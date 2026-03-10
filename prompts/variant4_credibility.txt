@@ -1,0 +1,10 @@
+[question]
+
+When answering, focus your rationale on the credibility of the news articles in the Evidence Summaries (news_articles summaries or summary_llm). Use any provided credibility fields, and consider source reliability, evidence quality, and recency. Explicitly mention whether the strongest support comes from high-credibility sources or if the evidence is weak/mixed.
+
+Then output JSON with exactly these fields:
+{
+  "predicted_answer": "Yes or No",
+  "confidence": number between 0 and 1,
+  "rationale": "short explanation (2–4 sentences)"
+}

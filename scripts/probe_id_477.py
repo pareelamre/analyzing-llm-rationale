@@ -1,0 +1,82 @@
+import os
+import json
+import pathlib
+import requests
+
+base = pathlib.Path(r"C:\Users\paree\Documents\Analyzing Rationale of LLMs")
+input_path = base / "forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json"
+records = json.load(input_path.open("r", encoding="utf-8"))
+rec = next(r for r in records if r.get("id") == 477)
+
+system_prompt = (base / "prompts" / "system.txt").read_text(encoding="utf-8").strip()
+neutral_prompt = (base / "prompts" / "variant0_neutral_baseline.txt").read_text(encoding="utf-8").strip()
+
+question = (rec.get("question") or "").strip()
+description = (rec.get("description") or "").strip()
+resolution = (rec.get("resolution_criteria") or "").strip()
+categories = rec.get("categories") or []
+created_time = rec.get("created_time")
+publish_time = rec.get("publish_time")
+resolve_time = rec.get("resolve_time")
+days_open = rec.get("days_open")
+
+articles = rec.get("news_articles") or []
+summary_items = []
+for art in articles:
+    if not isinstance(art, dict):
+        continue
+    summary_items.append({
+        "url": art.get("url"),
+        "title": art.get("title"),
+        "authors": art.get("authors"),
+        "publish_date": art.get("publish_date"),
+        "summary": art.get("summary"),
+        "summary_llm": art.get("summary_llm"),
+        "keywords": art.get("keywords"),
+        "frs": art.get("frs"),
+        "credibility": art.get("credibility"),
+        "text": art.get("text"),
+    })
+
+user_prompt = neutral_prompt.replace("[question]", "").strip()
+parts = []
+parts.append(f"Question: {question}")
+if description:
+    parts.append(f"Description: {description}")
+if resolution:
+    parts.append(f"Resolution Criteria: {resolution}")
+if categories:
+    parts.append(f"Categories: {categories}")
+if created_time:
+    parts.append(f"Created Time: {created_time}")
+if publish_time:
+    parts.append(f"Publish Time: {publish_time}")
+if resolve_time:
+    parts.append(f"Resolve Time: {resolve_time}")
+if days_open is not None:
+    parts.append(f"Days Open: {days_open}")
+
+parts.append("Evidence Summaries (full article fields):")
+if summary_items:
+    for i, s in enumerate(summary_items, 1):
+        parts.append("Article {}: {}".format(i, json.dumps(s, ensure_ascii=False)))
+else:
+    parts.append("(none)")
+
+parts.append("")
+parts.append(user_prompt)
+full_user = "\n".join(parts).strip()
+
+api_key = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+payload = {
+    "model": "Qwen/Qwen2.5-7B-Instruct:featherless-ai",
+    "temperature": 0.0,
+    "messages": [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": full_user}
+    ]
+}
+resp = requests.post("https://router.huggingface.co/v1/chat/completions", headers=headers, json=payload, timeout=120)
+print("status", resp.status_code)
+print(resp.text[:2000])

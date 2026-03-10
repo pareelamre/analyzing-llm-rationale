@@ -1,0 +1,15 @@
+[question]
+
+When answering, use the Description and Evidence Summaries (news_articles summaries or summary_llm). Indicate if your reasoning is based mainly on:
+(a) speculation, 
+(b) a stated plan, 
+(c) an expert forecast, or 
+(d) a past trend.
+
+Then output JSON with exactly these fields:
+{
+  "predicted_answer": "Yes or No",
+  "confidence": number between 0 and 1,
+  "rationale": "short explanation (2–4 sentences)",
+  "reasoning_type": "speculation | stated_plan | expert_forecast | past_trend"
+}

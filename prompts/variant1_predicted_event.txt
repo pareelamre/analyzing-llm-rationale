@@ -1,0 +1,11 @@
+[question]
+
+When answering, use the Description and Evidence Summaries (news_articles summaries or summary_llm). First state what concrete event you think will occur.
+
+Then output JSON with exactly these fields:
+{
+  "predicted_answer": "Yes or No",
+  "confidence": number between 0 and 1,
+  "rationale": "short explanation (2–4 sentences)",
+  "predicted_event": "concise description of the concrete event you expect to occur"
+}

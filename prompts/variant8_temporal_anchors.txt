@@ -1,0 +1,10 @@
+When answering, use the Description and Evidence Summaries (news_articles summaries or summary_llm). You must mention the relevant dates or time ranges that matter for resolution of the question. 
+Be explicit about dates or ranges, and if no date is relevant, state "none".
+
+Then output your forecast in JSON with these fields:
+{
+  "predicted_answer": "Yes or No",
+  "confidence": number between 0 and 1,
+  "rationale": "short text explanation",
+  "temporal_anchors": "list of relevant dates or time ranges as a single string, or 'none' if none"
+}

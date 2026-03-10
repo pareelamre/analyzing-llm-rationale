@@ -1,0 +1,11 @@
+[question]
+
+When answering, use the Description and Evidence Summaries (news_articles summaries or summary_llm). Also state the most important attribute (time, quantity, or actor) that determines the outcome.
+
+Then output JSON with exactly these fields:
+{
+  "predicted_answer": "Yes or No",
+  "confidence": number between 0 and 1,
+  "rationale": "short explanation (2–4 sentences)",
+  "key_attribute": "time | quantity | actor — specify which and briefly describe its role"
+}

@@ -1,0 +1,10 @@
+When answering, use the Description and Evidence Summaries (news_articles summaries or summary_llm). List the key conditions that must hold true for your forecast to be correct. 
+Provide 2–4 concise conditions.
+
+Then output JSON with exactly these fields:
+{
+  "predicted_answer": "Yes or No",
+  "confidence": number between 0 and 1,
+  "rationale": "short explanation (2–4 sentences)",
+  "key_conditions": "list of 2-4 key conditions as a single string"
+}
