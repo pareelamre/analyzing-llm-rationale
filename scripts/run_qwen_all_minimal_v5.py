@@ -1,6 +1,8 @@
 import os
 import json
 import pathlib
+import random
+import traceback
 import requests
 import time
 
@@ -19,6 +21,14 @@ api_key = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACEHUB_API_TOKEN
 headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
 session = requests.Session()
+
+error_log_path = output_dir / "errors_variant5_key_conditions.jsonl"
+
+def log_error(event: dict):
+    # append jsonl for later diagnosis
+    event["ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    with error_log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 # resume support
 existing_ids = set()
@@ -110,16 +120,28 @@ for idx, rec in enumerate(records, 1):
         ]
     }
 
-    # basic retry with context-limit fallback (drop full text)
+    # retry with backoff + context-limit fallback + logging
     content = None
-    for attempt in range(3):
+    max_attempts = int(os.environ.get("RETRY_MAX", "6"))
+    base_sleep = float(os.environ.get("RETRY_BASE_SLEEP_S", "1.5"))
+    timeout_s = float(os.environ.get("REQUEST_TIMEOUT_S", "120"))
+
+    # We may switch to a trimmed prompt after a context-length failure.
+    did_trim_text = False
+
+    for attempt in range(max_attempts):
         try:
-            resp = session.post("https://router.huggingface.co/v1/chat/completions", headers=headers, json=payload, timeout=120)
-            if resp.status_code >= 500:
-                time.sleep(2 ** attempt)
-                continue
-            if resp.status_code == 400 and "maximum context length" in resp.text:
-                # drop full extracted text field and retry once
+            resp = session.post(
+                "https://router.huggingface.co/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=timeout_s,
+            )
+
+            code = resp.status_code
+
+            # Handle context overflow once by dropping full text.
+            if code == 400 and ("maximum context length" in resp.text.lower()) and not did_trim_text:
                 trimmed_items = []
                 for s in summary_items:
                     if isinstance(s, dict):
@@ -128,23 +150,62 @@ for idx, rec in enumerate(records, 1):
                         trimmed_items.append(s2)
                 full_user = build_user_prompt(trimmed_items)
                 payload["messages"][1]["content"] = full_user
-                resp = session.post("https://router.huggingface.co/v1/chat/completions", headers=headers, json=payload, timeout=120)
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
-            break
-        except Exception:
-            if attempt == 2:
-                content = None
-            else:
-                time.sleep(2 ** attempt)
+                did_trim_text = True
+                log_error({"id": rec_id, "phase": "context_trim", "attempt": attempt, "status": code})
                 continue
+
+            # Retryable HTTP statuses
+            if code in (408, 409, 425, 429) or code >= 500:
+                ra = resp.headers.get("Retry-After")
+                sleep_s = float(ra) if (ra and ra.isdigit()) else (base_sleep * (2 ** min(attempt, 6)))
+                sleep_s = min(120.0, sleep_s) * (0.75 + 0.5 * random.random())
+                log_error({
+                    "id": rec_id,
+                    "phase": "http_retry",
+                    "attempt": attempt,
+                    "status": code,
+                    "sleep_s": round(sleep_s, 3),
+                    "resp_head": resp.text[:300],
+                })
+                time.sleep(sleep_s)
+                continue
+
+            # Non-retryable failure
+            if code != 200:
+                log_error({
+                    "id": rec_id,
+                    "phase": "http_fail",
+                    "attempt": attempt,
+                    "status": code,
+                    "resp_head": resp.text[:500],
+                })
+                break
+
+            # Success
+            j = resp.json()
+            content = j["choices"][0]["message"]["content"]
+            break
+
+        except Exception as e:
+            sleep_s = min(120.0, base_sleep * (2 ** min(attempt, 6))) * (0.75 + 0.5 * random.random())
+            log_error({
+                "id": rec_id,
+                "phase": "exception",
+                "attempt": attempt,
+                "exc": repr(e),
+                "trace": traceback.format_exc(limit=5),
+                "sleep_s": round(sleep_s, 3),
+            })
+            time.sleep(sleep_s)
+            content = None
 
     if content is None:
         out_obj = {"id": rec_id, "predicted_answer": None, "confidence": None, "rationale": None, "key_conditions": None}
     else:
         try:
             model_json = json.loads(content)
-        except Exception:
+        except Exception as e:
+            log_error({"id": rec_id, "phase": "json_parse", "exc": repr(e), "content_head": (content or "")[:500]})
             model_json = None
         if isinstance(model_json, dict):
             out_obj = {
