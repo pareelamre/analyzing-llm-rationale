@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "analyzing-llm-rationale"
+version = "0.1.0"
+description = "Batch inference tooling for forecasting rationale experiments."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+  { name = "Repository Maintainers" },
+]
+dependencies = [
+  "huggingface_hub>=0.30.0",
+  "pyyaml>=6.0.2",
+  "requests>=2.32.3",
+  "torch>=2.2.0",
+  "transformers>=4.49.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.11.0",
+]
+
+[project.scripts]
+analyze-llm-rationale = "analyzing_llm_rationale.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
