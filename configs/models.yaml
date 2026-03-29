@@ -13,6 +13,16 @@ models:
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
+    request_timeout_cap_s: 90
+    access: hosted
+  llama-4-scout-17b-16e-instruct:
+    result_label: Llama-4-Scout-17B-16E-Instruct
+    provider: openai-compatible
+    local_model_name: meta-llama/Llama-4-Scout-17B-16E-Instruct
+    router_model_name: meta-llama/Llama-4-Scout-17B-16E-Instruct
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
   deepseek-r1:
     result_label: DeepSeek-R1
@@ -28,6 +38,24 @@ models:
     provider: openai-compatible
     local_model_name: deepseek-ai/DeepSeek-V3.2
     router_model_name: deepseek-ai/DeepSeek-V3.2
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+  gpt-5:
+    result_label: GPT-5
+    provider: openai-compatible
+    local_model_name: gpt-5
+    router_model_name: gpt-5
+    api_base_url: https://api.openai.com/v1/chat/completions
+    api_key_env_var: OPENAI_API_KEY
+    api_key_file: OPEN_AI_API_KEY.txt
+    access: hosted
+  gpt-oss-120b:
+    result_label: GPT-OSS-120B
+    provider: openai-compatible
+    local_model_name: openai/gpt-oss-120b
+    router_model_name: openai/gpt-oss-120b
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt

@@ -24,6 +24,8 @@ class ModelConfig:
     api_base_url: str | None = None
     api_key_env_var: str | None = None
     api_key_file: str | None = None
+    max_tokens_cap: int | None = None
+    request_timeout_cap_s: float | None = None
 
 
 def load_yaml(path: Path) -> Dict[str, object]:
@@ -72,6 +74,8 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
         api_base_url = payload.get("api_base_url")
         api_key_env_var = payload.get("api_key_env_var")
         api_key_file = payload.get("api_key_file")
+        max_tokens_cap = payload.get("max_tokens_cap")
+        request_timeout_cap_s = payload.get("request_timeout_cap_s")
         if not all(isinstance(value, str) for value in (result_label, provider, local_model_name, router_model_name)):
             raise ValueError(
                 f"Model '{name}' must define string result_label, provider, local_model_name, and router_model_name"
@@ -82,6 +86,14 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             raise ValueError(f"Model '{name}' api_key_env_var must be a string when provided")
         if api_key_file is not None and not isinstance(api_key_file, str):
             raise ValueError(f"Model '{name}' api_key_file must be a string when provided")
+        if max_tokens_cap is not None and not isinstance(max_tokens_cap, int):
+            raise ValueError(f"Model '{name}' max_tokens_cap must be an integer when provided")
+        if isinstance(max_tokens_cap, int) and max_tokens_cap <= 0:
+            raise ValueError(f"Model '{name}' max_tokens_cap must be positive when provided")
+        if request_timeout_cap_s is not None and not isinstance(request_timeout_cap_s, (int, float)):
+            raise ValueError(f"Model '{name}' request_timeout_cap_s must be numeric when provided")
+        if isinstance(request_timeout_cap_s, (int, float)) and request_timeout_cap_s <= 0:
+            raise ValueError(f"Model '{name}' request_timeout_cap_s must be positive when provided")
         models[name] = ModelConfig(
             name=name,
             result_label=result_label,
@@ -91,6 +103,10 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             api_base_url=api_base_url,
             api_key_env_var=api_key_env_var,
             api_key_file=api_key_file,
+            max_tokens_cap=max_tokens_cap,
+            request_timeout_cap_s=(
+                float(request_timeout_cap_s) if request_timeout_cap_s is not None else None
+            ),
         )
     return models
 

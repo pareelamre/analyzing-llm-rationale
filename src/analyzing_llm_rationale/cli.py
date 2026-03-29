@@ -133,6 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
 def resolve_model_args(args: argparse.Namespace) -> argparse.Namespace:
     models = load_model_configs(args.models_config)
     model = models[args.model]
+    args._resolved_model_config = model
     if getattr(args, "provider", None) is None:
         args.provider = model.provider
     if getattr(args, "local_model_name", None) is None:
@@ -173,6 +174,10 @@ def resolve_api_key(args: argparse.Namespace) -> str:
 
 def build_provider(args: argparse.Namespace):
     args = resolve_model_args(args)
+    model = args._resolved_model_config
+    effective_request_timeout_s = args.request_timeout_s
+    if model.request_timeout_cap_s is not None:
+        effective_request_timeout_s = min(effective_request_timeout_s, model.request_timeout_cap_s)
     if args.provider == "local-qwen":
         return LocalQwenProvider(
             model_name=args.local_model_name,
@@ -183,7 +188,7 @@ def build_provider(args: argparse.Namespace):
         return OpenAICompatibleProvider(
             model_name=args.router_model_name,
             api_key=api_key,
-            request_timeout_s=args.request_timeout_s,
+            request_timeout_s=effective_request_timeout_s,
             base_url=args.api_base_url or "https://api.openai.com/v1/chat/completions",
             missing_api_key_message=(
                 f"{args.api_key_env_var} must be set or {args.api_key_file} must exist for openai-compatible provider."
@@ -194,7 +199,7 @@ def build_provider(args: argparse.Namespace):
     return HuggingFaceRouterProvider(
         model_name=args.router_model_name,
         api_key=api_key,
-        request_timeout_s=args.request_timeout_s,
+        request_timeout_s=effective_request_timeout_s,
         base_url=args.api_base_url or "https://router.huggingface.co/v1/chat/completions",
     )
 
@@ -202,6 +207,7 @@ def build_provider(args: argparse.Namespace):
 def resolve_run_config(args: argparse.Namespace) -> RunConfig:
     root = repo_root()
     args = resolve_model_args(args)
+    model = args._resolved_model_config
     variants = load_variant_configs(args.variants_config)
     variant = variants[args.variant]
 
@@ -218,6 +224,9 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
         if args.output_fields
         else list(variant.output_fields)
     )
+    effective_max_tokens = args.max_tokens
+    if model.max_tokens_cap is not None:
+        effective_max_tokens = min(effective_max_tokens, model.max_tokens_cap)
 
     return RunConfig(
         input_path=args.input_path,
@@ -227,7 +236,7 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
         user_prompt_path=user_prompt_path,
         output_fields=output_fields,
         temperature=args.temperature,
-        max_tokens=args.max_tokens,
+        max_tokens=effective_max_tokens,
         max_records=args.max_records,
         max_attempts=args.max_attempts,
         retry_base_sleep_s=args.retry_base_sleep_s,

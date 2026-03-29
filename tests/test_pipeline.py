@@ -27,6 +27,9 @@ from analyzing_llm_rationale.providers import (  # noqa: E402
     OpenAICompatibleProvider,
     ensure_prompt_fits_context,
     resolve_context_window,
+    ProviderResponseError,
+    uses_default_temperature_only,
+    uses_max_completion_tokens,
 )
 
 
@@ -75,10 +78,12 @@ class PipelineTests(unittest.TestCase):
         prompt = build_user_prompt(
             self.sample_record(),
             user_prompt_template="[question]\nReturn JSON.",
-            include_article_text=False,
+            article_detail="summary",
         )
         self.assertIn("Question: Will event X happen?", prompt)
-        self.assertIn('"text": null', prompt)
+        self.assertIn("Evidence Summaries:", prompt)
+        self.assertIn('"summary_llm": "LLM summary"', prompt)
+        self.assertNotIn("Full article text", prompt)
         self.assertNotIn("[question]", prompt)
 
     def test_process_batch_skips_completed_ids(self):
@@ -184,7 +189,9 @@ class PipelineTests(unittest.TestCase):
 
             self.assertEqual(len(provider.calls), 2)
             self.assertIn('"text": "Full article text"', provider.calls[0][1]["content"])
-            self.assertIn('"text": null', provider.calls[1][1]["content"])
+            self.assertIn("Evidence Summaries:", provider.calls[1][1]["content"])
+            self.assertIn('"summary_llm": "LLM summary"', provider.calls[1][1]["content"])
+            self.assertNotIn("Full article text", provider.calls[1][1]["content"])
             results = load_json(output_path)
             self.assertEqual(results[0]["predicted_answer"], "Yes")
             error_log = error_path.read_text(encoding="utf-8")
@@ -245,7 +252,9 @@ class PipelineTests(unittest.TestCase):
                 provider,
             )
 
-            self.assertIn('"text": null', provider.calls[0][1]["content"])
+            self.assertIn("Evidence Summaries:", provider.calls[0][1]["content"])
+            self.assertIn('"summary_llm": "LLM summary"', provider.calls[0][1]["content"])
+            self.assertNotIn("Full article text", provider.calls[0][1]["content"])
             results = load_json(output_path)
             self.assertEqual(results[0]["predicted_answer"], "No")
 
@@ -269,6 +278,60 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(parsed["predicted_answer"], "No")
         self.assertEqual(parsed["confidence"], 0.85)
         self.assertEqual(parsed["rationale"], "Recovered from nested JSON.")
+
+    def test_parse_model_response_recovers_fields_from_truncated_jsonish_content(self):
+        content = (
+            "```json\n"
+            "{\n"
+            '  "predicted_answer": "Yes",\n'
+            '  "confidence": 0.99,\n'
+            '  "rationale": "The world population grew every year."\n'
+        )
+
+        parsed = parse_model_response(content, ("predicted_answer", "confidence", "rationale"))
+
+        self.assertEqual(parsed["predicted_answer"], "Yes")
+        self.assertEqual(parsed["confidence"], 0.99)
+        self.assertEqual(parsed["rationale"], "The world population grew every year.")
+
+    def test_parse_model_response_recovers_malformed_confidence_word_decimal(self):
+        content = (
+            "{\n"
+            '  "predicted_answer": "Yes",\n'
+            '  "confidence": 0. nine,\n'
+            '  "rationale": "Recovered from malformed confidence.",\n'
+            '  "temporal_anchors": "2016-2025"\n'
+            "}"
+        )
+
+        parsed = parse_model_response(
+            content,
+            ("predicted_answer", "confidence", "rationale", "temporal_anchors"),
+        )
+
+        self.assertEqual(parsed["predicted_answer"], "Yes")
+        self.assertEqual(parsed["confidence"], 0.9)
+        self.assertEqual(parsed["rationale"], "Recovered from malformed confidence.")
+        self.assertEqual(parsed["temporal_anchors"], "2016-2025")
+
+    def test_parse_model_response_normalizes_string_and_list_fields(self):
+        content = json.dumps(
+            {
+                "predicted_answer": " yes ",
+                "confidence": "82%",
+                "rationale": "Normalized fields.",
+                "key_conditions": ["condition one", "condition two"],
+            }
+        )
+
+        parsed = parse_model_response(
+            content,
+            ("predicted_answer", "confidence", "rationale", "key_conditions"),
+        )
+
+        self.assertEqual(parsed["predicted_answer"], "Yes")
+        self.assertEqual(parsed["confidence"], 0.82)
+        self.assertEqual(parsed["key_conditions"], "condition one; condition two")
 
     def test_recover_missing_fields_keeps_existing_non_null_values(self):
         parsed = recover_missing_fields(
@@ -331,6 +394,14 @@ class PipelineTests(unittest.TestCase):
             "https://llm.scads.ai/v1/chat/completions",
         )
         self.assertEqual(models["llama-3.3-70b-instruct"].api_key_file, "SCADS_AI_API_KEY.txt")
+        self.assertIsNone(models["llama-3.3-70b-instruct"].max_tokens_cap)
+        self.assertEqual(models["llama-3.3-70b-instruct"].request_timeout_cap_s, 90.0)
+        self.assertIn("gpt-5", models)
+        self.assertEqual(models["gpt-5"].provider, "openai-compatible")
+        self.assertEqual(models["gpt-5"].router_model_name, "gpt-5")
+        self.assertEqual(models["gpt-5"].api_base_url, "https://api.openai.com/v1/chat/completions")
+        self.assertEqual(models["gpt-5"].api_key_env_var, "OPENAI_API_KEY")
+        self.assertEqual(models["gpt-5"].api_key_file, "OPEN_AI_API_KEY.txt")
         self.assertEqual(temperature_to_tag(0.7), "temperature_07")
 
     def test_resolve_run_config_builds_output_path_from_variant_model_and_temperature(self):
@@ -372,6 +443,47 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertEqual(config.output_fields[-1], "key_conditions")
 
+    def test_resolve_run_config_keeps_llama_max_tokens_when_no_model_cap_is_set(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        args = Namespace(
+            provider="openai-compatible",
+            variant="variant0_neutral_baseline",
+            model="llama-3.3-70b-instruct",
+            variants_config=repo_root / "configs" / "variants.yaml",
+            models_config=repo_root / "configs" / "models.yaml",
+            input_path=repo_root / "forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json",
+            system_prompt_path=repo_root / "prompts" / "system.txt",
+            user_prompt_path=None,
+            output_path=None,
+            error_log_path=None,
+            output_fields=None,
+            temperature=1.75,
+            temperature_tag=None,
+            max_tokens=2048,
+            max_records=0,
+            max_attempts=3,
+            retry_base_sleep_s=1.5,
+            reprocess_nulls=False,
+            drop_article_text=False,
+            model_label=None,
+            local_model_name=None,
+            router_model_name=None,
+            api_base_url=None,
+            api_key_env_var=None,
+            api_key_file=None,
+            device="cuda",
+            request_timeout_s=120.0,
+        )
+
+        config = resolve_run_config(args)
+
+        self.assertEqual(config.max_tokens, 2048)
+        self.assertTrue(
+            str(config.output_path).endswith(
+                "results/Llama-3.3-70B-Instruct/temperature_175/results_variant0_neutral_baseline.json"
+            )
+        )
+
     def test_context_window_resolution_prefers_config_then_model_then_tokenizer(self):
         self.assertEqual(resolve_context_window(16000, 32000, 64000), 16000)
         self.assertEqual(resolve_context_window(None, 32000, 64000), 32000)
@@ -382,6 +494,58 @@ class PipelineTests(unittest.TestCase):
         with self.assertRaises(ContextLimitError):
             ensure_prompt_fits_context(input_tokens=31000, max_tokens=2048, context_window=32000)
         ensure_prompt_fits_context(input_tokens=1000, max_tokens=512, context_window=32000)
+
+    def test_openai_gpt5_uses_max_completion_tokens(self):
+        class FakeResponse:
+            status_code = 200
+            text = '{"choices":[{"message":{"content":"ok"}}]}'
+
+            @staticmethod
+            def json():
+                return {"choices": [{"message": {"content": "ok"}}]}
+
+        provider = OpenAICompatibleProvider(
+            model_name="gpt-5",
+            api_key="test-key",
+            base_url="https://api.openai.com/v1/chat/completions",
+        )
+        captured = {}
+
+        def fake_post(url, headers, json, timeout):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            captured["timeout"] = timeout
+            return FakeResponse()
+
+        provider._session = SimpleNamespace(post=fake_post)
+
+        result = provider.chat_completion(
+            messages=[{"role": "user", "content": "test"}],
+            temperature=0.0,
+            max_tokens=64,
+        )
+
+        self.assertEqual(result, "ok")
+        self.assertTrue(uses_max_completion_tokens("gpt-5", provider.base_url))
+        self.assertTrue(uses_default_temperature_only("gpt-5", provider.base_url))
+        self.assertEqual(captured["json"]["max_completion_tokens"], 64)
+        self.assertNotIn("max_tokens", captured["json"])
+        self.assertNotIn("temperature", captured["json"])
+
+    def test_openai_gpt5_rejects_non_default_temperature(self):
+        provider = OpenAICompatibleProvider(
+            model_name="gpt-5",
+            api_key="test-key",
+            base_url="https://api.openai.com/v1/chat/completions",
+        )
+
+        with self.assertRaises(ProviderResponseError):
+            provider.chat_completion(
+                messages=[{"role": "user", "content": "test"}],
+                temperature=0.25,
+                max_tokens=64,
+            )
 
     def test_local_qwen_greedy_run_neutralizes_sampling_defaults(self):
         class FakeTensor:
@@ -602,6 +766,49 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(provider.api_key, "test-key")
             self.assertEqual(provider.model_name, "example/remote")
             self.assertEqual(provider.base_url, "https://llm.scads.ai/v1/chat/completions")
+
+    def test_build_provider_clamps_request_timeout_from_model_config(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            api_key_file = base / "scads-key.txt"
+            api_key_file.write_text("test-key\n", encoding="utf-8")
+            models_config_path = base / "models.yaml"
+            models_config_path.write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "test-model": {
+                                "result_label": "TestModel",
+                                "provider": "openai-compatible",
+                                "local_model_name": "example/local",
+                                "router_model_name": "example/remote",
+                                "api_base_url": "https://llm.scads.ai/v1/chat/completions",
+                                "api_key_file": str(api_key_file),
+                                "request_timeout_cap_s": 45,
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            args = Namespace(
+                provider=None,
+                model="test-model",
+                models_config=models_config_path,
+                local_model_name=None,
+                router_model_name=None,
+                model_label=None,
+                api_base_url=None,
+                api_key_env_var=None,
+                api_key_file=None,
+                device="cuda",
+                request_timeout_s=120.0,
+            )
+
+            provider = build_provider(args)
+
+            self.assertIsInstance(provider, OpenAICompatibleProvider)
+            self.assertEqual(provider.request_timeout_s, 45.0)
 
 
 if __name__ == "__main__":

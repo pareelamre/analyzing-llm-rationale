@@ -58,6 +58,16 @@ def ensure_prompt_fits_context(
         )
 
 
+def uses_max_completion_tokens(model_name: str, base_url: str) -> bool:
+    if "api.openai.com" not in base_url:
+        return False
+    return model_name.startswith(("gpt-5", "o1", "o3", "o4"))
+
+
+def uses_default_temperature_only(model_name: str, base_url: str) -> bool:
+    return "api.openai.com" in base_url and model_name.startswith("gpt-5")
+
+
 @dataclass
 class OpenAICompatibleProvider(ChatProvider):
     model_name: str
@@ -82,10 +92,20 @@ class OpenAICompatibleProvider(ChatProvider):
     ) -> str:
         payload = {
             "model": self.model_name,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
             "messages": messages,
         }
+        if uses_default_temperature_only(self.model_name, self.base_url):
+            if temperature not in (0.0, 1.0):
+                raise ProviderResponseError(
+                    "OpenAI GPT-5 family models only support the default temperature. "
+                    "Use temperature=1.0 or omit the override."
+                )
+        else:
+            payload["temperature"] = temperature
+        if uses_max_completion_tokens(self.model_name, self.base_url):
+            payload["max_completion_tokens"] = max_tokens
+        else:
+            payload["max_tokens"] = max_tokens
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",

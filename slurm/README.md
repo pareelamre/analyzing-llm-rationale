@@ -17,6 +17,7 @@ Variant launchers:
 Shared helper:
 
 - `run_variant_common.sh`: resolves provider/model/temperature/output paths and calls the packaged CLI
+- `submit_sweep.sh`: submits a full multi-variant sweep with a configurable active-job cap using SLURM dependencies
 
 The variant launchers default to `RUN_PROVIDER=local-qwen`, but can also run against Hugging Face Router with `RUN_PROVIDER=hf-router`.
 
@@ -31,3 +32,16 @@ Useful overrides:
 - `MAX_RECORDS=...`: limit records for a partial run
 - `REPROCESS_NULLS=1`: rerun only rows with null predictions
 - `DROP_ARTICLE_TEXT=1`: trim raw article text from prompts
+
+Concurrency control:
+
+- Use `slurm/submit_sweep.sh` instead of a raw nested `sbatch` loop when you want to avoid flooding a hosted API.
+- `--max-concurrent N` caps how many jobs from the sweep can run at once.
+- Example:
+
+```bash
+slurm/submit_sweep.sh \
+  --model llama-3.3-70b-instruct \
+  --prefix llama33 \
+  --max-concurrent 4
+```
