@@ -1,0 +1,35 @@
+{
+  "status": "completed",
+  "variant": "variant7_uncertainty_language",
+  "model_key": "gpt-oss-120b",
+  "model_label": "GPT-OSS-120B",
+  "provider": "openai-compatible",
+  "model_identifier": "openai/gpt-oss-120b",
+  "temperature": 1.75,
+  "temperature_tag": "temperature_175",
+  "max_tokens": 2048,
+  "max_attempts": 6,
+  "retry_base_sleep_s": 1.5,
+  "reprocess_null_only": true,
+  "drop_article_text": false,
+  "input_path": "/data/horse/ws/paam844f-codabench/analyzing-llm-rationale/forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json",
+  "output_path": "/data/horse/ws/paam844f-codabench/analyzing-llm-rationale/results/GPT-OSS-120B/temperature_175/results_variant7_uncertainty_language.json",
+  "error_log_path": "/data/horse/ws/paam844f-codabench/analyzing-llm-rationale/results/GPT-OSS-120B/temperature_175/errors_variant7_uncertainty_language.jsonl",
+  "system_prompt_path": "/data/horse/ws/paam844f-codabench/analyzing-llm-rationale/prompts/system.txt",
+  "user_prompt_path": "/data/horse/ws/paam844f-codabench/analyzing-llm-rationale/prompts/variant7_uncertainty_language.txt",
+  "output_fields": [
+    "predicted_answer",
+    "confidence",
+    "rationale"
+  ],
+  "input_record_count": 1580,
+  "existing_result_count": 1580,
+  "system_prompt_sha256": "2ce302ae49b88f1417d3a1eda116c0f17564a59eb09decd2abc22d97e67a618a",
+  "user_prompt_sha256": "39806471470de1f1d75b6147d05e6beffbacb74275b2ed3998e4376b003de3d6",
+  "written_at": "2026-03-24T20:16:29",
+  "summary": {
+    "processed": 2,
+    "total_results": 1580,
+    "null_predictions": 1
+  }
+}

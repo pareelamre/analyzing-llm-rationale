@@ -31,6 +31,29 @@ ARTICLE_FIELDS = (
     "text",
 )
 
+SUMMARY_ARTICLE_FIELDS = (
+    "title",
+    "publish_date",
+    "summary",
+    "summary_llm",
+    "keywords",
+    "frs",
+    "credibility",
+)
+
+DIGIT_WORDS = {
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+}
+
 
 @dataclass
 class RunConfig:
@@ -85,16 +108,19 @@ def log_error(error_log_path: Path, event: Dict[str, object]) -> None:
         handle.write("\n")
 
 
-def extract_summary_items(record: Dict[str, object], include_article_text: bool) -> List[Dict[str, object]]:
+def extract_summary_items(record: Dict[str, object], article_detail: str) -> List[Dict[str, object]]:
     summary_items: List[Dict[str, object]] = []
     for article in record.get("news_articles") or []:
         if not isinstance(article, dict):
             continue
         item = {}
-        for field in ARTICLE_FIELDS:
-            if field == "text" and not include_article_text:
-                item[field] = None
-            else:
+        if article_detail == "summary":
+            for field in SUMMARY_ARTICLE_FIELDS:
+                item[field] = article.get(field)
+            if not item.get("summary_llm") and item.get("summary"):
+                item["summary_llm"] = item.get("summary")
+        else:
+            for field in ARTICLE_FIELDS:
                 item[field] = article.get(field)
         summary_items.append(item)
     return summary_items
@@ -103,7 +129,7 @@ def extract_summary_items(record: Dict[str, object], include_article_text: bool)
 def build_user_prompt(
     record: Dict[str, object],
     user_prompt_template: str,
-    include_article_text: bool,
+    article_detail: str,
 ) -> str:
     question = str(record.get("question") or "").strip()
     description = str(record.get("description") or "").strip()
@@ -131,8 +157,11 @@ def build_user_prompt(
     if days_open is not None:
         parts.append(f"Days Open: {days_open}")
 
-    parts.append("Evidence Summaries (full article fields):")
-    summary_items = extract_summary_items(record, include_article_text=include_article_text)
+    if article_detail == "summary":
+        parts.append("Evidence Summaries:")
+    else:
+        parts.append("Evidence Summaries (full article fields):")
+    summary_items = extract_summary_items(record, article_detail=article_detail)
     if summary_items:
         for index, item in enumerate(summary_items, start=1):
             parts.append(f"Article {index}: {json.dumps(item, ensure_ascii=False)}")
@@ -183,9 +212,7 @@ def _extract_from_jsonish_text(value: object, output_fields: Sequence[str]) -> D
 
     for field in output_fields:
         if field == "confidence":
-            match = re.search(r'"confidence"\s*:\s*(-?\d+(?:\.\d+)?)', value)
-            if match:
-                extracted[field] = float(match.group(1))
+            extracted[field] = _extract_confidence_from_text(value)
             continue
 
         match = re.search(
@@ -200,6 +227,111 @@ def _extract_from_jsonish_text(value: object, output_fields: Sequence[str]) -> D
                 extracted[field] = match.group(1)
 
     return extracted
+
+
+def _coerce_predicted_answer(value: object) -> object:
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if not isinstance(value, str):
+        return value
+
+    normalized = value.strip().lower()
+    if normalized == "yes":
+        return "Yes"
+    if normalized == "no":
+        return "No"
+    return value.strip()
+
+
+def _coerce_string_field(value: object) -> object:
+    if value is None or isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "; ".join(str(item) for item in value)
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
+
+
+def _coerce_confidence(value: object) -> Optional[float]:
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    if not isinstance(value, str):
+        return None
+
+    text = value.strip().lower()
+    if not text:
+        return None
+
+    if text.endswith("%"):
+        try:
+            return float(text[:-1].strip()) / 100.0
+        except ValueError:
+            return None
+
+    try:
+        return float(text)
+    except ValueError:
+        pass
+
+    # Handle malformed forms such as `0. nine` or `0.nine`.
+    match = re.fullmatch(r"(-?\d+)\s*\.\s*([a-z]+)", text)
+    if match and match.group(2) in DIGIT_WORDS:
+        return float(f"{match.group(1)}.{DIGIT_WORDS[match.group(2)]}")
+
+    if text in {"zero", "one"}:
+        return float(DIGIT_WORDS[text])
+
+    return None
+
+
+def _extract_confidence_from_text(value: object) -> Optional[float]:
+    if not isinstance(value, str):
+        return None
+
+    patterns = (
+        r'"confidence"\s*:\s*(-?\d+)\s*\.\s*([A-Za-z]+)',
+        r'"confidence"\s*:\s*(-?\d+(?:\.\d+)?)',
+        r'"confidence"\s*:\s*"([^"]+)"',
+    )
+
+    for pattern in patterns:
+        match = re.search(pattern, value)
+        if not match:
+            continue
+        if len(match.groups()) == 1:
+            coerced = _coerce_confidence(match.group(1))
+        else:
+            coerced = _coerce_confidence(f"{match.group(1)}.{match.group(2)}")
+        if coerced is not None:
+            return coerced
+    return None
+
+
+def _normalize_result_fields(
+    result: Dict[str, object],
+    output_fields: Sequence[str],
+    raw_content: Optional[str] = None,
+) -> Dict[str, object]:
+    normalized = dict(result)
+
+    if "predicted_answer" in normalized:
+        normalized["predicted_answer"] = _coerce_predicted_answer(normalized.get("predicted_answer"))
+
+    if "confidence" in output_fields:
+        confidence = _coerce_confidence(normalized.get("confidence"))
+        if confidence is None and raw_content is not None:
+            confidence = _extract_confidence_from_text(raw_content)
+        normalized["confidence"] = confidence
+
+    for field in output_fields:
+        if field in {"predicted_answer", "confidence"}:
+            continue
+        normalized[field] = _coerce_string_field(normalized.get(field))
+
+    return normalized
 
 
 def recover_missing_fields(result: Dict[str, object], output_fields: Sequence[str]) -> Dict[str, object]:
@@ -217,7 +349,7 @@ def recover_missing_fields(result: Dict[str, object], output_fields: Sequence[st
     nested_rationale = nested.get("rationale")
     if isinstance(nested_rationale, str):
         recovered["rationale"] = nested_rationale
-    return recovered
+    return _normalize_result_fields(recovered, output_fields, raw_content=recovered.get("rationale"))
 
 
 def parse_model_response(content: str, output_fields: Sequence[str]) -> Dict[str, object]:
@@ -226,11 +358,12 @@ def parse_model_response(content: str, output_fields: Sequence[str]) -> Dict[str
     if parsed is None:
         if "rationale" in default_result:
             default_result["rationale"] = content
-        return default_result
+        return recover_missing_fields(default_result, output_fields)
 
     for field in output_fields:
         default_result[field] = parsed.get(field)
-    return recover_missing_fields(default_result, output_fields)
+    normalized = _normalize_result_fields(default_result, output_fields, raw_content=content)
+    return recover_missing_fields(normalized, output_fields)
 
 
 def load_existing_results(output_path: Path) -> List[Dict[str, object]]:
@@ -242,6 +375,10 @@ def load_existing_results(output_path: Path) -> List[Dict[str, object]]:
 
 def count_null_predictions(results: Iterable[Dict[str, object]]) -> int:
     return sum(1 for row in results if row.get("predicted_answer") is None)
+
+
+def is_effectively_empty_result(result: Dict[str, object]) -> bool:
+    return all(value is None for value in result.values())
 
 
 def pending_record_ids(
@@ -271,6 +408,36 @@ def pending_record_ids(
 def compute_sleep_s(base_sleep_s: float, attempt: int) -> float:
     bounded = min(120.0, base_sleep_s * (2 ** min(attempt, 6)))
     return bounded * (0.75 + 0.5 * random.random())
+
+
+def looks_like_timeout_error(exc: BaseException) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    markers = (
+        "timed out",
+        "timeout",
+        "remote end closed connection",
+        "connection aborted",
+    )
+    return any(marker in text for marker in markers)
+
+
+def effective_max_tokens_for_attempt(
+    base_max_tokens: int,
+    attempt: int,
+    article_detail: str,
+) -> int:
+    reduced = base_max_tokens
+    if article_detail != "full":
+        reduced = min(reduced, 1024)
+    if attempt >= 1:
+        reduced = min(reduced, 1024)
+    if attempt >= 2:
+        reduced = min(reduced, 768)
+    if attempt >= 3:
+        reduced = min(reduced, 512)
+    if attempt >= 4:
+        reduced = min(reduced, 384)
+    return max(256, reduced)
 
 
 def sha256_text(value: str) -> str:
@@ -365,15 +532,20 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
         if config.max_records and processed >= config.max_records:
             break
 
-        include_article_text = not config.drop_article_text
+        article_detail = "summary" if config.drop_article_text else "full"
         content = None
         last_exception: Optional[Exception] = None
 
         for attempt in range(config.max_attempts):
+            attempt_max_tokens = effective_max_tokens_for_attempt(
+                config.max_tokens,
+                attempt,
+                article_detail=article_detail,
+            )
             user_prompt = build_user_prompt(
                 record,
                 user_prompt_template=user_prompt_template,
-                include_article_text=include_article_text,
+                article_detail=article_detail,
             )
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -383,13 +555,13 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
                 content = provider.chat_completion(
                     messages=messages,
                     temperature=config.temperature,
-                    max_tokens=config.max_tokens,
+                    max_tokens=attempt_max_tokens,
                 )
                 break
             except ContextLimitError as exc:
                 last_exception = exc
-                if include_article_text:
-                    include_article_text = False
+                if article_detail == "full":
+                    article_detail = "summary"
                     log_error(
                         config.error_log_path,
                         {
@@ -413,6 +585,17 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
             except RetryableProviderError as exc:
                 last_exception = exc
                 sleep_s = compute_sleep_s(config.retry_base_sleep_s, attempt)
+                if article_detail == "full":
+                    article_detail = "summary"
+                    log_error(
+                        config.error_log_path,
+                        {
+                            "id": record_id,
+                            "phase": "latency_trim",
+                            "attempt": attempt,
+                            "detail": "Switching to summary-only evidence after retryable provider failure.",
+                        },
+                    )
                 log_error(
                     config.error_log_path,
                     {
@@ -442,6 +625,17 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
             except Exception as exc:
                 last_exception = exc
                 sleep_s = compute_sleep_s(config.retry_base_sleep_s, attempt)
+                if article_detail == "full" and looks_like_timeout_error(exc):
+                    article_detail = "summary"
+                    log_error(
+                        config.error_log_path,
+                        {
+                            "id": record_id,
+                            "phase": "latency_trim",
+                            "attempt": attempt,
+                            "detail": "Switching to summary-only evidence after timeout-like exception.",
+                        },
+                    )
                 log_error(
                     config.error_log_path,
                     {
@@ -459,9 +653,10 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
                 break
 
         parsed_result = {field: None for field in config.output_fields}
+        should_write_result = False
         if content is not None:
             parsed_result = parse_model_response(content, config.output_fields)
-            if all(value is None for value in parsed_result.values()):
+            if is_effectively_empty_result(parsed_result):
                 log_error(
                     config.error_log_path,
                     {
@@ -470,6 +665,8 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
                         "content_head": content[:500],
                     },
                 )
+            else:
+                should_write_result = True
         elif last_exception is not None:
             log_error(
                 config.error_log_path,
@@ -480,10 +677,11 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
                 },
             )
 
-        result_row = {"id": record_id, **parsed_result}
-        results_by_id[record_id] = result_row
-        ordered_results = _ordered_results(records, results_by_id)
-        write_json(config.output_path, ordered_results)
+        if should_write_result:
+            result_row = {"id": record_id, **parsed_result}
+            results_by_id[record_id] = result_row
+            ordered_results = _ordered_results(records, results_by_id)
+            write_json(config.output_path, ordered_results)
         processed += 1
 
     final_results = _ordered_results(records, results_by_id)
