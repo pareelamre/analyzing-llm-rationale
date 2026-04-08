@@ -76,6 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--temperature-tag", default=None)
     run_parser.add_argument("--max-tokens", type=int, default=int(os.environ.get("MAX_TOKENS", "2048")))
     run_parser.add_argument("--max-records", type=int, default=int(os.environ.get("MAX_RECORDS", "0")))
+    run_parser.add_argument("--shard-count", type=int, default=int(os.environ.get("SHARD_COUNT", "1")))
+    run_parser.add_argument("--shard-index", type=int, default=int(os.environ.get("SHARD_INDEX", "0")))
+    run_parser.add_argument("--progress-every", type=int, default=int(os.environ.get("PROGRESS_EVERY", "0")))
     run_parser.add_argument("--max-attempts", type=int, default=int(os.environ.get("RETRY_MAX", "3")))
     run_parser.add_argument(
         "--retry-base-sleep-s",
@@ -219,6 +222,8 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
     run_metadata_path = getattr(args, "run_metadata_path", None) or (
         output_dir / f"run_metadata_{variant.name}.json"
     )
+    if args.shard_count > 1 and getattr(args, "run_metadata_path", None) is None:
+        run_metadata_path = output_dir / f"run_metadata_{variant.name}.shard{args.shard_index}.json"
     output_fields = (
         [field.strip() for field in args.output_fields.split(",") if field.strip()]
         if args.output_fields
@@ -249,6 +254,9 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
         model_identifier=args.local_model_name if args.provider == "local-qwen" else args.router_model_name,
         temperature_tag=temperature_tag,
         run_metadata_path=run_metadata_path,
+        shard_count=max(1, args.shard_count),
+        shard_index=max(0, args.shard_index),
+        progress_every=max(0, args.progress_every),
     )
 
 

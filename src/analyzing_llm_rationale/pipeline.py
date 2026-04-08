@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fcntl
 import json
 import random
 import hashlib
@@ -77,6 +78,9 @@ class RunConfig:
     model_identifier: str = ""
     temperature_tag: str = ""
     run_metadata_path: Optional[Path] = None
+    shard_count: int = 1
+    shard_index: int = 0
+    progress_every: int = 0
 
 
 @dataclass
@@ -97,6 +101,15 @@ def write_json(path: Path, payload: object) -> None:
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
+
+
+def write_json_atomic(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f"{path.name}.tmp")
+    with tmp_path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+    tmp_path.replace(path)
 
 
 def log_error(error_log_path: Path, event: Dict[str, object]) -> None:
@@ -225,6 +238,18 @@ def _extract_from_jsonish_text(value: object, output_fields: Sequence[str]) -> D
                 extracted[field] = json.loads(f'"{match.group(1)}"')
             except json.JSONDecodeError:
                 extracted[field] = match.group(1)
+        elif field == "rationale":
+            # Handle truncated or malformed JSON strings where the closing quote is missing.
+            loose_match = re.search(
+                rf'"{re.escape(field)}"\s*:\s*"((?:\\.|[^"\\])*)(?:\"|$)',
+                value,
+                flags=re.S,
+            )
+            if loose_match:
+                try:
+                    extracted[field] = json.loads(f'"{loose_match.group(1)}"')
+                except json.JSONDecodeError:
+                    extracted[field] = loose_match.group(1)
 
     return extracted
 
@@ -373,6 +398,28 @@ def load_existing_results(output_path: Path) -> List[Dict[str, object]]:
     return existing if isinstance(existing, list) else []
 
 
+def merge_result_row_locked(
+    output_path: Path,
+    records: Sequence[Dict[str, object]],
+    result_row: Dict[str, object],
+) -> List[Dict[str, object]]:
+    lock_path = output_path.with_name(f"{output_path.name}.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock_handle:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        latest_results = load_existing_results(output_path)
+        latest_by_id = {
+            row.get("id"): row
+            for row in latest_results
+            if isinstance(row, dict) and row.get("id") is not None
+        }
+        latest_by_id[result_row.get("id")] = result_row
+        ordered_results = _ordered_results(records, latest_by_id)
+        write_json_atomic(output_path, ordered_results)
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+    return ordered_results
+
+
 def count_null_predictions(results: Iterable[Dict[str, object]]) -> int:
     return sum(1 for row in results if row.get("predicted_answer") is None)
 
@@ -403,6 +450,20 @@ def pending_record_ids(
         for record in records
         if isinstance(record, dict) and record.get("id") not in completed_ids
     ]
+
+
+def filter_shard_ids(
+    record_ids: Sequence[object],
+    shard_count: int,
+    shard_index: int,
+) -> List[object]:
+    if shard_count <= 1:
+        return list(record_ids)
+    filtered: List[object] = []
+    for rid in record_ids:
+        if isinstance(rid, int) and rid % shard_count == shard_index:
+            filtered.append(rid)
+    return filtered
 
 
 def compute_sleep_s(base_sleep_s: float, attempt: int) -> float:
@@ -523,7 +584,11 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
         )
 
     todo_ids = pending_record_ids(records, existing_results, config.reprocess_null_only)
+    if config.shard_count > 1:
+        todo_ids = filter_shard_ids(todo_ids, config.shard_count, config.shard_index)
     processed = 0
+
+    total_todo = len(todo_ids)
 
     for record_id in todo_ids:
         record = record_by_id.get(record_id)
@@ -680,9 +745,22 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
         if should_write_result:
             result_row = {"id": record_id, **parsed_result}
             results_by_id[record_id] = result_row
-            ordered_results = _ordered_results(records, results_by_id)
-            write_json(config.output_path, ordered_results)
+            ordered_results = merge_result_row_locked(config.output_path, records, result_row)
+            results_by_id = {
+                row.get("id"): row
+                for row in ordered_results
+                if isinstance(row, dict) and row.get("id") is not None
+            }
         processed += 1
+        if config.progress_every > 0 and (
+            processed == 1 or processed % config.progress_every == 0 or processed == total_todo
+        ):
+            print(
+                f"PROGRESS record_id={record_id} processed={processed}/{total_todo} "
+                f"wrote={'yes' if should_write_result else 'no'} "
+                f"results={len(results_by_id)} nulls={count_null_predictions(results_by_id.values())}",
+                flush=True,
+            )
 
     final_results = _ordered_results(records, results_by_id)
     summary = RunSummary(

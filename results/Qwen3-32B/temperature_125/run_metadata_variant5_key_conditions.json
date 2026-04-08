@@ -1,0 +1,36 @@
+{
+  "status": "completed",
+  "variant": "variant5_key_conditions",
+  "model_key": "qwen3-32b",
+  "model_label": "Qwen3-32B",
+  "provider": "local-qwen",
+  "model_identifier": "Qwen/Qwen3-32B",
+  "temperature": 1.25,
+  "temperature_tag": "temperature_125",
+  "max_tokens": 2048,
+  "max_attempts": 3,
+  "retry_base_sleep_s": 1.5,
+  "reprocess_null_only": false,
+  "drop_article_text": false,
+  "input_path": "forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json",
+  "output_path": "/data/horse/ws/paam844f-codabench/analyzing-llm-rationale/results/Qwen3-32B/temperature_125/results_variant5_key_conditions.json",
+  "error_log_path": "/data/horse/ws/paam844f-codabench/analyzing-llm-rationale/results/Qwen3-32B/temperature_125/errors_variant5_key_conditions.jsonl",
+  "system_prompt_path": "prompts/system.txt",
+  "user_prompt_path": "/data/horse/ws/paam844f-codabench/analyzing-llm-rationale/prompts/variant5_key_conditions.txt",
+  "output_fields": [
+    "predicted_answer",
+    "confidence",
+    "rationale",
+    "key_conditions"
+  ],
+  "input_record_count": 1580,
+  "existing_result_count": 0,
+  "system_prompt_sha256": "2ce302ae49b88f1417d3a1eda116c0f17564a59eb09decd2abc22d97e67a618a",
+  "user_prompt_sha256": "10779b736f9eee8772371dfe6cd34f069702c8f96a2f52753a69aeda9933badd",
+  "written_at": "2026-04-04T13:22:47",
+  "summary": {
+    "processed": 1580,
+    "total_results": 1580,
+    "null_predictions": 0
+  }
+}

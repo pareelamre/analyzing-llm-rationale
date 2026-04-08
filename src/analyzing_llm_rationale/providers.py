@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+from pathlib import Path
+import os
 from typing import Dict, List, Optional
 
 CONTEXT_WINDOW_SENTINEL = 1_000_000
@@ -31,6 +33,20 @@ class ChatProvider:
         max_tokens: int,
         ) -> str:
         raise NotImplementedError
+
+
+def resolve_hf_token() -> Optional[str]:
+    for env_var in ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGINGFACEHUB_API_TOKEN"):
+        value = os.environ.get(env_var, "").strip()
+        if value:
+            return value
+
+    token_path = Path(__file__).resolve().parents[2] / "HF_TOKEN.txt"
+    if token_path.exists():
+        value = token_path.read_text(encoding="utf-8").strip()
+        if value:
+            return value
+    return None
 
 
 def resolve_context_window(
@@ -166,7 +182,13 @@ class LocalQwenProvider(ChatProvider):
         else:
             self._resolved_device = self.device
 
-        tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        trust_remote = "Qwen3" in self.model_name
+        hf_token = resolve_hf_token()
+        tokenizer = AutoTokenizer.from_pretrained(
+            self.model_name,
+            trust_remote_code=trust_remote,
+            token=hf_token,
+        )
         if tokenizer.pad_token_id is None:
             tokenizer.pad_token = tokenizer.eos_token
 
@@ -176,12 +198,16 @@ class LocalQwenProvider(ChatProvider):
                 self.model_name,
                 torch_dtype=dtype,
                 device_map="auto",
+                trust_remote_code=trust_remote,
+                token=hf_token,
             )
         else:
             dtype = torch.float32 if self.torch_dtype is None else getattr(torch, self.torch_dtype)
             model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
                 torch_dtype=dtype,
+                trust_remote_code=trust_remote,
+                token=hf_token,
             )
             model.to(self._resolved_device)
 
@@ -261,11 +287,19 @@ class LocalQwenProvider(ChatProvider):
         assert self._model is not None
         assert self._tokenizer is not None
 
-        text = self._tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
+        apply_kwargs = {
+            "tokenize": False,
+            "add_generation_prompt": True,
+        }
+        # Qwen3 defaults to thinking mode; disable it to keep outputs clean JSON.
+        if "Qwen3" in self.model_name:
+            apply_kwargs["enable_thinking"] = False
+        try:
+            text = self._tokenizer.apply_chat_template(messages, **apply_kwargs)
+        except TypeError:
+            # Older transformers do not support enable_thinking.
+            apply_kwargs.pop("enable_thinking", None)
+            text = self._tokenizer.apply_chat_template(messages, **apply_kwargs)
         tokenized = self._tokenizer(text, return_tensors="pt")
         input_tokens = int(tokenized.input_ids.shape[1])
         ensure_prompt_fits_context(

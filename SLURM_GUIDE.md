@@ -1,196 +1,195 @@
-# SLURM Job Guide - Variant 3 Processing
+# SLURM Job Guide
 
-This guide shows how to run variant 3 processing on HPC using SLURM using a single launcher that can target either local GPU inference or Hugging Face Router.
+This repository uses one SLURM launcher per prompt variant plus a shared wrapper that resolves the effective model, provider, output paths, verification, and null-only reruns.
 
-## One Script, Two Provider Modes
+## Current Layout
 
-- **Script**: `slurm/variant3.sh`
-- **Default**: local GPU inference via `RUN_PROVIDER=local-qwen`
-- **Alternative**: Hugging Face Router via `RUN_PROVIDER=hf-router`
+- Variant launchers: `slurm/variant0.sh` through `slurm/variant8.sh`
+- Shared wrapper: `slurm/run_variant_common.sh`
+- Sweep submitter: `slurm/submit_sweep.sh`
 
----
+Each variant launcher only sets `VARIANT_NAME` and the SLURM resource request, then sources the shared wrapper.
 
-## Using Hugging Face Router
+## Current Resource Request
 
-### Setup
+All current variant launchers request:
 
-1. Set your HF token:
-```bash
-export HF_TOKEN='your_huggingface_token'
-```
+- `--nodes=1`
+- `--ntasks=1`
+- `--cpus-per-task=4`
+- `--mem=32G`
+- `--gres=gpu:1`
+- `--partition=capella`
+- `--time=48:00:00`
 
-2. Create logs directory:
+If you need different resources, update the relevant `slurm/variant*.sh` file.
+
+## Provider Resolution
+
+The effective provider is resolved from `configs/models.yaml` unless you explicitly override it with `RUN_PROVIDER`.
+
+Examples from the current model config:
+
+- `qwen2.5-7b-instruct` -> `local-qwen`
+- `qwen3-32b` -> `local-qwen`
+- `deepseek-v3` -> `openai-compatible`
+
+This means the variant launchers do not hardcode `local-qwen`. The provider follows the chosen model config by default.
+
+## Single-Variant Submission
+
+Submit one variant with the model and temperature you want:
+
 ```bash
 mkdir -p logs
+MODEL_CONFIG=qwen3-32b TEMPERATURE=0.75 sbatch slurm/variant0.sh
 ```
 
-3. Submit job:
-```bash
-RUN_PROVIDER=hf-router sbatch slurm/variant3.sh
+The wrapper derives the temperature directory tag automatically:
+
+- `0` -> `temperature_0`
+- `0.25` -> `temperature_025`
+- `0.75` -> `temperature_075`
+- `1.25` -> `temperature_125`
+
+Example result path for the command above:
+
+```text
+results/Qwen3-32B/temperature_075/results_variant0_neutral_baseline.json
 ```
 
-### Key Features
-- Temperature: **0.0** (deterministic)
-- Automatic retry with exponential backoff
-- Handles context length errors by dropping article text
-- Processes in chunks of 10 records
-- Loops until all records complete with no nulls
+## Full Sweep Submission
 
-## Using Local GPU Inference
-
-### Prerequisites
-
-1. Download the model (one-time, ~15GB):
-```bash
-# On login node or interactive session
-python download_qwen_model.py
-```
-
-This downloads to `~/.cache/huggingface/hub/` and takes 30-60 minutes.
-
-2. Install dependencies (if not already installed):
-```bash
-pip install --user transformers torch huggingface_hub accelerate
-```
-
-### Submit Job
+Use the sweep helper to submit multiple variants and temperatures:
 
 ```bash
-sbatch slurm/variant3.sh
+slurm/submit_sweep.sh \
+  --model qwen3-32b \
+  --prefix qwen3 \
+  --variants "0 1 2 3 4 5 6 7 8" \
+  --temperatures "0.75"
 ```
 
-### Key Features
-- Temperature: **0.0** (deterministic)
-- Runs on GPU (8-16GB VRAM recommended)
-- No API costs or rate limits
-- Processes records sequentially
-- Automatic resume support
+The sweep script:
 
----
+- submits one `sbatch` job per variant/temperature pair
+- writes a submission log under `logs/<prefix>_submit_<timestamp>.tsv`
+- sets `MODEL_CONFIG`, `TEMPERATURE`, and `TEMPERATURE_TAG` via `sbatch --export=ALL`
+- does not add inter-job dependencies
 
-## Monitoring Jobs
+If you need dependency chaining, you must add it yourself or modify the submit script.
 
-### Check job status
+## Useful Environment Overrides
+
+These are consumed by `slurm/run_variant_common.sh` and are forwarded through `submit_sweep.sh` because it uses `--export=ALL`.
+
+- `MODEL_CONFIG=...`: model key from `configs/models.yaml`
+- `RUN_PROVIDER=...`: override the provider resolved from the model config
+- `TEMPERATURE=...`: generation temperature
+- `TEMPERATURE_TAG=...`: manual override for the output directory tag
+- `MODEL_LABEL=...`: override the result directory name under `results/`
+- `LOCAL_MODEL_NAME=...`: override the local inference model name
+- `ROUTER_MODEL_NAME=...`: override the router model name
+- `MAX_RECORDS=...`: limit a run to a subset of records
+- `MAX_TOKENS=...`: generation length limit
+- `MAX_ATTEMPTS=...`: retry count per record
+- `RETRY_BASE_SLEEP_S=...`: exponential backoff base delay
+- `REQUEST_TIMEOUT_S=...`: request timeout
+- `DROP_ARTICLE_TEXT=1`: trim raw article text from prompts
+- `REPROCESS_NULLS=1`: rerun only rows with null predictions
+- `AUTO_RERUN_NULLS=0`: disable the automatic null-only rerun after a full run
+- `VERIFY_RESULTS=0`: disable post-run verification
+- `FAIL_ON_VERIFY=0`: do not fail the SLURM job when verification fails
+
+## Runtime Behavior
+
+For a full run, the wrapper currently does the following:
+
+1. Resolves the effective provider from `configs/models.yaml` unless overridden.
+2. Runs `scripts/run_variant.py`.
+3. If `AUTO_RERUN_NULLS=1` and this is not a partial run, checks for null predictions and reruns null rows only when needed.
+4. Runs `scripts/verify_results.py` unless verification is disabled.
+
+## Monitoring
+
+Check your jobs:
+
 ```bash
-squeue -u $USER
+squeue -u "$USER"
 ```
 
-### Watch output logs
+Watch a job log:
+
 ```bash
-# For Hugging Face Router
-tail -f logs/variant3_JOBID.out
-
-# For local GPU
-tail -f logs/variant3_JOBID.out
+tail -f logs/qwen3_v0_t075_JOBID.out
+tail -f logs/qwen3_v0_t075_JOBID.err
 ```
 
-### Check progress
+The sweep submitter sets custom log names like:
+
+- `logs/qwen3_v0_t075_<jobid>.out`
+- `logs/qwen3_v0_t075_<jobid>.err`
+
+The launcher scripts themselves contain default `#SBATCH --output/--error` lines, but `submit_sweep.sh` overrides those at submission time.
+
+## Common Examples
+
+Run variant 3 for Qwen3 at temperature 0.75:
+
 ```bash
-python -c "
-import json
-from pathlib import Path
-p = Path('results/Qwen2.5-7b-instruct/temperature_00/results_variant3_reasoning_type.json')
-if p.exists():
-    data = json.load(p.open())
-    total = len(data)
-    nulls = sum(1 for r in data if r.get('predicted_answer') is None)
-    print(f'Progress: {total} records, {nulls} nulls, {total-nulls} complete')
-"
+MODEL_CONFIG=qwen3-32b TEMPERATURE=0.75 sbatch slurm/variant3.sh
 ```
 
-### Cancel job
+Run only null predictions for an existing result:
+
 ```bash
-scancel JOBID
+MODEL_CONFIG=qwen3-32b TEMPERATURE=0.25 REPROCESS_NULLS=1 sbatch slurm/variant5.sh
 ```
 
----
+Run a small partial test:
 
-## Resource Requirements
+```bash
+MODEL_CONFIG=qwen3-32b TEMPERATURE=0.75 MAX_RECORDS=20 sbatch slurm/variant0.sh
+```
 
-| Option | GPU | CPUs | RAM | Time | Partition |
-|--------|-----|------|-----|------|-----------|
-| Hugging Face Router | No | 4 | 16GB | 48h | standard |
-| Local GPU | Yes (1x) | 4 | 32GB | 48h | gpu |
+Override to a different provider explicitly:
 
----
-
-## Performance Comparison
-
-| Method | Speed/Record | Total Time (700 records) | Cost |
-|--------|--------------|--------------------------|------|
-| HF API | 5-10s | 1-2 hours | $$ (uses credits) |
-| Local GPU | 10-15s | 2-3 hours | Free |
-| Local CPU | 2-3 min | 20-30 hours | Free (very slow) |
-
-**Recommendation**: Use **Local GPU** (Option 2) for best balance of speed and cost.
-
----
-
-## Configuration
-
-Both scripts use temperature **0.0** for deterministic outputs.
-
-### Common Script Environment Variables
-Set in `slurm/variant3.sh`:
-- `CHUNK_SIZE=10` - Records per batch run
-- `RETRY_MAX=6` - Max retries per record
-- `RETRY_BASE_SLEEP_S=1.5` - Initial retry delay
-- `REQUEST_TIMEOUT_S=120` - HTTP timeout
-- `RUN_PROVIDER=local-qwen|hf-router` - Provider selection
-- `MODEL_CONFIG=qwen2.5-7b-instruct` - Model key from `configs/models.yaml`
-- `TEMPERATURE=0.0` - Generation temperature
-- `MODEL_LABEL=Qwen2.5-7b-instruct` - Result directory segment
-
----
+```bash
+RUN_PROVIDER=hf-router MODEL_CONFIG=qwen3-32b TEMPERATURE=0.75 sbatch slurm/variant0.sh
+```
 
 ## Troubleshooting
 
-### Hugging Face Router Issues
+`sbatch` hangs or `scontrol ping` times out:
 
-**"HF_TOKEN not set"**
-```bash
-export HF_TOKEN='your_token'
-RUN_PROVIDER=hf-router sbatch slurm/variant3.sh
-```
+- This is a cluster-side SLURM availability problem, not a repo problem.
+- Check `scontrol ping` and `squeue -u "$USER"` from the login node.
+- Retry submission once the controller is responsive again.
 
-**"Out of credits"**
-Switch to local GPU inference by omitting `RUN_PROVIDER=hf-router`
+Local GPU model errors:
 
-### Local GPU Issues
-
-**"Model not found"**
 ```bash
 python download_qwen_model.py
 ```
 
-**"CUDA out of memory"**
-- Request GPU with more VRAM: `#SBATCH --gres=gpu:a100:1`
-- Or fall back to CPU (very slow)
+Missing Python dependencies:
 
-**"ImportError: No module named transformers"**
 ```bash
 pip install --user transformers torch huggingface_hub accelerate
 ```
 
----
+HF Router auth issues:
 
-## Which Mode Should I Use?
+```bash
+export HF_TOKEN='your_token'
+export HUGGINGFACEHUB_API_TOKEN="$HF_TOKEN"
+```
 
-Use **Local GPU** if:
-- ✓ You're out of HF API credits
-- ✓ You want free, unlimited processing
-- ✓ You have access to GPU nodes
-- ✓ You've downloaded the model
+## Source Of Truth
 
-Use **Hugging Face Router** if:
-- ✓ You have HF API credits
-- ✓ You don't want to download the model
-- ✓ You only have CPU nodes available
-- ✓ You need slightly faster per-record processing
+When this guide and the code diverge, trust the code in:
 
----
-
-## Next Steps
-
-After variant 3 completes, use the matching scripts in `slurm/variant0.sh` through `slurm/variant8.sh`.
-You can verify a results file with `python scripts/verify_results.py --variant variant3_reasoning_type`.
+- `slurm/variant*.sh`
+- `slurm/run_variant_common.sh`
+- `slurm/submit_sweep.sh`
+- `configs/models.yaml`

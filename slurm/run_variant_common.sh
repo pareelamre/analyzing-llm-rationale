@@ -13,6 +13,15 @@ cd "${REPO_ROOT}"
 
 mkdir -p logs
 
+PYTHON_BIN=${PYTHON_BIN:-}
+if [[ -z "${PYTHON_BIN}" ]]; then
+  if [[ -x "${REPO_ROOT}/envs/py310/bin/python" ]]; then
+    PYTHON_BIN="${REPO_ROOT}/envs/py310/bin/python"
+  else
+    PYTHON_BIN="python"
+  fi
+fi
+
 MODEL_CONFIG=${MODEL_CONFIG:-qwen2.5-7b-instruct}
 # Provider defaults to the value declared in configs/models.yaml for the selected model.
 # Set RUN_PROVIDER explicitly only when you need to override the model config.
@@ -22,7 +31,7 @@ LOCAL_MODEL_NAME=${LOCAL_MODEL_NAME:-}
 ROUTER_MODEL_NAME=${ROUTER_MODEL_NAME:-}
 MODEL_DEVICE=${MODEL_DEVICE:-cuda}
 TEMPERATURE=${TEMPERATURE:-0.0}
-TEMPERATURE_TAG=${TEMPERATURE_TAG:-$(python - <<'PY'
+TEMPERATURE_TAG=${TEMPERATURE_TAG:-$("${PYTHON_BIN}" - <<'PY'
 import os
 value = os.environ.get("TEMPERATURE", "0.0").strip()
 print(f"temperature_{value.replace('.', '')}")
@@ -47,7 +56,7 @@ REPROCESS_NULLS=${REPROCESS_NULLS:-0}
 
 # Resolve the effective provider from the model config when not overridden.
 if [[ -z "${RUN_PROVIDER}" ]]; then
-  RUN_PROVIDER=$(python - <<PY
+  RUN_PROVIDER=$("${PYTHON_BIN}" - <<PY
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path.cwd() / "src"))
@@ -79,7 +88,7 @@ if [[ "${RUN_PROVIDER}" == "local-qwen" ]]; then
   if command -v nvidia-smi >/dev/null 2>&1; then
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
   fi
-  python - <<'PY'
+  "${PYTHON_BIN}" - <<'PY'
 try:
     import torch
     print(f"CUDA: {torch.cuda.is_available()}")
@@ -89,17 +98,17 @@ PY
 fi
 
 append_arg() {
-  local -n target_array="$1"
+  local -n args_ref="$1"
   local flag="$2"
   local value="${3:-}"
   if [[ -n "${value}" ]]; then
-    target_array+=("${flag}" "${value}")
+    args_ref+=("${flag}" "${value}")
   fi
 }
 
 build_run_args() {
-  local -n target_array="$1"
-  target_array=(
+  local -n args_ref="$1"
+  args_ref=(
     --variant "${VARIANT_NAME}"
     --model "${MODEL_CONFIG}"
     --temperature "${TEMPERATURE}"
@@ -116,22 +125,22 @@ build_run_args() {
     --models-config "${MODELS_CONFIG}"
   )
 
-  append_arg target_array --provider "${RUN_PROVIDER}"
-  append_arg target_array --model-label "${MODEL_LABEL}"
-  append_arg target_array --local-model-name "${LOCAL_MODEL_NAME}"
-  append_arg target_array --router-model-name "${ROUTER_MODEL_NAME}"
-  append_arg target_array --user-prompt-path "${PROMPT_PATH}"
-  append_arg target_array --output-path "${OUTPUT_PATH}"
-  append_arg target_array --error-log-path "${ERROR_LOG_PATH}"
+  append_arg args_ref --provider "${RUN_PROVIDER}"
+  append_arg args_ref --model-label "${MODEL_LABEL}"
+  append_arg args_ref --local-model-name "${LOCAL_MODEL_NAME}"
+  append_arg args_ref --router-model-name "${ROUTER_MODEL_NAME}"
+  append_arg args_ref --user-prompt-path "${PROMPT_PATH}"
+  append_arg args_ref --output-path "${OUTPUT_PATH}"
+  append_arg args_ref --error-log-path "${ERROR_LOG_PATH}"
 
   if [[ "${DROP_ARTICLE_TEXT:-0}" == "1" ]]; then
-    target_array+=(--drop-article-text)
+    args_ref+=(--drop-article-text)
   fi
 }
 
 build_verify_args() {
-  local -n target_array="$1"
-  target_array=(
+  local -n args_ref="$1"
+  args_ref=(
     --variant "${VARIANT_NAME}"
     --model "${MODEL_CONFIG}"
     --temperature "${TEMPERATURE}"
@@ -141,8 +150,8 @@ build_verify_args() {
     --models-config "${MODELS_CONFIG}"
   )
 
-  append_arg target_array --model-label "${MODEL_LABEL}"
-  append_arg target_array --output-path "${OUTPUT_PATH}"
+  append_arg args_ref --model-label "${MODEL_LABEL}"
+  append_arg args_ref --output-path "${OUTPUT_PATH}"
 }
 
 resolved_output_path() {
@@ -169,7 +178,7 @@ resolved_output_path() {
     ROUTER_MODEL_NAME="${ROUTER_MODEL_NAME}" \
     MODEL_DEVICE="${MODEL_DEVICE}" \
     REQUEST_TIMEOUT_S="${REQUEST_TIMEOUT_S}" \
-    python - <<'PY'
+    "${PYTHON_BIN}" - <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -215,7 +224,7 @@ PY
 
 count_null_predictions() {
   local output_path="$1"
-  python - "$output_path" <<'PY'
+  "${PYTHON_BIN}" - "$output_path" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -238,7 +247,7 @@ run_phase() {
   local label="$1"
   shift
   echo "=== ${label} ==="
-  python scripts/run_variant.py "$@"
+  "${PYTHON_BIN}" scripts/run_variant.py "$@"
 }
 
 RUN_ARGS=()
@@ -263,7 +272,7 @@ if [[ "${VERIFY_RESULTS}" == "1" && "${MAX_RECORDS}" == "0" ]]; then
   VERIFY_ARGS=()
   build_verify_args VERIFY_ARGS
   echo "=== verification ==="
-  if python scripts/verify_results.py "${VERIFY_ARGS[@]}"; then
+  if "${PYTHON_BIN}" scripts/verify_results.py "${VERIFY_ARGS[@]}"; then
     echo "Verification passed."
   else
     echo "Verification failed."

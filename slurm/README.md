@@ -16,10 +16,10 @@ Variant launchers:
 
 Shared helper:
 
-- `run_variant_common.sh`: resolves provider/model/temperature/output paths and calls the packaged CLI
-- `submit_sweep.sh`: submits a full multi-variant sweep with a configurable active-job cap using SLURM dependencies
+- `run_variant_common.sh`: resolves provider/model/temperature/output paths, runs the packaged CLI, optionally reruns null predictions, and verifies outputs
+- `submit_sweep.sh`: submits a full multi-variant sweep directly with `sbatch`
 
-The variant launchers default to `RUN_PROVIDER=local-qwen`, but can also run against Hugging Face Router with `RUN_PROVIDER=hf-router`.
+The variant launchers do not hardcode a provider. The effective provider is resolved from `configs/models.yaml` for the selected `MODEL_CONFIG`, unless you override it with `RUN_PROVIDER=...`.
 
 Useful overrides:
 
@@ -33,15 +33,14 @@ Useful overrides:
 - `REPROCESS_NULLS=1`: rerun only rows with null predictions
 - `DROP_ARTICLE_TEXT=1`: trim raw article text from prompts
 
-Concurrency control:
+Sweep submission:
 
-- Use `slurm/submit_sweep.sh` instead of a raw nested `sbatch` loop when you want to avoid flooding a hosted API.
-- `--max-concurrent N` caps how many jobs from the sweep can run at once.
+- `slurm/submit_sweep.sh` submits each requested variant and temperature without adding inter-job dependencies.
+- The script forwards environment overrides through `sbatch --export=ALL`, including retry and verification flags.
 - Example:
 
 ```bash
 slurm/submit_sweep.sh \
   --model llama-3.3-70b-instruct \
-  --prefix llama33 \
-  --max-concurrent 4
+  --prefix llama33
 ```
