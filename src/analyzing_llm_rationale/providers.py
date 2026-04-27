@@ -6,7 +6,12 @@ from pathlib import Path
 import os
 from typing import Dict, List, Optional
 
+from analyzing_llm_rationale.cache_env import configure_workspace_cache_env
+
 CONTEXT_WINDOW_SENTINEL = 1_000_000
+
+
+configure_workspace_cache_env()
 
 
 class ProviderError(RuntimeError):

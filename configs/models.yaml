@@ -66,6 +66,15 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+  gemma-4-31b-it:
+    result_label: Gemma-4-31B-it
+    provider: openai-compatible
+    local_model_name: google/gemma-4-31B-it
+    router_model_name: google/gemma-4-31B-it
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
   kimi-k2.5:
     result_label: Kimi-K2.5
     provider: openai-compatible

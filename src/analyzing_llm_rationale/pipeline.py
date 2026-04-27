@@ -17,7 +17,11 @@ from analyzing_llm_rationale.providers import (
     ProviderResponseError,
     RetryableProviderError,
 )
-from analyzing_llm_rationale.validation import validate_dataset_records, validate_result_records
+from analyzing_llm_rationale.validation import (
+    is_incomplete_prediction_row,
+    validate_dataset_records,
+    validate_result_records,
+)
 
 ARTICLE_FIELDS = (
     "url",
@@ -421,7 +425,7 @@ def merge_result_row_locked(
 
 
 def count_null_predictions(results: Iterable[Dict[str, object]]) -> int:
-    return sum(1 for row in results if row.get("predicted_answer") is None)
+    return sum(1 for row in results if is_incomplete_prediction_row(row))
 
 
 def is_effectively_empty_result(result: Dict[str, object]) -> bool:
@@ -437,7 +441,7 @@ def pending_record_ids(
         return [
             row.get("id")
             for row in existing_results
-            if isinstance(row, dict) and row.get("predicted_answer") is None
+            if isinstance(row, dict) and is_incomplete_prediction_row(row)
         ]
 
     completed_ids = {

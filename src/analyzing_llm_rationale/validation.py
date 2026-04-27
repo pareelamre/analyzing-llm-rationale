@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import math
 from typing import Dict, Iterable, List, Optional, Sequence
 
 
@@ -37,6 +38,39 @@ class VerificationSummary:
 
 def _append_issue(issues: List[str], path: str, message: str) -> None:
     issues.append(f"{path}: {message}")
+
+
+def _normalize_binary_answer(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in {"yes", "no"}:
+        return normalized
+    return None
+
+
+def _normalize_confidence(value: object) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(confidence) or math.isinf(confidence):
+        return None
+    if not (0.0 <= confidence <= 1.0):
+        return None
+    return confidence
+
+
+def is_incomplete_prediction_row(row: object) -> bool:
+    if not isinstance(row, dict):
+        return True
+    if _normalize_binary_answer(row.get("predicted_answer")) is None:
+        return True
+    if _normalize_confidence(row.get("confidence")) is None:
+        return True
+    return False
 
 
 def validate_dataset_records(records: object) -> None:
@@ -153,7 +187,7 @@ def verify_result_records(
         if missing_fields:
             incomplete_ids.append(row_id)
             continue
-        if row.get("predicted_answer") is None:
+        if is_incomplete_prediction_row(row):
             null_prediction_ids.append(row_id)
             incomplete_ids.append(row_id)
             continue

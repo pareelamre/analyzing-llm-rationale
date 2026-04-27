@@ -13,6 +13,32 @@ cd "${REPO_ROOT}"
 
 mkdir -p logs
 
+WORKSPACE_CACHE_ROOT=${WORKSPACE_CACHE_ROOT:-${REPO_ROOT}/.cache}
+export XDG_CACHE_HOME=${XDG_CACHE_HOME:-${WORKSPACE_CACHE_ROOT}/xdg}
+export HF_HOME=${HF_HOME:-${WORKSPACE_CACHE_ROOT}/huggingface}
+export HF_HUB_CACHE=${HF_HUB_CACHE:-${HF_HOME}/hub}
+export HUGGINGFACE_HUB_CACHE=${HUGGINGFACE_HUB_CACHE:-${HF_HUB_CACHE}}
+export TRANSFORMERS_CACHE=${TRANSFORMERS_CACHE:-${HF_HOME}/transformers}
+export HF_DATASETS_CACHE=${HF_DATASETS_CACHE:-${HF_HOME}/datasets}
+export HF_ASSETS_CACHE=${HF_ASSETS_CACHE:-${HF_HOME}/assets}
+export HF_MODULES_CACHE=${HF_MODULES_CACHE:-${HF_HOME}/modules}
+export TORCH_HOME=${TORCH_HOME:-${WORKSPACE_CACHE_ROOT}/torch}
+export TORCHINDUCTOR_CACHE_DIR=${TORCHINDUCTOR_CACHE_DIR:-${WORKSPACE_CACHE_ROOT}/torchinductor}
+export TRITON_CACHE_DIR=${TRITON_CACHE_DIR:-${WORKSPACE_CACHE_ROOT}/triton}
+export PIP_CACHE_DIR=${PIP_CACHE_DIR:-${WORKSPACE_CACHE_ROOT}/pip}
+mkdir -p \
+  "${XDG_CACHE_HOME}" \
+  "${HF_HOME}" \
+  "${HF_HUB_CACHE}" \
+  "${TRANSFORMERS_CACHE}" \
+  "${HF_DATASETS_CACHE}" \
+  "${HF_ASSETS_CACHE}" \
+  "${HF_MODULES_CACHE}" \
+  "${TORCH_HOME}" \
+  "${TORCHINDUCTOR_CACHE_DIR}" \
+  "${TRITON_CACHE_DIR}" \
+  "${PIP_CACHE_DIR}"
+
 PYTHON_BIN=${PYTHON_BIN:-}
 if [[ -z "${PYTHON_BIN}" ]]; then
   if [[ -x "${REPO_ROOT}/envs/py310/bin/python" ]]; then
@@ -76,6 +102,7 @@ echo "Job ${SLURM_JOB_ID:-local} on ${SLURM_NODELIST:-unknown} - $(date)"
 echo "Variant: ${VARIANT_NAME}"
 echo "Provider: ${RUN_PROVIDER}"
 echo "Model key: ${MODEL_CONFIG}"
+echo "Cache root: ${WORKSPACE_CACHE_ROOT}"
 if [[ -n "${MODEL_LABEL}" ]]; then
   echo "Model label override: ${MODEL_LABEL}"
 fi

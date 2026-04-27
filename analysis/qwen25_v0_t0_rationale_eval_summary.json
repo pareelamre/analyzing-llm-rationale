@@ -1,0 +1,258 @@
+{
+  "dataset": "/data/horse/ws/paam844f-codabench/analyzing-llm-rationale/forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json",
+  "results": "/data/horse/ws/paam844f-codabench/analyzing-llm-rationale/results/Qwen2.5-7b-instruct/temperature_000/results_variant0_neutral_baseline.json",
+  "n_scored": 1580,
+  "correctness_definition": "predicted_answer == dataset answer",
+  "metrics": {
+    "forecast_correct": {
+      "mean": 0.7544303797468355,
+      "median": 1.0,
+      "p10": 0.0,
+      "p90": 1.0
+    },
+    "confidence": {
+      "mean": 0.8522689873417721,
+      "median": 0.85,
+      "p10": 0.75,
+      "p90": 0.95
+    },
+    "word_count": {
+      "mean": 45.43417721518988,
+      "median": 44.0,
+      "p10": 34.0,
+      "p90": 59.0
+    },
+    "sentence_count": {
+      "mean": 2.437341772151899,
+      "median": 2.0,
+      "p10": 1.0,
+      "p90": 4.0
+    },
+    "context_grounding": {
+      "mean": 0.6181989122808546,
+      "median": 0.625,
+      "p10": 0.45,
+      "p90": 0.782608695652174
+    },
+    "question_focus": {
+      "mean": 0.7029828289621823,
+      "median": 0.75,
+      "p10": 0.36363636363636365,
+      "p90": 1.0
+    },
+    "article_support": {
+      "mean": 0.30837968099864616,
+      "median": 0.313125,
+      "p10": 0.10125,
+      "p90": 0.5115
+    },
+    "temporal_specificity": {
+      "mean": 0.899367088607595,
+      "median": 1.0,
+      "p10": 0.0,
+      "p90": 1.0
+    },
+    "conciseness": {
+      "mean": 0.9581424050632912,
+      "median": 1.0,
+      "p10": 0.75,
+      "p90": 1.0
+    },
+    "hedging_alignment": {
+      "mean": 0.6786075949367089,
+      "median": 0.8,
+      "p10": 0.3,
+      "p90": 1.0
+    },
+    "quality_proxy": {
+      "mean": 0.694279751808213,
+      "median": 0.7078133903133903,
+      "p10": 0.544047619047619,
+      "p90": 0.8186066666666667
+    }
+  },
+  "breakdown_by_forecast_correctness": {
+    "correct": {
+      "forecast_correct": 1.0,
+      "confidence": 0.8594924496644294,
+      "word_count": 44.65604026845637,
+      "sentence_count": 2.452181208053691,
+      "context_grounding": 0.6241762247598975,
+      "question_focus": 0.7153907344279218,
+      "article_support": 0.3194560454366506,
+      "temporal_specificity": 0.9077181208053692,
+      "conciseness": 0.9616610738255034,
+      "hedging_alignment": 0.68498322147651,
+      "quality_proxy": 0.7022309034553088
+    },
+    "incorrect": {
+      "forecast_correct": 0.0,
+      "confidence": 0.8300773195876289,
+      "word_count": 47.824742268041234,
+      "sentence_count": 2.3917525773195876,
+      "context_grounding": 0.5998356223967848,
+      "question_focus": 0.664863696706612,
+      "article_support": 0.2743512624159107,
+      "temporal_specificity": 0.8737113402061856,
+      "conciseness": 0.9473324742268041,
+      "hedging_alignment": 0.659020618556701,
+      "quality_proxy": 0.6698525024181664
+    }
+  },
+  "strongest_correct_examples": [
+    {
+      "id": 41271,
+      "confidence": 0.85,
+      "quality_proxy": 0.9377380952380951,
+      "context_grounding": 0.9523809523809523,
+      "question_focus": 1.0,
+      "article_support": 0.674047619047619,
+      "question": "Will ABBV's market close price on 2025-12-31 be higher than its market close price on 2025-12-24?",
+      "rationale": "The latest available trading day for the target date (2025-12-31) is 2025-12-30, with a closing price of 229.74. This is lower than the baseline closing price of 229.89 on 2025-12-24, indicating that ABBV\u2019s market close price on 2025-12-31 will not be higher than its market close price on 2025-12-24."
+    },
+    {
+      "id": 31124,
+      "confidence": 0.95,
+      "quality_proxy": 0.9298888888888889,
+      "context_grounding": 0.9666666666666667,
+      "question_focus": 0.8333333333333334,
+      "article_support": 0.7793333333333333,
+      "question": "Will car crash deaths in the US be below 40,000 for 2024?",
+      "rationale": "Preliminary data from the National Highway Traffic Safety Administration (NHTSA) shows that 39,345 people died in traffic crashes in 2024, which is a decrease of about 3.8% compared to 2023. This marks the first time since 2020 that the number of fatalities fell below 40,000."
+    },
+    {
+      "id": 41434,
+      "confidence": 0.85,
+      "quality_proxy": 0.9249944444444443,
+      "context_grounding": 0.9333333333333333,
+      "question_focus": 1.0,
+      "article_support": 0.6166333333333334,
+      "question": "Will WY's market close price on 2026-01-16 be higher than its market close price on 2026-01-09?",
+      "rationale": "The Stooq-derived daily close prices show that the market close price of WY on 2026-01-16 ($27.06) is higher than its market close price on 2026-01-09 ($25.73)."
+    },
+    {
+      "id": 41287,
+      "confidence": 0.85,
+      "quality_proxy": 0.9238888888888889,
+      "context_grounding": 0.9047619047619048,
+      "question_focus": 1.0,
+      "article_support": 0.6385714285714286,
+      "question": "Will MTB's market close price on 2026-01-01 be higher than its market close price on 2025-12-27?",
+      "rationale": "The latest available trading day for the baseline date (2025-12-27) had a closing price of 207.28, while the latest available trading day for the target date (2026-01-01) had a closing price of 201.48. Since the target closing price is lower than the baseline closing price, the market close price on 2026-01-01 will not be higher than its market close price on 2025-12-27."
+    },
+    {
+      "id": 31151,
+      "confidence": 0.95,
+      "quality_proxy": 0.9228333333333333,
+      "context_grounding": 0.9642857142857143,
+      "question_focus": 1.0,
+      "article_support": 0.5727142857142857,
+      "question": "Will the International Longshoremen's Association (ILA) go on strike before February 1, 2025?",
+      "rationale": "Credible news sources, including PBS and The Guardian, report that the International Longshoremen's Association and the U.S. Maritime Alliance reached a tentative six-year contract agreement a week before the January 15, 2025 deadline, effectively averting any potential strike before February 1, 2025."
+    }
+  ],
+  "high_confidence_failures": [
+    {
+      "id": 36877,
+      "confidence": 0.95,
+      "quality_proxy": 0.5561728395061728,
+      "context_grounding": 0.037037037037037035,
+      "question_focus": 1.0,
+      "article_support": 0.0,
+      "question": "\u0427\u0438 \u0437\u0443\u0441\u0442\u0440\u0456\u043d\u0435\u0442\u044c\u0441\u044f \u0417\u0435\u043b\u0435\u043d\u0441\u044c\u043a\u0438\u0439 \u0437 \u0422\u0440\u0430\u043c\u043f\u043e\u043c \u0434\u043e \u043b\u0438\u043f\u043d\u044f 2025?",
+      "rationale": "Since the last meeting in February 2025, there has been no indication of any upcoming personal meetings between President Volodymyr Zelensky of Ukraine and President Donald Trump of the United States. Given the lack of concrete plans or announcements, it is unlikely they will meet before July 1, 2025."
+    },
+    {
+      "id": 36173,
+      "confidence": 0.95,
+      "quality_proxy": 0.564906220322887,
+      "context_grounding": 0.37037037037037035,
+      "question_focus": 0.6923076923076923,
+      "article_support": 0.02675925925925926,
+      "question": "Will the Guatemala City, Guatemala fail to reach reach 80 degrees F on any day after the launch of this question and before April 1, 2025?",
+      "rationale": "The evidence provided does not contain any relevant weather data for Guatemala City, Guatemala, and there is no indication of an unusual weather pattern that would prevent temperatures from reaching 80 degrees F. Given the typical climate in Guatemala City, it is highly unlikely that the temperature will not reach 80 degrees F before April 1, 2025."
+    },
+    {
+      "id": 37436,
+      "confidence": 0.95,
+      "quality_proxy": 0.6013671274961597,
+      "context_grounding": 0.5483870967741935,
+      "question_focus": 0.5714285714285714,
+      "article_support": 0.18838709677419355,
+      "question": "Will 300 or more UN staff be reported to be killed in Gaza according to UN's OCHA in its final impact snapshot before July 1, 2025?",
+      "rationale": "The latest evidence provided is a security verification notice from the UNRWA website, which does not contain any information about UN staff fatalities in Gaza. Given the lack of relevant data and the time proximity to the resolution date, it is unlikely that the number of reported UN staff killed will reach 300 by July 1, 2025."
+    },
+    {
+      "id": 31217,
+      "confidence": 0.95,
+      "quality_proxy": 0.5961527777777778,
+      "context_grounding": 0.5666666666666667,
+      "question_focus": 0.625,
+      "article_support": 0.08525,
+      "question": "Will Brazil officially launch its digital currency (Drex) by March 2025?",
+      "rationale": "The evidence indicates that by March 2025, the Central Bank of Brazil had already made significant progress in the Drex project, with an 18-month pilot completed and the currency ready for public use. Given the timeline and the lack of any official postponements mentioned, it is highly likely that Drex was launched as planned."
+    },
+    {
+      "id": 35474,
+      "confidence": 0.95,
+      "quality_proxy": 0.7031987179487179,
+      "context_grounding": 0.5769230769230769,
+      "question_focus": 1.0,
+      "article_support": 0.3422692307692307,
+      "question": "Will India's Gaganyaan-1 program launch a flight test before April 1, 2025?",
+      "rationale": "The article mentions that India's Gaganyaan mission is planned for 2025 and explicitly states that the first space hotel is set to begin construction in 2025. Given the timeline and the explicit mention, it is highly likely that the Gaganyaan-1 program will launch a flight test before April 1, 2025."
+    }
+  ],
+  "grounded_but_wrong_examples": [
+    {
+      "id": 39489,
+      "confidence": 0.85,
+      "quality_proxy": 0.9102932098765432,
+      "context_grounding": 0.9259259259259259,
+      "question_focus": 0.9,
+      "article_support": 0.6358333333333334,
+      "question": "In 2025, will the domestic content requirements become mandatory for obtaining the IRA's Production Tax Credits (45Y)?",
+      "rationale": "The One Big Beautiful Bill Act (OBBBA), signed into law on July 4, 2025, harmonizes the domestic content requirements under Section 48E with those under Section 45Y for projects beginning construction on or after June 16, 2025. This indicates that the domestic content requirements become mandatory for the Production Tax Credits (PTC) described in Section 45Y."
+    },
+    {
+      "id": 35472,
+      "confidence": 0.95,
+      "quality_proxy": 0.9025341130604289,
+      "context_grounding": 0.8947368421052632,
+      "question_focus": 0.8888888888888888,
+      "article_support": 0.6315789473684211,
+      "question": "Will SpaceX's Fram2 mission launch before April 1, 2025?",
+      "rationale": "The SpaceX Fram2 mission launched on March 31, 2025, and the crew began uploading views of Earth's poles from their polar orbit. This confirms the mission launched before April 1, 2025."
+    },
+    {
+      "id": 39357,
+      "confidence": 0.85,
+      "quality_proxy": 0.75625,
+      "context_grounding": 0.8695652173913043,
+      "question_focus": 0.5625,
+      "article_support": 0.35543478260869565,
+      "question": "Which of these changes to the 45X clean energy manufacturing tax credit of the 2022 Inflation Reduction Act will occur before January 1, 2026? (Capped credits)",
+      "rationale": "The One Big Beautiful Bill Act, signed into law on July 4, 2025, by President Trump, includes provisions to cap 45X tax credits, which directly addresses the question of whether capped credits will occur before January 1, 2026."
+    },
+    {
+      "id": 35480,
+      "confidence": 0.95,
+      "quality_proxy": 0.8753333333333333,
+      "context_grounding": 0.8636363636363636,
+      "question_focus": 0.8,
+      "article_support": 0.5883636363636363,
+      "question": "Will 900,000 Russian personnel losses be reported before March 21, 2025?",
+      "rationale": "On March 21, 2025, the Commander-in-Chief of the Armed Forces of Ukraine, Oleksandr Syrskyi, announced that Russian personnel losses in Ukraine had exceeded 900,000. This announcement meets the criteria for resolving the question as 'Yes'."
+    },
+    {
+      "id": 39475,
+      "confidence": 0.85,
+      "quality_proxy": 0.5126541274817137,
+      "context_grounding": 0.8620689655172413,
+      "question_focus": 0.45454545454545453,
+      "article_support": 0.4593103448275862,
+      "question": "Will a dense machine learning model with at least 100 trillion parameters be trained before 2026?",
+      "rationale": "The NVIDIA Rubin platform, as described in the article, is designed to support large-scale AI inference and training, potentially accommodating models with over 100 trillion parameters. The platform's architecture, including the Vera CPU and Rubin GPU, is optimized for sustained intelligence production and high throughput, suggesting it could support such a dense model."
+    }
+  ]
+}
