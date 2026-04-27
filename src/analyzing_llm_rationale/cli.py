@@ -213,6 +213,9 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
     model = args._resolved_model_config
     variants = load_variant_configs(args.variants_config)
     variant = variants[args.variant]
+    shard_count = max(1, getattr(args, "shard_count", 1))
+    shard_index = max(0, getattr(args, "shard_index", 0))
+    progress_every = max(0, getattr(args, "progress_every", 0))
 
     user_prompt_path = args.user_prompt_path or (root / variant.prompt_path)
     temperature_tag = args.temperature_tag or temperature_to_tag(args.temperature)
@@ -222,8 +225,8 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
     run_metadata_path = getattr(args, "run_metadata_path", None) or (
         output_dir / f"run_metadata_{variant.name}.json"
     )
-    if args.shard_count > 1 and getattr(args, "run_metadata_path", None) is None:
-        run_metadata_path = output_dir / f"run_metadata_{variant.name}.shard{args.shard_index}.json"
+    if shard_count > 1 and getattr(args, "run_metadata_path", None) is None:
+        run_metadata_path = output_dir / f"run_metadata_{variant.name}.shard{shard_index}.json"
     output_fields = (
         [field.strip() for field in args.output_fields.split(",") if field.strip()]
         if args.output_fields
@@ -254,9 +257,9 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
         model_identifier=args.local_model_name if args.provider == "local-qwen" else args.router_model_name,
         temperature_tag=temperature_tag,
         run_metadata_path=run_metadata_path,
-        shard_count=max(1, args.shard_count),
-        shard_index=max(0, args.shard_index),
-        progress_every=max(0, args.progress_every),
+        shard_count=shard_count,
+        shard_index=shard_index,
+        progress_every=progress_every,
     )
 
 

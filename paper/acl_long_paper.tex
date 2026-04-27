@@ -1,0 +1,355 @@
+\documentclass[11pt]{article}
+
+% Draft ACL long-paper manuscript. Replace this preamble with the official
+% ACL style files before submission, e.g., \usepackage[review]{acl}.
+\usepackage[margin=1in]{geometry}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{url}
+\usepackage{hyperref}
+
+\newcommand{\yesprob}{p_{\mathrm{yes}}}
+
+\title{Evaluating the Explanatory Validity of Structured LLM Rationales for Forecasting}
+\author{Anonymous ACL submission}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Accurate forecasting requires models to provide not only well-calibrated probabilities, but also explanations that make their reasoning inspectable under temporal uncertainty.
+We study whether structured rationale prompts improve the forecasting behavior and explanatory quality of large language models (LLMs) on binary future-event questions.
+We build a reproducible evaluation pipeline over 1,580 resolved Metaculus-style forecasting questions paired with resolution criteria and news evidence, and compare a neutral baseline against eight rationale structures: predicted event, key attribute, reasoning type, credibility, key conditions, step-by-step reasoning, uncertainty language, and temporal anchors.
+Across Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B, we evaluate accuracy, Brier score, expected calibration error, and rationale quality under two automatic LLM judges.
+Our results show that structured rationales do not uniformly improve forecasting: temporal anchors and credibility framing can improve some models, while uncertainty-language and key-condition prompts often degrade calibration or accuracy.
+Automatic rationale scores correlate with forecast correctness, with plausibility and completeness emerging as the strongest predictors in a SHAP analysis.
+These findings suggest that rationale structure is a consequential design choice, but its benefits depend on the target model and evaluation objective.
+\end{abstract}
+
+\section{Introduction}
+
+Forecasting future events informs decisions in policy, finance, public health, and strategic planning.
+Large language models (LLMs) are increasingly used to generate forecasts accompanied by natural-language rationales, making them attractive for settings where users need both a probability and an explanation.
+Yet this combination raises a central question: \textit{does changing the structure of an LLM's rationale improve the reliability of its forecast, or merely change the surface form of its explanation?}
+
+This question matters because probabilistic forecasting is not evaluated only by whether a model chooses the correct label.
+A useful forecaster should also be calibrated: events assigned high confidence should occur more often than events assigned low confidence.
+At the same time, a rationale should make the forecast inspectable by identifying the relevant event, evidence, assumptions, uncertainty, and temporal constraints.
+These goals need not coincide.
+A detailed rationale can support an overconfident or incorrect prediction, while a comparatively terse rationale can accompany a well-calibrated forecast.
+For forecasting systems, explanation quality and probabilistic reliability therefore have to be measured jointly rather than assumed to improve together.
+
+\paragraph{Challenges in LLM Forecasting.}
+Future-event forecasting is difficult for LLMs because it requires reasoning over incomplete evidence, changing temporal context, and verifiable outcomes that may occur after the evidence was written.
+Models can overfit to salient evidence, miss resolution-relevant dates, conflate stated plans with realized outcomes, or express verbal uncertainty that is not aligned with numeric confidence.
+Moreover, generated rationales may be post-hoc justifications: they can sound coherent without faithfully reflecting the computation that produced the forecast.
+This makes forecasting a useful testbed for studying rationale validity, because every prediction can be externally scored after resolution.
+
+\paragraph{Motivation.}
+Our approach is motivated by two complementary literatures.
+Research on judgmental and crowd forecasting shows that decomposing a question into assumptions, evidence, time horizons, and uncertainty can improve human forecasts \cite{tetlock2015superforecasting}.
+More directly, prior work on forecast summarization proposes representing future-related statements through atomic components such as the predicted event, event attributes, source credibility, conditions, rationale, modality, and timestamp \cite{saha2025wisdom}.
+Interpretability research, however, cautions that natural-language explanations should not be equated with faithful reasoning traces \cite{jacovi2020towards}.
+We use these components as inspiration for our structured rationale variants and treat rationale structure as an experimental intervention: if a component such as temporal anchoring or key-condition enumeration helps LLM forecasting, this should be visible in accuracy, Brier score, calibration, or independently judged rationale quality.
+
+\paragraph{Our Work.}
+We evaluate structured LLM rationales on 1,580 resolved Metaculus-style binary forecasting questions paired with descriptions, resolution criteria, temporal metadata, and retrieved news evidence.
+We compare a neutral baseline prompt with eight structured variants targeting predicted event restatement, key attribute specification, reasoning type declaration, source credibility, key conditions, step-by-step reasoning, uncertainty language, and temporal anchors.
+For the complete checked-in sweep, we evaluate three target models---Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B---across six temperature settings.
+We score forecasts using accuracy, Brier score, and expected calibration error (ECE), and we evaluate rationale quality using two automatic LLM judges that rate plausibility, completeness, source consistency, non-hallucination, informativeness, and conciseness.
+Finally, we use a SHAP-based diagnostic analysis to test which judged rationale attributes are most predictive of forecast correctness.
+
+Our results show that rationale structure is consequential but not uniformly beneficial.
+Temporal anchors yield the best mean Brier score for GPT-OSS-120B and slightly improve over its neutral baseline.
+Credibility framing gives Qwen3-32B its best accuracy and ECE, although not its best Brier score.
+For Qwen2.5-7B-Instruct, the neutral baseline remains strongest under accuracy and Brier score, suggesting that smaller or less robust models may not benefit from additional rationale constraints.
+Across automatic rationale evaluations, plausibility and completeness are the strongest predictors of forecast correctness, while conciseness contributes little because most generated rationales already satisfy the requested length constraints.
+
+\subsection{Research Questions}
+
+We organize the study around three research questions:
+
+\begin{itemize}
+    \item \textbf{RQ1:} How do structured rationale components affect probabilistic forecasting performance, as measured by accuracy, Brier score, and ECE?
+    \item \textbf{RQ2:} How do structured rationale components affect judged explanatory quality, including plausibility, completeness, source consistency, non-hallucination, informativeness, and conciseness?
+    \item \textbf{RQ3:} Which judged rationale attributes are most associated with forecast correctness?
+\end{itemize}
+
+\subsection{Hypotheses}
+
+Inspired by the future-related statement components discussed in forecast-summarization research \cite{saha2025wisdom}, we test eight component-level hypotheses corresponding to the eight structured rationale variants beyond the neutral baseline:
+
+\begin{itemize}
+    \item \textbf{H1: Predicted event.} Explicitly restating the predicted event improves alignment between the forecast, the resolution criterion, and the generated rationale.
+    \item \textbf{H2: Key attribute.} Identifying the key attribute improves specificity by focusing the rationale on the decisive time, quantity, or actor.
+    \item \textbf{H3: Reasoning type.} Declaring the reasoning type exposes systematic differences among speculative, plan-based, expert-forecast-based, and trend-based forecasts.
+    \item \textbf{H4: Credibility.} Focusing on source credibility improves evidence grounding and reduces unsupported or weakly supported claims.
+    \item \textbf{H5: Key conditions.} Enumerating key conditions improves causal precision by making the assumptions behind the forecast explicit.
+    \item \textbf{H6: Step-by-step reasoning.} Step-by-step reasoning improves transparency, but may also introduce redundant or formulaic rationales.
+    \item \textbf{H7: Uncertainty language.} Explicit uncertainty language improves perceived interpretability and may improve alignment between verbal uncertainty and numeric confidence.
+    \item \textbf{H8: Temporal anchors.} Temporal anchors improve temporal grounding by making resolution-relevant dates and time ranges explicit.
+\end{itemize}
+
+\subsection{Contributions}
+
+This work makes four contributions:
+
+\begin{itemize}
+    \item We introduce a reproducible framework for evaluating structured LLM rationales on resolved binary forecasting questions with evidence, resolution criteria, and temporal metadata.
+    \item We provide a controlled comparison of a neutral forecasting prompt and eight structured rationale prompts across three fully evaluated LLMs and six temperature settings.
+    \item We jointly evaluate forecast reliability and rationale quality using accuracy, Brier score, ECE, two automatic LLM judges, and feature-attribution analysis.
+    \item We show that structured rationales produce model- and metric-dependent trade-offs: temporal and credibility framing help some settings, while richer explanation prompts do not reliably improve calibration.
+\end{itemize}
+
+\paragraph{Calibration and Rationale Faithfulness.}
+Throughout this paper, calibration is used as an operational measure of probabilistic reliability, not as direct evidence that a generated rationale faithfully represents a model's internal reasoning.
+Likewise, high judge-rated rationale quality does not imply causal responsibility for the forecast.
+Our experiments therefore evaluate the external relationship between rationale structure, forecast outcomes, and explanation quality, while leaving mechanistic faithfulness as an open question.
+
+\section{Related Work}
+
+\paragraph{LLMs for Future-Event Forecasting.}
+Recent work has begun to evaluate whether language models can forecast real-world events rather than merely answer static knowledge questions.
+Autocast introduced a large benchmark of forecasting questions paired with date-indexed news evidence, showing that forecasting remains difficult for neural models but improves with model scale and relevant retrieved information \cite{zou2022forecasting}.
+Retrieval-augmented forecasting systems have since narrowed the gap with competitive human forecasters by searching for evidence, generating forecasts, and aggregating predictions \cite{halawi2024approaching}.
+Work on binary forecasting with LLMs further shows that context matters: adding relevant news summaries can improve performance, while additional prompt scaffolding such as few-shot examples may not always help \cite{mutschlechner2025context}.
+These studies establish LLM forecasting as a viable but fragile setting.
+Our work differs by holding the task format fixed and asking how the structure of the generated rationale itself affects forecast accuracy, calibration, and explanation quality.
+
+\paragraph{Forecast Structure and Crowd Wisdom.}
+Human and crowd forecasting research emphasizes decomposition: strong forecasts often separate the target event, evidence, assumptions, base rates, time horizons, and uncertainty \cite{tetlock2015superforecasting}.
+Forecast-summarization work makes a related point from an information-extraction perspective, proposing that future-related statements can be represented through components such as the predicted event, event attributes, source credibility, conditions, rationale, modality, and timestamp \cite{saha2025wisdom}.
+This component view directly motivates our prompt variants.
+Rather than aggregating many human forecasts, we test whether prompting a single LLM to expose these components changes its probabilistic forecasts or the quality of its rationales.
+
+\paragraph{Calibration and Uncertainty.}
+Forecasts are only useful when their probabilities can be trusted.
+Proper scoring rules such as the Brier score evaluate the quality of probabilistic predictions \cite{brier1950verification}, while calibration metrics such as expected calibration error assess the alignment between confidence and empirical correctness \cite{guo2017calibration}.
+For LLM forecasting, this distinction is especially important because verbal uncertainty and numeric confidence can diverge.
+A rationale may say that an event is ``likely'' while assigning an overconfident probability, or it may hedge linguistically without improving calibration.
+We therefore evaluate uncertainty language as an explicit rationale intervention rather than assuming that more hedging produces more reliable probabilities.
+
+\paragraph{Rationales and Structured Reasoning.}
+Structured prompting methods such as chain-of-thought and self-consistency can improve performance on some reasoning tasks by encouraging intermediate reasoning steps \cite{wei2022chain,wang2023selfconsistency}.
+However, explanation research cautions that natural-language rationales may be plausible without being faithful to the model's internal decision process \cite{jacovi2020towards,wiegreffe2019attention}.
+This distinction is central for forecasting: a rationale can be fluent, detailed, and source-aware while still supporting an incorrect or miscalibrated forecast.
+Accordingly, we evaluate rationales along fine-grained attributes such as plausibility, completeness, source consistency, non-hallucination, informativeness, and conciseness, and then test how those attributes relate to resolved forecast correctness.
+The contribution is not another general reasoning prompt, but a controlled evaluation of which forecast-specific rationale components are associated with reliable probabilistic prediction.
+
+\section{Task and Data}
+
+We evaluate binary forecasting questions with resolved yes/no answers.
+Each example contains a question, description, resolution criteria, temporal metadata, categories, and up to three retrieved news articles with summaries, keywords, Forecast Relevance Score (FRS), and credibility scores.
+The current dataset contains 1,580 resolved questions: 556 resolve to \textsc{yes} and 1,024 resolve to \textsc{no}.
+The average number of associated news articles is 2.14, with a maximum of 3.
+
+For each question, a model must output a JSON object containing a predicted answer, a confidence score in $[0,1]$, and a short rationale.
+For structured variants, the JSON schema also requires one additional field, such as \texttt{temporal\_anchors} or \texttt{key\_conditions}.
+All prompts instruct models to use only the provided question, description, resolution criteria, and evidence summaries.
+
+\section{Prompt Variants}
+
+Table~\ref{tab:variants} summarizes the nine prompt conditions.
+The neutral baseline asks for only an answer, confidence, and rationale.
+The other eight variants add one targeted reasoning component.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+Variant & Required rationale structure \\
+\midrule
+V0 & Neutral baseline \\
+V1 & Concrete predicted event \\
+V2 & Key attribute: time, quantity, or actor \\
+V3 & Reasoning type: speculation, plan, expert forecast, trend \\
+V4 & Evidence credibility and recency \\
+V5 & Two to four key conditions \\
+V6 & Two to three numbered reasoning steps \\
+V7 & Explicit uncertainty language \\
+V8 & Relevant dates or time ranges \\
+\bottomrule
+\end{tabular}
+\caption{Prompt variants used in the forecasting sweep.}
+\label{tab:variants}
+\end{table}
+
+\section{Models and Inference}
+
+The checked-in complete sweep covers three target models: Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B.
+The repository also contains configuration hooks for additional hosted models, including Llama, DeepSeek, Kimi, Gemma, and GPT-family endpoints, but the quantitative tables in this draft report only models with complete metrics artifacts.
+
+Each model is evaluated across six temperature settings and all nine prompt variants.
+Runs write JSON results and metadata containing the provider, model identifier, temperature, output fields, and prompt hashes.
+The pipeline supports retry, sharding, resuming incomplete rows, schema validation, and result verification.
+
+\section{Evaluation}
+
+\paragraph{Forecast metrics.}
+Let $y \in \{0,1\}$ denote the resolved answer and let $\hat{a}$ be the predicted yes/no label with confidence $c$.
+We convert model outputs to a probability of yes:
+\[
+\yesprob =
+\begin{cases}
+c, & \hat{a}=\textsc{yes}\\
+1-c, & \hat{a}=\textsc{no}.
+\end{cases}
+\]
+We report accuracy, Brier score $\frac{1}{N}\sum_i(\yesprob_i-y_i)^2$, and 10-bin expected calibration error (ECE), where ECE compares predicted-label confidence to empirical correctness within equal-width confidence bins.
+
+\paragraph{Automatic rationale evaluation.}
+Two LLM judges, Gemma-4-31B-it and Kimi-K2.5, score rationales using only the supplied question, description, resolution criteria, and evidence digest.
+Judges do not score forecast correctness.
+They assign six attributes on a 0--1 scale: plausibility, completeness, source consistency, non-hallucination, informativeness, and conciseness.
+We average the six attributes to obtain an overall judge score.
+
+\paragraph{Attribution analysis.}
+To examine whether judged rationale attributes predict forecast correctness, we fit a classifier from rationale attributes to correctness and compute SHAP feature importances.
+This analysis is diagnostic: it does not establish causal effects of rationale quality on correctness.
+
+\section{Results}
+
+\subsection{Temperature Effects}
+
+Table~\ref{tab:temperature} reports the best temperature per model by mean Brier score, averaging over all prompt variants.
+The strongest model in the current sweep is GPT-OSS-120B, while both Qwen models perform best at deterministic decoding.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Model & Temp. & Acc. & Brier & ECE \\
+\midrule
+GPT-OSS-120B & 0.25 & 0.817 & 0.166 & 0.121 \\
+Qwen2.5-7B-Instruct & 0.00 & 0.734 & 0.200 & 0.112 \\
+Qwen3-32B & 0.00 & 0.712 & 0.214 & 0.112 \\
+\bottomrule
+\end{tabular}
+\caption{Best temperature per model by mean Brier score across variants.}
+\label{tab:temperature}
+\end{table}
+
+\subsection{Prompt Variant Effects}
+
+Table~\ref{tab:variant-best} compares the neutral baseline to the best observed structured variant for each model under different metrics.
+The effect of structure is model-dependent.
+GPT-OSS-120B benefits most from temporal anchors, which improve mean Brier score from 0.164 to 0.162.
+Qwen3-32B obtains its best accuracy and ECE under credibility framing, but this does not improve Brier score.
+Qwen2.5-7B-Instruct is strongest under the neutral baseline for accuracy and Brier score, although reasoning-type prompts slightly improve ECE.
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabular}{llrrr}
+\toprule
+Model & Condition & Acc. & Brier & ECE \\
+\midrule
+\multirow{4}{*}{GPT-OSS-120B}
+& Baseline & 0.815 & 0.164 & 0.104 \\
+& Best Brier: V8 temporal anchors & 0.817 & 0.162 & 0.103 \\
+& Best ECE: V5 key conditions & 0.809 & 0.164 & 0.098 \\
+& Best accuracy: V8 temporal anchors & 0.817 & 0.162 & 0.103 \\
+\midrule
+\multirow{4}{*}{Qwen2.5-7B}
+& Baseline & 0.743 & 0.196 & 0.104 \\
+& Best Brier: V0 baseline & 0.743 & 0.196 & 0.104 \\
+& Best ECE: V3 reasoning type & 0.725 & 0.201 & 0.098 \\
+& Best accuracy: V0 baseline & 0.743 & 0.196 & 0.104 \\
+\midrule
+\multirow{4}{*}{Qwen3-32B}
+& Baseline & 0.715 & 0.208 & 0.106 \\
+& Best Brier: V0 baseline & 0.715 & 0.208 & 0.106 \\
+& Best ECE: V4 credibility & 0.730 & 0.211 & 0.086 \\
+& Best accuracy: V4 credibility & 0.730 & 0.211 & 0.086 \\
+\bottomrule
+\end{tabular}
+\caption{Prompt-variant effects averaged over temperature runs. Lower Brier and ECE are better.}
+\label{tab:variant-best}
+\end{table*}
+
+Aggregating across the three models, the neutral baseline has the best mean Brier score (0.189), followed by temporal anchors (0.193) and credibility framing (0.195).
+This aggregate result should not be over-interpreted because model-specific effects are heterogeneous.
+It does, however, show that adding an explicit rationale component can impose costs as well as benefits.
+
+\subsection{Rationale Quality}
+
+Automatic judge scores do not simply reward longer or more structured outputs.
+In the currently available judged runs, the neutral baseline often receives the highest overall judge score, especially for GPT-OSS-120B and both Qwen models.
+Step-by-step reasoning and uncertainty-language prompts are usually competitive but do not dominate.
+This suggests that concise free-form rationales can be judged as more plausible or source-consistent than forced schemas when the schema encourages formulaic text.
+
+\subsection{Predicting Correctness from Rationale Attributes}
+
+The SHAP analysis in Table~\ref{tab:shap} links automatic rationale attributes to forecast correctness.
+Using combined mean judge scores, the attribute classifier obtains ROC-AUC 0.735 and accuracy 0.654 over 13,149 rows.
+Plausibility and completeness are the strongest features by mean absolute SHAP value.
+Source consistency, informativeness, and non-hallucination differ between correct and incorrect forecasts but have lower attribution magnitude in the fitted model.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+Feature & Mean & Correct--Incorrect & Mean $|\mathrm{SHAP}|$ \\
+\midrule
+Plausibility & 0.739 & 0.152 & 0.072 \\
+Completeness & 0.675 & 0.147 & 0.071 \\
+Non-hallucination & 0.658 & 0.126 & 0.021 \\
+Informativeness & 0.675 & 0.124 & 0.020 \\
+Source consistency & 0.672 & 0.147 & 0.016 \\
+Conciseness & 0.908 & 0.024 & 0.012 \\
+\bottomrule
+\end{tabular}
+\caption{Rationale-attribute feature importance for predicting forecast correctness using combined judge scores.}
+\label{tab:shap}
+\end{table}
+
+\section{Discussion}
+
+The experiments point to three practical lessons.
+First, rationale structure should be treated as an intervention, not as a purely cosmetic formatting choice.
+The same structural component can improve one metric while degrading another.
+Second, temporal and evidential grounding are especially important for forecasting, but they do not guarantee better calibration for every model.
+Third, explanation quality and forecast quality are separable: automatic judges can identify rationale attributes associated with correctness, yet high-scoring rationales can still support wrong answers.
+
+The results also caution against relying on explicit uncertainty language as a proxy for calibration.
+Prompting models to include words such as ``likely'' or ``possible'' may improve the surface interpretability of rationales, but the checked-in metrics do not show reliable calibration gains from this variant.
+In some cases, uncertainty language increases ECE or Brier score, suggesting a mismatch between verbal hedging and numeric confidence.
+
+\section{Limitations}
+
+This draft reports the complete metrics currently available in the repository: three target models, nine prompt variants, and six temperature settings.
+The model configuration includes additional systems, but incomplete or partial runs should not be presented as final results until verified.
+The rationale-quality evaluation is automatic rather than human-annotated, and LLM judges may share biases with the models being evaluated.
+The dataset is drawn from Metaculus-style resolved questions with retrieved news evidence, so results may not generalize to domains where evidence is private, highly technical, or adversarial.
+Finally, SHAP analysis is correlational and should not be interpreted as proving that making a rationale more plausible or complete will causally improve forecast accuracy.
+
+\section{Ethical Considerations}
+
+Forecasting systems can influence decisions in finance, policy, public health, and security.
+Poorly calibrated forecasts or persuasive but unsupported rationales may mislead users.
+Our framework is intended for evaluation and diagnostic use, not as evidence that LLM forecasts should be deployed without human oversight.
+The dataset contains public forecasting questions and article-derived evidence, but future releases should document source licenses and remove any sensitive content that appears in retrieved articles.
+
+\section{Conclusion}
+
+We introduced a reproducible evaluation framework for structured LLM rationales in binary forecasting.
+Across 1,580 resolved questions, three target models, and nine prompt conditions, we find that rationale structure has heterogeneous effects on accuracy, calibration, and judged explanation quality.
+Temporal anchors and credibility framing can help specific models and metrics, but neutral rationales remain strong baselines.
+Automatic rationale attributes, especially plausibility and completeness, are predictive of forecast correctness, supporting their use as diagnostic signals.
+Future work should add human annotation, expand the model set, and test whether adaptive prompting can select the right rationale structure for each question.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

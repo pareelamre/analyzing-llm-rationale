@@ -16,6 +16,7 @@ Options:
   --prefix JOB_PREFIX          Required SLURM job-name prefix
   --variants "0 1 ... 8"       Variant indices to submit (default: 0 1 2 3 4 5 6 7 8)
   --temperatures "..."         Temperature values to submit (default: 0 0.25 0.75 1.25 1.75 2)
+  --sbatch-extra ARG          Additional sbatch argument to append (repeatable)
   --dry-run                    Print planned submissions without calling sbatch
 
 Notes:
@@ -30,6 +31,7 @@ JOB_PREFIX=""
 VARIANTS=(0 1 2 3 4 5 6 7 8)
 TEMPERATURES=(0 0.25 0.75 1.25 1.75 2)
 DRY_RUN=0
+SBATCH_EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -47,6 +49,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --temperatures)
       read -r -a TEMPERATURES <<< "${2:-}"
+      shift 2
+      ;;
+    --sbatch-extra)
+      SBATCH_EXTRA_ARGS+=("${2:-}")
       shift 2
       ;;
     --dry-run)
@@ -110,6 +116,9 @@ for variant in "${VARIANTS[@]}"; do
       --error="${err_path}"
       --export=ALL,MODEL_CONFIG="${MODEL_CONFIG}",TEMPERATURE="${temperature}",TEMPERATURE_TAG="${temp_tag}"
     )
+    if [[ "${#SBATCH_EXTRA_ARGS[@]}" -gt 0 ]]; then
+      sbatch_args+=("${SBATCH_EXTRA_ARGS[@]}")
+    fi
     sbatch_args+=("${script_path}")
 
     if [[ "${DRY_RUN}" == "1" ]]; then

@@ -13,6 +13,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def needs_reprocess(row: object) -> bool:
+    if not isinstance(row, dict):
+        return True
+    answer = row.get("predicted_answer")
+    normalized_answer = str(answer).strip().lower() if answer is not None else None
+    if normalized_answer not in {"yes", "no"}:
+        return True
+    confidence = row.get("confidence")
+    try:
+        confidence = float(confidence)
+    except (TypeError, ValueError):
+        return True
+    return not (0.0 <= confidence <= 1.0)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Recover one variant by looping over nulls and missing ids.")
     parser.add_argument("--variant", required=True)
@@ -55,7 +70,7 @@ def summarize_results(results_dir_name: str, temp_tag: str, variant: str, expect
     nulls = {
         rid
         for rid, row in seen.items()
-        if rid in expected_ids and row.get("predicted_answer") is None
+        if rid in expected_ids and needs_reprocess(row)
     }
     complete = len(expected_ids) - len(missing) - len(nulls)
     return complete, len(nulls), len(missing)

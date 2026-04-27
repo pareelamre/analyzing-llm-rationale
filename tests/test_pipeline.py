@@ -12,6 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale.cli import build_provider, main as cli_main, resolve_run_config  # noqa: E402
+from analyzing_llm_rationale.cache_env import configure_workspace_cache_env, workspace_cache_paths  # noqa: E402
 from analyzing_llm_rationale.config import load_model_configs, load_variant_configs, temperature_to_tag  # noqa: E402
 from analyzing_llm_rationale.pipeline import (  # noqa: E402
     RunConfig,
@@ -85,6 +86,33 @@ class PipelineTests(unittest.TestCase):
         self.assertIn('"summary_llm": "LLM summary"', prompt)
         self.assertNotIn("Full article text", prompt)
         self.assertNotIn("[question]", prompt)
+
+    def test_configure_workspace_cache_env_uses_repo_cache_tree(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            env: dict[str, str] = {}
+
+            resolved = configure_workspace_cache_env(root, environ=env)
+            paths = workspace_cache_paths(root)
+
+            self.assertEqual(env["HF_HOME"], str(paths["hf_home"]))
+            self.assertEqual(env["HF_HUB_CACHE"], str(paths["hf_hub_cache"]))
+            self.assertEqual(env["HUGGINGFACE_HUB_CACHE"], str(paths["hf_hub_cache"]))
+            self.assertEqual(env["TORCH_HOME"], str(paths["torch_home"]))
+            self.assertEqual(resolved["cache_root"], paths["cache_root"])
+            self.assertTrue(paths["hf_hub_cache"].is_dir())
+            self.assertTrue(paths["torch_home"].is_dir())
+
+    def test_configure_workspace_cache_env_preserves_existing_values(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            custom_hf_home = root / "custom-hf-home"
+            env = {"HF_HOME": str(custom_hf_home)}
+
+            configure_workspace_cache_env(root, environ=env)
+
+            self.assertEqual(env["HF_HOME"], str(custom_hf_home))
+            self.assertTrue(custom_hf_home.is_dir())
 
     def test_process_batch_skips_completed_ids(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
