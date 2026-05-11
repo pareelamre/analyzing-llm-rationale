@@ -32,6 +32,9 @@ ATTRIBUTES = [
     "informativeness",
     "conciseness",
 ]
+VARIANT_ALIASES = {
+    "variant7_uncertain_language": "variant7_uncertainty_language",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -93,6 +96,18 @@ def load_variant_predictions(
     return variant_predictions
 
 
+def normalize_variant_name(variant: str) -> str:
+    return VARIANT_ALIASES.get(variant, variant)
+
+
+def iter_payloads(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        return [payload]
+    return []
+
+
 def load_judge_rows(
     judge_name: str,
     judge_dir: Path,
@@ -113,27 +128,31 @@ def load_judge_rows(
                 if not line.strip():
                     continue
                 payload = json.loads(line)
-                rid = int(payload["id"])
-                variant_scores = payload.get("variant_scores", {})
-                for variant, score_row in variant_scores.items():
-                    prediction_row = variant_predictions.get((rid, variant))
-                    if prediction_row is None:
-                        continue
-                    out_row = {
-                        "judge": judge_name,
-                        "model": model_label,
-                        "temperature_dir": temperature_dir,
-                        "variant": variant,
-                        "id": rid,
-                        "forecast_correct": prediction_row["forecast_correct"],
-                    }
-                    for attribute in ATTRIBUTES:
-                        value = score_row.get(attribute)
-                        if value is None:
-                            break
-                        out_row[attribute] = float(value)
-                    else:
-                        rows.append(out_row)
+                for item in iter_payloads(payload):
+                    rid = int(item["id"])
+                    variant_scores = item.get("variant_scores", {})
+                    for raw_variant, score_row in variant_scores.items():
+                        if not isinstance(score_row, dict):
+                            continue
+                        variant = normalize_variant_name(raw_variant)
+                        prediction_row = variant_predictions.get((rid, variant))
+                        if prediction_row is None:
+                            continue
+                        out_row = {
+                            "judge": judge_name,
+                            "model": model_label,
+                            "temperature_dir": temperature_dir,
+                            "variant": variant,
+                            "id": rid,
+                            "forecast_correct": prediction_row["forecast_correct"],
+                        }
+                        for attribute in ATTRIBUTES:
+                            value = score_row.get(attribute)
+                            if value is None:
+                                break
+                            out_row[attribute] = float(value)
+                        else:
+                            rows.append(out_row)
     return rows
 
 

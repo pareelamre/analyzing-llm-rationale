@@ -1,8 +1,6 @@
 \documentclass[11pt]{article}
 
-% Draft ACL long-paper manuscript. Replace this preamble with the official
-% ACL style files before submission, e.g., \usepackage[review]{acl}.
-\usepackage[margin=1in]{geometry}
+\usepackage[review]{acl}
 \usepackage{times}
 \usepackage{latexsym}
 \usepackage[T1]{fontenc}
@@ -12,6 +10,8 @@
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{float}
 \usepackage{url}
 \usepackage{hyperref}
 
@@ -30,7 +30,7 @@ We study whether structured rationale prompts improve the forecasting behavior a
 We build a reproducible evaluation pipeline over 1,580 resolved Metaculus-style forecasting questions paired with resolution criteria and news evidence, and compare a neutral baseline against eight rationale structures: predicted event, key attribute, reasoning type, credibility, key conditions, step-by-step reasoning, uncertainty language, and temporal anchors.
 Across Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B, we evaluate accuracy, Brier score, expected calibration error, and rationale quality under two automatic LLM judges.
 Our results show that structured rationales do not uniformly improve forecasting: temporal anchors and credibility framing can improve some models, while uncertainty-language and key-condition prompts often degrade calibration or accuracy.
-Automatic rationale scores correlate with forecast correctness, with plausibility and completeness emerging as the strongest predictors in a SHAP analysis.
+Automatic rationale scores correlate with forecast correctness, with completeness and plausibility emerging as the strongest predictors in a SHAP analysis.
 These findings suggest that rationale structure is a consequential design choice, but its benefits depend on the target model and evaluation objective.
 \end{abstract}
 
@@ -71,7 +71,7 @@ Our results show that rationale structure is consequential but not uniformly ben
 Temporal anchors yield the best mean Brier score for GPT-OSS-120B and slightly improve over its neutral baseline.
 Credibility framing gives Qwen3-32B its best accuracy and ECE, although not its best Brier score.
 For Qwen2.5-7B-Instruct, the neutral baseline remains strongest under accuracy and Brier score, suggesting that smaller or less robust models may not benefit from additional rationale constraints.
-Across automatic rationale evaluations, plausibility and completeness are the strongest predictors of forecast correctness, while conciseness contributes little because most generated rationales already satisfy the requested length constraints.
+Across automatic rationale evaluations, completeness and plausibility are the strongest predictors of forecast correctness, while conciseness contributes little because most generated rationales already satisfy the requested length constraints.
 
 \subsection{Research Questions}
 
@@ -144,77 +144,106 @@ This distinction is central for forecasting: a rationale can be fluent, detailed
 Accordingly, we evaluate rationales along fine-grained attributes such as plausibility, completeness, source consistency, non-hallucination, informativeness, and conciseness, and then test how those attributes relate to resolved forecast correctness.
 The contribution is not another general reasoning prompt, but a controlled evaluation of which forecast-specific rationale components are associated with reliable probabilistic prediction.
 
-\section{Task and Data}
+\section{Approach}
 
-We evaluate binary forecasting questions with resolved yes/no answers.
-Each example contains a question, description, resolution criteria, temporal metadata, categories, and up to three retrieved news articles with summaries, keywords, Forecast Relevance Score (FRS), and credibility scores.
-The current dataset contains 1,580 resolved questions: 556 resolve to \textsc{yes} and 1,024 resolve to \textsc{no}.
-The average number of associated news articles is 2.14, with a maximum of 3.
+Figure~\ref{fig:pipeline} summarizes the experimental pipeline.
+We treat rationale structure as a controlled prompt intervention: the forecasting question, resolution criteria, temporal metadata, and evidence summaries are held fixed, while the requested rationale component is varied.
+The checked-in evaluation covers 1,580 resolved binary forecasting questions, nine prompt conditions, three fully evaluated target models, and six decoding temperatures, yielding 162 model--temperature--variant cells before accounting for malformed or missing outputs.
 
-For each question, a model must output a JSON object containing a predicted answer, a confidence score in $[0,1]$, and a short rationale.
-For structured variants, the JSON schema also requires one additional field, such as \texttt{temporal\_anchors} or \texttt{key\_conditions}.
-All prompts instruct models to use only the provided question, description, resolution criteria, and evidence summaries.
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{project_pipeline_acl_three.png}
+    \caption{Experimental pipeline for evaluating structured rationale components in binary event forecasting.}
+    \label{fig:pipeline}
+\end{figure*}
 
-\section{Prompt Variants}
+\subsection{Dataset Construction}
 
-Table~\ref{tab:variants} summarizes the nine prompt conditions.
-The neutral baseline asks for only an answer, confidence, and rationale.
-The other eight variants add one targeted reasoning component.
+We use the released dataset \texttt{forecasting\_qa\_news\_metaculus\_2025-02-01\_to\_today.metaculus\_frs\_format.json}.
+It contains 1,580 resolved Metaculus-style binary questions with verified yes/no outcomes.
+Of these questions, 556 resolve to \textsc{yes} and 1,024 resolve to \textsc{no}.
+Each record contains the original question text, description, resolution criteria, category labels, creation and publication times, resolution time, days open, and a search query used to associate evidence.
+
+Each question is paired with up to three evidence articles.
+The article fields include URL, title, raw text, authors, publication date, extractive or LLM-generated summaries, keywords, Forecast Relevance Score (FRS), and a credibility score.
+The average number of associated evidence articles is 2.14.
+We verified that article timestamps in the current dataset precede the corresponding resolution timestamp, so the evidence supplied to the model is pre-resolution evidence.
+Because the experiment conditions on provided evidence, the task is best understood as evidence-conditioned forecasting rather than purely parametric prediction from a model's pretraining data.
+
+\subsection{Prompt Variants}
+
+All runs use a shared system instruction that restricts the model to the provided question, description, resolution criteria, and evidence summaries.
+The model must output valid JSON with \texttt{predicted\_answer}, \texttt{confidence}, and \texttt{rationale}.
+Structured variants either add a required field or impose a targeted constraint on the rationale.
+Table~\ref{tab:variants} lists the nine prompt conditions.
+Unlike earlier pilot drafts, V4 is part of the evaluated sweep: it asks the model to ground the rationale in source credibility, evidence quality, and recency.
 
 \begin{table}[t]
 \centering
 \small
 \begin{tabular}{ll}
 \toprule
-Variant & Required rationale structure \\
+Variant & Prompt intervention \\
 \midrule
 V0 & Neutral baseline \\
-V1 & Concrete predicted event \\
-V2 & Key attribute: time, quantity, or actor \\
-V3 & Reasoning type: speculation, plan, expert forecast, trend \\
-V4 & Evidence credibility and recency \\
-V5 & Two to four key conditions \\
-V6 & Two to three numbered reasoning steps \\
-V7 & Explicit uncertainty language \\
-V8 & Relevant dates or time ranges \\
+V1 & State the concrete predicted event \\
+V2 & Identify the key attribute: time, quantity, or actor \\
+V3 & Declare reasoning type: speculation, plan, expert forecast, trend \\
+V4 & Discuss evidence credibility, quality, and recency \\
+V5 & List two to four key conditions \\
+V6 & Provide two to three numbered reasoning steps \\
+V7 & Use explicit uncertainty language \\
+V8 & Mention relevant dates or time ranges \\
 \bottomrule
 \end{tabular}
 \caption{Prompt variants used in the forecasting sweep.}
 \label{tab:variants}
 \end{table}
 
-\section{Models and Inference}
+\subsection{Models and Inference}
 
-The checked-in complete sweep covers three target models: Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B.
-The repository also contains configuration hooks for additional hosted models, including Llama, DeepSeek, Kimi, Gemma, and GPT-family endpoints, but the quantitative tables in this draft report only models with complete metrics artifacts.
+The complete quantitative sweep reported in this paper covers three target models: Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B.
+The repository also contains configuration entries and partial artifacts for additional hosted models, but we restrict the main analysis to models with complete metric tables.
+For each target model, we evaluate all nine prompt variants at six nominal temperatures:
+\[
+T \in \{0.0, 0.25, 0.75, 1.25, 1.75, 2.0\}.
+\]
+Temperature directory names differ slightly across providers, but the analysis scripts normalize them when aggregating results.
 
-Each model is evaluated across six temperature settings and all nine prompt variants.
-Runs write JSON results and metadata containing the provider, model identifier, temperature, output fields, and prompt hashes.
-The pipeline supports retry, sharding, resuming incomplete rows, schema validation, and result verification.
+Inference is config-driven through \texttt{configs/models.yaml} and \texttt{configs/variants.yaml}.
+Each run writes JSON outputs and metadata including provider, resolved model identifier, temperature, output schema, and prompt hashes.
+The pipeline supports sharded execution, retrying null or malformed outputs, resuming incomplete runs, dataset validation, and result verification.
+Malformed predictions and missing rows are not silently dropped: they are counted as missing outputs in the metric summaries.
 
-\section{Evaluation}
+\subsection{Forecast Evaluation}
 
-\paragraph{Forecast metrics.}
-Let $y \in \{0,1\}$ denote the resolved answer and let $\hat{a}$ be the predicted yes/no label with confidence $c$.
-We convert model outputs to a probability of yes:
+Let $y \in \{0,1\}$ denote the resolved answer and let $\hat{a}$ be the model's predicted yes/no label with confidence $c \in [0,1]$.
+We convert the output to a probability of \textsc{yes} as follows:
 \[
 \yesprob =
 \begin{cases}
-c, & \hat{a}=\textsc{yes}\\
+c, & \hat{a}=\textsc{yes},\\
 1-c, & \hat{a}=\textsc{no}.
 \end{cases}
 \]
-We report accuracy, Brier score $\frac{1}{N}\sum_i(\yesprob_i-y_i)^2$, and 10-bin expected calibration error (ECE), where ECE compares predicted-label confidence to empirical correctness within equal-width confidence bins.
+We report accuracy, Brier score \cite{brier1950verification}, and expected calibration error (ECE) \cite{guo2017calibration}.
+Accuracy evaluates the binary label.
+Brier score evaluates probabilistic error using $\frac{1}{N}\sum_i(\yesprob_i-y_i)^2$.
+ECE is computed with 10 equal-width confidence bins and compares predicted-label confidence to empirical correctness within each bin.
 
-\paragraph{Automatic rationale evaluation.}
-Two LLM judges, Gemma-4-31B-it and Kimi-K2.5, score rationales using only the supplied question, description, resolution criteria, and evidence digest.
-Judges do not score forecast correctness.
-They assign six attributes on a 0--1 scale: plausibility, completeness, source consistency, non-hallucination, informativeness, and conciseness.
-We average the six attributes to obtain an overall judge score.
+\subsection{Automatic Rationale Evaluation}
 
-\paragraph{Attribution analysis.}
-To examine whether judged rationale attributes predict forecast correctness, we fit a classifier from rationale attributes to correctness and compute SHAP feature importances.
-This analysis is diagnostic: it does not establish causal effects of rationale quality on correctness.
+We evaluate rationale quality with two automatic LLM judges: Gemma-4-31B-it and Kimi-K2.5.
+For each question, the judge receives the shared forecasting context and evidence digest, along with the rationales produced by the prompt variants.
+Judges are explicitly instructed not to score forecast correctness; correctness is computed separately from the resolved labels.
+Each judge assigns six scores on a 0--1 scale: plausibility, completeness, source consistency, non-hallucination, informativeness, and conciseness.
+We report per-attribute scores and their mean as an overall rationale-quality score.
+
+\subsection{Diagnostic Attribution}
+
+Finally, we ask whether judged rationale attributes are predictive of forecast correctness.
+We fit a classifier using the six judged rationale attributes as input features and forecast correctness as the target, then compute SHAP feature importances.
+This analysis is diagnostic rather than causal: it identifies which judged properties co-vary with correct forecasts, but it does not prove that those properties caused the model's prediction.
 
 \section{Results}
 
@@ -291,9 +320,9 @@ This suggests that concise free-form rationales can be judged as more plausible 
 \subsection{Predicting Correctness from Rationale Attributes}
 
 The SHAP analysis in Table~\ref{tab:shap} links automatic rationale attributes to forecast correctness.
-Using combined mean judge scores, the attribute classifier obtains ROC-AUC 0.735 and accuracy 0.654 over 13,149 rows.
-Plausibility and completeness are the strongest features by mean absolute SHAP value.
-Source consistency, informativeness, and non-hallucination differ between correct and incorrect forecasts but have lower attribution magnitude in the fitted model.
+The rationale-evaluation sample contains 42,660 model--variant--question rows when missing rationales are included; using the 42,652 rows with complete combined mean judge scores, the attribute classifier obtains ROC-AUC 0.726 and accuracy 0.646.
+Completeness and plausibility are the strongest features by mean absolute SHAP value.
+Informativeness, non-hallucination, and source consistency differ between correct and incorrect forecasts but have lower attribution magnitude in the fitted model.
 
 \begin{table}[t]
 \centering
@@ -302,12 +331,12 @@ Source consistency, informativeness, and non-hallucination differ between correc
 \toprule
 Feature & Mean & Correct--Incorrect & Mean $|\mathrm{SHAP}|$ \\
 \midrule
-Plausibility & 0.739 & 0.152 & 0.072 \\
-Completeness & 0.675 & 0.147 & 0.071 \\
-Non-hallucination & 0.658 & 0.126 & 0.021 \\
-Informativeness & 0.675 & 0.124 & 0.020 \\
-Source consistency & 0.672 & 0.147 & 0.016 \\
-Conciseness & 0.908 & 0.024 & 0.012 \\
+Completeness & 0.742 & 0.138 & 0.074 \\
+Plausibility & 0.792 & 0.128 & 0.060 \\
+Informativeness & 0.740 & 0.119 & 0.027 \\
+Non-hallucination & 0.686 & 0.117 & 0.024 \\
+Conciseness & 0.911 & 0.024 & 0.019 \\
+Source consistency & 0.719 & 0.134 & 0.011 \\
 \bottomrule
 \end{tabular}
 \caption{Rationale-attribute feature importance for predicting forecast correctness using combined judge scores.}
@@ -316,15 +345,58 @@ Conciseness & 0.908 & 0.024 & 0.012 \\
 
 \section{Discussion}
 
-The experiments point to three practical lessons.
-First, rationale structure should be treated as an intervention, not as a purely cosmetic formatting choice.
-The same structural component can improve one metric while degrading another.
-Second, temporal and evidential grounding are especially important for forecasting, but they do not guarantee better calibration for every model.
-Third, explanation quality and forecast quality are separable: automatic judges can identify rationale attributes associated with correctness, yet high-scoring rationales can still support wrong answers.
+Our experiments show that rationale structure affects forecasting behavior, but its effects are heterogeneous across models and metrics.
+The neutral baseline is a strong reference point: averaged over all temperatures, it remains best for Qwen2.5-7B and Qwen3-32B by Brier score, and it is competitive for GPT-OSS-120B.
+This cautions against treating more structured rationales as automatically better forecasts.
+Structured prompts are interventions on the model's reasoning format, and the same intervention can improve one metric while degrading another.
 
-The results also caution against relying on explicit uncertainty language as a proxy for calibration.
-Prompting models to include words such as ``likely'' or ``possible'' may improve the surface interpretability of rationales, but the checked-in metrics do not show reliable calibration gains from this variant.
-In some cases, uncertainty language increases ECE or Brier score, suggesting a mismatch between verbal hedging and numeric confidence.
+\subsection{Prompt Structure and Calibration}
+
+The most useful structured variants are model dependent.
+For GPT-OSS-120B, temporal anchors achieve the best average Brier score among variants, while key conditions give the lowest average ECE.
+For Qwen2.5-7B, the neutral baseline performs best overall, with temporal anchors close behind; key conditions substantially reduce accuracy and worsen calibration.
+For Qwen3-32B, credibility framing gives the highest accuracy and lowest ECE, while the neutral baseline gives the best Brier score.
+Thus, temporal and evidential cues can be useful, but their benefits are not universal.
+
+Explicit uncertainty language does not reliably improve calibration.
+Across models, the uncertainty variant often changes the surface form of the rationale without producing better probability estimates.
+This supports a distinction between verbal uncertainty and probabilistic calibration: hedging expressions such as ``likely'' or ``possible'' may make explanations appear more cautious, but they do not guarantee better numeric confidence.
+
+\subsection{Temperature and Coverage}
+
+Temperature effects are also model specific.
+Using Brier score as the selection criterion, GPT-OSS-120B performs best at $T=0.25$, while Qwen2.5-7B and Qwen3-32B perform best at deterministic decoding.
+GPT-OSS-120B is relatively stable for $T \leq 0.75$, whereas both Qwen models degrade as temperature increases.
+High-temperature settings also introduce more missing or invalid generations, especially for GPT-OSS-120B at $T=2.0$ and Qwen3-32B at $T=2.0$.
+For forecasting, temperature should therefore be tuned jointly with output validity, Brier score, and calibration rather than selected only for diversity.
+
+\subsection{Forecasting Summaries}
+
+The forecasting-summary component improves average performance, but not uniformly.
+At $T=0$, adding summaries improves the average across the three evaluated models from 0.736 to 0.756 accuracy, from 0.205 to 0.193 Brier score, and from 0.131 to 0.116 ECE.
+The gains are clearest for Qwen2.5-7B and Qwen3-32B, suggesting that structured evidence summaries help models use retrieved context more effectively.
+GPT-OSS-120B is an exception: its accuracy is unchanged, and its Brier score and ECE are better without summaries in this ablation.
+This indicates that stronger models may already extract enough signal from raw evidence, while smaller models benefit more from explicit forecasting-oriented summaries.
+
+\subsection{Rationale Quality as a Diagnostic Signal}
+
+The LLM-judge analysis shows that rationale quality tracks forecast correctness but is not identical to it.
+Correct forecasts receive higher scores on all six judged attributes.
+The largest raw gaps are for completeness, source consistency, and plausibility, indicating that correct forecasts tend to be more complete, better grounded in the supplied evidence, and more plausible.
+In the multivariate SHAP analysis, completeness and plausibility are the strongest marginal predictors of correctness.
+Source consistency has a large raw correctness gap but the lowest SHAP importance, suggesting that its signal overlaps with completeness, plausibility, and informativeness.
+Conciseness contributes little in both analyses.
+
+These results should be interpreted as correlational.
+Judge scores are assigned after the forecast is generated, so they do not establish that improving a rationale attribute would causally improve the forecast.
+Rather, they show that rationale attributes are useful diagnostic signals for identifying when a forecast is more likely to be correct.
+
+\subsection{Implications}
+
+The main implication is that rationale design should be evaluated with forecasting metrics, not only with explanation-quality judgments.
+Structured rationales can expose evidence use and reasoning quality, but they can also harm calibration or reduce robustness.
+For deployment, neutral and temporal-anchor prompts are sensible starting points, credibility framing should be considered for models that benefit from evidence filtering, and uncertainty-language prompts should not be treated as calibration methods.
+Forecasting summaries are useful on average, especially for smaller models, but their value should be validated per model.
 
 \section{Limitations}
 
@@ -341,15 +413,211 @@ Poorly calibrated forecasts or persuasive but unsupported rationales may mislead
 Our framework is intended for evaluation and diagnostic use, not as evidence that LLM forecasts should be deployed without human oversight.
 The dataset contains public forecasting questions and article-derived evidence, but future releases should document source licenses and remove any sensitive content that appears in retrieved articles.
 
+\section{Extended Uncertainty Analysis}
+\label{app:uncertainty}
+
+This appendix compares natural uncertainty language in V0 with forced uncertainty language in V7 at $T=0.0$ using forecasting summaries.
+
+\subsection{Uncertainty Expression Patterns}
+
+We count lexical uncertainty markers in rationales using patterns for hedging terms, epistemic markers, and strong uncertainty expressions.
+V7 substantially increases explicit uncertainty language, but this lexical shift does not improve calibration.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{V0} & \textbf{V7} \\
+\midrule
+Has any uncertainty & 69.0\% & 95.9\% \\
+Mean hedging markers & 0.63 & 1.41 \\
+Mean epistemic markers & 1.11 & 1.03 \\
+Mean strong uncertainty & 0.05 & 0.24 \\
+\bottomrule
+\end{tabular}
+\caption{Uncertainty expression frequency in V0 and V7 rationales, aggregated across Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B at $T=0.0$.}
+\label{tab:uncertainty-freq}
+\end{table}
+
+\subsection{Matched Calibration Comparison}
+
+We compare V0 and V7 on the same 1,580 questions for each model.
+Positive $\Delta$ Brier and $\Delta$ ECE indicate degradation under V7.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Model} & \textbf{V0 Brier} & \textbf{V7 Brier} & $\boldsymbol{\Delta}$ \textbf{Brier} & $\boldsymbol{\Delta}$ \textbf{ECE} \\
+\midrule
+Qwen2.5-7B & 0.187 & 0.199 & +0.011 & +0.009 \\
+Qwen3-32B & 0.200 & 0.223 & +0.024 & +0.012 \\
+GPT-OSS-120B & 0.159 & 0.177 & +0.018 & +0.026 \\
+\midrule
+Average & 0.182 & 0.200 & +0.018 & +0.016 \\
+\bottomrule
+\end{tabular}
+\caption{Matched calibration comparison between V0 and V7 at $T=0.0$.}
+\label{tab:calibration-matched}
+\end{table}
+
+Forced uncertainty language worsens calibration for all three completed models.
+Average accuracy also falls from 76.7\% under V0 to 75.3\% under V7.
+
+\subsection{Confidence Shifts}
+
+V7 lowers mean confidence for all three models, but the reduction is not well aligned with correctness.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Model} & \textbf{V0 Conf.} & \textbf{V7 Conf.} & $\boldsymbol{\Delta}$ \\
+\midrule
+Qwen2.5-7B & 0.852 & 0.839 & -0.013 \\
+Qwen3-32B & 0.774 & 0.702 & -0.073 \\
+GPT-OSS-120B & 0.710 & 0.680 & -0.029 \\
+\midrule
+Average & 0.779 & 0.740 & -0.038 \\
+\bottomrule
+\end{tabular}
+\caption{Mean predicted-label confidence under V0 and V7 at $T=0.0$.}
+\label{tab:confidence-shifts}
+\end{table}
+
+On questions where V0 was incorrect, V7 reduces confidence by 0.012 for Qwen2.5-7B, 0.047 for Qwen3-32B, and 0.010 for GPT-OSS-120B.
+This suggests that V7 can reduce overconfidence on some errors, but the effect is outweighed by worse overall Brier score and ECE.
+
+\subsection{Interpretation}
+
+The uncertainty prompt mainly changes language, not forecast reliability.
+V7 makes rationales sound more cautious and lowers confidence, yet it degrades accuracy, Brier score, and ECE in the completed $T=0.0$ sweep.
+Uncertainty language should therefore be treated as an interpretability device, not as a calibration method.
+
+\section{Extended Temperature Analysis}
+\label{app:temperature}
+
+This appendix summarizes temperature sensitivity for the completed with-summaries sweep over Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B.
+Each model is evaluated across nine prompt variants and six temperature settings.
+
+\subsection{Aggregate Results}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Temperature} & \textbf{Acc.} & \textbf{Brier} & \textbf{ECE} & \textbf{Missing} \\
+\midrule
+$T=0.00$ & \textbf{75.6\%} & \textbf{0.193} & 0.116 & 0 \\
+$T=0.25$ & 75.2\% & 0.195 & 0.117 & 1 \\
+$T=0.75$ & 75.2\% & 0.196 & 0.118 & 1 \\
+$T=1.25$ & 74.8\% & 0.198 & 0.117 & 0 \\
+$T=1.75$ & 74.0\% & 0.203 & 0.123 & 14 \\
+$T=2.00$ & 73.0\% & 0.209 & \textbf{0.107} & 47 \\
+\bottomrule
+\end{tabular}
+\caption{Aggregate temperature results averaged across three models and nine prompt variants. Missing counts are summed over all model--variant cells.}
+\label{tab:temp-aggregate}
+\end{table}
+
+On aggregate, $T=0.0$ gives the best accuracy and Brier score.
+The lower ECE at $T=2.0$ should not be treated as an improvement because it coincides with the largest missing-output count and worse accuracy and Brier score.
+
+\subsection{Per-Model Optima}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Model} & \textbf{Best $T$} & \textbf{Acc.} & \textbf{Brier} & \textbf{ECE} \\
+\midrule
+Qwen2.5-7B-Instruct & 0.00 & 73.4\% & 0.200 & 0.112 \\
+Qwen3-32B & 0.00 & 71.2\% & 0.214 & 0.112 \\
+GPT-OSS-120B & 0.25 & 81.7\% & 0.166 & 0.121 \\
+\bottomrule
+\end{tabular}
+\caption{Best temperature per model by mean Brier score across prompt variants.}
+\label{tab:temp-model-optima}
+\end{table}
+
+Both Qwen models perform best under deterministic decoding.
+GPT-OSS-120B is strongest at $T=0.25$ by Brier score, although its low-temperature results are close.
+High-temperature sampling is consistently harmful for accuracy and Brier score, especially at $T \geq 1.75$.
+
+\subsection{Practical Implications}
+
+Temperature should be tuned per model rather than assumed transferable.
+For the completed sweep, deterministic decoding is the safest default for Qwen models, while GPT-OSS-120B can benefit slightly from low stochasticity.
+Temperatures at or above $1.75$ should be avoided for forecasting because they increase missing outputs and degrade probabilistic accuracy.
+
+\section{Future Directions}
+\label{app:future_directions}
+
+\paragraph{Adaptive Prompt Routing.}
+Future work should test routing policies that select between the neutral baseline, temporal anchors, and credibility framing by model, question category, evidence density, and time-to-resolution.
+The goal is not to find a universally best rationale format, but to identify when a specific prompt creates incremental accuracy or calibration gains.
+
+\paragraph{Probability Post-Processing.}
+Several prompts change accuracy and ECE in different directions, so future systems should test held-out calibration methods such as temperature scaling, isotonic regression, and confidence clipping.
+These methods are practical because they can improve the reliability of probability estimates without changing the underlying model.
+
+\paragraph{Evidence Summarization for Signal Extraction.}
+Forecasting summaries help on average but not uniformly.
+A useful next step is to optimize summaries for resolution-relevant signals: base rates, recent trend changes, deadline constraints, and disconfirming evidence.
+This should be evaluated by whether summaries improve out-of-sample Brier score, not by whether they make rationales more fluent.
+
+\paragraph{Event-Driven Updating.}
+Many forecasting opportunities depend on reacting to new evidence before it is fully priced in.
+Future work should evaluate whether models update probabilities coherently when new articles arrive, how quickly they incorporate new information, and whether update rationales correctly identify the evidence that moved the forecast.
+
+\paragraph{Robustness Checks.}
+Forecasting pipelines should be tested against stale articles, irrelevant evidence, duplicated sources, misleading snippets, and prompt-injection text in retrieved documents.
+Reliable forecasting depends on avoiding false signals, so robustness should be measured by performance under realistic retrieval noise.
+
 \section{Conclusion}
 
 We introduced a reproducible evaluation framework for structured LLM rationales in binary forecasting.
 Across 1,580 resolved questions, three target models, and nine prompt conditions, we find that rationale structure has heterogeneous effects on accuracy, calibration, and judged explanation quality.
 Temporal anchors and credibility framing can help specific models and metrics, but neutral rationales remain strong baselines.
-Automatic rationale attributes, especially plausibility and completeness, are predictive of forecast correctness, supporting their use as diagnostic signals.
+Automatic rationale attributes, especially completeness and plausibility, are predictive of forecast correctness, supporting their use as diagnostic signals.
 Future work should add human annotation, expand the model set, and test whether adaptive prompting can select the right rationale structure for each question.
 
-\bibliographystyle{plain}
+\section{Hypothesis Validation}
+\label{app:hypothesis_validation}
+
+\begin{table}[H]
+\centering
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{lccc}
+\hline
+Hypothesis & Status & Acc. & ECE \\
+\hline
+H1: Predicted Event        & Rejected  & 75.0\% & 0.109 \\
+H2: Key Attribute          & Rejected  & 75.3\% & 0.123 \\
+H3: Reasoning Type         & Rejected  & 74.8\% & 0.109 \\
+H4: Credibility            & Partial   & 76.6\% & 0.112 \\
+H5: Key Conditions         & Rejected  & 74.3\% & 0.120 \\
+H6: Step-by-Step Reasoning & Rejected  & 75.5\% & 0.129 \\
+H7: Uncertainty Language   & Rejected  & 75.3\% & 0.123 \\
+H8: Temporal Anchors       & Partial   & 76.6\% & 0.113 \\
+V0: Neutral Baseline       & Reference & 76.7\% & 0.108 \\
+\hline
+\end{tabular}}
+\caption{Hypothesis validation summary at $T=0.0$ using forecasting summaries, averaged across Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B.}
+\label{tab:hypothesis_validation}
+\end{table}
+
+Overall, the neutral baseline remains the strongest aggregate condition at $T=0.0$, with the highest accuracy and lowest ECE.
+We therefore reject H1, H2, H3, H5, H6, and H7: predicted-event restatement, key-attribute identification, reasoning-type declaration, key-condition enumeration, step-by-step reasoning, and uncertainty language do not improve aggregate forecasting performance over the baseline.
+H4 is partially supported because credibility framing nearly matches baseline accuracy and gives Qwen3-32B its best accuracy and ECE, but it does not improve the aggregate ECE.
+H8 is also partially supported because temporal anchors nearly match baseline accuracy and improve GPT-OSS-120B, but they do not beat the aggregate baseline calibration.
+
+\bibliographystyle{acl_natbib}
 \bibliography{references}
 
 \end{document}
