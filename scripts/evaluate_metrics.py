@@ -169,8 +169,12 @@ def parse_temperature(dirname: str) -> float:
     raw = dirname.removeprefix("temperature_")
     if raw in {"0", "00", "000"}:
         return 0.0
+    if raw.isdigit() and raw.startswith("00"):
+        return int(raw) / 100.0
     if len(raw) == 3 and raw.isdigit():
-        return int(raw) / 1000.0
+        return int(raw) / 100.0
+    if len(raw) == 2 and raw.isdigit() and raw.startswith("0"):
+        return int(raw) / 10.0
     return float(raw)
 
 

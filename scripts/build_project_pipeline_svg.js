@@ -8,6 +8,16 @@ const OUT_DIR = path.join(ROOT, "paper");
 const SVG_PATH = path.join(OUT_DIR, "project_pipeline_js.svg");
 const PNG_PATH = path.join(OUT_DIR, "project_pipeline_js.png");
 
+function requireTool(name) {
+  try {
+    return require(name);
+  } catch (err) {
+    return require(path.join(ROOT, ".cache/js-tools/node_modules", name));
+  }
+}
+
+const THREE = requireTool("three");
+
 const W = 2400;
 const H = 1050;
 
@@ -84,8 +94,49 @@ function roundedRect(x, y, w, h, r, fill, stroke = "none", sw = 0, extra = "") {
   return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" ${extra}/>`;
 }
 
+function shade(hex, amount) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.min(255, (n >> 16) + amount));
+  const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amount));
+  const b = Math.max(0, Math.min(255, (n & 255) + amount));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+}
+
+function project3(v) {
+  return {
+    x: v.x + v.z * 0.52,
+    y: v.y - v.z * 0.28,
+  };
+}
+
+function polygon(points, fill, stroke = "none", sw = 0) {
+  const coords = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  return `<polygon points="${coords}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+}
+
+function slab3d(x, y, w, h, depth, color) {
+  const A = project3(new THREE.Vector3(x, y, 0));
+  const B = project3(new THREE.Vector3(x + w, y, 0));
+  const C = project3(new THREE.Vector3(x + w, y + h, 0));
+  const D = project3(new THREE.Vector3(x, y + h, 0));
+  const Ab = project3(new THREE.Vector3(x, y, depth));
+  const Bb = project3(new THREE.Vector3(x + w, y, depth));
+  const Cb = project3(new THREE.Vector3(x + w, y + h, depth));
+  const Db = project3(new THREE.Vector3(x, y + h, depth));
+
+  return `
+    <g filter="url(#depthShadow)">
+      ${polygon([A, B, Bb, Ab], shade(color, 38), "rgba(255,255,255,0.35)", 1)}
+      ${polygon([B, C, Cb, Bb], shade(color, -28))}
+      ${polygon([D, C, Cb, Db], shade(color, -46))}
+      ${polygon([A, B, C, D], color)}
+    </g>
+  `;
+}
+
 function stage({ x, y, w, h, no, title, subtitle, accent, fill, rows }) {
   const innerX = x + 34;
+  const rowStart = y + (rows.length === 3 ? 174 : 152);
   const top = `
     <g filter="url(#cardShadow)">
       ${roundedRect(x, y, w, h, 22, fill, "#D7DFEA", 2)}
@@ -99,7 +150,7 @@ function stage({ x, y, w, h, no, title, subtitle, accent, fill, rows }) {
 
   const rowSvg = rows
     .map((row, i) => {
-      const ry = y + 152 + i * 58;
+      const ry = rowStart + i * 58;
       return `
         ${roundedRect(innerX, ry, w - 68, 42, 12, "#FFFFFF", "#E1E8F0", 1.5)}
         ${roundedRect(innerX + 14, ry + 12, 18, 18, 9, row.color || accent)}
@@ -152,7 +203,7 @@ const stages = [
       { label: "Metaculus-style questions", value: "1,580", color: C.blue },
       { label: "Yes outcomes", value: "556", color: C.green },
       { label: "No outcomes", value: "1,024", color: C.red },
-      { label: "Mean evidence articles", value: "2.14", color: C.blue },
+      { label: "News articles/question", value: "3", color: C.blue },
     ],
   },
   {
@@ -169,7 +220,6 @@ const stages = [
       { label: "Neutral baseline", value: "V0", color: C.teal },
       { label: "Structured variants", value: "V1-V8", color: C.teal },
       { label: "Forecast components", value: "8", color: C.teal },
-      { label: "Same question set", value: "fixed", color: C.teal },
     ],
   },
   {
@@ -186,7 +236,6 @@ const stages = [
       { label: "Target models", value: "3", color: C.amber },
       { label: "Temperatures", value: "6", color: C.amber },
       { label: "Prompt conditions", value: "9", color: C.amber },
-      { label: "Rationales logged", value: "all", color: C.amber },
     ],
   },
   {
@@ -247,6 +296,15 @@ const variantChips = variants
   .join("");
 
 const stageSvg = stages.map(stage).join("");
+const depthSvg = `
+  <g opacity="0.22">
+    ${slab3d(126, 562, 320, 24, 66, C.blue)}
+    ${slab3d(588, 562, 320, 24, 66, C.teal)}
+    ${slab3d(1050, 562, 320, 24, 66, C.amber)}
+    ${slab3d(1512, 562, 320, 24, 66, C.violet)}
+    ${slab3d(1974, 562, 280, 24, 66, C.red)}
+  </g>
+`;
 const stageArrows = [
   arrow(506, 339, 548, 339),
   arrow(968, 339, 1010, 339),
@@ -260,6 +318,9 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     <filter id="cardShadow" x="-12%" y="-12%" width="124%" height="140%">
       <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0F172A" flood-opacity="0.09"/>
     </filter>
+    <filter id="depthShadow" x="-20%" y="-40%" width="145%" height="190%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#0F172A" flood-opacity="0.12"/>
+    </filter>
     <marker id="smallArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
       <path d="M 0 0 L 8 4 L 0 8 z" fill="${C.line}"/>
     </marker>
@@ -272,6 +333,7 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   ${roundedRect(0, 0, W, H, 0, C.bg)}
   ${roundedRect(64, 50, 2272, 960, 34, "#FFFFFF", "#E5EBF2", 2)}
 
+  ${depthSvg}
   ${stageSvg}
   ${stageArrows}
 
@@ -289,8 +351,7 @@ async function main() {
   fs.writeFileSync(SVG_PATH, svg);
 
   try {
-    const sharpPath = path.join(ROOT, ".cache/js-tools/node_modules/sharp");
-    const sharp = require(sharpPath);
+    const sharp = requireTool("sharp");
     await sharp(Buffer.from(svg), { density: 220 }).png().toFile(PNG_PATH);
     console.log(SVG_PATH);
     console.log(PNG_PATH);
