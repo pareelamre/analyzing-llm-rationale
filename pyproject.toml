@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 authors = [
-  { name = "Repository Maintainers" },
+  { name = "Pareel Amre" },
 ]
 dependencies = [
   "huggingface_hub>=0.30.0",
@@ -23,6 +23,14 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "ruff>=0.11.0",
+]
+analysis = [
+  "matplotlib>=3.8.0",
+  "numpy>=1.26.0",
+  "pandas>=2.2.0",
+  "pypdf>=5.0.0",
+  "scikit-learn>=1.4.0",
+  "shap>=0.46.0",
 ]
 
 [project.scripts]
