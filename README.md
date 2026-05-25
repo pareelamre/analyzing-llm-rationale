@@ -52,7 +52,7 @@ analyze-llm-rationale run-batch --variant variant3_reasoning_type
 For a remote OpenAI-compatible provider:
 
 ```bash
-export SCADS_AI_API_KEY=your_token
+export PROVIDER_API_KEY=your_token
 analyze-llm-rationale run-batch --variant variant3_reasoning_type --model llama-3.3-70b-instruct
 ```
 
@@ -139,9 +139,8 @@ Model access is configured in `configs/models.yaml`. Open-weight Qwen models run
 locally through Hugging Face; hosted models use OpenAI-compatible endpoints and
 require API keys through environment variables or local key files.
 
-Never commit key files such as `SCADS_AI_API_KEY.txt`, `DEEPSEEK_API_KEY.txt`,
-`HF_TOKEN.txt`, or `OPEN_AI_API_KEY.txt`. Large local caches (`.cache/`, `envs/`,
-`.venv/`) are intentionally ignored and excluded from source archives.
+Never commit key files or tokens. Large local caches (`.cache/`, `envs/`, `.venv/`)
+are intentionally ignored and excluded from source archives.
 
 ## Citation
 
