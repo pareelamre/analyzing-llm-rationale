@@ -24,7 +24,6 @@ from analyzing_llm_rationale.validation import (
     verify_result_records,
 )
 
-
 REMOTE_PROVIDER_CHOICES = ["local-qwen", "hf-router", "openai-compatible"]
 
 
@@ -129,6 +128,25 @@ def build_parser() -> argparse.ArgumentParser:
     verify_results_parser.add_argument("--input-path", type=Path, default=defaults["input_path"])
     verify_results_parser.add_argument("--output-path", type=Path, default=None)
     verify_results_parser.add_argument("--model-label", default=None)
+
+    serve_parser = subparsers.add_parser("serve", help="Start FastAPI inference server.")
+    serve_parser.add_argument("--host", default="0.0.0.0")
+    serve_parser.add_argument("--port", type=int, default=8000)
+    serve_parser.add_argument("--model", default="qwen2.5-7b-instruct")
+    serve_parser.add_argument("--variant", default="variant0_neutral_baseline")
+    serve_parser.add_argument("--variants-config", type=Path, default=repo_root() / "configs" / "variants.yaml")
+    serve_parser.add_argument("--models-config", type=Path, default=repo_root() / "configs" / "models.yaml")
+    serve_parser.add_argument("--temperature", type=float, default=0.0)
+    serve_parser.add_argument("--max-tokens", type=int, default=int(os.environ.get("MAX_TOKENS", "2048")))
+    serve_parser.add_argument("--provider", choices=REMOTE_PROVIDER_CHOICES, default=None)
+    serve_parser.add_argument("--local-model-name", default=None)
+    serve_parser.add_argument("--router-model-name", default=None)
+    serve_parser.add_argument("--api-base-url", default=None)
+    serve_parser.add_argument("--api-key-env-var", default=None)
+    serve_parser.add_argument("--api-key-file", default=None)
+    serve_parser.add_argument("--device", default=os.environ.get("MODEL_DEVICE", "cuda"))
+    serve_parser.add_argument("--request-timeout-s", type=float, default=float(os.environ.get("REQUEST_TIMEOUT_S", "120")))
+    serve_parser.add_argument("--model-label", default=None)
 
     return parser
 
@@ -266,7 +284,61 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
 def run_batch_command(args: argparse.Namespace) -> int:
     provider = build_provider(args)
     config = resolve_run_config(args)
+
+    try:
+        import mlflow
+        _mlflow_available = True
+    except ImportError:
+        _mlflow_available = False
+
+    if _mlflow_available:
+        mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "./mlruns"))
+        mlflow.set_experiment("analyzing-llm-rationale")
+        _run_ctx = mlflow.start_run()
+        _run_ctx.__enter__()
+        mlflow.log_params({
+            "model_key": config.model_key,
+            "variant_name": config.variant_name,
+            "temperature": config.temperature,
+            "max_records": config.max_records,
+            "provider_name": config.provider_name,
+            "max_tokens": config.max_tokens,
+            "temperature_tag": config.temperature_tag,
+        })
+
     summary = process_batch(config, provider)
+
+    if _mlflow_available:
+        mlflow.log_metrics({
+            "processed": float(summary.processed),
+            "null_predictions": float(summary.null_predictions),
+            "total_results": float(summary.total_results),
+        })
+        try:
+            from analyzing_llm_rationale.metrics import (
+                accuracy,
+                brier_score,
+                ece,
+                iter_examples,
+                load_targets,
+            )
+            results = json.loads(config.output_path.read_text(encoding="utf-8"))
+            targets = load_targets(config.input_path)
+            examples, _ = iter_examples(results, targets)
+            if examples:
+                mlflow.log_metrics({
+                    "accuracy": accuracy(examples),
+                    "brier_score": brier_score(examples),
+                    "ece": ece(examples, bins=10),
+                })
+        except Exception:
+            pass
+        if config.output_path.exists():
+            mlflow.log_artifact(str(config.output_path))
+        if config.run_metadata_path and config.run_metadata_path.exists():
+            mlflow.log_artifact(str(config.run_metadata_path))
+        _run_ctx.__exit__(None, None, None)
+
     print(
         f"Processed {summary.processed} records | "
         f"total={summary.total_results} | nulls={summary.null_predictions} | "
@@ -327,6 +399,30 @@ def verify_results_command(args: argparse.Namespace) -> int:
     return 0 if summary.is_clean else 1
 
 
+def serve_command(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+
+        from analyzing_llm_rationale.server import _state, app
+    except ImportError:
+        print("The 'serve' extra is required: pip install '.[serve]'")
+        return 1
+
+    root = repo_root()
+    _state["provider"] = build_provider(args)
+    _state["variants"] = load_variant_configs(args.variants_config)
+    _state["system_prompt"] = (root / "prompts" / "system.txt").read_text(encoding="utf-8").strip()
+    _state["prompt_templates"] = {
+        name: (root / variant.prompt_path).read_text(encoding="utf-8").strip()
+        for name, variant in _state["variants"].items()
+    }
+    _state["temperature"] = args.temperature
+    _state["max_tokens"] = args.max_tokens
+    _state["model_key"] = args.model
+    uvicorn.run(app, host=args.host, port=args.port)
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -341,5 +437,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return validate_dataset_command(args)
     if args.command == "verify-results":
         return verify_results_command(args)
+    if args.command == "serve":
+        return serve_command(args)
     parser.error(f"Unknown command: {args.command}")
     return 2

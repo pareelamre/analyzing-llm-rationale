@@ -32,6 +32,13 @@ analysis = [
   "scikit-learn>=1.4.0",
   "shap>=0.46.0",
 ]
+serve = [
+  "fastapi>=0.111",
+  "uvicorn[standard]>=0.29",
+]
+tracking = [
+  "mlflow>=2.13",
+]
 
 [project.scripts]
 analyze-llm-rationale = "analyzing_llm_rationale.cli:main"
@@ -49,3 +56,4 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
+ignore = ["E501"]

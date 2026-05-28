@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import math
-from typing import Dict, Iterable, List, Optional, Sequence
+from dataclasses import asdict, dataclass
+from typing import Dict, List, Optional, Sequence
 
 
 class SchemaValidationError(ValueError):
