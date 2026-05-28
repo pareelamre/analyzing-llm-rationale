@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import os
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-import os
 from typing import Dict, List, Optional
 
 from analyzing_llm_rationale.cache_env import configure_workspace_cache_env
