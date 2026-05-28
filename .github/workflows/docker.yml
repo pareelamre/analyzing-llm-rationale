@@ -1,0 +1,100 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+env:
+  GCP_REGION: us-central1
+  GCP_PROJECT_ID: brave-drive-471109-d9
+  SERVICE_NAME: analyzing-llm-rationale
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      gar_image: ${{ steps.gar_tag.outputs.image }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/docker/${{ env.SERVICE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: cpu
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Capture GAR image tag
+        id: gar_tag
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "image=${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/docker/${{ env.SERVICE_NAME }}:sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image "${{ needs.build-and-push.outputs.gar_image }}" \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8000 \
+            --timeout 300 \
+            --memory 512Mi \
+            --update-secrets SCADS_AI_API_KEY=SCADS_AI_API_KEY:latest \
+            --set-env-vars MODEL_DEVICE=cpu \
+            --project ${{ env.GCP_PROJECT_ID }}
+
+      - name: Print service URL
+        run: |
+          gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ env.GCP_PROJECT_ID }} \
+            --format 'value(status.url)'
