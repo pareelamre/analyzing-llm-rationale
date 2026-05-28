@@ -5,6 +5,31 @@ forecasting behavior on Metaculus-style binary forecasting questions. The codeba
 contains the prompt variants, batch inference runner, generated result tables, and
 plotting/analysis scripts used for the paper figures.
 
+## Live API
+
+Deployed on [Google Cloud Run](https://cloud.google.com/run) — model `gpt-oss-120b`, variant `variant0_neutral_baseline`:
+
+```
+https://analyzing-llm-rationale-<hash>-uc.a.run.app
+```
+
+*(The URL is printed in the GitHub Actions deploy-step output after the first push to `main`.)*
+
+```bash
+# Health check
+curl https://analyzing-llm-rationale-<hash>-uc.a.run.app/health
+
+# Single-record prediction
+curl -X POST https://analyzing-llm-rationale-<hash>-uc.a.run.app/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Will X happen by date Y?",
+    "description": "Context here.",
+    "news_articles": [],
+    "variant": "variant0_neutral_baseline"
+  }'
+```
+
 ## Repository Contents
 
 - `src/analyzing_llm_rationale/`: packaged inference, provider, validation, and CLI logic.
