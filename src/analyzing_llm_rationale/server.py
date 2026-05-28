@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -59,6 +59,13 @@ class PredictResponse(BaseModel):
     model_key: str
 
 
+class VertexPredictRequest(BaseModel):
+    instances: List[Dict[str, Any]]
+
+class VertexPredictResponse(BaseModel):
+    predictions: List[Dict[str, Any]]
+
+
 @app.get("/health")
 async def health() -> Dict[str, str]:
     return {"status": "ok"}
@@ -110,3 +117,12 @@ async def predict(req: PredictRequest) -> PredictResponse:
         variant=req.variant,
         model_key=_state["model_key"],
     )
+
+
+@app.post("/vertex-predict", response_model=VertexPredictResponse)
+async def vertex_predict(req: VertexPredictRequest) -> VertexPredictResponse:
+    predictions = []
+    for instance in req.instances:
+        result = await predict(PredictRequest(**instance))
+        predictions.append(result.model_dump())
+    return VertexPredictResponse(predictions=predictions)

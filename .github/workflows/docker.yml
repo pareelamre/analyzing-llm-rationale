@@ -98,3 +98,75 @@ jobs:
             --region ${{ env.GCP_REGION }} \
             --project ${{ env.GCP_PROJECT_ID }} \
             --format 'value(status.url)'
+
+  vertex-ai:
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload model to Vertex AI
+        run: |
+          gcloud ai models upload \
+            --region=${{ env.GCP_REGION }} \
+            --display-name=${{ env.SERVICE_NAME }} \
+            --container-image-uri="${{ needs.build-and-push.outputs.gar_image }}" \
+            --container-health-route=/health \
+            --container-predict-route=/vertex-predict \
+            --container-ports=8000 \
+            --container-env-vars=MODEL_DEVICE=cpu \
+            --project=${{ env.GCP_PROJECT_ID }}
+
+      - name: Get latest model ID
+        id: model
+        run: |
+          MODEL_ID=$(gcloud ai models list \
+            --region=${{ env.GCP_REGION }} \
+            --filter="displayName=${{ env.SERVICE_NAME }}" \
+            --sort-by="~createTime" \
+            --limit=1 \
+            --format='value(name)' \
+            --project=${{ env.GCP_PROJECT_ID }} | awk -F/ '{print $NF}')
+          echo "id=$MODEL_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Undeploy previous model versions
+        continue-on-error: true
+        run: |
+          DEPLOYED_IDS=$(gcloud ai endpoints describe ${{ vars.VERTEX_ENDPOINT_ID }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --format='value(deployedModels[].id)')
+          for ID in $DEPLOYED_IDS; do
+            gcloud ai endpoints undeploy-model ${{ vars.VERTEX_ENDPOINT_ID }} \
+              --region=${{ env.GCP_REGION }} \
+              --deployed-model-id="$ID" \
+              --project=${{ env.GCP_PROJECT_ID }}
+          done
+
+      - name: Deploy model to Vertex AI endpoint
+        run: |
+          SCADS_KEY=$(gcloud secrets versions access latest \
+            --secret=SCADS_AI_API_KEY \
+            --project=${{ env.GCP_PROJECT_ID }})
+          echo "::add-mask::$SCADS_KEY"
+          gcloud ai endpoints deploy-model ${{ vars.VERTEX_ENDPOINT_ID }} \
+            --region=${{ env.GCP_REGION }} \
+            --model=${{ steps.model.outputs.id }} \
+            --display-name=${{ env.SERVICE_NAME }} \
+            --machine-type=e2-standard-2 \
+            --min-replica-count=1 \
+            --max-replica-count=2 \
+            --env-vars="SCADS_AI_API_KEY=$SCADS_KEY,MODEL_DEVICE=cpu" \
+            --project=${{ env.GCP_PROJECT_ID }}
+
+      - name: Print Vertex AI endpoint URL
+        run: |
+          echo "https://${{ env.GCP_REGION }}-aiplatform.googleapis.com/v1/projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.GCP_REGION }}/endpoints/${{ vars.VERTEX_ENDPOINT_ID }}:predict"
