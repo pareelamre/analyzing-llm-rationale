@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+os.environ["ANALYTICS_DB"] = str(Path(tempfile.gettempdir()) / "foresea_test_analytics.duckdb")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from analyzing_llm_rationale.server import _state, app  # noqa: E402
+from analyzing_llm_rationale.server import _ANALYTICS_DB, _state, app  # noqa: E402
 
 
 class FakeProvider:
@@ -70,6 +73,8 @@ class ServerTests(unittest.TestCase):
 
     def tearDown(self):
         _state.clear()
+        if _ANALYTICS_DB.exists():
+            _ANALYTICS_DB.unlink()
 
     def test_predict_fetches_and_returns_evidence(self):
         response = self.client.post(
@@ -138,6 +143,25 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["evidence_articles"][0]["summary"], "Evidence details")
+
+    def test_records_anonymous_page_visit(self):
+        response = self.client.post(
+            "/analytics/visit",
+            json={
+                "path": "/",
+                "referrer": "",
+                "timezone": "Europe/Berlin",
+            },
+            headers={"user-agent": "test-client"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        summary = self.client.get("/analytics/summary")
+        self.assertEqual(summary.status_code, 200)
+        payload = summary.json()
+        self.assertGreaterEqual(payload["total_visits"], 1)
+        self.assertGreaterEqual(payload["unique_visitors"], 1)
+        self.assertEqual(payload["by_day"][0]["visits"], 1)
 
 
 if __name__ == "__main__":

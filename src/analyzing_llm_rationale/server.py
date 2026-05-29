@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import html
 import os
 import re
@@ -10,6 +11,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import duckdb
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -20,6 +22,7 @@ from analyzing_llm_rationale.pipeline import build_user_prompt, parse_model_resp
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _STATIC_DIR = _REPO_ROOT / "static"
+_ANALYTICS_DB = Path(os.environ.get("ANALYTICS_DB", "/tmp/foresea_analytics.duckdb"))
 
 _REQUIRED_API_KEY: Optional[str] = os.environ.get("API_KEY")
 _state: Dict[str, Any] = {}
@@ -377,6 +380,20 @@ class VertexPredictResponse(BaseModel):
     )
 
 
+class VisitRequest(BaseModel):
+    """Anonymous browser visit event."""
+
+    path: str = Field("/", max_length=500)
+    referrer: str = Field("", max_length=2000)
+    timezone: Optional[str] = Field(None, max_length=100)
+
+
+class AnalyticsSummary(BaseModel):
+    total_visits: int
+    unique_visitors: int
+    by_day: List[Dict[str, Any]]
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _check_api_key(request: Request) -> None:
     if not _REQUIRED_API_KEY:
@@ -432,6 +449,56 @@ def _evidence_sources(articles: List[Dict[str, Any]]) -> List[EvidenceSource]:
     return sources
 
 
+def _analytics_conn():
+    _ANALYTICS_DB.parent.mkdir(parents=True, exist_ok=True)
+    conn = duckdb.connect(str(_ANALYTICS_DB))
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS page_visits (
+            ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            path TEXT,
+            referrer TEXT,
+            user_agent TEXT,
+            timezone TEXT,
+            visitor_hash TEXT
+        )
+        """
+    )
+    return conn
+
+
+def _visitor_hash(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    ip = forwarded.split(",")[0].strip() if forwarded else ""
+    if not ip and request.client:
+        ip = request.client.host
+    user_agent = request.headers.get("user-agent", "")
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    salt = os.environ.get("ANALYTICS_SALT", "foresea-analytics")
+    raw = f"{day}:{ip}:{user_agent}:{salt}".encode("utf-8", errors="ignore")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _record_visit(event: VisitRequest, request: Request) -> None:
+    conn = _analytics_conn()
+    try:
+        conn.execute(
+            """
+            INSERT INTO page_visits (path, referrer, user_agent, timezone, visitor_hash)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                event.path,
+                event.referrer,
+                request.headers.get("user-agent", "")[:1000],
+                event.timezone,
+                _visitor_hash(request),
+            ],
+        )
+    finally:
+        conn.close()
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get(
@@ -448,6 +515,58 @@ async def health() -> Dict[str, str]:
     It does **not** verify that the LLM provider is reachable.
     """
     return {"status": "ok"}
+
+
+@app.post("/analytics/visit", tags=["System"], summary="Record anonymous page visit")
+async def record_visit(event: VisitRequest, request: Request) -> Dict[str, str]:
+    """Record one anonymous page visit.
+
+    Stores no raw IP address. Unique visitors are estimated with a daily salted
+    hash of IP address and user agent.
+    """
+    _record_visit(event, request)
+    return {"status": "ok"}
+
+
+@app.get("/analytics/summary", tags=["System"], response_model=AnalyticsSummary)
+async def analytics_summary(request: Request) -> AnalyticsSummary:
+    """Return basic page-visit counts.
+
+    If `API_KEY` is configured, this endpoint requires `X-API-Key`.
+    """
+    _check_api_key(request)
+    conn = _analytics_conn()
+    try:
+        total, unique_visitors = conn.execute(
+            "SELECT COUNT(*), COUNT(DISTINCT visitor_hash) FROM page_visits"
+        ).fetchone()
+        rows = conn.execute(
+            """
+            SELECT
+                CAST(ts AS DATE) AS day,
+                COUNT(*) AS visits,
+                COUNT(DISTINCT visitor_hash) AS unique_visitors
+            FROM page_visits
+            GROUP BY 1
+            ORDER BY 1 DESC
+            LIMIT 30
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return AnalyticsSummary(
+        total_visits=int(total or 0),
+        unique_visitors=int(unique_visitors or 0),
+        by_day=[
+            {
+                "day": str(day),
+                "visits": int(visits),
+                "unique_visitors": int(unique_count),
+            }
+            for day, visits, unique_count in rows
+        ],
+    )
 
 
 @app.post(
