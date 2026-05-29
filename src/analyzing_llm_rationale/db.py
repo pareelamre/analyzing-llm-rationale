@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -38,6 +37,19 @@ CREATE TABLE IF NOT EXISTS news_articles (
     relevance_score FLOAT,
     summary TEXT,
     fetched_at TIMESTAMP DEFAULT current_timestamp
+);
+
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+    run_id VARCHAR PRIMARY KEY,
+    question_id INTEGER,
+    model VARCHAR,
+    variant VARCHAR,
+    temperature FLOAT,
+    status VARCHAR,
+    article_count INTEGER,
+    error TEXT,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP DEFAULT current_timestamp
 );
 """
 
@@ -96,7 +108,7 @@ def ingest_results_json(
     ]
     conn.executemany(
         """
-        INSERT OR IGNORE INTO predictions
+        INSERT INTO predictions
           (run_id, model, temperature, variant, question_id,
            predicted_answer, confidence, rationale)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -213,3 +225,42 @@ def store_news_articles(
     if close:
         conn.close()
     return len(rows)
+
+
+def store_pipeline_run(
+    run_id: str,
+    question_id: int,
+    model: str,
+    variant: str,
+    temperature: float,
+    status: str,
+    article_count: int,
+    error: Optional[str] = None,
+    started_at: Optional[str] = None,
+    conn=None,
+) -> None:
+    close = conn is None
+    if conn is None:
+        conn = get_connection()
+
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO pipeline_runs
+          (run_id, question_id, model, variant, temperature, status,
+           article_count, error, started_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(CAST(? AS TIMESTAMP), current_timestamp))
+        """,
+        [
+            run_id,
+            question_id,
+            model,
+            variant,
+            temperature,
+            status,
+            article_count,
+            error,
+            started_at,
+        ],
+    )
+    if close:
+        conn.close()
