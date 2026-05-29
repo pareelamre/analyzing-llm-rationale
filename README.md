@@ -10,25 +10,33 @@ plotting/analysis scripts used for the paper figures.
 Deployed on [Google Cloud Run](https://cloud.google.com/run) — model `gpt-oss-120b`, variant `variant0_neutral_baseline`:
 
 ```
-https://analyzing-llm-rationale-<hash>-uc.a.run.app
+https://analyzing-llm-rationale-hy7gvnvt4a-uc.a.run.app
 ```
 
 *(The URL is printed in the GitHub Actions deploy-step output after the first push to `main`.)*
 
 ```bash
 # Health check
-curl https://analyzing-llm-rationale-<hash>-uc.a.run.app/health
+curl https://analyzing-llm-rationale-hy7gvnvt4a-uc.a.run.app/health
 
 # Single-record prediction
-curl -X POST https://analyzing-llm-rationale-<hash>-uc.a.run.app/predict \
+curl -X POST https://analyzing-llm-rationale-hy7gvnvt4a-uc.a.run.app/predict \
   -H "Content-Type: application/json" \
   -d '{
     "question": "Will X happen by date Y?",
     "description": "Context here.",
     "news_articles": [],
+    "attach_evidence": true,
+    "evidence_top_k": 5,
     "variant": "variant0_neutral_baseline"
   }'
 ```
+
+When `attach_evidence` is true and no `news_articles` are supplied, `/predict`
+fetches and ranks current news evidence from GDELT and Google News RSS by
+default, injects it into the model prompt, and returns the selected
+`evidence_articles` with the forecast. Supplying `news_articles` skips automatic
+retrieval and uses the caller-provided evidence.
 
 ## Repository Contents
 
@@ -115,6 +123,51 @@ Regenerate aggregate metrics from `results/`:
 
 ```bash
 python scripts/evaluate_metrics.py
+```
+
+Run the DuckDB SQL analytics suite over the real Metaculus-style dataset and
+saved model outputs:
+
+```bash
+python scripts/sql_analytics.py \
+  --db analysis/forecasting_analytics.duckdb \
+  --ingest --replace \
+  --output-dir analysis/sql_analytics
+```
+
+This writes a markdown report plus one CSV per query for 10 medium-level SQL
+problems: model accuracy, best variants, calibration bins, Brier score,
+consensus/disagreement cases, prompt lift over baseline, temperature sensitivity,
+overconfident errors, and category difficulty.
+
+Run the LangChain-powered news retrieval wrapper:
+
+```bash
+PYTHONPATH=src analyze-llm-rationale fetch-and-rank \
+  --question "Will X happen by date Y?" \
+  --source gdelt \
+  --source google-news \
+  --top-k 5
+```
+
+The news pipeline uses LangChain for a query-planning step, article
+summarization, and embedding-based relevance ranking before inference. Evidence
+sources are configurable with `--source` for the CLI and `--evidence-source`
+when serving the API.
+
+Run or schedule the Prefect DAG for RSS/news fetch, inference, and DuckDB
+logging:
+
+```bash
+# One question
+python flows/forecasting_flow.py --question-id 124 --top-k 5
+
+# Small batch from the dataset
+python flows/forecasting_flow.py --limit 3 --top-k 5
+
+# Daily scheduled deployment at 06:00 UTC
+prefect server start
+python flows/forecasting_flow.py --deploy --limit 3 --cron "0 6 * * *"
 ```
 
 Regenerate paper figures after metrics are present:

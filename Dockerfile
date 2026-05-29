@@ -7,7 +7,7 @@ COPY src/ src/
 COPY configs/ configs/
 COPY prompts/ prompts/
 
-RUN pip install --no-cache-dir -e ".[serve,tracking]"
+RUN pip install --no-cache-dir -e ".[serve,tracking,pipeline]"
 
 ENV MODEL_DEVICE=cuda
 EXPOSE 8000
@@ -24,7 +24,7 @@ COPY prompts/ prompts/
 
 # Install CPU-only torch first so pip doesn't pull CUDA wheels when resolving the package deps
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -e ".[serve,tracking]"
+    pip install --no-cache-dir -e ".[serve,tracking,pipeline]"
 
 ENV MODEL_DEVICE=cpu
 EXPOSE 8000
