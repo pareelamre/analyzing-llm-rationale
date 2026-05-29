@@ -1,10 +1,43 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import List, Optional
+
+_GCP_PROJECT_ID = "brave-drive-471109-d9"
+
+
+def _fetch_secret_from_gcp(secret_name: str) -> Optional[str]:
+    """Fetch a secret from GCP Secret Manager using the instance service account.
+
+    Only works when running on GCP (metadata server must be reachable).
+    Uses stdlib only — no google-cloud SDK required.
+    """
+    try:
+        token_req = urllib.request.Request(
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+            headers={"Metadata-Flavor": "Google"},
+        )
+        with urllib.request.urlopen(token_req, timeout=2) as resp:
+            token = json.loads(resp.read())["access_token"]
+
+        secret_url = (
+            f"https://secretmanager.googleapis.com/v1/projects/{_GCP_PROJECT_ID}"
+            f"/secrets/{secret_name}/versions/latest:access"
+        )
+        secret_req = urllib.request.Request(
+            secret_url, headers={"Authorization": f"Bearer {token}"}
+        )
+        with urllib.request.urlopen(secret_req, timeout=5) as resp:
+            payload = json.loads(resp.read())["payload"]["data"]
+        return base64.b64decode(payload).decode("utf-8").strip()
+    except Exception:
+        return None
 
 from analyzing_llm_rationale.config import (
     load_model_configs,
@@ -223,6 +256,11 @@ def resolve_api_key(args: argparse.Namespace) -> str:
         value = os.environ.get(args.api_key_env_var)
         if value:
             return value
+        # Fallback: fetch from GCP Secret Manager when running on GCP
+        # (env var absent means we're likely in a Vertex AI container without baked-in creds)
+        secret_value = _fetch_secret_from_gcp(args.api_key_env_var)
+        if secret_value:
+            return secret_value
 
     if args.api_key_file:
         api_key_path = Path(args.api_key_file)

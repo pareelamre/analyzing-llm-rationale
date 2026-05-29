@@ -120,10 +120,6 @@ jobs:
 
       - name: Upload model to Vertex AI
         run: |
-          SCADS_KEY=$(gcloud secrets versions access latest \
-            --secret=SCADS_AI_API_KEY \
-            --project=${{ env.GCP_PROJECT_ID }})
-          echo "::add-mask::$SCADS_KEY"
           gcloud ai models upload \
             --region=${{ env.GCP_REGION }} \
             --display-name=${{ env.SERVICE_NAME }} \
@@ -131,7 +127,7 @@ jobs:
             --container-health-route=/health \
             --container-predict-route=/vertex-predict \
             --container-ports=8000 \
-            --container-env-vars="MODEL_DEVICE=cpu,SCADS_AI_API_KEY=$SCADS_KEY" \
+            --container-env-vars="MODEL_DEVICE=cpu" \
             --project=${{ env.GCP_PROJECT_ID }}
 
       - name: Get latest model ID
