@@ -714,6 +714,7 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
         503: {"description": "Server not yet initialised."},
     },
     response_model=VertexPredictResponse,
+    include_in_schema=False,
 )
 async def vertex_predict(req: VertexPredictRequest, request: Request = None) -> VertexPredictResponse:
     """Vertex AI-compatible prediction endpoint.
