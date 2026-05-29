@@ -14,21 +14,98 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from analyzing_llm_rationale.pipeline import build_user_prompt, parse_model_response
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _STATIC_DIR = _REPO_ROOT / "static"
 
-# Optional API key protection — set API_KEY env var to require it on /predict
 _REQUIRED_API_KEY: Optional[str] = os.environ.get("API_KEY")
-
-# Module-level state populated by serve_command() before uvicorn.run()
 _state: Dict[str, Any] = {}
 
+_DESCRIPTION = """
+## Overview
 
-# ── Rate limiter (sliding window, per IP, in-process) ─────────────────────────
+The **LLM Forecasting API** runs probabilistic binary (yes/no) predictions on
+[Metaculus](https://www.metaculus.com)-style forecasting questions using
+**GPT-OSS-120B** via the SCADS AI inference cluster.
+
+Each prediction includes a **confidence score** (0–1), a structured **rationale**,
+and optional evidence sources fetched from live news when the evidence pipeline is
+configured.
+
+---
+
+## Quick start
+
+```bash
+curl -X POST https://analyzing-llm-rationale-hy7gvnvt4a-uc.a.run.app/predict \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
+    "variant": "variant0_neutral_baseline"
+  }'
+```
+
+---
+
+## Prompt variants
+
+The `variant` field controls how the LLM is prompted. Choose the variant that
+best matches the information you have available:
+
+| Variant key | Focus |
+|---|---|
+| `variant0_neutral_baseline` | Control — no extra framing (default) |
+| `variant1_predicted_event` | State the concrete predicted event |
+| `variant2_key_attribute` | Highlight time / quantity / actor |
+| `variant3_reasoning_type` | Specify reasoning type (speculation, expert forecast…) |
+| `variant4_credibility` | Ground rationale in source credibility scores |
+| `variant5_key_conditions` | List 2–4 conditions that must hold |
+| `variant6_step_by_step_reasoning` | Produce 2–3 numbered reasoning steps |
+| `variant7_uncertainty_language` | Require uncertainty hedging words |
+| `variant8_temporal_anchors` | Anchor reasoning to specific dates |
+
+---
+
+## Rate limiting
+
+**20 requests per minute per IP address.** Exceeding this returns `429 Too Many Requests`
+with a `Retry-After: 60` header.
+
+---
+
+## Authentication
+
+When the server is configured with `API_KEY`, all prediction endpoints require:
+
+```
+X-API-Key: <your-key>
+```
+
+The `/health` endpoint is always unauthenticated.
+
+---
+
+## Source code
+
+[github.com/pareelamle/analyzing-llm-rationale](https://github.com/pareelamre/analyzing-llm-rationale)
+"""
+
+_TAGS = [
+    {
+        "name": "Inference",
+        "description": "Run probabilistic predictions on binary forecasting questions.",
+    },
+    {
+        "name": "System",
+        "description": "Health and liveness checks.",
+    },
+]
+
+
+# ── Rate limiter ──────────────────────────────────────────────────────────────
 class _RateLimiter:
     def __init__(self, calls: int = 20, period: int = 60):
         self._calls = calls
@@ -39,7 +116,6 @@ class _RateLimiter:
         now = time.monotonic()
         window = now - self._period
         log = self._log[key]
-        # Evict old entries
         while log and log[0] < window:
             log.pop(0)
         if len(log) >= self._calls:
@@ -48,7 +124,7 @@ class _RateLimiter:
         return True
 
 
-_rate_limiter = _RateLimiter(calls=20, period=60)  # 20 req/min per IP
+_rate_limiter = _RateLimiter(calls=20, period=60)
 
 
 @asynccontextmanager
@@ -58,13 +134,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="LLM Forecasting API",
-    description="Single-record prediction endpoint for the analyzing-llm-rationale pipeline.",
+    description=_DESCRIPTION,
+    version="1.0.0",
+    contact={
+        "name": "Pareel Amre",
+        "email": "pareel.amre@gmail.com",
+        "url": "https://github.com/pareelamre/analyzing-llm-rationale",
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    openapi_tags=_TAGS,
     lifespan=lifespan,
 )
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
-# Allow same-origin browser requests and the deployed Cloud Run origin.
-# Cross-origin API callers must send a valid API_KEY header.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -77,7 +161,6 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-API-Key"],
 )
 
-# ── Static / UI ───────────────────────────────────────────────────────────────
 if _STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
@@ -87,49 +170,130 @@ async def index():
     return FileResponse(str(_STATIC_DIR / "index.html"))
 
 
-# ── Models ────────────────────────────────────────────────────────────────────
+# ── Request / response models ─────────────────────────────────────────────────
+
 class NewsArticle(BaseModel):
-    title: Optional[str] = Field(None, max_length=500)
-    summary: Optional[str] = Field(None, max_length=4000)
-    summary_llm: Optional[str] = Field(None, max_length=4000)
-    text: Optional[str] = Field(None, max_length=20000)
-    source: Optional[str] = Field(None, max_length=200)
-    credibility: Optional[Dict[str, Any]] = None
-    frs: Optional[Dict[str, Any]] = None
-    url: Optional[str] = Field(None, max_length=2000)
-    authors: Optional[Any] = None
-    publish_date: Optional[str] = Field(None, max_length=100)
-    keywords: Optional[Any] = None
-    relevance_score: Optional[float] = None
-    search_query: Optional[str] = Field(None, max_length=500)
+    """A news article passed as evidence context for the prediction."""
+
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "title": "Fed signals rate cuts may slow in 2025",
+            "source": "Reuters",
+            "url": "https://reuters.com/example",
+            "publish_date": "2025-01-15T10:30:00Z",
+            "summary": "Federal Reserve officials signaled a more cautious approach to rate cuts...",
+            "relevance_score": 0.91,
+        }
+    })
+
+    title: Optional[str] = Field(None, max_length=500, description="Article headline.")
+    summary: Optional[str] = Field(None, max_length=4000, description="Short human-written summary.")
+    summary_llm: Optional[str] = Field(None, max_length=4000, description="LLM-generated summary.")
+    text: Optional[str] = Field(None, max_length=20000, description="Full article body text.")
+    source: Optional[str] = Field(None, max_length=200, description="Publisher name (e.g. Reuters).")
+    credibility: Optional[Dict[str, Any]] = Field(None, description="Credibility score breakdown.")
+    frs: Optional[Dict[str, Any]] = Field(None, description="Future-Resolution Statement metadata.")
+    url: Optional[str] = Field(None, max_length=2000, description="Canonical article URL.")
+    authors: Optional[Any] = Field(None, description="Author name(s).")
+    publish_date: Optional[str] = Field(None, max_length=100, description="ISO 8601 publish timestamp.")
+    keywords: Optional[Any] = Field(None, description="Extracted keywords.")
+    relevance_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Cosine similarity to the question (0–1).")
+    search_query: Optional[str] = Field(None, max_length=500, description="Query used to retrieve this article.")
 
 
 class EvidenceSource(BaseModel):
-    source: str
-    title: Optional[str] = None
-    url: Optional[str] = None
-    publish_date: Optional[str] = None
-    relevance_score: Optional[float] = None
+    """A deduplicated citation drawn from the evidence articles."""
+
+    source: str = Field(..., description="Publisher name.")
+    title: Optional[str] = Field(None, description="Article headline.")
+    url: Optional[str] = Field(None, description="Article URL.")
+    publish_date: Optional[str] = Field(None, description="ISO 8601 publish date.")
+    relevance_score: Optional[float] = Field(None, description="Relevance to the question (0–1).")
 
 
 class PredictRequest(BaseModel):
-    question: str = Field(..., min_length=10, max_length=2000)
-    description: str = Field("", max_length=4000)
-    resolution_criteria: str = Field("", max_length=2000)
-    categories: List[str] = Field(default_factory=list, max_length=20)
-    news_articles: List[NewsArticle] = Field(default_factory=list, max_length=20)
-    variant: str = Field("variant0_neutral_baseline", max_length=100)
-    attach_evidence: bool = True
-    evidence_top_k: int = Field(5, ge=1, le=10)
-    created_time: Optional[str] = Field(None, max_length=50)
-    publish_time: Optional[str] = Field(None, max_length=50)
-    resolve_time: Optional[str] = Field(None, max_length=50)
-    days_open: Optional[int] = Field(None, ge=0, le=36500)
+    """Input payload for a single forecasting prediction."""
+
+    model_config = ConfigDict(json_schema_extra={
+        "examples": {
+            "minimal": {
+                "summary": "Minimal request — just a question",
+                "value": {
+                    "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
+                },
+            },
+            "full": {
+                "summary": "Full request with context and variant",
+                "value": {
+                    "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
+                    "description": "The question resolves YES if the FOMC reduces the federal funds rate target by at least 25 basis points from its current level at any point before 31 December 2025.",
+                    "resolution_criteria": "Resolves YES if the Federal Reserve lowers the federal funds rate at least once before 2026-01-01.",
+                    "categories": ["Economics", "Finance", "United States"],
+                    "variant": "variant3_reasoning_type",
+                    "resolve_time": "2025-12-31T23:59:00Z",
+                    "days_open": 180,
+                },
+            },
+        }
+    })
+
+    question: str = Field(
+        ...,
+        min_length=10,
+        max_length=2000,
+        description="The binary forecasting question to evaluate. Must be answerable with Yes or No.",
+        examples=["Will the Federal Reserve cut interest rates at least once before the end of 2025?"],
+    )
+    description: str = Field(
+        "",
+        max_length=4000,
+        description="Extended background context that clarifies what the question is asking.",
+    )
+    resolution_criteria: str = Field(
+        "",
+        max_length=2000,
+        description="Exact conditions under which the question resolves Yes or No.",
+    )
+    categories: List[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Topic tags (e.g. `['Economics', 'United States']`).",
+    )
+    news_articles: List[NewsArticle] = Field(
+        default_factory=list,
+        max_length=20,
+        description=(
+            "Pre-fetched news articles to use as evidence. "
+            "If empty and the evidence pipeline is configured, articles are fetched automatically."
+        ),
+    )
+    variant: str = Field(
+        "variant0_neutral_baseline",
+        max_length=100,
+        description=(
+            "Prompt variant that controls the reasoning instruction style. "
+            "See the variant table in the Overview section."
+        ),
+        examples=["variant0_neutral_baseline", "variant3_reasoning_type"],
+    )
+    attach_evidence: bool = Field(
+        True,
+        description="If `true` and `news_articles` is empty, fetch live evidence automatically.",
+    )
+    evidence_top_k: int = Field(
+        5,
+        ge=1,
+        le=10,
+        description="Maximum number of evidence articles to retrieve (1–10).",
+    )
+    created_time: Optional[str] = Field(None, max_length=50, description="ISO 8601 question creation time.")
+    publish_time: Optional[str] = Field(None, max_length=50, description="ISO 8601 question publish time.")
+    resolve_time: Optional[str] = Field(None, max_length=50, description="ISO 8601 resolution deadline.")
+    days_open: Optional[int] = Field(None, ge=0, le=36500, description="Days the question has been open.")
 
     @field_validator("question")
     @classmethod
     def question_must_be_question(cls, v: str) -> str:
-        # Block obvious prompt injection attempts
         lowered = v.lower()
         injection_signals = [
             "ignore previous", "ignore above", "disregard",
@@ -150,40 +314,85 @@ class PredictRequest(BaseModel):
 
 
 class PredictResponse(BaseModel):
-    predicted_answer: Optional[str]
-    confidence: Optional[float]
-    rationale: Optional[str]
-    model_rationale: Optional[str]
-    variant: str
-    model_key: str
-    evidence_sources: List[EvidenceSource] = Field(default_factory=list)
-    evidence_articles: List[NewsArticle] = Field(default_factory=list)
-    evidence_error: Optional[str] = None
+    """Prediction result for a single forecasting question."""
+
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "predicted_answer": "No",
+            "confidence": 0.72,
+            "rationale": (
+                "Current Fed guidance suggests rates will remain elevated through mid-2025. "
+                "Recent inflation data remains above the 2% target, reducing the likelihood "
+                "of a cut in the near term. However, slowing economic growth introduces some "
+                "downside risk that could prompt a cut by year-end."
+            ),
+            "model_rationale": (
+                "Current Fed guidance suggests rates will remain elevated through mid-2025."
+            ),
+            "variant": "variant0_neutral_baseline",
+            "model_key": "gpt-oss-120b",
+            "evidence_sources": [
+                {
+                    "source": "Reuters",
+                    "title": "Fed signals rate cuts may slow in 2025",
+                    "url": "https://reuters.com/example",
+                    "publish_date": "2025-01-15T10:30:00Z",
+                    "relevance_score": 0.91,
+                }
+            ],
+            "evidence_articles": [],
+            "evidence_error": None,
+        }
+    })
+
+    predicted_answer: Optional[str] = Field(None, description="`Yes` or `No`.")
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Model confidence (0 = certain No, 1 = certain Yes).")
+    rationale: Optional[str] = Field(None, description="2–4 sentence explanation of the prediction.")
+    model_rationale: Optional[str] = Field(None, description="Raw rationale as returned by the model (may differ from `rationale` after post-processing).")
+    variant: str = Field(..., description="Prompt variant used for this prediction.")
+    model_key: str = Field(..., description="Model identifier (e.g. `gpt-oss-120b`).")
+    evidence_sources: List[EvidenceSource] = Field(default_factory=list, description="Deduplicated citations used as evidence.")
+    evidence_articles: List[NewsArticle] = Field(default_factory=list, description="Full evidence articles passed to the model.")
+    evidence_error: Optional[str] = Field(None, description="Non-null if evidence retrieval failed (prediction still returned).")
 
 
 class VertexPredictRequest(BaseModel):
-    instances: List[Dict[str, Any]] = Field(..., max_length=10)
+    """Vertex AI prediction contract: wraps one or more `PredictRequest` objects."""
+
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "instances": [
+                {"question": "Will global oil prices exceed $100 per barrel before the end of 2025?"}
+            ]
+        }
+    })
+
+    instances: List[Dict[str, Any]] = Field(
+        ...,
+        max_length=10,
+        description="Array of `PredictRequest` objects (max 10 per call).",
+    )
 
 
 class VertexPredictResponse(BaseModel):
-    predictions: List[Dict[str, Any]]
+    """Vertex AI prediction contract: wraps one or more `PredictResponse` objects."""
+
+    predictions: List[Dict[str, Any]] = Field(
+        ...,
+        description="Array of `PredictResponse` objects, one per input instance.",
+    )
 
 
-# ── Auth helper ───────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 def _check_api_key(request: Request) -> None:
     if not _REQUIRED_API_KEY:
         return
-    provided = request.headers.get("X-API-Key", "")
-    if provided != _REQUIRED_API_KEY:
-        raise HTTPException(
-            status_code=401,
-            detail="Missing or invalid X-API-Key header.",
-        )
+    if request.headers.get("X-API-Key", "") != _REQUIRED_API_KEY:
+        raise HTTPException(status_code=401, detail="Missing or invalid X-API-Key header.")
 
 
-# ── Rate limit helper ─────────────────────────────────────────────────────────
 def _check_rate_limit(request: Request) -> None:
-    ip = (request.client.host if request.client else "unknown")
+    ip = request.client.host if request.client else "unknown"
     if not _rate_limiter.is_allowed(ip):
         raise HTTPException(
             status_code=429,
@@ -192,7 +401,6 @@ def _check_rate_limit(request: Request) -> None:
         )
 
 
-# ── Utilities ─────────────────────────────────────────────────────────────────
 def _clean_text(value: Any) -> Any:
     if not isinstance(value, str):
         return value
@@ -231,13 +439,82 @@ def _evidence_sources(articles: List[Dict[str, Any]]) -> List[EvidenceSource]:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
-@app.get("/health")
+
+@app.get(
+    "/health",
+    tags=["System"],
+    summary="Health check",
+    response_description="Service status.",
+    responses={200: {"content": {"application/json": {"example": {"status": "ok"}}}}},
+)
 async def health() -> Dict[str, str]:
+    """Returns `{"status": "ok"}` when the server is running.
+
+    Use this endpoint for liveness probes and uptime monitoring.
+    It does **not** verify that the LLM provider is reachable.
+    """
     return {"status": "ok"}
 
 
-@app.post("/predict", response_model=PredictResponse)
+@app.post(
+    "/predict",
+    tags=["Inference"],
+    summary="Run a single forecasting prediction",
+    response_description="Prediction result with confidence score, rationale, and evidence sources.",
+    responses={
+        200: {"description": "Prediction returned successfully."},
+        400: {"description": "Invalid request — unknown variant or malformed input."},
+        401: {"description": "Missing or invalid `X-API-Key` header (only when API key is configured)."},
+        429: {"description": "Rate limit exceeded. Retry after 60 seconds."},
+        503: {"description": "Server not yet initialised — LLM provider not loaded."},
+    },
+    response_model=PredictResponse,
+)
 async def predict(req: PredictRequest, request: Request = None) -> PredictResponse:
+    """Submit a binary forecasting question and receive a structured prediction.
+
+    The model returns:
+    - **`predicted_answer`** — `Yes` or `No`
+    - **`confidence`** — probability (0–1) the answer is Yes
+    - **`rationale`** — 2–4 sentence explanation
+    - **`evidence_sources`** — news articles used as context
+
+    ### Choosing a variant
+
+    Start with `variant0_neutral_baseline` (the default). Switch to other variants
+    to inject additional structure into the prompt — for example, `variant3_reasoning_type`
+    asks the model to identify whether the prediction is based on speculation, an expert
+    forecast, or a stated plan.
+
+    ### Providing your own evidence
+
+    Pass pre-fetched articles in `news_articles` to use them directly.
+    Leave the list empty to trigger automatic news retrieval (if the evidence
+    pipeline is configured on the server).
+
+    ### Example — minimal request
+
+    ```bash
+    curl -X POST /predict \\
+      -H "Content-Type: application/json" \\
+      -d '{"question": "Will oil prices exceed $100 per barrel in 2025?"}'
+    ```
+
+    ### Example — with context and variant
+
+    ```bash
+    curl -X POST /predict \\
+      -H "Content-Type: application/json" \\
+      -d '{
+        "question": "Will the EU impose new sanctions on Russia before July 2025?",
+        "description": "Focuses on economic sanctions, not diplomatic measures.",
+        "resolution_criteria": "Resolves YES if any new EU economic sanction package is announced.",
+        "categories": ["Geopolitics", "Europe"],
+        "variant": "variant5_key_conditions",
+        "resolve_time": "2025-07-01T00:00:00Z"
+      }'
+    ```
+    """
     if request is not None:
         _check_rate_limit(request)
         _check_api_key(request)
@@ -247,10 +524,9 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
 
     variants = _state["variants"]
     if req.variant not in variants:
-        valid = sorted(variants)
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown variant '{req.variant}'. Valid: {valid}",
+            detail=f"Unknown variant '{req.variant}'. Valid: {sorted(variants)}",
         )
 
     variant = variants[req.variant]
@@ -313,8 +589,40 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     )
 
 
-@app.post("/vertex-predict", response_model=VertexPredictResponse)
+@app.post(
+    "/vertex-predict",
+    tags=["Inference"],
+    summary="Vertex AI batch prediction (instances wrapper)",
+    response_description="Array of prediction results, one per input instance.",
+    responses={
+        200: {"description": "All predictions returned successfully."},
+        400: {"description": "One or more instances are malformed."},
+        429: {"description": "Rate limit exceeded."},
+        503: {"description": "Server not yet initialised."},
+    },
+    response_model=VertexPredictResponse,
+)
 async def vertex_predict(req: VertexPredictRequest, request: Request = None) -> VertexPredictResponse:
+    """Vertex AI-compatible prediction endpoint.
+
+    Wraps `/predict` in the Vertex AI contract:
+    - **Request**: `{"instances": [PredictRequest, ...]}`
+    - **Response**: `{"predictions": [PredictResponse, ...]}`
+
+    Instances are processed sequentially. Maximum 10 instances per call.
+
+    This endpoint is called automatically by the Vertex AI SDK and REST API.
+    For direct use, prefer `/predict` instead.
+
+    ```python
+    from google.cloud import aiplatform
+
+    endpoint = aiplatform.Endpoint("projects/.../endpoints/7325853011580813312")
+    response = endpoint.predict(instances=[
+        {"question": "Will oil prices exceed $100 per barrel in 2025?"}
+    ])
+    ```
+    """
     if request is not None:
         _check_rate_limit(request)
         _check_api_key(request)
