@@ -148,6 +148,18 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--request-timeout-s", type=float, default=float(os.environ.get("REQUEST_TIMEOUT_S", "120")))
     serve_parser.add_argument("--model-label", default=None)
 
+    fetch_rank_parser = subparsers.add_parser(
+        "fetch-and-rank", help="Fetch and rank news articles for a forecasting question."
+    )
+    fetch_rank_parser.add_argument("--question", required=True)
+    fetch_rank_parser.add_argument("--top-k", type=int, default=5)
+    fetch_rank_parser.add_argument("--model", default="gpt-oss-120b")
+    fetch_rank_parser.add_argument("--models-config", type=Path, default=repo_root() / "configs" / "models.yaml")
+    fetch_rank_parser.add_argument("--api-base-url", default=None)
+    fetch_rank_parser.add_argument("--api-key-env-var", default=None)
+    fetch_rank_parser.add_argument("--api-key-file", default=None)
+    fetch_rank_parser.add_argument("--newsapi-key-env-var", default="NEWSAPI_KEY")
+
     return parser
 
 
@@ -399,6 +411,39 @@ def verify_results_command(args: argparse.Namespace) -> int:
     return 0 if summary.is_clean else 1
 
 
+def fetch_and_rank_command(args: argparse.Namespace) -> int:
+    try:
+        from analyzing_llm_rationale.news_pipeline import NewsPipeline
+    except ImportError:
+        print("The 'pipeline' extra is required: pip install '.[pipeline]'")
+        return 1
+
+    args = resolve_model_args(args)
+    api_key = resolve_api_key(args)
+    newsapi_key = os.environ.get(args.newsapi_key_env_var) if args.newsapi_key_env_var else None
+
+    pipeline = NewsPipeline(
+        api_key=api_key or None,
+        base_url=args.api_base_url or args._resolved_model_config.api_base_url or "https://llm.scads.ai/v1",
+        newsapi_key=newsapi_key,
+    )
+    articles = pipeline.fetch_summarize_rank(args.question, top_k=args.top_k)
+
+    print(f"\nTop {len(articles)} articles for: \"{args.question}\"\n")
+    for i, a in enumerate(articles, 1):
+        score = a.get("relevance_score", 0.0)
+        title = a.get("title") or "(no title)"
+        url = a.get("url") or ""
+        summary = (a.get("summary") or "")[:200]
+        print(f"  {i}. [{score:.4f}] {title}")
+        if url:
+            print(f"     {url}")
+        if summary:
+            print(f"     {summary}")
+        print()
+    return 0
+
+
 def serve_command(args: argparse.Namespace) -> int:
     try:
         import uvicorn
@@ -439,5 +484,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return verify_results_command(args)
     if args.command == "serve":
         return serve_command(args)
+    if args.command == "fetch-and-rank":
+        return fetch_and_rank_command(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
