@@ -59,35 +59,44 @@ class NewsPipelineSourceTests(unittest.TestCase):
     def test_fetch_google_news_uses_search_rss(self):
         calls = []
 
-        def fake_parse(url):
-            calls.append(url)
-            return SimpleNamespace(
-                entries=[
-                    {
-                        "title": "Google News result",
-                        "link": "https://example.com/google-news",
-                        "published": "Fri, 29 May 2026 12:00:00 GMT",
-                        "summary": "A relevant article summary.",
-                    }
-                ]
-            )
+        class FakeGoogleResponse:
+            content = b"""
+            <rss>
+              <channel>
+                <item>
+                  <title>Google News result</title>
+                  <link>https://example.com/google-news</link>
+                  <pubDate>Fri, 29 May 2026 12:00:00 GMT</pubDate>
+                  <description>A relevant article summary.</description>
+                  <source>Example Source</source>
+                </item>
+              </channel>
+            </rss>
+            """
 
-        original = sys.modules.get("feedparser")
-        sys.modules["feedparser"] = SimpleNamespace(parse=fake_parse)
+            def raise_for_status(self):
+                return None
+
+        def fake_get(url, headers, timeout):
+            calls.append((url, headers, timeout))
+            return FakeGoogleResponse()
+
+        original = sys.modules.get("requests")
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
         try:
             pipeline = NewsPipeline.__new__(NewsPipeline)
             articles = pipeline._fetch_google_news("Federal Reserve rate cut", limit=5)
         finally:
             if original is None:
-                sys.modules.pop("feedparser", None)
+                sys.modules.pop("requests", None)
             else:
-                sys.modules["feedparser"] = original
+                sys.modules["requests"] = original
 
         self.assertEqual(len(articles), 1)
-        self.assertEqual(articles[0]["source"], "Google News")
+        self.assertEqual(articles[0]["source"], "Example Source")
         self.assertEqual(articles[0]["url"], "https://example.com/google-news")
-        self.assertIn("news.google.com/rss/search", calls[0])
-        self.assertIn("Federal+Reserve+rate+cut", calls[0])
+        self.assertIn("news.google.com/rss/search", calls[0][0])
+        self.assertIn("Federal+Reserve+rate+cut", calls[0][0])
 
     def test_rank_can_use_lightweight_lexical_scores(self):
         pipeline = NewsPipeline.__new__(NewsPipeline)
