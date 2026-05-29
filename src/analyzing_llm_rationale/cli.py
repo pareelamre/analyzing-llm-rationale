@@ -9,6 +9,24 @@ import urllib.request
 from pathlib import Path
 from typing import List, Optional
 
+from analyzing_llm_rationale.config import (
+    load_model_configs,
+    load_variant_configs,
+    temperature_to_tag,
+)
+from analyzing_llm_rationale.pipeline import RunConfig, process_batch
+from analyzing_llm_rationale.providers import (
+    HuggingFaceRouterProvider,
+    LocalQwenProvider,
+    OpenAICompatibleProvider,
+    download_model_snapshot,
+)
+from analyzing_llm_rationale.validation import (
+    SchemaValidationError,
+    validate_dataset_records,
+    verify_result_records,
+)
+
 _GCP_PROJECT_ID = "brave-drive-471109-d9"
 
 
@@ -38,24 +56,6 @@ def _fetch_secret_from_gcp(secret_name: str) -> Optional[str]:
         return base64.b64decode(payload).decode("utf-8").strip()
     except Exception:
         return None
-
-from analyzing_llm_rationale.config import (
-    load_model_configs,
-    load_variant_configs,
-    temperature_to_tag,
-)
-from analyzing_llm_rationale.pipeline import RunConfig, process_batch
-from analyzing_llm_rationale.providers import (
-    HuggingFaceRouterProvider,
-    LocalQwenProvider,
-    OpenAICompatibleProvider,
-    download_model_snapshot,
-)
-from analyzing_llm_rationale.validation import (
-    SchemaValidationError,
-    validate_dataset_records,
-    verify_result_records,
-)
 
 REMOTE_PROVIDER_CHOICES = ["local-qwen", "hf-router", "openai-compatible"]
 NEWS_SOURCE_CHOICES = ["newsapi", "gdelt", "google-news", "rss"]
