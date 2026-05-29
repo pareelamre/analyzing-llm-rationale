@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Forecasting AI</title>
+  <title>Foresea</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Racing+Sans+One&display=swap');
 
     :root {
       --bg:        #000000;
@@ -166,6 +166,16 @@
     .conv-item:hover .conv-delete { opacity: 1; }
     .conv-delete:hover { color: var(--orange); }
 
+    /* Brand wordmark — NASCAR-style racing font */
+    .brand {
+      font-family: 'Racing Sans One', system-ui, sans-serif;
+      font-style: italic;
+      letter-spacing: 0.01em;
+      transform: skewX(-6deg);
+      display: inline-block;
+      line-height: 1;
+    }
+
     /* Logo mark */
     .logo-dot {
       width: 9px; height: 9px; border-radius: 2px;
@@ -208,7 +218,7 @@
 
   <div class="flex items-center gap-2 px-1 py-1">
     <span class="logo-dot"></span>
-    <span class="display font-semibold text-white text-sm tracking-wide flex-1">Forecasting AI</span>
+    <span class="brand text-white text-lg flex-1" style="color: var(--green)">FORESEA</span>
     <button class="menu-btn" onclick="closeSidebar()" title="Close">✕</button>
   </div>
 
@@ -242,7 +252,7 @@
     <div class="flex justify-between"><span>Model</span><span class="text-gray-400">gpt-oss-120b</span></div>
     <div class="flex justify-between"><span>Provider</span><span class="text-gray-400">SCADS AI</span></div>
     <div class="mt-2 pt-2 border-t border-gray-800">
-      <a href="/docs" target="_blank" style="color: var(--lime)" class="hover:opacity-80">API docs ↗</a>
+      <a href="/docs" target="_blank" style="color: var(--green)" class="hover:opacity-80">API docs ↗</a>
     </div>
   </div>
 
@@ -263,7 +273,7 @@
       <p class="text-xs text-gray-500 hidden sm:block">Ask any binary (yes/no) forecasting question</p>
     </div>
     <div class="flex items-center gap-1.5 text-xs text-gray-500 flex-shrink-0">
-      <span class="w-2 h-2 rounded-full inline-block" style="background: var(--lime); box-shadow: 0 0 8px var(--lime-glow)"></span>
+      <span class="w-2 h-2 rounded-full inline-block" style="background: var(--green); box-shadow: 0 0 8px var(--green-glow)"></span>
       <span class="hidden sm:inline">Live</span>
     </div>
   </header>
@@ -408,7 +418,7 @@ function renderMessages() {
     el.innerHTML = `
       <div class="msg-ai max-w-2xl mx-auto w-full p-4 sm:p-5">
         <p class="text-sm text-gray-400 leading-relaxed">
-          Hello! I'm a forecasting AI powered by <span style="color: var(--lime)">gpt-oss-120b</span>.
+          Hello! I'm Foresea, a forecasting AI powered by <span style="color: var(--green)">gpt-oss-120b</span>.
           Ask me any binary (yes/no) question about future events.
         </p>
         <p class="text-xs text-gray-600 mt-3">
