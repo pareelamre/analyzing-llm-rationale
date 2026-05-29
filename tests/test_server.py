@@ -85,7 +85,14 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["predicted_answer"], "Yes")
+        self.assertEqual(payload["rationale"], "Evidence supports a yes forecast.")
+        self.assertEqual(payload["model_rationale"], "Evidence supports a yes forecast.")
         self.assertEqual(payload["evidence_error"], None)
+        self.assertEqual(payload["evidence_sources"][0]["source"], "Example News")
+        self.assertEqual(
+            payload["evidence_sources"][0]["url"],
+            "https://example.com/rates",
+        )
         self.assertEqual(len(payload["evidence_articles"]), 1)
         self.assertEqual(payload["evidence_articles"][0]["relevance_score"], 0.91)
         self.assertEqual(
@@ -112,6 +119,25 @@ class ServerTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["evidence_articles"][0]["title"], "Supplied evidence")
         self.assertEqual(self.evidence_pipeline.calls, [])
+
+    def test_predict_strips_html_from_returned_evidence(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "Will event X happen?",
+                "news_articles": [
+                    {
+                        "title": "Supplied evidence",
+                        "source": "Example News",
+                        "summary": '<a href="https://example.com">Evidence</a>&nbsp;details',
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["evidence_articles"][0]["summary"], "Evidence details")
 
 
 if __name__ == "__main__":
