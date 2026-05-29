@@ -39,10 +39,17 @@
     body {
       background: var(--bg);
       color: var(--text);
-      height: 100vh;
-      height: 100dvh;
+      min-height: 100vh;
+      min-height: 100dvh;
     }
 
+    .app-shell {
+      display: flex;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+    }
+    .hidden-view { display: none !important; }
     main.chat-main { flex: 1 1 0%; min-width: 0; width: 100%; height: 100%; }
     #messages { min-height: 0; }
 
@@ -200,11 +207,37 @@
     }
     .topbar-link:hover { color: var(--ink); border-color: var(--ink); }
 
-    .empty-shell {
+    .landing {
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: #fff;
+      color: var(--text);
+    }
+    .landing-nav {
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .landing-brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+    .landing-links {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .landing-shell {
       max-width: 1080px;
       margin: 0 auto;
       width: 100%;
-      padding: 40px 16px 20px;
+      padding: 46px 18px 34px;
     }
     .hero-grid {
       display: grid;
@@ -216,7 +249,8 @@
       display: flex;
       flex-direction: column;
       justify-content: center;
-      min-height: 420px;
+      min-height: calc(100vh - 220px);
+      min-height: calc(100dvh - 220px);
       border-bottom: 1px solid var(--border);
     }
     .hero-title {
@@ -249,7 +283,8 @@
       background: var(--paper);
       border: 1px solid var(--border);
       border-radius: 3px;
-      min-height: 420px;
+      min-height: calc(100vh - 220px);
+      min-height: calc(100dvh - 220px);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -307,7 +342,9 @@
       .product-panel { min-height: auto; }
     }
     @media (max-width: 640px) {
-      .empty-shell { padding-top: 26px; }
+      .landing-nav { padding: 0 14px; }
+      .landing-links { gap: 12px; }
+      .landing-shell { padding-top: 28px; }
       .feature-strip { grid-template-columns: 1fr; }
       .feature-block { border-right: 0; border-bottom: 1px solid var(--border); }
       .feature-block:last-child { border-bottom: 0; }
@@ -315,7 +352,94 @@
     }
   </style>
 </head>
-<body class="flex overflow-hidden">
+<body>
+
+<!-- ── Landing ── -->
+<section id="landingPage" class="landing">
+  <nav class="landing-nav">
+    <div class="landing-brand">
+      <span class="logo-dot"></span>
+      <span class="brand text-xl">Foresea</span>
+    </div>
+    <div class="landing-links">
+      <a href="/docs" target="_blank" class="topbar-link">API docs</a>
+      <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
+      <button class="hero-action primary py-2" onclick="launchApp()">Launch</button>
+    </div>
+  </nav>
+
+  <div class="landing-shell">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="label mb-5">Forecasting API with live evidence</p>
+        <h1 class="display hero-title">Ask live questions. Get cited forecasts.</h1>
+        <p class="hero-text">
+          Foresea turns binary forecasting questions into evidence-backed predictions.
+          It retrieves current articles, lists the sources, and asks gpt-oss-120b
+          to return a yes/no answer, confidence score, and model rationale.
+        </p>
+        <div class="hero-actions">
+          <button class="hero-action primary" onclick="launchApp()">Launch Foresea</button>
+          <button class="hero-action" onclick="startExample('Will the Federal Reserve cut interest rates at least once before September 30, 2026?')">Try live question</button>
+        </div>
+      </div>
+
+      <div class="product-panel">
+        <div class="panel-bar">
+          <span>Product preview</span>
+          <span>gpt-oss-120b</span>
+        </div>
+        <div class="panel-body">
+          <div class="evidence-row">
+            <div class="evidence-kicker"><span>Question</span><span>live evidence attached</span></div>
+            <p class="text-sm text-gray-900 leading-relaxed">
+              Will the Federal Reserve cut interest rates before September 30, 2026?
+            </p>
+          </div>
+          <div class="evidence-row">
+            <div class="evidence-kicker"><span>Forecast</span><span>86% confidence</span></div>
+            <p class="text-2xl text-gray-950 display leading-tight">Yes</p>
+            <p class="text-sm text-gray-600 leading-relaxed mt-2">
+              Recent reporting and policy signals point toward at least one cut
+              before the deadline, with timing dependent on inflation data.
+            </p>
+          </div>
+          <div class="evidence-row">
+            <div class="evidence-kicker"><span>Evidence sources</span><span>ranked</span></div>
+            <div class="flex flex-wrap gap-1">
+              <span class="source-chip">Reuters</span>
+              <span class="source-chip">CNBC</span>
+              <span class="source-chip">Federal Reserve</span>
+            </div>
+          </div>
+          <div class="evidence-row">
+            <div class="evidence-kicker"><span>API response</span><span>structured</span></div>
+            <p class="text-xs text-gray-500 leading-relaxed">
+              predicted_answer · confidence · model_rationale · evidence_sources · evidence_articles
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-strip">
+      <div class="feature-block">
+        <h3>Live evidence</h3>
+        <p>Retrieves and ranks current articles from Google News RSS and GDELT before the model answers.</p>
+      </div>
+      <div class="feature-block">
+        <h3>Source list</h3>
+        <p>Returns compact source names and links separately from full evidence records.</p>
+      </div>
+      <div class="feature-block">
+        <h3>API first</h3>
+        <p>Call the public Cloud Run endpoint or the Vertex-compatible prediction wrapper.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="appShell" class="app-shell hidden-view">
 
 <!-- Mobile overlay -->
 <div id="overlay" onclick="closeSidebar()"></div>
@@ -416,6 +540,8 @@
   </div>
 
 </main>
+
+</div>
 
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -527,69 +653,15 @@ function renderMessages() {
 
   if (!conv || conv.messages.length === 0) {
     el.innerHTML = `
-      <section class="empty-shell">
-        <div class="hero-grid">
-          <div class="hero-copy">
-            <p class="label mb-5">Open forecasting workspace</p>
-            <h2 class="display hero-title">Ask live questions. Get cited forecasts.</h2>
-            <p class="hero-text">
-              Foresea turns binary forecasting questions into evidence-backed predictions.
-              It fetches current articles, lists the sources, and asks gpt-oss-120b to
-              return a yes/no answer, confidence score, and rationale.
-            </p>
-            <div class="hero-actions">
-              <button class="hero-action primary" onclick="fillExample('Will the Federal Reserve cut interest rates at least once before September 30, 2026?')">Try live question</button>
-              <button class="hero-action" onclick="fillExample('Will OpenAI file for an IPO before December 15, 2026?')">Use market question</button>
-            </div>
-          </div>
-
-          <div class="product-panel">
-            <div class="panel-bar">
-              <span>Product preview</span>
-              <span>gpt-oss-120b</span>
-            </div>
-            <div class="panel-body">
-              <div class="evidence-row">
-                <div class="evidence-kicker"><span>Forecast</span><span>86% confidence</span></div>
-                <p class="text-2xl text-gray-950 display leading-tight">Yes</p>
-                <p class="text-sm text-gray-600 leading-relaxed mt-2">
-                  The strongest recent evidence points toward at least one policy move
-                  before the deadline, though timing remains sensitive to inflation data.
-                </p>
-              </div>
-              <div class="evidence-row">
-                <div class="evidence-kicker"><span>Evidence sources</span><span>ranked</span></div>
-                <div class="flex flex-wrap gap-1">
-                  <span class="source-chip">Reuters</span>
-                  <span class="source-chip">CNBC</span>
-                  <span class="source-chip">Federal Reserve</span>
-                </div>
-              </div>
-              <div class="evidence-row">
-                <div class="evidence-kicker"><span>Returned fields</span><span>API ready</span></div>
-                <p class="text-xs text-gray-500 leading-relaxed">
-                  predicted_answer · confidence · model_rationale · evidence_sources · evidence_articles
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="feature-strip">
-          <div class="feature-block">
-            <h3>Live evidence</h3>
-            <p>Retrieves and ranks articles from Google News RSS and GDELT before the model answers.</p>
-          </div>
-          <div class="feature-block">
-            <h3>Source list</h3>
-            <p>Returns compact source names and links separately from full article records.</p>
-          </div>
-          <div class="feature-block">
-            <h3>API first</h3>
-            <p>Use the public Cloud Run endpoint or the Vertex-compatible prediction wrapper.</p>
-          </div>
-        </div>
-      </section>`;
+      <div class="max-w-xl mx-auto w-full text-center pt-16 sm:pt-28 px-4">
+        <p class="label mb-4">New forecast</p>
+        <h2 class="display text-3xl sm:text-5xl text-gray-900 leading-tight mb-5">
+          Ask a yes or no question.
+        </h2>
+        <p class="text-[15px] text-gray-500 leading-relaxed">
+          The answer will include a probability, model rationale, and linked evidence sources.
+        </p>
+      </div>`;
     return;
   }
 
@@ -735,11 +807,21 @@ function updateVariantDesc() {
   const v = document.getElementById('variantSelect').value;
   document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
 }
+function launchApp() {
+  document.getElementById('landingPage').classList.add('hidden-view');
+  document.getElementById('appShell').classList.remove('hidden-view');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('questionInput').focus(), 0);
+}
 function fillExample(question) {
   const input = document.getElementById('questionInput');
   input.value = question;
   autoResize(input);
   input.focus();
+}
+function startExample(question) {
+  launchApp();
+  fillExample(question);
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -747,6 +829,7 @@ updateVariantDesc();
 const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);
 else newConversation();
+document.body.style.overflow = 'auto';
 </script>
 </body>
 </html>
