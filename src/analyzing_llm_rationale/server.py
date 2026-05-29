@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import html
+import re
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
@@ -41,6 +43,14 @@ class NewsArticle(BaseModel):
     search_query: Optional[str] = None
 
 
+class EvidenceSource(BaseModel):
+    source: str
+    title: Optional[str] = None
+    url: Optional[str] = None
+    publish_date: Optional[str] = None
+    relevance_score: Optional[float] = None
+
+
 class PredictRequest(BaseModel):
     question: str
     description: str = ""
@@ -60,8 +70,10 @@ class PredictResponse(BaseModel):
     predicted_answer: Optional[str]
     confidence: Optional[float]
     rationale: Optional[str]
+    model_rationale: Optional[str]
     variant: str
     model_key: str
+    evidence_sources: List[EvidenceSource] = Field(default_factory=list)
     evidence_articles: List[NewsArticle] = Field(default_factory=list)
     evidence_error: Optional[str] = None
 
@@ -76,6 +88,40 @@ class VertexPredictResponse(BaseModel):
 @app.get("/health")
 async def health() -> Dict[str, str]:
     return {"status": "ok"}
+
+
+def _clean_text(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    without_tags = re.sub(r"<[^>]+>", " ", value)
+    return re.sub(r"\s+", " ", html.unescape(without_tags)).strip()
+
+
+def _clean_article(article: Dict[str, Any]) -> Dict[str, Any]:
+    cleaned = dict(article)
+    for field in ("title", "summary", "summary_llm", "text", "source"):
+        cleaned[field] = _clean_text(cleaned.get(field))
+    return cleaned
+
+
+def _evidence_sources(articles: List[Dict[str, Any]]) -> List[EvidenceSource]:
+    sources: List[EvidenceSource] = []
+    seen: set[tuple[str, str]] = set()
+    for article in articles:
+        source = (article.get("source") or "Unknown source").strip()
+        url = article.get("url") or ""
+        key = (source, url)
+        if key in seen:
+            continue
+        seen.add(key)
+        sources.append(EvidenceSource(
+            source=source,
+            title=article.get("title"),
+            url=article.get("url"),
+            publish_date=article.get("publish_date"),
+            relevance_score=article.get("relevance_score"),
+        ))
+    return sources
 
 
 @app.post("/predict", response_model=PredictResponse)
@@ -114,6 +160,7 @@ async def predict(req: PredictRequest) -> PredictResponse:
             except Exception as exc:
                 evidence_error = f"Evidence retrieval failed: {exc}"
 
+    evidence_articles = [_clean_article(article) for article in evidence_articles]
     record["news_articles"] = evidence_articles
 
     user_prompt = build_user_prompt(record, prompt_text, "full")
@@ -136,12 +183,15 @@ async def predict(req: PredictRequest) -> PredictResponse:
         raise HTTPException(status_code=500, detail=f"Provider error: {exc}") from exc
 
     parsed = parse_model_response(content, variant.output_fields)
+    rationale = parsed.get("rationale")
     return PredictResponse(
         predicted_answer=parsed.get("predicted_answer"),
         confidence=parsed.get("confidence"),
-        rationale=parsed.get("rationale"),
+        rationale=rationale,
+        model_rationale=rationale,
         variant=req.variant,
         model_key=_state["model_key"],
+        evidence_sources=_evidence_sources(evidence_articles),
         evidence_articles=[NewsArticle(**article) for article in evidence_articles],
         evidence_error=evidence_error,
     )
