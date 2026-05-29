@@ -100,6 +100,18 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertGreater(ranked[0]["relevance_score"], ranked[1]["relevance_score"])
         self.assertGreater(_lexical_relevance("Federal Reserve rate cut", ranked[0]["title"]), 0)
 
+    def test_retrieval_only_pipeline_does_not_require_llm_client(self):
+        pipeline = NewsPipeline(
+            api_key=None,
+            use_query_planner=False,
+            summarize_articles=False,
+            use_embeddings=False,
+            fetch_sources=("rss",),
+        )
+
+        self.assertIsNone(pipeline._llm)
+        self.assertEqual(pipeline.plan_search_query("Will X happen?"), "Will X happen?")
+
 
 if __name__ == "__main__":
     unittest.main()

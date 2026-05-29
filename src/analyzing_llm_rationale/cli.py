@@ -514,7 +514,7 @@ def serve_command(args: argparse.Namespace) -> int:
                 base_url=base_url,
                 model=args.router_model_name,
                 newsapi_key=newsapi_key,
-                use_query_planner=not args.disable_query_planner,
+                use_query_planner=False,
                 fetch_sources=args.evidence_source,
                 summarize_articles=False,
                 use_embeddings=False,

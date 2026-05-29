@@ -48,21 +48,23 @@ class NewsPipeline:
         summarize_articles: bool = True,
         use_embeddings: bool = True,
     ):
-        from langchain_openai import ChatOpenAI
+        self._llm = None
+        if use_query_planner or summarize_articles:
+            from langchain_openai import ChatOpenAI
 
-        resolved_key = api_key or os.environ.get("SCADS_AI_API_KEY")
-        if not resolved_key:
-            raise ValueError(
-                "An API key is required. Set the SCADS_AI_API_KEY environment variable "
-                "or pass api_key= explicitly."
+            resolved_key = api_key or os.environ.get("SCADS_AI_API_KEY")
+            if not resolved_key:
+                raise ValueError(
+                    "An API key is required. Set the SCADS_AI_API_KEY environment variable "
+                    "or pass api_key= explicitly."
+                )
+            self._llm = ChatOpenAI(
+                model=model,
+                api_key=resolved_key,
+                base_url=base_url,
+                temperature=0.0,
+                max_tokens=512,
             )
-        self._llm = ChatOpenAI(
-            model=model,
-            api_key=resolved_key,
-            base_url=base_url,
-            temperature=0.0,
-            max_tokens=512,
-        )
         self._embedding_model_name = embedding_model
         self._embeddings = None
         self._newsapi_key = newsapi_key or os.environ.get("NEWSAPI_KEY")
@@ -232,7 +234,7 @@ class NewsPipeline:
 
     def plan_search_query(self, question: str) -> str:
         """Use a small LangChain planner step to turn a forecast into a news query."""
-        if not self._use_query_planner:
+        if not self._use_query_planner or self._llm is None:
             return question
 
         try:
