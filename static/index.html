@@ -26,13 +26,25 @@
     * { font-family: 'Inter', system-ui, sans-serif; }
     h1, .display { font-family: 'Space Grotesk', system-ui, sans-serif; letter-spacing: -0.02em; }
 
+    html, body { height: 100%; }
     body {
       background: var(--bg);
       background-image:
         radial-gradient(900px 500px at 78% -10%, rgba(196,245,66,.06), transparent 60%),
         radial-gradient(700px 500px at 0% 110%, rgba(196,245,66,.04), transparent 55%);
       color: var(--text);
+      height: 100vh;
+      height: 100dvh;          /* dynamic viewport — excludes mobile browser chrome */
     }
+
+    /* Main chat column — always fills remaining space, never collapses */
+    main.chat-main {
+      flex: 1 1 0%;
+      min-width: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #messages { min-height: 0; }   /* allow the flex child to shrink and scroll */
 
     /* Sidebar */
     .sidebar {
@@ -177,7 +189,7 @@
     @media (max-width: 640px) { .menu-btn { display: flex; } }
   </style>
 </head>
-<body class="h-screen flex overflow-hidden text-gray-200">
+<body class="flex overflow-hidden text-gray-200">
 
 <!-- Mobile overlay -->
 <div id="overlay" onclick="closeSidebar()"></div>
@@ -228,7 +240,7 @@
 </aside>
 
 <!-- ── Main ── -->
-<main class="flex-1 flex flex-col overflow-hidden min-w-0">
+<main class="chat-main flex flex-col overflow-hidden">
 
   <!-- Header -->
   <header class="flex items-center gap-3 px-4 py-3 border-b border-gray-800 flex-shrink-0">
