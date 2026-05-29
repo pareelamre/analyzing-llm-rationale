@@ -244,7 +244,7 @@ class NewsPipeline:
 
     def summarize(self, article: dict) -> str:
         """Summarize a single article using LangChain + SCADS AI LLM."""
-        from langchain.schema import HumanMessage
+        from langchain_core.messages import HumanMessage
 
         text = (article.get("text") or article.get("summary") or "").strip()
         if not text:
