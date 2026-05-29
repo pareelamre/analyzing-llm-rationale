@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from analyzing_llm_rationale.news_pipeline import NewsPipeline  # noqa: E402
+from analyzing_llm_rationale.news_pipeline import NewsPipeline, _lexical_relevance  # noqa: E402
 
 
 class FakeResponse:
@@ -84,6 +84,21 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(articles[0]["url"], "https://example.com/google-news")
         self.assertIn("news.google.com/rss/search", calls[0])
         self.assertIn("Federal+Reserve+rate+cut", calls[0])
+
+    def test_rank_can_use_lightweight_lexical_scores(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._use_embeddings = False
+        pipeline._embeddings = None
+        articles = [
+            {"title": "Sports update", "summary": "A tennis result."},
+            {"title": "Federal Reserve rate cut", "summary": "Fed officials discuss rates."},
+        ]
+
+        ranked = pipeline.rank("Federal Reserve rate cut", articles)
+
+        self.assertEqual(ranked[0]["title"], "Federal Reserve rate cut")
+        self.assertGreater(ranked[0]["relevance_score"], ranked[1]["relevance_score"])
+        self.assertGreater(_lexical_relevance("Federal Reserve rate cut", ranked[0]["title"]), 0)
 
 
 if __name__ == "__main__":

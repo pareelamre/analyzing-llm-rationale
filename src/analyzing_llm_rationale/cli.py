@@ -516,6 +516,8 @@ def serve_command(args: argparse.Namespace) -> int:
                 newsapi_key=newsapi_key,
                 use_query_planner=not args.disable_query_planner,
                 fetch_sources=args.evidence_source,
+                summarize_articles=False,
+                use_embeddings=False,
             )
         except Exception as exc:
             print(f"Evidence retrieval disabled: {exc}")
