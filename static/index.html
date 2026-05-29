@@ -6,34 +6,31 @@
   <title>Foresea</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,800;0,900;1,700&family=Lora:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
 
     :root {
-      --bg:        #000000;
-      --bg-2:      #0a0a0a;
-      --panel:     #050505;
-      --card:      #0c0c0c;
-      --border:    #1a1a1a;
-      --border-2:  #242424;
-      --text:      #f4f4f4;
-      --text-dim:  #888888;
-      --text-mute: #555555;
-      --green:     #ffffff;
-      --green-soft: rgba(255,255,255,.10);
-      --green-glow: rgba(255,255,255,.22);
-      --orange:    #ffffff;
-      --orange-soft: rgba(255,255,255,.10);
+      --bg:        #ffffff;
+      --panel:     #fafafa;
+      --card:      #ffffff;
+      --border:    #e5e7eb;
+      --border-2:  #d4d4d8;
+      --ink:       #111111;
+      --text:      #374151;
+      --text-dim:  #6b7280;
+      --text-mute: #9ca3af;
     }
 
-    * { font-family: 'Lora', Georgia, 'Times New Roman', serif; }
-    h1, .display {
-      font-family: 'Playfair Display', Georgia, serif;
-      letter-spacing: 0; font-weight: 800;
-    }
-    /* Monospace micro-labels — the Nitro signature */
-    .mono {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.02em;
+    * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    h1, h2, .display { font-family: 'Playfair Display', Georgia, serif; }
+    .display { font-weight: 300; letter-spacing: -0.01em; }
+
+    /* Editorial uppercase micro-label */
+    .label {
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-dim);
     }
 
     html, body { height: 100%; }
@@ -44,13 +41,7 @@
       height: 100dvh;
     }
 
-    /* Faint vertical grid lines — Nitro hero motif */
-    main.chat-main {
-      flex: 1 1 0%; min-width: 0; width: 100%; height: 100%;
-      background-image:
-        linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
-      background-size: 72px 100%;
-    }
+    main.chat-main { flex: 1 1 0%; min-width: 0; width: 100%; height: 100%; }
     #messages { min-height: 0; }
 
     /* Sidebar */
@@ -58,7 +49,7 @@
       background: var(--panel);
       border-right: 1px solid var(--border);
       width: 264px; flex-shrink: 0;
-      display: flex; flex-direction: column; gap: 14px; padding: 14px;
+      display: flex; flex-direction: column; gap: 14px; padding: 16px;
       transition: transform .25s ease;
     }
     @media (max-width: 640px) {
@@ -66,84 +57,77 @@
         position: fixed; top: 0; left: 0; bottom: 0; z-index: 50;
         transform: translateX(-100%);
       }
-      .sidebar.open { transform: translateX(0); box-shadow: 8px 0 40px rgba(0,0,0,.8); }
+      .sidebar.open { transform: translateX(0); box-shadow: 8px 0 40px rgba(0,0,0,.12); }
     }
 
     #overlay {
       display: none; position: fixed; inset: 0; z-index: 40;
-      background: rgba(0,0,0,.7); backdrop-filter: blur(2px);
+      background: rgba(0,0,0,.3); backdrop-filter: blur(1px);
     }
     #overlay.show { display: block; }
 
     /* Message bubbles */
     .msg-user {
-      background: #161616; color: var(--text);
-      border: 1px solid var(--border-2);
-      border-radius: 14px 14px 4px 14px; font-weight: 400;
+      background: var(--ink); color: #fff;
+      border-radius: 16px 16px 4px 16px; font-weight: 400;
     }
     .msg-ai {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 14px 14px 14px 4px;
+      border-radius: 16px 16px 16px 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.04);
     }
 
-    /* Send button — green fill, black text */
+    /* Buttons — pill, dark primary */
     .send-btn {
-      background: var(--green); color: #000; font-weight: 600;
-      transition: box-shadow .2s, transform .05s, opacity .15s;
+      background: var(--ink); color: #fff; font-weight: 500;
+      border-radius: 9999px;
+      transition: background .15s, transform .05s, opacity .15s;
     }
-    .send-btn:hover { box-shadow: 0 0 22px -2px var(--green-glow); }
+    .send-btn:hover { background: #000; }
     .send-btn:active { transform: translateY(1px); }
-    .send-btn:disabled { opacity: .3; cursor: not-allowed; box-shadow: none; }
+    .send-btn:disabled { opacity: .35; cursor: not-allowed; }
 
-    textarea { resize: none; background: transparent; color: var(--text); }
+    textarea { resize: none; background: transparent; color: var(--ink); }
     textarea:focus { outline: none; }
     textarea::placeholder { color: var(--text-mute); }
 
-    /* Answer badges — YES green, NO orange (both from the palette) */
-    .yes-badge {
-      background: #fff; color: #000;
-      border: 1px solid #fff;
-    }
-    .no-badge {
-      background: transparent; color: #fff;
-      border: 1px solid rgba(255,255,255,.45);
-    }
-    .conf-bar-fill { background: var(--green); box-shadow: 0 0 12px -2px var(--green-glow); }
+    /* Answer badges — YES filled dark, NO outline */
+    .yes-badge { background: var(--ink); color: #fff; border: 1px solid var(--ink); }
+    .no-badge  { background: #fff; color: var(--ink); border: 1px solid var(--border-2); }
+    .conf-bar-fill { background: var(--ink); }
 
     /* Typing indicator */
     .typing span {
       display: inline-block; width: 6px; height: 6px;
-      background: var(--green); border-radius: 50%; margin: 0 2px;
+      background: var(--ink); border-radius: 50%; margin: 0 2px;
       animation: bounce 1.2s infinite;
     }
     .typing span:nth-child(2) { animation-delay: .2s; }
     .typing span:nth-child(3) { animation-delay: .4s; }
     @keyframes bounce {
-      0%,60%,100% { transform: translateY(0); opacity: .6; }
+      0%,60%,100% { transform: translateY(0); opacity: .5; }
       30% { transform: translateY(-6px); opacity: 1; }
     }
 
     .scrollable { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
-    .scrollable::-webkit-scrollbar { width: 4px; }
-    .scrollable::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+    .scrollable::-webkit-scrollbar { width: 5px; }
+    .scrollable::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 5px; }
 
     /* Variant select */
     .variant-select {
-      background: var(--bg-2); color: var(--text-dim); border: 1px solid var(--border-2);
+      background: #fff; color: var(--text); border: 1px solid var(--border-2);
       border-radius: 8px; padding: 7px 9px; font-size: 12px; width: 100%;
-      font-family: 'JetBrains Mono', monospace;
     }
-    .variant-select:focus { outline: none; border-color: var(--green); }
+    .variant-select:focus { outline: none; border-color: var(--ink); }
 
-    /* Source chips */
+    /* Source chips — light pills */
     .source-chip {
-      background: var(--green-soft); color: var(--green); border: 1px solid rgba(255,255,255,.22);
-      border-radius: 6px; padding: 3px 9px; font-size: 11px;
+      background: #f4f4f5; color: var(--text); border: 1px solid var(--border);
+      border-radius: 9999px; padding: 3px 10px; font-size: 11px;
       display: inline-block; margin: 2px; transition: background .12s;
-      font-family: 'JetBrains Mono', monospace;
     }
-    .source-chip:hover { background: rgba(255,255,255,.18); }
+    .source-chip:hover { background: #e9e9eb; }
 
     /* Conversation items */
     .conv-item {
@@ -151,10 +135,10 @@
       color: var(--text-dim); cursor: pointer; transition: background .1s, color .1s;
       display: flex; align-items: center; gap: 6px;
     }
-    .conv-item:hover { background: #121212; color: var(--text); }
+    .conv-item:hover { background: #f0f0f0; color: var(--ink); }
     .conv-item.active {
-      background: var(--green-soft); color: var(--green);
-      box-shadow: inset 2px 0 0 var(--green);
+      background: #f0f0f0; color: var(--ink);
+      box-shadow: inset 2px 0 0 var(--ink);
     }
     .conv-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conv-delete {
@@ -164,40 +148,40 @@
       opacity: 0; transition: opacity .1s, color .1s;
     }
     .conv-item:hover .conv-delete { opacity: 1; }
-    .conv-delete:hover { color: var(--orange); }
+    .conv-delete:hover { color: var(--ink); }
 
-    /* Brand wordmark — NASCAR-style racing font */
+    /* Brand wordmark — editorial serif */
     .brand {
       font-family: 'Playfair Display', Georgia, serif;
-      font-weight: 800;
-      letter-spacing: 0.04em;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--ink);
       display: inline-block;
       line-height: 1;
     }
 
-    /* Logo mark */
+    /* Logo mark — dark square */
     .logo-dot {
       width: 9px; height: 9px; border-radius: 2px;
-      background: var(--green); box-shadow: 0 0 10px -1px var(--green-glow);
+      background: var(--ink);
       display: inline-block; flex-shrink: 0;
     }
 
-    /* New chat button — green outline */
+    /* New chat — outline pill (secondary) */
     .new-chat-btn {
-      border: 1px solid rgba(255,255,255,.25); color: var(--green);
-      background: var(--green-soft); border-radius: 10px;
+      border: 1px solid var(--border-2); color: var(--ink);
+      background: #fff; border-radius: 9999px;
       padding: 9px 12px; font-size: 13px; font-weight: 500; width: 100%;
-      transition: background .15s, box-shadow .2s;
-      font-family: 'JetBrains Mono', monospace;
+      transition: background .15s;
     }
-    .new-chat-btn:hover { background: rgba(255,255,255,.16); box-shadow: 0 0 18px -4px var(--green-glow); }
+    .new-chat-btn:hover { background: #f4f4f5; }
 
     /* Input box */
     .input-box {
-      background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 14px;
+      background: #fff; border: 1px solid var(--border-2); border-radius: 16px;
       transition: border-color .15s, box-shadow .2s;
     }
-    .input-box:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+    .input-box:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(0,0,0,.05); }
 
     /* Hamburger */
     .menu-btn {
@@ -207,7 +191,7 @@
     @media (max-width: 640px) { .menu-btn { display: flex; } }
   </style>
 </head>
-<body class="flex overflow-hidden text-gray-200">
+<body class="flex overflow-hidden">
 
 <!-- Mobile overlay -->
 <div id="overlay" onclick="closeSidebar()"></div>
@@ -217,7 +201,7 @@
 
   <div class="flex items-center gap-2 px-1 py-1">
     <span class="logo-dot"></span>
-    <span class="brand text-white text-lg flex-1" style="color: var(--green)">FORESEA</span>
+    <span class="brand text-lg flex-1">FORESEA</span>
     <button class="menu-btn" onclick="closeSidebar()" title="Close">✕</button>
   </div>
 
@@ -225,13 +209,13 @@
 
   <!-- Conversation list -->
   <div class="flex-1 scrollable flex flex-col gap-1 min-h-0">
-    <p class="text-xs text-gray-600 px-1 mb-1">Recent</p>
+    <p class="label px-1 mb-2">Recent</p>
     <div id="convList"></div>
   </div>
 
   <!-- Variant selector -->
   <div>
-    <p class="text-xs text-gray-500 mb-1 px-1">Prompt variant</p>
+    <p class="label px-1 mb-2">Prompt variant</p>
     <select id="variantSelect" class="variant-select" onchange="updateVariantDesc()">
       <option value="variant0_neutral_baseline">Baseline</option>
       <option value="variant1_predicted_event">Predicted Event</option>
@@ -243,15 +227,15 @@
       <option value="variant7_uncertainty_language">Uncertainty</option>
       <option value="variant8_temporal_anchors">Temporal Anchors</option>
     </select>
-    <p id="variantDesc" class="text-xs text-gray-600 mt-1 px-1"></p>
+    <p id="variantDesc" class="text-xs text-gray-500 mt-2 px-1"></p>
   </div>
 
   <!-- Model info -->
-  <div class="border border-gray-800 rounded-xl p-3 text-xs text-gray-500 space-y-1">
-    <div class="flex justify-between"><span>Model</span><span class="text-gray-400">gpt-oss-120b</span></div>
-    <div class="flex justify-between"><span>Provider</span><span class="text-gray-400">SCADS AI</span></div>
-    <div class="mt-2 pt-2 border-t border-gray-800">
-      <a href="/docs" target="_blank" style="color: var(--green)" class="hover:opacity-80">API docs ↗</a>
+  <div class="border border-gray-200 rounded-xl p-3 text-xs text-gray-500 space-y-1">
+    <div class="flex justify-between"><span>Model</span><span class="text-gray-800">gpt-oss-120b</span></div>
+    <div class="flex justify-between"><span>Provider</span><span class="text-gray-800">SCADS AI</span></div>
+    <div class="mt-2 pt-2 border-t border-gray-200">
+      <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70">API docs ↗</a>
     </div>
   </div>
 
@@ -261,19 +245,19 @@
 <main class="chat-main flex flex-col overflow-hidden">
 
   <!-- Header -->
-  <header class="flex items-center gap-3 px-4 py-3 border-b border-gray-800 flex-shrink-0">
+  <header class="flex items-center gap-3 px-4 py-3 border-b border-gray-200 flex-shrink-0">
     <button class="menu-btn" onclick="openSidebar()" title="Menu">
       <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
       </svg>
     </button>
     <div class="flex-1 min-w-0">
-      <h1 id="chatTitle" class="text-sm font-medium text-white truncate">New conversation</h1>
+      <h1 id="chatTitle" class="text-sm font-medium text-gray-900 truncate" style="font-family: 'Inter', sans-serif;">New conversation</h1>
       <p class="text-xs text-gray-500 hidden sm:block">Ask any binary (yes/no) forecasting question</p>
     </div>
-    <div class="flex items-center gap-1.5 text-xs text-gray-500 flex-shrink-0">
-      <span class="w-2 h-2 rounded-full inline-block" style="background: var(--green); box-shadow: 0 0 8px var(--green-glow)"></span>
-      <span class="hidden sm:inline">Live</span>
+    <div class="flex items-center gap-1.5 flex-shrink-0">
+      <span class="w-1.5 h-1.5 rounded-full inline-block" style="background: var(--ink)"></span>
+      <span class="label hidden sm:inline">Live</span>
     </div>
   </header>
 
@@ -281,23 +265,23 @@
   <div id="messages" class="scrollable flex-1 px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"></div>
 
   <!-- Input -->
-  <div class="border-t border-gray-800 px-3 sm:px-4 py-3 sm:py-4 flex-shrink-0">
+  <div class="border-t border-gray-200 px-3 sm:px-4 py-3 sm:py-4 flex-shrink-0">
     <div class="max-w-2xl mx-auto">
       <div class="input-box flex gap-2 sm:gap-3 items-end p-2 sm:p-3">
         <textarea
           id="questionInput"
           rows="1"
           placeholder="Ask a forecasting question…"
-          class="flex-1 bg-transparent text-sm border-none py-1 px-1 text-base"
+          class="flex-1 bg-transparent border-none py-1 px-1"
           style="font-size: 16px;"
           oninput="autoResize(this)"
           onkeydown="handleKey(event)"
         ></textarea>
-        <button id="sendBtn" class="send-btn text-white rounded-xl px-3 sm:px-4 py-2 text-sm font-medium flex-shrink-0" onclick="sendQuestion()">
+        <button id="sendBtn" class="send-btn px-4 sm:px-5 py-2 text-sm flex-shrink-0" onclick="sendQuestion()">
           Send
         </button>
       </div>
-      <p class="text-xs text-gray-600 text-center mt-2 hidden sm:block">
+      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">
         Predictions are probabilistic. Always verify with authoritative sources.
       </p>
     </div>
@@ -415,13 +399,17 @@ function renderMessages() {
 
   if (!conv || conv.messages.length === 0) {
     el.innerHTML = `
-      <div class="msg-ai max-w-2xl mx-auto w-full p-4 sm:p-5">
-        <p class="text-sm text-gray-400 leading-relaxed">
-          Hello! I'm Foresea, a forecasting AI powered by <span style="color: var(--green)">gpt-oss-120b</span>.
-          Ask me any binary (yes/no) question about future events.
+      <div class="max-w-xl mx-auto w-full text-center pt-10 sm:pt-20 px-4">
+        <p class="label mb-4">Forecasting intelligence</p>
+        <h2 class="display text-3xl sm:text-5xl text-gray-900 leading-tight mb-5">
+          Ask the future a yes or no question.
+        </h2>
+        <p class="text-[15px] text-gray-500 leading-relaxed mb-3">
+          Foresea reads live news, weighs the evidence, and returns a calibrated
+          probability with its reasoning shown.
         </p>
-        <p class="text-xs text-gray-600 mt-3">
-          Example: <em>"Will the Federal Reserve cut rates before the end of 2025?"</em>
+        <p class="text-sm text-gray-400">
+          Try: <em>“Will the Federal Reserve cut rates before the end of 2025?”</em>
         </p>
       </div>`;
     return;
@@ -437,7 +425,7 @@ function renderMessages() {
 function makeUserBubble(text) {
   const div = document.createElement('div');
   div.className = 'flex justify-end';
-  div.innerHTML = `<div class="msg-user max-w-xs sm:max-w-xl px-4 py-3 text-sm text-gray-200">${escHtml(text)}</div>`;
+  div.innerHTML = `<div class="msg-user max-w-xs sm:max-w-xl px-4 py-3 text-sm">${escHtml(text)}</div>`;
   return div;
 }
 
@@ -452,16 +440,16 @@ function makeAIBubble(data, variant) {
   const confBar = conf != null ? `
     <div class="mt-3">
       <div class="flex justify-between text-xs text-gray-500 mb-1">
-        <span>Confidence</span><span class="text-gray-300 font-medium">${conf}%</span>
+        <span class="label">Confidence</span><span class="text-gray-900 font-medium">${conf}%</span>
       </div>
-      <div class="w-full bg-gray-800 rounded-full h-1.5">
+      <div class="w-full bg-gray-200 rounded-full h-1.5">
         <div class="conf-bar-fill h-1.5 rounded-full" style="width:${conf}%"></div>
       </div>
     </div>` : '';
 
   const sourcesHtml = sources.length ? `
-    <div class="mt-4 pt-3 border-t border-gray-800">
-      <p class="text-xs text-gray-500 mb-2">Evidence sources</p>
+    <div class="mt-4 pt-3 border-t border-gray-200">
+      <p class="label mb-2">Evidence sources</p>
       <div>${sources.map(s =>
         s.url
           ? `<a href="${escHtml(s.url)}" target="_blank" class="source-chip hover:opacity-80">${escHtml(s.source)}</a>`
@@ -474,17 +462,17 @@ function makeAIBubble(data, variant) {
   div.innerHTML = `
     <div class="msg-ai p-4 sm:p-5 space-y-3">
       <div class="flex items-center gap-3">
-        <span class="${isYes ? 'yes-badge' : 'no-badge'} text-lg font-bold px-4 py-1 rounded-lg">${answer || '?'}</span>
+        <span class="${isYes ? 'yes-badge' : 'no-badge'} text-lg font-semibold px-4 py-1 rounded-full">${answer || '?'}</span>
         ${conf != null ? `<span class="text-gray-500 text-sm">${conf}% confidence</span>` : ''}
       </div>
       ${confBar}
       ${rationale ? `
         <div class="pt-2">
-          <p class="text-xs text-gray-500 mb-1">Rationale</p>
-          <p class="text-sm text-gray-300 leading-relaxed">${escHtml(rationale)}</p>
+          <p class="label mb-1">Rationale</p>
+          <p class="text-[15px] text-gray-700 leading-relaxed">${escHtml(rationale)}</p>
         </div>` : ''}
       ${sourcesHtml}
-      <div class="pt-2 flex items-center gap-2 text-xs text-gray-600">
+      <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
         <span class="logo-dot" style="width:5px;height:5px"></span>
         gpt-oss-120b · ${escHtml(variantLabel)}
       </div>
@@ -551,7 +539,7 @@ function addTyping() {
 function addError(msg) {
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
-  div.innerHTML = `<div class="msg-ai border-red-900 p-4 text-sm text-red-400">⚠ ${escHtml(msg)}</div>`;
+  div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">⚠ ${escHtml(msg)}</div>`;
   document.getElementById('messages').appendChild(div);
   scrollBottom();
 }
