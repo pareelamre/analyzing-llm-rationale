@@ -87,8 +87,6 @@ rationale, and optional evidence articles.
 
 - `GET /health`: service health check.
 - `POST /predict`: public prediction endpoint.
-- `POST /vertex-predict`: Vertex AI-compatible wrapper used by Vertex endpoint
-  deployment.
 
 ### Request fields
 
@@ -179,32 +177,6 @@ for source in prediction["evidence_sources"]:
 - `evidence_articles`: full evidence records attached to the prompt.
 - `evidence_error`: retrieval error message, or `null` when evidence retrieval
   succeeds.
-
-### Vertex AI format
-
-The Vertex AI endpoint requires a Google bearer token and uses the standard
-`instances` wrapper:
-
-```bash
-ACCESS_TOKEN="$(gcloud auth print-access-token)"
-
-curl -X POST \
-  "https://us-central1-aiplatform.googleapis.com/v1/projects/brave-drive-471109-d9/locations/us-central1/endpoints/7325853011580813312:predict" \
-  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "instances": [
-      {
-        "question": "Will the Federal Reserve cut interest rates at least once before September 30, 2026?",
-        "attach_evidence": true,
-        "evidence_top_k": 3
-      }
-    ]
-  }'
-```
-
-For most external users, the Cloud Run `/predict` endpoint is simpler because it
-does not require Google Cloud authentication.
 
 ## Repository Contents
 
