@@ -10,26 +10,41 @@
     * { font-family: 'Inter', system-ui, sans-serif; }
     body { background: #1a1a1a; }
 
-    .sidebar { background: #111; border-right: 1px solid #2a2a2a; }
-    .chat-bg  { background: #1a1a1a; }
+    /* Sidebar */
+    .sidebar {
+      background: #111; border-right: 1px solid #2a2a2a;
+      width: 260px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 12px; padding: 12px;
+      transition: transform .25s ease;
+    }
+    @media (max-width: 640px) {
+      .sidebar {
+        position: fixed; top: 0; left: 0; bottom: 0; z-index: 50;
+        transform: translateX(-100%);
+      }
+      .sidebar.open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,.6); }
+    }
+
+    /* Overlay for mobile sidebar */
+    #overlay {
+      display: none; position: fixed; inset: 0; z-index: 40;
+      background: rgba(0,0,0,.5);
+    }
+    #overlay.show { display: block; }
 
     .msg-user { background: #2a2a2a; border-radius: 18px 18px 4px 18px; }
     .msg-ai   { background: #222; border: 1px solid #333; border-radius: 18px 18px 18px 4px; }
 
-    .send-btn {
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
-      transition: opacity .15s;
-    }
+    .send-btn { background: linear-gradient(135deg, #6366f1, #8b5cf6); transition: opacity .15s; }
     .send-btn:hover { opacity: .85; }
     .send-btn:disabled { opacity: .4; cursor: not-allowed; }
 
-    textarea { resize: none; background: #2a2a2a; color: #e5e5e5; border: 1px solid #3a3a3a; }
-    textarea:focus { outline: none; border-color: #6366f1; }
+    textarea { resize: none; background: transparent; color: #e5e5e5; }
+    textarea:focus { outline: none; }
     textarea::placeholder { color: #555; }
 
     .yes-badge { background: #14532d; color: #4ade80; border: 1px solid #166534; }
     .no-badge  { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
-
     .conf-bar-fill { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
 
     .typing span {
@@ -40,7 +55,7 @@
     .typing span:nth-child(2) { animation-delay: .2s; }
     .typing span:nth-child(3) { animation-delay: .4s; }
     @keyframes bounce {
-      0%, 60%, 100% { transform: translateY(0); }
+      0%,60%,100% { transform: translateY(0); }
       30% { transform: translateY(-6px); }
     }
 
@@ -49,368 +64,429 @@
     .scrollable::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
 
     .variant-select {
-      background: #1a1a1a; color: #aaa;
-      border: 1px solid #2a2a2a; border-radius: 8px;
-      padding: 6px 8px; font-size: 12px; width: 100%;
+      background: #1a1a1a; color: #aaa; border: 1px solid #2a2a2a;
+      border-radius: 8px; padding: 6px 8px; font-size: 12px; width: 100%;
     }
     .variant-select:focus { outline: none; border-color: #6366f1; }
 
     .source-chip {
-      background: #1e1b4b; color: #a5b4fc;
-      border: 1px solid #312e81;
-      border-radius: 6px; padding: 2px 8px;
-      font-size: 11px; display: inline-block; margin: 2px;
+      background: #1e1b4b; color: #a5b4fc; border: 1px solid #312e81;
+      border-radius: 6px; padding: 2px 8px; font-size: 11px;
+      display: inline-block; margin: 2px;
     }
 
-    .new-chat-btn {
-      border: 1px solid #2a2a2a; color: #aaa;
-      border-radius: 10px; padding: 8px 12px;
-      font-size: 13px; width: 100%;
-      transition: background .15s, color .15s;
+    .conv-item {
+      border-radius: 8px; padding: 8px 10px; font-size: 12px;
+      color: #888; cursor: pointer; transition: background .1s;
+      display: flex; align-items: center; gap: 6px;
     }
-    .new-chat-btn:hover { background: #222; color: #e5e5e5; }
-
-    .history-item {
-      border-radius: 8px; padding: 8px 10px;
-      font-size: 12px; color: #777;
-      cursor: pointer; transition: background .1s;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    .conv-item:hover { background: #1e1e1e; color: #ccc; }
+    .conv-item.active { background: #1e1b4b; color: #a5b4fc; }
+    .conv-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conv-delete {
+      flex-shrink: 0; width: 18px; height: 18px; border-radius: 4px;
+      color: #555; font-size: 15px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity .1s;
     }
-    .history-item:hover { background: #1e1e1e; color: #bbb; }
+    .conv-item:hover .conv-delete { opacity: 1; }
+    .conv-delete:hover { color: #f87171; }
 
     .logo-dot {
       width: 8px; height: 8px; border-radius: 50%;
       background: linear-gradient(135deg, #6366f1, #8b5cf6);
-      display: inline-block; margin-right: 4px;
+      display: inline-block; flex-shrink: 0;
     }
+
+    .new-chat-btn {
+      border: 1px solid #2a2a2a; color: #aaa; border-radius: 10px;
+      padding: 8px 12px; font-size: 13px; width: 100%;
+      transition: background .15s, color .15s;
+    }
+    .new-chat-btn:hover { background: #222; color: #e5e5e5; }
+
+    .input-box {
+      background: #242424; border: 1px solid #3a3a3a; border-radius: 16px;
+      transition: border-color .15s;
+    }
+    .input-box:focus-within { border-color: #6366f1; }
+
+    /* Hamburger */
+    .menu-btn {
+      display: none; background: none; border: none;
+      color: #aaa; cursor: pointer; padding: 4px;
+    }
+    @media (max-width: 640px) { .menu-btn { display: flex; } }
   </style>
 </head>
 <body class="h-screen flex overflow-hidden text-gray-200">
 
-  <!-- ── Sidebar ── -->
-  <aside class="sidebar w-64 flex-shrink-0 flex flex-col p-4 gap-4">
+<!-- Mobile overlay -->
+<div id="overlay" onclick="closeSidebar()"></div>
 
-    <!-- Logo -->
-    <div class="flex items-center gap-2 px-1 py-2">
-      <span class="logo-dot"></span>
-      <span class="font-semibold text-white text-sm tracking-wide">Forecasting AI</span>
+<!-- ── Sidebar ── -->
+<aside id="sidebar" class="sidebar overflow-hidden">
+
+  <div class="flex items-center gap-2 px-1 py-1">
+    <span class="logo-dot"></span>
+    <span class="font-semibold text-white text-sm tracking-wide flex-1">Forecasting AI</span>
+    <button class="menu-btn" onclick="closeSidebar()" title="Close">✕</button>
+  </div>
+
+  <button class="new-chat-btn" onclick="newConversation()">+ New conversation</button>
+
+  <!-- Conversation list -->
+  <div class="flex-1 scrollable flex flex-col gap-1 min-h-0">
+    <p class="text-xs text-gray-600 px-1 mb-1">Recent</p>
+    <div id="convList"></div>
+  </div>
+
+  <!-- Variant selector -->
+  <div>
+    <p class="text-xs text-gray-500 mb-1 px-1">Prompt variant</p>
+    <select id="variantSelect" class="variant-select" onchange="updateVariantDesc()">
+      <option value="variant0_neutral_baseline">Baseline</option>
+      <option value="variant1_predicted_event">Predicted Event</option>
+      <option value="variant2_key_attribute">Key Attribute</option>
+      <option value="variant3_reasoning_type">Reasoning Type</option>
+      <option value="variant4_credibility">Credibility</option>
+      <option value="variant5_key_conditions">Key Conditions</option>
+      <option value="variant6_step_by_step_reasoning">Step-by-Step</option>
+      <option value="variant7_uncertainty_language">Uncertainty</option>
+      <option value="variant8_temporal_anchors">Temporal Anchors</option>
+    </select>
+    <p id="variantDesc" class="text-xs text-gray-600 mt-1 px-1"></p>
+  </div>
+
+  <!-- Model info -->
+  <div class="border border-gray-800 rounded-xl p-3 text-xs text-gray-500 space-y-1">
+    <div class="flex justify-between"><span>Model</span><span class="text-gray-400">gpt-oss-120b</span></div>
+    <div class="flex justify-between"><span>Provider</span><span class="text-gray-400">SCADS AI</span></div>
+    <div class="mt-2 pt-2 border-t border-gray-800">
+      <a href="/docs" target="_blank" class="text-indigo-500 hover:text-indigo-400">API docs ↗</a>
     </div>
+  </div>
 
-    <!-- New chat -->
-    <button class="new-chat-btn" onclick="newChat()">+ New conversation</button>
+</aside>
 
-    <!-- Variant selector -->
-    <div>
-      <p class="text-xs text-gray-500 mb-1 px-1">Prompt variant</p>
-      <select id="variantSelect" class="variant-select" onchange="updateVariantDesc()">
-        <option value="variant0_neutral_baseline">Baseline</option>
-        <option value="variant1_predicted_event">Predicted Event</option>
-        <option value="variant2_key_attribute">Key Attribute</option>
-        <option value="variant3_reasoning_type">Reasoning Type</option>
-        <option value="variant4_credibility">Credibility</option>
-        <option value="variant5_key_conditions">Key Conditions</option>
-        <option value="variant6_step_by_step_reasoning">Step-by-Step</option>
-        <option value="variant7_uncertainty_language">Uncertainty</option>
-        <option value="variant8_temporal_anchors">Temporal Anchors</option>
-      </select>
-      <p id="variantDesc" class="text-xs text-gray-600 mt-1 px-1"></p>
+<!-- ── Main ── -->
+<main class="flex-1 flex flex-col overflow-hidden min-w-0">
+
+  <!-- Header -->
+  <header class="flex items-center gap-3 px-4 py-3 border-b border-gray-800 flex-shrink-0">
+    <button class="menu-btn" onclick="openSidebar()" title="Menu">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <div class="flex-1 min-w-0">
+      <h1 id="chatTitle" class="text-sm font-medium text-white truncate">New conversation</h1>
+      <p class="text-xs text-gray-500 hidden sm:block">Ask any binary (yes/no) forecasting question</p>
     </div>
-
-    <!-- Model info -->
-    <div class="mt-auto border border-gray-800 rounded-xl p-3 text-xs text-gray-500 space-y-1">
-      <div class="flex justify-between">
-        <span>Model</span>
-        <span class="text-gray-400">gpt-oss-120b</span>
-      </div>
-      <div class="flex justify-between">
-        <span>Provider</span>
-        <span class="text-gray-400">SCADS AI</span>
-      </div>
-      <div class="flex justify-between">
-        <span>Temperature</span>
-        <span class="text-gray-400">0.0</span>
-      </div>
-      <div class="mt-2 pt-2 border-t border-gray-800">
-        <a href="/docs" target="_blank" class="text-indigo-500 hover:text-indigo-400">API docs ↗</a>
-      </div>
+    <div class="flex items-center gap-1.5 text-xs text-gray-500 flex-shrink-0">
+      <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+      <span class="hidden sm:inline">Live</span>
     </div>
+  </header>
 
-    <!-- Chat history -->
-    <div id="historyList" class="flex flex-col gap-1 overflow-y-auto max-h-48"></div>
-  </aside>
+  <!-- Messages -->
+  <div id="messages" class="scrollable flex-1 px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"></div>
 
-  <!-- ── Main ── -->
-  <main class="flex-1 flex flex-col overflow-hidden">
-
-    <!-- Header -->
-    <header class="flex items-center justify-between px-6 py-3 border-b border-gray-800">
-      <div>
-        <h1 class="text-sm font-medium text-white">Forecasting Assistant</h1>
-        <p class="text-xs text-gray-500">Ask any binary (yes/no) forecasting question</p>
+  <!-- Input -->
+  <div class="border-t border-gray-800 px-3 sm:px-4 py-3 sm:py-4 flex-shrink-0">
+    <div class="max-w-2xl mx-auto">
+      <div class="input-box flex gap-2 sm:gap-3 items-end p-2 sm:p-3">
+        <textarea
+          id="questionInput"
+          rows="1"
+          placeholder="Ask a forecasting question…"
+          class="flex-1 bg-transparent text-sm border-none py-1 px-1 text-base"
+          style="font-size: 16px;"
+          oninput="autoResize(this)"
+          onkeydown="handleKey(event)"
+        ></textarea>
+        <button id="sendBtn" class="send-btn text-white rounded-xl px-3 sm:px-4 py-2 text-sm font-medium flex-shrink-0" onclick="sendQuestion()">
+          Send
+        </button>
       </div>
-      <div id="statusDot" class="flex items-center gap-2 text-xs text-gray-500">
-        <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
-        Live
-      </div>
-    </header>
+      <p class="text-xs text-gray-600 text-center mt-2 hidden sm:block">
+        Predictions are probabilistic. Always verify with authoritative sources.
+      </p>
+    </div>
+  </div>
 
-    <!-- Messages -->
-    <div id="messages" class="scrollable flex-1 px-4 py-6 flex flex-col gap-6">
+</main>
 
-      <!-- Welcome message -->
-      <div class="msg-ai max-w-2xl mx-auto w-full p-5">
+<script>
+// ── Constants ────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'forecasting_ai_convs';
+const VARIANT_DESCS = {
+  variant0_neutral_baseline:       'Neutral control — no extra framing',
+  variant1_predicted_event:        'States the concrete predicted event',
+  variant2_key_attribute:          'Focuses on time / quantity / actor',
+  variant3_reasoning_type:         'Speculation, expert forecast, trend…',
+  variant4_credibility:            'Grounds rationale in source scores',
+  variant5_key_conditions:         '2–4 conditions that must hold',
+  variant6_step_by_step_reasoning: '2–3 numbered reasoning steps',
+  variant7_uncertainty_language:   'Requires uncertainty hedging words',
+  variant8_temporal_anchors:       'Anchors to relevant dates',
+};
+
+// ── State ────────────────────────────────────────────────────────────────────
+let store = loadStore();
+let activeId = null;
+
+// ── Persistence ──────────────────────────────────────────────────────────────
+function loadStore() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { conversations: {} }; }
+  catch { return { conversations: {} }; }
+}
+function saveStore() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch {}
+}
+function getConv(id) { return store.conversations[id]; }
+function upsertConv(id, patch) {
+  store.conversations[id] = Object.assign(store.conversations[id] || {}, patch);
+  saveStore();
+}
+
+// ── Mobile sidebar ────────────────────────────────────────────────────────────
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+// ── Conversation management ──────────────────────────────────────────────────
+function newConversation() {
+  closeSidebar();
+  const id = 'conv_' + Date.now();
+  upsertConv(id, { id, title: 'New conversation', createdAt: Date.now(), updatedAt: Date.now(), messages: [] });
+  activateConv(id);
+}
+
+function activateConv(id) {
+  closeSidebar();
+  activeId = id;
+  renderSidebar();
+  renderMessages();
+  document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New conversation';
+}
+
+function deleteConv(id, e) {
+  e.stopPropagation();
+  delete store.conversations[id];
+  saveStore();
+  if (activeId === id) {
+    const ids = sortedIds();
+    if (ids.length) activateConv(ids[0]);
+    else newConversation();
+  } else { renderSidebar(); }
+}
+
+function sortedIds() {
+  return Object.keys(store.conversations)
+    .sort((a, b) => (store.conversations[b].updatedAt || 0) - (store.conversations[a].updatedAt || 0));
+}
+
+function appendMessage(convId, msg) {
+  const conv = getConv(convId);
+  conv.messages.push(msg);
+  conv.updatedAt = Date.now();
+  if (conv.messages.filter(m => m.role === 'user').length === 1 && msg.role === 'user') {
+    conv.title = msg.content.slice(0, 60) + (msg.content.length > 60 ? '…' : '');
+    document.getElementById('chatTitle').textContent = conv.title;
+  }
+  saveStore();
+  renderSidebar();
+}
+
+// ── Sidebar rendering ────────────────────────────────────────────────────────
+function renderSidebar() {
+  const ids = sortedIds();
+  const list = document.getElementById('convList');
+  list.innerHTML = ids.map(id => {
+    const c = store.conversations[id];
+    const active = id === activeId ? ' active' : '';
+    return `
+      <div class="conv-item${active}" onclick="activateConv('${id}')">
+        <span class="conv-title">${escHtml(c.title)}</span>
+        <span class="conv-delete" onclick="deleteConv('${id}', event)" title="Delete">×</span>
+      </div>`;
+  }).join('');
+}
+
+// ── Message rendering ────────────────────────────────────────────────────────
+function renderMessages() {
+  const conv = getConv(activeId);
+  const el = document.getElementById('messages');
+  el.innerHTML = '';
+
+  if (!conv || conv.messages.length === 0) {
+    el.innerHTML = `
+      <div class="msg-ai max-w-2xl mx-auto w-full p-4 sm:p-5">
         <p class="text-sm text-gray-400 leading-relaxed">
           Hello! I'm a forecasting AI powered by <span class="text-indigo-400">gpt-oss-120b</span>.
-          Ask me any binary question about future events — I'll analyze it and give you a
-          <strong class="text-white">Yes</strong> or <strong class="text-white">No</strong> prediction
-          with a confidence score and reasoning.
+          Ask me any binary (yes/no) question about future events.
         </p>
         <p class="text-xs text-gray-600 mt-3">
-          Example: <em>"Will the Federal Reserve cut interest rates before the end of 2025?"</em>
+          Example: <em>"Will the Federal Reserve cut rates before the end of 2025?"</em>
         </p>
+      </div>`;
+    return;
+  }
+
+  for (const msg of conv.messages) {
+    if (msg.role === 'user') el.appendChild(makeUserBubble(msg.content));
+    else el.appendChild(makeAIBubble(msg.data, msg.variant));
+  }
+  scrollBottom();
+}
+
+function makeUserBubble(text) {
+  const div = document.createElement('div');
+  div.className = 'flex justify-end';
+  div.innerHTML = `<div class="msg-user max-w-xs sm:max-w-xl px-4 py-3 text-sm text-gray-200">${escHtml(text)}</div>`;
+  return div;
+}
+
+function makeAIBubble(data, variant) {
+  const answer = (data.predicted_answer || '').toUpperCase();
+  const isYes  = answer === 'YES';
+  const conf   = data.confidence != null ? Math.round(data.confidence * 100) : null;
+  const rationale = data.rationale || '';
+  const sources   = data.evidence_sources || [];
+  const variantLabel = VARIANT_DESCS[variant] || variant || '';
+
+  const confBar = conf != null ? `
+    <div class="mt-3">
+      <div class="flex justify-between text-xs text-gray-500 mb-1">
+        <span>Confidence</span><span class="text-gray-300 font-medium">${conf}%</span>
       </div>
-
-    </div>
-
-    <!-- Input area -->
-    <div class="border-t border-gray-800 px-4 py-4">
-      <div class="max-w-2xl mx-auto">
-        <div class="flex gap-3 items-end bg-gray-900 border border-gray-700 rounded-2xl p-3 focus-within:border-indigo-500 transition-colors">
-          <textarea
-            id="questionInput"
-            rows="1"
-            placeholder="Ask a forecasting question…"
-            class="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 border-none outline-none py-1 px-1"
-            oninput="autoResize(this)"
-            onkeydown="handleKey(event)"
-          ></textarea>
-          <button
-            id="sendBtn"
-            class="send-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex-shrink-0"
-            onclick="sendQuestion()"
-          >
-            Send
-          </button>
-        </div>
-        <p class="text-xs text-gray-600 text-center mt-2">
-          Predictions are probabilistic and may be inaccurate. Always verify with authoritative sources.
-        </p>
+      <div class="w-full bg-gray-800 rounded-full h-1.5">
+        <div class="conf-bar-fill h-1.5 rounded-full" style="width:${conf}%"></div>
       </div>
-    </div>
+    </div>` : '';
 
-  </main>
+  const sourcesHtml = sources.length ? `
+    <div class="mt-4 pt-3 border-t border-gray-800">
+      <p class="text-xs text-gray-500 mb-2">Evidence sources</p>
+      <div>${sources.map(s =>
+        s.url
+          ? `<a href="${escHtml(s.url)}" target="_blank" class="source-chip hover:opacity-80">${escHtml(s.source)}</a>`
+          : `<span class="source-chip">${escHtml(s.source)}</span>`
+      ).join('')}</div>
+    </div>` : '';
 
-  <script>
-    // ── State ──
-    let history = [];
-    const VARIANT_DESCS = {
-      variant0_neutral_baseline:       'Neutral control — no extra framing',
-      variant1_predicted_event:        'States the concrete predicted event',
-      variant2_key_attribute:          'Focuses on time / quantity / actor',
-      variant3_reasoning_type:         'Speculation, expert forecast, trend…',
-      variant4_credibility:            'Grounds rationale in source scores',
-      variant5_key_conditions:         '2–4 conditions that must hold',
-      variant6_step_by_step_reasoning: '2–3 numbered reasoning steps',
-      variant7_uncertainty_language:   'Requires uncertainty hedging words',
-      variant8_temporal_anchors:       'Anchors to relevant dates',
-    };
+  const div = document.createElement('div');
+  div.className = 'max-w-2xl mx-auto w-full';
+  div.innerHTML = `
+    <div class="msg-ai p-4 sm:p-5 space-y-3">
+      <div class="flex items-center gap-3">
+        <span class="${isYes ? 'yes-badge' : 'no-badge'} text-lg font-bold px-4 py-1 rounded-lg">${answer || '?'}</span>
+        ${conf != null ? `<span class="text-gray-500 text-sm">${conf}% confidence</span>` : ''}
+      </div>
+      ${confBar}
+      ${rationale ? `
+        <div class="pt-2">
+          <p class="text-xs text-gray-500 mb-1">Rationale</p>
+          <p class="text-sm text-gray-300 leading-relaxed">${escHtml(rationale)}</p>
+        </div>` : ''}
+      ${sourcesHtml}
+      <div class="pt-2 flex items-center gap-2 text-xs text-gray-600">
+        <span class="logo-dot" style="width:5px;height:5px"></span>
+        gpt-oss-120b · ${escHtml(variantLabel)}
+      </div>
+    </div>`;
+  return div;
+}
 
-    // ── Init ──
-    updateVariantDesc();
+// ── Send ─────────────────────────────────────────────────────────────────────
+async function sendQuestion() {
+  const input = document.getElementById('questionInput');
+  const question = input.value.trim();
+  if (!question || !activeId) return;
 
-    function updateVariantDesc() {
-      const v = document.getElementById('variantSelect').value;
-      document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
-    }
+  const variant = document.getElementById('variantSelect').value;
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true;
+  input.value = '';
+  input.style.height = 'auto';
 
-    function autoResize(el) {
-      el.style.height = 'auto';
-      el.style.height = Math.min(el.scrollHeight, 160) + 'px';
-    }
+  appendMessage(activeId, { role: 'user', content: question });
+  document.getElementById('messages').appendChild(makeUserBubble(question));
 
-    function handleKey(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendQuestion();
-      }
-    }
+  const typingEl = addTyping();
 
-    function newChat() {
-      document.getElementById('messages').innerHTML = `
-        <div class="msg-ai max-w-2xl mx-auto w-full p-5">
-          <p class="text-sm text-gray-400 leading-relaxed">
-            Hello! I'm a forecasting AI. Ask me any binary forecasting question.
-          </p>
-        </div>`;
-      document.getElementById('questionInput').value = '';
-    }
+  try {
+    const resp = await fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, variant }),
+    });
+    const data = await resp.json();
+    typingEl.remove();
 
-    function addToHistory(q) {
-      history.unshift(q);
-      const list = document.getElementById('historyList');
-      list.innerHTML = history.slice(0, 10).map(h =>
-        `<div class="history-item" title="${escHtml(h)}">${escHtml(h.slice(0, 60))}${h.length > 60 ? '…' : ''}</div>`
-      ).join('');
-    }
-
-    function escHtml(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    // ── Send ──
-    async function sendQuestion() {
-      const input = document.getElementById('questionInput');
-      const question = input.value.trim();
-      if (!question) return;
-
-      const variant = document.getElementById('variantSelect').value;
-      const btn = document.getElementById('sendBtn');
-      btn.disabled = true;
-      input.value = '';
-      input.style.height = 'auto';
-
-      addToHistory(question);
-      appendUserMessage(question);
-      const typingId = appendTyping();
-
-      try {
-        const resp = await fetch('/predict', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question, variant }),
-        });
-        const data = await resp.json();
-        removeTyping(typingId);
-
-        if (!resp.ok) {
-          appendError(data.detail || 'Server error');
-        } else {
-          appendAIMessage(data, question, variant);
-        }
-      } catch (err) {
-        removeTyping(typingId);
-        appendError('Network error: ' + err.message);
-      } finally {
-        btn.disabled = false;
-        input.focus();
-      }
-    }
-
-    // ── DOM helpers ──
-    function scrollBottom() {
-      const el = document.getElementById('messages');
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    }
-
-    function appendUserMessage(text) {
-      const el = document.getElementById('messages');
-      const div = document.createElement('div');
-      div.className = 'flex justify-end';
-      div.innerHTML = `
-        <div class="msg-user max-w-xl px-4 py-3 text-sm text-gray-200">
-          ${escHtml(text)}
-        </div>`;
-      el.appendChild(div);
+    if (!resp.ok) {
+      addError(data.detail || 'Server error');
+    } else {
+      appendMessage(activeId, { role: 'assistant', data, variant, content: data.rationale || '' });
+      document.getElementById('messages').appendChild(makeAIBubble(data, variant));
       scrollBottom();
     }
+  } catch (err) {
+    typingEl.remove();
+    addError('Network error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    input.focus();
+  }
+}
 
-    let _typingCounter = 0;
-    function appendTyping() {
-      const id = 'typing-' + (_typingCounter++);
-      const el = document.getElementById('messages');
-      const div = document.createElement('div');
-      div.id = id;
-      div.className = 'max-w-2xl mx-auto w-full';
-      div.innerHTML = `
-        <div class="msg-ai inline-flex items-center px-5 py-4">
-          <div class="typing">
-            <span></span><span></span><span></span>
-          </div>
-        </div>`;
-      el.appendChild(div);
-      scrollBottom();
-      return id;
-    }
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function scrollBottom() {
+  const el = document.getElementById('messages');
+  el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+}
+function addTyping() {
+  const div = document.createElement('div');
+  div.className = 'max-w-2xl mx-auto w-full';
+  div.innerHTML = `<div class="msg-ai inline-flex items-center px-5 py-4">
+    <div class="typing"><span></span><span></span><span></span></div></div>`;
+  document.getElementById('messages').appendChild(div);
+  scrollBottom();
+  return div;
+}
+function addError(msg) {
+  const div = document.createElement('div');
+  div.className = 'max-w-2xl mx-auto w-full';
+  div.innerHTML = `<div class="msg-ai border-red-900 p-4 text-sm text-red-400">⚠ ${escHtml(msg)}</div>`;
+  document.getElementById('messages').appendChild(div);
+  scrollBottom();
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+}
+function updateVariantDesc() {
+  const v = document.getElementById('variantSelect').value;
+  document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
+}
 
-    function removeTyping(id) {
-      document.getElementById(id)?.remove();
-    }
-
-    function appendError(msg) {
-      const el = document.getElementById('messages');
-      const div = document.createElement('div');
-      div.className = 'max-w-2xl mx-auto w-full';
-      div.innerHTML = `
-        <div class="msg-ai border-red-900 p-4 text-sm text-red-400">
-          ⚠ ${escHtml(msg)}
-        </div>`;
-      el.appendChild(div);
-      scrollBottom();
-    }
-
-    function appendAIMessage(data, question, variant) {
-      const answer = (data.predicted_answer || '').toUpperCase();
-      const isYes  = answer === 'YES';
-      const badgeClass = isYes ? 'yes-badge' : 'no-badge';
-      const conf   = data.confidence != null
-        ? Math.round(data.confidence * 100)
-        : null;
-      const rationale = data.rationale || '';
-      const sources   = data.evidence_sources || [];
-      const variantLabel = VARIANT_DESCS[variant] || variant;
-
-      const confBar = conf != null ? `
-        <div class="mt-3">
-          <div class="flex justify-between text-xs text-gray-500 mb-1">
-            <span>Confidence</span>
-            <span class="text-gray-300 font-medium">${conf}%</span>
-          </div>
-          <div class="w-full bg-gray-800 rounded-full h-1.5">
-            <div class="conf-bar-fill h-1.5 rounded-full" style="width:${conf}%"></div>
-          </div>
-        </div>` : '';
-
-      const sourcesHtml = sources.length ? `
-        <div class="mt-4 pt-3 border-t border-gray-800">
-          <p class="text-xs text-gray-500 mb-2">Evidence sources</p>
-          <div>${sources.map(s =>
-            s.url
-              ? `<a href="${escHtml(s.url)}" target="_blank" class="source-chip hover:opacity-80">${escHtml(s.source)}</a>`
-              : `<span class="source-chip">${escHtml(s.source)}</span>`
-          ).join('')}</div>
-        </div>` : '';
-
-      const el = document.getElementById('messages');
-      const div = document.createElement('div');
-      div.className = 'max-w-2xl mx-auto w-full';
-      div.innerHTML = `
-        <div class="msg-ai p-5 space-y-3">
-          <!-- Answer badge -->
-          <div class="flex items-center gap-3">
-            <span class="${badgeClass} text-lg font-bold px-4 py-1 rounded-lg">${answer || '?'}</span>
-            ${conf != null ? `<span class="text-gray-500 text-sm">${conf}% confidence</span>` : ''}
-          </div>
-
-          ${confBar}
-
-          <!-- Rationale -->
-          ${rationale ? `
-          <div class="pt-2">
-            <p class="text-xs text-gray-500 mb-1">Rationale</p>
-            <p class="text-sm text-gray-300 leading-relaxed">${escHtml(rationale)}</p>
-          </div>` : ''}
-
-          ${sourcesHtml}
-
-          <!-- Footer -->
-          <div class="pt-2 flex items-center gap-2 text-xs text-gray-600">
-            <span class="logo-dot" style="width:5px;height:5px;"></span>
-            gpt-oss-120b · ${escHtml(variantLabel)}
-          </div>
-        </div>`;
-      el.appendChild(div);
-      scrollBottom();
-    }
-  </script>
+// ── Init ─────────────────────────────────────────────────────────────────────
+updateVariantDesc();
+const ids = sortedIds();
+if (ids.length) activateConv(ids[0]);
+else newConversation();
+</script>
 </body>
 </html>
