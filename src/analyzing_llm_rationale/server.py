@@ -215,26 +215,20 @@ class PredictRequest(BaseModel):
     """Input payload for a single forecasting prediction."""
 
     model_config = ConfigDict(json_schema_extra={
-        "examples": {
-            "minimal": {
-                "summary": "Minimal request — just a question",
-                "value": {
-                    "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
-                },
+        "examples": [
+            {
+                "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
             },
-            "full": {
-                "summary": "Full request with context and variant",
-                "value": {
-                    "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
-                    "description": "The question resolves YES if the FOMC reduces the federal funds rate target by at least 25 basis points from its current level at any point before 31 December 2025.",
-                    "resolution_criteria": "Resolves YES if the Federal Reserve lowers the federal funds rate at least once before 2026-01-01.",
-                    "categories": ["Economics", "Finance", "United States"],
-                    "variant": "variant3_reasoning_type",
-                    "resolve_time": "2025-12-31T23:59:00Z",
-                    "days_open": 180,
-                },
+            {
+                "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
+                "description": "The question resolves YES if the FOMC reduces the federal funds rate target by at least 25 basis points from its current level at any point before 31 December 2025.",
+                "resolution_criteria": "Resolves YES if the Federal Reserve lowers the federal funds rate at least once before 2026-01-01.",
+                "categories": ["Economics", "Finance", "United States"],
+                "variant": "variant3_reasoning_type",
+                "resolve_time": "2025-12-31T23:59:00Z",
+                "days_open": 180,
             },
-        }
+        ]
     })
 
     question: str = Field(

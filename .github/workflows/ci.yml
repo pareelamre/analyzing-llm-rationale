@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install dependencies
-        run: pip install .[dev]
+        run: pip install -e ".[dev,serve,analysis]" httpx
       - name: Lint
         run: ruff check src tests
       - name: Test
