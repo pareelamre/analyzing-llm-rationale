@@ -515,7 +515,7 @@ def serve_command(args: argparse.Namespace) -> int:
                 model=args.router_model_name,
                 newsapi_key=newsapi_key,
                 use_query_planner=False,
-                fetch_sources=args.evidence_source,
+                fetch_sources=args.evidence_source or ("gdelt", "google-news"),
                 summarize_articles=False,
                 use_embeddings=False,
             )
