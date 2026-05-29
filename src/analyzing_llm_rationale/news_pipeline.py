@@ -15,6 +15,33 @@ RSS_FEEDS = [
 ]
 
 DEFAULT_FETCH_SOURCES = ("newsapi", "gdelt", "google-news", "rss")
+QUERY_STOPWORDS = {
+    "will",
+    "the",
+    "a",
+    "an",
+    "is",
+    "it",
+    "be",
+    "before",
+    "after",
+    "by",
+    "on",
+    "or",
+    "and",
+    "to",
+    "of",
+    "for",
+    "per",
+    "share",
+    "shares",
+    "close",
+    "above",
+    "below",
+    "happen",
+    "occur",
+    "resolves",
+}
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -31,6 +58,19 @@ def _lexical_relevance(query: str, text: str) -> float:
     if not query_terms or not text_terms:
         return 0.0
     return len(query_terms & text_terms) / len(query_terms)
+
+
+def _keyword_search_query(question: str, max_terms: int = 12) -> str:
+    terms = re.findall(r"[A-Za-z0-9$]+", question)
+    kept = []
+    for term in terms:
+        normalized = term.lower().strip("$")
+        if normalized in QUERY_STOPWORDS:
+            continue
+        if len(normalized) <= 2 and not normalized.isdigit():
+            continue
+        kept.append(term.strip("$"))
+    return " ".join(kept[:max_terms]) or question
 
 
 class NewsPipeline:
@@ -323,6 +363,11 @@ class NewsPipeline:
         """Full pipeline: fetch → summarize → rank → return top_k."""
         search_query = self.plan_search_query(question)
         raw = self.fetch(search_query, top_k=top_k * 2)
+        if not raw:
+            fallback_query = _keyword_search_query(question)
+            if fallback_query != search_query:
+                search_query = fallback_query
+                raw = self.fetch(search_query, top_k=top_k * 2)
         for article in raw:
             if self._summarize_articles:
                 article["summary"] = self.summarize(article)

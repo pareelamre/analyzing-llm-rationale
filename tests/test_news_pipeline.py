@@ -7,7 +7,11 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from analyzing_llm_rationale.news_pipeline import NewsPipeline, _lexical_relevance  # noqa: E402
+from analyzing_llm_rationale.news_pipeline import (  # noqa: E402
+    NewsPipeline,
+    _keyword_search_query,
+    _lexical_relevance,
+)
 
 
 class FakeResponse:
@@ -111,6 +115,17 @@ class NewsPipelineSourceTests(unittest.TestCase):
 
         self.assertIsNone(pipeline._llm)
         self.assertEqual(pipeline.plan_search_query("Will X happen?"), "Will X happen?")
+
+    def test_keyword_search_query_removes_forecast_filler(self):
+        query = _keyword_search_query(
+            "Will the Federal Reserve cut US interest rates before July 31, 2026?"
+        )
+
+        self.assertIn("Federal", query)
+        self.assertIn("Reserve", query)
+        self.assertIn("interest", query)
+        self.assertNotIn("Will", query)
+        self.assertNotIn("before", query)
 
 
 if __name__ == "__main__":
