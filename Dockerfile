@@ -6,6 +6,7 @@ COPY pyproject.toml README.md ./
 COPY src/ src/
 COPY configs/ configs/
 COPY prompts/ prompts/
+COPY static/ static/
 
 RUN pip install --no-cache-dir -e ".[serve,tracking,pipeline]"
 
@@ -21,6 +22,7 @@ COPY pyproject.toml README.md ./
 COPY src/ src/
 COPY configs/ configs/
 COPY prompts/ prompts/
+COPY static/ static/
 
 # Install CPU-only torch first so pip doesn't pull CUDA wheels when resolving the package deps
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
