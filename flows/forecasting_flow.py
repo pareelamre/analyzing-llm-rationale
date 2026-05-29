@@ -26,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from prefect import flow, task, get_run_logger
-from prefect.schedules import CronSchedule
+from prefect.client.schemas.schedules import CronSchedule
 
 from analyzing_llm_rationale.db import (
     get_connection,
