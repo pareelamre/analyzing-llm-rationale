@@ -6,15 +6,40 @@
   <title>Forecasting AI</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+    :root {
+      --bg:        #080808;
+      --bg-2:      #0d0d0d;
+      --panel:     #111111;
+      --card:      #151515;
+      --border:    #1f1f1f;
+      --border-2:  #2a2a2a;
+      --text:      #f5f5f5;
+      --text-dim:  #8a8a8a;
+      --text-mute: #5a5a5a;
+      --lime:      #c4f542;
+      --lime-soft: rgba(196,245,66,.12);
+      --lime-glow: rgba(196,245,66,.25);
+    }
+
     * { font-family: 'Inter', system-ui, sans-serif; }
-    body { background: #1a1a1a; }
+    h1, .display { font-family: 'Space Grotesk', system-ui, sans-serif; letter-spacing: -0.02em; }
+
+    body {
+      background: var(--bg);
+      background-image:
+        radial-gradient(900px 500px at 78% -10%, rgba(196,245,66,.06), transparent 60%),
+        radial-gradient(700px 500px at 0% 110%, rgba(196,245,66,.04), transparent 55%);
+      color: var(--text);
+    }
 
     /* Sidebar */
     .sidebar {
-      background: #111; border-right: 1px solid #2a2a2a;
-      width: 260px; flex-shrink: 0;
-      display: flex; flex-direction: column; gap: 12px; padding: 12px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      width: 264px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 14px; padding: 14px;
       transition: transform .25s ease;
     }
     @media (max-width: 640px) {
@@ -22,99 +47,132 @@
         position: fixed; top: 0; left: 0; bottom: 0; z-index: 50;
         transform: translateX(-100%);
       }
-      .sidebar.open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,.6); }
+      .sidebar.open { transform: translateX(0); box-shadow: 8px 0 40px rgba(0,0,0,.7); }
     }
 
-    /* Overlay for mobile sidebar */
+    /* Mobile overlay */
     #overlay {
       display: none; position: fixed; inset: 0; z-index: 40;
-      background: rgba(0,0,0,.5);
+      background: rgba(0,0,0,.6); backdrop-filter: blur(2px);
     }
     #overlay.show { display: block; }
 
-    .msg-user { background: #2a2a2a; border-radius: 18px 18px 4px 18px; }
-    .msg-ai   { background: #222; border: 1px solid #333; border-radius: 18px 18px 18px 4px; }
+    /* Message bubbles */
+    .msg-user {
+      background: var(--lime); color: #0a0a0a;
+      border-radius: 16px 16px 4px 16px; font-weight: 500;
+    }
+    .msg-ai {
+      background: var(--card);
+      border: 1px solid var(--border-2);
+      border-radius: 16px 16px 16px 4px;
+    }
 
-    .send-btn { background: linear-gradient(135deg, #6366f1, #8b5cf6); transition: opacity .15s; }
-    .send-btn:hover { opacity: .85; }
-    .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+    /* Send button — lime fill, black text */
+    .send-btn {
+      background: var(--lime); color: #0a0a0a; font-weight: 600;
+      box-shadow: 0 0 0 0 var(--lime-glow);
+      transition: box-shadow .2s, transform .05s, opacity .15s;
+    }
+    .send-btn:hover { box-shadow: 0 0 22px -2px var(--lime-glow); }
+    .send-btn:active { transform: translateY(1px); }
+    .send-btn:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
 
-    textarea { resize: none; background: transparent; color: #e5e5e5; }
+    textarea { resize: none; background: transparent; color: var(--text); }
     textarea:focus { outline: none; }
-    textarea::placeholder { color: #555; }
+    textarea::placeholder { color: var(--text-mute); }
 
-    .yes-badge { background: #14532d; color: #4ade80; border: 1px solid #166534; }
-    .no-badge  { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
-    .conf-bar-fill { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
+    /* Answer badges */
+    .yes-badge {
+      background: var(--lime); color: #0a0a0a;
+      border: 1px solid var(--lime); box-shadow: 0 0 18px -4px var(--lime-glow);
+    }
+    .no-badge {
+      background: #1a1a1a; color: #ff6b6b;
+      border: 1px solid #3a2020;
+    }
+    .conf-bar-fill { background: var(--lime); box-shadow: 0 0 12px -2px var(--lime-glow); }
 
+    /* Typing indicator */
     .typing span {
       display: inline-block; width: 6px; height: 6px;
-      background: #6366f1; border-radius: 50%; margin: 0 2px;
+      background: var(--lime); border-radius: 50%; margin: 0 2px;
       animation: bounce 1.2s infinite;
     }
     .typing span:nth-child(2) { animation-delay: .2s; }
     .typing span:nth-child(3) { animation-delay: .4s; }
     @keyframes bounce {
-      0%,60%,100% { transform: translateY(0); }
-      30% { transform: translateY(-6px); }
+      0%,60%,100% { transform: translateY(0); opacity: .6; }
+      30% { transform: translateY(-6px); opacity: 1; }
     }
 
-    .scrollable { overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+    .scrollable { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
     .scrollable::-webkit-scrollbar { width: 4px; }
-    .scrollable::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    .scrollable::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
 
+    /* Variant select */
     .variant-select {
-      background: #1a1a1a; color: #aaa; border: 1px solid #2a2a2a;
-      border-radius: 8px; padding: 6px 8px; font-size: 12px; width: 100%;
+      background: var(--bg-2); color: var(--text-dim); border: 1px solid var(--border-2);
+      border-radius: 10px; padding: 7px 9px; font-size: 12px; width: 100%;
     }
-    .variant-select:focus { outline: none; border-color: #6366f1; }
+    .variant-select:focus { outline: none; border-color: var(--lime); }
 
+    /* Source chips */
     .source-chip {
-      background: #1e1b4b; color: #a5b4fc; border: 1px solid #312e81;
-      border-radius: 6px; padding: 2px 8px; font-size: 11px;
-      display: inline-block; margin: 2px;
+      background: var(--lime-soft); color: var(--lime); border: 1px solid rgba(196,245,66,.25);
+      border-radius: 7px; padding: 3px 9px; font-size: 11px;
+      display: inline-block; margin: 2px; transition: background .12s;
     }
+    .source-chip:hover { background: rgba(196,245,66,.2); }
 
+    /* Conversation items */
     .conv-item {
-      border-radius: 8px; padding: 8px 10px; font-size: 12px;
-      color: #888; cursor: pointer; transition: background .1s;
+      border-radius: 10px; padding: 9px 11px; font-size: 12px;
+      color: var(--text-dim); cursor: pointer; transition: background .1s, color .1s;
       display: flex; align-items: center; gap: 6px;
     }
-    .conv-item:hover { background: #1e1e1e; color: #ccc; }
-    .conv-item.active { background: #1e1b4b; color: #a5b4fc; }
+    .conv-item:hover { background: #181818; color: var(--text); }
+    .conv-item.active {
+      background: var(--lime-soft); color: var(--lime);
+      box-shadow: inset 2px 0 0 var(--lime);
+    }
     .conv-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conv-delete {
-      flex-shrink: 0; width: 18px; height: 18px; border-radius: 4px;
-      color: #555; font-size: 15px; line-height: 1;
+      flex-shrink: 0; width: 18px; height: 18px; border-radius: 5px;
+      color: var(--text-mute); font-size: 15px; line-height: 1;
       display: flex; align-items: center; justify-content: center;
-      opacity: 0; transition: opacity .1s;
+      opacity: 0; transition: opacity .1s, color .1s;
     }
     .conv-item:hover .conv-delete { opacity: 1; }
-    .conv-delete:hover { color: #f87171; }
+    .conv-delete:hover { color: #ff6b6b; }
 
+    /* Logo mark */
     .logo-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      width: 9px; height: 9px; border-radius: 2px;
+      background: var(--lime); box-shadow: 0 0 10px -1px var(--lime-glow);
       display: inline-block; flex-shrink: 0;
     }
 
+    /* New chat button — lime outline */
     .new-chat-btn {
-      border: 1px solid #2a2a2a; color: #aaa; border-radius: 10px;
-      padding: 8px 12px; font-size: 13px; width: 100%;
-      transition: background .15s, color .15s;
+      border: 1px solid rgba(196,245,66,.35); color: var(--lime);
+      background: var(--lime-soft); border-radius: 12px;
+      padding: 9px 12px; font-size: 13px; font-weight: 500; width: 100%;
+      transition: background .15s, box-shadow .2s;
     }
-    .new-chat-btn:hover { background: #222; color: #e5e5e5; }
+    .new-chat-btn:hover { background: rgba(196,245,66,.18); box-shadow: 0 0 18px -4px var(--lime-glow); }
 
+    /* Input box */
     .input-box {
-      background: #242424; border: 1px solid #3a3a3a; border-radius: 16px;
-      transition: border-color .15s;
+      background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 16px;
+      transition: border-color .15s, box-shadow .2s;
     }
-    .input-box:focus-within { border-color: #6366f1; }
+    .input-box:focus-within { border-color: var(--lime); box-shadow: 0 0 0 3px var(--lime-soft); }
 
     /* Hamburger */
     .menu-btn {
       display: none; background: none; border: none;
-      color: #aaa; cursor: pointer; padding: 4px;
+      color: var(--text-dim); cursor: pointer; padding: 4px;
     }
     @media (max-width: 640px) { .menu-btn { display: flex; } }
   </style>
@@ -129,7 +187,7 @@
 
   <div class="flex items-center gap-2 px-1 py-1">
     <span class="logo-dot"></span>
-    <span class="font-semibold text-white text-sm tracking-wide flex-1">Forecasting AI</span>
+    <span class="display font-semibold text-white text-sm tracking-wide flex-1">Forecasting AI</span>
     <button class="menu-btn" onclick="closeSidebar()" title="Close">✕</button>
   </div>
 
@@ -163,7 +221,7 @@
     <div class="flex justify-between"><span>Model</span><span class="text-gray-400">gpt-oss-120b</span></div>
     <div class="flex justify-between"><span>Provider</span><span class="text-gray-400">SCADS AI</span></div>
     <div class="mt-2 pt-2 border-t border-gray-800">
-      <a href="/docs" target="_blank" class="text-indigo-500 hover:text-indigo-400">API docs ↗</a>
+      <a href="/docs" target="_blank" style="color: var(--lime)" class="hover:opacity-80">API docs ↗</a>
     </div>
   </div>
 
@@ -184,7 +242,7 @@
       <p class="text-xs text-gray-500 hidden sm:block">Ask any binary (yes/no) forecasting question</p>
     </div>
     <div class="flex items-center gap-1.5 text-xs text-gray-500 flex-shrink-0">
-      <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+      <span class="w-2 h-2 rounded-full inline-block" style="background: var(--lime); box-shadow: 0 0 8px var(--lime-glow)"></span>
       <span class="hidden sm:inline">Live</span>
     </div>
   </header>
@@ -329,7 +387,7 @@ function renderMessages() {
     el.innerHTML = `
       <div class="msg-ai max-w-2xl mx-auto w-full p-4 sm:p-5">
         <p class="text-sm text-gray-400 leading-relaxed">
-          Hello! I'm a forecasting AI powered by <span class="text-indigo-400">gpt-oss-120b</span>.
+          Hello! I'm a forecasting AI powered by <span style="color: var(--lime)">gpt-oss-120b</span>.
           Ask me any binary (yes/no) question about future events.
         </p>
         <p class="text-xs text-gray-600 mt-3">
