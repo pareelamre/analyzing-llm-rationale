@@ -6,8 +6,15 @@ import re
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_STATIC_DIR = _REPO_ROOT / "static"
 
 from analyzing_llm_rationale.pipeline import build_user_prompt, parse_model_response
 
@@ -25,6 +32,14 @@ app = FastAPI(
     description="Single-record prediction endpoint for the analyzing-llm-rationale pipeline.",
     lifespan=lifespan,
 )
+
+if _STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def index():
+    return FileResponse(str(_STATIC_DIR / "index.html"))
 
 
 class NewsArticle(BaseModel):

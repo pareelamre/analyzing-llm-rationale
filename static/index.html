@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forecasting AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+    * { font-family: 'Inter', system-ui, sans-serif; }
+    body { background: #1a1a1a; }
+
+    .sidebar { background: #111; border-right: 1px solid #2a2a2a; }
+    .chat-bg  { background: #1a1a1a; }
+
+    .msg-user { background: #2a2a2a; border-radius: 18px 18px 4px 18px; }
+    .msg-ai   { background: #222; border: 1px solid #333; border-radius: 18px 18px 18px 4px; }
+
+    .send-btn {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      transition: opacity .15s;
+    }
+    .send-btn:hover { opacity: .85; }
+    .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    textarea { resize: none; background: #2a2a2a; color: #e5e5e5; border: 1px solid #3a3a3a; }
+    textarea:focus { outline: none; border-color: #6366f1; }
+    textarea::placeholder { color: #555; }
+
+    .yes-badge { background: #14532d; color: #4ade80; border: 1px solid #166534; }
+    .no-badge  { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
+
+    .conf-bar-fill { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
+
+    .typing span {
+      display: inline-block; width: 6px; height: 6px;
+      background: #6366f1; border-radius: 50%; margin: 0 2px;
+      animation: bounce 1.2s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: .2s; }
+    .typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-6px); }
+    }
+
+    .scrollable { overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+    .scrollable::-webkit-scrollbar { width: 4px; }
+    .scrollable::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+    .variant-select {
+      background: #1a1a1a; color: #aaa;
+      border: 1px solid #2a2a2a; border-radius: 8px;
+      padding: 6px 8px; font-size: 12px; width: 100%;
+    }
+    .variant-select:focus { outline: none; border-color: #6366f1; }
+
+    .source-chip {
+      background: #1e1b4b; color: #a5b4fc;
+      border: 1px solid #312e81;
+      border-radius: 6px; padding: 2px 8px;
+      font-size: 11px; display: inline-block; margin: 2px;
+    }
+
+    .new-chat-btn {
+      border: 1px solid #2a2a2a; color: #aaa;
+      border-radius: 10px; padding: 8px 12px;
+      font-size: 13px; width: 100%;
+      transition: background .15s, color .15s;
+    }
+    .new-chat-btn:hover { background: #222; color: #e5e5e5; }
+
+    .history-item {
+      border-radius: 8px; padding: 8px 10px;
+      font-size: 12px; color: #777;
+      cursor: pointer; transition: background .1s;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .history-item:hover { background: #1e1e1e; color: #bbb; }
+
+    .logo-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      display: inline-block; margin-right: 4px;
+    }
+  </style>
+</head>
+<body class="h-screen flex overflow-hidden text-gray-200">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar w-64 flex-shrink-0 flex flex-col p-4 gap-4">
+
+    <!-- Logo -->
+    <div class="flex items-center gap-2 px-1 py-2">
+      <span class="logo-dot"></span>
+      <span class="font-semibold text-white text-sm tracking-wide">Forecasting AI</span>
+    </div>
+
+    <!-- New chat -->
+    <button class="new-chat-btn" onclick="newChat()">+ New conversation</button>
+
+    <!-- Variant selector -->
+    <div>
+      <p class="text-xs text-gray-500 mb-1 px-1">Prompt variant</p>
+      <select id="variantSelect" class="variant-select" onchange="updateVariantDesc()">
+        <option value="variant0_neutral_baseline">Baseline</option>
+        <option value="variant1_predicted_event">Predicted Event</option>
+        <option value="variant2_key_attribute">Key Attribute</option>
+        <option value="variant3_reasoning_type">Reasoning Type</option>
+        <option value="variant4_credibility">Credibility</option>
+        <option value="variant5_key_conditions">Key Conditions</option>
+        <option value="variant6_step_by_step_reasoning">Step-by-Step</option>
+        <option value="variant7_uncertainty_language">Uncertainty</option>
+        <option value="variant8_temporal_anchors">Temporal Anchors</option>
+      </select>
+      <p id="variantDesc" class="text-xs text-gray-600 mt-1 px-1"></p>
+    </div>
+
+    <!-- Model info -->
+    <div class="mt-auto border border-gray-800 rounded-xl p-3 text-xs text-gray-500 space-y-1">
+      <div class="flex justify-between">
+        <span>Model</span>
+        <span class="text-gray-400">gpt-oss-120b</span>
+      </div>
+      <div class="flex justify-between">
+        <span>Provider</span>
+        <span class="text-gray-400">SCADS AI</span>
+      </div>
+      <div class="flex justify-between">
+        <span>Temperature</span>
+        <span class="text-gray-400">0.0</span>
+      </div>
+      <div class="mt-2 pt-2 border-t border-gray-800">
+        <a href="/docs" target="_blank" class="text-indigo-500 hover:text-indigo-400">API docs ↗</a>
+      </div>
+    </div>
+
+    <!-- Chat history -->
+    <div id="historyList" class="flex flex-col gap-1 overflow-y-auto max-h-48"></div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="flex items-center justify-between px-6 py-3 border-b border-gray-800">
+      <div>
+        <h1 class="text-sm font-medium text-white">Forecasting Assistant</h1>
+        <p class="text-xs text-gray-500">Ask any binary (yes/no) forecasting question</p>
+      </div>
+      <div id="statusDot" class="flex items-center gap-2 text-xs text-gray-500">
+        <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+        Live
+      </div>
+    </header>
+
+    <!-- Messages -->
+    <div id="messages" class="scrollable flex-1 px-4 py-6 flex flex-col gap-6">
+
+      <!-- Welcome message -->
+      <div class="msg-ai max-w-2xl mx-auto w-full p-5">
+        <p class="text-sm text-gray-400 leading-relaxed">
+          Hello! I'm a forecasting AI powered by <span class="text-indigo-400">gpt-oss-120b</span>.
+          Ask me any binary question about future events — I'll analyze it and give you a
+          <strong class="text-white">Yes</strong> or <strong class="text-white">No</strong> prediction
+          with a confidence score and reasoning.
+        </p>
+        <p class="text-xs text-gray-600 mt-3">
+          Example: <em>"Will the Federal Reserve cut interest rates before the end of 2025?"</em>
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Input area -->
+    <div class="border-t border-gray-800 px-4 py-4">
+      <div class="max-w-2xl mx-auto">
+        <div class="flex gap-3 items-end bg-gray-900 border border-gray-700 rounded-2xl p-3 focus-within:border-indigo-500 transition-colors">
+          <textarea
+            id="questionInput"
+            rows="1"
+            placeholder="Ask a forecasting question…"
+            class="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 border-none outline-none py-1 px-1"
+            oninput="autoResize(this)"
+            onkeydown="handleKey(event)"
+          ></textarea>
+          <button
+            id="sendBtn"
+            class="send-btn text-white rounded-xl px-4 py-2 text-sm font-medium flex-shrink-0"
+            onclick="sendQuestion()"
+          >
+            Send
+          </button>
+        </div>
+        <p class="text-xs text-gray-600 text-center mt-2">
+          Predictions are probabilistic and may be inaccurate. Always verify with authoritative sources.
+        </p>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // ── State ──
+    let history = [];
+    const VARIANT_DESCS = {
+      variant0_neutral_baseline:       'Neutral control — no extra framing',
+      variant1_predicted_event:        'States the concrete predicted event',
+      variant2_key_attribute:          'Focuses on time / quantity / actor',
+      variant3_reasoning_type:         'Speculation, expert forecast, trend…',
+      variant4_credibility:            'Grounds rationale in source scores',
+      variant5_key_conditions:         '2–4 conditions that must hold',
+      variant6_step_by_step_reasoning: '2–3 numbered reasoning steps',
+      variant7_uncertainty_language:   'Requires uncertainty hedging words',
+      variant8_temporal_anchors:       'Anchors to relevant dates',
+    };
+
+    // ── Init ──
+    updateVariantDesc();
+
+    function updateVariantDesc() {
+      const v = document.getElementById('variantSelect').value;
+      document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+    }
+
+    function handleKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendQuestion();
+      }
+    }
+
+    function newChat() {
+      document.getElementById('messages').innerHTML = `
+        <div class="msg-ai max-w-2xl mx-auto w-full p-5">
+          <p class="text-sm text-gray-400 leading-relaxed">
+            Hello! I'm a forecasting AI. Ask me any binary forecasting question.
+          </p>
+        </div>`;
+      document.getElementById('questionInput').value = '';
+    }
+
+    function addToHistory(q) {
+      history.unshift(q);
+      const list = document.getElementById('historyList');
+      list.innerHTML = history.slice(0, 10).map(h =>
+        `<div class="history-item" title="${escHtml(h)}">${escHtml(h.slice(0, 60))}${h.length > 60 ? '…' : ''}</div>`
+      ).join('');
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Send ──
+    async function sendQuestion() {
+      const input = document.getElementById('questionInput');
+      const question = input.value.trim();
+      if (!question) return;
+
+      const variant = document.getElementById('variantSelect').value;
+      const btn = document.getElementById('sendBtn');
+      btn.disabled = true;
+      input.value = '';
+      input.style.height = 'auto';
+
+      addToHistory(question);
+      appendUserMessage(question);
+      const typingId = appendTyping();
+
+      try {
+        const resp = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, variant }),
+        });
+        const data = await resp.json();
+        removeTyping(typingId);
+
+        if (!resp.ok) {
+          appendError(data.detail || 'Server error');
+        } else {
+          appendAIMessage(data, question, variant);
+        }
+      } catch (err) {
+        removeTyping(typingId);
+        appendError('Network error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        input.focus();
+      }
+    }
+
+    // ── DOM helpers ──
+    function scrollBottom() {
+      const el = document.getElementById('messages');
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
+
+    function appendUserMessage(text) {
+      const el = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.className = 'flex justify-end';
+      div.innerHTML = `
+        <div class="msg-user max-w-xl px-4 py-3 text-sm text-gray-200">
+          ${escHtml(text)}
+        </div>`;
+      el.appendChild(div);
+      scrollBottom();
+    }
+
+    let _typingCounter = 0;
+    function appendTyping() {
+      const id = 'typing-' + (_typingCounter++);
+      const el = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.id = id;
+      div.className = 'max-w-2xl mx-auto w-full';
+      div.innerHTML = `
+        <div class="msg-ai inline-flex items-center px-5 py-4">
+          <div class="typing">
+            <span></span><span></span><span></span>
+          </div>
+        </div>`;
+      el.appendChild(div);
+      scrollBottom();
+      return id;
+    }
+
+    function removeTyping(id) {
+      document.getElementById(id)?.remove();
+    }
+
+    function appendError(msg) {
+      const el = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.className = 'max-w-2xl mx-auto w-full';
+      div.innerHTML = `
+        <div class="msg-ai border-red-900 p-4 text-sm text-red-400">
+          ⚠ ${escHtml(msg)}
+        </div>`;
+      el.appendChild(div);
+      scrollBottom();
+    }
+
+    function appendAIMessage(data, question, variant) {
+      const answer = (data.predicted_answer || '').toUpperCase();
+      const isYes  = answer === 'YES';
+      const badgeClass = isYes ? 'yes-badge' : 'no-badge';
+      const conf   = data.confidence != null
+        ? Math.round(data.confidence * 100)
+        : null;
+      const rationale = data.rationale || '';
+      const sources   = data.evidence_sources || [];
+      const variantLabel = VARIANT_DESCS[variant] || variant;
+
+      const confBar = conf != null ? `
+        <div class="mt-3">
+          <div class="flex justify-between text-xs text-gray-500 mb-1">
+            <span>Confidence</span>
+            <span class="text-gray-300 font-medium">${conf}%</span>
+          </div>
+          <div class="w-full bg-gray-800 rounded-full h-1.5">
+            <div class="conf-bar-fill h-1.5 rounded-full" style="width:${conf}%"></div>
+          </div>
+        </div>` : '';
+
+      const sourcesHtml = sources.length ? `
+        <div class="mt-4 pt-3 border-t border-gray-800">
+          <p class="text-xs text-gray-500 mb-2">Evidence sources</p>
+          <div>${sources.map(s =>
+            s.url
+              ? `<a href="${escHtml(s.url)}" target="_blank" class="source-chip hover:opacity-80">${escHtml(s.source)}</a>`
+              : `<span class="source-chip">${escHtml(s.source)}</span>`
+          ).join('')}</div>
+        </div>` : '';
+
+      const el = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.className = 'max-w-2xl mx-auto w-full';
+      div.innerHTML = `
+        <div class="msg-ai p-5 space-y-3">
+          <!-- Answer badge -->
+          <div class="flex items-center gap-3">
+            <span class="${badgeClass} text-lg font-bold px-4 py-1 rounded-lg">${answer || '?'}</span>
+            ${conf != null ? `<span class="text-gray-500 text-sm">${conf}% confidence</span>` : ''}
+          </div>
+
+          ${confBar}
+
+          <!-- Rationale -->
+          ${rationale ? `
+          <div class="pt-2">
+            <p class="text-xs text-gray-500 mb-1">Rationale</p>
+            <p class="text-sm text-gray-300 leading-relaxed">${escHtml(rationale)}</p>
+          </div>` : ''}
+
+          ${sourcesHtml}
+
+          <!-- Footer -->
+          <div class="pt-2 flex items-center gap-2 text-xs text-gray-600">
+            <span class="logo-dot" style="width:5px;height:5px;"></span>
+            gpt-oss-120b · ${escHtml(variantLabel)}
+          </div>
+        </div>`;
+      el.appendChild(div);
+      scrollBottom();
+    }
+  </script>
+</body>
+</html>
