@@ -4,6 +4,7 @@ import os
 import re
 from typing import List, Optional, Sequence
 from urllib.parse import urlencode
+from xml.etree import ElementTree
 
 import numpy as np
 
@@ -215,11 +216,6 @@ class NewsPipeline:
             return []
 
     def _fetch_google_news(self, query: str, limit: int = 20) -> List[dict]:
-        try:
-            import feedparser
-        except ImportError:
-            return []
-
         params = urlencode({
             "q": query,
             "hl": "en-US",
@@ -229,19 +225,49 @@ class NewsPipeline:
         feed_url = f"https://news.google.com/rss/search?{params}"
 
         try:
-            feed = feedparser.parse(feed_url)
+            import requests
+
+            resp = requests.get(
+                feed_url,
+                headers={"User-Agent": "Mozilla/5.0 compatible forecasting-evidence-bot/1.0"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            root = ElementTree.fromstring(resp.content)
         except Exception:
-            return []
+            try:
+                import feedparser
+
+                feed = feedparser.parse(feed_url)
+                entries = feed.entries[:limit]
+                return [
+                    {
+                        "title": entry.get("title") or "",
+                        "url": entry.get("link") or "",
+                        "publish_date": entry.get("published") or "",
+                        "text": entry.get("summary") or "",
+                        "summary": entry.get("summary") or "",
+                        "source": "Google News",
+                    }
+                    for entry in entries
+                ]
+            except Exception:
+                return []
 
         articles: List[dict] = []
-        for entry in feed.entries[:limit]:
+        for item in root.findall("./channel/item")[:limit]:
+            title = item.findtext("title") or ""
+            link = item.findtext("link") or ""
+            publish_date = item.findtext("pubDate") or ""
+            description = item.findtext("description") or ""
+            source = item.findtext("source") or "Google News"
             articles.append({
-                "title": entry.get("title") or "",
-                "url": entry.get("link") or "",
-                "publish_date": entry.get("published") or "",
-                "text": entry.get("summary") or "",
-                "summary": entry.get("summary") or "",
-                "source": "Google News",
+                "title": title,
+                "url": link,
+                "publish_date": publish_date,
+                "text": description,
+                "summary": description,
+                "source": source,
             })
         return articles
 
