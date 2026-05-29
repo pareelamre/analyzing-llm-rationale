@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import List, Optional, Sequence
 from urllib.parse import urlencode
 
@@ -24,6 +25,14 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (norm_a * norm_b))
 
 
+def _lexical_relevance(query: str, text: str) -> float:
+    query_terms = set(re.findall(r"[a-z0-9]+", query.lower()))
+    text_terms = set(re.findall(r"[a-z0-9]+", text.lower()))
+    if not query_terms or not text_terms:
+        return 0.0
+    return len(query_terms & text_terms) / len(query_terms)
+
+
 class NewsPipeline:
     """Fetch, summarize, and rank news articles for a forecasting question."""
 
@@ -36,6 +45,8 @@ class NewsPipeline:
         newsapi_key: Optional[str] = None,
         use_query_planner: bool = True,
         fetch_sources: Optional[Sequence[str]] = None,
+        summarize_articles: bool = True,
+        use_embeddings: bool = True,
     ):
         from langchain_openai import ChatOpenAI
 
@@ -57,8 +68,12 @@ class NewsPipeline:
         self._newsapi_key = newsapi_key or os.environ.get("NEWSAPI_KEY")
         self._use_query_planner = use_query_planner
         self._fetch_sources = tuple(fetch_sources or DEFAULT_FETCH_SOURCES)
+        self._summarize_articles = summarize_articles
+        self._use_embeddings = use_embeddings
 
     def _get_embeddings(self):
+        if not self._use_embeddings:
+            return None
         if self._embeddings is None:
             try:
                 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -272,17 +287,24 @@ class NewsPipeline:
 
         embeddings = self._get_embeddings()
         texts = [
-            (a.get("summary") or a.get("title") or a.get("text") or "")[:512]
+            " ".join(
+                str(value)
+                for value in (a.get("title"), a.get("summary"), a.get("text"))
+                if value
+            )[:512]
             for a in articles
         ]
         texts = [t if t.strip() else " " for t in texts]
 
-        try:
-            q_vec = np.array(embeddings.embed_query(question))
-            doc_vecs = np.array(embeddings.embed_documents(texts))
-            scores = [_cosine_similarity(q_vec, d) for d in doc_vecs]
-        except Exception:
-            scores = [0.0] * len(articles)
+        if embeddings is None:
+            scores = [_lexical_relevance(question, text) for text in texts]
+        else:
+            try:
+                q_vec = np.array(embeddings.embed_query(question))
+                doc_vecs = np.array(embeddings.embed_documents(texts))
+                scores = [_cosine_similarity(q_vec, d) for d in doc_vecs]
+            except Exception:
+                scores = [_lexical_relevance(question, text) for text in texts]
 
         ranked = sorted(
             zip(scores, articles),
@@ -300,7 +322,8 @@ class NewsPipeline:
         search_query = self.plan_search_query(question)
         raw = self.fetch(search_query, top_k=top_k * 2)
         for article in raw:
-            article["summary"] = self.summarize(article)
+            if self._summarize_articles:
+                article["summary"] = self.summarize(article)
             article["search_query"] = search_query
         ranked = self.rank(question, raw)
         return ranked[:top_k]
