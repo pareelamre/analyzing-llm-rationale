@@ -10,7 +10,7 @@
 
     :root {
       --bg:        #ffffff;
-      --panel:     #fafafa;
+      --panel:     #f7f7f5;
       --card:      #ffffff;
       --border:    #e5e7eb;
       --border-2:  #d4d4d8;
@@ -18,6 +18,8 @@
       --text:      #374151;
       --text-dim:  #6b7280;
       --text-mute: #9ca3af;
+      --paper:     #fbfbf8;
+      --accent:    #1f5f5b;
     }
 
     * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
@@ -48,8 +50,8 @@
     .sidebar {
       background: var(--panel);
       border-right: 1px solid var(--border);
-      width: 264px; flex-shrink: 0;
-      display: flex; flex-direction: column; gap: 14px; padding: 16px;
+      width: 288px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 16px; padding: 18px;
       transition: transform .25s ease;
     }
     @media (max-width: 640px) {
@@ -69,19 +71,19 @@
     /* Message bubbles */
     .msg-user {
       background: var(--ink); color: #fff;
-      border-radius: 16px 16px 4px 16px; font-weight: 400;
+      border-radius: 3px; font-weight: 400;
     }
     .msg-ai {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 16px 16px 16px 4px;
-      box-shadow: 0 1px 2px rgba(0,0,0,.04);
+      border-radius: 3px;
+      box-shadow: 0 12px 40px rgba(17,17,17,.04);
     }
 
     /* Buttons — pill, dark primary */
     .send-btn {
       background: var(--ink); color: #fff; font-weight: 500;
-      border-radius: 9999px;
+      border-radius: 3px;
       transition: background .15s, transform .05s, opacity .15s;
     }
     .send-btn:hover { background: #000; }
@@ -95,7 +97,7 @@
     /* Answer badges — YES filled dark, NO outline */
     .yes-badge { background: var(--ink); color: #fff; border: 1px solid var(--ink); }
     .no-badge  { background: #fff; color: var(--ink); border: 1px solid var(--border-2); }
-    .conf-bar-fill { background: var(--ink); }
+    .conf-bar-fill { background: var(--accent); }
 
     /* Typing indicator */
     .typing span {
@@ -117,21 +119,21 @@
     /* Variant select */
     .variant-select {
       background: #fff; color: var(--text); border: 1px solid var(--border-2);
-      border-radius: 8px; padding: 7px 9px; font-size: 12px; width: 100%;
+      border-radius: 3px; padding: 8px 10px; font-size: 12px; width: 100%;
     }
     .variant-select:focus { outline: none; border-color: var(--ink); }
 
     /* Source chips — light pills */
     .source-chip {
-      background: #f4f4f5; color: var(--text); border: 1px solid var(--border);
-      border-radius: 9999px; padding: 3px 10px; font-size: 11px;
+      background: var(--paper); color: var(--text); border: 1px solid var(--border);
+      border-radius: 3px; padding: 4px 8px; font-size: 11px;
       display: inline-block; margin: 2px; transition: background .12s;
     }
     .source-chip:hover { background: #e9e9eb; }
 
     /* Conversation items */
     .conv-item {
-      border-radius: 8px; padding: 9px 11px; font-size: 12px;
+      border-radius: 3px; padding: 9px 11px; font-size: 12px;
       color: var(--text-dim); cursor: pointer; transition: background .1s, color .1s;
       display: flex; align-items: center; gap: 6px;
     }
@@ -154,7 +156,7 @@
     .brand {
       font-family: 'Playfair Display', Georgia, serif;
       font-weight: 600;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.04em;
       color: var(--ink);
       display: inline-block;
       line-height: 1;
@@ -162,7 +164,7 @@
 
     /* Logo mark — dark square */
     .logo-dot {
-      width: 9px; height: 9px; border-radius: 2px;
+      width: 10px; height: 10px; border-radius: 1px;
       background: var(--ink);
       display: inline-block; flex-shrink: 0;
     }
@@ -170,15 +172,15 @@
     /* New chat — outline pill (secondary) */
     .new-chat-btn {
       border: 1px solid var(--border-2); color: var(--ink);
-      background: #fff; border-radius: 9999px;
-      padding: 9px 12px; font-size: 13px; font-weight: 500; width: 100%;
+      background: #fff; border-radius: 3px;
+      padding: 10px 12px; font-size: 13px; font-weight: 500; width: 100%;
       transition: background .15s;
     }
     .new-chat-btn:hover { background: #f4f4f5; }
 
     /* Input box */
     .input-box {
-      background: #fff; border: 1px solid var(--border-2); border-radius: 16px;
+      background: #fff; border: 1px solid var(--border-2); border-radius: 3px;
       transition: border-color .15s, box-shadow .2s;
     }
     .input-box:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(0,0,0,.05); }
@@ -189,6 +191,128 @@
       color: var(--text-dim); cursor: pointer; padding: 4px;
     }
     @media (max-width: 640px) { .menu-btn { display: flex; } }
+
+    .topbar-link {
+      font-size: 12px;
+      color: var(--text-dim);
+      border-bottom: 1px solid transparent;
+      transition: color .12s, border-color .12s;
+    }
+    .topbar-link:hover { color: var(--ink); border-color: var(--ink); }
+
+    .empty-shell {
+      max-width: 1080px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 40px 16px 20px;
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(280px, .92fr);
+      gap: 34px;
+      align-items: stretch;
+    }
+    .hero-copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 420px;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-title {
+      font-size: clamp(42px, 7.4vw, 92px);
+      line-height: .94;
+      color: var(--ink);
+      max-width: 760px;
+    }
+    .hero-text {
+      max-width: 560px;
+      font-size: 16px;
+      line-height: 1.75;
+      color: var(--text);
+      margin-top: 24px;
+    }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+    .hero-action {
+      border: 1px solid var(--ink);
+      border-radius: 3px;
+      padding: 10px 13px;
+      font-size: 13px;
+      color: var(--ink);
+      background: #fff;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .hero-action.primary { background: var(--ink); color: #fff; }
+    .hero-action:hover { background: var(--ink); color: #fff; }
+    .product-panel {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      min-height: 420px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 14px;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+    .panel-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+    .evidence-row {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 13px;
+    }
+    .evidence-kicker {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--text-dim);
+      font-size: 11px;
+      margin-bottom: 7px;
+    }
+    .feature-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin-top: 34px;
+    }
+    .feature-block {
+      padding: 20px 18px;
+      border-right: 1px solid var(--border);
+    }
+    .feature-block:last-child { border-right: 0; }
+    .feature-block h3 {
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .feature-block p {
+      color: var(--text-dim);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    @media (max-width: 900px) {
+      .hero-grid { grid-template-columns: 1fr; }
+      .hero-copy { min-height: auto; padding-bottom: 28px; }
+      .product-panel { min-height: auto; }
+    }
+    @media (max-width: 640px) {
+      .empty-shell { padding-top: 26px; }
+      .feature-strip { grid-template-columns: 1fr; }
+      .feature-block { border-right: 0; border-bottom: 1px solid var(--border); }
+      .feature-block:last-child { border-bottom: 0; }
+      .hero-title { font-size: 44px; }
+    }
   </style>
 </head>
 <body class="flex overflow-hidden">
@@ -201,11 +325,11 @@
 
   <div class="flex items-center gap-2 px-1 py-1">
     <span class="logo-dot"></span>
-    <span class="brand text-lg flex-1">FORESEA</span>
+    <span class="brand text-xl flex-1">Foresea</span>
     <button class="menu-btn" onclick="closeSidebar()" title="Close">✕</button>
   </div>
 
-  <button class="new-chat-btn" onclick="newConversation()">+ New conversation</button>
+  <button class="new-chat-btn" onclick="newConversation()">New forecast</button>
 
   <!-- Conversation list -->
   <div class="flex-1 scrollable flex flex-col gap-1 min-h-0">
@@ -231,7 +355,7 @@
   </div>
 
   <!-- Model info -->
-  <div class="border border-gray-200 rounded-xl p-3 text-xs text-gray-500 space-y-1">
+  <div class="border border-gray-200 rounded-sm bg-white p-3 text-xs text-gray-500 space-y-1">
     <div class="flex justify-between"><span>Model</span><span class="text-gray-800">gpt-oss-120b</span></div>
     <div class="flex justify-between"><span>Provider</span><span class="text-gray-800">SCADS AI</span></div>
     <div class="mt-2 pt-2 border-t border-gray-200">
@@ -245,7 +369,7 @@
 <main class="chat-main flex flex-col overflow-hidden">
 
   <!-- Header -->
-  <header class="flex items-center gap-3 px-4 py-3 border-b border-gray-200 flex-shrink-0">
+  <header class="flex items-center gap-3 px-4 py-3 border-b border-gray-200 flex-shrink-0 bg-white">
     <button class="menu-btn" onclick="openSidebar()" title="Menu">
       <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
@@ -253,9 +377,13 @@
     </button>
     <div class="flex-1 min-w-0">
       <h1 id="chatTitle" class="text-sm font-medium text-gray-900 truncate" style="font-family: 'Inter', sans-serif;">New conversation</h1>
-      <p class="text-xs text-gray-500 hidden sm:block">Ask any binary (yes/no) forecasting question</p>
+      <p class="text-xs text-gray-500 hidden sm:block">Forecasting API with live evidence and model rationale</p>
     </div>
-    <div class="flex items-center gap-1.5 flex-shrink-0">
+    <nav class="hidden md:flex items-center gap-4 flex-shrink-0">
+      <a href="/docs" target="_blank" class="topbar-link">API docs</a>
+      <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
+    </nav>
+    <div class="flex items-center gap-1.5 flex-shrink-0 border border-gray-200 rounded-sm px-2 py-1">
       <span class="w-1.5 h-1.5 rounded-full inline-block" style="background: var(--ink)"></span>
       <span class="label hidden sm:inline">Live</span>
     </div>
@@ -399,19 +527,69 @@ function renderMessages() {
 
   if (!conv || conv.messages.length === 0) {
     el.innerHTML = `
-      <div class="max-w-xl mx-auto w-full text-center pt-10 sm:pt-20 px-4">
-        <p class="label mb-4">Forecasting intelligence</p>
-        <h2 class="display text-3xl sm:text-5xl text-gray-900 leading-tight mb-5">
-          Ask the future a yes or no question.
-        </h2>
-        <p class="text-[15px] text-gray-500 leading-relaxed mb-3">
-          Foresea reads live news, weighs the evidence, and returns a calibrated
-          probability with its reasoning shown.
-        </p>
-        <p class="text-sm text-gray-400">
-          Try: <em>“Will the Federal Reserve cut rates before the end of 2025?”</em>
-        </p>
-      </div>`;
+      <section class="empty-shell">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="label mb-5">Open forecasting workspace</p>
+            <h2 class="display hero-title">Ask live questions. Get cited forecasts.</h2>
+            <p class="hero-text">
+              Foresea turns binary forecasting questions into evidence-backed predictions.
+              It fetches current articles, lists the sources, and asks gpt-oss-120b to
+              return a yes/no answer, confidence score, and rationale.
+            </p>
+            <div class="hero-actions">
+              <button class="hero-action primary" onclick="fillExample('Will the Federal Reserve cut interest rates at least once before September 30, 2026?')">Try live question</button>
+              <button class="hero-action" onclick="fillExample('Will OpenAI file for an IPO before December 15, 2026?')">Use market question</button>
+            </div>
+          </div>
+
+          <div class="product-panel">
+            <div class="panel-bar">
+              <span>Product preview</span>
+              <span>gpt-oss-120b</span>
+            </div>
+            <div class="panel-body">
+              <div class="evidence-row">
+                <div class="evidence-kicker"><span>Forecast</span><span>86% confidence</span></div>
+                <p class="text-2xl text-gray-950 display leading-tight">Yes</p>
+                <p class="text-sm text-gray-600 leading-relaxed mt-2">
+                  The strongest recent evidence points toward at least one policy move
+                  before the deadline, though timing remains sensitive to inflation data.
+                </p>
+              </div>
+              <div class="evidence-row">
+                <div class="evidence-kicker"><span>Evidence sources</span><span>ranked</span></div>
+                <div class="flex flex-wrap gap-1">
+                  <span class="source-chip">Reuters</span>
+                  <span class="source-chip">CNBC</span>
+                  <span class="source-chip">Federal Reserve</span>
+                </div>
+              </div>
+              <div class="evidence-row">
+                <div class="evidence-kicker"><span>Returned fields</span><span>API ready</span></div>
+                <p class="text-xs text-gray-500 leading-relaxed">
+                  predicted_answer · confidence · model_rationale · evidence_sources · evidence_articles
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="feature-strip">
+          <div class="feature-block">
+            <h3>Live evidence</h3>
+            <p>Retrieves and ranks articles from Google News RSS and GDELT before the model answers.</p>
+          </div>
+          <div class="feature-block">
+            <h3>Source list</h3>
+            <p>Returns compact source names and links separately from full article records.</p>
+          </div>
+          <div class="feature-block">
+            <h3>API first</h3>
+            <p>Use the public Cloud Run endpoint or the Vertex-compatible prediction wrapper.</p>
+          </div>
+        </div>
+      </section>`;
     return;
   }
 
@@ -556,6 +734,12 @@ function handleKey(e) {
 function updateVariantDesc() {
   const v = document.getElementById('variantSelect').value;
   document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
+}
+function fillExample(question) {
+  const input = document.getElementById('questionInput');
+  input.value = question;
+  autoResize(input);
+  input.focus();
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
