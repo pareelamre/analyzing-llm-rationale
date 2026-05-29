@@ -39,6 +39,15 @@ serve = [
 tracking = [
   "mlflow>=2.13",
 ]
+pipeline = [
+  "langchain>=0.3",
+  "langchain-openai>=0.2",
+  "langchain-community>=0.3",
+  "feedparser>=6.0",
+  "sentence-transformers>=3.0",
+  "duckdb>=1.0",
+  "prefect>=3.0",
+]
 
 [project.scripts]
 analyze-llm-rationale = "analyzing_llm_rationale.cli:main"
