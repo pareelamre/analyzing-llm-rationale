@@ -25,6 +25,7 @@ from analyzing_llm_rationale.validation import (
 )
 
 REMOTE_PROVIDER_CHOICES = ["local-qwen", "hf-router", "openai-compatible"]
+NEWS_SOURCE_CHOICES = ["newsapi", "gdelt", "google-news", "rss"]
 
 
 def repo_root() -> Path:
@@ -147,6 +148,24 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--device", default=os.environ.get("MODEL_DEVICE", "cuda"))
     serve_parser.add_argument("--request-timeout-s", type=float, default=float(os.environ.get("REQUEST_TIMEOUT_S", "120")))
     serve_parser.add_argument("--model-label", default=None)
+    serve_parser.add_argument(
+        "--disable-evidence",
+        action="store_true",
+        help="Disable automatic news evidence retrieval for /predict requests.",
+    )
+    serve_parser.add_argument("--newsapi-key-env-var", default="NEWSAPI_KEY")
+    serve_parser.add_argument(
+        "--evidence-source",
+        action="append",
+        choices=NEWS_SOURCE_CHOICES,
+        default=None,
+        help="News source for automatic evidence. Repeat to combine sources.",
+    )
+    serve_parser.add_argument(
+        "--disable-query-planner",
+        action="store_true",
+        help="Skip LangChain query planning for automatic evidence retrieval.",
+    )
 
     fetch_rank_parser = subparsers.add_parser(
         "fetch-and-rank", help="Fetch and rank news articles for a forecasting question."
@@ -159,6 +178,18 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_rank_parser.add_argument("--api-key-env-var", default=None)
     fetch_rank_parser.add_argument("--api-key-file", default=None)
     fetch_rank_parser.add_argument("--newsapi-key-env-var", default="NEWSAPI_KEY")
+    fetch_rank_parser.add_argument(
+        "--source",
+        action="append",
+        choices=NEWS_SOURCE_CHOICES,
+        default=None,
+        help="News source to query. Repeat to combine sources.",
+    )
+    fetch_rank_parser.add_argument(
+        "--disable-query-planner",
+        action="store_true",
+        help="Skip the LangChain query-planning step and search with the raw question.",
+    )
 
     return parser
 
@@ -421,11 +452,16 @@ def fetch_and_rank_command(args: argparse.Namespace) -> int:
     args = resolve_model_args(args)
     api_key = resolve_api_key(args)
     newsapi_key = os.environ.get(args.newsapi_key_env_var) if args.newsapi_key_env_var else None
+    base_url = args.api_base_url or args._resolved_model_config.api_base_url or "https://llm.scads.ai/v1"
+    base_url = base_url.removesuffix("/chat/completions").rstrip("/")
 
     pipeline = NewsPipeline(
         api_key=api_key or None,
-        base_url=args.api_base_url or args._resolved_model_config.api_base_url or "https://llm.scads.ai/v1",
+        base_url=base_url,
+        model=args.router_model_name,
         newsapi_key=newsapi_key,
+        use_query_planner=not args.disable_query_planner,
+        fetch_sources=args.source,
     )
     articles = pipeline.fetch_summarize_rank(args.question, top_k=args.top_k)
 
@@ -454,6 +490,7 @@ def serve_command(args: argparse.Namespace) -> int:
         return 1
 
     root = repo_root()
+    args = resolve_model_args(args)
     _state["provider"] = build_provider(args)
     _state["variants"] = load_variant_configs(args.variants_config)
     _state["system_prompt"] = (root / "prompts" / "system.txt").read_text(encoding="utf-8").strip()
@@ -464,6 +501,24 @@ def serve_command(args: argparse.Namespace) -> int:
     _state["temperature"] = args.temperature
     _state["max_tokens"] = args.max_tokens
     _state["model_key"] = args.model
+    _state["evidence_pipeline"] = None
+    if not args.disable_evidence:
+        try:
+            from analyzing_llm_rationale.news_pipeline import NewsPipeline
+
+            base_url = args.api_base_url or args._resolved_model_config.api_base_url or "https://llm.scads.ai/v1"
+            base_url = base_url.removesuffix("/chat/completions").rstrip("/")
+            newsapi_key = os.environ.get(args.newsapi_key_env_var) if args.newsapi_key_env_var else None
+            _state["evidence_pipeline"] = NewsPipeline(
+                api_key=resolve_api_key(args) or None,
+                base_url=base_url,
+                model=args.router_model_name,
+                newsapi_key=newsapi_key,
+                use_query_planner=not args.disable_query_planner,
+                fetch_sources=args.evidence_source,
+            )
+        except Exception as exc:
+            print(f"Evidence retrieval disabled: {exc}")
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
 

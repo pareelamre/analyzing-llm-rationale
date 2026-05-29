@@ -26,8 +26,11 @@ from analyzing_llm_rationale.validation import (
 ARTICLE_FIELDS = (
     "url",
     "title",
+    "source",
     "authors",
     "publish_date",
+    "relevance_score",
+    "search_query",
     "summary",
     "summary_llm",
     "keywords",
@@ -38,7 +41,10 @@ ARTICLE_FIELDS = (
 
 SUMMARY_ARTICLE_FIELDS = (
     "title",
+    "source",
     "publish_date",
+    "relevance_score",
+    "search_query",
     "summary",
     "summary_llm",
     "keywords",
