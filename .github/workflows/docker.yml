@@ -104,6 +104,7 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       id-token: write
 
@@ -145,20 +146,35 @@ jobs:
       - name: Undeploy previous model versions
         continue-on-error: true
         run: |
-          DEPLOYED_IDS=$(gcloud ai endpoints describe ${{ env.VERTEX_ENDPOINT_ID }} \
+          gcloud ai endpoints describe ${{ env.VERTEX_ENDPOINT_ID }} \
             --region=${{ env.GCP_REGION }} \
             --project=${{ env.GCP_PROJECT_ID }} \
-            --format='value(deployedModels[].id)')
-          for ID in $DEPLOYED_IDS; do
+            --format=json > endpoint.json
+          python - <<'PY' > deployed_model_ids.txt
+          import json
+          import re
+
+          with open("endpoint.json", encoding="utf-8") as handle:
+              endpoint = json.load(handle)
+
+          for deployed in endpoint.get("deployedModels", []):
+              raw_id = str(deployed.get("id") or "")
+              match = re.search(r"([0-9]+)$", raw_id)
+              if match:
+                  print(match.group(1))
+              elif raw_id:
+                  print(f"skip:{raw_id}")
+          PY
+          while read -r ID; do
             if [[ "$ID" =~ ^[0-9]+$ ]]; then
               gcloud ai endpoints undeploy-model ${{ env.VERTEX_ENDPOINT_ID }} \
                 --region=${{ env.GCP_REGION }} \
                 --deployed-model-id="$ID" \
                 --project=${{ env.GCP_PROJECT_ID }}
-            elif [[ -n "$ID" ]]; then
-              echo "Skipping non-numeric deployed model id: $ID"
+            elif [[ "$ID" == skip:* ]]; then
+              echo "Skipping non-numeric deployed model id: ${ID#skip:}"
             fi
-          done
+          done < deployed_model_ids.txt
 
       - name: Deploy model to Vertex AI endpoint
         run: |
