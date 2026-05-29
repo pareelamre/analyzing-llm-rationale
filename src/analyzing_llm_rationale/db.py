@@ -49,11 +49,13 @@ def get_connection(path: Optional[Path] = None):
     return conn
 
 
-def _tag_to_temperature(tag: str) -> float:
-    """Convert 'temperature_025' → 0.25, 'temperature_00' → 0.0."""
-    digits = re.sub(r"^temperature_", "", tag)
-    if not digits:
-        return 0.0
+def _tag_to_temperature(tag: str) -> Optional[float]:
+    """Convert 'temperature_025' → 0.25. Returns None for non-temperature dirs."""
+    if not tag.startswith("temperature_"):
+        return None
+    digits = tag[len("temperature_"):]
+    if not digits or not digits.isdigit():
+        return None
     if len(digits) == 2:
         return float(digits) / 10.0
     if len(digits) == 3:
@@ -124,6 +126,8 @@ def ingest_all_results(results_root: Optional[Path] = None, conn=None) -> int:
             if not temp_dir.is_dir():
                 continue
             temperature = _tag_to_temperature(temp_dir.name)
+            if temperature is None:
+                continue
             for result_file in sorted(temp_dir.glob("results_variant*.json")):
                 variant = result_file.stem.replace("results_", "")
                 try:
