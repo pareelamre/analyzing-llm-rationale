@@ -90,6 +90,8 @@ jobs:
             --port 8000 \
             --timeout 300 \
             --memory 512Mi \
+            --max-instances 10 \
+            --concurrency 4 \
             --update-secrets SCADS_AI_API_KEY=SCADS_AI_API_KEY:latest \
             --set-env-vars MODEL_DEVICE=cpu \
             --project ${{ env.GCP_PROJECT_ID }}
