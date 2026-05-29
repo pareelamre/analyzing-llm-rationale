@@ -822,8 +822,27 @@ function startExample(question) {
   launchApp();
   fillExample(question);
 }
+function recordPageVisit() {
+  const payload = JSON.stringify({
+    path: window.location.pathname,
+    referrer: document.referrer || '',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+  });
+  if (navigator.sendBeacon) {
+    const blob = new Blob([payload], { type: 'application/json' });
+    navigator.sendBeacon('/analytics/visit', blob);
+    return;
+  }
+  fetch('/analytics/visit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload,
+    keepalive: true,
+  }).catch(() => {});
+}
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+recordPageVisit();
 updateVariantDesc();
 const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);
