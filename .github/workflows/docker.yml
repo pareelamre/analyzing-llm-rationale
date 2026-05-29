@@ -10,6 +10,7 @@ env:
   GCP_PROJECT_ID: brave-drive-471109-d9
   SERVICE_NAME: analyzing-llm-rationale
   VERTEX_ENDPOINT_ID: 7325853011580813312
+  VERTEX_ENDPOINT_NAME: projects/brave-drive-471109-d9/locations/us-central1/endpoints/7325853011580813312
 
 jobs:
   build-and-push:
@@ -134,13 +135,15 @@ jobs:
       - name: Get latest model ID
         id: model
         run: |
-          MODEL_ID=$(gcloud ai models list \
+          MODEL_NAME=$(gcloud ai models list \
             --region=${{ env.GCP_REGION }} \
             --filter="displayName=${{ env.SERVICE_NAME }}" \
             --sort-by="~createTime" \
             --limit=1 \
             --format='value(name)' \
-            --project=${{ env.GCP_PROJECT_ID }} | awk -F/ '{print $NF}')
+            --project=${{ env.GCP_PROJECT_ID }})
+          MODEL_ID=$(echo "$MODEL_NAME" | awk -F/ '{print $NF}')
+          echo "name=$MODEL_NAME" >> "$GITHUB_OUTPUT"
           echo "id=$MODEL_ID" >> "$GITHUB_OUTPUT"
 
       - name: Undeploy previous model versions
@@ -178,14 +181,39 @@ jobs:
 
       - name: Deploy model to Vertex AI endpoint
         run: |
-          gcloud ai endpoints deploy-model ${{ env.VERTEX_ENDPOINT_ID }} \
-            --region=${{ env.GCP_REGION }} \
-            --model=${{ steps.model.outputs.id }} \
-            --display-name=${{ env.SERVICE_NAME }} \
-            --machine-type=e2-standard-2 \
-            --min-replica-count=1 \
-            --max-replica-count=1 \
-            --project=${{ env.GCP_PROJECT_ID }}
+          ACCESS_TOKEN=$(gcloud auth print-access-token)
+          python - <<'PY' > deploy_request.json
+          import json
+          import os
+
+          model_name = os.environ["MODEL_NAME"]
+          if not model_name.startswith("projects/"):
+              model_name = (
+                  f"projects/{os.environ['GCP_PROJECT_ID']}/"
+                  f"locations/{os.environ['GCP_REGION']}/models/{model_name}"
+              )
+
+          request = {
+              "deployedModel": {
+                  "model": model_name,
+                  "displayName": os.environ["SERVICE_NAME"],
+                  "dedicatedResources": {
+                      "machineSpec": {"machineType": "e2-standard-2"},
+                      "minReplicaCount": 1,
+                      "maxReplicaCount": 1,
+                  },
+              },
+              "trafficSplit": {"0": 100},
+          }
+          print(json.dumps(request))
+          PY
+          curl --fail-with-body -X POST \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://${{ env.GCP_REGION }}-aiplatform.googleapis.com/v1/${{ env.VERTEX_ENDPOINT_NAME }}:deployModel" \
+            --data @deploy_request.json
+        env:
+          MODEL_NAME: ${{ steps.model.outputs.name }}
 
       - name: Print Vertex AI endpoint URL
         run: |
