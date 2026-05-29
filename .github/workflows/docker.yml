@@ -9,6 +9,7 @@ env:
   GCP_REGION: us-central1
   GCP_PROJECT_ID: brave-drive-471109-d9
   SERVICE_NAME: analyzing-llm-rationale
+  VERTEX_ENDPOINT_ID: 7325853011580813312
 
 jobs:
   build-and-push:
@@ -144,28 +145,32 @@ jobs:
       - name: Undeploy previous model versions
         continue-on-error: true
         run: |
-          DEPLOYED_IDS=$(gcloud ai endpoints describe 7325853011580813312 \
+          DEPLOYED_IDS=$(gcloud ai endpoints describe ${{ env.VERTEX_ENDPOINT_ID }} \
             --region=${{ env.GCP_REGION }} \
             --project=${{ env.GCP_PROJECT_ID }} \
             --format='value(deployedModels[].id)')
           for ID in $DEPLOYED_IDS; do
-            gcloud ai endpoints undeploy-model 7325853011580813312 \
-              --region=${{ env.GCP_REGION }} \
-              --deployed-model-id="$ID" \
-              --project=${{ env.GCP_PROJECT_ID }}
+            if [[ "$ID" =~ ^[0-9]+$ ]]; then
+              gcloud ai endpoints undeploy-model ${{ env.VERTEX_ENDPOINT_ID }} \
+                --region=${{ env.GCP_REGION }} \
+                --deployed-model-id="$ID" \
+                --project=${{ env.GCP_PROJECT_ID }}
+            elif [[ -n "$ID" ]]; then
+              echo "Skipping non-numeric deployed model id: $ID"
+            fi
           done
 
       - name: Deploy model to Vertex AI endpoint
         run: |
-          gcloud ai endpoints deploy-model 7325853011580813312 \
+          gcloud ai endpoints deploy-model ${{ env.VERTEX_ENDPOINT_ID }} \
             --region=${{ env.GCP_REGION }} \
             --model=${{ steps.model.outputs.id }} \
             --display-name=${{ env.SERVICE_NAME }} \
             --machine-type=e2-standard-2 \
             --min-replica-count=1 \
-            --max-replica-count=2 \
+            --max-replica-count=1 \
             --project=${{ env.GCP_PROJECT_ID }}
 
       - name: Print Vertex AI endpoint URL
         run: |
-          echo "https://${{ env.GCP_REGION }}-aiplatform.googleapis.com/v1/projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.GCP_REGION }}/endpoints/7325853011580813312:predict"
+          echo "https://${{ env.GCP_REGION }}-aiplatform.googleapis.com/v1/projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.GCP_REGION }}/endpoints/${{ env.VERTEX_ENDPOINT_ID }}:predict"
