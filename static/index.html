@@ -6,7 +6,7 @@
   <title>Foresea</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Racing+Sans+One&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,800;0,900;1,700&family=Lora:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
     :root {
       --bg:        #000000;
@@ -18,17 +18,17 @@
       --text:      #f4f4f4;
       --text-dim:  #888888;
       --text-mute: #555555;
-      --green:     #4ade80;
-      --green-soft: rgba(74,222,128,.12);
-      --green-glow: rgba(74,222,128,.3);
-      --orange:    #ff5a00;
-      --orange-soft: rgba(255,90,0,.14);
+      --green:     #ffffff;
+      --green-soft: rgba(255,255,255,.10);
+      --green-glow: rgba(255,255,255,.22);
+      --orange:    #ffffff;
+      --orange-soft: rgba(255,255,255,.10);
     }
 
-    * { font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif; }
+    * { font-family: 'Lora', Georgia, 'Times New Roman', serif; }
     h1, .display {
-      font-family: 'Hanken Grotesk', system-ui, sans-serif;
-      letter-spacing: -0.03em; font-weight: 700;
+      font-family: 'Playfair Display', Georgia, serif;
+      letter-spacing: 0; font-weight: 800;
     }
     /* Monospace micro-labels — the Nitro signature */
     .mono {
@@ -102,12 +102,12 @@
 
     /* Answer badges — YES green, NO orange (both from the palette) */
     .yes-badge {
-      background: var(--green); color: #000;
-      border: 1px solid var(--green); box-shadow: 0 0 18px -4px var(--green-glow);
+      background: #fff; color: #000;
+      border: 1px solid #fff;
     }
     .no-badge {
-      background: var(--orange); color: #000;
-      border: 1px solid var(--orange); box-shadow: 0 0 18px -4px rgba(255,90,0,.35);
+      background: transparent; color: #fff;
+      border: 1px solid rgba(255,255,255,.45);
     }
     .conf-bar-fill { background: var(--green); box-shadow: 0 0 12px -2px var(--green-glow); }
 
@@ -138,12 +138,12 @@
 
     /* Source chips */
     .source-chip {
-      background: var(--green-soft); color: var(--green); border: 1px solid rgba(74,222,128,.25);
+      background: var(--green-soft); color: var(--green); border: 1px solid rgba(255,255,255,.22);
       border-radius: 6px; padding: 3px 9px; font-size: 11px;
       display: inline-block; margin: 2px; transition: background .12s;
       font-family: 'JetBrains Mono', monospace;
     }
-    .source-chip:hover { background: rgba(74,222,128,.2); }
+    .source-chip:hover { background: rgba(255,255,255,.18); }
 
     /* Conversation items */
     .conv-item {
@@ -168,10 +168,9 @@
 
     /* Brand wordmark — NASCAR-style racing font */
     .brand {
-      font-family: 'Racing Sans One', system-ui, sans-serif;
-      font-style: italic;
-      letter-spacing: 0.01em;
-      transform: skewX(-6deg);
+      font-family: 'Playfair Display', Georgia, serif;
+      font-weight: 800;
+      letter-spacing: 0.04em;
       display: inline-block;
       line-height: 1;
     }
@@ -185,13 +184,13 @@
 
     /* New chat button — green outline */
     .new-chat-btn {
-      border: 1px solid rgba(74,222,128,.3); color: var(--green);
+      border: 1px solid rgba(255,255,255,.25); color: var(--green);
       background: var(--green-soft); border-radius: 10px;
       padding: 9px 12px; font-size: 13px; font-weight: 500; width: 100%;
       transition: background .15s, box-shadow .2s;
       font-family: 'JetBrains Mono', monospace;
     }
-    .new-chat-btn:hover { background: rgba(74,222,128,.18); box-shadow: 0 0 18px -4px var(--green-glow); }
+    .new-chat-btn:hover { background: rgba(255,255,255,.16); box-shadow: 0 0 18px -4px var(--green-glow); }
 
     /* Input box */
     .input-box {
