@@ -865,6 +865,17 @@ function makeAIBubble(data, variant) {
   const variantLabel = VARIANT_DESCS[variant] || variant || '';
   const p = x => Math.round((x || 0) * 100);
 
+  // Plain conversational reply — no forecast chrome
+  if (qtype === 'chat') {
+    const div = document.createElement('div');
+    div.className = 'max-w-2xl mx-auto w-full';
+    div.innerHTML = `
+      <div class="msg-ai p-4 sm:p-5">
+        <p class="text-[15px] text-gray-700 leading-relaxed">${escHtml(rationale)}</p>
+      </div>`;
+    return div;
+  }
+
   let verdict;
   if (qtype === 'multiple_choice' && (data.options || []).length) {
     const opts = data.options.slice().sort((a, b) => b.probability - a.probability);
@@ -961,14 +972,18 @@ async function sendQuestion() {
 
   // Multi-turn memory: send the most recent prior turns as context
   const priorMessages = getConv(activeId)?.messages || [];
-  const history = priorMessages.slice(-6).map(m => ({
-    role: m.role === 'user' ? 'user' : 'assistant',
-    content: m.role === 'user'
-      ? m.content
-      : `Answer: ${m.data?.predicted_answer ?? '?'}`
+  const history = priorMessages.slice(-6).map(m => {
+    if (m.role === 'user') return { role: 'user', content: m.content };
+    // Conversational reply — pass through as-is
+    if (m.data?.question_type === 'chat') return { role: 'assistant', content: m.data.rationale || '' };
+    // Structured forecast reply
+    return {
+      role: 'assistant',
+      content: `Answer: ${m.data?.predicted_answer ?? '?'}`
         + (m.data?.confidence != null ? ` (confidence ${Math.round(m.data.confidence * 100)}%)` : '')
         + (m.data?.rationale ? `. ${m.data.rationale}` : ''),
-  }));
+    };
+  });
 
   const emptyState = document.getElementById('emptyState');
   if (emptyState) emptyState.remove();
