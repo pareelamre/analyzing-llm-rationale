@@ -148,7 +148,7 @@ def _verify_google_token(credential: str) -> dict:
         from google.oauth2.id_token import verify_oauth2_token as _verify
         return _verify(credential, _GRequest(), _GOOGLE_CLIENT_ID)
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=f"Invalid Google credential: {exc}")
+        raise HTTPException(status_code=401, detail=f"Invalid Google credential: {exc}") from exc
 
 
 def _issue_session(sub: str, email: str, name: str, picture: str) -> str:
@@ -175,9 +175,9 @@ def _decode_session(token: str) -> dict:
     try:
         return _jwt.decode(token, _SESSION_SECRET, algorithms=["HS256"])
     except _jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Session expired.")
+        raise HTTPException(status_code=401, detail="Session expired.") from None
     except _jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid session token.")
+        raise HTTPException(status_code=401, detail="Invalid session token.") from None
 
 
 _ds_client: Any = None
