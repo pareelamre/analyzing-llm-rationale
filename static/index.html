@@ -500,6 +500,21 @@
       .tr-stats { grid-template-columns: repeat(2, 1fr); }
     }
 
+    /* ── Mode toggle ─────────────────────────────────────────────────────── */
+    .tog-wrap {
+      width: 32px; height: 18px; border-radius: 9px;
+      background: var(--border-2); flex-shrink: 0;
+      display: inline-flex; align-items: center; padding: 2px;
+      transition: background .2s; cursor: pointer;
+    }
+    .tog-wrap[aria-checked="true"] { background: var(--accent); }
+    .tog-thumb {
+      width: 14px; height: 14px; border-radius: 50%; background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+      transition: transform .2s;
+    }
+    .tog-wrap[aria-checked="true"] .tog-thumb { transform: translateX(14px); }
+
     /* ── Auth UI ─────────────────────────────────────────────────────────── */
     .user-chip {
       display: inline-flex; align-items: center; gap: 7px;
@@ -591,6 +606,15 @@
     <p class="label px-1 mb-2">Recent</p>
     <div id="convList"></div>
   </div>
+
+  <!-- Chat mode toggle -->
+  <label class="flex items-center justify-between px-1 cursor-pointer select-none" style="min-height:32px">
+    <span class="text-xs" style="color:var(--text-dim)">Forecast output</span>
+    <span class="tog-wrap" role="switch" aria-checked="true" id="chatModeToggle" tabindex="0"
+          onclick="toggleChatMode()" onkeydown="if(event.key==='Enter'||event.key===' ')toggleChatMode()">
+      <span class="tog-thumb"></span>
+    </span>
+  </label>
 
   <details class="advanced-panel">
     <summary role="button" aria-label="Show advanced forecast settings">Advanced</summary>
@@ -1050,7 +1074,7 @@ async function sendQuestion() {
   try {
     const orKey = localStorage.getItem('or_key') || '';
     const orModel = localStorage.getItem('or_model') || '';
-    const body = { question, variant, history };
+    const body = { question, variant, history, chat_mode: isChatMode() };
     if (orKey && orModel) {
       body.openrouter_api_key = orKey;
       body.openrouter_model = orModel;
@@ -1420,6 +1444,26 @@ document.addEventListener('keydown', event => {
   }
 });
 
+// ── Chat mode toggle ──────────────────────────────────────────────────────────
+function isChatMode() {
+  return localStorage.getItem('chat_mode') === '1';
+}
+function toggleChatMode() {
+  const next = !isChatMode();
+  localStorage.setItem('chat_mode', next ? '1' : '0');
+  const el = document.getElementById('chatModeToggle');
+  if (el) el.setAttribute('aria-checked', next ? 'false' : 'true');
+  const label = el?.previousElementSibling;
+  if (label) label.textContent = next ? 'Chat mode' : 'Forecast output';
+}
+function loadChatModeToggle() {
+  const chat = isChatMode();
+  const el = document.getElementById('chatModeToggle');
+  if (el) el.setAttribute('aria-checked', chat ? 'false' : 'true');
+  const label = el?.previousElementSibling;
+  if (label) label.textContent = chat ? 'Chat mode' : 'Forecast output';
+}
+
 // ── OpenRouter settings ───────────────────────────────────────────────────────
 function saveOrSettings() {
   const key = document.getElementById('orKey')?.value.trim() || '';
@@ -1613,6 +1657,7 @@ setHistoryState('landing', 'replace');
 syncSidebarA11y();
 recordPageVisit();
 updateVariantDesc();
+loadChatModeToggle();
 loadOrSettings();
 initAuth();
 const ids = sortedIds();

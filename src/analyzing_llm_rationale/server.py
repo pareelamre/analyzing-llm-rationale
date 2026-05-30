@@ -524,6 +524,13 @@ class PredictRequest(BaseModel):
         max_length=128,
         description="OpenRouter model ID (e.g. `openai/gpt-4o`, `anthropic/claude-3.5-sonnet`).",
     )
+    chat_mode: bool = Field(
+        False,
+        description=(
+            "When `true`, skips the forecast output template entirely. "
+            "The model responds in plain natural language with no structured JSON."
+        ),
+    )
 
     @field_validator("question")
     @classmethod
@@ -1156,7 +1163,8 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     record["news_articles"] = evidence_articles
 
     user_prompt = build_user_prompt(record, prompt_text, "full")
-    user_prompt += _typing_instruction(req.question_type, req.options, has_history=bool(req.history))
+    if not req.chat_mode:
+        user_prompt += _typing_instruction(req.question_type, req.options, has_history=bool(req.history))
     messages = [{"role": "system", "content": system_prompt}]
     for turn in req.history[-12:]:
         role = turn.get("role")
@@ -1189,6 +1197,18 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
         raise HTTPException(status_code=500, detail=f"Provider error: {exc}") from exc
 
     parsed = _parse_json_dict(content)
+    if req.chat_mode:
+        text = content.strip()
+        from analyzing_llm_rationale.providers import OpenRouterProvider
+        model_key = req.openrouter_model or _state["model_key"]
+        return PredictResponse(
+            question_type="chat",
+            rationale=text, model_rationale=text,
+            variant=req.variant, model_key=model_key,
+            evidence_sources=_evidence_sources(evidence_articles),
+            evidence_articles=[NewsArticle(**a) for a in evidence_articles],
+            evidence_error=evidence_error,
+        )
     return _build_typed_response(req, parsed, content, evidence_articles, evidence_error)
 
 
