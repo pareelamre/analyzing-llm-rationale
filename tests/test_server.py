@@ -193,6 +193,8 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(len(payload["options"]), 3)
         self.assertIn("multiple_choice", self.provider.calls[0][-1]["content"])
         self.assertIn("Alice, Bob, Carol", self.provider.calls[0][-1]["content"])
+        self.assertIn("overrides any earlier variant template", self.provider.calls[0][-1]["content"])
+        self.assertIn("Only binary questions should use a Yes/No", self.provider.calls[0][-1]["content"])
 
     def test_predict_numeric_returns_range_forecast(self):
         self.provider.response = {
@@ -222,6 +224,34 @@ class ServerTests(unittest.TestCase):
             payload["range_forecast"],
             {"p10": "42", "p50": "55", "p90": "73", "unit": "USD"},
         )
+        self.assertIn('"type":"numeric"', self.provider.calls[0][-1]["content"])
+        self.assertIn("Only binary questions should use a Yes/No", self.provider.calls[0][-1]["content"])
+
+    def test_predict_without_question_type_asks_model_to_infer_schema(self):
+        self.provider.response = {
+            "type": "numeric",
+            "p10": 2.1,
+            "p50": 2.6,
+            "p90": 3.4,
+            "unit": "%",
+            "rationale": "Inflation is likely to stay near recent targets.",
+        }
+
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "What will US CPI inflation be in December 2026?",
+                "attach_evidence": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["question_type"], "numeric")
+        self.assertEqual(payload["predicted_answer"], "2.6")
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("First infer the question type", prompt)
+        self.assertIn("- numeric:", prompt)
 
     def test_predict_date_returns_range_forecast(self):
         self.provider.response = {
