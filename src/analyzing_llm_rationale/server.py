@@ -173,6 +173,21 @@ async def index():
     return FileResponse(str(_STATIC_DIR / "index.html"))
 
 
+@app.get("/track-record", tags=["System"], summary="Public forecasting track record")
+async def track_record():
+    """Return Foresea's resolved-forecast track record.
+
+    A backtest of `gpt-oss-120b` predictions scored against published Metaculus
+    outcomes: accuracy, Brier score, calibration (ECE), a reliability curve, and
+    a sample of individual resolved forecasts. Only questions with a known
+    real-world outcome are included.
+    """
+    path = _STATIC_DIR / "track_record.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Track record not generated yet.")
+    return FileResponse(str(path), media_type="application/json")
+
+
 # ── Request / response models ─────────────────────────────────────────────────
 
 class NewsArticle(BaseModel):

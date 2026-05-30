@@ -401,6 +401,52 @@
       * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
       .grain { display: none; }
     }
+
+    /* ── Track record overlay ────────────────────────────────────────── */
+    .tr-overlay {
+      position: fixed; inset: 0; z-index: 60; background: var(--bg);
+      display: none; flex-direction: column;
+    }
+    .tr-overlay.open { display: flex; }
+    .tr-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .tr-body { overflow-y: auto; padding: 30px 22px 64px; }
+    .tr-inner { max-width: 880px; margin: 0 auto; width: 100%; }
+    .tr-hero-title { font-size: clamp(28px, 4vw, 40px); color: var(--ink); margin-top: 6px; line-height: 1.02; }
+    .tr-stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+      background: var(--border); border: 1px solid var(--border);
+      border-radius: 3px; overflow: hidden; margin-top: 22px;
+    }
+    .tr-stat { background: #fff; padding: 18px 16px; }
+    .tr-stat .v { font-family: var(--font-db); font-weight: 700; font-size: 30px; color: var(--ink); line-height: 1; }
+    .tr-stat .k { margin-top: 9px; }
+    .tr-method { font-size: 13px; color: var(--text-dim); line-height: 1.65; margin-top: 16px; max-width: 660px; }
+    .tr-section-title { margin-top: 36px; margin-bottom: 12px; }
+    .tr-calib { display: flex; flex-direction: column; gap: 7px; }
+    .tr-calib-row {
+      display: grid; grid-template-columns: 64px 1fr 46px; gap: 12px;
+      align-items: center; font-size: 12px; color: var(--text-dim);
+    }
+    .tr-bar { height: 8px; background: #f0f0f0; border-radius: 2px; overflow: hidden; }
+    .tr-bar > i { display: block; height: 100%; background: var(--ink); border-radius: 2px; }
+    .tr-log { display: flex; flex-direction: column; }
+    .tr-log-row {
+      display: grid; grid-template-columns: 18px 1fr auto; gap: 13px;
+      align-items: start; padding: 13px 0; border-top: 1px solid var(--border);
+    }
+    .tr-mark { width: 13px; height: 13px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
+    .tr-mark.hit { background: var(--ink); }
+    .tr-mark.miss { background: #fff; border: 1px solid var(--border-2); }
+    .tr-q { font-size: 14px; color: var(--text); line-height: 1.45; }
+    .tr-meta { display: block; font-size: 11px; color: var(--text-mute); margin-top: 4px; }
+    .tr-verdict { text-align: right; font-size: 12px; white-space: nowrap; color: var(--ink); }
+    .tr-verdict .sub { color: var(--text-mute); }
+    @media (max-width: 640px) {
+      .tr-stats { grid-template-columns: repeat(2, 1fr); }
+    }
   </style>
 </head>
 <body>
@@ -415,6 +461,7 @@
       <span class="brand text-xl">Foresea</span>
     </div>
     <div class="landing-links">
+      <a class="topbar-link" style="cursor:pointer" onclick="openTrackRecord()">Track record</a>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
       <button class="hero-action primary py-2" onclick="launchApp()">Launch</button>
@@ -540,6 +587,7 @@
       <h1 id="chatTitle" class="text-sm font-medium text-gray-900 truncate">New conversation</h1>
     </div>
     <nav class="hidden md:flex items-center gap-4 flex-shrink-0">
+      <a class="topbar-link" style="cursor:pointer" onclick="openTrackRecord()">Track record</a>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
     </nav>
@@ -577,6 +625,18 @@
 
 </main>
 
+</div>
+
+<!-- ── Track record overlay ── -->
+<div id="trackOverlay" class="tr-overlay">
+  <div class="tr-head">
+    <div class="flex items-center gap-2">
+      <span class="logo-dot"></span>
+      <span class="brand text-lg">Foresea</span>
+    </div>
+    <button class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeTrackRecord()">Close</button>
+  </div>
+  <div id="trackBody" class="tr-body"></div>
 </div>
 
 <script>
@@ -969,6 +1029,97 @@ function recordPageVisit() {
   }).catch(() => {});
 }
 
+// ── Track record ─────────────────────────────────────────────────────────────
+let trackLoaded = false;
+async function openTrackRecord() {
+  const ov = document.getElementById('trackOverlay');
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  if (window.Motion && !prefersReduced()) {
+    Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
+  }
+  if (!trackLoaded) { trackLoaded = true; await loadTrackRecord(); }
+}
+function closeTrackRecord() {
+  const ov = document.getElementById('trackOverlay');
+  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
+  const finish = () => {
+    ov.classList.remove('open');
+    ov.style.opacity = '';
+    document.body.style.overflow = inApp ? 'hidden' : 'auto';
+  };
+  if (window.Motion && !prefersReduced()) {
+    Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
+  } else { finish(); }
+}
+function pct(x) { return Math.round((x || 0) * 100); }
+async function loadTrackRecord() {
+  const host = document.getElementById('trackBody');
+  host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading track record…</p></div>';
+  try {
+    const r = await fetch('/track-record');
+    if (!r.ok) throw new Error('unavailable');
+    const d = await r.json();
+    host.innerHTML = renderTrackRecord(d);
+    if (window.Motion && !prefersReduced()) {
+      Motion.animate('#trackBody .tr-stat',
+        { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
+        { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
+      Motion.animate('#trackBody .tr-calib-row',
+        { opacity: [0, 1] }, { delay: Motion.stagger(0.02), duration: 0.4, easing: EASE });
+      // Scroll-reveal the resolved log as it enters view
+      host.querySelectorAll('.tr-log-row').forEach(el => { el.style.opacity = '0'; });
+      Motion.inView('#trackBody .tr-log-row', (entry) => {
+        Motion.animate(entry.target,
+          { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
+          { duration: 0.4, easing: EASE });
+      }, { amount: 0.15 });
+    }
+  } catch (e) {
+    host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Track record is not available yet.</p></div>';
+  }
+}
+function renderTrackRecord(d) {
+  const stats = `
+    <div class="tr-stats">
+      <div class="tr-stat"><div class="v">${pct(d.accuracy)}%</div><div class="k label">Accuracy</div></div>
+      <div class="tr-stat"><div class="v">${(d.brier_score ?? 0).toFixed(3)}</div><div class="k label">Brier score</div></div>
+      <div class="tr-stat"><div class="v">${(d.ece ?? 0).toFixed(3)}</div><div class="k label">Calibration error</div></div>
+      <div class="tr-stat"><div class="v">${(d.n_resolved || 0).toLocaleString()}</div><div class="k label">Resolved</div></div>
+    </div>`;
+  const gen = d.generated_at ? new Date(d.generated_at).toLocaleDateString() : '';
+  const method = `<p class="tr-method">${escHtml(d.methodology || '')} ${gen ? 'Updated ' + gen + '.' : ''}</p>`;
+  const calib = (d.calibration || []).map(b => `
+    <div class="tr-calib-row">
+      <span>${pct(b.avg_predicted)}%</span>
+      <span class="tr-bar"><i style="width:${pct(b.observed_yes_rate)}%"></i></span>
+      <span>${pct(b.observed_yes_rate)}%</span>
+    </div>`).join('');
+  const log = (d.log || []).map(r => `
+    <div class="tr-log-row">
+      <span class="tr-mark ${r.correct ? 'hit' : 'miss'}" title="${r.correct ? 'Correct' : 'Missed'}"></span>
+      <span>
+        <span class="tr-q">${escHtml(r.question)}</span>
+        <span class="tr-meta">${r.category ? escHtml(r.category) + ' · ' : ''}${r.resolve_time ? escHtml(String(r.resolve_time).slice(0, 10)) : ''}</span>
+      </span>
+      <span class="tr-verdict">
+        ${escHtml(r.predicted)} ${pct(r.confidence)}%<br>
+        <span class="sub">actual ${escHtml(r.actual)}</span>
+      </span>
+    </div>`).join('');
+  return `
+    <div class="tr-inner">
+      <p class="label">Track record</p>
+      <h2 class="display tr-hero-title">Forecasts, scored against reality.</h2>
+      ${stats}
+      ${method}
+      <p class="tr-section-title label">Calibration — predicted vs. resolved yes-rate</p>
+      <div class="tr-calib">${calib}</div>
+      <p class="tr-section-title label">Resolved forecasts · most recent ${(d.log_sample_size || 0)} of ${(d.n_resolved || 0).toLocaleString()}</p>
+      <div class="tr-log">${log}</div>
+    </div>`;
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 recordPageVisit();
 updateVariantDesc();
@@ -987,15 +1138,18 @@ document.body.style.overflow = 'auto';
     (function raf(t) { lenis.raf(t); requestAnimationFrame(raf); })();
   }
 
-  // Landing hero reveal (only if the landing is the current view)
+  // Landing reveal (only if the landing is the current view)
   const landingVisible = !document.getElementById('landingPage').classList.contains('hidden-view');
   if (window.Motion && landingVisible) {
+    Motion.animate('.landing-nav',
+      { opacity: [0, 1], transform: ['translateY(-8px)', 'translateY(0)'] },
+      { duration: 0.5, easing: EASE });
     Motion.animate('.hero-copy > *',
       { opacity: [0, 1], transform: ['translateY(16px)', 'translateY(0)'] },
       { delay: Motion.stagger(0.08), duration: 0.6, easing: EASE });
     Motion.animate('.product-panel',
       { opacity: [0, 1], transform: ['translateY(20px)', 'translateY(0)'] },
-      { duration: 0.7, delay: 0.18, easing: EASE });
+      { duration: 0.7, delay: 0.22, easing: EASE });
   }
 })();
 </script>
