@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import duckdb
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -885,6 +885,40 @@ def _build_typed_response(
     )
 
 
+# ── Attachment extraction ─────────────────────────────────────────────────────
+
+def _extract_pdf_bytes(content: bytes) -> str:
+    try:
+        import io  # noqa: PLC0415
+
+        from pypdf import PdfReader  # noqa: PLC0415
+
+        reader = PdfReader(io.BytesIO(content))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"PDF extraction failed: {exc}") from exc
+
+
+def _extract_url_sync(url: str) -> Dict[str, Any]:
+    import re
+    from urllib.parse import urlparse
+    try:
+        import requests as _req
+        from bs4 import BeautifulSoup
+        resp = _req.get(url, timeout=20, headers={"User-Agent": "Foresea/1.0"}, allow_redirects=True)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+            tag.decompose()
+        title = (soup.title.string or "").strip() if soup.title else urlparse(url).netloc
+        text = re.sub(r"\n{3,}", "\n\n", soup.get_text(separator="\n", strip=True))
+        return {"title": title, "text": text[:20000], "source": urlparse(url).netloc, "url": url}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"URL extraction failed: {exc}") from exc
+
+
 def _analytics_conn():
     _ANALYTICS_DB.parent.mkdir(parents=True, exist_ok=True)
     conn = duckdb.connect(str(_ANALYTICS_DB))
@@ -1003,6 +1037,35 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
             for day, visits, unique_count in rows
         ],
     )
+
+
+@app.post("/extract", tags=["System"], summary="Extract text from a PDF file or URL")
+async def extract_attachment(  # noqa: B008
+    request: Request,
+    file: Optional[UploadFile] = File(None),  # noqa: B008
+    url: Optional[str] = Form(None),  # noqa: B008
+) -> Dict[str, Any]:
+    """Extract plain text from an uploaded PDF or a web URL.
+
+    Returns a dict compatible with the `news_articles` field of `/predict`:
+    `{title, text, source, url}`. Pass one of `file` or `url`, not both.
+    """
+    _check_rate_limit(request)
+    loop = asyncio.get_running_loop()
+    if file is not None:
+        if not (file.filename or "").lower().endswith(".pdf"):
+            raise HTTPException(status_code=415, detail="Only PDF files are supported.")
+        content = await file.read()
+        if len(content) > 20 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="PDF exceeds 20 MB limit.")
+        text = await loop.run_in_executor(None, _extract_pdf_bytes, content)
+        return {"title": file.filename, "text": text[:20000], "source": file.filename, "url": None}
+    if url:
+        url = url.strip()
+        if not url.startswith(("http://", "https://")):
+            raise HTTPException(status_code=422, detail="URL must start with http:// or https://")
+        return await loop.run_in_executor(None, _extract_url_sync, url)
+    raise HTTPException(status_code=400, detail="Provide either a PDF file or a url.")
 
 
 @app.get("/auth/config", tags=["Auth"], include_in_schema=False)
