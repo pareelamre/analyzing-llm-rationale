@@ -731,27 +731,47 @@ def _evidence_sources(articles: List[Dict[str, Any]]) -> List[EvidenceSource]:
 
 
 # ── Multi-type forecasting ────────────────────────────────────────────────────
-_TYPE_INSTRUCTIONS = (
-    "\n\nYou are a calibrated forecaster. First decide the question type, then forecast. "
-    "Respond with ONLY one JSON object (no prose) using the matching schema:\n"
-    "- Yes/No -> {\"type\":\"binary\",\"predicted_answer\":\"Yes\"|\"No\",\"confidence\":0-1,\"rationale\":\"...\"}\n"
-    "- Multiple choice -> {\"type\":\"multiple_choice\",\"options\":[{\"label\":\"...\",\"probability\":0-1}],"
-    "\"rationale\":\"...\"} (probabilities sum to ~1)\n"
-    "- Numeric quantity -> {\"type\":\"numeric\",\"p10\":<low>,\"p50\":<median>,\"p90\":<high>,\"unit\":\"...\","
-    "\"rationale\":\"...\"}\n"
-    "- Specific date -> {\"type\":\"date\",\"p10\":\"YYYY-MM-DD\",\"p50\":\"YYYY-MM-DD\",\"p90\":\"YYYY-MM-DD\","
-    "\"rationale\":\"...\"}\n"
-    "`confidence` is your probability the stated answer is correct."
-)
+_TYPE_SCHEMAS = {
+    "binary": (
+        '{"type":"binary","predicted_answer":"Yes"|"No",'
+        '"confidence":0-1,"rationale":"..."}'
+    ),
+    "multiple_choice": (
+        '{"type":"multiple_choice","options":[{"label":"...","probability":0-1}],'
+        '"rationale":"..."}'
+    ),
+    "numeric": (
+        '{"type":"numeric","p10":<low>,"p50":<median>,"p90":<high>,'
+        '"unit":"...","rationale":"..."}'
+    ),
+    "date": (
+        '{"type":"date","p10":"YYYY-MM-DD","p50":"YYYY-MM-DD",'
+        '"p90":"YYYY-MM-DD","rationale":"..."}'
+    ),
+}
 
 
 def _typing_instruction(question_type: Optional[str], options: List[str]) -> str:
-    instr = _TYPE_INSTRUCTIONS
+    instr = (
+        "\n\nForecast output contract: choose the schema that matches the question type. "
+        "This contract overrides any earlier variant template that says the answer must be Yes or No. "
+        "Only binary questions should use a Yes/No `predicted_answer`. "
+        "Respond with ONLY one JSON object (no prose)."
+    )
     if question_type:
-        instr += f"\nThe question type is '{question_type}'. Use that schema."
+        instr += f"\nThe question type is '{question_type}'. Use exactly this schema:\n{_TYPE_SCHEMAS[question_type]}"
+    else:
+        instr += (
+            "\nFirst infer the question type, then use the matching schema:\n"
+            f"- binary: {_TYPE_SCHEMAS['binary']}\n"
+            f"- multiple_choice: {_TYPE_SCHEMAS['multiple_choice']} (probabilities sum to about 1)\n"
+            f"- numeric: {_TYPE_SCHEMAS['numeric']}\n"
+            f"- date: {_TYPE_SCHEMAS['date']}"
+        )
     if options:
         joined = ", ".join(str(o) for o in options[:12])
-        instr += f"\nFor multiple_choice, choose among these options: {joined}."
+        instr += f"\nFor multiple_choice, assign probabilities across these options: {joined}."
+    instr += "\nUse `confidence` only for binary forecasts; for multiple_choice, use option probabilities."
     return instr
 
 
