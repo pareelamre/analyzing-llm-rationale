@@ -528,51 +528,17 @@
       <div class="hero-copy">
         <p class="label mb-5">Foresea</p>
         <h1 class="display hero-title">Forecasts with sources.</h1>
-        <p class="hero-text">
-          Ask a forecasting question — yes/no, multiple choice, a number, or a date.
-          Foresea returns an estimate, rationale, and the articles it used.
-        </p>
+        <p class="hero-text">Ask a forecasting question.</p>
         <form class="landing-question" onsubmit="submitLandingQuestion(event)">
           <textarea
             id="landingQuestionInput"
             rows="2"
-            placeholder="What will US CPI inflation be in December 2026?"
+            placeholder="Ask a forecasting question…"
             oninput="autoResize(this)"
             onkeydown="handleLandingKey(event)"
           ></textarea>
           <button class="hero-action primary" type="submit">Ask</button>
         </form>
-        <button type="button" class="quiet-link" onclick="startExample('What will US CPI inflation be in December 2026?')">
-          Use an example
-        </button>
-      </div>
-
-      <div class="product-panel">
-        <div class="panel-bar">
-          <span>Example</span>
-          <span>range</span>
-        </div>
-        <div class="panel-body">
-          <div class="evidence-row">
-            <div class="evidence-kicker"><span>Question</span><span>live</span></div>
-            <p class="text-sm text-gray-900 leading-relaxed">
-              What will US CPI inflation be in December 2026?
-            </p>
-          </div>
-          <div class="evidence-row">
-            <div class="evidence-kicker"><span>Forecast</span><span>gpt-oss-120b</span></div>
-            <p class="text-2xl text-gray-950 display leading-tight">2.8%</p>
-            <p class="text-xs text-gray-500 mt-1">p10 2.1 · p90 3.6</p>
-          </div>
-          <div class="evidence-row">
-            <div class="evidence-kicker"><span>Sources</span><span>ranked</span></div>
-            <div class="flex flex-wrap gap-1">
-              <span class="source-chip">Reuters</span>
-              <span class="source-chip">CNBC</span>
-              <span class="source-chip">Federal Reserve</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
