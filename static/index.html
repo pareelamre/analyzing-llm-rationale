@@ -749,7 +749,7 @@ function renderMessages() {
 
   if (!conv || conv.messages.length === 0) {
     el.innerHTML = `
-      <div class="max-w-xl mx-auto w-full text-center pt-16 sm:pt-28 px-4">
+      <div id="emptyState" class="max-w-xl mx-auto w-full text-center pt-16 sm:pt-28 px-4">
         <p class="label mb-4">New forecast</p>
         <h2 class="display text-3xl sm:text-5xl text-gray-900 leading-tight mb-5">
           Ask a yes or no question.
@@ -854,6 +854,9 @@ async function sendQuestion() {
         + (m.data?.confidence != null ? ` (confidence ${Math.round(m.data.confidence * 100)}%)` : '')
         + (m.data?.rationale ? `. ${m.data.rationale}` : ''),
   }));
+
+  const emptyState = document.getElementById('emptyState');
+  if (emptyState) emptyState.remove();
 
   appendMessage(activeId, { role: 'user', content: question });
   const userNode = makeUserBubble(question);
