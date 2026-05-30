@@ -310,7 +310,7 @@ class NewsPipeline:
             prompt = ChatPromptTemplate.from_messages([
                 (
                     "system",
-                    "You write concise web-news search queries for binary forecasting questions.",
+                    "You write concise web-news search queries for forecasting questions.",
                 ),
                 (
                     "user",

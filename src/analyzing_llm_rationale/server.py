@@ -34,13 +34,13 @@ _state: Dict[str, Any] = {}
 _DESCRIPTION = """
 ## Overview
 
-The **LLM Forecasting API** runs probabilistic binary (yes/no) predictions on
+The **LLM Forecasting API** runs probabilistic forecasts for
 [Metaculus](https://www.metaculus.com)-style forecasting questions using
 **GPT-OSS-120B** via the SCADS AI inference cluster.
 
-Each prediction includes a **confidence score** (0–1), a structured **rationale**,
-and optional evidence sources fetched from live news when the evidence pipeline is
-configured.
+It supports binary, multiple-choice, numeric, and date forecasts. Each response
+includes a structured **rationale**, typed forecast fields, and optional evidence
+sources fetched from live news when the evidence pipeline is configured.
 
 ---
 
@@ -50,10 +50,27 @@ configured.
 curl -X POST https://analyzing-llm-rationale-hy7gvnvt4a-uc.a.run.app/predict \\
   -H "Content-Type: application/json" \\
   -d '{
-    "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
+    "question": "What will US CPI inflation be in December 2026?",
+    "question_type": "numeric",
     "variant": "variant0_neutral_baseline"
   }'
 ```
+
+---
+
+## Question types
+
+Use `question_type` when your client already knows the shape of the question.
+If omitted, the model will try to infer it.
+
+| Type | Response shape |
+|---|---|
+| `binary` | `predicted_answer` is `Yes`/`No`; `confidence` is 0–1 |
+| `multiple_choice` | `options` contains per-option probabilities; `predicted_answer` is the top option |
+| `numeric` | `range_forecast` contains `p10`, `p50`, `p90`, and optional `unit` |
+| `date` | `range_forecast` contains date percentiles |
+
+For multiple-choice forecasts, pass `options` when the answer set is known.
 
 ---
 
@@ -103,7 +120,7 @@ The `/health` endpoint is always unauthenticated.
 _TAGS = [
     {
         "name": "Inference",
-        "description": "Run probabilistic predictions on binary forecasting questions.",
+        "description": "Run probabilistic forecasts on binary, multiple-choice, numeric, and date forecasting questions.",
     },
     {
         "name": "System",
@@ -240,15 +257,18 @@ class PredictRequest(BaseModel):
         "examples": [
             {
                 "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
+                "question_type": "binary",
             },
             {
-                "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
-                "description": "The question resolves YES if the FOMC reduces the federal funds rate target by at least 25 basis points from its current level at any point before 31 December 2025.",
-                "resolution_criteria": "Resolves YES if the Federal Reserve lowers the federal funds rate at least once before 2026-01-01.",
-                "categories": ["Economics", "Finance", "United States"],
-                "variant": "variant3_reasoning_type",
-                "resolve_time": "2025-12-31T23:59:00Z",
-                "days_open": 180,
+                "question": "Who will win the 2026 Formula 1 drivers championship?",
+                "question_type": "multiple_choice",
+                "options": ["Max Verstappen", "Lando Norris", "Charles Leclerc", "Lewis Hamilton", "Other"],
+            },
+            {
+                "question": "What will US CPI inflation be in December 2026?",
+                "question_type": "numeric",
+                "resolution_criteria": "Use the year-over-year CPI-U inflation rate for December 2026.",
+                "categories": ["Economics", "United States"],
             },
         ]
     })
@@ -257,8 +277,15 @@ class PredictRequest(BaseModel):
         ...,
         min_length=10,
         max_length=2000,
-        description="The binary forecasting question to evaluate. Must be answerable with Yes or No.",
-        examples=["Will the Federal Reserve cut interest rates at least once before the end of 2025?"],
+        description=(
+            "The forecasting question to evaluate. It should ask about a future or "
+            "otherwise resolvable event, option, quantity, or date."
+        ),
+        examples=[
+            "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
+            "Who will win the 2026 Formula 1 drivers championship?",
+            "What will US CPI inflation be in December 2026?",
+        ],
     )
     description: str = Field(
         "",
@@ -268,7 +295,7 @@ class PredictRequest(BaseModel):
     resolution_criteria: str = Field(
         "",
         max_length=2000,
-        description="Exact conditions under which the question resolves Yes or No.",
+        description="Exact conditions or measurement source used to resolve the forecast.",
     )
     categories: List[str] = Field(
         default_factory=list,
@@ -318,7 +345,7 @@ class PredictRequest(BaseModel):
         None,
         description=(
             "Question type: `binary`, `multiple_choice`, `numeric`, or `date`. "
-            "Auto-detected from the question when omitted."
+            "Set this explicitly for API clients; auto-detected from the question when omitted."
         ),
     )
     options: List[str] = Field(
@@ -348,6 +375,19 @@ class PredictRequest(BaseModel):
             raise ValueError("Invalid variant name.")
         return v
 
+    @field_validator("question_type")
+    @classmethod
+    def question_type_supported(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        normalized = v.strip().lower()
+        if not normalized:
+            return None
+        allowed = {"binary", "multiple_choice", "numeric", "date"}
+        if normalized not in allowed:
+            raise ValueError(f"question_type must be one of {sorted(allowed)}.")
+        return normalized
+
 
 class OptionProb(BaseModel):
     """A single option and its probability in a multiple-choice forecast."""
@@ -370,8 +410,11 @@ class PredictResponse(BaseModel):
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
+            "question_type": "binary",
             "predicted_answer": "No",
             "confidence": 0.72,
+            "options": [],
+            "range_forecast": None,
             "rationale": (
                 "Current Fed guidance suggests rates will remain elevated through mid-2025. "
                 "Recent inflation data remains above the 2% target, reducing the likelihood "
@@ -736,11 +779,14 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
     response_model=PredictResponse,
 )
 async def predict(req: PredictRequest, request: Request = None) -> PredictResponse:
-    """Submit a binary forecasting question and receive a structured prediction.
+    """Submit a forecasting question and receive a typed structured prediction.
 
     The model returns:
-    - **`predicted_answer`** — `Yes` or `No`
-    - **`confidence`** — probability (0–1) the answer is Yes
+    - **`question_type`** — `binary`, `multiple_choice`, `numeric`, or `date`
+    - **`predicted_answer`** — `Yes`/`No`, top option, or median estimate
+    - **`confidence`** — probability (0–1) for binary and multiple-choice answers
+    - **`options`** — per-option probabilities for multiple-choice questions
+    - **`range_forecast`** — p10/p50/p90 bounds for numeric and date questions
     - **`rationale`** — 2–4 sentence explanation
     - **`evidence_sources`** — news articles used as context
 
@@ -757,26 +803,41 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     Leave the list empty to trigger automatic news retrieval (if the evidence
     pipeline is configured on the server).
 
-    ### Example — minimal request
-
-    ```bash
-    curl -X POST /predict \\
-      -H "Content-Type: application/json" \\
-      -d '{"question": "Will oil prices exceed $100 per barrel in 2025?"}'
-    ```
-
-    ### Example — with context and variant
+    ### Example — binary request
 
     ```bash
     curl -X POST /predict \\
       -H "Content-Type: application/json" \\
       -d '{
-        "question": "Will the EU impose new sanctions on Russia before July 2025?",
-        "description": "Focuses on economic sanctions, not diplomatic measures.",
-        "resolution_criteria": "Resolves YES if any new EU economic sanction package is announced.",
-        "categories": ["Geopolitics", "Europe"],
-        "variant": "variant5_key_conditions",
-        "resolve_time": "2025-07-01T00:00:00Z"
+        "question": "Will oil prices exceed $100 per barrel in 2026?",
+        "question_type": "binary"
+      }'
+    ```
+
+    ### Example — multiple choice
+
+    ```bash
+    curl -X POST /predict \\
+      -H "Content-Type: application/json" \\
+      -d '{
+        "question": "Who will win the 2026 Formula 1 drivers championship?",
+        "question_type": "multiple_choice",
+        "options": ["Max Verstappen", "Lando Norris", "Charles Leclerc", "Lewis Hamilton", "Other"],
+        "attach_evidence": false
+      }'
+    ```
+
+    ### Example — numeric forecast with context
+
+    ```bash
+    curl -X POST /predict \\
+      -H "Content-Type: application/json" \\
+      -d '{
+        "question": "What will US CPI inflation be in December 2026?",
+        "question_type": "numeric",
+        "resolution_criteria": "Use the year-over-year CPI-U inflation rate for December 2026.",
+        "categories": ["Economics", "United States"],
+        "variant": "variant5_key_conditions"
       }'
     ```
     """
