@@ -162,6 +162,47 @@ class HuggingFaceRouterProvider(OpenAICompatibleProvider):
 
 
 @dataclass
+class OpenRouterProvider(OpenAICompatibleProvider):
+    """User-supplied OpenRouter key — passes any model through the OpenRouter API."""
+    base_url: str = "https://openrouter.ai/api/v1/chat/completions"
+    missing_api_key_message: str = "OpenRouter API key required."
+
+    def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://foresea.ink",
+            "X-Title": "Foresea",
+        }
+        response = self._session.post(
+            self.base_url,
+            headers=headers,
+            json=payload,
+            timeout=self.request_timeout_s,
+        )
+        response_text = response.text[:500]
+        if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
+            raise RetryableProviderError(f"status={response.status_code} body={response_text}")
+        if response.status_code != 200:
+            raise ProviderResponseError(f"status={response.status_code} body={response_text}")
+        try:
+            return response.json()["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise ProviderResponseError(f"Malformed OpenRouter response: {exc}") from exc
+
+
+@dataclass
 class LocalQwenProvider(ChatProvider):
     model_name: str = "Qwen/Qwen2.5-7B-Instruct"
     device: str = "cuda"

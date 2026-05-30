@@ -619,10 +619,70 @@
     </div>
   </details>
 
-  <!-- Model info -->
-  <div class="border border-gray-200 rounded-sm bg-white p-3 text-xs text-gray-500 space-y-1">
-    <div class="flex justify-between"><span>Model</span><span class="text-gray-800">gpt-oss-120b</span></div>
-    <div class="mt-2 pt-2 border-t border-gray-200">
+  <!-- Model info / OpenRouter -->
+  <div class="border border-gray-200 rounded-sm bg-white p-3 text-xs text-gray-500 space-y-2">
+    <div class="flex justify-between items-center">
+      <span>Model</span>
+      <span id="activeModelLabel" class="text-gray-800 font-medium truncate ml-2 max-w-[120px]">gpt-oss-120b</span>
+    </div>
+
+    <!-- OpenRouter toggle -->
+    <details class="group" id="orDetails">
+      <summary class="cursor-pointer text-gray-500 hover:text-gray-900 flex items-center gap-1 list-none select-none" style="list-style:none">
+        <svg id="orChevron" width="10" height="10" viewBox="0 0 10 10" fill="none" style="transition:transform .15s">
+          <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Use your own model
+      </summary>
+      <div class="mt-2 space-y-2" onclick="event.stopPropagation()">
+        <div>
+          <label class="label block mb-1" for="orKey">OpenRouter API key</label>
+          <input
+            id="orKey"
+            type="password"
+            class="variant-select text-xs"
+            placeholder="sk-or-…"
+            autocomplete="off"
+            oninput="saveOrSettings()"
+          />
+          <p class="text-gray-400 mt-1" style="font-size:10px">
+            Stored locally. Get a key at <a href="https://openrouter.ai/keys" target="_blank" class="underline">openrouter.ai/keys</a>.
+          </p>
+        </div>
+        <div>
+          <label class="label block mb-1" for="orModel">Model</label>
+          <select id="orModel" class="variant-select text-xs" onchange="saveOrSettings()">
+            <option value="">— server default —</option>
+            <optgroup label="OpenAI">
+              <option value="openai/gpt-4o">GPT-4o</option>
+              <option value="openai/gpt-4o-mini">GPT-4o mini</option>
+              <option value="openai/o3-mini">o3 mini</option>
+            </optgroup>
+            <optgroup label="Anthropic">
+              <option value="anthropic/claude-sonnet-4-5">Claude Sonnet 4.5</option>
+              <option value="anthropic/claude-3.5-haiku">Claude Haiku 3.5</option>
+            </optgroup>
+            <optgroup label="Google">
+              <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash</option>
+              <option value="google/gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro</option>
+            </optgroup>
+            <optgroup label="Meta">
+              <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+              <option value="meta-llama/llama-4-maverick">Llama 4 Maverick</option>
+            </optgroup>
+            <optgroup label="Mistral">
+              <option value="mistralai/mistral-small-3.1-24b-instruct">Mistral Small 3.1</option>
+            </optgroup>
+            <optgroup label="DeepSeek">
+              <option value="deepseek/deepseek-r1">DeepSeek R1</option>
+              <option value="deepseek/deepseek-chat-v3-0324">DeepSeek V3</option>
+            </optgroup>
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <div class="pt-1 border-t border-gray-200">
       <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70">API docs ↗</a>
     </div>
   </div>
@@ -996,10 +1056,17 @@ async function sendQuestion() {
   const typingEl = addTyping();
 
   try {
+    const orKey = localStorage.getItem('or_key') || '';
+    const orModel = localStorage.getItem('or_model') || '';
+    const body = { question, variant, history };
+    if (orKey && orModel) {
+      body.openrouter_api_key = orKey;
+      body.openrouter_model = orModel;
+    }
     const resp = await fetch('/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, variant, history }),
+      body: JSON.stringify(body),
     });
     const data = await resp.json();
     typingEl.remove();
@@ -1361,6 +1428,48 @@ document.addEventListener('keydown', event => {
   }
 });
 
+// ── OpenRouter settings ───────────────────────────────────────────────────────
+function saveOrSettings() {
+  const key = document.getElementById('orKey')?.value.trim() || '';
+  const model = document.getElementById('orModel')?.value || '';
+  if (key) localStorage.setItem('or_key', key); else localStorage.removeItem('or_key');
+  if (model) localStorage.setItem('or_model', model); else localStorage.removeItem('or_model');
+  _updateModelLabel();
+}
+
+function loadOrSettings() {
+  const key = localStorage.getItem('or_key') || '';
+  const model = localStorage.getItem('or_model') || '';
+  const keyEl = document.getElementById('orKey');
+  const modelEl = document.getElementById('orModel');
+  if (keyEl) keyEl.value = key;
+  if (modelEl && model) modelEl.value = model;
+  // Open the details panel if a key is already saved
+  if (key) {
+    const det = document.getElementById('orDetails');
+    if (det) det.open = true;
+  }
+  _updateModelLabel();
+}
+
+function _updateModelLabel() {
+  const model = localStorage.getItem('or_model') || '';
+  const key = localStorage.getItem('or_key') || '';
+  const label = document.getElementById('activeModelLabel');
+  if (label) label.textContent = (model && key) ? model.split('/').pop() : 'gpt-oss-120b';
+}
+
+// Rotate chevron when details opens/closes
+document.addEventListener('DOMContentLoaded', () => {
+  const det = document.getElementById('orDetails');
+  const chev = document.getElementById('orChevron');
+  if (det && chev) {
+    det.addEventListener('toggle', () => {
+      chev.style.transform = det.open ? 'rotate(180deg)' : '';
+    });
+  }
+});
+
 // ── Auth ─────────────────────────────────────────────────────────────────────
 let _gClientId = null;
 let currentUser = null;
@@ -1512,6 +1621,7 @@ setHistoryState('landing', 'replace');
 syncSidebarA11y();
 recordPageVisit();
 updateVariantDesc();
+loadOrSettings();
 initAuth();
 const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);
