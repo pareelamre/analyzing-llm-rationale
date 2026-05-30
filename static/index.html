@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Foresea</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
   <style>
     :root {
       --bg:        #ffffff;
@@ -370,9 +372,40 @@
       .landing-question { grid-template-columns: 1fr; }
       .landing-question .hero-action { width: 100%; }
     }
+
+    /* ── Tasteful polish ─────────────────────────────────────────────── */
+
+    /* Fine grain texture overlay — editorial paper feel */
+    .grain {
+      position: fixed; inset: 0; z-index: 5; pointer-events: none;
+      opacity: .04; mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* Micro-interactions */
+    .send-btn, .new-chat-btn, .hero-action { will-change: transform; }
+    .hero-action:hover, .new-chat-btn:hover { transform: translateY(-1px); }
+    .send-btn:hover { transform: translateY(-1px); }
+    .source-chip { transition: background .14s ease, transform .14s ease, border-color .14s ease; }
+    .source-chip:hover { transform: translateY(-1px); border-color: var(--ink); }
+    .conv-item { transition: background .12s ease, color .12s ease, transform .12s ease; }
+    .msg-ai, .msg-user { will-change: transform, opacity; }
+    .topbar-link { transition: color .14s ease, border-color .14s ease; }
+
+    /* Lenis smooth scroll */
+    html.lenis, html.lenis body { height: auto; }
+    .lenis.lenis-smooth { scroll-behavior: auto !important; }
+    .lenis.lenis-stopped { overflow: hidden; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+      .grain { display: none; }
+    }
   </style>
 </head>
 <body>
+
+<div class="grain"></div>
 
 <!-- ── Landing ── -->
 <section id="landingPage" class="landing">
@@ -668,9 +701,15 @@ function renderMessages() {
     return;
   }
 
+  let i = 0;
   for (const msg of conv.messages) {
-    if (msg.role === 'user') el.appendChild(makeUserBubble(msg.content));
-    else el.appendChild(makeAIBubble(msg.data, msg.variant));
+    const node = msg.role === 'user'
+      ? makeUserBubble(msg.content)
+      : makeAIBubble(msg.data, msg.variant);
+    el.appendChild(node);
+    animateIn(node, Math.min(i, 8) * 0.04);
+    if (msg.role !== 'user') enhanceCard(node);
+    i++;
   }
   scrollBottom();
 }
@@ -693,10 +732,10 @@ function makeAIBubble(data, variant) {
   const confBar = conf != null ? `
     <div class="mt-3">
       <div class="flex justify-between text-xs text-gray-500 mb-1">
-        <span class="label">Confidence</span><span class="text-gray-900 font-medium">${conf}%</span>
+        <span class="label">Confidence</span><span class="text-gray-900 font-medium conf-num" data-conf="${conf}">${conf}%</span>
       </div>
-      <div class="w-full bg-gray-200 rounded-full h-1.5">
-        <div class="conf-bar-fill h-1.5 rounded-full" style="width:${conf}%"></div>
+      <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+        <div class="conf-bar-fill h-1.5 rounded-full" data-conf="${conf}" style="width:0%"></div>
       </div>
     </div>` : '';
 
@@ -746,7 +785,9 @@ async function sendQuestion() {
   input.style.height = 'auto';
 
   appendMessage(activeId, { role: 'user', content: question });
-  document.getElementById('messages').appendChild(makeUserBubble(question));
+  const userNode = makeUserBubble(question);
+  document.getElementById('messages').appendChild(userNode);
+  animateIn(userNode);
 
   const typingEl = addTyping();
 
@@ -763,7 +804,10 @@ async function sendQuestion() {
       addError(data.detail || 'Server error');
     } else {
       appendMessage(activeId, { role: 'assistant', data, variant, content: data.rationale || '' });
-      document.getElementById('messages').appendChild(makeAIBubble(data, variant));
+      const aiNode = makeAIBubble(data, variant);
+      document.getElementById('messages').appendChild(aiNode);
+      animateIn(aiNode);
+      enhanceCard(aiNode);
       scrollBottom();
     }
   } catch (err) {
@@ -799,6 +843,50 @@ function addError(msg) {
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ── Motion helpers ─────────────────────────────────────────────────────────
+const EASE = [0.22, 1, 0.36, 1];
+function prefersReduced() {
+  return window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+function animateIn(node, delay = 0) {
+  if (!node || !window.Motion || prefersReduced()) return;
+  Motion.animate(
+    node,
+    { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
+    { duration: 0.45, delay, easing: EASE }
+  );
+}
+function enhanceCard(node) {
+  if (!node) return;
+  const bar = node.querySelector('.conf-bar-fill');
+  const num = node.querySelector('.conf-num');
+  const chips = node.querySelectorAll('.source-chip');
+  const reduce = prefersReduced() || !window.Motion;
+
+  if (bar) {
+    const target = parseFloat(bar.dataset.conf || '0');
+    if (reduce) {
+      bar.style.width = target + '%';
+      if (num) num.textContent = Math.round(target) + '%';
+    } else {
+      Motion.animate(bar, { width: ['0%', target + '%'] }, { duration: 0.9, easing: EASE });
+      if (num) {
+        Motion.animate(0, target, {
+          duration: 0.9, easing: EASE,
+          onUpdate: v => { num.textContent = Math.round(v) + '%'; },
+        });
+      }
+    }
+  }
+  if (chips.length && !reduce) {
+    Motion.animate(
+      chips,
+      { opacity: [0, 1], transform: ['translateY(6px)', 'translateY(0)'] },
+      { delay: Motion.stagger(0.05), duration: 0.4, easing: EASE }
+    );
+  }
+}
 function autoResize(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 160) + 'px';
@@ -814,9 +902,14 @@ function updateVariantDesc() {
   document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
 }
 function launchApp() {
+  const app = document.getElementById('appShell');
   document.getElementById('landingPage').classList.add('hidden-view');
-  document.getElementById('appShell').classList.remove('hidden-view');
+  app.classList.remove('hidden-view');
   document.body.style.overflow = 'hidden';
+  if (window.Motion && !prefersReduced()) {
+    Motion.animate(app, { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
+      { duration: 0.45, easing: EASE });
+  }
   setTimeout(() => document.getElementById('questionInput').focus(), 0);
 }
 function fillExample(question) {
@@ -872,6 +965,28 @@ const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);
 else newConversation();
 document.body.style.overflow = 'auto';
+
+// ── Smooth scroll + entrance choreography ────────────────────────────────────
+(function initMotion() {
+  if (prefersReduced()) return;
+
+  // Lenis — buttery momentum scrolling on the landing/document
+  if (window.Lenis) {
+    const lenis = new Lenis({ lerp: 0.1, smoothWheel: true, wheelMultiplier: 1 });
+    (function raf(t) { lenis.raf(t); requestAnimationFrame(raf); })();
+  }
+
+  // Landing hero reveal (only if the landing is the current view)
+  const landingVisible = !document.getElementById('landingPage').classList.contains('hidden-view');
+  if (window.Motion && landingVisible) {
+    Motion.animate('.hero-copy > *',
+      { opacity: [0, 1], transform: ['translateY(16px)', 'translateY(0)'] },
+      { delay: Motion.stagger(0.08), duration: 0.6, easing: EASE });
+    Motion.animate('.product-panel',
+      { opacity: [0, 1], transform: ['translateY(20px)', 'translateY(0)'] },
+      { duration: 0.7, delay: 0.18, easing: EASE });
+  }
+})();
 </script>
 </body>
 </html>
