@@ -247,6 +247,18 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["predicted_answer"], "2026-09-15")
         self.assertEqual(payload["range_forecast"]["p50"], "2026-09-15")
 
+    def test_predict_rejects_unknown_question_type(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "What will Example Corp revenue be in Q4 2026?",
+                "question_type": "essay",
+                "attach_evidence": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()
