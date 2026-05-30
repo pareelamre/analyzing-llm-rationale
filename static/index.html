@@ -277,6 +277,42 @@
     }
     .hero-action.primary { background: var(--ink); color: #fff; }
     .hero-action:hover { background: var(--ink); color: #fff; }
+    .landing-question {
+      margin-top: 30px;
+      max-width: 560px;
+      border: 1px solid var(--border-2);
+      border-radius: 3px;
+      background: #fff;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 10px;
+      padding: 10px;
+    }
+    .landing-question textarea {
+      min-height: 44px;
+      max-height: 112px;
+      padding: 8px 6px;
+      font-size: 16px;
+      line-height: 1.45;
+    }
+    .landing-question:focus-within {
+      border-color: var(--ink);
+      box-shadow: 0 0 0 3px rgba(0,0,0,.05);
+    }
+    .quiet-link {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-dim);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      background: none;
+      border: 0;
+      padding: 0;
+      width: fit-content;
+      cursor: pointer;
+    }
+    .quiet-link:hover { color: var(--ink); }
     .product-panel {
       background: #fff;
       border: 1px solid var(--border);
@@ -307,6 +343,20 @@
       font-size: 11px;
       margin-bottom: 7px;
     }
+    .advanced-panel {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+    .advanced-panel summary {
+      cursor: pointer;
+      color: var(--text-dim);
+      font-size: 12px;
+      list-style: none;
+      user-select: none;
+    }
+    .advanced-panel summary::-webkit-details-marker { display: none; }
+    .advanced-panel summary:hover { color: var(--ink); }
+    .advanced-panel[open] summary { color: var(--ink); margin-bottom: 12px; }
     @media (max-width: 900px) {
       .hero-grid { grid-template-columns: 1fr; }
       .hero-copy { min-height: auto; padding-bottom: 28px; }
@@ -317,6 +367,8 @@
       .landing-links { gap: 12px; }
       .landing-shell { padding-top: 28px; }
       .hero-title { font-size: 44px; }
+      .landing-question { grid-template-columns: 1fr; }
+      .landing-question .hero-action { width: 100%; }
     }
   </style>
 </head>
@@ -345,9 +397,19 @@
           Ask a yes/no question. Foresea returns an answer, confidence, rationale,
           and the articles it used.
         </p>
-        <div class="hero-actions">
-          <button class="hero-action primary" onclick="launchApp()">Launch Foresea</button>
-        </div>
+        <form class="landing-question" onsubmit="submitLandingQuestion(event)">
+          <textarea
+            id="landingQuestionInput"
+            rows="2"
+            placeholder="Will the Federal Reserve cut interest rates before September 30, 2026?"
+            oninput="autoResize(this)"
+            onkeydown="handleLandingKey(event)"
+          ></textarea>
+          <button class="hero-action primary" type="submit">Ask</button>
+        </form>
+        <button type="button" class="quiet-link" onclick="startExample('Will OpenAI file for an IPO before December 15, 2026?')">
+          Use an example
+        </button>
       </div>
 
       <div class="product-panel">
@@ -402,22 +464,24 @@
     <div id="convList"></div>
   </div>
 
-  <!-- Variant selector -->
-  <div>
-    <p class="label px-1 mb-2">Prompt variant</p>
-    <select id="variantSelect" class="variant-select" onchange="updateVariantDesc()">
-      <option value="variant0_neutral_baseline">Baseline</option>
-      <option value="variant1_predicted_event">Predicted Event</option>
-      <option value="variant2_key_attribute">Key Attribute</option>
-      <option value="variant3_reasoning_type">Reasoning Type</option>
-      <option value="variant4_credibility">Credibility</option>
-      <option value="variant5_key_conditions">Key Conditions</option>
-      <option value="variant6_step_by_step_reasoning">Step-by-Step</option>
-      <option value="variant7_uncertainty_language">Uncertainty</option>
-      <option value="variant8_temporal_anchors">Temporal Anchors</option>
-    </select>
-    <p id="variantDesc" class="text-xs text-gray-500 mt-2 px-1"></p>
-  </div>
+  <details class="advanced-panel">
+    <summary>Advanced</summary>
+    <div>
+      <p class="label px-1 mb-2">Prompt variant</p>
+      <select id="variantSelect" class="variant-select" onchange="updateVariantDesc()">
+        <option value="variant0_neutral_baseline">Baseline</option>
+        <option value="variant1_predicted_event">Predicted Event</option>
+        <option value="variant2_key_attribute">Key Attribute</option>
+        <option value="variant3_reasoning_type">Reasoning Type</option>
+        <option value="variant4_credibility">Credibility</option>
+        <option value="variant5_key_conditions">Key Conditions</option>
+        <option value="variant6_step_by_step_reasoning">Step-by-Step</option>
+        <option value="variant7_uncertainty_language">Uncertainty</option>
+        <option value="variant8_temporal_anchors">Temporal Anchors</option>
+      </select>
+      <p id="variantDesc" class="text-xs text-gray-500 mt-2 px-1"></p>
+    </div>
+  </details>
 
   <!-- Model info -->
   <div class="border border-gray-200 rounded-sm bg-white p-3 text-xs text-gray-500 space-y-1">
@@ -742,6 +806,9 @@ function autoResize(el) {
 function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
 }
+function handleLandingKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitLandingQuestion(e); }
+}
 function updateVariantDesc() {
   const v = document.getElementById('variantSelect').value;
   document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
@@ -759,8 +826,25 @@ function fillExample(question) {
   input.focus();
 }
 function startExample(question) {
+  startForecast(question);
+}
+function submitLandingQuestion(event) {
+  event.preventDefault();
+  const input = document.getElementById('landingQuestionInput');
+  const question = input.value.trim();
+  if (!question) {
+    input.focus();
+    return;
+  }
+  startForecast(question);
+}
+function startForecast(question) {
   launchApp();
+  if (!activeId || (getConv(activeId)?.messages || []).length > 0) {
+    newConversation();
+  }
   fillExample(question);
+  sendQuestion();
 }
 function recordPageVisit() {
   const payload = JSON.stringify({
