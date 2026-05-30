@@ -511,6 +511,19 @@ class PredictRequest(BaseModel):
         max_length=12,
         description="Candidate answers for `multiple_choice` questions (optional; the model can infer them).",
     )
+    openrouter_api_key: Optional[str] = Field(
+        None,
+        max_length=256,
+        description=(
+            "User-supplied OpenRouter API key. When set, this request is routed through "
+            "OpenRouter using `openrouter_model` instead of the server's default provider."
+        ),
+    )
+    openrouter_model: Optional[str] = Field(
+        None,
+        max_length=128,
+        description="OpenRouter model ID (e.g. `openai/gpt-4o`, `anthropic/claude-3.5-sonnet`).",
+    )
 
     @field_validator("question")
     @classmethod
@@ -804,9 +817,10 @@ def _build_typed_response(
 ) -> "PredictResponse":
     qtype = (req.question_type or (parsed.get("type") if parsed else None) or "binary").lower()
     rationale = parsed.get("rationale") if parsed else None
+    model_key = req.openrouter_model or _state["model_key"]
     base = dict(
         variant=req.variant,
-        model_key=_state["model_key"],
+        model_key=model_key,
         evidence_sources=_evidence_sources(evidence_articles),
         evidence_articles=[NewsArticle(**a) for a in evidence_articles],
         evidence_error=evidence_error,
@@ -1151,9 +1165,19 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
             messages.append({"role": role, "content": content[:4000]})
     messages.append({"role": "user", "content": user_prompt})
 
-    provider = _state["provider"]
-    temperature = _state["temperature"]
-    max_tokens = _state["max_tokens"]
+    # Use user-supplied OpenRouter key/model if provided, otherwise fall back to server default.
+    if req.openrouter_api_key and req.openrouter_model:
+        from analyzing_llm_rationale.providers import OpenRouterProvider
+        provider = OpenRouterProvider(
+            model_name=req.openrouter_model,
+            api_key=req.openrouter_api_key,
+        )
+        temperature = 0.7
+        max_tokens = _state.get("max_tokens", 1024)
+    else:
+        provider = _state["provider"]
+        temperature = _state["temperature"]
+        max_tokens = _state["max_tokens"]
 
     loop = asyncio.get_running_loop()
     try:
