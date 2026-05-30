@@ -447,6 +447,12 @@
     @media (max-width: 640px) {
       .tr-stats { grid-template-columns: repeat(2, 1fr); }
     }
+
+    /* Multiple-choice option bars */
+    .opt-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--text); margin-bottom: 4px; }
+    .opt-track { height: 8px; background: #f0f0f0; border-radius: 2px; overflow: hidden; }
+    .opt-fill { display: block; height: 100%; background: #c9c9c9; border-radius: 2px; }
+    .opt-fill.top { background: var(--ink); }
   </style>
 </head>
 <body>
@@ -752,10 +758,11 @@ function renderMessages() {
       <div id="emptyState" class="max-w-xl mx-auto w-full text-center pt-16 sm:pt-28 px-4">
         <p class="label mb-4">New forecast</p>
         <h2 class="display text-3xl sm:text-5xl text-gray-900 leading-tight mb-5">
-          Ask a yes or no question.
+          Ask a forecasting question.
         </h2>
         <p class="text-[15px] text-gray-500 leading-relaxed">
-          The answer will include a probability, model rationale, and linked evidence sources.
+          Yes/no, multiple choice, a number, or a date — Foresea returns a calibrated
+          estimate, its rationale, and linked evidence sources.
         </p>
       </div>`;
     return;
@@ -782,22 +789,63 @@ function makeUserBubble(text) {
 }
 
 function makeAIBubble(data, variant) {
-  const answer = (data.predicted_answer || '').toUpperCase();
-  const isYes  = answer === 'YES';
-  const conf   = data.confidence != null ? Math.round(data.confidence * 100) : null;
+  const qtype = data.question_type || 'binary';
   const rationale = data.rationale || '';
   const sources   = data.evidence_sources || [];
   const variantLabel = VARIANT_DESCS[variant] || variant || '';
+  const p = x => Math.round((x || 0) * 100);
 
-  const confBar = conf != null ? `
-    <div class="mt-3">
-      <div class="flex justify-between text-xs text-gray-500 mb-1">
-        <span class="label">Confidence</span><span class="text-gray-900 font-medium conf-num" data-conf="${conf}">${conf}%</span>
+  let verdict;
+  if (qtype === 'multiple_choice' && (data.options || []).length) {
+    const opts = data.options.slice().sort((a, b) => b.probability - a.probability);
+    const top = opts[0];
+    verdict = `
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="yes-badge text-lg font-semibold px-4 py-1 rounded-full">${escHtml(top.label)}</span>
+        <span class="text-gray-500 text-sm">${p(top.probability)}% most likely</span>
       </div>
-      <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-        <div class="conf-bar-fill h-1.5 rounded-full" data-conf="${conf}" style="width:0%"></div>
+      <div class="mt-3 space-y-2">
+        ${opts.map((o, i) => `
+          <div>
+            <div class="opt-head"><span>${escHtml(o.label)}</span><span class="text-gray-900 font-medium">${p(o.probability)}%</span></div>
+            <div class="opt-track"><i class="opt-fill ${i === 0 ? 'top' : ''}" data-w="${p(o.probability)}" style="width:0%"></i></div>
+          </div>`).join('')}
+      </div>`;
+  } else if (qtype === 'numeric' || qtype === 'date') {
+    const rf = data.range_forecast || {};
+    const unit = rf.unit ? ' ' + escHtml(rf.unit) : '';
+    const headline = escHtml(rf.p50 ?? data.predicted_answer ?? '—');
+    const hasRange = rf.p10 != null && rf.p90 != null;
+    verdict = `
+      <div class="flex items-baseline gap-3 flex-wrap">
+        <span class="display" style="font-size:30px;color:var(--ink);line-height:1">${headline}${unit}</span>
+        <span class="text-gray-500 text-sm">median estimate</span>
       </div>
-    </div>` : '';
+      ${hasRange ? `
+      <div class="mt-3 grid grid-cols-3 gap-px rounded-sm overflow-hidden" style="background:var(--border);border:1px solid var(--border)">
+        <div class="bg-white px-3 py-2 text-center"><div class="label">Low · p10</div><div class="text-gray-900 font-medium mt-1">${escHtml(rf.p10)}${unit}</div></div>
+        <div class="bg-white px-3 py-2 text-center"><div class="label">Median</div><div class="text-gray-900 font-medium mt-1">${escHtml(rf.p50)}${unit}</div></div>
+        <div class="bg-white px-3 py-2 text-center"><div class="label">High · p90</div><div class="text-gray-900 font-medium mt-1">${escHtml(rf.p90)}${unit}</div></div>
+      </div>` : ''}`;
+  } else {
+    const answer = (data.predicted_answer || '').toUpperCase();
+    const isYes  = answer === 'YES';
+    const conf   = data.confidence != null ? p(data.confidence) : null;
+    verdict = `
+      <div class="flex items-center gap-3">
+        <span class="${isYes ? 'yes-badge' : 'no-badge'} text-lg font-semibold px-4 py-1 rounded-full">${answer || '?'}</span>
+        ${conf != null ? `<span class="text-gray-500 text-sm">${conf}% confidence</span>` : ''}
+      </div>
+      ${conf != null ? `
+      <div class="mt-3">
+        <div class="flex justify-between text-xs text-gray-500 mb-1">
+          <span class="label">Confidence</span><span class="text-gray-900 font-medium conf-num" data-conf="${conf}">${conf}%</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+          <div class="conf-bar-fill h-1.5 rounded-full" data-conf="${conf}" style="width:0%"></div>
+        </div>
+      </div>` : ''}`;
+  }
 
   const sourcesHtml = sources.length ? `
     <div class="mt-4 pt-3 border-t border-gray-200">
@@ -809,15 +857,12 @@ function makeAIBubble(data, variant) {
       ).join('')}</div>
     </div>` : '';
 
+  const typeTag = qtype !== 'binary' ? ' · ' + qtype.replace(/_/g, ' ') : '';
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
   div.innerHTML = `
     <div class="msg-ai p-4 sm:p-5 space-y-3">
-      <div class="flex items-center gap-3">
-        <span class="${isYes ? 'yes-badge' : 'no-badge'} text-lg font-semibold px-4 py-1 rounded-full">${answer || '?'}</span>
-        ${conf != null ? `<span class="text-gray-500 text-sm">${conf}% confidence</span>` : ''}
-      </div>
-      ${confBar}
+      ${verdict}
       ${rationale ? `
         <div class="pt-2">
           <p class="label mb-1">Rationale</p>
@@ -826,7 +871,7 @@ function makeAIBubble(data, variant) {
       ${sourcesHtml}
       <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
         <span class="logo-dot" style="width:5px;height:5px"></span>
-        gpt-oss-120b · ${escHtml(variantLabel)}
+        gpt-oss-120b${typeTag} · ${escHtml(variantLabel)}
       </div>
     </div>`;
   return div;
@@ -933,24 +978,28 @@ function animateIn(node, delay = 0) {
 }
 function enhanceCard(node) {
   if (!node) return;
-  const bar = node.querySelector('.conf-bar-fill');
+  const bars = node.querySelectorAll('.conf-bar-fill, .opt-fill');
   const num = node.querySelector('.conf-num');
   const chips = node.querySelectorAll('.source-chip');
   const reduce = prefersReduced() || !window.Motion;
 
-  if (bar) {
-    const target = parseFloat(bar.dataset.conf || '0');
+  bars.forEach(bar => {
+    const target = parseFloat(bar.dataset.conf || bar.dataset.w || '0');
     if (reduce) {
       bar.style.width = target + '%';
-      if (num) num.textContent = Math.round(target) + '%';
     } else {
       Motion.animate(bar, { width: ['0%', target + '%'] }, { duration: 0.9, easing: EASE });
-      if (num) {
-        Motion.animate(0, target, {
-          duration: 0.9, easing: EASE,
-          onUpdate: v => { num.textContent = Math.round(v) + '%'; },
-        });
-      }
+    }
+  });
+  if (num) {
+    const target = parseFloat(num.dataset.conf || '0');
+    if (reduce) {
+      num.textContent = Math.round(target) + '%';
+    } else {
+      Motion.animate(0, target, {
+        duration: 0.9, easing: EASE,
+        onUpdate: v => { num.textContent = Math.round(v) + '%'; },
+      });
     }
   }
   if (chips.length && !reduce) {
