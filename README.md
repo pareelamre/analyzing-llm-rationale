@@ -35,7 +35,7 @@ curl -X POST https://analyzing-llm-rationale-hy7gvnvt4a-uc.a.run.app/predict \
 ```
 
 When `attach_evidence` is true and no `news_articles` are supplied, `/predict`
-fetches and ranks current news evidence from GDELT and Google News RSS by
+fetches and ranks current news evidence from GDELT, Google News RSS, and Stooq by
 default, injects it into the model prompt, and returns the selected
 `evidence_articles` with the forecast. Supplying `news_articles` skips automatic
 retrieval and uses the caller-provided evidence.
@@ -111,7 +111,7 @@ Optional:
 - `news_articles`: caller-supplied evidence articles. If provided, automatic
   evidence retrieval is skipped.
 - `attach_evidence`: defaults to `true`. When true and `news_articles` is empty,
-  the API fetches current evidence from GDELT and Google News RSS.
+  the API fetches current evidence from GDELT, Google News RSS, and Stooq.
 - `evidence_top_k`: number of evidence articles to attach, capped by the server.
 - `variant`: prompt variant. Defaults to `variant0_neutral_baseline`.
 - `created_time`, `publish_time`, `resolve_time`, `days_open`: optional
@@ -330,6 +330,7 @@ PYTHONPATH=src analyze-llm-rationale fetch-and-rank \
   --question "Will X happen by date Y?" \
   --source gdelt \
   --source google-news \
+  --source stooq \
   --top-k 5
 ```
 

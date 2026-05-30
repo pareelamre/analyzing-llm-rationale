@@ -58,7 +58,7 @@ def _fetch_secret_from_gcp(secret_name: str) -> Optional[str]:
         return None
 
 REMOTE_PROVIDER_CHOICES = ["local-qwen", "hf-router", "openai-compatible"]
-NEWS_SOURCE_CHOICES = ["newsapi", "gdelt", "google-news", "rss"]
+NEWS_SOURCE_CHOICES = ["newsapi", "gdelt", "google-news", "stooq", "rss"]
 
 
 def repo_root() -> Path:
@@ -553,7 +553,7 @@ def serve_command(args: argparse.Namespace) -> int:
                 model=args.router_model_name,
                 newsapi_key=newsapi_key,
                 use_query_planner=False,
-                fetch_sources=args.evidence_source or ("gdelt", "google-news"),
+                fetch_sources=args.evidence_source or ("gdelt", "google-news", "stooq"),
                 summarize_articles=False,
                 use_embeddings=False,
             )
