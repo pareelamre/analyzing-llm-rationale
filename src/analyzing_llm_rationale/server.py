@@ -14,7 +14,11 @@ from typing import Any, Dict, List, Optional
 import duckdb
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
+import smtplib
+import traceback
+from email.message import EmailMessage
+import threading
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -184,6 +188,77 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "X-API-Key"],
 )
+
+
+# Redirect middleware: send requests from run.app hosts to the custom domain
+@app.middleware("http")
+async def host_redirect_middleware(request: Request, call_next):
+    host = (request.headers.get("host") or "").lower()
+    # Target domain can be overridden by env var CUSTOM_DOMAIN
+    target_domain = os.environ.get("CUSTOM_DOMAIN", "foresea.mine").lower()
+    # Redirect only run.app hosts (avoid loop when already on target domain)
+    if host.endswith(".run.app") and target_domain and target_domain not in host:
+        url = request.url
+        new_url = f"https://{target_domain}{url.path}"
+        if url.query:
+            new_url = new_url + "?" + url.query
+        return RedirectResponse(url=new_url, status_code=301)
+    return await call_next(request)
+
+
+# Middleware to catch unhandled exceptions and send an alert email
+@app.middleware("http")
+async def exception_alert_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        # Build alert
+        tb = traceback.format_exc()
+        subject = f"Foresea server error: {type(exc).__name__}"
+        body = (
+            f"Request: {request.method} {request.url}\n"
+            f"Host: {request.headers.get('host')}\n\n"
+            f"Exception:\n{tb}"
+        )
+        # Send email in background thread to avoid blocking
+        try:
+            threading.Thread(target=_send_alert_email, args=(subject, body), daemon=True).start()
+        except Exception:
+            pass
+        raise
+
+
+def _send_alert_email(subject: str, body: str) -> None:
+    """Send a plain-text alert email. Configured via env vars:
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, ALERT_FROM, ALERT_TO
+    """
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+    alert_from = os.environ.get("ALERT_FROM", "noreply@foresea.mine")
+    alert_to = os.environ.get("ALERT_TO", "pareel.amre@gmail.com")
+
+    if not smtp_host:
+        return
+
+    msg = EmailMessage()
+    msg["From"] = alert_from
+    msg["To"] = alert_to
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    try:
+        if smtp_user and smtp_password:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
+                s.starttls()
+                s.login(smtp_user, smtp_password)
+                s.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
+                s.send_message(msg)
+    except Exception:
+        return
 
 if _STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
