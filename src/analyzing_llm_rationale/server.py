@@ -180,6 +180,14 @@ def _decode_session(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Invalid session token.") from None
 
 
+def _require_session(request: Request) -> dict:
+    """Return session claims from a required bearer token."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization: Bearer header.")
+    return _decode_session(auth[7:])
+
+
 _ds_client: Any = None
 
 
@@ -212,6 +220,118 @@ def _upsert_user(sub: str, email: str, name: str, picture: str) -> None:
         last_login=datetime.now(timezone.utc),
     )
     client.put(entity)
+
+
+def _conversation_key(client: Any, user_id: str, conversation_id: str) -> Any:
+    return client.key("User", user_id, "Conversation", conversation_id)
+
+
+def _message_key(client: Any, user_id: str, conversation_id: str, message_id: str) -> Any:
+    return client.key(
+        "User",
+        user_id,
+        "Conversation",
+        conversation_id,
+        "Message",
+        message_id,
+    )
+
+
+def _normalise_message(message: Dict[str, Any], index: int) -> Dict[str, Any]:
+    normalised = dict(message)
+    normalised.setdefault("id", f"msg_{index}")
+    normalised.setdefault("createdAt", normalised.get("updatedAt") or index)
+    return normalised
+
+
+def _list_conversations(user_id: str) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        conversations = list(_state.setdefault("chat_conversations", {}).get(user_id, {}).values())
+        return sorted(conversations, key=lambda c: c.get("updatedAt") or 0, reverse=True)
+    query = client.query(kind="Conversation", ancestor=client.key("User", user_id))
+    conversations = []
+    for entity in query.fetch(limit=100):
+        conversations.append({
+            "id": entity.key.name,
+            "title": entity.get("title", "New conversation"),
+            "createdAt": entity.get("createdAt"),
+            "updatedAt": entity.get("updatedAt"),
+            "messages": _list_messages(user_id, entity.key.name),
+        })
+    conversations.sort(key=lambda c: c.get("updatedAt") or 0, reverse=True)
+    return conversations
+
+
+def _list_messages(user_id: str, conversation_id: str) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        conv = _state.setdefault("chat_conversations", {}).get(user_id, {}).get(conversation_id, {})
+        return conv.get("messages", [])
+    query = client.query(kind="Message", ancestor=_conversation_key(client, user_id, conversation_id))
+    messages = []
+    for entity in query.fetch(limit=500):
+        message = dict(entity)
+        message["id"] = entity.key.name
+        messages.append(message)
+    messages.sort(key=lambda m: (m.get("createdAt") or 0, m.get("id") or ""))
+    return messages
+
+
+def _put_conversation(user_id: str, conversation: Dict[str, Any]) -> Dict[str, Any]:
+    client = _get_datastore()
+    messages = [
+        _normalise_message(message, index)
+        for index, message in enumerate(conversation.get("messages", []))
+    ]
+    conversation = dict(conversation)
+    conversation["messages"] = messages
+    if client is None:
+        _state.setdefault("chat_conversations", {}).setdefault(user_id, {})[conversation["id"]] = conversation
+        return conversation
+    from google.cloud import datastore as _ds
+    key = _conversation_key(client, user_id, conversation["id"])
+    entity = _ds.Entity(key=key)
+    entity.update({
+        "title": conversation.get("title", "New conversation"),
+        "createdAt": conversation.get("createdAt"),
+        "updatedAt": conversation.get("updatedAt"),
+        "saved_at": datetime.now(timezone.utc),
+    })
+    message_keys = [
+        _message_key(client, user_id, conversation["id"], message["id"])
+        for message in messages
+    ]
+    with client.transaction():
+        client.put(entity)
+        existing_query = client.query(kind="Message", ancestor=key)
+        existing_query.keys_only()
+        existing_keys = [message_entity.key for message_entity in existing_query.fetch()]
+        stale_keys = [existing_key for existing_key in existing_keys if existing_key not in message_keys]
+        if stale_keys:
+            client.delete_multi(stale_keys)
+        message_entities = []
+        for message, message_key in zip(messages, message_keys):
+            message_entity = _ds.Entity(key=message_key, exclude_from_indexes=("content", "data"))
+            message_entity.update(message)
+            message_entities.append(message_entity)
+        if message_entities:
+            client.put_multi(message_entities)
+    return conversation
+
+
+def _delete_conversation(user_id: str, conversation_id: str) -> None:
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("chat_conversations", {}).setdefault(user_id, {}).pop(conversation_id, None)
+        return
+    key = _conversation_key(client, user_id, conversation_id)
+    message_query = client.query(kind="Message", ancestor=key)
+    message_query.keys_only()
+    message_keys = [entity.key for entity in message_query.fetch()]
+    if message_keys:
+        client.delete_multi(message_keys)
+    client.delete(key)
 
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
@@ -268,8 +388,8 @@ app.add_middleware(
         "http://localhost:3000",
     ],
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-API-Key"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "X-API-Key", "Authorization"],
 )
 
 
@@ -695,6 +815,19 @@ class AuthMeResponse(BaseModel):
     picture: str
 
 
+class ChatConversation(BaseModel):
+    """A user-owned chat conversation synced by the browser UI."""
+    id: str = Field(..., min_length=1, max_length=120)
+    title: str = Field("New conversation", max_length=200)
+    createdAt: int = Field(..., ge=0)
+    updatedAt: int = Field(..., ge=0)
+    messages: List[Dict[str, Any]] = Field(default_factory=list, max_length=200)
+
+
+class ChatConversationList(BaseModel):
+    conversations: List[ChatConversation]
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _check_api_key(request: Request) -> None:
     if not _REQUIRED_API_KEY:
@@ -1097,16 +1230,46 @@ async def auth_google(req: GoogleAuthRequest) -> SessionResponse:
 @app.get("/auth/me", tags=["Auth"], summary="Get current user", response_model=AuthMeResponse)
 async def auth_me(request: Request) -> AuthMeResponse:
     """Return the authenticated user decoded from the `Authorization: Bearer` session token."""
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing Authorization: Bearer header.")
-    claims = _decode_session(auth[7:])
+    claims = _require_session(request)
     return AuthMeResponse(
         user_id=claims["sub"],
         email=claims["email"],
         name=claims["name"],
         picture=claims["picture"],
     )
+
+
+@app.get("/chat/conversations", tags=["Auth"], response_model=ChatConversationList, include_in_schema=False)
+async def chat_conversations(request: Request) -> ChatConversationList:
+    """List conversations for the signed-in user."""
+    claims = _require_session(request)
+    loop = asyncio.get_running_loop()
+    conversations = await loop.run_in_executor(None, _list_conversations, claims["sub"])
+    return ChatConversationList(conversations=[ChatConversation(**c) for c in conversations])
+
+
+@app.put("/chat/conversations/{conversation_id}", tags=["Auth"], response_model=ChatConversation, include_in_schema=False)
+async def save_chat_conversation(
+    conversation_id: str,
+    conversation: ChatConversation,
+    request: Request,
+) -> ChatConversation:
+    """Create or replace one conversation for the signed-in user."""
+    claims = _require_session(request)
+    if conversation.id != conversation_id:
+        raise HTTPException(status_code=400, detail="Conversation ID path/body mismatch.")
+    loop = asyncio.get_running_loop()
+    saved = await loop.run_in_executor(None, _put_conversation, claims["sub"], conversation.model_dump())
+    return ChatConversation(**saved)
+
+
+@app.delete("/chat/conversations/{conversation_id}", tags=["Auth"], include_in_schema=False)
+async def delete_chat_conversation(conversation_id: str, request: Request) -> Dict[str, bool]:
+    """Delete one conversation for the signed-in user."""
+    claims = _require_session(request)
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _delete_conversation, claims["sub"], conversation_id)
+    return {"ok": True}
 
 
 @app.post(
