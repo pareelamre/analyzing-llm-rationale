@@ -784,6 +784,17 @@ async function sendQuestion() {
   input.value = '';
   input.style.height = 'auto';
 
+  // Multi-turn memory: send the most recent prior turns as context
+  const priorMessages = getConv(activeId)?.messages || [];
+  const history = priorMessages.slice(-6).map(m => ({
+    role: m.role === 'user' ? 'user' : 'assistant',
+    content: m.role === 'user'
+      ? m.content
+      : `Answer: ${m.data?.predicted_answer ?? '?'}`
+        + (m.data?.confidence != null ? ` (confidence ${Math.round(m.data.confidence * 100)}%)` : '')
+        + (m.data?.rationale ? `. ${m.data.rationale}` : ''),
+  }));
+
   appendMessage(activeId, { role: 'user', content: question });
   const userNode = makeUserBubble(question);
   document.getElementById('messages').appendChild(userNode);
@@ -795,7 +806,7 @@ async function sendQuestion() {
     const resp = await fetch('/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, variant }),
+      body: JSON.stringify({ question, variant, history }),
     });
     const data = await resp.json();
     typingEl.remove();

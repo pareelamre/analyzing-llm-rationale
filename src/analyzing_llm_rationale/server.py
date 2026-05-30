@@ -287,6 +287,14 @@ class PredictRequest(BaseModel):
     publish_time: Optional[str] = Field(None, max_length=50, description="ISO 8601 question publish time.")
     resolve_time: Optional[str] = Field(None, max_length=50, description="ISO 8601 resolution deadline.")
     days_open: Optional[int] = Field(None, ge=0, le=36500, description="Days the question has been open.")
+    history: List[Dict[str, str]] = Field(
+        default_factory=list,
+        max_length=12,
+        description=(
+            "Prior conversation turns for multi-turn context, oldest first. "
+            "Each item is `{\"role\": \"user\"|\"assistant\", \"content\": \"...\"}`."
+        ),
+    )
 
     @field_validator("question")
     @classmethod
@@ -669,10 +677,13 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     record["news_articles"] = evidence_articles
 
     user_prompt = build_user_prompt(record, prompt_text, "full")
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
+    messages = [{"role": "system", "content": system_prompt}]
+    for turn in req.history[-12:]:
+        role = turn.get("role")
+        content = (turn.get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content[:4000]})
+    messages.append({"role": "user", "content": user_prompt})
 
     provider = _state["provider"]
     temperature = _state["temperature"]
