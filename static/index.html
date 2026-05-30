@@ -539,7 +539,7 @@
   <button class="new-chat-btn" onclick="newConversation()">New forecast</button>
 
   <!-- Conversation list -->
-  <div class="flex-1 scrollable flex flex-col gap-1 min-h-0">
+  <div class="flex-1 scrollable flex flex-col gap-1 min-h-0" data-lenis-prevent>
     <p class="label px-1 mb-2">Recent</p>
     <div id="convList"></div>
   </div>
@@ -598,7 +598,7 @@
   </header>
 
   <!-- Messages -->
-  <div id="messages" class="scrollable flex-1 px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"></div>
+  <div id="messages" data-lenis-prevent class="scrollable flex-1 px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"></div>
 
   <!-- Input -->
   <div class="border-t border-gray-200 px-3 sm:px-4 py-3 sm:py-4 flex-shrink-0">
@@ -636,7 +636,7 @@
     </div>
     <button class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeTrackRecord()">Close</button>
   </div>
-  <div id="trackBody" class="tr-body"></div>
+  <div id="trackBody" class="tr-body" data-lenis-prevent></div>
 </div>
 
 <script>
