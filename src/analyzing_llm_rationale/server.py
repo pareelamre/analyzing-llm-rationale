@@ -751,27 +751,39 @@ _TYPE_SCHEMAS = {
 }
 
 
-def _typing_instruction(question_type: Optional[str], options: List[str]) -> str:
-    instr = (
-        "\n\nForecast output contract: choose the schema that matches the question type. "
-        "This contract overrides any earlier variant template that says the answer must be Yes or No. "
-        "Only binary questions should use a Yes/No `predicted_answer`. "
-        "Respond with ONLY one JSON object (no prose)."
+def _typing_instruction(
+    question_type: Optional[str],
+    options: List[str],
+    has_history: bool = False,
+) -> str:
+    schemas = (
+        f"- binary: {_TYPE_SCHEMAS['binary']}\n"
+        f"- multiple_choice: {_TYPE_SCHEMAS['multiple_choice']} (probabilities sum to about 1)\n"
+        f"- numeric: {_TYPE_SCHEMAS['numeric']}\n"
+        f"- date: {_TYPE_SCHEMAS['date']}"
     )
-    if question_type:
-        instr += f"\nThe question type is '{question_type}'. Use exactly this schema:\n{_TYPE_SCHEMAS[question_type]}"
-    else:
-        instr += (
-            "\nFirst infer the question type, then use the matching schema:\n"
-            f"- binary: {_TYPE_SCHEMAS['binary']}\n"
-            f"- multiple_choice: {_TYPE_SCHEMAS['multiple_choice']} (probabilities sum to about 1)\n"
-            f"- numeric: {_TYPE_SCHEMAS['numeric']}\n"
-            f"- date: {_TYPE_SCHEMAS['date']}"
+    if has_history:
+        # Conversational mode: allow plain text for follow-ups
+        instr = (
+            "\n\nIf this message is a follow-up, clarification, or discussion about a prior forecast, "
+            "respond in plain natural language — no JSON.\n"
+            "If it is a new forecasting question, respond with ONLY one JSON object:\n" + schemas
         )
+    else:
+        instr = (
+            "\n\nForecast output contract: choose the schema that matches the question type. "
+            "This contract overrides any earlier variant template that says the answer must be Yes or No. "
+            "Only binary questions should use a Yes/No `predicted_answer`. "
+            "Respond with ONLY one JSON object (no prose).\n"
+            "First infer the question type, then use the matching schema:\n" + schemas
+        )
+    if question_type:
+        instr += f"\nThe question type is '{question_type}'. Use that schema."
     if options:
         joined = ", ".join(str(o) for o in options[:12])
-        instr += f"\nFor multiple_choice, assign probabilities across these options: {joined}."
-    instr += "\nUse `confidence` only for binary forecasts; for multiple_choice, use option probabilities."
+        instr += f"\nFor multiple_choice, assign probabilities across: {joined}."
+    if not has_history:
+        instr += "\nUse `confidence` only for binary forecasts; for multiple_choice, use option probabilities."
     return instr
 
 
@@ -835,6 +847,14 @@ def _build_typed_response(
 
     # binary (default) — reuse the battle-tested parser
     bparsed = parse_model_response(content, ("predicted_answer", "confidence", "rationale"))
+    # If no structured forecast fields were found and the response doesn't look like JSON,
+    # treat it as a plain conversational reply.
+    if not bparsed.get("predicted_answer") and not content.strip().startswith("{"):
+        text = content.strip()
+        return PredictResponse(
+            question_type="chat",
+            rationale=text, model_rationale=text, **base,
+        )
     brat = bparsed.get("rationale")
     return PredictResponse(
         question_type="binary",
@@ -1122,7 +1142,7 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     record["news_articles"] = evidence_articles
 
     user_prompt = build_user_prompt(record, prompt_text, "full")
-    user_prompt += _typing_instruction(req.question_type, req.options)
+    user_prompt += _typing_instruction(req.question_type, req.options, has_history=bool(req.history))
     messages = [{"role": "system", "content": system_prompt}]
     for turn in req.history[-12:]:
         role = turn.get("role")
