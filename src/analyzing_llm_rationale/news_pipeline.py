@@ -15,7 +15,13 @@ RSS_FEEDS = [
     "https://feeds.a.dj.com/rss/RSSWorldNews.xml",
 ]
 
-DEFAULT_FETCH_SOURCES = ("newsapi", "gdelt", "google-news", "rss")
+STOOQ_RSS_FEEDS = (
+    "https://static.stooq.com/rss/pl/b.rss",
+    "https://static.stooq.com/rss/pl/c.rss",
+    "https://static.stooq.com/rss/pl/w.rss",
+)
+
+DEFAULT_FETCH_SOURCES = ("newsapi", "gdelt", "google-news", "stooq", "rss")
 QUERY_STOPWORDS = {
     "will",
     "the",
@@ -141,6 +147,9 @@ class NewsPipeline:
 
         if "google-news" in self._fetch_sources and len(articles) < top_k:
             articles.extend(self._fetch_google_news(query, limit=top_k * 2))
+
+        if "stooq" in self._fetch_sources and len(articles) < top_k:
+            articles.extend(self._fetch_stooq(limit=top_k * 2))
 
         if "rss" in self._fetch_sources and len(articles) < top_k:
             articles.extend(self._fetch_rss(limit=top_k * 2))
@@ -269,6 +278,44 @@ class NewsPipeline:
                 "summary": description,
                 "source": source,
             })
+        return articles
+
+    def _fetch_stooq(self, limit: int = 20) -> List[dict]:
+        articles: List[dict] = []
+        try:
+            import requests
+        except ImportError:
+            return articles
+
+        for feed_url in STOOQ_RSS_FEEDS:
+            if len(articles) >= limit:
+                break
+            try:
+                resp = requests.get(
+                    feed_url,
+                    headers={"User-Agent": "Mozilla/5.0 compatible forecasting-evidence-bot/1.0"},
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                root = ElementTree.fromstring(resp.content)
+                feed_title = root.findtext("./channel/title") or "Stooq"
+                for item in root.findall("./channel/item"):
+                    if len(articles) >= limit:
+                        break
+                    title = item.findtext("title") or ""
+                    link = item.findtext("link") or ""
+                    description = item.findtext("description") or ""
+                    articles.append({
+                        "title": title,
+                        "url": link,
+                        "publish_date": item.findtext("pubDate") or "",
+                        "text": description,
+                        "summary": description or title,
+                        "source": "Stooq",
+                        "search_query": feed_title,
+                    })
+            except Exception:
+                continue
         return articles
 
     def _fetch_rss(self, limit: int = 20) -> List[dict]:

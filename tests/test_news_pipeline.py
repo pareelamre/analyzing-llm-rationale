@@ -98,6 +98,49 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertIn("news.google.com/rss/search", calls[0][0])
         self.assertIn("Federal+Reserve+rate+cut", calls[0][0])
 
+    def test_fetch_stooq_maps_static_rss_feeds(self):
+        calls = []
+
+        class FakeStooqResponse:
+            content = b"""
+            <rss>
+              <channel>
+                <title>Stooq - Wiadomosci Biznes</title>
+                <item>
+                  <title>Stooq market update</title>
+                  <link>https://stooq.com/n/?f=123</link>
+                  <pubDate>Sat, 30 May 2026 12:00:00 GMT</pubDate>
+                  <description>A financial market update.</description>
+                </item>
+              </channel>
+            </rss>
+            """
+
+            def raise_for_status(self):
+                return None
+
+        def fake_get(url, headers, timeout):
+            calls.append((url, headers, timeout))
+            return FakeStooqResponse()
+
+        original = sys.modules.get("requests")
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+        try:
+            pipeline = NewsPipeline.__new__(NewsPipeline)
+            articles = pipeline._fetch_stooq(limit=1)
+        finally:
+            if original is None:
+                sys.modules.pop("requests", None)
+            else:
+                sys.modules["requests"] = original
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["source"], "Stooq")
+        self.assertEqual(articles[0]["title"], "Stooq market update")
+        self.assertEqual(articles[0]["summary"], "A financial market update.")
+        self.assertEqual(articles[0]["search_query"], "Stooq - Wiadomosci Biznes")
+        self.assertIn("static.stooq.com/rss/pl/b.rss", calls[0][0])
+
     def test_rank_can_use_lightweight_lexical_scores(self):
         pipeline = NewsPipeline.__new__(NewsPipeline)
         pipeline._use_embeddings = False
