@@ -5,9 +5,14 @@ import hashlib
 import html
 import os
 import re
+import smtplib
+import threading
 import time
+import traceback
 from collections import defaultdict
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -15,10 +20,6 @@ import duckdb
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
-import smtplib
-import traceback
-from email.message import EmailMessage
-import threading
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -33,6 +34,9 @@ _STATIC_DIR = _REPO_ROOT / "static"
 _ANALYTICS_DB = Path(os.environ.get("ANALYTICS_DB", "/tmp/foresea_analytics.duckdb"))
 
 _REQUIRED_API_KEY: Optional[str] = os.environ.get("API_KEY")
+_GOOGLE_CLIENT_ID: Optional[str] = os.environ.get("GOOGLE_CLIENT_ID")
+_SESSION_SECRET: str = os.environ.get("SESSION_SECRET", "change-me-in-production")
+_SESSION_TTL_DAYS = 30
 _state: Dict[str, Any] = {}
 
 _DESCRIPTION = """
@@ -51,7 +55,7 @@ sources fetched from live news when the evidence pipeline is configured.
 ## Quick start
 
 ```bash
-curl -X POST https://analyzing-llm-rationale-hy7gvnvt4a-uc.a.run.app/predict \\
+curl -X POST https://foresea.ink/predict \\
   -H "Content-Type: application/json" \\
   -d '{
     "question": "What will US CPI inflation be in December 2026?",
@@ -133,6 +137,83 @@ _TAGS = [
 ]
 
 
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+
+def _verify_google_token(credential: str) -> dict:
+    """Verify a Google One-Tap ID token and return its claims."""
+    if not _GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Google auth is not configured on this server.")
+    try:
+        from google.auth.transport.requests import Request as _GRequest
+        from google.oauth2.id_token import verify_oauth2_token as _verify
+        return _verify(credential, _GRequest(), _GOOGLE_CLIENT_ID)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid Google credential: {exc}")
+
+
+def _issue_session(sub: str, email: str, name: str, picture: str) -> str:
+    """Sign and return a JWT session token."""
+    import jwt as _jwt
+    now = datetime.now(timezone.utc)
+    return _jwt.encode(
+        {
+            "sub": sub,
+            "email": email,
+            "name": name,
+            "picture": picture,
+            "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(days=_SESSION_TTL_DAYS)).timestamp()),
+        },
+        _SESSION_SECRET,
+        algorithm="HS256",
+    )
+
+
+def _decode_session(token: str) -> dict:
+    """Verify a session JWT and return its claims."""
+    import jwt as _jwt
+    try:
+        return _jwt.decode(token, _SESSION_SECRET, algorithms=["HS256"])
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Session expired.")
+    except _jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid session token.")
+
+
+_ds_client: Any = None
+
+
+def _get_datastore():
+    global _ds_client
+    if _ds_client is None:
+        try:
+            from google.cloud import datastore as _ds
+            _ds_client = _ds.Client()
+        except Exception:
+            pass
+    return _ds_client
+
+
+def _upsert_user(sub: str, email: str, name: str, picture: str) -> None:
+    """Create or update a User entity in Cloud Datastore."""
+    client = _get_datastore()
+    if client is None:
+        return
+    from google.cloud import datastore as _ds
+    key = client.key("User", sub)
+    entity = client.get(key)
+    if entity is None:
+        entity = _ds.Entity(key=key, exclude_from_indexes=("picture",))
+        entity["created_at"] = datetime.now(timezone.utc)
+    entity.update(
+        email=email,
+        name=name,
+        picture=picture,
+        last_login=datetime.now(timezone.utc),
+    )
+    client.put(entity)
+
+
 # ── Rate limiter ──────────────────────────────────────────────────────────────
 class _RateLimiter:
     def __init__(self, calls: int = 20, period: int = 60):
@@ -180,6 +261,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://foresea.ink",
+        "https://www.foresea.ink",
         "https://analyzing-llm-rationale-hy7gvnvt4a-uc.a.run.app",
         "http://localhost:8000",
         "http://localhost:3000",
@@ -195,7 +278,7 @@ app.add_middleware(
 async def host_redirect_middleware(request: Request, call_next):
     host = (request.headers.get("host") or "").lower()
     # Target domain can be overridden by env var CUSTOM_DOMAIN
-    target_domain = os.environ.get("CUSTOM_DOMAIN", "foresea.mine").lower()
+    target_domain = os.environ.get("CUSTOM_DOMAIN", "foresea.ink").lower()
     # Redirect only run.app hosts (avoid loop when already on target domain)
     if host.endswith(".run.app") and target_domain and target_domain not in host:
         url = request.url
@@ -236,7 +319,7 @@ def _send_alert_email(subject: str, body: str) -> None:
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_user = os.environ.get("SMTP_USER")
     smtp_password = os.environ.get("SMTP_PASSWORD")
-    alert_from = os.environ.get("ALERT_FROM", "noreply@foresea.mine")
+    alert_from = os.environ.get("ALERT_FROM", "noreply@foresea.ink")
     alert_to = os.environ.get("ALERT_TO", "pareel.amre@gmail.com")
 
     if not smtp_host:
@@ -570,6 +653,28 @@ class AnalyticsSummary(BaseModel):
     by_day: List[Dict[str, Any]]
 
 
+class GoogleAuthRequest(BaseModel):
+    """Google One-Tap credential submitted by the browser."""
+    credential: str = Field(..., max_length=8192)
+
+
+class SessionResponse(BaseModel):
+    """Issued after a successful Google sign-in."""
+    token: str
+    user_id: str
+    email: str
+    name: str
+    picture: str
+
+
+class AuthMeResponse(BaseModel):
+    """Current user decoded from a session token."""
+    user_id: str
+    email: str
+    name: str
+    picture: str
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _check_api_key(request: Request) -> None:
     if not _REQUIRED_API_KEY:
@@ -836,6 +941,47 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
             }
             for day, visits, unique_count in rows
         ],
+    )
+
+
+@app.get("/auth/config", tags=["Auth"], include_in_schema=False)
+async def auth_config() -> Dict[str, str]:
+    """Return the public Google OAuth client ID so the browser can initialise GIS."""
+    return {"google_client_id": _GOOGLE_CLIENT_ID or ""}
+
+
+@app.post("/auth/google", tags=["Auth"], summary="Sign in with Google", response_model=SessionResponse)
+async def auth_google(req: GoogleAuthRequest) -> SessionResponse:
+    """Verify a Google One-Tap ID token, create or update the user account, and return a session token.
+
+    The browser should send the `credential` string returned by
+    `google.accounts.id.initialize({ callback })` after the user grants consent.
+    Store the returned `token` in `localStorage` and include it as
+    `Authorization: Bearer <token>` on subsequent authenticated requests.
+    """
+    claims = _verify_google_token(req.credential)
+    sub = str(claims["sub"])
+    email = claims.get("email", "")
+    name = claims.get("name", "")
+    picture = claims.get("picture", "")
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _upsert_user, sub, email, name, picture)
+    token = _issue_session(sub, email, name, picture)
+    return SessionResponse(token=token, user_id=sub, email=email, name=name, picture=picture)
+
+
+@app.get("/auth/me", tags=["Auth"], summary="Get current user", response_model=AuthMeResponse)
+async def auth_me(request: Request) -> AuthMeResponse:
+    """Return the authenticated user decoded from the `Authorization: Bearer` session token."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization: Bearer header.")
+    claims = _decode_session(auth[7:])
+    return AuthMeResponse(
+        user_id=claims["sub"],
+        email=claims["email"],
+        name=claims["name"],
+        picture=claims["picture"],
     )
 
 

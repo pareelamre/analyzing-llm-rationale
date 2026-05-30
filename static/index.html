@@ -526,6 +526,19 @@
       .tr-stats { grid-template-columns: repeat(2, 1fr); }
     }
 
+    /* ── Auth UI ─────────────────────────────────────────────────────────── */
+    .user-chip {
+      display: inline-flex; align-items: center; gap: 7px;
+      border: 1px solid var(--border); border-radius: 3px;
+      padding: 4px 9px; background: var(--card);
+    }
+    .user-avatar {
+      width: 20px; height: 20px; border-radius: 50%;
+      object-fit: cover; flex-shrink: 0; border: 1px solid var(--border);
+    }
+    .user-name { font-size: 12px; color: var(--text); font-weight: 500; }
+    .gsi-wrap { overflow: hidden; border-radius: 3px; display: inline-flex; }
+
     /* Multiple-choice option bars */
     .opt-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--text); margin-bottom: 4px; }
     .opt-track { height: 8px; background: var(--paper); border-radius: 2px; overflow: hidden; }
@@ -548,6 +561,13 @@
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
+      <!-- Auth — rendered by initAuth() -->
+      <div id="landingGsiWrap" class="gsi-wrap" hidden aria-label="Sign in with Google"></div>
+      <div id="landingUserChip" class="user-chip" hidden>
+        <img id="landingUserAvatar" src="" class="user-avatar" alt="" />
+        <span id="landingUserName" class="user-name"></span>
+        <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
+      </div>
       <button type="button" class="hero-action primary py-2" onclick="launchApp()">Launch</button>
     </div>
   </nav>
@@ -681,6 +701,13 @@
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
+      <!-- Auth -->
+      <button id="appSignInBtn" type="button" class="topbar-link" onclick="triggerSignIn()" hidden>Sign in</button>
+      <div id="appUserChip" class="user-chip" hidden>
+        <img id="appUserAvatar" src="" class="user-avatar" alt="" />
+        <span id="appUserName" class="user-name"></span>
+        <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
+      </div>
     </nav>
     <div class="flex items-center gap-1.5 flex-shrink-0 border border-gray-200 rounded-sm px-2 py-1">
       <span class="live-pulse rounded-full inline-block" style="width:6px;height:6px;background:var(--accent)"></span>
@@ -1374,11 +1401,158 @@ document.addEventListener('keydown', event => {
   }
 });
 
+// ── Auth ─────────────────────────────────────────────────────────────────────
+let _gClientId = null;
+let currentUser = null;
+
+function _loadStoredSession() {
+  try {
+    return {
+      token: localStorage.getItem('foresea_session') || null,
+      user: JSON.parse(localStorage.getItem('foresea_user') || 'null'),
+    };
+  } catch { return { token: null, user: null }; }
+}
+
+function _saveSession(token, user) {
+  try {
+    localStorage.setItem('foresea_session', token);
+    localStorage.setItem('foresea_user', JSON.stringify(user));
+  } catch {}
+}
+
+function _clearSession() {
+  localStorage.removeItem('foresea_session');
+  localStorage.removeItem('foresea_user');
+  currentUser = null;
+}
+
+function _setAuthEl(id, show, data) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.hidden = !show;
+  if (data) Object.entries(data).forEach(([k, v]) => {
+    const child = document.getElementById(k);
+    if (child) {
+      if (child.tagName === 'IMG') child.src = v, child.alt = v;
+      else child.textContent = v;
+    }
+  });
+}
+
+function updateAuthUI(user) {
+  currentUser = user;
+  const firstName = (user?.name || '').split(' ')[0];
+  const pic = user?.picture || '';
+
+  if (user) {
+    _setAuthEl('landingGsiWrap', false);
+    _setAuthEl('landingUserChip', true, {
+      landingUserAvatar: pic,
+      landingUserName: firstName,
+    });
+    _setAuthEl('appSignInBtn', false);
+    _setAuthEl('appUserChip', true, {
+      appUserAvatar: pic,
+      appUserName: firstName,
+    });
+  } else {
+    _setAuthEl('landingUserChip', false);
+    _setAuthEl('appUserChip', false);
+    _setAuthEl('appSignInBtn', true);
+    if (_gClientId) _setAuthEl('landingGsiWrap', true);
+  }
+}
+
+async function handleGoogleCredential(response) {
+  try {
+    const r = await fetch('/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: response.credential }),
+    });
+    if (!r.ok) { console.error('Auth failed:', await r.text()); return; }
+    const d = await r.json();
+    const user = { name: d.name, email: d.email, picture: d.picture };
+    _saveSession(d.token, user);
+    updateAuthUI(user);
+  } catch (e) { console.error('Auth error:', e); }
+}
+
+async function _verifySession() {
+  const { token, user } = _loadStoredSession();
+  if (!token) return null;
+  try {
+    const r = await fetch('/auth/me', { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) { _clearSession(); return null; }
+    const d = await r.json();
+    return { name: d.name, email: d.email, picture: d.picture };
+  } catch { return user; /* offline: trust cached data */ }
+}
+
+function triggerSignIn() {
+  if (window.google?.accounts?.id) google.accounts.id.prompt();
+}
+
+function signOut() {
+  _clearSession();
+  if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
+  updateAuthUI(null);
+}
+
+async function initAuth() {
+  // 1. Restore any existing session
+  const user = await _verifySession();
+  if (user) {
+    const { token } = _loadStoredSession();
+    _saveSession(token, user);
+    updateAuthUI(user);
+  }
+
+  // 2. Fetch Google client ID from server
+  try {
+    const r = await fetch('/auth/config');
+    if (!r.ok) return;
+    const cfg = await r.json();
+    if (!cfg.google_client_id) return;
+    _gClientId = cfg.google_client_id;
+  } catch { return; }
+
+  // 3. Load GIS and render sign-in button (unless already signed in)
+  const script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.onload = () => {
+    google.accounts.id.initialize({
+      client_id: _gClientId,
+      callback: handleGoogleCredential,
+      auto_select: false,
+    });
+    if (!currentUser) {
+      const wrap = document.getElementById('landingGsiWrap');
+      if (wrap) {
+        google.accounts.id.renderButton(wrap, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'medium',
+          text: 'signin_with',
+          shape: 'rectangular',
+          logo_alignment: 'left',
+          width: 140,
+        });
+        wrap.hidden = false;
+      }
+      _setAuthEl('appSignInBtn', true);
+    }
+  };
+  document.head.appendChild(script);
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 setHistoryState('landing', 'replace');
 syncSidebarA11y();
 recordPageVisit();
 updateVariantDesc();
+initAuth();
 const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);
 else newConversation();
