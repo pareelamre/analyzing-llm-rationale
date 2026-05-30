@@ -91,7 +91,7 @@ jobs:
             --max-instances 1 \
             --concurrency 4 \
             --update-secrets SCADS_AI_API_KEY=SCADS_AI_API_KEY:latest \
-            --set-env-vars MODEL_DEVICE=cpu \
+            --set-env-vars MODEL_DEVICE=cpu,CUSTOM_DOMAIN=foresea.ink \
             --project ${{ env.GCP_PROJECT_ID }}
 
       - name: Print service URL
