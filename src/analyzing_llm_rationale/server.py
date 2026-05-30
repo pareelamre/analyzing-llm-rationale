@@ -18,7 +18,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from analyzing_llm_rationale.pipeline import build_user_prompt, parse_model_response
+from analyzing_llm_rationale.pipeline import (
+    _parse_json_dict,
+    build_user_prompt,
+    parse_model_response,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _STATIC_DIR = _REPO_ROOT / "static"
@@ -310,6 +314,18 @@ class PredictRequest(BaseModel):
             "Each item is `{\"role\": \"user\"|\"assistant\", \"content\": \"...\"}`."
         ),
     )
+    question_type: Optional[str] = Field(
+        None,
+        description=(
+            "Question type: `binary`, `multiple_choice`, `numeric`, or `date`. "
+            "Auto-detected from the question when omitted."
+        ),
+    )
+    options: List[str] = Field(
+        default_factory=list,
+        max_length=12,
+        description="Candidate answers for `multiple_choice` questions (optional; the model can infer them).",
+    )
 
     @field_validator("question")
     @classmethod
@@ -331,6 +347,22 @@ class PredictRequest(BaseModel):
         if not re.match(r"^[a-z0-9_]+$", v):
             raise ValueError("Invalid variant name.")
         return v
+
+
+class OptionProb(BaseModel):
+    """A single option and its probability in a multiple-choice forecast."""
+
+    label: str = Field(..., description="The option text.")
+    probability: float = Field(..., ge=0.0, le=1.0, description="Probability assigned to this option (0–1).")
+
+
+class RangeForecast(BaseModel):
+    """A numeric or date estimate expressed as percentile bounds."""
+
+    p10: Optional[str] = Field(None, description="10th-percentile (low) estimate.")
+    p50: Optional[str] = Field(None, description="50th-percentile (median) estimate.")
+    p90: Optional[str] = Field(None, description="90th-percentile (high) estimate.")
+    unit: Optional[str] = Field(None, description="Unit of the estimate, e.g. 'USD', '%', 'people'.")
 
 
 class PredictResponse(BaseModel):
@@ -365,8 +397,11 @@ class PredictResponse(BaseModel):
         }
     })
 
-    predicted_answer: Optional[str] = Field(None, description="`Yes` or `No`.")
-    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Model confidence (0 = certain No, 1 = certain Yes).")
+    question_type: str = Field("binary", description="Detected type: `binary`, `multiple_choice`, `numeric`, or `date`.")
+    predicted_answer: Optional[str] = Field(None, description="Headline answer: Yes/No, the top option, or the median estimate.")
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Confidence in the headline answer (binary/MC). Null for numeric.")
+    options: List[OptionProb] = Field(default_factory=list, description="Per-option probabilities for `multiple_choice`.")
+    range_forecast: Optional[RangeForecast] = Field(None, description="p10/p50/p90 estimate for `numeric` and `date`.")
     rationale: Optional[str] = Field(None, description="2–4 sentence explanation of the prediction.")
     model_rationale: Optional[str] = Field(None, description="Raw rationale as returned by the model (may differ from `rationale` after post-processing).")
     variant: str = Field(..., description="Prompt variant used for this prediction.")
@@ -470,6 +505,100 @@ def _evidence_sources(articles: List[Dict[str, Any]]) -> List[EvidenceSource]:
             relevance_score=article.get("relevance_score"),
         ))
     return sources
+
+
+# ── Multi-type forecasting ────────────────────────────────────────────────────
+_TYPE_INSTRUCTIONS = (
+    "\n\nYou are a calibrated forecaster. First decide the question type, then forecast. "
+    "Respond with ONLY one JSON object (no prose) using the matching schema:\n"
+    "- Yes/No -> {\"type\":\"binary\",\"predicted_answer\":\"Yes\"|\"No\",\"confidence\":0-1,\"rationale\":\"...\"}\n"
+    "- Multiple choice -> {\"type\":\"multiple_choice\",\"options\":[{\"label\":\"...\",\"probability\":0-1}],"
+    "\"rationale\":\"...\"} (probabilities sum to ~1)\n"
+    "- Numeric quantity -> {\"type\":\"numeric\",\"p10\":<low>,\"p50\":<median>,\"p90\":<high>,\"unit\":\"...\","
+    "\"rationale\":\"...\"}\n"
+    "- Specific date -> {\"type\":\"date\",\"p10\":\"YYYY-MM-DD\",\"p50\":\"YYYY-MM-DD\",\"p90\":\"YYYY-MM-DD\","
+    "\"rationale\":\"...\"}\n"
+    "`confidence` is your probability the stated answer is correct."
+)
+
+
+def _typing_instruction(question_type: Optional[str], options: List[str]) -> str:
+    instr = _TYPE_INSTRUCTIONS
+    if question_type:
+        instr += f"\nThe question type is '{question_type}'. Use that schema."
+    if options:
+        joined = ", ".join(str(o) for o in options[:12])
+        instr += f"\nFor multiple_choice, choose among these options: {joined}."
+    return instr
+
+
+def _to_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _build_typed_response(
+    req: "PredictRequest",
+    parsed: Optional[Dict[str, Any]],
+    content: str,
+    evidence_articles: List[Dict[str, Any]],
+    evidence_error: Optional[str],
+) -> "PredictResponse":
+    qtype = (req.question_type or (parsed.get("type") if parsed else None) or "binary").lower()
+    rationale = parsed.get("rationale") if parsed else None
+    base = dict(
+        variant=req.variant,
+        model_key=_state["model_key"],
+        evidence_sources=_evidence_sources(evidence_articles),
+        evidence_articles=[NewsArticle(**a) for a in evidence_articles],
+        evidence_error=evidence_error,
+    )
+
+    if qtype == "multiple_choice" and parsed:
+        opts: List[OptionProb] = []
+        for o in parsed.get("options") or []:
+            if isinstance(o, dict) and o.get("label") is not None:
+                try:
+                    p = float(o.get("probability"))
+                except (TypeError, ValueError):
+                    p = 0.0
+                opts.append(OptionProb(label=str(o["label"]), probability=max(0.0, min(1.0, p))))
+        top = max(opts, key=lambda x: x.probability) if opts else None
+        return PredictResponse(
+            question_type="multiple_choice",
+            options=opts,
+            predicted_answer=top.label if top else None,
+            confidence=top.probability if top else None,
+            rationale=rationale, model_rationale=rationale, **base,
+        )
+
+    if qtype in ("numeric", "date") and parsed:
+        rf = RangeForecast(
+            p10=_to_str(parsed.get("p10")),
+            p50=_to_str(parsed.get("p50")),
+            p90=_to_str(parsed.get("p90")),
+            unit=_to_str(parsed.get("unit")),
+        )
+        return PredictResponse(
+            question_type=qtype,
+            range_forecast=rf,
+            predicted_answer=_to_str(parsed.get("p50")),
+            confidence=None,
+            rationale=rationale, model_rationale=rationale, **base,
+        )
+
+    # binary (default) — reuse the battle-tested parser
+    bparsed = parse_model_response(content, ("predicted_answer", "confidence", "rationale"))
+    brat = bparsed.get("rationale")
+    return PredictResponse(
+        question_type="binary",
+        predicted_answer=bparsed.get("predicted_answer"),
+        confidence=bparsed.get("confidence"),
+        rationale=brat, model_rationale=brat, **base,
+    )
 
 
 def _analytics_conn():
@@ -665,7 +794,6 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
             detail=f"Unknown variant '{req.variant}'. Valid: {sorted(variants)}",
         )
 
-    variant = variants[req.variant]
     prompt_text = _state["prompt_templates"][req.variant]
     system_prompt = _state["system_prompt"]
 
@@ -692,6 +820,7 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     record["news_articles"] = evidence_articles
 
     user_prompt = build_user_prompt(record, prompt_text, "full")
+    user_prompt += _typing_instruction(req.question_type, req.options)
     messages = [{"role": "system", "content": system_prompt}]
     for turn in req.history[-12:]:
         role = turn.get("role")
@@ -713,19 +842,8 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Provider error: {exc}") from exc
 
-    parsed = parse_model_response(content, variant.output_fields)
-    rationale = parsed.get("rationale")
-    return PredictResponse(
-        predicted_answer=parsed.get("predicted_answer"),
-        confidence=parsed.get("confidence"),
-        rationale=rationale,
-        model_rationale=rationale,
-        variant=req.variant,
-        model_key=_state["model_key"],
-        evidence_sources=_evidence_sources(evidence_articles),
-        evidence_articles=[NewsArticle(**a) for a in evidence_articles],
-        evidence_error=evidence_error,
-    )
+    parsed = _parse_json_dict(content)
+    return _build_typed_response(req, parsed, content, evidence_articles, evidence_error)
 
 
 @app.post(
