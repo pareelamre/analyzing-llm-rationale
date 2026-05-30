@@ -1,0 +1,43 @@
+name: Track record
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - "forecasting_qa_news_metaculus_*.json"
+      - "results/GPT-OSS-120B/temperature_00/results_variant0_neutral_baseline.json"
+      - "scripts/build_track_record.py"
+      - "src/analyzing_llm_rationale/metrics.py"
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip track-record]')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Regenerate track record
+        run: python scripts/build_track_record.py
+
+      - name: Commit refreshed track record
+        run: |
+          if git diff --quiet -- static/track_record.json; then
+            echo "Track record already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add static/track_record.json
+          git commit -m "Refresh track record [skip track-record]"
+          git push

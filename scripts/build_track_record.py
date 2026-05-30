@@ -51,6 +51,23 @@ def _results_path() -> Path:
     )
 
 
+def _preserve_generated_at_if_unchanged(payload: dict, out: Path) -> dict:
+    if not out.exists():
+        return payload
+    try:
+        existing = json.loads(out.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return payload
+
+    old_without_timestamp = dict(existing)
+    new_without_timestamp = dict(payload)
+    old_without_timestamp.pop("generated_at", None)
+    new_without_timestamp.pop("generated_at", None)
+    if old_without_timestamp == new_without_timestamp and existing.get("generated_at"):
+        payload["generated_at"] = existing["generated_at"]
+    return payload
+
+
 def main() -> int:
     dataset_path = _dataset_path()
     results_path = _results_path()
@@ -141,6 +158,7 @@ def main() -> int:
     }
 
     out = ROOT / "static" / "track_record.json"
+    payload = _preserve_generated_at_if_unchanged(payload, out)
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(
         f"Wrote {out.relative_to(ROOT)} — {len(examples)} resolved, "

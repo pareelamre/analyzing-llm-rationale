@@ -19,14 +19,15 @@ from analyzing_llm_rationale.server import _ANALYTICS_DB, _state, app  # noqa: E
 class FakeProvider:
     def __init__(self):
         self.calls = []
-
-    def chat_completion(self, messages, temperature, max_tokens):
-        self.calls.append(messages)
-        return json.dumps({
+        self.response = {
             "predicted_answer": "Yes",
             "confidence": 0.7,
             "rationale": "Evidence supports a yes forecast.",
-        })
+        }
+
+    def chat_completion(self, messages, temperature, max_tokens):
+        self.calls.append(messages)
+        return json.dumps(self.response)
 
 
 class FakeEvidencePipeline:
@@ -162,6 +163,89 @@ class ServerTests(unittest.TestCase):
         self.assertGreaterEqual(payload["total_visits"], 1)
         self.assertGreaterEqual(payload["unique_visitors"], 1)
         self.assertEqual(payload["by_day"][0]["visits"], 1)
+
+    def test_predict_multiple_choice_returns_options(self):
+        self.provider.response = {
+            "type": "multiple_choice",
+            "options": [
+                {"label": "Alice", "probability": 0.2},
+                {"label": "Bob", "probability": 0.7},
+                {"label": "Carol", "probability": 0.1},
+            ],
+            "rationale": "Bob has the strongest polling and fundraising evidence.",
+        }
+
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "Who will win the Example City mayoral election?",
+                "question_type": "multiple_choice",
+                "options": ["Alice", "Bob", "Carol"],
+                "attach_evidence": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["question_type"], "multiple_choice")
+        self.assertEqual(payload["predicted_answer"], "Bob")
+        self.assertEqual(payload["confidence"], 0.7)
+        self.assertEqual(len(payload["options"]), 3)
+        self.assertIn("multiple_choice", self.provider.calls[0][-1]["content"])
+        self.assertIn("Alice, Bob, Carol", self.provider.calls[0][-1]["content"])
+
+    def test_predict_numeric_returns_range_forecast(self):
+        self.provider.response = {
+            "type": "numeric",
+            "p10": 42,
+            "p50": 55,
+            "p90": 73,
+            "unit": "USD",
+            "rationale": "Recent guidance supports a mid-range estimate.",
+        }
+
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "What will Example Corp revenue be in Q4 2026?",
+                "question_type": "numeric",
+                "attach_evidence": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["question_type"], "numeric")
+        self.assertEqual(payload["predicted_answer"], "55")
+        self.assertEqual(payload["confidence"], None)
+        self.assertEqual(
+            payload["range_forecast"],
+            {"p10": "42", "p50": "55", "p90": "73", "unit": "USD"},
+        )
+
+    def test_predict_date_returns_range_forecast(self):
+        self.provider.response = {
+            "type": "date",
+            "p10": "2026-07-01",
+            "p50": "2026-09-15",
+            "p90": "2026-12-31",
+            "rationale": "The event is most likely in the second half of 2026.",
+        }
+
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "When will the Example spacecraft launch?",
+                "question_type": "date",
+                "attach_evidence": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["question_type"], "date")
+        self.assertEqual(payload["predicted_answer"], "2026-09-15")
+        self.assertEqual(payload["range_forecast"]["p50"], "2026-09-15")
 
 
 if __name__ == "__main__":
