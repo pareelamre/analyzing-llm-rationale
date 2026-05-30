@@ -500,6 +500,55 @@
       .tr-stats { grid-template-columns: repeat(2, 1fr); }
     }
 
+    /* ── Attachments ─────────────────────────────────────────────────────── */
+    .attach-btn {
+      background: none; border: none; padding: 4px; cursor: pointer;
+      color: var(--text-dim); border-radius: 3px; flex-shrink: 0;
+      transition: color .12s, background .12s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .attach-btn:hover { color: var(--ink); background: var(--paper); }
+    .attach-btn.active { color: var(--accent); }
+    .attach-panel {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 3px; padding: 10px; margin-top: 6px;
+      box-shadow: 0 4px 16px rgba(17,17,17,.06);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .attach-options { display: flex; gap: 6px; }
+    .attach-opt {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      gap: 6px; padding: 8px; border: 1px solid var(--border);
+      border-radius: 3px; cursor: pointer; font-size: 12px; color: var(--text-dim);
+      background: var(--paper); transition: border-color .12s, color .12s;
+    }
+    .attach-opt:hover { border-color: var(--ink); color: var(--ink); }
+    .attach-url-row { display: flex; gap: 6px; }
+    .attach-url-input {
+      flex: 1; border: 1px solid var(--border-2); border-radius: 3px;
+      padding: 6px 8px; font-size: 12px; background: #fff; color: var(--ink);
+      min-width: 0;
+    }
+    .attach-url-input:focus { outline: none; border-color: var(--accent); }
+    .attach-add-btn {
+      border: 1px solid var(--ink); border-radius: 3px; padding: 6px 10px;
+      font-size: 12px; font-weight: 500; background: var(--ink); color: #fff;
+      cursor: pointer; flex-shrink: 0; transition: opacity .12s;
+    }
+    .attach-add-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .attach-chip {
+      display: inline-flex; align-items: center; gap: 5px; max-width: 200px;
+      background: var(--paper); border: 1px solid var(--border);
+      border-radius: 3px; padding: 3px 7px; font-size: 11px; color: var(--text);
+    }
+    .attach-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .attach-chip-remove {
+      flex-shrink: 0; color: var(--text-mute); cursor: pointer; line-height: 1;
+      font-size: 14px; padding: 0 1px;
+    }
+    .attach-chip-remove:hover { color: var(--ink); }
+    .attach-loading { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 5px; }
+
     /* ── Mode toggle ─────────────────────────────────────────────────────── */
     .tog-wrap {
       width: 32px; height: 18px; border-radius: 9px;
@@ -742,6 +791,8 @@
   <!-- Input -->
   <div class="border-t border-gray-200 px-3 sm:px-4 py-3 sm:py-4 flex-shrink-0">
     <div class="max-w-2xl mx-auto">
+      <!-- Attachment chips -->
+      <div id="attachChips" class="flex flex-wrap gap-1.5 mb-2"></div>
       <div class="input-box flex gap-2 sm:gap-3 items-end p-2 sm:p-3">
         <textarea
           id="questionInput"
@@ -752,9 +803,32 @@
           oninput="autoResize(this)"
           onkeydown="handleKey(event)"
         ></textarea>
+        <button id="attachBtn" class="attach-btn" onclick="toggleAttachPanel()" title="Attach PDF or URL" aria-label="Attach file or URL" aria-expanded="false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+          </svg>
+        </button>
         <button id="sendBtn" class="send-btn px-4 sm:px-5 py-2 text-sm flex-shrink-0" onclick="sendQuestion()">
           Send
         </button>
+      </div>
+      <!-- Attach panel -->
+      <div id="attachPanel" class="attach-panel" hidden>
+        <div class="attach-options">
+          <label class="attach-opt" style="cursor:pointer">
+            <input type="file" id="fileInput" accept=".pdf" class="sr-only" onchange="handleFileAttach(event)" />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            PDF
+          </label>
+          <div class="attach-opt" onclick="toggleUrlInput()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+            URL
+          </div>
+        </div>
+        <div id="urlInputRow" class="attach-url-row" hidden>
+          <input id="urlInput" type="url" class="attach-url-input" placeholder="https://…" onkeydown="if(event.key==='Enter')addUrlAttachment()" />
+          <button class="attach-add-btn" onclick="addUrlAttachment()">Add</button>
+        </div>
       </div>
       <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">
         Probabilistic forecast. Verify before relying on it.
@@ -1075,10 +1149,14 @@ async function sendQuestion() {
     const orKey = localStorage.getItem('or_key') || '';
     const orModel = localStorage.getItem('or_model') || '';
     const body = { question, variant, history, chat_mode: isChatMode() };
+    if (_attachments.length) body.news_articles = [..._attachments];
     if (orKey && orModel) {
       body.openrouter_api_key = orKey;
       body.openrouter_model = orModel;
     }
+    // Clear attachments after send
+    _attachments = [];
+    _renderChips();
     const resp = await fetch('/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1443,6 +1521,90 @@ document.addEventListener('keydown', event => {
     trapFocus(event, sidebar);
   }
 });
+
+// ── Attachments ───────────────────────────────────────────────────────────────
+let _attachments = []; // [{title, text, source, url}]
+
+function toggleAttachPanel() {
+  const panel = document.getElementById('attachPanel');
+  const btn = document.getElementById('attachBtn');
+  const open = !panel.hidden;
+  panel.hidden = open;
+  btn.setAttribute('aria-expanded', String(!open));
+  btn.classList.toggle('active', !open);
+  if (open) document.getElementById('urlInputRow').hidden = true;
+}
+
+function toggleUrlInput() {
+  const row = document.getElementById('urlInputRow');
+  row.hidden = !row.hidden;
+  if (!row.hidden) setTimeout(() => document.getElementById('urlInput').focus(), 0);
+}
+
+function _renderChips() {
+  const container = document.getElementById('attachChips');
+  if (!container) return;
+  container.innerHTML = _attachments.map((a, i) => `
+    <span class="attach-chip" title="${escHtml(a.title)}">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span>${escHtml(a.title.length > 22 ? a.title.slice(0, 20) + '…' : a.title)}</span>
+      <span class="attach-chip-remove" onclick="removeAttachment(${i})" title="Remove">×</span>
+    </span>`).join('');
+}
+
+function removeAttachment(i) {
+  _attachments.splice(i, 1);
+  _renderChips();
+}
+
+function _setAttachLoading(msg) {
+  const container = document.getElementById('attachChips');
+  if (!container) return;
+  const existing = container.querySelector('.attach-loading');
+  if (existing) existing.remove();
+  if (msg) {
+    const el = document.createElement('span');
+    el.className = 'attach-loading';
+    el.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${escHtml(msg)}`;
+    container.appendChild(el);
+  }
+}
+
+async function _extractAndAdd(formData, label) {
+  _setAttachLoading(`Extracting ${label}…`);
+  try {
+    const r = await fetch('/extract', { method: 'POST', body: formData });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); addError(e.detail || 'Extraction failed'); return; }
+    const data = await r.json();
+    _attachments.push(data);
+    _renderChips();
+  } catch (e) { addError('Extraction error: ' + e.message); }
+  finally { _setAttachLoading(null); }
+}
+
+async function handleFileAttach(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+  const fd = new FormData();
+  fd.append('file', file);
+  await _extractAndAdd(fd, file.name);
+  document.getElementById('attachPanel').hidden = true;
+  document.getElementById('attachBtn').classList.remove('active');
+}
+
+async function addUrlAttachment() {
+  const input = document.getElementById('urlInput');
+  const url = (input?.value || '').trim();
+  if (!url) return;
+  input.value = '';
+  const fd = new FormData();
+  fd.append('url', url);
+  document.getElementById('urlInputRow').hidden = true;
+  document.getElementById('attachPanel').hidden = true;
+  document.getElementById('attachBtn').classList.remove('active');
+  await _extractAndAdd(fd, url);
+}
 
 // ── Chat mode toggle ──────────────────────────────────────────────────────────
 function isChatMode() {
