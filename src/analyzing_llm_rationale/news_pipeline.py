@@ -22,6 +22,42 @@ STOOQ_RSS_FEEDS = (
 )
 
 DEFAULT_FETCH_SOURCES = ("newsapi", "gdelt", "google-news", "stooq", "rss")
+SOURCE_DIVERSITY_ORDER = ("gdelt", "google-news", "newsapi", "rss", "stooq")
+HIGH_CREDIBILITY_SOURCES = {
+    "abc news",
+    "al jazeera",
+    "ap",
+    "associated press",
+    "axios",
+    "bbc",
+    "bloomberg",
+    "cbs news",
+    "cnbc",
+    "cnn",
+    "dw",
+    "financial times",
+    "fortune",
+    "guardian",
+    "npr",
+    "politico",
+    "reuters",
+    "the associated press",
+    "the guardian",
+    "the new york times",
+    "the wall street journal",
+    "the washington post",
+    "time",
+    "usa today",
+    "wall street journal",
+    "washington post",
+}
+CHANNEL_CREDIBILITY = {
+    "newsapi": 0.75,
+    "gdelt": 0.72,
+    "google-news": 0.70,
+    "rss": 0.68,
+    "stooq": 0.55,
+}
 QUERY_STOPWORDS = {
     "will",
     "the",
@@ -78,6 +114,17 @@ def _keyword_search_query(question: str, max_terms: int = 12) -> str:
             continue
         kept.append(term.strip("$"))
     return " ".join(kept[:max_terms]) or question
+
+
+def _source_credibility(article: dict) -> float:
+    """Small prior favoring established publishers without excluding other hits."""
+    source = (article.get("source") or "").lower()
+    channel = article.get("source_channel") or ""
+    if source in HIGH_CREDIBILITY_SOURCES:
+        return 1.0
+    if any(name in source for name in HIGH_CREDIBILITY_SOURCES):
+        return 0.9
+    return CHANNEL_CREDIBILITY.get(channel, 0.6)
 
 
 class NewsPipeline:
@@ -138,31 +185,34 @@ class NewsPipeline:
     def fetch(self, query: str, top_k: int = 10) -> List[dict]:
         """Return up to top_k raw article dicts from configured news sources."""
         articles: List[dict] = []
+        per_source_limit = max(top_k, 10)
 
         if self._newsapi_key and "newsapi" in self._fetch_sources:
-            articles.extend(self._fetch_newsapi(query, page_size=top_k))
+            articles.extend(self._fetch_newsapi(query, page_size=per_source_limit))
 
-        if "gdelt" in self._fetch_sources and len(articles) < top_k:
-            articles.extend(self._fetch_gdelt(query, limit=top_k * 2))
+        if "gdelt" in self._fetch_sources:
+            articles.extend(self._fetch_gdelt(query, limit=per_source_limit))
 
-        if "google-news" in self._fetch_sources and len(articles) < top_k:
-            articles.extend(self._fetch_google_news(query, limit=top_k * 2))
+        if "google-news" in self._fetch_sources:
+            articles.extend(self._fetch_google_news(query, limit=per_source_limit))
 
-        if "stooq" in self._fetch_sources and len(articles) < top_k:
-            articles.extend(self._fetch_stooq(limit=top_k * 2))
+        if "stooq" in self._fetch_sources:
+            articles.extend(self._fetch_stooq(limit=per_source_limit))
 
-        if "rss" in self._fetch_sources and len(articles) < top_k:
-            articles.extend(self._fetch_rss(limit=top_k * 2))
+        if "rss" in self._fetch_sources:
+            articles.extend(self._fetch_rss(limit=per_source_limit))
 
         seen_urls: set = set()
         unique: List[dict] = []
         for a in articles:
             url = a.get("url", "")
-            if url not in seen_urls:
-                seen_urls.add(url)
-                unique.append(a)
+            dedupe_key = url or f"{a.get('source', '')}:{a.get('title', '')}"
+            if dedupe_key in seen_urls:
+                continue
+            seen_urls.add(dedupe_key)
+            unique.append(a)
 
-        return unique[:top_k * 2]
+        return unique
 
     def _fetch_newsapi(self, query: str, page_size: int = 10) -> List[dict]:
         try:
@@ -188,6 +238,7 @@ class NewsPipeline:
                     "text": item.get("content") or item.get("description") or "",
                     "summary": item.get("description") or "",
                     "source": item.get("source", {}).get("name") or "",
+                    "source_channel": "newsapi",
                 })
             return articles
         except Exception:
@@ -219,6 +270,7 @@ class NewsPipeline:
                     "text": item.get("title") or "",
                     "summary": item.get("title") or "",
                     "source": item.get("source") or item.get("domain") or "GDELT",
+                    "source_channel": "gdelt",
                 })
             return articles
         except Exception:
@@ -257,6 +309,7 @@ class NewsPipeline:
                         "text": entry.get("summary") or "",
                         "summary": entry.get("summary") or "",
                         "source": "Google News",
+                        "source_channel": "google-news",
                     }
                     for entry in entries
                 ]
@@ -277,6 +330,7 @@ class NewsPipeline:
                 "text": description,
                 "summary": description,
                 "source": source,
+                "source_channel": "google-news",
             })
         return articles
 
@@ -312,6 +366,7 @@ class NewsPipeline:
                         "text": description,
                         "summary": description or title,
                         "source": "Stooq",
+                        "source_channel": "stooq",
                         "search_query": feed_title,
                     })
             except Exception:
@@ -340,6 +395,7 @@ class NewsPipeline:
                         "text": entry.get("summary") or "",
                         "summary": entry.get("summary") or "",
                         "source": feed.feed.get("title") or feed_url,
+                        "source_channel": "rss",
                     })
             except Exception:
                 continue
@@ -412,14 +468,20 @@ class NewsPipeline:
         texts = [t if t.strip() else " " for t in texts]
 
         if embeddings is None:
-            scores = [_lexical_relevance(question, text) for text in texts]
+            relevance_scores = [_lexical_relevance(question, text) for text in texts]
         else:
             try:
                 q_vec = np.array(embeddings.embed_query(question))
                 doc_vecs = np.array(embeddings.embed_documents(texts))
-                scores = [_cosine_similarity(q_vec, d) for d in doc_vecs]
+                relevance_scores = [_cosine_similarity(q_vec, d) for d in doc_vecs]
             except Exception:
-                scores = [_lexical_relevance(question, text) for text in texts]
+                relevance_scores = [_lexical_relevance(question, text) for text in texts]
+
+        scores = []
+        for relevance, article in zip(relevance_scores, articles):
+            credibility = _source_credibility(article)
+            article["source_credibility"] = round(credibility, 2)
+            scores.append((0.85 * relevance) + (0.15 * credibility))
 
         ranked = sorted(
             zip(scores, articles),
@@ -429,6 +491,34 @@ class NewsPipeline:
         for score, article in ranked:
             article["relevance_score"] = round(score, 4)
         return [a for _, a in ranked]
+
+    def select_diverse_sources(self, ranked: List[dict], top_k: int) -> List[dict]:
+        """Pick a relevant final set while avoiding one-source evidence packs."""
+        if top_k <= 0 or not ranked:
+            return []
+
+        selected: List[dict] = []
+        seen_urls: set = set()
+
+        def add(article: dict) -> None:
+            url = article.get("url") or f"{article.get('source', '')}:{article.get('title', '')}"
+            if url in seen_urls or len(selected) >= top_k:
+                return
+            seen_urls.add(url)
+            selected.append(article)
+
+        for channel in SOURCE_DIVERSITY_ORDER:
+            if channel not in self._fetch_sources:
+                continue
+            for article in ranked:
+                if article.get("source_channel") == channel:
+                    add(article)
+                    break
+
+        for article in ranked:
+            add(article)
+
+        return selected[:top_k]
 
     def fetch_summarize_rank(
         self, question: str, top_k: int = 5
@@ -446,4 +536,4 @@ class NewsPipeline:
                 article["summary"] = self.summarize(article)
             article["search_query"] = search_query
         ranked = self.rank(question, raw)
-        return ranked[:top_k]
+        return self.select_diverse_sources(ranked, top_k)

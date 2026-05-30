@@ -141,6 +141,50 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(articles[0]["search_query"], "Stooq - Wiadomosci Biznes")
         self.assertIn("static.stooq.com/rss/pl/b.rss", calls[0][0])
 
+    def test_fetch_queries_all_configured_sources_before_dedupe(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._newsapi_key = None
+        pipeline._fetch_sources = ("gdelt", "google-news", "stooq")
+        calls = []
+
+        def fake_gdelt(query, limit):
+            calls.append(("gdelt", query, limit))
+            return [{"title": "GDELT result", "url": "https://example.com/gdelt"}]
+
+        def fake_google(query, limit):
+            calls.append(("google-news", query, limit))
+            return [{"title": "Google result", "url": "https://example.com/google"}]
+
+        def fake_stooq(limit):
+            calls.append(("stooq", limit))
+            return [{"title": "Stooq result", "url": "https://example.com/stooq"}]
+
+        pipeline._fetch_gdelt = fake_gdelt
+        pipeline._fetch_google_news = fake_google
+        pipeline._fetch_stooq = fake_stooq
+
+        articles = pipeline.fetch("Federal Reserve rate cut", top_k=1)
+
+        self.assertEqual([call[0] for call in calls], ["gdelt", "google-news", "stooq"])
+        self.assertEqual(len(articles), 3)
+
+    def test_select_diverse_sources_keeps_gdelt_google_and_stooq_when_available(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._fetch_sources = ("gdelt", "google-news", "stooq")
+        ranked = [
+            {"title": "Stooq 1", "url": "https://example.com/s1", "source_channel": "stooq"},
+            {"title": "Stooq 2", "url": "https://example.com/s2", "source_channel": "stooq"},
+            {"title": "GDELT", "url": "https://example.com/g", "source_channel": "gdelt"},
+            {"title": "Google", "url": "https://example.com/n", "source_channel": "google-news"},
+        ]
+
+        selected = pipeline.select_diverse_sources(ranked, top_k=3)
+
+        self.assertEqual(
+            {article["source_channel"] for article in selected},
+            {"gdelt", "google-news", "stooq"},
+        )
+
     def test_rank_can_use_lightweight_lexical_scores(self):
         pipeline = NewsPipeline.__new__(NewsPipeline)
         pipeline._use_embeddings = False
