@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from analyzing_llm_rationale.server import _ANALYTICS_DB, _state, app  # noqa: E402
+from analyzing_llm_rationale.server import _ANALYTICS_DB, _issue_session, _state, app  # noqa: E402
 
 
 class FakeProvider:
@@ -288,6 +288,51 @@ class ServerTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 422)
+
+    def test_authenticated_user_can_sync_chat_conversations(self):
+        token = _issue_session("user-123", "user@example.com", "User Example", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        conversation = {
+            "id": "conv_test",
+            "title": "Fed forecast",
+            "createdAt": 1000,
+            "updatedAt": 2000,
+            "messages": [
+                {
+                    "id": "msg_user",
+                    "role": "user",
+                    "content": "Will the Fed cut rates before July 2026?",
+                    "createdAt": 1001,
+                },
+                {
+                    "id": "msg_assistant",
+                    "role": "assistant",
+                    "content": "Probably yes.",
+                    "createdAt": 1002,
+                },
+            ],
+        }
+
+        save_response = self.client.put(
+            "/chat/conversations/conv_test",
+            json=conversation,
+            headers=headers,
+        )
+        self.assertEqual(save_response.status_code, 200)
+
+        list_response = self.client.get("/chat/conversations", headers=headers)
+        self.assertEqual(list_response.status_code, 200)
+        saved = list_response.json()["conversations"][0]
+        self.assertEqual(saved["id"], "conv_test")
+        self.assertEqual([m["id"] for m in saved["messages"]], ["msg_user", "msg_assistant"])
+
+        delete_response = self.client.delete("/chat/conversations/conv_test", headers=headers)
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(self.client.get("/chat/conversations", headers=headers).json()["conversations"], [])
+
+    def test_chat_conversation_sync_requires_session(self):
+        response = self.client.get("/chat/conversations")
+        self.assertEqual(response.status_code, 401)
 
 
 if __name__ == "__main__":

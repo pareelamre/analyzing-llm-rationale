@@ -28,22 +28,30 @@
   <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
   <style>
     :root {
-      --bg:         #f9f8f6;
-      --panel:      #f2f0eb;
+      --bg:         #ffffff;
+      --panel:      #f7f7f8;
       --card:       #ffffff;
-      --border:     #e4e3de;
-      --border-2:   #d2d1cc;
-      --ink:        #111111;
-      --text:       #374151;
-      --text-dim:   #6b7280;
-      --text-mute:  #9ca3af;
-      --paper:      #f4f3ef;
-      --accent:     #1f5f5b;
-      --accent-bg:  #e8f2f1;
+      --border:     #ececf0;
+      --border-2:   #d9d9e0;
+      --ink:        #0f0f10;
+      --text:       #2f3033;
+      --text-dim:   #70727a;
+      --text-mute:  #a0a2aa;
+      --paper:      #f4f4f6;
+      --accent:     #111827;
+      --accent-bg:  #eef2ff;
       --font-db:    "Inter", "DB Neo Screen", "Helvetica Neue", Arial, sans-serif;
+      --ease-soft:  cubic-bezier(.22, 1, .36, 1);
+      --ease-fast:  cubic-bezier(.2, .8, .2, 1);
+      --dur-fast:   180ms;
+      --dur-med:    280ms;
+      --dur-slow:   420ms;
     }
 
     * { font-family: var(--font-db); }
+    * {
+      transition-timing-function: var(--ease-soft);
+    }
     h1, h2, .display { font-family: var(--font-db); }
     .display { font-weight: 700; letter-spacing: 0; }
 
@@ -74,13 +82,12 @@
     main.chat-main { flex: 1 1 0%; min-width: 0; width: 100%; height: 100%; }
     #messages { min-height: 0; }
 
-    /* Sidebar */
     .sidebar {
       background: var(--panel);
       border-right: 1px solid var(--border);
-      width: 288px; flex-shrink: 0;
-      display: flex; flex-direction: column; gap: 16px; padding: 18px;
-      transition: transform .25s ease;
+      width: 276px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 12px; padding: 12px;
+      transition: transform var(--dur-slow) var(--ease-soft), box-shadow var(--dur-slow) var(--ease-soft);
     }
     @media (max-width: 640px) {
       .sidebar {
@@ -98,21 +105,20 @@
 
     /* Message bubbles */
     .msg-user {
-      background: var(--ink); color: #fff;
-      border-radius: 3px; font-weight: 400;
+      background: #f2f2f4; color: var(--ink);
+      border-radius: 18px; font-weight: 400;
     }
     .msg-ai {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 3px;
-      box-shadow: 0 1px 4px rgba(17,17,17,.05), 0 8px 24px rgba(17,17,17,.04);
+      border-radius: 18px;
+      box-shadow: none;
     }
 
-    /* Buttons — pill, dark primary */
     .send-btn {
       background: var(--ink); color: #fff; font-weight: 500;
-      border-radius: 3px;
-      transition: background .15s, transform .05s, opacity .15s;
+      border-radius: 999px;
+      transition: background var(--dur-med), transform var(--dur-fast), opacity var(--dur-med), box-shadow var(--dur-med);
     }
     .send-btn:hover { background: #000; }
     .send-btn:active { transform: translateY(1px); }
@@ -147,35 +153,34 @@
     /* Variant select */
     .variant-select {
       background: #fff; color: var(--text); border: 1px solid var(--border-2);
-      border-radius: 3px; padding: 8px 10px; font-size: 12px; width: 100%;
+      border-radius: 16px; padding: 9px 12px; font-size: 12px; width: 100%;
     }
     .variant-select:focus { outline: none; border-color: var(--accent); }
 
     /* Source chips — light pills */
     .source-chip {
       background: var(--paper); color: var(--text); border: 1px solid var(--border);
-      border-radius: 3px; padding: 4px 8px; font-size: 11px;
-      display: inline-block; margin: 2px; transition: background .12s;
+      border-radius: 999px; padding: 6px 10px; font-size: 11px;
+      display: inline-block; margin: 2px; transition: background var(--dur-med), border-color var(--dur-med), transform var(--dur-med), color var(--dur-med);
     }
     .source-chip:hover { background: #e9e9eb; }
 
     /* Conversation items */
     .conv-item {
-      border-radius: 3px; padding: 9px 11px; font-size: 12px;
-      color: var(--text-dim); cursor: pointer; transition: background .1s, color .1s;
+      border-radius: 16px; padding: 10px 12px; font-size: 13px;
+      color: var(--text-dim); cursor: pointer; transition: background var(--dur-med), color var(--dur-med), transform var(--dur-med);
       display: flex; align-items: center; gap: 6px;
     }
-    .conv-item:hover { background: #f0f0f0; color: var(--ink); }
+    .conv-item:hover { background: #ececef; color: var(--ink); }
     .conv-item.active {
-      background: #f0f0f0; color: var(--ink);
-      box-shadow: inset 2px 0 0 var(--ink);
+      background: #e9e9ed; color: var(--ink);
     }
     .conv-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conv-delete {
       flex-shrink: 0; width: 18px; height: 18px; border-radius: 5px;
       color: var(--text-mute); font-size: 15px; line-height: 1;
       display: flex; align-items: center; justify-content: center;
-      opacity: 0; transition: opacity .1s, color .1s;
+      opacity: 0; transition: opacity var(--dur-med), color var(--dur-med), background var(--dur-med);
     }
     .conv-item:hover .conv-delete { opacity: 1; }
     .conv-delete:hover { color: var(--ink); }
@@ -203,26 +208,67 @@
 
     /* Logo mark — dark square */
     .logo-dot {
-      width: 10px; height: 10px; border-radius: 1px;
+      width: 20px; height: 20px; border-radius: 6px;
       background: var(--ink);
       display: inline-block; flex-shrink: 0;
     }
 
-    /* New chat — outline pill (secondary) */
     .new-chat-btn {
-      border: 1px solid var(--border-2); color: var(--ink);
-      background: #fff; border-radius: 3px;
-      padding: 10px 12px; font-size: 13px; font-weight: 500; width: 100%;
-      transition: background .15s;
+      border: 0; color: var(--ink);
+      background: #ececef; border-radius: 18px;
+      padding: 12px 14px; font-size: 13px; font-weight: 500; width: 100%;
+      transition: background var(--dur-med), color var(--dur-med), transform var(--dur-med);
     }
-    .new-chat-btn:hover { background: #f4f4f5; }
+    .new-chat-btn:hover { background: #e1e1e6; }
 
-    /* Input box */
-    .input-box {
-      background: #fff; border: 1px solid var(--border-2); border-radius: 3px;
-      transition: border-color .15s, box-shadow .2s;
+    .sidebar-icon-btn {
+      width: 36px; height: 36px; border: 0; border-radius: 999px;
+      background: transparent; color: var(--text-dim);
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background var(--dur-med), color var(--dur-med), transform var(--dur-med);
     }
-    .input-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(31,95,91,.09); }
+    .sidebar-icon-btn:hover { background: #ececef; color: var(--ink); }
+    .sidebar-icon-btn:hover { transform: scale(1.04); }
+
+    .model-pill {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 15px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: default;
+    }
+    .model-pill:hover { background: var(--paper); }
+
+    .empty-suggestion {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      border-radius: 20px;
+      padding: 14px 16px;
+      font-size: 14px;
+      line-height: 1.35;
+      text-align: left;
+      transition: background var(--dur-med), border-color var(--dur-med), transform var(--dur-med), box-shadow var(--dur-med);
+    }
+    .empty-suggestion:hover {
+      background: #f8f8f9;
+      border-color: var(--border-2);
+      transform: translateY(-1px);
+    }
+
+    .input-box {
+      background: #fff; border: 1px solid var(--border); border-radius: 30px;
+      box-shadow: 0 14px 40px rgba(15,15,16,.08);
+      transition: border-color var(--dur-med), box-shadow var(--dur-slow), transform var(--dur-med), background var(--dur-med);
+    }
+    .input-box:focus-within { border-color: #c8c8d0; box-shadow: 0 16px 46px rgba(15,15,16,.12); }
+    .input-box:focus-within { transform: translateY(-1px); }
 
     /* Hamburger */
     .menu-btn {
@@ -236,7 +282,7 @@
       color: var(--text-dim);
       border: 0;
       border-bottom: 1px solid transparent;
-      transition: color .12s, border-color .12s;
+      transition: color var(--dur-med), border-color var(--dur-med), opacity var(--dur-med);
       background: none;
       padding: 0;
       cursor: pointer;
@@ -255,17 +301,17 @@
     .landing {
       min-height: 100vh;
       min-height: 100dvh;
-      background: #fff;
+      background: var(--bg);
       color: var(--text);
     }
     .landing-nav {
-      height: 58px;
+      height: 56px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 18px;
       border-bottom: 1px solid var(--border);
-      padding: 0 24px;
+      padding: 0 18px;
     }
     .landing-brand {
       display: flex;
@@ -279,61 +325,62 @@
       gap: 18px;
     }
     .landing-shell {
-      max-width: 980px;
+      max-width: 840px;
       margin: 0 auto;
       width: 100%;
-      padding: 60px 18px 34px;
+      padding: 90px 18px 34px;
     }
     .hero-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 320px;
-      gap: 64px;
-      align-items: center;
+      display: block;
     }
     .hero-copy {
       display: flex;
       flex-direction: column;
-      justify-content: center;
-      min-height: calc(100vh - 190px);
-      min-height: calc(100dvh - 190px);
+      justify-content: flex-start;
+      align-items: center;
+      text-align: center;
+      min-height: calc(100vh - 220px);
+      min-height: calc(100dvh - 220px);
     }
     .hero-title {
-      font-size: clamp(44px, 7vw, 86px);
-      line-height: .96;
+      font-size: clamp(34px, 5vw, 54px);
+      line-height: 1.08;
       color: var(--ink);
-      max-width: 680px;
+      max-width: 760px;
     }
     .hero-text {
-      max-width: 480px;
-      font-size: 16px;
+      max-width: 520px;
+      font-size: 15px;
       line-height: 1.6;
       color: var(--text);
-      margin-top: 22px;
+      margin-top: 14px;
     }
     .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
     .hero-action {
       border: 1px solid var(--ink);
-      border-radius: 3px;
+      border-radius: 999px;
       padding: 10px 13px;
       font-size: 13px;
       color: var(--ink);
       background: #fff;
       cursor: pointer;
-      transition: background .15s, color .15s;
+      transition: background var(--dur-med), color var(--dur-med), transform var(--dur-med), border-color var(--dur-med);
     }
     .hero-action.primary { background: var(--ink); color: #fff; }
     .hero-action:hover { background: var(--ink); color: #fff; }
     .landing-question {
       margin-top: 30px;
-      max-width: 560px;
+      max-width: 720px;
+      width: 100%;
       border: 1px solid var(--border-2);
-      border-radius: 3px;
+      border-radius: 30px;
       background: #fff;
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: end;
       gap: 10px;
-      padding: 10px;
+      padding: 10px 10px 10px 16px;
+      box-shadow: 0 18px 50px rgba(15,15,16,.08);
     }
     .landing-question textarea {
       min-height: 44px;
@@ -343,8 +390,8 @@
       line-height: 1.45;
     }
     .landing-question:focus-within {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(31,95,91,.09), 0 4px 20px rgba(31,95,91,.08);
+      border-color: #c8c8d0;
+      box-shadow: 0 20px 58px rgba(15,15,16,.12);
     }
     .quiet-link {
       margin-top: 10px;
@@ -430,11 +477,11 @@
     .send-btn, .new-chat-btn, .hero-action { will-change: transform; }
     .hero-action:hover, .new-chat-btn:hover { transform: translateY(-1px); }
     .send-btn:hover { transform: translateY(-1px); }
-    .source-chip { transition: background .14s ease, transform .14s ease, border-color .14s ease; }
+    .source-chip { transition: background var(--dur-med), transform var(--dur-med), border-color var(--dur-med), color var(--dur-med); }
     .source-chip:hover { transform: translateY(-1px); border-color: var(--ink); }
-    .conv-item { transition: background .12s ease, color .12s ease, transform .12s ease; }
+    .conv-item { transition: background var(--dur-med), color var(--dur-med), transform var(--dur-med); }
     .msg-ai, .msg-user { will-change: transform, opacity; }
-    .topbar-link { transition: color .14s ease, border-color .14s ease; }
+    .topbar-link { transition: color var(--dur-med), border-color var(--dur-med), opacity var(--dur-med); }
 
     /* Lenis smooth scroll */
     html.lenis, html.lenis body { height: auto; }
@@ -470,7 +517,7 @@
     .tr-stats {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
       background: var(--border); border: 1px solid var(--border);
-      border-radius: 3px; overflow: hidden; margin-top: 22px;
+      border-radius: 20px; overflow: hidden; margin-top: 22px;
     }
     .tr-stat { background: #fff; padding: 18px 16px; }
     .tr-stat .v { font-family: var(--font-db); font-weight: 700; font-size: 30px; color: var(--ink); line-height: 1; }
@@ -503,43 +550,50 @@
     /* ── Attachments ─────────────────────────────────────────────────────── */
     .attach-btn {
       background: none; border: none; padding: 4px; cursor: pointer;
-      color: var(--text-dim); border-radius: 3px; flex-shrink: 0;
-      transition: color .12s, background .12s;
+      color: var(--text-dim); border-radius: 999px; flex-shrink: 0;
+      transition: color var(--dur-med), background var(--dur-med), transform var(--dur-med);
       display: flex; align-items: center; justify-content: center;
     }
     .attach-btn:hover { color: var(--ink); background: var(--paper); }
+    .attach-btn:hover { transform: scale(1.04); }
     .attach-btn.active { color: var(--accent); }
     .attach-panel {
       background: var(--card); border: 1px solid var(--border);
-      border-radius: 3px; padding: 10px; margin-top: 6px;
-      box-shadow: 0 4px 16px rgba(17,17,17,.06);
+      border-radius: 24px; padding: 12px; margin-top: 8px;
+      box-shadow: 0 12px 34px rgba(17,17,17,.08);
       display: flex; flex-direction: column; gap: 8px;
+      animation: panel-reveal var(--dur-slow) var(--ease-soft);
+    }
+    @keyframes panel-reveal {
+      from { opacity: 0; transform: translateY(8px) scale(.985); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .attach-options { display: flex; gap: 6px; }
     .attach-opt {
       flex: 1; display: flex; align-items: center; justify-content: center;
       gap: 6px; padding: 8px; border: 1px solid var(--border);
-      border-radius: 3px; cursor: pointer; font-size: 12px; color: var(--text-dim);
-      background: var(--paper); transition: border-color .12s, color .12s;
+      border-radius: 18px; cursor: pointer; font-size: 12px; color: var(--text-dim);
+      background: var(--paper); transition: border-color var(--dur-med), color var(--dur-med), background var(--dur-med), transform var(--dur-med);
     }
     .attach-opt:hover { border-color: var(--ink); color: var(--ink); }
+    .attach-opt:hover { transform: translateY(-1px); }
     .attach-url-row { display: flex; gap: 6px; }
     .attach-url-input {
-      flex: 1; border: 1px solid var(--border-2); border-radius: 3px;
-      padding: 6px 8px; font-size: 12px; background: #fff; color: var(--ink);
+      flex: 1; border: 1px solid var(--border-2); border-radius: 999px;
+      padding: 8px 12px; font-size: 12px; background: #fff; color: var(--ink);
       min-width: 0;
     }
     .attach-url-input:focus { outline: none; border-color: var(--accent); }
     .attach-add-btn {
-      border: 1px solid var(--ink); border-radius: 3px; padding: 6px 10px;
+      border: 1px solid var(--ink); border-radius: 999px; padding: 8px 12px;
       font-size: 12px; font-weight: 500; background: var(--ink); color: #fff;
-      cursor: pointer; flex-shrink: 0; transition: opacity .12s;
+      cursor: pointer; flex-shrink: 0; transition: opacity var(--dur-med), background var(--dur-med), transform var(--dur-med);
     }
     .attach-add-btn:disabled { opacity: .4; cursor: not-allowed; }
     .attach-chip {
       display: inline-flex; align-items: center; gap: 5px; max-width: 200px;
       background: var(--paper); border: 1px solid var(--border);
-      border-radius: 3px; padding: 3px 7px; font-size: 11px; color: var(--text);
+      border-radius: 999px; padding: 5px 10px; font-size: 11px; color: var(--text);
     }
     .attach-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .attach-chip-remove {
@@ -554,28 +608,195 @@
       width: 32px; height: 18px; border-radius: 9px;
       background: var(--border-2); flex-shrink: 0;
       display: inline-flex; align-items: center; padding: 2px;
-      transition: background .2s; cursor: pointer;
+      transition: background var(--dur-med); cursor: pointer;
     }
     .tog-wrap[aria-checked="true"] { background: var(--accent); }
     .tog-thumb {
       width: 14px; height: 14px; border-radius: 50%; background: #fff;
       box-shadow: 0 1px 3px rgba(0,0,0,.2);
-      transition: transform .2s;
+      transition: transform var(--dur-med) var(--ease-soft);
     }
     .tog-wrap[aria-checked="true"] .tog-thumb { transform: translateX(14px); }
 
     /* ── Auth UI ─────────────────────────────────────────────────────────── */
     .user-chip {
       display: inline-flex; align-items: center; gap: 7px;
-      border: 1px solid var(--border); border-radius: 3px;
-      padding: 4px 9px; background: var(--card);
+      border: 1px solid var(--border); border-radius: 999px;
+      padding: 5px 10px; background: var(--card);
     }
     .user-avatar {
       width: 20px; height: 20px; border-radius: 50%;
       object-fit: cover; flex-shrink: 0; border: 1px solid var(--border);
     }
     .user-name { font-size: 12px; color: var(--text); font-weight: 500; }
-    .gsi-wrap { overflow: hidden; border-radius: 3px; display: inline-flex; }
+    .gsi-wrap { overflow: hidden; border-radius: 999px; display: inline-flex; }
+    .account-panel {
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 20px;
+      padding: 12px;
+    }
+    .account-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .account-meta {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .account-email {
+      font-size: 11px;
+      color: var(--text-mute);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .account-sync {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 8px;
+    }
+
+    /* ── ChatGPT-style app surface ─────────────────────────────────────── */
+    .grain { display: none; }
+    .app-shell { background: #fff; }
+    .sidebar {
+      width: 260px;
+      background: #f9f9f9;
+      border-right: 0;
+      padding: 8px;
+      gap: 8px;
+    }
+    .sidebar .brand {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .sidebar .logo-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+    }
+    .new-chat-btn {
+      background: transparent;
+      border-radius: 18px;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-weight: 400;
+    }
+    .new-chat-btn:hover { background: #ececec; transform: none; }
+    .conv-item {
+      border-radius: 18px;
+      padding: 10px 12px;
+      color: #3f3f46;
+      font-size: 14px;
+    }
+    .conv-item:hover,
+    .conv-item.active { background: #ececec; color: #111; }
+    .conv-item:hover { transform: translateX(2px); }
+    .advanced-panel,
+    .account-panel,
+    .sidebar .border {
+      border-color: transparent !important;
+      background: transparent !important;
+      border-radius: 20px;
+      box-shadow: none;
+    }
+    .chat-main header {
+      height: 56px;
+      border-bottom: 0;
+      background: #fff;
+      padding-left: 14px;
+      padding-right: 14px;
+    }
+    .chat-main header nav > .topbar-link,
+    .chat-main header nav > a.topbar-link {
+      display: none;
+    }
+    .model-pill {
+      padding: 8px 12px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #444;
+    }
+    .model-pill:hover { background: #f4f4f4; }
+    #messages {
+      padding-top: 18px;
+      padding-bottom: 18px;
+    }
+    .msg-user {
+      background: #f4f4f4;
+      color: #111;
+      border-radius: 26px;
+      padding: 11px 17px;
+      line-height: 1.55;
+      max-width: min(70%, 680px);
+    }
+    .msg-ai {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0;
+    }
+    .msg-ai > .space-y-3,
+    .msg-ai.p-4,
+    .msg-ai.p-5,
+    .msg-ai.sm\:p-5 {
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+    }
+    .yes-badge,
+    .no-badge,
+    .opt-track,
+    .tr-bar {
+      border-radius: 999px;
+    }
+    .opt-fill,
+    .conf-bar-fill,
+    .tr-bar > i {
+      border-radius: 999px;
+    }
+    .input-box {
+      border-radius: 34px;
+      border-color: #d9d9d9;
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+      padding: 10px 12px !important;
+    }
+    .input-box:focus-within {
+      border-color: #c7c7c7;
+      box-shadow: 0 2px 12px rgba(0,0,0,.09);
+    }
+    .input-box:focus-within { transform: translateY(-1px); }
+    #questionInput::placeholder { color: #8f8f8f; }
+    .send-btn {
+      width: 34px !important;
+      height: 34px !important;
+      background: #111;
+    }
+    .attach-btn {
+      width: 34px;
+      height: 34px;
+    }
+    .empty-suggestion {
+      border-radius: 22px;
+      background: #fff;
+      border-color: #e5e5e5;
+      color: #444;
+    }
+    .empty-suggestion:hover {
+      background: #f9f9f9;
+      transform: translateY(-1px);
+    }
+    .live-pulse,
+    .live-pulse + span {
+      display: none;
+    }
 
     /* Multiple-choice option bars */
     .opt-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--text); margin-bottom: 4px; }
@@ -614,17 +835,17 @@
     <div class="hero-grid">
       <div class="hero-copy">
         <p class="label mb-5">Foresea</p>
-        <h1 class="display hero-title">Forecasts with sources.</h1>
-        <p class="hero-text">Ask a forecasting question.</p>
+        <h1 class="display hero-title">What do you want to forecast?</h1>
+        <p class="hero-text">Ask about an event, an option set, a number, or a date. Foresea will return a probability, rationale, and evidence.</p>
         <form class="landing-question" onsubmit="submitLandingQuestion(event)">
           <textarea
             id="landingQuestionInput"
             rows="2"
-            placeholder="Ask a forecasting question…"
+            placeholder="Message Foresea"
             oninput="autoResize(this)"
             onkeydown="handleLandingKey(event)"
           ></textarea>
-          <button class="hero-action primary" type="submit">Ask</button>
+          <button class="hero-action primary" type="submit">Send</button>
         </form>
       </div>
 
@@ -640,19 +861,22 @@
 <!-- ── Sidebar ── -->
 <aside id="sidebar" class="sidebar overflow-hidden" aria-label="Forecast navigation" aria-hidden="false">
 
-  <div class="flex items-center gap-2 px-1 py-1">
-    <button type="button" class="brand-home flex-1" onclick="showLanding()" aria-label="Go to landing page">
+  <div class="flex items-center justify-between gap-2 px-1 py-1">
+    <button type="button" class="brand-home min-w-0" onclick="showLanding()" aria-label="Go to landing page">
       <span class="logo-dot"></span>
-      <span class="brand text-xl">Foresea</span>
+      <span class="brand text-base">Foresea</span>
     </button>
-    <button class="menu-btn" onclick="closeSidebar()" title="Close" aria-label="Close navigation">✕</button>
+    <div class="flex items-center gap-1">
+      <button class="sidebar-icon-btn" onclick="newConversation()" title="New chat" aria-label="New chat">＋</button>
+      <button class="menu-btn sidebar-icon-btn" onclick="closeSidebar()" title="Close" aria-label="Close navigation">✕</button>
+    </div>
   </div>
 
-  <button type="button" class="new-chat-btn" onclick="newConversation()">New forecast</button>
+  <button type="button" class="new-chat-btn text-left" onclick="newConversation()">New chat</button>
 
   <!-- Conversation list -->
   <div class="flex-1 scrollable flex flex-col gap-1 min-h-0" data-lenis-prevent>
-    <p class="label px-1 mb-2">Recent</p>
+    <p class="label px-1 mb-2">Chats</p>
     <div id="convList"></div>
   </div>
 
@@ -752,36 +976,59 @@
     </div>
   </div>
 
+  <div class="account-panel">
+    <p class="label mb-2">Account</p>
+    <div id="sidebarGsiWrap" class="gsi-wrap" hidden aria-label="Sign in with Google"></div>
+    <div id="sidebarUserChip" hidden>
+      <div class="account-row">
+        <img id="sidebarUserAvatar" src="" class="user-avatar" alt="" />
+        <div class="account-meta">
+          <span id="sidebarUserName" class="user-name"></span>
+          <span id="sidebarUserEmail" class="account-email"></span>
+        </div>
+        <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
+      </div>
+      <div id="sidebarSyncStatus" class="account-sync">Saved to your account</div>
+    </div>
+  </div>
+
 </aside>
 
 <!-- ── Main ── -->
 <main class="chat-main flex flex-col overflow-hidden">
 
   <!-- Header -->
-  <header class="flex items-center gap-3 px-4 py-3 border-b border-gray-200 flex-shrink-0 bg-white">
+  <header class="flex items-center gap-3 px-3 sm:px-4 py-2.5 flex-shrink-0 bg-white">
     <button class="menu-btn" onclick="openSidebar()" title="Menu" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">
       <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
       </svg>
     </button>
-    <div class="flex-1 min-w-0">
-      <h1 id="chatTitle" class="text-sm font-medium text-gray-900 truncate">New conversation</h1>
+    <div class="flex-1 min-w-0 flex items-center gap-2">
+      <button type="button" class="model-pill" title="Active model">
+        <span id="chatTitle" class="truncate max-w-[220px] sm:max-w-[360px]">Foresea</span>
+        <span class="text-gray-400 text-sm">⌄</span>
+      </button>
     </div>
     <nav class="hidden md:flex items-center gap-4 flex-shrink-0" aria-label="App navigation">
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
       <!-- Auth -->
-      <button id="appSignInBtn" type="button" class="topbar-link" onclick="triggerSignIn()" hidden>Sign in</button>
+      <div id="appGsiWrap" class="gsi-wrap" hidden aria-label="Sign in with Google"></div>
       <div id="appUserChip" class="user-chip" hidden>
         <img id="appUserAvatar" src="" class="user-avatar" alt="" />
         <span id="appUserName" class="user-name"></span>
         <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
       </div>
     </nav>
-    <div class="flex items-center gap-1.5 flex-shrink-0 border border-gray-200 rounded-sm px-2 py-1">
+    <div id="headerUserChip" class="user-chip" hidden title="Signed in">
+      <img id="headerUserAvatar" src="" class="user-avatar" alt="" />
+      <span id="headerUserName" class="user-name hidden sm:inline"></span>
+    </div>
+    <div class="hidden sm:flex items-center gap-1.5 flex-shrink-0 border border-gray-200 rounded-full px-2 py-1">
       <span class="live-pulse rounded-full inline-block" style="width:6px;height:6px;background:var(--accent)"></span>
-      <span class="label hidden sm:inline">Live</span>
+      <span class="text-xs text-gray-500">Live</span>
     </div>
   </header>
 
@@ -789,15 +1036,15 @@
   <div id="messages" data-lenis-prevent aria-live="polite" aria-label="Forecast conversation" class="scrollable flex-1 px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"></div>
 
   <!-- Input -->
-  <div class="border-t border-gray-200 px-3 sm:px-4 py-3 sm:py-4 flex-shrink-0">
-    <div class="max-w-2xl mx-auto">
+  <div class="px-3 sm:px-4 pb-4 sm:pb-5 pt-2 flex-shrink-0">
+    <div class="max-w-3xl mx-auto">
       <!-- Attachment chips -->
       <div id="attachChips" class="flex flex-wrap gap-1.5 mb-2"></div>
       <div class="input-box flex gap-2 sm:gap-3 items-end p-2 sm:p-3">
         <textarea
           id="questionInput"
           rows="1"
-          placeholder="Ask a forecasting question…"
+          placeholder="Message Foresea"
           class="flex-1 bg-transparent border-none py-1 px-1"
           style="font-size: 16px;"
           oninput="autoResize(this)"
@@ -808,8 +1055,8 @@
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
           </svg>
         </button>
-        <button id="sendBtn" class="send-btn px-4 sm:px-5 py-2 text-sm flex-shrink-0" onclick="sendQuestion()">
-          Send
+        <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="sendQuestion()" title="Send" aria-label="Send">
+          ↑
         </button>
       </div>
       <!-- Attach panel -->
@@ -830,9 +1077,7 @@
           <button class="attach-add-btn" onclick="addUrlAttachment()">Add</button>
         </div>
       </div>
-      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">
-        Probabilistic forecast. Verify before relying on it.
-      </p>
+      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">Foresea can make mistakes. Verify important forecasts.</p>
     </div>
   </div>
 
@@ -871,6 +1116,7 @@ const VARIANT_DESCS = {
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
+let storageKey = STORAGE_KEY;
 let store = loadStore();
 let activeId = null;
 let currentView = 'landing';
@@ -879,16 +1125,125 @@ let isApplyingHistory = false;
 
 // ── Persistence ──────────────────────────────────────────────────────────────
 function loadStore() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { conversations: {} }; }
+  try { return JSON.parse(localStorage.getItem(storageKey)) || { conversations: {} }; }
   catch { return { conversations: {} }; }
 }
 function saveStore() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch {}
+  try { localStorage.setItem(storageKey, JSON.stringify(store)); } catch {}
 }
 function getConv(id) { return store.conversations[id]; }
+function newMessageId() {
+  if (window.crypto?.randomUUID) return 'msg_' + crypto.randomUUID();
+  return 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+}
+function normaliseMessage(msg) {
+  return Object.assign({ id: newMessageId(), createdAt: Date.now() }, msg);
+}
 function upsertConv(id, patch) {
   store.conversations[id] = Object.assign(store.conversations[id] || {}, patch);
   saveStore();
+  queueConversationSync(id);
+}
+
+function userStorageKey(user) {
+  const stableId = user?.user_id || user?.email || 'anonymous';
+  return `${STORAGE_KEY}:${stableId}`;
+}
+
+function mergeConversationStores(a, b) {
+  const merged = { conversations: Object.assign({}, a?.conversations || {}) };
+  Object.values(b?.conversations || {}).forEach(conv => {
+    const existing = merged.conversations[conv.id];
+    if (!existing || (conv.updatedAt || 0) >= (existing.updatedAt || 0)) {
+      merged.conversations[conv.id] = conv;
+    }
+  });
+  return merged;
+}
+
+function authHeaders(extra) {
+  const { token } = _loadStoredSession();
+  return Object.assign(
+    {},
+    extra || {},
+    token ? { Authorization: 'Bearer ' + token } : {}
+  );
+}
+
+function setSyncStatus(text) {
+  const el = document.getElementById('sidebarSyncStatus');
+  if (el) el.textContent = text;
+}
+
+async function loadRemoteConversations() {
+  const r = await fetch('/chat/conversations', { headers: authHeaders() });
+  if (!r.ok) throw new Error('Could not load saved chats.');
+  const data = await r.json();
+  return {
+    conversations: Object.fromEntries((data.conversations || []).map(c => [c.id, c])),
+  };
+}
+
+async function saveRemoteConversation(conv) {
+  if (!currentUser || !conv?.id) return;
+  setSyncStatus('Saving...');
+  await fetch('/chat/conversations/' + encodeURIComponent(conv.id), {
+    method: 'PUT',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(conv),
+  });
+  setSyncStatus('Saved to your account');
+}
+
+async function deleteRemoteConversation(id) {
+  if (!currentUser || !id) return;
+  await fetch('/chat/conversations/' + encodeURIComponent(id), {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+function queueConversationSync(id) {
+  if (!currentUser || !id || window._syncPaused) return;
+  clearTimeout(window._syncTimers?.[id]);
+  window._syncTimers = window._syncTimers || {};
+  window._syncTimers[id] = setTimeout(() => {
+    saveRemoteConversation(getConv(id)).catch(err => console.warn('Chat sync failed:', err));
+  }, 500);
+}
+
+async function syncConversationsAfterSignIn(user) {
+  setSyncStatus('Loading your chats...');
+  const anonymousStore = store;
+  storageKey = userStorageKey(user);
+  const localUserStore = loadStore();
+  let remoteStore = { conversations: {} };
+  try { remoteStore = await loadRemoteConversations(); }
+  catch (err) {
+    console.warn(err.message || err);
+    setSyncStatus('Signed in. Cloud sync unavailable.');
+  }
+
+  window._syncPaused = true;
+  store = mergeConversationStores(mergeConversationStores(localUserStore, anonymousStore), remoteStore);
+  saveStore();
+  window._syncPaused = false;
+
+  renderSidebar();
+  const ids = sortedIds();
+  if (ids.length) activateConv(activeId && store.conversations[activeId] ? activeId : ids[0]);
+  else newConversation();
+
+  await Promise.allSettled(Object.values(store.conversations).map(saveRemoteConversation));
+  setSyncStatus('Saved to your account');
+}
+
+function switchToAnonymousStore() {
+  storageKey = STORAGE_KEY;
+  store = loadStore();
+  const ids = sortedIds();
+  if (ids.length) activateConv(ids[0]);
+  else newConversation();
 }
 
 // ── Mobile sidebar ────────────────────────────────────────────────────────────
@@ -928,6 +1283,7 @@ function deleteConv(id, e) {
   e.stopPropagation();
   delete store.conversations[id];
   saveStore();
+  deleteRemoteConversation(id).catch(err => console.warn('Chat delete sync failed:', err));
   if (activeId === id) {
     const ids = sortedIds();
     if (ids.length) activateConv(ids[0]);
@@ -942,6 +1298,7 @@ function sortedIds() {
 
 function appendMessage(convId, msg) {
   const conv = getConv(convId);
+  msg = normaliseMessage(msg);
   conv.messages.push(msg);
   conv.updatedAt = Date.now();
   if (conv.messages.filter(m => m.role === 'user').length === 1 && msg.role === 'user') {
@@ -949,6 +1306,7 @@ function appendMessage(convId, msg) {
     document.getElementById('chatTitle').textContent = conv.title;
   }
   saveStore();
+  queueConversationSync(convId);
   renderSidebar();
 }
 
@@ -975,15 +1333,24 @@ function renderMessages() {
 
   if (!conv || conv.messages.length === 0) {
     el.innerHTML = `
-      <div id="emptyState" class="max-w-xl mx-auto w-full text-center pt-16 sm:pt-28 px-4">
-        <p class="label mb-4">New forecast</p>
-        <h2 class="display text-3xl sm:text-5xl text-gray-900 leading-tight mb-5">
-          Ask a forecasting question.
+      <div id="emptyState" class="max-w-3xl mx-auto w-full text-center pt-16 sm:pt-32 px-4">
+        <h2 class="display text-3xl sm:text-[44px] text-gray-900 leading-tight mb-3 font-semibold">
+          What can I help you forecast?
         </h2>
-        <p class="text-[15px] text-gray-500 leading-relaxed">
-          Yes/no, multiple choice, a number, or a date — Foresea returns a calibrated
-          estimate, its rationale, and linked evidence sources.
+        <p class="text-[15px] text-gray-500 leading-relaxed max-w-xl mx-auto">
+          Ask anything forecastable. Foresea can answer directly or return probabilities, rationale, and sources.
         </p>
+        <div class="mt-8 grid sm:grid-cols-2 gap-2.5 text-left">
+          ${[
+            'Will the Fed cut rates before September 30, 2026?',
+            'Who will win the 2026 Formula 1 drivers championship?',
+            'What will US CPI inflation be in December 2026?',
+            'When will the next major SpaceX Starship milestone occur?'
+          ].map(q => `
+            <button type="button" class="empty-suggestion" onclick="startExample('${escAttr(q)}')">
+              ${escHtml(q)}
+            </button>`).join('')}
+        </div>
       </div>`;
     return;
   }
@@ -1004,7 +1371,7 @@ function renderMessages() {
 function makeUserBubble(text) {
   const div = document.createElement('div');
   div.className = 'flex justify-end';
-  div.innerHTML = `<div class="msg-user max-w-xs sm:max-w-xl px-4 py-3 text-sm">${escHtml(text)}</div>`;
+  div.innerHTML = `<div class="msg-user text-sm leading-relaxed">${escHtml(text)}</div>`;
   return div;
 }
 
@@ -1159,7 +1526,7 @@ async function sendQuestion() {
     _renderChips();
     const resp = await fetch('/predict', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
     });
     const data = await resp.json();
@@ -1208,6 +1575,9 @@ function addError(msg) {
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function escAttr(s) {
+  return escHtml(s).replace(/'/g,'&#39;');
+}
 
 // ── Motion helpers ─────────────────────────────────────────────────────────
 const EASE = [0.22, 1, 0.36, 1];
@@ -1218,8 +1588,8 @@ function animateIn(node, delay = 0) {
   if (!node || !window.Motion || prefersReduced()) return;
   Motion.animate(
     node,
-    { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
-    { duration: 0.45, delay, easing: EASE }
+    { opacity: [0, 1], transform: ['translateY(14px) scale(.985)', 'translateY(0) scale(1)'] },
+    { duration: 0.62, delay, easing: EASE }
   );
 }
 function enhanceCard(node) {
@@ -1234,7 +1604,7 @@ function enhanceCard(node) {
     if (reduce) {
       bar.style.width = target + '%';
     } else {
-      Motion.animate(bar, { width: ['0%', target + '%'] }, { duration: 0.9, easing: EASE });
+      Motion.animate(bar, { width: ['0%', target + '%'] }, { duration: 1.15, easing: EASE });
     }
   });
   if (num) {
@@ -1243,7 +1613,7 @@ function enhanceCard(node) {
       num.textContent = Math.round(target) + '%';
     } else {
       Motion.animate(0, target, {
-        duration: 0.9, easing: EASE,
+        duration: 1.15, easing: EASE,
         onUpdate: v => { num.textContent = Math.round(v) + '%'; },
       });
     }
@@ -1252,7 +1622,7 @@ function enhanceCard(node) {
     Motion.animate(
       chips,
       { opacity: [0, 1], transform: ['translateY(6px)', 'translateY(0)'] },
-      { delay: Motion.stagger(0.05), duration: 0.4, easing: EASE }
+      { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE }
     );
   }
 }
@@ -1573,7 +1943,7 @@ function _setAttachLoading(msg) {
 async function _extractAndAdd(formData, label) {
   _setAttachLoading(`Extracting ${label}…`);
   try {
-    const r = await fetch('/extract', { method: 'POST', body: formData });
+    const r = await fetch('/extract', { method: 'POST', headers: authHeaders(), body: formData });
     if (!r.ok) { const e = await r.json().catch(() => ({})); addError(e.detail || 'Extraction failed'); return; }
     const data = await r.json();
     _attachments.push(data);
@@ -1711,23 +2081,39 @@ function updateAuthUI(user) {
   currentUser = user;
   const firstName = (user?.name || '').split(' ')[0];
   const pic = user?.picture || '';
+  const email = user?.email || '';
 
   if (user) {
     _setAuthEl('landingGsiWrap', false);
+    _setAuthEl('appGsiWrap', false);
+    _setAuthEl('sidebarGsiWrap', false);
     _setAuthEl('landingUserChip', true, {
       landingUserAvatar: pic,
       landingUserName: firstName,
     });
-    _setAuthEl('appSignInBtn', false);
     _setAuthEl('appUserChip', true, {
       appUserAvatar: pic,
       appUserName: firstName,
     });
+    _setAuthEl('headerUserChip', true, {
+      headerUserAvatar: pic,
+      headerUserName: firstName,
+    });
+    _setAuthEl('sidebarUserChip', true, {
+      sidebarUserAvatar: pic,
+      sidebarUserName: firstName,
+      sidebarUserEmail: email,
+    });
   } else {
     _setAuthEl('landingUserChip', false);
     _setAuthEl('appUserChip', false);
-    _setAuthEl('appSignInBtn', true);
-    if (_gClientId) _setAuthEl('landingGsiWrap', true);
+    _setAuthEl('headerUserChip', false);
+    _setAuthEl('sidebarUserChip', false);
+    if (_gClientId) {
+      _setAuthEl('landingGsiWrap', true);
+      _setAuthEl('appGsiWrap', true);
+      _setAuthEl('sidebarGsiWrap', true);
+    }
   }
 }
 
@@ -1740,9 +2126,10 @@ async function handleGoogleCredential(response) {
     });
     if (!r.ok) { console.error('Auth failed:', await r.text()); return; }
     const d = await r.json();
-    const user = { name: d.name, email: d.email, picture: d.picture };
+    const user = { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
     _saveSession(d.token, user);
     updateAuthUI(user);
+    await syncConversationsAfterSignIn(user);
   } catch (e) { console.error('Auth error:', e); }
 }
 
@@ -1753,18 +2140,44 @@ async function _verifySession() {
     const r = await fetch('/auth/me', { headers: { Authorization: 'Bearer ' + token } });
     if (!r.ok) { _clearSession(); return null; }
     const d = await r.json();
-    return { name: d.name, email: d.email, picture: d.picture };
+    return { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
   } catch { return user; /* offline: trust cached data */ }
 }
 
+function renderGoogleButton(id, width) {
+  const wrap = document.getElementById(id);
+  if (!wrap || !window.google?.accounts?.id) return;
+  wrap.innerHTML = '';
+  google.accounts.id.renderButton(wrap, {
+    type: 'standard',
+    theme: 'outline',
+    size: 'medium',
+    text: 'signin_with',
+    shape: 'rectangular',
+    logo_alignment: 'left',
+    width,
+  });
+  wrap.hidden = !!currentUser;
+}
+
 function triggerSignIn() {
-  if (window.google?.accounts?.id) google.accounts.id.prompt();
+  if (window.google?.accounts?.id) {
+    google.accounts.id.prompt(notification => {
+      if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
+        renderGoogleButton('appGsiWrap', 160);
+        renderGoogleButton('sidebarGsiWrap', 210);
+        _setAuthEl('appGsiWrap', true);
+        _setAuthEl('sidebarGsiWrap', true);
+      }
+    });
+  }
 }
 
 function signOut() {
   _clearSession();
   if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
   updateAuthUI(null);
+  switchToAnonymousStore();
 }
 
 async function initAuth() {
@@ -1774,6 +2187,7 @@ async function initAuth() {
     const { token } = _loadStoredSession();
     _saveSession(token, user);
     updateAuthUI(user);
+    await syncConversationsAfterSignIn(user);
   }
 
   // 2. Fetch Google client ID from server
@@ -1795,27 +2209,16 @@ async function initAuth() {
       auto_select: false,
     });
     if (!currentUser) {
-      const wrap = document.getElementById('landingGsiWrap');
-      if (wrap) {
-        google.accounts.id.renderButton(wrap, {
-          type: 'standard',
-          theme: 'outline',
-          size: 'medium',
-          text: 'signin_with',
-          shape: 'rectangular',
-          logo_alignment: 'left',
-          width: 140,
-        });
-        wrap.hidden = false;
-      }
-      _setAuthEl('appSignInBtn', true);
+      renderGoogleButton('landingGsiWrap', 140);
+      renderGoogleButton('appGsiWrap', 160);
+      renderGoogleButton('sidebarGsiWrap', 210);
     }
   };
   document.head.appendChild(script);
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-setHistoryState('landing', 'replace');
+setHistoryState('app', 'replace');
 syncSidebarA11y();
 recordPageVisit();
 updateVariantDesc();
@@ -1825,6 +2228,9 @@ initAuth();
 const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);
 else newConversation();
+document.getElementById('landingPage').classList.add('hidden-view');
+document.getElementById('appShell').classList.remove('hidden-view');
+currentView = 'app';
 document.body.style.overflow = 'auto';
 
 // ── Smooth scroll + entrance choreography ────────────────────────────────────
