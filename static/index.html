@@ -203,10 +203,23 @@
     .topbar-link {
       font-size: 12px;
       color: var(--text-dim);
+      border: 0;
       border-bottom: 1px solid transparent;
       transition: color .12s, border-color .12s;
+      background: none;
+      padding: 0;
+      cursor: pointer;
     }
     .topbar-link:hover { color: var(--ink); border-color: var(--ink); }
+    .topbar-link:focus-visible,
+    button:focus-visible,
+    a:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 3px;
+    }
 
     .landing {
       min-height: 100vh;
@@ -355,6 +368,7 @@
       font-size: 12px;
       list-style: none;
       user-select: none;
+      width: fit-content;
     }
     .advanced-panel summary::-webkit-details-marker { display: none; }
     .advanced-panel summary:hover { color: var(--ink); }
@@ -461,16 +475,16 @@
 
 <!-- ── Landing ── -->
 <section id="landingPage" class="landing">
-  <nav class="landing-nav">
+  <nav class="landing-nav" aria-label="Main navigation">
     <div class="landing-brand">
       <span class="logo-dot"></span>
       <span class="brand text-xl">Foresea</span>
     </div>
     <div class="landing-links">
-      <a class="topbar-link" style="cursor:pointer" onclick="openTrackRecord()">Track record</a>
+      <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
-      <button class="hero-action primary py-2" onclick="launchApp()">Launch</button>
+      <button type="button" class="hero-action primary py-2" onclick="launchApp()">Launch</button>
     </div>
   </nav>
 
@@ -531,18 +545,18 @@
 <div id="appShell" class="app-shell hidden-view">
 
 <!-- Mobile overlay -->
-<div id="overlay" onclick="closeSidebar()"></div>
+<div id="overlay" onclick="closeSidebar()" aria-hidden="true"></div>
 
 <!-- ── Sidebar ── -->
-<aside id="sidebar" class="sidebar overflow-hidden">
+<aside id="sidebar" class="sidebar overflow-hidden" aria-label="Forecast navigation" aria-hidden="false">
 
   <div class="flex items-center gap-2 px-1 py-1">
     <span class="logo-dot"></span>
     <span class="brand text-xl flex-1">Foresea</span>
-    <button class="menu-btn" onclick="closeSidebar()" title="Close">✕</button>
+    <button class="menu-btn" onclick="closeSidebar()" title="Close" aria-label="Close navigation">✕</button>
   </div>
 
-  <button class="new-chat-btn" onclick="newConversation()">New forecast</button>
+  <button type="button" class="new-chat-btn" onclick="newConversation()">New forecast</button>
 
   <!-- Conversation list -->
   <div class="flex-1 scrollable flex flex-col gap-1 min-h-0" data-lenis-prevent>
@@ -551,7 +565,7 @@
   </div>
 
   <details class="advanced-panel">
-    <summary>Advanced</summary>
+    <summary role="button" aria-label="Show advanced forecast settings">Advanced</summary>
     <div>
       <p class="label px-1 mb-2">Prompt variant</p>
       <select id="variantSelect" class="variant-select" onchange="updateVariantDesc()">
@@ -584,7 +598,7 @@
 
   <!-- Header -->
   <header class="flex items-center gap-3 px-4 py-3 border-b border-gray-200 flex-shrink-0 bg-white">
-    <button class="menu-btn" onclick="openSidebar()" title="Menu">
+    <button class="menu-btn" onclick="openSidebar()" title="Menu" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">
       <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
       </svg>
@@ -592,8 +606,8 @@
     <div class="flex-1 min-w-0">
       <h1 id="chatTitle" class="text-sm font-medium text-gray-900 truncate">New conversation</h1>
     </div>
-    <nav class="hidden md:flex items-center gap-4 flex-shrink-0">
-      <a class="topbar-link" style="cursor:pointer" onclick="openTrackRecord()">Track record</a>
+    <nav class="hidden md:flex items-center gap-4 flex-shrink-0" aria-label="App navigation">
+      <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
     </nav>
@@ -604,7 +618,7 @@
   </header>
 
   <!-- Messages -->
-  <div id="messages" data-lenis-prevent class="scrollable flex-1 px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"></div>
+  <div id="messages" data-lenis-prevent aria-live="polite" aria-label="Forecast conversation" class="scrollable flex-1 px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"></div>
 
   <!-- Input -->
   <div class="border-t border-gray-200 px-3 sm:px-4 py-3 sm:py-4 flex-shrink-0">
@@ -634,13 +648,14 @@
 </div>
 
 <!-- ── Track record overlay ── -->
-<div id="trackOverlay" class="tr-overlay">
+<div id="trackOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="trackDialogTitle" aria-hidden="true" tabindex="-1">
   <div class="tr-head">
     <div class="flex items-center gap-2">
       <span class="logo-dot"></span>
       <span class="brand text-lg">Foresea</span>
+      <h2 id="trackDialogTitle" class="sr-only">Foresea track record</h2>
     </div>
-    <button class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeTrackRecord()">Close</button>
+    <button id="trackCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeTrackRecord()">Close</button>
   </div>
   <div id="trackBody" class="tr-body" data-lenis-prevent></div>
 </div>
@@ -663,6 +678,9 @@ const VARIANT_DESCS = {
 // ── State ────────────────────────────────────────────────────────────────────
 let store = loadStore();
 let activeId = null;
+let currentView = 'landing';
+let lastFocusedBeforeDialog = null;
+let isApplyingHistory = false;
 
 // ── Persistence ──────────────────────────────────────────────────────────────
 function loadStore() {
@@ -680,12 +698,19 @@ function upsertConv(id, patch) {
 
 // ── Mobile sidebar ────────────────────────────────────────────────────────────
 function openSidebar() {
-  document.getElementById('sidebar').classList.add('open');
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.add('open');
+  sidebar.setAttribute('aria-hidden', 'false');
   document.getElementById('overlay').classList.add('show');
+  document.querySelector('[aria-controls="sidebar"]')?.setAttribute('aria-expanded', 'true');
+  setTimeout(() => focusFirst(sidebar), 0);
 }
 function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.remove('open');
   document.getElementById('overlay').classList.remove('show');
+  document.querySelector('[aria-controls="sidebar"]')?.setAttribute('aria-expanded', 'false');
+  syncSidebarA11y();
 }
 
 // ── Conversation management ──────────────────────────────────────────────────
@@ -1024,11 +1049,28 @@ function updateVariantDesc() {
   const v = document.getElementById('variantSelect').value;
   document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
 }
-function launchApp() {
+function setHistoryState(view, mode = 'push') {
+  if (isApplyingHistory || !window.history) return;
+  const state = { view };
+  if (mode === 'replace') history.replaceState(state, '', window.location.pathname);
+  else if (history.state?.view !== view) history.pushState(state, '', window.location.pathname);
+}
+function showLanding({ updateHistory = true } = {}) {
+  closeSidebar();
+  closeTrackRecord({ updateHistory: false });
+  document.getElementById('appShell').classList.add('hidden-view');
+  document.getElementById('landingPage').classList.remove('hidden-view');
+  document.body.style.overflow = 'auto';
+  currentView = 'landing';
+  if (updateHistory) setHistoryState('landing');
+}
+function launchApp({ updateHistory = true } = {}) {
   const app = document.getElementById('appShell');
   document.getElementById('landingPage').classList.add('hidden-view');
   app.classList.remove('hidden-view');
   document.body.style.overflow = 'hidden';
+  currentView = 'app';
+  if (updateHistory) setHistoryState('app');
   if (window.Motion && !prefersReduced()) {
     Motion.animate(app, { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
       { duration: 0.45, easing: EASE });
@@ -1083,22 +1125,36 @@ function recordPageVisit() {
 
 // ── Track record ─────────────────────────────────────────────────────────────
 let trackLoaded = false;
-async function openTrackRecord() {
+async function openTrackRecord({ updateHistory = true } = {}) {
   const ov = document.getElementById('trackOverlay');
+  if (ov.classList.contains('open')) return;
+  lastFocusedBeforeDialog = document.activeElement;
   ov.classList.add('open');
+  ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+  if (updateHistory) setHistoryState(currentView === 'app' ? 'track-app' : 'track-landing');
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   }
   if (!trackLoaded) { trackLoaded = true; await loadTrackRecord(); }
+  setTimeout(() => document.getElementById('trackCloseBtn')?.focus(), 0);
 }
-function closeTrackRecord() {
+function closeTrackRecord({ updateHistory = true } = {}) {
   const ov = document.getElementById('trackOverlay');
+  if (!ov.classList.contains('open')) return;
+  if (updateHistory && (history.state?.view === 'track-app' || history.state?.view === 'track-landing')) {
+    history.back();
+    return;
+  }
   const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
     ov.classList.remove('open');
+    ov.setAttribute('aria-hidden', 'true');
     ov.style.opacity = '';
     document.body.style.overflow = inApp ? 'hidden' : 'auto';
+    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) {
+      lastFocusedBeforeDialog.focus();
+    }
   };
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
@@ -1172,7 +1228,82 @@ function renderTrackRecord(d) {
     </div>`;
 }
 
+// ── History + accessibility ─────────────────────────────────────────────────
+function focusableElements(root) {
+  if (!root) return [];
+  return Array.from(root.querySelectorAll(
+    'a[href], button:not([disabled]), textarea:not([disabled]), select:not([disabled]), input:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+  )).filter(el => el.offsetParent !== null || el === document.activeElement);
+}
+function focusFirst(root) {
+  const first = focusableElements(root)[0];
+  if (first) first.focus();
+}
+function trapFocus(event, root) {
+  if (event.key !== 'Tab') return;
+  const items = focusableElements(root);
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+function syncSidebarA11y() {
+  const sidebar = document.getElementById('sidebar');
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+  sidebar.setAttribute('aria-hidden', isMobile && !sidebar.classList.contains('open') ? 'true' : 'false');
+}
+function applyHistoryState(state) {
+  isApplyingHistory = true;
+  const view = state?.view || 'landing';
+  if (view === 'app') {
+    closeTrackRecord({ updateHistory: false });
+    launchApp({ updateHistory: false });
+  } else if (view === 'track-app') {
+    launchApp({ updateHistory: false });
+    openTrackRecord({ updateHistory: false });
+  } else if (view === 'track-landing') {
+    showLanding({ updateHistory: false });
+    openTrackRecord({ updateHistory: false });
+  } else {
+    showLanding({ updateHistory: false });
+  }
+  isApplyingHistory = false;
+}
+window.addEventListener('popstate', event => applyHistoryState(event.state));
+window.addEventListener('resize', syncSidebarA11y);
+document.addEventListener('keydown', event => {
+  const track = document.getElementById('trackOverlay');
+  const sidebar = document.getElementById('sidebar');
+  const trackOpen = track.classList.contains('open');
+  const sidebarOpen = sidebar.classList.contains('open');
+
+  if (event.key === 'Escape') {
+    if (trackOpen) {
+      event.preventDefault();
+      closeTrackRecord();
+    } else if (sidebarOpen) {
+      event.preventDefault();
+      closeSidebar();
+    }
+    return;
+  }
+
+  if (trackOpen) {
+    trapFocus(event, track);
+  } else if (sidebarOpen) {
+    trapFocus(event, sidebar);
+  }
+});
+
 // ── Init ─────────────────────────────────────────────────────────────────────
+setHistoryState('landing', 'replace');
+syncSidebarA11y();
 recordPageVisit();
 updateVariantDesc();
 const ids = sortedIds();
