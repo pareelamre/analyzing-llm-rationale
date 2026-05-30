@@ -169,6 +169,18 @@
       display: inline-block;
       line-height: 1;
     }
+    .brand-home {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+      color: var(--ink);
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      text-align: left;
+    }
 
     /* Logo mark — dark square */
     .logo-dot {
@@ -476,10 +488,10 @@
 <!-- ── Landing ── -->
 <section id="landingPage" class="landing">
   <nav class="landing-nav" aria-label="Main navigation">
-    <div class="landing-brand">
+    <button type="button" class="landing-brand brand-home" onclick="showLanding()" aria-label="Go to landing page">
       <span class="logo-dot"></span>
       <span class="brand text-xl">Foresea</span>
-    </div>
+    </button>
     <div class="landing-links">
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
@@ -552,8 +564,10 @@
 <aside id="sidebar" class="sidebar overflow-hidden" aria-label="Forecast navigation" aria-hidden="false">
 
   <div class="flex items-center gap-2 px-1 py-1">
-    <span class="logo-dot"></span>
-    <span class="brand text-xl flex-1">Foresea</span>
+    <button type="button" class="brand-home flex-1" onclick="showLanding()" aria-label="Go to landing page">
+      <span class="logo-dot"></span>
+      <span class="brand text-xl">Foresea</span>
+    </button>
     <button class="menu-btn" onclick="closeSidebar()" title="Close" aria-label="Close navigation">✕</button>
   </div>
 
@@ -652,8 +666,10 @@
 <div id="trackOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="trackDialogTitle" aria-hidden="true" tabindex="-1">
   <div class="tr-head">
     <div class="flex items-center gap-2">
-      <span class="logo-dot"></span>
-      <span class="brand text-lg">Foresea</span>
+      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
+        <span class="logo-dot"></span>
+        <span class="brand text-lg">Foresea</span>
+      </button>
       <h2 id="trackDialogTitle" class="sr-only">Foresea track record</h2>
     </div>
     <button id="trackCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeTrackRecord()">Close</button>
