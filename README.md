@@ -203,6 +203,40 @@ evidence articles. It is built for resolvable forecasts, not general Q&A.
 
 - `GET /health`: service health check.
 - `POST /predict`: public prediction endpoint.
+- `GET /markets/polymarket`: fetch a live Polymarket quote (see below).
+- `GET /markets/kalshi`: fetch a live Kalshi quote (see below).
+
+### Fetch live market prices
+
+Pull the current market-implied probability straight from a venue, then feed it
+into `/predict` as `market_probability` to compute an edge.
+
+```bash
+# Polymarket — by market slug (or ?id=<numeric id>)
+curl "https://foresea.ink/markets/polymarket?slug=will-the-fed-cut-rates-in-2026"
+
+# Kalshi — by market ticker
+curl "https://foresea.ink/markets/kalshi?ticker=KXFED-26SEP-C"
+```
+
+Both return a normalised quote:
+
+```json
+{
+  "platform": "Polymarket",
+  "question": "Will the Fed cut rates in 2026?",
+  "market_url": "https://polymarket.com/market/...",
+  "outcome": "Yes",
+  "probability": 0.54,
+  "outcomes": [
+    {"label": "Yes", "probability": 0.54},
+    {"label": "No", "probability": 0.46}
+  ]
+}
+```
+
+`probability` is `null` for unpriced/illiquid markets. Quotes are cached briefly
+(`MARKET_CACHE_TTL`, default 30s).
 
 ### Request fields
 

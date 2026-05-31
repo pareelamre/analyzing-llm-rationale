@@ -204,6 +204,42 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn("Only binary questions", user_message)
         self.assertNotIn('"type":', user_message)
 
+    def test_markets_polymarket_endpoint_returns_quote(self):
+        import analyzing_llm_rationale.market_data as md
+
+        quote = {
+            "platform": "Polymarket",
+            "question": "Will X happen?",
+            "market_url": "https://polymarket.com/market/will-x",
+            "outcome": "Yes",
+            "probability": 0.62,
+            "outcomes": [
+                {"label": "Yes", "probability": 0.62},
+                {"label": "No", "probability": 0.38},
+            ],
+        }
+        with mock.patch.object(md, "fetch_polymarket", lambda slug=None, market_id=None: quote):
+            response = self.client.get("/markets/polymarket?slug=will-x")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["platform"], "Polymarket")
+        self.assertAlmostEqual(body["probability"], 0.62)
+        self.assertEqual(len(body["outcomes"]), 2)
+
+    def test_markets_polymarket_requires_identifier(self):
+        self.assertEqual(self.client.get("/markets/polymarket").status_code, 422)
+
+    def test_markets_kalshi_not_found_maps_to_404(self):
+        import analyzing_llm_rationale.market_data as md
+
+        def boom(ticker):
+            raise md.MarketDataError("Kalshi market not found.")
+
+        with mock.patch.object(md, "fetch_kalshi", boom):
+            response = self.client.get("/markets/kalshi?ticker=NOPE")
+        self.assertEqual(response.status_code, 404)
+
     def test_records_anonymous_page_visit(self):
         response = self.client.post(
             "/analytics/visit",

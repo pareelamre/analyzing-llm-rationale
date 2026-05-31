@@ -165,6 +165,10 @@ _TAGS = [
         "description": "Run forecast and market-edge analysis for binary, multiple-choice, numeric, and date questions.",
     },
     {
+        "name": "Markets",
+        "description": "Fetch live prices from prediction-market venues (Polymarket, Kalshi).",
+    },
+    {
         "name": "System",
         "description": "Health and liveness checks.",
     },
@@ -1062,6 +1066,22 @@ class MarketAnalysis(BaseModel):
     summary: str = Field(..., description="Short human-readable market comparison.")
 
 
+class MarketOption(BaseModel):
+    """One outcome of a fetched prediction market and its implied probability."""
+    label: str = Field(..., description="Outcome label, e.g. 'Yes' or 'No'.")
+    probability: Optional[float] = Field(None, description="Market-implied probability (0..1), or null when unpriced.")
+
+
+class MarketQuote(BaseModel):
+    """A live prediction-market quote, normalised for use with `/predict`."""
+    platform: str = Field(..., description="Venue: 'Polymarket' or 'Kalshi'.")
+    question: str = Field("", description="Market question/title.")
+    market_url: str = Field("", description="Canonical market URL.")
+    outcome: str = Field("", description="Primary outcome (prefers 'Yes').")
+    probability: Optional[float] = Field(None, description="Market-implied probability for `outcome` (0..1).")
+    outcomes: List[MarketOption] = Field(default_factory=list, description="All outcomes with their probabilities.")
+
+
 class PredictResponse(BaseModel):
     """Prediction result for a single forecasting question."""
 
@@ -1700,6 +1720,67 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
             for day, visits, unique_count in rows
         ],
     )
+
+
+_MARKET_CACHE_TTL = int(os.environ.get("MARKET_CACHE_TTL", "30"))
+
+
+async def _fetch_market_quote(venue: str, **kwargs: Any) -> "MarketQuote":
+    """Shared cache + error handling for the market-fetch endpoints."""
+    from analyzing_llm_rationale import market_data
+
+    cache_key = _cache_key("market", venue, kwargs)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return MarketQuote(**cached)
+
+    loop = asyncio.get_running_loop()
+    try:
+        if venue == "polymarket":
+            quote = await loop.run_in_executor(
+                None,
+                lambda: market_data.fetch_polymarket(
+                    slug=kwargs.get("slug"), market_id=kwargs.get("market_id")
+                ),
+            )
+        else:
+            quote = await loop.run_in_executor(
+                None, lambda: market_data.fetch_kalshi(kwargs["ticker"])
+            )
+    except market_data.MarketDataError as exc:
+        code = 404 if "not found" in str(exc).lower() else 502
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Market provider error: {exc}") from exc
+
+    _cache_set(cache_key, quote, _MARKET_CACHE_TTL)
+    return MarketQuote(**quote)
+
+
+@app.get("/markets/polymarket", tags=["Markets"], summary="Fetch a Polymarket market", response_model=MarketQuote)
+async def market_polymarket(
+    request: Request,
+    slug: Optional[str] = None,
+    id: Optional[str] = None,
+) -> "MarketQuote":
+    """Fetch a live Polymarket quote by market `slug` (or numeric `id`).
+
+    The result is normalised so `probability` can be passed to `/predict` as
+    `market_probability` (with `market_platform="Polymarket"`) to compute an edge.
+    """
+    _check_rate_limit(request)
+    if not slug and not id:
+        raise HTTPException(status_code=422, detail="Provide a Polymarket 'slug' or 'id'.")
+    return await _fetch_market_quote("polymarket", slug=slug, market_id=id)
+
+
+@app.get("/markets/kalshi", tags=["Markets"], summary="Fetch a Kalshi market", response_model=MarketQuote)
+async def market_kalshi(request: Request, ticker: str) -> "MarketQuote":
+    """Fetch a live Kalshi quote by market `ticker` (e.g. `KXFED-26SEP-C`)."""
+    _check_rate_limit(request)
+    if not ticker.strip():
+        raise HTTPException(status_code=422, detail="Provide a Kalshi 'ticker'.")
+    return await _fetch_market_quote("kalshi", ticker=ticker)
 
 
 @app.post("/extract", tags=["System"], summary="Extract text from a PDF file or URL")
