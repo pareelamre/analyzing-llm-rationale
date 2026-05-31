@@ -435,6 +435,19 @@
       color: var(--ink);
       transform: translateY(-1px);
     }
+    .market-sources {
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .market-sources a {
+      color: var(--ink);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      transition: opacity var(--dur-med);
+    }
+    .market-sources a:hover { opacity: .7; }
+    .market-sources span { margin: 0 4px; color: var(--text-mute); }
     .market-dashboard {
       width: 100%;
       max-width: 760px;
@@ -1026,6 +1039,64 @@
     .chat-md ul.md-ul { list-style: disc; }
     .chat-md ol.md-ol { list-style: decimal; }
     .chat-md li { margin: 3px 0; padding-left: 2px; }
+    .chat-md .md-table-wrap { overflow-x: auto; margin: 0 0 12px; }
+    .chat-md table.md-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    .chat-md table.md-table th,
+    .chat-md table.md-table td {
+      border: 1px solid var(--border-2);
+      padding: 6px 10px; text-align: left; vertical-align: top;
+    }
+    .chat-md table.md-table th { background: var(--paper); font-weight: 600; color: var(--ink); }
+    .chat-md hr.md-hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+    .chat-md blockquote.md-quote {
+      border-left: 3px solid var(--border-2);
+      margin: 0 0 10px; padding: 2px 0 2px 12px; color: var(--text-dim);
+    }
+
+    /* ── Model manager (Ollama-style) ────────────────────────────────────── */
+    .model-list { display: flex; flex-direction: column; gap: 4px; }
+    .model-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 8px; border-radius: 10px; cursor: pointer;
+      border: 1px solid transparent;
+      transition: background var(--dur-med), border-color var(--dur-med);
+    }
+    .model-row:hover { background: #f1f1f3; }
+    .model-row.active { border-color: var(--ink); background: #f6f6f8; }
+    .model-radio {
+      width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+      border: 1.5px solid var(--border-2); position: relative;
+    }
+    .model-row.active .model-radio { border-color: var(--ink); }
+    .model-row.active .model-radio::after {
+      content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--ink);
+    }
+    .model-meta { flex: 1; min-width: 0; }
+    .model-name { font-size: 12px; color: var(--ink); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .model-sub { font-size: 10px; color: var(--text-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .model-badge { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-mute); border: 1px solid var(--border-2); border-radius: 999px; padding: 1px 6px; flex-shrink: 0; }
+    .model-actions { display: flex; gap: 2px; opacity: 0; transition: opacity var(--dur-med); }
+    .model-row:hover .model-actions { opacity: 1; }
+    .model-icon-btn {
+      width: 22px; height: 22px; border: 0; background: transparent; border-radius: 6px;
+      color: var(--text-mute); cursor: pointer; font-size: 12px; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .model-icon-btn:hover { background: #e6e6e9; color: var(--ink); }
+    .model-add-btn {
+      margin-top: 6px; width: 100%; text-align: left;
+      font-size: 12px; color: var(--text-dim); background: transparent;
+      border: 1px dashed var(--border-2); border-radius: 10px; padding: 8px 10px; cursor: pointer;
+      transition: border-color var(--dur-med), color var(--dur-med), background var(--dur-med);
+    }
+    .model-add-btn:hover { border-color: var(--ink); color: var(--ink); background: #fafafa; }
+    .model-form { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+    .model-form-error { font-size: 11px; color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 6px 8px; }
+    .model-form-actions { display: flex; gap: 8px; }
+    .model-save { flex: 1; background: var(--ink); color: #fff; border: 0; border-radius: 999px; padding: 8px; font-size: 12px; font-weight: 500; cursor: pointer; }
+    .model-save:hover { background: #000; }
+    .model-cancel { flex: 1; background: transparent; color: var(--text-dim); border: 1px solid var(--border-2); border-radius: 999px; padding: 8px; font-size: 12px; cursor: pointer; }
+    .model-cancel:hover { color: var(--ink); border-color: var(--ink); }
 
     /* ── Glass surfaces ──────────────────────────────────────────────────── */
     .glass {
@@ -1115,12 +1186,10 @@
       margin-top: 5px; margin-bottom: 18px; line-height: 1.5;
     }
 
-    /* Clean Google button */
-    .auth-google { display: flex; justify-content: center; min-height: 44px; }
+    /* Clean Google button — single pill outline, full width, no double border */
+    .auth-google { display: flex; justify-content: center; min-height: 42px; }
     .auth-google .gsi-wrap {
-      border-radius: 12px;
-      border: 1px solid var(--border-2);
-      box-shadow: 0 1px 2px rgba(15,15,16,.05);
+      border-radius: 999px;
       overflow: hidden;
     }
 
@@ -1259,6 +1328,12 @@
           <button type="button" class="market-prompt" onclick="startExample('Compare the evidence for this market: Will US CPI inflation be at least 3.0% in December 2026?')">Evidence brief</button>
           <button type="button" class="market-prompt" onclick="startExample('What probability should this market trade at: Will SpaceX complete a major Starship milestone before December 31, 2026?')">Fair value</button>
         </div>
+        <p class="market-sources">
+          Live prices from
+          <a href="https://polymarket.com" target="_blank" rel="noopener">Polymarket</a>
+          <span aria-hidden="true">·</span>
+          <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a>
+        </p>
         <div class="product-panel market-dashboard" aria-label="Foresea market intelligence preview">
           <div class="panel-bar">
             <span>Market desk</span>
@@ -1360,68 +1435,57 @@
         </svg>
         Use your own model
       </summary>
-      <div class="mt-2 space-y-2" onclick="event.stopPropagation()">
-        <div>
-          <label class="label block mb-1" for="orProvider">Provider</label>
-          <select id="orProvider" class="variant-select text-xs" onchange="saveOrSettings()">
-            <option value="openrouter">OpenRouter</option>
-            <option value="custom">Custom (OpenAI-compatible)</option>
-          </select>
-        </div>
-        <div id="orBaseUrlRow" hidden>
-          <label class="label block mb-1" for="orBaseUrl">Endpoint URL</label>
-          <input
-            id="orBaseUrl"
-            type="url"
-            class="variant-select text-xs"
-            placeholder="https://api.openai.com/v1/chat/completions"
-            autocomplete="off"
-            oninput="saveOrSettings()"
-          />
-          <p class="text-gray-400 mt-1" style="font-size:10px">
-            Any OpenAI-compatible <code>/chat/completions</code> endpoint. Public HTTPS only.
-          </p>
-        </div>
-        <div>
-          <label class="label block mb-1" for="orKey">API key</label>
-          <input
-            id="orKey"
-            type="password"
-            class="variant-select text-xs"
-            placeholder="sk-…"
-            autocomplete="off"
-            oninput="saveOrSettings()"
-          />
-          <p id="orKeyHint" class="text-gray-400 mt-1" style="font-size:10px">
-            Stored locally in your browser. Get an OpenRouter key at <a href="https://openrouter.ai/keys" target="_blank" class="underline">openrouter.ai/keys</a>.
-          </p>
-        </div>
-        <div>
-          <label class="label block mb-1" for="orModel">Model</label>
-          <input
-            id="orModel"
-            class="variant-select text-xs"
-            list="orModelList"
-            placeholder="e.g. openai/gpt-4o"
-            autocomplete="off"
-            oninput="saveOrSettings()"
-          />
-          <datalist id="orModelList">
-            <option value="openai/gpt-4o"></option>
-            <option value="openai/gpt-4o-mini"></option>
-            <option value="openai/o3-mini"></option>
-            <option value="anthropic/claude-sonnet-4-5"></option>
-            <option value="anthropic/claude-3.5-haiku"></option>
-            <option value="google/gemini-2.5-pro-preview-05-06"></option>
-            <option value="google/gemini-2.0-flash-001"></option>
-            <option value="meta-llama/llama-3.3-70b-instruct"></option>
-            <option value="deepseek/deepseek-r1"></option>
-            <option value="deepseek/deepseek-chat-v3-0324"></option>
-            <option value="mistralai/mistral-small-3.1-24b-instruct"></option>
-          </datalist>
-          <p class="text-gray-400 mt-1" style="font-size:10px">
-            Type any model ID your provider supports.
-          </p>
+      <div class="mt-2" onclick="event.stopPropagation()">
+        <!-- Saved models (rendered by renderModelList) -->
+        <div id="modelList" class="model-list"></div>
+        <button type="button" id="addModelBtn" class="model-add-btn" onclick="startAddModel()">+ Add a model</button>
+
+        <!-- Add / edit form -->
+        <div id="modelForm" class="model-form" hidden>
+          <div>
+            <label class="label block mb-1" for="mfName">Name</label>
+            <input id="mfName" class="variant-select text-xs" placeholder="e.g. My GPT-4o" autocomplete="off" />
+          </div>
+          <div>
+            <label class="label block mb-1" for="mfProvider">Provider</label>
+            <select id="mfProvider" class="variant-select text-xs" onchange="_mfToggleBaseUrl()">
+              <option value="openrouter">OpenRouter</option>
+              <option value="custom">Custom (OpenAI-compatible)</option>
+            </select>
+          </div>
+          <div id="mfBaseUrlRow" hidden>
+            <label class="label block mb-1" for="mfBaseUrl">Endpoint URL</label>
+            <input id="mfBaseUrl" type="url" class="variant-select text-xs" placeholder="https://api.openai.com/v1/chat/completions" autocomplete="off" />
+            <p class="text-gray-400 mt-1" style="font-size:10px">OpenAI-compatible <code>/chat/completions</code>. Public HTTPS only.</p>
+          </div>
+          <div>
+            <label class="label block mb-1" for="mfKey">API key</label>
+            <input id="mfKey" type="password" class="variant-select text-xs" placeholder="sk-…" autocomplete="off" />
+            <p id="mfKeyHint" class="text-gray-400 mt-1" style="font-size:10px">Get an OpenRouter key at <a href="https://openrouter.ai/keys" target="_blank" class="underline">openrouter.ai/keys</a>.</p>
+          </div>
+          <div>
+            <label class="label block mb-1" for="mfModel">Model</label>
+            <input id="mfModel" class="variant-select text-xs" list="orModelList" placeholder="e.g. openai/gpt-4o" autocomplete="off" />
+            <datalist id="orModelList">
+              <option value="openai/gpt-4o"></option>
+              <option value="openai/gpt-4o-mini"></option>
+              <option value="openai/o3-mini"></option>
+              <option value="anthropic/claude-sonnet-4-5"></option>
+              <option value="anthropic/claude-3.5-haiku"></option>
+              <option value="google/gemini-2.5-pro-preview-05-06"></option>
+              <option value="google/gemini-2.0-flash-001"></option>
+              <option value="meta-llama/llama-3.3-70b-instruct"></option>
+              <option value="deepseek/deepseek-r1"></option>
+              <option value="deepseek/deepseek-chat-v3-0324"></option>
+              <option value="mistralai/mistral-small-3.1-24b-instruct"></option>
+            </datalist>
+          </div>
+          <div id="mfError" class="model-form-error" hidden></div>
+          <div class="model-form-actions">
+            <button type="button" class="model-save" onclick="saveModelForm()">Save</button>
+            <button type="button" class="model-cancel" onclick="cancelModelForm()">Cancel</button>
+          </div>
+          <p class="text-gray-400" style="font-size:10px">Keys are stored only in your browser.</p>
         </div>
       </div>
     </details>
@@ -2218,10 +2282,7 @@ async function sendQuestion() {
   const typingEl = addTyping();
 
   try {
-    const orKey = localStorage.getItem('or_key') || '';
-    const orModel = localStorage.getItem('or_model') || '';
-    const orProvider = localStorage.getItem('or_provider') || 'openrouter';
-    const orBaseUrl = localStorage.getItem('or_base_url') || '';
+    const activeModel = getActiveModelConfig();
     const body = { question, variant, history, chat_mode: isChatMode() };
     const marketProbability = extractMarketProbability(question);
     if (marketProbability != null) {
@@ -2230,10 +2291,12 @@ async function sendQuestion() {
       if (platform) body.market_platform = platform;
     }
     if (_attachments.length) body.news_articles = [..._attachments];
-    if (orKey && orModel) {
-      body.openrouter_api_key = orKey;
-      body.openrouter_model = orModel;
-      if (orProvider === 'custom' && orBaseUrl) body.provider_base_url = orBaseUrl;
+    if (activeModel) {
+      body.openrouter_api_key = activeModel.apiKey;
+      body.openrouter_model = activeModel.model;
+      if (activeModel.provider === 'custom' && activeModel.baseUrl) {
+        body.provider_base_url = activeModel.baseUrl;
+      }
     }
     // Clear attachments after send
     _attachments = [];
@@ -2327,17 +2390,65 @@ function _chatText(s) {
   return t;
 }
 
+// Split a GFM table row into trimmed cells (drops leading/trailing pipes).
+function _mdSplitRow(line) {
+  let s = line.trim();
+  if (s.startsWith('|')) s = s.slice(1);
+  if (s.endsWith('|')) s = s.slice(0, -1);
+  return s.split('|').map(c => c.trim());
+}
+// A table separator line, e.g. |---|:--:|---|
+function _isTableSep(line) {
+  const t = (line || '').trim();
+  return t.includes('-') && /^\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?$/.test(t);
+}
+
 function renderMarkdown(text) {
   const lines = escHtml(text || '').split(/\r?\n/);
   let html = '';
   let list = null;            // 'ul' | 'ol'
   let para = [];
+  let quote = [];
   const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
   const flushPara = () => { if (para.length) { html += `<p>${_mdInline(para.join(' '))}</p>`; para = []; } };
-  for (const raw of lines) {
-    const line = raw.trim();
+  const flushQuote = () => {
+    if (quote.length) { html += `<blockquote class="md-quote">${_mdInline(quote.join(' '))}</blockquote>`; quote = []; }
+  };
+  const flushAll = () => { flushPara(); flushQuote(); closeList(); };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
     let m;
-    if (!line) { flushPara(); closeList(); continue; }
+    if (!line) { flushAll(); continue; }
+
+    // GFM table: a row of cells immediately followed by a separator line.
+    if (line.includes('|') && _isTableSep(lines[i + 1] || '')) {
+      flushAll();
+      const headers = _mdSplitRow(line);
+      let j = i + 2;
+      const rows = [];
+      while (j < lines.length && lines[j].trim() && lines[j].includes('|')) {
+        rows.push(_mdSplitRow(lines[j]));
+        j++;
+      }
+      let t = '<div class="md-table-wrap"><table class="md-table"><thead><tr>';
+      t += headers.map(h => `<th>${_mdInline(h)}</th>`).join('');
+      t += '</tr></thead><tbody>';
+      for (const row of rows) {
+        t += '<tr>' + headers.map((_, k) => `<td>${_mdInline(row[k] || '')}</td>`).join('') + '</tr>';
+      }
+      html += t + '</tbody></table></div>';
+      i = j - 1;
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) { flushAll(); html += '<hr class="md-hr">'; continue; }
+
+    // Blockquote (">" is escaped to "&gt;" upstream)
+    if ((m = line.match(/^&gt;\s?(.*)$/))) { flushPara(); closeList(); quote.push(m[1]); continue; }
+    flushQuote();
+
     if ((m = line.match(/^#{1,6}\s+(.*)$/))) {
       flushPara(); closeList();
       html += `<h4 class="md-h">${_mdInline(m[1])}</h4>`;
@@ -2354,7 +2465,7 @@ function renderMarkdown(text) {
       para.push(line);
     }
   }
-  flushPara(); closeList();
+  flushAll();
   return html;
 }
 
@@ -2761,45 +2872,149 @@ async function addUrlAttachment() {
 function isChatMode() { return true; }
 function loadChatModeToggle() { /* toggle removed; chat is the default */ }
 
-// ── OpenRouter settings ───────────────────────────────────────────────────────
-function saveOrSettings() {
-  const provider = document.getElementById('orProvider')?.value || 'openrouter';
-  const key = document.getElementById('orKey')?.value.trim() || '';
-  const model = document.getElementById('orModel')?.value.trim() || '';
-  const baseUrl = document.getElementById('orBaseUrl')?.value.trim() || '';
-  localStorage.setItem('or_provider', provider);
-  if (key) localStorage.setItem('or_key', key); else localStorage.removeItem('or_key');
-  if (model) localStorage.setItem('or_model', model); else localStorage.removeItem('or_model');
-  if (baseUrl) localStorage.setItem('or_base_url', baseUrl); else localStorage.removeItem('or_base_url');
-  // Show the endpoint field + tailor the key hint only for custom providers.
-  const isCustom = provider === 'custom';
-  const baseRow = document.getElementById('orBaseUrlRow');
-  if (baseRow) baseRow.hidden = !isCustom;
-  const hint = document.getElementById('orKeyHint');
-  if (hint) hint.style.display = isCustom ? 'none' : '';
+// ── Custom model manager (Ollama-style) ───────────────────────────────────────
+// Models live in localStorage as `or_models` (array) with `or_active` (id, or
+// '' for the server default). Each model: {id, name, provider, baseUrl, apiKey, model}.
+function _loadModels() {
+  try { return JSON.parse(localStorage.getItem('or_models') || '[]') || []; }
+  catch { return []; }
+}
+function _saveModels(models) { localStorage.setItem('or_models', JSON.stringify(models)); }
+function _activeModelId() { return localStorage.getItem('or_active') || ''; }
+
+function getActiveModelConfig() {
+  const id = _activeModelId();
+  if (!id) return null;
+  const m = _loadModels().find(x => x.id === id);
+  return (m && m.apiKey && m.model) ? m : null;
+}
+
+function _migrateLegacyModel() {
+  if (localStorage.getItem('or_models')) return;
+  const key = localStorage.getItem('or_key');
+  const model = localStorage.getItem('or_model');
+  if (key && model) {
+    const m = {
+      id: 'm_' + Date.now(),
+      name: model.split('/').pop(),
+      provider: localStorage.getItem('or_provider') || 'openrouter',
+      baseUrl: localStorage.getItem('or_base_url') || '',
+      apiKey: key, model,
+    };
+    _saveModels([m]);
+    localStorage.setItem('or_active', m.id);
+  }
+  ['or_key', 'or_model', 'or_provider', 'or_base_url'].forEach(k => localStorage.removeItem(k));
+}
+
+function setActiveModel(id) {
+  localStorage.setItem('or_active', id || '');
+  renderModelList();
   _updateModelLabel();
 }
 
+function renderModelList() {
+  const host = document.getElementById('modelList');
+  if (!host) return;
+  const active = _activeModelId();
+  const rows = [`
+    <div class="model-row ${!active ? 'active' : ''}" onclick="setActiveModel('')">
+      <span class="model-radio"></span>
+      <div class="model-meta">
+        <div class="model-name">Server default</div>
+        <div class="model-sub">gpt-oss-120b · hosted</div>
+      </div>
+    </div>`];
+  _loadModels().forEach(m => {
+    const badge = m.provider === 'custom' ? 'Custom' : 'OpenRouter';
+    rows.push(`
+      <div class="model-row ${active === m.id ? 'active' : ''}" onclick="setActiveModel('${m.id}')">
+        <span class="model-radio"></span>
+        <div class="model-meta">
+          <div class="model-name">${escHtml(m.name || m.model)}</div>
+          <div class="model-sub">${escHtml(m.model)}</div>
+        </div>
+        <span class="model-badge">${badge}</span>
+        <div class="model-actions">
+          <button type="button" class="model-icon-btn" title="Edit" onclick="event.stopPropagation();editModel('${m.id}')">✎</button>
+          <button type="button" class="model-icon-btn" title="Remove" onclick="event.stopPropagation();deleteModel('${m.id}')">✕</button>
+        </div>
+      </div>`);
+  });
+  host.innerHTML = rows.join('');
+}
+
+let _editingModelId = null;
+function _mfToggleBaseUrl() {
+  const custom = document.getElementById('mfProvider').value === 'custom';
+  document.getElementById('mfBaseUrlRow').hidden = !custom;
+  const hint = document.getElementById('mfKeyHint');
+  if (hint) hint.style.display = custom ? 'none' : '';
+}
+function _showModelForm(show) {
+  document.getElementById('modelForm').hidden = !show;
+  document.getElementById('addModelBtn').hidden = show;
+}
+function _mfError(msg) {
+  const el = document.getElementById('mfError');
+  el.textContent = msg || ''; el.hidden = !msg;
+}
+function startAddModel() {
+  _editingModelId = null;
+  for (const [id, val] of [['mfName', ''], ['mfBaseUrl', ''], ['mfKey', ''], ['mfModel', '']]) {
+    document.getElementById(id).value = val;
+  }
+  document.getElementById('mfProvider').value = 'openrouter';
+  _mfError(''); _mfToggleBaseUrl(); _showModelForm(true);
+}
+function editModel(id) {
+  const m = _loadModels().find(x => x.id === id);
+  if (!m) return;
+  _editingModelId = id;
+  document.getElementById('mfName').value = m.name || '';
+  document.getElementById('mfProvider').value = m.provider || 'openrouter';
+  document.getElementById('mfBaseUrl').value = m.baseUrl || '';
+  document.getElementById('mfKey').value = m.apiKey || '';
+  document.getElementById('mfModel').value = m.model || '';
+  _mfError(''); _mfToggleBaseUrl(); _showModelForm(true);
+}
+function cancelModelForm() { _mfError(''); _showModelForm(false); }
+function saveModelForm() {
+  const name = document.getElementById('mfName').value.trim();
+  const provider = document.getElementById('mfProvider').value;
+  const baseUrl = document.getElementById('mfBaseUrl').value.trim();
+  const apiKey = document.getElementById('mfKey').value.trim();
+  const model = document.getElementById('mfModel').value.trim();
+  if (!apiKey || !model) { _mfError('API key and model are required.'); return; }
+  if (provider === 'custom' && !/^https:\/\//i.test(baseUrl)) {
+    _mfError('Custom endpoint must be a public https:// URL.'); return;
+  }
+  const models = _loadModels();
+  const fields = { name: name || model.split('/').pop(), provider, baseUrl, apiKey, model };
+  let id = _editingModelId;
+  if (id) {
+    const idx = models.findIndex(x => x.id === id);
+    if (idx >= 0) models[idx] = { ...models[idx], ...fields };
+  } else {
+    id = 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    models.push({ id, ...fields });
+  }
+  _saveModels(models);
+  _showModelForm(false);
+  setActiveModel(id);
+}
+function deleteModel(id) {
+  _saveModels(_loadModels().filter(x => x.id !== id));
+  if (_activeModelId() === id) localStorage.setItem('or_active', '');
+  renderModelList();
+  _updateModelLabel();
+}
+
+// Entry point at init (name kept for the existing call site).
 function loadOrSettings() {
-  const provider = localStorage.getItem('or_provider') || 'openrouter';
-  const key = localStorage.getItem('or_key') || '';
-  const model = localStorage.getItem('or_model') || '';
-  const baseUrl = localStorage.getItem('or_base_url') || '';
-  const provEl = document.getElementById('orProvider');
-  const keyEl = document.getElementById('orKey');
-  const modelEl = document.getElementById('orModel');
-  const baseEl = document.getElementById('orBaseUrl');
-  if (provEl) provEl.value = provider;
-  if (keyEl) keyEl.value = key;
-  if (modelEl && model) modelEl.value = model;
-  if (baseEl) baseEl.value = baseUrl;
-  const isCustom = provider === 'custom';
-  const baseRow = document.getElementById('orBaseUrlRow');
-  if (baseRow) baseRow.hidden = !isCustom;
-  const hint = document.getElementById('orKeyHint');
-  if (hint) hint.style.display = isCustom ? 'none' : '';
-  // Open the details panel if a key is already saved
-  if (key) {
+  _migrateLegacyModel();
+  renderModelList();
+  if (_loadModels().length) {
     const det = document.getElementById('orDetails');
     if (det) det.open = true;
   }
@@ -2807,10 +3022,9 @@ function loadOrSettings() {
 }
 
 function _updateModelLabel() {
-  const model = localStorage.getItem('or_model') || '';
-  const key = localStorage.getItem('or_key') || '';
+  const m = getActiveModelConfig();
   const label = document.getElementById('activeModelLabel');
-  if (label) label.textContent = (model && key) ? model.split('/').pop() : 'gpt-oss-120b';
+  if (label) label.textContent = m ? m.model.split('/').pop() : 'gpt-oss-120b';
 }
 
 // Rotate chevron when details opens/closes
@@ -2940,7 +3154,8 @@ function openAuthModal(mode) {
   overlay.classList.add('show');
   overlay.setAttribute('aria-hidden', 'false');
   document.getElementById('authGoogleSection').hidden = !_gClientId;
-  if (_gClientId) renderGoogleButton('modalGsiWrap', 320);
+  // Render after layout so the button width matches the modal.
+  if (_gClientId) requestAnimationFrame(() => renderGoogleButton('modalGsiWrap'));
   setTimeout(() => document.getElementById('authEmail').focus(), 60);
 }
 
@@ -3045,14 +3260,17 @@ function renderGoogleButton(id, width) {
   const wrap = document.getElementById(id);
   if (!wrap || !window.google?.accounts?.id) return;
   wrap.innerHTML = '';
+  // Match the button to the modal width so it lines up with the form fields.
+  const containerW = wrap.parentElement?.getBoundingClientRect().width || 0;
+  const w = Math.round(width || Math.min(400, Math.max(240, containerW)) || 320);
   google.accounts.id.renderButton(wrap, {
     type: 'standard',
     theme: 'outline',
     size: 'large',
     text: 'continue_with',
     shape: 'pill',
-    logo_alignment: 'center',
-    width,
+    logo_alignment: 'left',
+    width: w,
   });
 }
 
@@ -3096,7 +3314,7 @@ async function initAuth() {
     // If the modal is already open (rare), render the button now.
     if (document.getElementById('authOverlay').classList.contains('show')) {
       document.getElementById('authGoogleSection').hidden = false;
-      renderGoogleButton('modalGsiWrap', 320);
+      renderGoogleButton('modalGsiWrap');
     }
   };
   document.head.appendChild(script);
