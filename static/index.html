@@ -684,6 +684,8 @@
       /* Keep the Config panel from pushing Account off a short screen. */
       .config-body { max-height: 60vh; overflow-y: auto; }
       .chat-md table.md-table { font-size: 12px; }
+      .agent-mode-label { display: none; }
+      .agent-mode-btn { padding: 0 9px; }
     }
 
     /* ── Tasteful polish ─────────────────────────────────────────────── */
@@ -1102,6 +1104,44 @@
     .model-save:hover { background: #000; }
     .model-cancel { flex: 1; background: transparent; color: var(--text-dim); border: 1px solid var(--border-2); border-radius: 999px; padding: 8px; font-size: 12px; cursor: pointer; }
     .model-cancel:hover { color: var(--ink); border-color: var(--ink); }
+
+    /* ── Inline Agent toggle (ChatGPT-style tool chip) ────────────────────── */
+    .agent-mode-btn {
+      display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+      height: 34px; padding: 0 11px; border-radius: 999px;
+      border: 1px solid var(--border-2); background: #fff; color: var(--text-dim);
+      font-size: 13px; cursor: pointer;
+      transition: background var(--dur-med), color var(--dur-med), border-color var(--dur-med);
+    }
+    .agent-mode-btn:hover { border-color: var(--ink); color: var(--ink); }
+    .agent-mode-btn.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .agent-mode-btn svg { flex-shrink: 0; }
+
+    /* ── Agent run step trace ─────────────────────────────────────────────── */
+    .agent-run-head {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 500; color: var(--ink); margin-bottom: 10px;
+    }
+    .agent-spinner {
+      width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
+      border: 2px solid var(--border-2); border-top-color: var(--ink);
+      animation: agent-spin .7s linear infinite;
+    }
+    @keyframes agent-spin { to { transform: rotate(360deg); } }
+    .agent-steps { display: flex; flex-direction: column; gap: 7px; }
+    .agent-step {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 13px; color: var(--text-mute);
+      opacity: .55; transition: opacity var(--dur-med), color var(--dur-med);
+    }
+    .agent-step .agent-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+      background: var(--border-2); transition: background var(--dur-med), transform var(--dur-med);
+    }
+    .agent-step.active { opacity: 1; color: var(--ink); }
+    .agent-step.active .agent-dot { background: var(--ink); transform: scale(1.25); }
+    .agent-step.done { opacity: .9; color: var(--text-dim); }
+    .agent-step.done .agent-dot { background: var(--signal); }
 
     /* ── Config panel (collapses model + agent skills) ────────────────────── */
     .config-panel { border: 0; }
@@ -1632,6 +1672,10 @@
           oninput="autoResize(this)"
           onkeydown="handleKey(event)"
         ></textarea>
+        <button id="agentModeBtn" class="agent-mode-btn" onclick="toggleAgentMode()" aria-pressed="false" title="Agent mode — fetch evidence, forecast, price the edge, and run your skills">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+          <span class="agent-mode-label">Agent</span>
+        </button>
         <button id="attachBtn" class="attach-btn" onclick="toggleAttachPanel()" title="Attach PDF or URL" aria-label="Attach file or URL" aria-expanded="false">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
@@ -2346,7 +2390,16 @@ async function sendQuestion() {
   document.getElementById('messages').appendChild(userNode);
   animateIn(userNode);
 
-  const typingEl = addTyping();
+  const typingEl = _agentEnabled()
+    ? addAgentProgress([
+        'Resolving the market',
+        'Gathering evidence',
+        'Forecasting',
+        'Pricing the edge',
+        ...(_loadSkills().length ? ['Running your skills'] : []),
+        'Recommending',
+      ])
+    : addTyping();
 
   try {
     const activeModel = getActiveModelConfig();
@@ -2428,6 +2481,32 @@ function addTyping() {
     <div class="typing"><span></span><span></span><span></span></div></div>`;
   document.getElementById('messages').appendChild(div);
   scrollBottom();
+  return div;
+}
+
+// ChatGPT-style agent run trace: shows the pipeline steps lighting up while the
+// (non-streaming) agent request is in flight. Self-clears when removed.
+function addAgentProgress(steps) {
+  const div = document.createElement('div');
+  div.className = 'max-w-2xl mx-auto w-full';
+  div.innerHTML = `<div class="msg-ai agent-run p-4 sm:p-5">
+    <div class="agent-run-head"><span class="agent-spinner"></span> Agent working…</div>
+    <div class="agent-steps">${steps.map(s => `
+      <div class="agent-step"><span class="agent-dot"></span><span>${escHtml(s)}</span></div>`).join('')}</div>
+  </div>`;
+  document.getElementById('messages').appendChild(div);
+  scrollBottom();
+  const stepEls = [...div.querySelectorAll('.agent-step')];
+  let i = 0;
+  const advance = () => {
+    if (i > 0 && stepEls[i - 1]) { stepEls[i - 1].classList.remove('active'); stepEls[i - 1].classList.add('done'); }
+    if (stepEls[i]) { stepEls[i].classList.add('active'); i++; }
+  };
+  advance();
+  const timer = setInterval(() => {
+    if (!document.body.contains(div)) { clearInterval(timer); return; }  // removed -> stop
+    if (i < stepEls.length) advance();
+  }, 1100);
   return div;
 }
 function addError(msg) {
@@ -3121,9 +3200,20 @@ function _loadSkills() {
 }
 function _saveSkills(s) { localStorage.setItem('agent_skills', JSON.stringify(s)); }
 function _agentEnabled() { return localStorage.getItem('agent_enabled') === '1'; }
-function toggleAgent() {
-  localStorage.setItem('agent_enabled', document.getElementById('agentToggle').checked ? '1' : '0');
+// Keep the sidebar checkbox and the inline input-bar toggle in sync.
+function _applyAgentEnabled(on) {
+  localStorage.setItem('agent_enabled', on ? '1' : '0');
+  const cb = document.getElementById('agentToggle');
+  if (cb) cb.checked = on;
+  const btn = document.getElementById('agentModeBtn');
+  if (btn) { btn.classList.toggle('active', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  const input = document.getElementById('questionInput');
+  if (input) input.placeholder = on
+    ? 'Agent mode — ask about any market or question'
+    : 'Ask about a market, quote, or resolution criteria';
 }
+function toggleAgent() { _applyAgentEnabled(document.getElementById('agentToggle').checked); }
+function toggleAgentMode() { _applyAgentEnabled(!_agentEnabled()); }
 
 function renderSkillList() {
   const host = document.getElementById('skillList');
@@ -3187,8 +3277,7 @@ function deleteSkill(id) {
   renderSkillList();
 }
 function loadAgentSkills() {
-  const t = document.getElementById('agentToggle');
-  if (t) t.checked = _agentEnabled();
+  _applyAgentEnabled(_agentEnabled());
   renderSkillList();
   if (_loadSkills().length || _agentEnabled()) {
     const d = document.getElementById('configDetails');
@@ -3244,7 +3333,12 @@ async function runScan(platform) {
   const userNode = makeUserBubble(label);
   document.getElementById('messages').appendChild(userNode);
   animateIn(userNode);
-  const typingEl = addTyping();
+  const typingEl = addAgentProgress([
+    'Listing live markets',
+    'Forecasting each',
+    'Pricing edges',
+    'Ranking opportunities',
+  ]);
   try {
     const r = await fetch('/agent/scan?platform=' + encodeURIComponent(platform) + '&limit=4', { headers: authHeaders() });
     const d = await r.json();
