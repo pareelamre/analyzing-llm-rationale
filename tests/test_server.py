@@ -183,6 +183,27 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Prediction Market Context:", prompt)
         self.assertIn("Market-Implied Probability: 0.42", prompt)
 
+    def test_chat_mode_uses_conversational_prompt_not_json_template(self):
+        from analyzing_llm_rationale.server import _CHAT_SYSTEM_PROMPT
+
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "can i talk to you?",
+                "chat_mode": True,
+                "attach_evidence": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["question_type"], "chat")
+        system_message = self.provider.calls[0][0]["content"]
+        user_message = self.provider.calls[0][-1]["content"]
+        self.assertEqual(system_message, _CHAT_SYSTEM_PROMPT)
+        # No forecast/JSON typing instruction is appended in chat mode.
+        self.assertNotIn("Only binary questions", user_message)
+        self.assertNotIn('"type":', user_message)
+
     def test_records_anonymous_page_visit(self):
         response = self.client.post(
             "/analytics/visit",

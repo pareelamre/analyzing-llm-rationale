@@ -2090,7 +2090,7 @@ function makeAIBubble(data, variant) {
     div.className = 'max-w-2xl mx-auto w-full';
     div.innerHTML = `
       <div class="msg-ai p-4 sm:p-5">
-        <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(rationale)}</div>
+        <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
       </div>`;
     return div;
   }
@@ -2306,6 +2306,27 @@ function _mdInline(s) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
              '<a href="$2" target="_blank" rel="noopener" class="md-link">$1</a>');
 }
+// If a model returns a forecast JSON object in chat mode, show its prose instead
+// of raw braces. Falls back to the original string for normal text.
+function _chatText(s) {
+  const t = String(s ?? '').trim();
+  if (t.startsWith('{') && t.endsWith('}')) {
+    try {
+      const o = JSON.parse(t);
+      const prose = o.rationale || o.model_rationale || o.answer || o.response || o.text || '';
+      if (prose) {
+        let prefix = '';
+        if (o.predicted_answer) {
+          const conf = o.confidence != null ? ` · ${Math.round(o.confidence * 100)}% confidence` : '';
+          prefix = `**${o.predicted_answer}**${conf}\n\n`;
+        }
+        return prefix + prose;
+      }
+    } catch (_) { /* not JSON — render as-is */ }
+  }
+  return t;
+}
+
 function renderMarkdown(text) {
   const lines = escHtml(text || '').split(/\r?\n/);
   let html = '';

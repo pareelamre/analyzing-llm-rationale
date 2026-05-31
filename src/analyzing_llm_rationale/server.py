@@ -44,6 +44,20 @@ _SESSION_SECRET: str = os.environ.get("SESSION_SECRET", "change-me-in-production
 _SESSION_TTL_DAYS = 30
 _state: Dict[str, Any] = {}
 
+# Conversational system prompt for chat_mode — overrides the JSON-only forecast
+# prompt so replies are natural language, not a forecast template.
+_CHAT_SYSTEM_PROMPT = (
+    "You are Foresea, a helpful forecasting and prediction-market assistant. "
+    "Answer the user's question conversationally in clear natural language. "
+    "Use light markdown — short paragraphs, **bold** for key points, and bullet or "
+    "numbered lists when they help. Ground your answer in the provided evidence "
+    "summaries and any prediction-market context when relevant, and be honest about "
+    "uncertainty. If the question implies a probability, you may express it in prose "
+    "(e.g., \"around 60%\") and, when a market price is given, briefly note whether "
+    "you lean above or below it. Do NOT output JSON, key/value objects, or a rigid "
+    "forecast template — just talk to the user."
+)
+
 _DESCRIPTION = """
 ## Overview
 
@@ -1988,8 +2002,14 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     evidence_articles = [_clean_article(a) for a in evidence_articles]
     record["news_articles"] = evidence_articles
 
-    user_prompt = build_user_prompt(record, prompt_text, "full")
-    if not req.chat_mode:
+    if req.chat_mode:
+        # Conversational mode: drop the JSON-only forecast template entirely so the
+        # model replies in natural language. Pass an empty template so the user
+        # prompt is just the question + evidence/market context, no JSON suffix.
+        system_prompt = _CHAT_SYSTEM_PROMPT
+        user_prompt = build_user_prompt(record, "[question]", "full")
+    else:
+        user_prompt = build_user_prompt(record, prompt_text, "full")
         user_prompt += _typing_instruction(req.question_type, req.options, has_history=bool(req.history))
     messages = [{"role": "system", "content": system_prompt}]
     for turn in req.history[-12:]:
