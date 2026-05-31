@@ -169,6 +169,10 @@ _TAGS = [
         "description": "Fetch live prices from prediction-market venues (Polymarket, Kalshi).",
     },
     {
+        "name": "Agents",
+        "description": "Autonomous analysis: orchestrate market fetch, evidence, forecast, edge, and custom skills into one report.",
+    },
+    {
         "name": "System",
         "description": "Health and liveness checks.",
     },
@@ -1080,6 +1084,53 @@ class MarketQuote(BaseModel):
     outcome: str = Field("", description="Primary outcome (prefers 'Yes').")
     probability: Optional[float] = Field(None, description="Market-implied probability for `outcome` (0..1).")
     outcomes: List[MarketOption] = Field(default_factory=list, description="All outcomes with their probabilities.")
+
+
+class AgentSkill(BaseModel):
+    """A user-defined analysis step the agent runs over the question + evidence."""
+    name: str = Field(..., min_length=1, max_length=60, description="Short skill name, e.g. 'Base rate check'.")
+    instruction: str = Field(..., min_length=1, max_length=2000, description="What this skill should analyse.")
+
+
+class AgentSkillResult(BaseModel):
+    name: str
+    output: str
+
+
+class AgentAnalyzeRequest(BaseModel):
+    """Ask the analysis agent to work a live question end-to-end."""
+    question: Optional[str] = Field(None, max_length=2000, description="Market question. Optional if a market identifier is given.")
+    platform: Optional[str] = Field(None, max_length=40, description="'polymarket' or 'kalshi' to fetch a live price.")
+    slug: Optional[str] = Field(None, max_length=200, description="Polymarket market slug.")
+    market_id: Optional[str] = Field(None, max_length=80, description="Polymarket numeric market id.")
+    ticker: Optional[str] = Field(None, max_length=80, description="Kalshi market ticker.")
+    market_probability: Optional[float] = Field(None, description="Override market price (0..1 or 0..100) when not fetching.")
+    variant: str = Field("variant0_neutral_baseline", max_length=64)
+    evidence_top_k: int = Field(5, ge=1, le=10)
+    skills: List[AgentSkill] = Field(default_factory=list, max_length=5, description="Up to 5 custom skills to run.")
+    openrouter_api_key: Optional[str] = Field(None, max_length=256)
+    openrouter_model: Optional[str] = Field(None, max_length=128)
+    provider_base_url: Optional[str] = Field(None, max_length=2000)
+
+
+class AgentReport(BaseModel):
+    """End-to-end analysis of a live question produced by the agent."""
+    question: str
+    pipeline: List[str] = Field(default_factory=list, description="Ordered steps the agent ran.")
+    platform: Optional[str] = None
+    market_url: Optional[str] = None
+    outcome: Optional[str] = None
+    market_probability: Optional[float] = None
+    model_probability: Optional[float] = None
+    edge: Optional[float] = None
+    stance: Optional[str] = None
+    recommendation: str = Field(..., description="`buy_yes`, `buy_no`, `hold`, or `no_market_price`.")
+    recommendation_detail: str = ""
+    confidence: Optional[float] = None
+    question_type: str = "binary"
+    thesis: str = ""
+    evidence_sources: List["EvidenceSource"] = Field(default_factory=list)
+    skills: List[AgentSkillResult] = Field(default_factory=list)
 
 
 class PredictResponse(BaseModel):
@@ -2196,3 +2247,165 @@ async def vertex_predict(req: VertexPredictRequest, request: Request = None) -> 
         result = await predict(PredictRequest(**instance))
         predictions.append(result.model_dump())
     return VertexPredictResponse(predictions=predictions)
+
+
+# ── Agent: orchestrated, autonomous analysis ─────────────────────────────────
+
+_AGENT_SKILL_SYSTEM = (
+    "You are one analysis skill inside a forecasting agent. Apply the requested "
+    "skill to the question, the agent's current forecast, and the evidence. "
+    "Respond in 2-5 sentences of clear natural language (light markdown is fine). "
+    "Do not output JSON or restate the whole forecast — add the specific insight "
+    "the skill asks for."
+)
+
+
+def _select_provider(
+    openrouter_api_key: Optional[str],
+    openrouter_model: Optional[str],
+    provider_base_url: Optional[str],
+):
+    """Return (provider, temperature, max_tokens): BYOK model if given, else the server default."""
+    if openrouter_api_key and openrouter_model:
+        max_tokens = _state.get("max_tokens", 1024)
+        if provider_base_url:
+            from analyzing_llm_rationale.providers import OpenAICompatibleProvider
+            return (
+                OpenAICompatibleProvider(
+                    model_name=openrouter_model, api_key=openrouter_api_key, base_url=provider_base_url
+                ),
+                0.7,
+                max_tokens,
+            )
+        from analyzing_llm_rationale.providers import OpenRouterProvider
+        return OpenRouterProvider(model_name=openrouter_model, api_key=openrouter_api_key), 0.7, max_tokens
+    return _state["provider"], _state["temperature"], _state["max_tokens"]
+
+
+def _agent_recommendation(edge: Optional[float], outcome: str) -> tuple[str, str]:
+    """Deterministic call from the model-vs-market edge."""
+    out = outcome or "Yes"
+    if edge is None:
+        return "no_market_price", "No market price supplied, so no edge could be computed."
+    pts = round(abs(edge) * 100)
+    if abs(edge) < 0.05:
+        return "hold", f"Model is within {pts} pts of the market on {out} — roughly fair value."
+    if edge > 0:
+        return "buy_yes", f"Model is {pts} pts above the market on {out}; {out} looks underpriced."
+    return "buy_no", f"Model is {pts} pts below the market on {out}; {out} looks overpriced."
+
+
+async def _run_agent_skill(skill: AgentSkill, context: str, provider, temperature, max_tokens) -> AgentSkillResult:
+    messages = [
+        {"role": "system", "content": _AGENT_SKILL_SYSTEM},
+        {"role": "user", "content": f"{context}\n\nSkill: {skill.name}\nInstruction: {skill.instruction}"},
+    ]
+    loop = asyncio.get_running_loop()
+    try:
+        output = await loop.run_in_executor(
+            None, lambda: provider.chat_completion(messages, temperature, max_tokens)
+        )
+        return AgentSkillResult(name=skill.name, output=(output or "").strip())
+    except Exception as exc:
+        return AgentSkillResult(name=skill.name, output=f"(skill failed: {exc})")
+
+
+@app.post("/agent/analyze", tags=["Agents"], summary="Run the analysis agent on a live question", response_model=AgentReport)
+async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> AgentReport:
+    """Orchestrate an end-to-end analysis of a live market question.
+
+    Pipeline: resolve the market (fetch a live Polymarket/Kalshi price when an
+    identifier is given) → gather evidence and forecast → compute the model-vs-market
+    edge → run any custom **skills** → recommend. Returns one structured report.
+    """
+    if request is not None:
+        _check_rate_limit(request)
+        _check_api_key(request)
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+
+    pipeline: List[str] = []
+
+    # 1. Resolve the market (live price) when an identifier is supplied.
+    quote: Optional[MarketQuote] = None
+    if req.platform and (req.slug or req.market_id or req.ticker):
+        venue = req.platform.strip().lower()
+        if "poly" in venue:
+            quote = await _fetch_market_quote("polymarket", slug=req.slug, market_id=req.market_id)
+        elif "kalshi" in venue:
+            quote = await _fetch_market_quote("kalshi", ticker=req.ticker)
+        if quote is not None:
+            pipeline.append("resolve_market")
+
+    question = (req.question or (quote.question if quote else "") or "").strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="Provide a question, or a platform plus market identifier.")
+
+    # 2. Evidence + forecast + edge — reuse the /predict pipeline.
+    pred_req = PredictRequest(
+        question=question,
+        attach_evidence=True,
+        evidence_top_k=req.evidence_top_k,
+        variant=req.variant,
+        market_platform=(quote.platform if quote else req.platform),
+        market_url=(quote.market_url if quote else None),
+        market_outcome=(quote.outcome if quote else None),
+        market_probability=(quote.probability if quote else req.market_probability),
+        openrouter_api_key=req.openrouter_api_key,
+        openrouter_model=req.openrouter_model,
+        provider_base_url=req.provider_base_url,
+    )
+    result = await predict(pred_req)
+    pipeline.extend(["gather_evidence", "forecast"])
+
+    analysis = result.market_analysis
+    edge = analysis.edge if analysis else None
+    model_probability = analysis.model_probability if analysis else result.confidence
+    stance = analysis.stance if analysis else None
+    outcome = (quote.outcome if quote else None) or "Yes"
+    recommendation, detail = _agent_recommendation(edge, outcome)
+    if analysis is not None:
+        pipeline.append("price_edge")
+
+    # 3. Custom skills — run the caller's own analysis steps over the context.
+    skill_results: List[AgentSkillResult] = []
+    if req.skills:
+        provider, temperature, max_tokens = _select_provider(
+            req.openrouter_api_key, req.openrouter_model, req.provider_base_url
+        )
+        sources_txt = "\n".join(
+            f"- {s.source}: {s.title}" for s in result.evidence_sources[:8]
+        ) or "(no evidence retrieved)"
+        context = (
+            f"Question: {question}\n"
+            f"Forecast: {result.predicted_answer} "
+            f"(confidence {result.confidence if result.confidence is not None else 'n/a'})\n"
+            f"Market-implied probability: {pred_req.market_probability}\n"
+            f"Thesis: {result.model_rationale or result.rationale or ''}\n"
+            f"Evidence:\n{sources_txt}"
+        )
+        skill_results = await asyncio.gather(
+            *(_run_agent_skill(s, context, provider, temperature, max_tokens) for s in req.skills)
+        )
+        pipeline.append("skills")
+
+    pipeline.append("recommend")
+
+    return AgentReport(
+        question=question,
+        pipeline=pipeline,
+        platform=(quote.platform if quote else req.platform),
+        market_url=(quote.market_url if quote else None),
+        outcome=outcome,
+        market_probability=(analysis.market_probability if analysis else None),
+        model_probability=model_probability,
+        edge=edge,
+        stance=stance,
+        recommendation=recommendation,
+        recommendation_detail=detail,
+        confidence=result.confidence,
+        question_type=result.question_type,
+        thesis=result.model_rationale or result.rationale or "",
+        evidence_sources=result.evidence_sources,
+        skills=list(skill_results),
+    )

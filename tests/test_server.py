@@ -20,6 +20,7 @@ from analyzing_llm_rationale.server import (  # noqa: E402
     _cache_set,
     _issue_session,
     _local_cache,
+    _rate_limiter,
     _state,
     app,
 )
@@ -63,6 +64,7 @@ class ServerTests(unittest.TestCase):
         self.provider = FakeProvider()
         self.evidence_pipeline = FakeEvidencePipeline()
         _local_cache.clear()
+        _rate_limiter._log.clear()  # isolate tests from cross-test rate-limit accumulation
         _state.clear()
         _state.update({
             "provider": self.provider,
@@ -239,6 +241,54 @@ class ServerTests(unittest.TestCase):
         with mock.patch.object(md, "fetch_kalshi", boom):
             response = self.client.get("/markets/kalshi?ticker=NOPE")
         self.assertEqual(response.status_code, 404)
+
+    def test_agent_analyze_question_only_runs_skill(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "evidence_top_k": 3,
+                "skills": [{"name": "Base rate check", "instruction": "Compare to historical base rates."}],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        report = response.json()
+        self.assertEqual(report["recommendation"], "no_market_price")  # no price supplied
+        self.assertAlmostEqual(report["model_probability"], 0.7)
+        self.assertTrue(report["thesis"])
+        self.assertIn("forecast", report["pipeline"])
+        self.assertIn("skills", report["pipeline"])
+        self.assertEqual(len(report["skills"]), 1)
+        self.assertEqual(report["skills"][0]["name"], "Base rate check")
+
+    def test_agent_analyze_fetches_market_and_recommends(self):
+        import analyzing_llm_rationale.market_data as md
+
+        quote = {
+            "platform": "Polymarket",
+            "question": "Will the Fed cut rates before September 30, 2026?",
+            "market_url": "https://polymarket.com/market/fed",
+            "outcome": "Yes",
+            "probability": 0.40,
+            "outcomes": [{"label": "Yes", "probability": 0.40}, {"label": "No", "probability": 0.60}],
+        }
+        with mock.patch.object(md, "fetch_polymarket", lambda slug=None, market_id=None: quote):
+            response = self.client.post(
+                "/agent/analyze",
+                json={"platform": "polymarket", "slug": "fed", "evidence_top_k": 2},
+            )
+        self.assertEqual(response.status_code, 200)
+        report = response.json()
+        self.assertEqual(report["platform"], "Polymarket")
+        self.assertIn("resolve_market", report["pipeline"])
+        self.assertAlmostEqual(report["market_probability"], 0.40)
+        self.assertAlmostEqual(report["model_probability"], 0.70)
+        self.assertAlmostEqual(report["edge"], 0.30)
+        self.assertEqual(report["recommendation"], "buy_yes")
+
+    def test_agent_analyze_requires_question_or_market(self):
+        response = self.client.post("/agent/analyze", json={"evidence_top_k": 3})
+        self.assertEqual(response.status_code, 422)
 
     def test_records_anonymous_page_visit(self):
         response = self.client.post(

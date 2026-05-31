@@ -205,6 +205,36 @@ evidence articles. It is built for resolvable forecasts, not general Q&A.
 - `POST /predict`: public prediction endpoint.
 - `GET /markets/polymarket`: fetch a live Polymarket quote (see below).
 - `GET /markets/kalshi`: fetch a live Kalshi quote (see below).
+- `POST /agent/analyze`: orchestrated end-to-end analysis of a live question (see below).
+
+### Agent: automated intelligence layer
+
+`POST /agent/analyze` runs the whole pipeline autonomously: **resolve the market**
+(fetch a live Polymarket/Kalshi price when an identifier is given) → **gather
+evidence + forecast** → **price the edge** → run any **custom skills** →
+**recommend**. It returns one structured report.
+
+```bash
+curl -X POST https://foresea.ink/agent/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "platform": "polymarket",
+    "slug": "will-the-fed-cut-rates-in-2026",
+    "skills": [
+      {"name": "Base rate check", "instruction": "Compare to historical base rates."},
+      {"name": "Risk", "instruction": "What would most change this forecast?"}
+    ]
+  }'
+```
+
+Custom **skills** are your own analysis steps — each runs as an extra model pass
+over the question, forecast, and evidence, and comes back as a named section in
+the report. Provide a `question` directly, or a `platform` + market identifier
+(`slug`/`market_id` for Polymarket, `ticker` for Kalshi). BYOK fields
+(`openrouter_api_key`, `openrouter_model`, `provider_base_url`) apply here too.
+The report includes `recommendation` (`buy_yes`/`buy_no`/`hold`/`no_market_price`),
+`edge`, `model_probability`, `market_probability`, `thesis`, `evidence_sources`,
+and `pipeline` (the ordered steps that ran).
 
 ### Fetch live market prices
 
