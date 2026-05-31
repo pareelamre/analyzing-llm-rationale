@@ -21,8 +21,11 @@ STOOQ_RSS_FEEDS = (
     "https://static.stooq.com/rss/pl/w.rss",
 )
 
-DEFAULT_FETCH_SOURCES = ("newsapi", "gdelt", "google-news", "stooq", "rss")
-SOURCE_DIVERSITY_ORDER = ("gdelt", "google-news", "newsapi", "rss", "stooq")
+# Stooq (Polish stock-market RSS) is not in the defaults — it was query-agnostic
+# and leaked irrelevant headlines into evidence. It stays available if explicitly
+# configured. `web` is a real web search (Brave), active when BRAVE_API_KEY is set.
+DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "rss")
+SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "newsapi", "rss", "stooq")
 HIGH_CREDIBILITY_SOURCES = {
     "abc news",
     "al jazeera",
@@ -52,6 +55,7 @@ HIGH_CREDIBILITY_SOURCES = {
     "washington post",
 }
 CHANNEL_CREDIBILITY = {
+    "web": 0.74,
     "newsapi": 0.75,
     "gdelt": 0.72,
     "google-news": 0.70,
@@ -188,6 +192,7 @@ class NewsPipeline:
         self._embedding_model_name = embedding_model
         self._embeddings = None
         self._newsapi_key = newsapi_key or os.environ.get("NEWSAPI_KEY")
+        self._brave_key = os.environ.get("BRAVE_API_KEY")
         self._use_query_planner = use_query_planner
         self._fetch_sources = tuple(fetch_sources or DEFAULT_FETCH_SOURCES)
         self._summarize_articles = summarize_articles
@@ -212,6 +217,9 @@ class NewsPipeline:
         """Return up to top_k raw article dicts from configured news sources."""
         articles: List[dict] = []
         per_source_limit = max(top_k, 10)
+
+        if getattr(self, "_brave_key", None) and "web" in self._fetch_sources:
+            articles.extend(self._fetch_web(query, limit=per_source_limit))
 
         if self._newsapi_key and "newsapi" in self._fetch_sources:
             articles.extend(self._fetch_newsapi(query, page_size=per_source_limit))
@@ -239,6 +247,36 @@ class NewsPipeline:
             unique.append(a)
 
         return unique
+
+    def _fetch_web(self, query: str, limit: int = 10) -> List[dict]:
+        """General web search via the Brave Search API (needs BRAVE_API_KEY)."""
+        try:
+            import requests
+            resp = requests.get(
+                "https://api.search.brave.com/res/v1/web/search",
+                params={"q": query, "count": min(limit, 20)},
+                headers={
+                    "Accept": "application/json",
+                    "X-Subscription-Token": self._brave_key,
+                },
+                timeout=15,
+            )
+            resp.raise_for_status()
+            results = (resp.json().get("web") or {}).get("results", [])
+            articles = []
+            for item in results:
+                articles.append({
+                    "title": item.get("title") or "",
+                    "url": item.get("url") or "",
+                    "publish_date": item.get("page_age") or item.get("age") or "",
+                    "text": item.get("description") or "",
+                    "summary": item.get("description") or item.get("title") or "",
+                    "source": (item.get("profile") or {}).get("name") or item.get("url") or "Web",
+                    "source_channel": "web",
+                })
+            return articles
+        except Exception:
+            return []
 
     def _fetch_newsapi(self, query: str, page_size: int = 10) -> List[dict]:
         try:

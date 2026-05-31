@@ -3332,7 +3332,11 @@ function _agentReportToMarkdown(d) {
     seen.add(s.source);
     links.push(s.url ? `[${s.source}](${s.url})` : s.source);
   });
-  if (links.length) md += `\n\n---\n*Sources:* ${links.join(' · ')}`;
+  if (links.length) {
+    md += `\n\n---\n*Sources:* ${links.join(' · ')}`;
+  } else {
+    md += `\n\n*I couldn't pull solid sources on this one, so I'm low-confidence. Paste an article or link (the 📎 button) and I'll factor it in, or sharpen the question — e.g. add the exact threshold and date.*`;
+  }
   return md;
 }
 

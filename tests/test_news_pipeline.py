@@ -142,6 +142,46 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(articles[0]["search_query"], "Stooq - Wiadomosci Biznes")
         self.assertIn("static.stooq.com/rss/pl/b.rss", calls[0][0])
 
+    def test_fetch_web_maps_brave_results(self):
+        class FakeBraveResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"web": {"results": [
+                    {"title": "US CPI rises", "url": "https://ex.com/cpi",
+                     "description": "Inflation update.", "profile": {"name": "Example"}},
+                ]}}
+
+        calls = []
+
+        def fake_get(url, params, headers, timeout):
+            calls.append((url, params, headers))
+            return FakeBraveResponse()
+
+        original = sys.modules.get("requests")
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+        try:
+            pipeline = NewsPipeline.__new__(NewsPipeline)
+            pipeline._brave_key = "test-key"
+            articles = pipeline._fetch_web("US CPI inflation December 2026", limit=5)
+        finally:
+            if original is None:
+                sys.modules.pop("requests", None)
+            else:
+                sys.modules["requests"] = original
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["source"], "Example")
+        self.assertEqual(articles[0]["source_channel"], "web")
+        self.assertEqual(articles[0]["url"], "https://ex.com/cpi")
+        self.assertEqual(calls[0][2]["X-Subscription-Token"], "test-key")
+
+    def test_stooq_not_in_default_sources(self):
+        from analyzing_llm_rationale.news_pipeline import DEFAULT_FETCH_SOURCES
+        self.assertNotIn("stooq", DEFAULT_FETCH_SOURCES)
+        self.assertIn("web", DEFAULT_FETCH_SOURCES)
+
     def test_fetch_queries_all_configured_sources_before_dedupe(self):
         pipeline = NewsPipeline.__new__(NewsPipeline)
         pipeline._newsapi_key = None
