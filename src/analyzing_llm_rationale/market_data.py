@@ -22,6 +22,12 @@ KALSHI_API_URL = "https://api.elections.kalshi.com/trade-api/v2/markets"
 _TIMEOUT_S = 12
 _HEADERS = {"User-Agent": "foresea-market-bot/1.0"}
 
+# The edge scan only considers genuinely contested markets. Near-certain
+# longshots (e.g. a 0.2% World Cup outcome) have huge volume but produce
+# spurious "edges" from small model differences, so they're filtered out.
+_SCAN_MIN_PRICE = 0.05
+_SCAN_MAX_PRICE = 0.95
+
 
 class MarketDataError(RuntimeError):
     """Raised when a market cannot be fetched or parsed."""
@@ -117,15 +123,19 @@ def fetch_polymarket(slug: Optional[str] = None, market_id: Optional[str] = None
 
 
 def list_polymarket(limit: int = 5) -> List[Dict[str, Any]]:
-    """List active, priced binary Yes/No Polymarket markets (for the edge scan)."""
+    """List liquid, contested binary Polymarket markets (for the edge scan).
+
+    Pulls high-volume markets, then keeps binary Yes/No markets priced in the
+    mid-range so the scan focuses on genuinely contested questions.
+    """
     limit = max(1, min(int(limit), 20))
     data = _get_json(
         POLYMARKET_GAMMA_URL,
         params={
             "active": "true",
             "closed": "false",
-            "limit": limit,
-            "order": "volumeNum",
+            "limit": min(100, limit * 10),
+            "order": "volume24hr",
             "ascending": "false",
         },
     )
@@ -133,9 +143,14 @@ def list_polymarket(limit: int = 5) -> List[Dict[str, Any]]:
     for market in data if isinstance(data, list) else []:
         quote = _polymarket_quote(market)
         labels = {str(o["label"]).strip().lower() for o in quote["outcomes"]}
-        if quote["probability"] is None or labels != {"yes", "no"}:
+        prob = quote["probability"]
+        if prob is None or labels != {"yes", "no"}:
+            continue
+        if not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
             continue
         quotes.append(quote)
+        if len(quotes) >= limit:
+            break
     return quotes
 
 
@@ -184,7 +199,15 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
 def list_kalshi(limit: int = 5) -> List[Dict[str, Any]]:
     """List open, priced Kalshi markets (for the edge scan)."""
     limit = max(1, min(int(limit), 20))
-    data = _get_json(KALSHI_API_URL, params={"status": "open", "limit": limit})
+    data = _get_json(KALSHI_API_URL, params={"status": "open", "limit": min(200, limit * 20)})
     markets = data.get("markets", []) if isinstance(data, dict) else []
-    quotes = [_kalshi_quote(m) for m in markets]
-    return [q for q in quotes if q["probability"] is not None]
+    quotes: List[Dict[str, Any]] = []
+    for market in markets:
+        quote = _kalshi_quote(market)
+        prob = quote["probability"]
+        if prob is None or not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
+            continue
+        quotes.append(quote)
+        if len(quotes) >= limit:
+            break
+    return quotes
