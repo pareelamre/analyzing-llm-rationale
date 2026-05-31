@@ -76,6 +76,25 @@ def _primary_outcome(options: List[Dict[str, Any]]) -> tuple[str, Optional[float
     return (options[0]["label"], options[0].get("probability")) if options else ("", None)
 
 
+def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
+    labels = _as_list(market.get("outcomes"))
+    prices = [_to_float(p) for p in _as_list(market.get("outcomePrices"))]
+    options = [
+        {"label": str(label), "probability": prices[i] if i < len(prices) else None}
+        for i, label in enumerate(labels)
+    ]
+    outcome, probability = _primary_outcome(options)
+    slug = market.get("slug") or ""
+    return {
+        "platform": "Polymarket",
+        "question": market.get("question") or market.get("title") or "",
+        "market_url": f"https://polymarket.com/market/{slug}" if slug else "",
+        "outcome": outcome,
+        "probability": probability,
+        "outcomes": options,
+    }
+
+
 def fetch_polymarket(slug: Optional[str] = None, market_id: Optional[str] = None) -> Dict[str, Any]:
     """Fetch a Polymarket market by slug or numeric id via the Gamma API."""
     if not slug and not market_id:
@@ -94,35 +113,34 @@ def fetch_polymarket(slug: Optional[str] = None, market_id: Optional[str] = None
         market = None
     if not market:
         raise MarketDataError("Polymarket market not found.")
-
-    labels = _as_list(market.get("outcomes"))
-    prices = [_to_float(p) for p in _as_list(market.get("outcomePrices"))]
-    options = [
-        {"label": str(label), "probability": prices[i] if i < len(prices) else None}
-        for i, label in enumerate(labels)
-    ]
-    outcome, probability = _primary_outcome(options)
-    resolved_slug = market.get("slug") or slug or ""
-    return {
-        "platform": "Polymarket",
-        "question": market.get("question") or market.get("title") or "",
-        "market_url": f"https://polymarket.com/market/{resolved_slug}" if resolved_slug else "",
-        "outcome": outcome,
-        "probability": probability,
-        "outcomes": options,
-    }
+    return _polymarket_quote(market)
 
 
-def fetch_kalshi(ticker: str) -> Dict[str, Any]:
-    """Fetch a Kalshi market by ticker via the public trade API v2."""
-    if not ticker:
-        raise MarketDataError("Provide a Kalshi market ticker.")
-    ticker = ticker.strip().upper()
-    data = _get_json(f"{KALSHI_API_URL}/{ticker}")
-    market = data.get("market") if isinstance(data, dict) else None
-    if not market:
-        raise MarketDataError("Kalshi market not found.")
+def list_polymarket(limit: int = 5) -> List[Dict[str, Any]]:
+    """List active, priced binary Yes/No Polymarket markets (for the edge scan)."""
+    limit = max(1, min(int(limit), 20))
+    data = _get_json(
+        POLYMARKET_GAMMA_URL,
+        params={
+            "active": "true",
+            "closed": "false",
+            "limit": limit,
+            "order": "volumeNum",
+            "ascending": "false",
+        },
+    )
+    quotes: List[Dict[str, Any]] = []
+    for market in data if isinstance(data, list) else []:
+        quote = _polymarket_quote(market)
+        labels = {str(o["label"]).strip().lower() for o in quote["outcomes"]}
+        if quote["probability"] is None or labels != {"yes", "no"}:
+            continue
+        quotes.append(quote)
+    return quotes
 
+
+def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
+    ticker = (market.get("ticker") or "").strip().upper()
     # Kalshi prices are in cents (0..100). Prefer last trade, else bid/ask midpoint.
     last = market.get("last_price")
     yes_bid = market.get("yes_bid")
@@ -141,7 +159,7 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     return {
         "platform": "Kalshi",
         "question": market.get("title") or market.get("subtitle") or ticker,
-        "market_url": f"https://kalshi.com/markets/{ticker}",
+        "market_url": f"https://kalshi.com/markets/{ticker}" if ticker else "",
         "outcome": "Yes",
         "probability": probability,
         "outcomes": [
@@ -149,3 +167,24 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
             {"label": "No", "probability": no_probability},
         ],
     }
+
+
+def fetch_kalshi(ticker: str) -> Dict[str, Any]:
+    """Fetch a Kalshi market by ticker via the public trade API v2."""
+    if not ticker:
+        raise MarketDataError("Provide a Kalshi market ticker.")
+    ticker = ticker.strip().upper()
+    data = _get_json(f"{KALSHI_API_URL}/{ticker}")
+    market = data.get("market") if isinstance(data, dict) else None
+    if not market:
+        raise MarketDataError("Kalshi market not found.")
+    return _kalshi_quote(market)
+
+
+def list_kalshi(limit: int = 5) -> List[Dict[str, Any]]:
+    """List open, priced Kalshi markets (for the edge scan)."""
+    limit = max(1, min(int(limit), 20))
+    data = _get_json(KALSHI_API_URL, params={"status": "open", "limit": limit})
+    markets = data.get("markets", []) if isinstance(data, dict) else []
+    quotes = [_kalshi_quote(m) for m in markets]
+    return [q for q in quotes if q["probability"] is not None]

@@ -210,6 +210,7 @@ evidence articles. It is built for resolvable forecasts, not general Q&A.
 - `GET /markets/polymarket`: fetch a live Polymarket quote (see below).
 - `GET /markets/kalshi`: fetch a live Kalshi quote (see below).
 - `POST /agent/analyze`: orchestrated end-to-end analysis of a live question (see below).
+- `GET /agent/scan`: scan a venue for mispriced markets, ranked by edge (see below).
 
 ### Agent: automated intelligence layer
 
@@ -239,6 +240,22 @@ the report. Provide a `question` directly, or a `platform` + market identifier
 The report includes `recommendation` (`buy_yes`/`buy_no`/`hold`/`no_market_price`),
 `edge`, `model_probability`, `market_probability`, `thesis`, `evidence_sources`,
 and `pipeline` (the ordered steps that ran).
+
+### Edge scan — find mispriced markets
+
+`GET /agent/scan` lists live markets on a venue, forecasts each, and returns the
+ones whose model-vs-market gap clears `min_edge`, ranked by `|edge|`.
+
+```bash
+curl "https://foresea.ink/agent/scan?platform=polymarket&limit=4&min_edge=0.1"
+```
+
+Params: `platform` (`polymarket` or `kalshi`), `limit` (markets to analyse, max 8),
+`min_edge` (default `0.1`), `evidence_top_k`. Each market runs a full forecast, so
+it's bounded by `limit` and the result is cached briefly. Response: `{platform,
+scanned, opportunities: [{question, market_url, market_probability,
+model_probability, edge, recommendation}]}`. In the web app, the desk's
+**"⚡ Scan Polymarket for mispriced markets"** button calls this.
 
 ### Fetch live market prices
 

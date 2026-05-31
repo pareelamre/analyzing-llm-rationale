@@ -1988,6 +1988,9 @@ function renderMessages() {
               ${escHtml(q)}
             </button>`).join('')}
             </div>
+            <button type="button" class="empty-suggestion" onclick="runScan('polymarket')" style="margin-top:10px;font-weight:500">
+              ⚡ Scan Polymarket for mispriced markets
+            </button>
           </div>
           <div class="empty-market-panel" aria-label="Foresea market intelligence format">
             <div class="panel-bar">
@@ -3209,6 +3212,55 @@ function _agentReportToMarkdown(d) {
   const srcs = [...new Set((d.evidence_sources || []).map(s => s.source).filter(Boolean))];
   if (srcs.length) md += `\n\n---\n*Sources: ${srcs.join(', ')}*`;
   return md;
+}
+
+// Scan agent: find mispriced markets on a venue and render them as a table.
+function _scanToMarkdown(d, venue) {
+  const opps = d.opportunities || [];
+  const recMap = { buy_yes: 'Buy YES', buy_no: 'Buy NO', hold: 'Hold', no_market_price: '—' };
+  const pct = x => (x == null ? '—' : Math.round(x * 100) + '%');
+  let md = `**${venue} edge scan** — analysed ${d.scanned} live market(s), found **${opps.length}** mispriced.`;
+  if (!opps.length) {
+    return md + `\n\nNothing past the edge threshold right now — these look fairly priced.`;
+  }
+  md += `\n\n| Market | Mkt | Foresea | Edge | Call |\n|---|---|---|---|---|\n`;
+  md += opps.map(o => {
+    const q = (o.question || '').replace(/[|\]]/g, '/');
+    const cell = o.market_url ? `[${q}](${o.market_url})` : q;
+    const edge = (o.edge >= 0 ? '+' : '') + Math.round(o.edge * 100) + ' pts';
+    return `| ${cell} | ${pct(o.market_probability)} | ${pct(o.model_probability)} | ${edge} | ${recMap[o.recommendation] || o.recommendation} |`;
+  }).join('\n');
+  return md + `\n\n*Decision support only — verify before trading.*`;
+}
+
+async function runScan(platform) {
+  if (currentView !== 'app') launchApp();
+  if (!activeId) newConversation();
+  const venue = platform === 'kalshi' ? 'Kalshi' : 'Polymarket';
+  const label = `Scan ${venue} for mispriced markets`;
+  const emptyState = document.getElementById('emptyState');
+  if (emptyState) emptyState.remove();
+  appendMessage(activeId, { role: 'user', content: label });
+  const userNode = makeUserBubble(label);
+  document.getElementById('messages').appendChild(userNode);
+  animateIn(userNode);
+  const typingEl = addTyping();
+  try {
+    const r = await fetch('/agent/scan?platform=' + encodeURIComponent(platform) + '&limit=4', { headers: authHeaders() });
+    const d = await r.json();
+    typingEl.remove();
+    if (!r.ok) { addError(d.detail || 'Scan failed'); return; }
+    const data = { question_type: 'chat', rationale: _scanToMarkdown(d, venue), model_key: 'scan agent' };
+    appendMessage(activeId, { role: 'assistant', data, content: data.rationale });
+    const aiNode = makeAIBubble(data);
+    document.getElementById('messages').appendChild(aiNode);
+    animateIn(aiNode);
+    enhanceCard(aiNode);
+    scrollBottom();
+  } catch (e) {
+    typingEl.remove();
+    addError('Network error: ' + e.message);
+  }
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────

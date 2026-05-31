@@ -11,6 +11,8 @@ from analyzing_llm_rationale.market_data import (  # noqa: E402
     MarketDataError,
     fetch_kalshi,
     fetch_polymarket,
+    list_kalshi,
+    list_polymarket,
 )
 
 
@@ -93,6 +95,27 @@ class MarketDataTests(unittest.TestCase):
     def test_kalshi_requires_ticker(self):
         with self.assertRaises(MarketDataError):
             fetch_kalshi("")
+
+    def test_list_polymarket_keeps_priced_binary_only(self):
+        payload = [
+            {"question": "A?", "slug": "a", "outcomes": '["Yes","No"]', "outcomePrices": '["0.3","0.7"]'},
+            {"question": "B (no price)", "slug": "b", "outcomes": '["Yes","No"]', "outcomePrices": '[]'},
+            {"question": "C (multi)", "slug": "c", "outcomes": '["X","Y","Z"]', "outcomePrices": '["0.3","0.3","0.4"]'},
+        ]
+        sys.modules["requests"] = _fake_requests(payload)
+        quotes = list_polymarket(limit=10)
+        self.assertEqual([q["question"] for q in quotes], ["A?"])
+        self.assertAlmostEqual(quotes[0]["probability"], 0.3)
+
+    def test_list_kalshi_skips_unpriced(self):
+        payload = {"markets": [
+            {"ticker": "T1", "title": "One", "last_price": 60},
+            {"ticker": "T2", "title": "Two", "last_price": None, "yes_bid": None, "yes_ask": None},
+        ]}
+        sys.modules["requests"] = _fake_requests(payload)
+        quotes = list_kalshi(limit=10)
+        self.assertEqual([q["question"] for q in quotes], ["One"])
+        self.assertAlmostEqual(quotes[0]["probability"], 0.6)
 
 
 if __name__ == "__main__":

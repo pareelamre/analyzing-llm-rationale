@@ -1179,6 +1179,25 @@ class AgentReport(BaseModel):
     skills: List[AgentSkillResult] = Field(default_factory=list)
 
 
+class ScanOpportunity(BaseModel):
+    """One mispriced market found by the scan agent."""
+    question: str
+    market_url: Optional[str] = None
+    outcome: str = "Yes"
+    market_probability: Optional[float] = None
+    model_probability: Optional[float] = None
+    edge: Optional[float] = None
+    stance: Optional[str] = None
+    recommendation: str
+
+
+class AgentScanResponse(BaseModel):
+    """Mispriced markets surfaced by the scan agent, ranked by |edge|."""
+    platform: str
+    scanned: int = Field(..., description="How many live markets were analysed.")
+    opportunities: List[ScanOpportunity] = Field(default_factory=list)
+
+
 class PredictResponse(BaseModel):
     """Prediction result for a single forecasting question."""
 
@@ -2480,3 +2499,83 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         evidence_sources=result.evidence_sources,
         skills=list(skill_results),
     )
+
+
+@app.get("/agent/scan", tags=["Agents"], summary="Scan a venue for mispriced markets", response_model=AgentScanResponse)
+async def agent_scan(
+    request: Request = None,
+    platform: str = "polymarket",
+    limit: int = 4,
+    min_edge: float = 0.1,
+    evidence_top_k: int = 3,
+) -> AgentScanResponse:
+    """Scan live markets on a venue and surface the most mispriced, ranked by edge.
+
+    Lists active markets (Polymarket or Kalshi), forecasts each, compares against
+    the market price, and returns those whose model-vs-market gap is at least
+    `min_edge`. Bounded by `limit` (max 8) since each market runs a full forecast;
+    results are cached briefly.
+    """
+    if request is not None:
+        _check_rate_limit(request)
+        _check_api_key(request)
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+
+    venue = (platform or "polymarket").strip().lower()
+    limit = max(1, min(limit, 8))
+    evidence_top_k = max(1, min(evidence_top_k, 6))
+    cache_key = _cache_key("scan", venue, limit, round(min_edge, 3), evidence_top_k, _state.get("model_key"))
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return AgentScanResponse(**cached)
+
+    from analyzing_llm_rationale import market_data
+    loop = asyncio.get_running_loop()
+    try:
+        if "poly" in venue:
+            quotes = await loop.run_in_executor(None, lambda: market_data.list_polymarket(limit))
+            platform_name = "Polymarket"
+        elif "kalshi" in venue:
+            quotes = await loop.run_in_executor(None, lambda: market_data.list_kalshi(limit))
+            platform_name = "Kalshi"
+        else:
+            raise HTTPException(status_code=422, detail="platform must be 'polymarket' or 'kalshi'.")
+    except market_data.MarketDataError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not list markets: {exc}") from exc
+    quotes = quotes[:limit]
+
+    async def _score(quote: Dict[str, Any]) -> Optional[ScanOpportunity]:
+        try:
+            res = await predict(PredictRequest(
+                question=quote["question"],
+                attach_evidence=True,
+                evidence_top_k=evidence_top_k,
+                market_platform=quote.get("platform"),
+                market_url=quote.get("market_url"),
+                market_outcome=quote.get("outcome"),
+                market_probability=quote.get("probability"),
+            ))
+        except Exception:
+            return None
+        analysis = res.market_analysis
+        if analysis is None or analysis.edge is None:
+            return None
+        recommendation, _ = _agent_recommendation(analysis.edge, quote.get("outcome") or "Yes")
+        return ScanOpportunity(
+            question=quote["question"],
+            market_url=quote.get("market_url"),
+            outcome=quote.get("outcome") or "Yes",
+            market_probability=analysis.market_probability,
+            model_probability=analysis.model_probability,
+            edge=analysis.edge,
+            stance=analysis.stance,
+            recommendation=recommendation,
+        )
+
+    scored = await asyncio.gather(*(_score(q) for q in quotes))
+    opportunities = [s for s in scored if s is not None and s.edge is not None and abs(s.edge) >= min_edge]
+    opportunities.sort(key=lambda o: abs(o.edge), reverse=True)
+    response = AgentScanResponse(platform=platform_name, scanned=len(quotes), opportunities=opportunities)
+    _cache_set(cache_key, response.model_dump(), _MARKET_CACHE_TTL * 10)
+    return response

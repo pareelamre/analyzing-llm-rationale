@@ -290,6 +290,34 @@ class ServerTests(unittest.TestCase):
         response = self.client.post("/agent/analyze", json={"evidence_top_k": 3})
         self.assertEqual(response.status_code, 422)
 
+    def test_agent_scan_ranks_mispriced_markets(self):
+        import analyzing_llm_rationale.market_data as md
+
+        # Model forecasts Yes 0.7 (FakeProvider). Market A at 0.40 -> edge 0.30
+        # (surfaces); market B at 0.66 -> edge 0.04 (below min_edge, filtered).
+        markets = [
+            {"platform": "Polymarket", "question": "Will event A happen by 2027?", "market_url": "https://p/a",
+             "outcome": "Yes", "probability": 0.40, "outcomes": []},
+            {"platform": "Polymarket", "question": "Will event B happen by 2027?", "market_url": "https://p/b",
+             "outcome": "Yes", "probability": 0.66, "outcomes": []},
+        ]
+        with mock.patch.object(md, "list_polymarket", lambda limit=5: markets):
+            response = self.client.get("/agent/scan?platform=polymarket&limit=2&min_edge=0.1&evidence_top_k=2")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["platform"], "Polymarket")
+        self.assertEqual(body["scanned"], 2)
+        self.assertEqual(len(body["opportunities"]), 1)
+        opp = body["opportunities"][0]
+        self.assertEqual(opp["question"], "Will event A happen by 2027?")
+        self.assertAlmostEqual(opp["edge"], 0.30)
+        self.assertEqual(opp["recommendation"], "buy_yes")
+
+    def test_agent_scan_rejects_unknown_platform(self):
+        response = self.client.get("/agent/scan?platform=betfair")
+        self.assertEqual(response.status_code, 422)
+
     def test_records_anonymous_page_visit(self):
         response = self.client.post(
             "/analytics/visit",
