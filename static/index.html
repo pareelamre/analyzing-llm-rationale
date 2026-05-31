@@ -1728,9 +1728,9 @@ const VARIANT_DESCS = {
 };
 const MARKET_EXAMPLES = [
   'Market at 42%: Will the Fed cut rates before September 30, 2026?',
-  'Market at 31%: Will US CPI inflation be at least 3.0% in December 2026?',
   'Which outcome is mispriced in the 2026 Formula 1 drivers championship market?',
-  'What is fair value for a market asking whether SpaceX completes a major Starship milestone before December 31, 2026?'
+  'What will US CPI inflation be in December 2026?',
+  'When will SpaceX complete its next major Starship milestone?'
 ];
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -1959,7 +1959,7 @@ function renderMessages() {
               The intelligence layer for prediction markets.
             </h2>
             <p class="text-[15px] text-gray-500 leading-relaxed">
-              Price a binary market, challenge consensus, or turn resolution criteria into a source-backed probability.
+              Price any market — yes/no, multiple-choice, numeric, or date — challenge the consensus, and turn resolution criteria into a source-backed forecast.
             </p>
             <div class="mt-8 grid gap-2.5 text-left">
               ${MARKET_EXAMPLES.map(q => `
