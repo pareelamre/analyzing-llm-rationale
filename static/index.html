@@ -669,7 +669,7 @@
       .landing-nav { padding: 0 14px; }
       .landing-links { gap: 12px; }
       .landing-shell { padding-top: 28px; }
-      .hero-title { font-size: 44px; }
+      .hero-title { font-size: 36px; }
       .landing-question { grid-template-columns: 1fr; }
       .landing-question .hero-action { width: 100%; }
       .market-table { grid-template-columns: 1fr 1fr; }
@@ -679,6 +679,11 @@
       .market-lens-grid { grid-template-columns: 1fr; }
       .intel-row { grid-template-columns: 1fr; gap: 4px; }
       .intel-note { text-align: left; }
+      /* >=16px stops iOS from zooming when a sidebar form field is focused. */
+      .variant-select, textarea.variant-select, .attach-url-input { font-size: 16px !important; }
+      /* Keep the Config panel from pushing Account off a short screen. */
+      .config-body { max-height: 60vh; overflow-y: auto; }
+      .chat-md table.md-table { font-size: 12px; }
     }
 
     /* ── Tasteful polish ─────────────────────────────────────────────── */
