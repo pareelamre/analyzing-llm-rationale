@@ -760,10 +760,11 @@ if _STATIC_DIR.exists():
 
 @app.get("/", include_in_schema=False)
 async def index():
-    # Short TTL so deploys propagate quickly while CDNs/browsers still cache.
+    # Revalidate every load so deploys of the single-file SPA show immediately
+    # (browser still gets a cheap 304 when unchanged).
     return FileResponse(
         str(_STATIC_DIR / "index.html"),
-        headers={"Cache-Control": "public, max-age=300"},
+        headers={"Cache-Control": "no-cache"},
     )
 
 
