@@ -58,6 +58,26 @@ CHANNEL_CREDIBILITY = {
     "rss": 0.68,
     "stooq": 0.55,
 }
+
+# Channels that return generic, query-agnostic headlines (Stooq market RSS,
+# publisher homepage RSS) rather than results matched to the question. Their
+# articles are only kept when they clear a minimum relevance to the question,
+# so they stop padding evidence for unrelated or conversational queries.
+_QUERY_AGNOSTIC_CHANNELS = ("stooq", "rss")
+_MIN_GENERIC_RELEVANCE = 0.1
+
+# Stooq only carries financial-market data, so it is fetched only when the
+# question is finance/markets related.
+_FINANCE_HINTS = {
+    "stock", "stocks", "share", "shares", "equity", "equities", "index", "indices",
+    "nasdaq", "s&p", "sp500", "dow", "ftse", "dax", "nikkei", "wig", "nyse",
+    "earnings", "ipo", "dividend", "valuation", "ticker", "revenue", "profit",
+    "interest", "rate", "rates", "fed", "ecb", "boe", "inflation", "cpi", "gdp",
+    "recession", "currency", "forex", "exchange", "bond", "bonds", "yield",
+    "treasury", "oil", "crude", "brent", "wti", "gold", "silver", "commodity",
+    "commodities", "crypto", "bitcoin", "btc", "ethereum", "eth", "trading",
+    "market", "markets", "bank", "stooq",
+}
 QUERY_STOPWORDS = {
     "will",
     "the",
@@ -101,6 +121,12 @@ def _lexical_relevance(query: str, text: str) -> float:
     if not query_terms or not text_terms:
         return 0.0
     return len(query_terms & text_terms) / len(query_terms)
+
+
+def _is_finance_query(text: str) -> bool:
+    """True when the question mentions markets/finance, gating Stooq retrieval."""
+    terms = set(re.findall(r"[a-z&0-9]+", (text or "").lower()))
+    return bool(terms & _FINANCE_HINTS)
 
 
 def _keyword_search_query(question: str, max_terms: int = 12) -> str:
@@ -196,7 +222,7 @@ class NewsPipeline:
         if "google-news" in self._fetch_sources:
             articles.extend(self._fetch_google_news(query, limit=per_source_limit))
 
-        if "stooq" in self._fetch_sources:
+        if "stooq" in self._fetch_sources and _is_finance_query(query):
             articles.extend(self._fetch_stooq(limit=per_source_limit))
 
         if "rss" in self._fetch_sources:
@@ -499,6 +525,7 @@ class NewsPipeline:
         for relevance, article in zip(relevance_scores, articles):
             credibility = _source_credibility(article)
             article["source_credibility"] = round(credibility, 2)
+            article["relevance"] = round(float(relevance), 4)
             scores.append((0.85 * relevance) + (0.15 * credibility))
 
         ranked = sorted(
@@ -521,6 +548,13 @@ class NewsPipeline:
         def add(article: dict) -> None:
             url = article.get("url") or f"{article.get('source', '')}:{article.get('title', '')}"
             if url in seen_urls or len(selected) >= top_k:
+                return
+            # Query-agnostic channels (Stooq, generic RSS) must clear a relevance
+            # floor, so they no longer pad evidence for unrelated questions.
+            if (
+                article.get("source_channel") in _QUERY_AGNOSTIC_CHANNELS
+                and article.get("relevance", 1.0) < _MIN_GENERIC_RELEVANCE
+            ):
                 return
             seen_urls.add(url)
             selected.append(article)

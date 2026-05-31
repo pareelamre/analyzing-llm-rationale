@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale.news_pipeline import (  # noqa: E402
     NewsPipeline,
+    _is_finance_query,
     _keyword_search_query,
     _lexical_relevance,
 )
@@ -184,6 +185,59 @@ class NewsPipelineSourceTests(unittest.TestCase):
             {article["source_channel"] for article in selected},
             {"gdelt", "google-news", "stooq"},
         )
+
+    def test_stooq_only_fetched_for_finance_questions(self):
+        self.assertTrue(_is_finance_query("Will the Fed cut interest rates in 2026?"))
+        self.assertTrue(_is_finance_query("Where will the S&P 500 close?"))
+        self.assertFalse(_is_finance_query("can i talk to you?"))
+        self.assertFalse(_is_finance_query("Will it rain in Berlin tomorrow?"))
+
+        def make_pipeline():
+            p = NewsPipeline.__new__(NewsPipeline)
+            p._newsapi_key = None
+            p._fetch_sources = ("gdelt", "stooq")
+            p._fetch_gdelt = lambda query, limit: []
+            return p
+
+        calls = []
+        finance = make_pipeline()
+        finance._fetch_stooq = lambda limit: calls.append("finance") or []
+        finance.fetch("Will the Fed cut interest rates?", top_k=5)
+        self.assertEqual(calls, ["finance"])
+
+        calls.clear()
+        casual = make_pipeline()
+        casual._fetch_stooq = lambda limit: calls.append("casual") or []
+        casual.fetch("can i talk to you?", top_k=5)
+        self.assertEqual(calls, [])  # Stooq not fetched for a non-finance question
+
+    def test_select_diverse_drops_low_relevance_generic_sources(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._fetch_sources = ("gdelt", "stooq", "rss")
+        ranked = [
+            {"title": "GDELT", "url": "https://e.com/g", "source_channel": "gdelt", "relevance": 0.40},
+            {"title": "Stooq junk", "url": "https://e.com/s", "source_channel": "stooq", "relevance": 0.0},
+            {"title": "RSS junk", "url": "https://e.com/r", "source_channel": "rss", "relevance": 0.02},
+        ]
+
+        selected = pipeline.select_diverse_sources(ranked, top_k=5)
+        channels = {a["source_channel"] for a in selected}
+
+        self.assertIn("gdelt", channels)
+        self.assertNotIn("stooq", channels)
+        self.assertNotIn("rss", channels)
+
+    def test_select_diverse_keeps_relevant_generic_sources(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._fetch_sources = ("gdelt", "stooq")
+        ranked = [
+            {"title": "GDELT", "url": "https://e.com/g", "source_channel": "gdelt", "relevance": 0.40},
+            {"title": "Relevant Stooq", "url": "https://e.com/s", "source_channel": "stooq", "relevance": 0.45},
+        ]
+
+        selected = pipeline.select_diverse_sources(ranked, top_k=5)
+
+        self.assertEqual({a["source_channel"] for a in selected}, {"gdelt", "stooq"})
 
     def test_rank_can_use_lightweight_lexical_scores(self):
         pipeline = NewsPipeline.__new__(NewsPipeline)
