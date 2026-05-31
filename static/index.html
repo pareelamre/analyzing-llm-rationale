@@ -1507,6 +1507,34 @@
   </div>
 
   <div class="account-panel">
+    <div class="flex items-center justify-between mb-2">
+      <p class="label" style="margin:0">Agent skills</p>
+      <label class="flex items-center gap-1.5 cursor-pointer select-none" title="Route questions through the analysis agent">
+        <input type="checkbox" id="agentToggle" onchange="toggleAgent()" />
+        <span class="text-xs" style="color:var(--text-dim)">Use</span>
+      </label>
+    </div>
+    <div id="skillList" class="model-list"></div>
+    <button type="button" id="addSkillBtn" class="model-add-btn" onclick="startAddSkill()">+ Add a skill</button>
+    <div id="skillForm" class="model-form" hidden>
+      <div>
+        <label class="label block mb-1" for="sfName">Name</label>
+        <input id="sfName" class="variant-select text-xs" placeholder="e.g. Base rate check" autocomplete="off" />
+      </div>
+      <div>
+        <label class="label block mb-1" for="sfInstruction">Instruction</label>
+        <textarea id="sfInstruction" class="variant-select text-xs" rows="3" placeholder="What should this skill analyse?" style="resize:vertical;min-height:56px"></textarea>
+      </div>
+      <div id="sfError" class="model-form-error" hidden></div>
+      <div class="model-form-actions">
+        <button type="button" class="model-save" onclick="saveSkillForm()">Save</button>
+        <button type="button" class="model-cancel" onclick="cancelSkillForm()">Cancel</button>
+      </div>
+    </div>
+    <p class="text-gray-400" style="font-size:10px;margin-top:6px">When “Use” is on, the agent fetches evidence, forecasts, prices the edge, and runs your skills.</p>
+  </div>
+
+  <div class="account-panel">
     <p class="label mb-2">Account</p>
     <div id="sidebarSignedOut" hidden>
       <button type="button" class="btn-signin sidebar-signin" onclick="openAuthModal('login')">Sign in</button>
@@ -2316,25 +2344,45 @@ async function sendQuestion() {
     // Clear attachments after send
     _attachments = [];
     _renderChips();
-    const resp = await fetch('/predict', {
-      method: 'POST',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(body),
-    });
-    const data = await resp.json();
-    typingEl.remove();
-
-    if (!resp.ok) {
-      addError(data.detail || 'Server error');
+    let data;
+    if (_agentEnabled()) {
+      const agentBody = {
+        question,
+        evidence_top_k: 5,
+        skills: _loadSkills().map(s => ({ name: s.name, instruction: s.instruction })),
+      };
+      if (marketProbability != null) agentBody.market_probability = marketProbability;
+      if (activeModel) {
+        agentBody.openrouter_api_key = activeModel.apiKey;
+        agentBody.openrouter_model = activeModel.model;
+        if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
+      }
+      const resp = await fetch('/agent/analyze', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(agentBody),
+      });
+      const report = await resp.json();
+      typingEl.remove();
+      if (!resp.ok) { addError(report.detail || 'Agent error'); return; }
+      data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
     } else {
+      const resp = await fetch('/predict', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body),
+      });
+      data = await resp.json();
+      typingEl.remove();
+      if (!resp.ok) { addError(data.detail || 'Server error'); return; }
       data.market_context = buildMarketContext(question, data);
-      appendMessage(activeId, { role: 'assistant', data, variant, content: data.rationale || '' });
-      const aiNode = makeAIBubble(data, variant);
-      document.getElementById('messages').appendChild(aiNode);
-      animateIn(aiNode);
-      enhanceCard(aiNode);
-      scrollBottom();
     }
+    appendMessage(activeId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    const aiNode = makeAIBubble(data, variant);
+    document.getElementById('messages').appendChild(aiNode);
+    animateIn(aiNode);
+    enhanceCard(aiNode);
+    scrollBottom();
   } catch (err) {
     typingEl.remove();
     addError('Network error: ' + err.message);
@@ -3042,6 +3090,102 @@ function _updateModelLabel() {
   if (label) label.textContent = m ? m.model.split('/').pop() : 'gpt-oss-120b';
 }
 
+// ── Agent skills manager ──────────────────────────────────────────────────────
+function _loadSkills() {
+  try { return JSON.parse(localStorage.getItem('agent_skills') || '[]') || []; }
+  catch { return []; }
+}
+function _saveSkills(s) { localStorage.setItem('agent_skills', JSON.stringify(s)); }
+function _agentEnabled() { return localStorage.getItem('agent_enabled') === '1'; }
+function toggleAgent() {
+  localStorage.setItem('agent_enabled', document.getElementById('agentToggle').checked ? '1' : '0');
+}
+
+function renderSkillList() {
+  const host = document.getElementById('skillList');
+  if (!host) return;
+  host.innerHTML = _loadSkills().map(s => `
+    <div class="model-row" style="cursor:default">
+      <div class="model-meta">
+        <div class="model-name">${escHtml(s.name)}</div>
+        <div class="model-sub">${escHtml(s.instruction)}</div>
+      </div>
+      <div class="model-actions">
+        <button type="button" class="model-icon-btn" title="Edit" onclick="editSkill('${s.id}')">✎</button>
+        <button type="button" class="model-icon-btn" title="Remove" onclick="deleteSkill('${s.id}')">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+let _editingSkillId = null;
+function _showSkillForm(show) {
+  document.getElementById('skillForm').hidden = !show;
+  document.getElementById('addSkillBtn').hidden = show;
+}
+function _sfError(msg) {
+  const el = document.getElementById('sfError');
+  el.textContent = msg || ''; el.hidden = !msg;
+}
+function startAddSkill() {
+  if (_loadSkills().length >= 5) { _showSkillForm(true); _sfError('Up to 5 skills.'); return; }
+  _editingSkillId = null;
+  document.getElementById('sfName').value = '';
+  document.getElementById('sfInstruction').value = '';
+  _sfError(''); _showSkillForm(true);
+}
+function editSkill(id) {
+  const s = _loadSkills().find(x => x.id === id);
+  if (!s) return;
+  _editingSkillId = id;
+  document.getElementById('sfName').value = s.name || '';
+  document.getElementById('sfInstruction').value = s.instruction || '';
+  _sfError(''); _showSkillForm(true);
+}
+function cancelSkillForm() { _sfError(''); _showSkillForm(false); }
+function saveSkillForm() {
+  const name = document.getElementById('sfName').value.trim();
+  const instruction = document.getElementById('sfInstruction').value.trim();
+  if (!name || !instruction) { _sfError('Name and instruction are required.'); return; }
+  const skills = _loadSkills();
+  if (_editingSkillId) {
+    const i = skills.findIndex(x => x.id === _editingSkillId);
+    if (i >= 0) skills[i] = { ...skills[i], name, instruction };
+  } else {
+    if (skills.length >= 5) { _sfError('Up to 5 skills.'); return; }
+    skills.push({ id: 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name, instruction });
+  }
+  _saveSkills(skills);
+  _showSkillForm(false);
+  renderSkillList();
+}
+function deleteSkill(id) {
+  _saveSkills(_loadSkills().filter(x => x.id !== id));
+  renderSkillList();
+}
+function loadAgentSkills() {
+  const t = document.getElementById('agentToggle');
+  if (t) t.checked = _agentEnabled();
+  renderSkillList();
+}
+
+// Format an /agent/analyze report as markdown for the chat bubble.
+function _agentReportToMarkdown(d) {
+  const pct = x => (x == null ? '—' : Math.round(x * 100) + '%');
+  const recMap = { buy_yes: 'Buy YES', buy_no: 'Buy NO', hold: 'Hold', no_market_price: 'No market price' };
+  let md = `**Recommendation: ${recMap[d.recommendation] || d.recommendation || ''}**`;
+  if (d.recommendation_detail) md += `\n\n${d.recommendation_detail}`;
+  const bits = [];
+  if (d.model_probability != null) bits.push(`Foresea ${pct(d.model_probability)}`);
+  if (d.market_probability != null) bits.push(`Market ${pct(d.market_probability)}`);
+  if (d.edge != null) bits.push(`Edge ${(d.edge >= 0 ? '+' : '') + Math.round(d.edge * 100)} pts`);
+  if (bits.length) md += `\n\n${bits.join('  ·  ')}`;
+  if (d.thesis) md += `\n\n${d.thesis}`;
+  (d.skills || []).forEach(s => { md += `\n\n### ${s.name}\n${s.output}`; });
+  const srcs = [...new Set((d.evidence_sources || []).map(s => s.source).filter(Boolean))];
+  if (srcs.length) md += `\n\n---\n*Sources: ${srcs.join(', ')}*`;
+  return md;
+}
+
 // Rotate chevron when details opens/closes
 document.addEventListener('DOMContentLoaded', () => {
   const det = document.getElementById('orDetails');
@@ -3400,6 +3544,7 @@ recordPageVisit();
 updateVariantDesc();
 loadChatModeToggle();
 loadOrSettings();
+loadAgentSkills();
 initAuth();
 const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);
