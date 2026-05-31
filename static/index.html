@@ -2390,6 +2390,17 @@ async function sendQuestion() {
   document.getElementById('messages').appendChild(userNode);
   animateIn(userNode);
 
+  // Agent mode: if the input isn't a specific market to price, guide with examples.
+  if (_agentEnabled() && _isDiscoveryRequest(question)) {
+    const data = { question_type: 'chat', rationale: _agentDiscoveryGuidance(), model_key: 'agent' };
+    appendMessage(activeId, { role: 'assistant', data, content: data.rationale });
+    const node = makeAIBubble(data);
+    document.getElementById('messages').appendChild(node);
+    animateIn(node); enhanceCard(node); scrollBottom();
+    btn.disabled = false; input.focus();
+    return;
+  }
+
   const typingEl = _agentEnabled()
     ? addAgentProgress([
         'Resolving the market',
@@ -3285,22 +3296,69 @@ function loadAgentSkills() {
   }
 }
 
-// Format an /agent/analyze report as markdown for the chat bubble.
+// Format an /agent/analyze report conversationally (Perplexity/Comet-style):
+// a natural-language read with the numbers woven in and clickable sources.
 function _agentReportToMarkdown(d) {
   const pct = x => (x == null ? '—' : Math.round(x * 100) + '%');
-  const recMap = { buy_yes: 'Buy YES', buy_no: 'Buy NO', hold: 'Hold', no_market_price: 'No market price' };
-  let md = `**Recommendation: ${recMap[d.recommendation] || d.recommendation || ''}**`;
-  if (d.recommendation_detail) md += `\n\n${d.recommendation_detail}`;
-  const bits = [];
-  if (d.model_probability != null) bits.push(`Foresea ${pct(d.model_probability)}`);
-  if (d.market_probability != null) bits.push(`Market ${pct(d.market_probability)}`);
-  if (d.edge != null) bits.push(`Edge ${(d.edge >= 0 ? '+' : '') + Math.round(d.edge * 100)} pts`);
-  if (bits.length) md += `\n\n${bits.join('  ·  ')}`;
-  if (d.thesis) md += `\n\n${d.thesis}`;
-  (d.skills || []).forEach(s => { md += `\n\n### ${s.name}\n${s.output}`; });
-  const srcs = [...new Set((d.evidence_sources || []).map(s => s.source).filter(Boolean))];
-  if (srcs.length) md += `\n\n---\n*Sources: ${srcs.join(', ')}*`;
+  const out = d.outcome || 'Yes';
+  let md = '';
+
+  if (d.market_probability != null && d.model_probability != null) {
+    const pts = Math.round((d.edge || 0) * 100);
+    if (pts >= 5) {
+      md = `There looks to be an edge here: I'd price **${out}** around **${pct(d.model_probability)}**, versus the market's **${pct(d.market_probability)}** — roughly **+${pts} points**, so **${out}** looks underpriced.`;
+    } else if (pts <= -5) {
+      md = `There looks to be an edge here: I'd price **${out}** around **${pct(d.model_probability)}**, versus the market's **${pct(d.market_probability)}** — about **${pts} points**, so **${out}** looks overpriced.`;
+    } else {
+      md = `I'm roughly in line with the market on this one — I'd say about **${pct(d.model_probability)}** for **${out}** against the market's **${pct(d.market_probability)}**, so no real edge.`;
+    }
+  } else if (d.model_probability != null) {
+    md = `I'd put **${out}** at around **${pct(d.model_probability)}**.`;
+  }
+
+  if (d.thesis) md += (md ? '\n\n' : '') + d.thesis;
+
+  if (d.market_probability == null) {
+    md += `\n\n*Give me the market price (start with "Market at 42%: …") or paste a Polymarket/Kalshi link, and I'll tell you whether there's an edge.*`;
+  }
+
+  (d.skills || []).forEach(s => { md += `\n\n**${s.name}.** ${s.output}`; });
+
+  // Clickable, de-duplicated source citations.
+  const seen = new Set();
+  const links = [];
+  (d.evidence_sources || []).forEach(s => {
+    if (!s.source || seen.has(s.source)) return;
+    seen.add(s.source);
+    links.push(s.url ? `[${s.source}](${s.url})` : s.source);
+  });
+  if (links.length) md += `\n\n---\n*Sources:* ${links.join(' · ')}`;
   return md;
+}
+
+// Detect "find me an edge / what should I bet" style discovery requests that
+// aren't a specific market to price — so the agent can guide instead of forcing
+// a forecast on the literal phrase.
+function _isDiscoveryRequest(q) {
+  const t = (q || '').toLowerCase().trim();
+  if (/^scan\b/.test(t)) return true;
+  if (/what should i (bet|trade|buy|back|wager)/.test(t)) return true;
+  if (/\b(edge|mispric\w*|opportunit\w*|value bets?)\b/.test(t)
+      && /\b(find|show|give|get|spot|hunt|any|some|me|where|which)\b/.test(t)
+      && !/\?\s*$/.test(q)) return true;
+  return false;
+}
+
+function _agentDiscoveryGuidance() {
+  return [
+    "I work a **specific** market or question and price it against the market — I don't go fishing for ideas on my own. Point me at one of these:",
+    "",
+    "- **A market question** — e.g. *Will the Fed cut rates before September 30, 2026?*",
+    "- **A quoted market** — e.g. *Market at 42%: Will [event] happen by [date]?*",
+    "- **A market link** — paste a Polymarket or Kalshi URL and I'll fetch the price",
+    "",
+    "To hunt for mispriced markets across a whole venue, use the **⚡ Scan** button on a new chat (or call `GET /agent/scan?platform=polymarket`).",
+  ].join("\n");
 }
 
 // Scan agent: find mispriced markets on a venue and render them as a table.
