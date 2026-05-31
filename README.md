@@ -234,6 +234,37 @@ Optional:
 - `variant`: prompt variant. Defaults to `variant0_neutral_baseline`.
 - `created_time`, `publish_time`, `resolve_time`, `days_open`: optional
   forecasting metadata.
+- `openrouter_api_key` + `openrouter_model`: run the forecast on your own model
+  instead of the server default (see "Bring your own model" below).
+- `provider_base_url`: optional OpenAI-compatible `/chat/completions` endpoint to
+  use with your key/model instead of OpenRouter. Must be public HTTPS.
+
+### Bring your own model
+
+By default `/predict` runs on the server's hosted model. To use your own:
+
+- **Via OpenRouter** — pass `openrouter_api_key` and `openrouter_model` (e.g.
+  `openai/gpt-4o`, `anthropic/claude-sonnet-4-5`). The request is proxied through
+  OpenRouter.
+- **Via any OpenAI-compatible endpoint** — also pass `provider_base_url` (e.g.
+  `https://api.openai.com/v1/chat/completions`) with the matching `openrouter_model`
+  (here just the provider's model ID, e.g. `gpt-4o`) and your key.
+
+For safety, `provider_base_url` must be public HTTPS; loopback, private,
+link-local, and cloud-metadata hosts are rejected. In the web app, the sidebar's
+**"Use your own model"** panel exposes the provider, endpoint, key, and model.
+
+```bash
+curl -X POST https://foresea.ink/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Will X happen by 2027?",
+    "question_type": "binary",
+    "openrouter_api_key": "YOUR_KEY",
+    "openrouter_model": "gpt-4o",
+    "provider_base_url": "https://api.openai.com/v1/chat/completions"
+  }'
+```
 
 ### Binary request
 

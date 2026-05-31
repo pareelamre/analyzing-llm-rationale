@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 os.environ["ANALYTICS_DB"] = str(Path(tempfile.gettempdir()) / "foresea_test_analytics.duckdb")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -478,6 +479,60 @@ class ServerTests(unittest.TestCase):
         self.assertIsNone(_cache_get("missing-key"))
         _cache_set("zero-ttl", {"v": 1}, ttl=0)  # ttl<=0 is a no-op
         self.assertIsNone(_cache_get("zero-ttl"))
+
+    def test_custom_provider_base_url_routes_to_own_endpoint(self):
+        import analyzing_llm_rationale.providers as providers_mod
+
+        captured = {}
+
+        class FakeCustomProvider:
+            def __init__(self, model_name, api_key, base_url):
+                captured.update(model=model_name, key=api_key, base_url=base_url)
+
+            def chat_completion(self, messages, temperature, max_tokens):
+                return json.dumps(
+                    {"predicted_answer": "Yes", "confidence": 0.6, "rationale": "ok"}
+                )
+
+        with mock.patch.object(providers_mod, "OpenAICompatibleProvider", FakeCustomProvider):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will X happen by 2027?",
+                    "question_type": "binary",
+                    "attach_evidence": False,
+                    "openrouter_api_key": "sk-test",
+                    "openrouter_model": "gpt-4o",
+                    "provider_base_url": "https://api.openai.com/v1/chat/completions",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured["base_url"], "https://api.openai.com/v1/chat/completions")
+        self.assertEqual(captured["model"], "gpt-4o")
+        self.assertEqual(captured["key"], "sk-test")
+        # The server's default provider must not be called for a BYOK request.
+        self.assertEqual(self.provider.calls, [])
+
+    def test_custom_provider_rejects_unsafe_base_url(self):
+        for bad_url in [
+            "http://api.openai.com/v1/chat/completions",  # not https
+            "https://localhost/v1/chat/completions",
+            "https://169.254.169.254/latest/meta-data",  # cloud metadata
+            "https://10.0.0.5/v1/chat/completions",       # private range
+            "https://metadata.google.internal/x",
+        ]:
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will X happen by 2027?",
+                    "attach_evidence": False,
+                    "openrouter_api_key": "sk-test",
+                    "openrouter_model": "gpt-4o",
+                    "provider_base_url": bad_url,
+                },
+            )
+            self.assertEqual(response.status_code, 422, bad_url)
 
 
 if __name__ == "__main__":

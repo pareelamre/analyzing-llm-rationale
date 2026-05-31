@@ -1362,48 +1362,66 @@
       </summary>
       <div class="mt-2 space-y-2" onclick="event.stopPropagation()">
         <div>
-          <label class="label block mb-1" for="orKey">OpenRouter API key</label>
+          <label class="label block mb-1" for="orProvider">Provider</label>
+          <select id="orProvider" class="variant-select text-xs" onchange="saveOrSettings()">
+            <option value="openrouter">OpenRouter</option>
+            <option value="custom">Custom (OpenAI-compatible)</option>
+          </select>
+        </div>
+        <div id="orBaseUrlRow" hidden>
+          <label class="label block mb-1" for="orBaseUrl">Endpoint URL</label>
           <input
-            id="orKey"
-            type="password"
+            id="orBaseUrl"
+            type="url"
             class="variant-select text-xs"
-            placeholder="sk-or-…"
+            placeholder="https://api.openai.com/v1/chat/completions"
             autocomplete="off"
             oninput="saveOrSettings()"
           />
           <p class="text-gray-400 mt-1" style="font-size:10px">
-            Stored locally. Get a key at <a href="https://openrouter.ai/keys" target="_blank" class="underline">openrouter.ai/keys</a>.
+            Any OpenAI-compatible <code>/chat/completions</code> endpoint. Public HTTPS only.
+          </p>
+        </div>
+        <div>
+          <label class="label block mb-1" for="orKey">API key</label>
+          <input
+            id="orKey"
+            type="password"
+            class="variant-select text-xs"
+            placeholder="sk-…"
+            autocomplete="off"
+            oninput="saveOrSettings()"
+          />
+          <p id="orKeyHint" class="text-gray-400 mt-1" style="font-size:10px">
+            Stored locally in your browser. Get an OpenRouter key at <a href="https://openrouter.ai/keys" target="_blank" class="underline">openrouter.ai/keys</a>.
           </p>
         </div>
         <div>
           <label class="label block mb-1" for="orModel">Model</label>
-          <select id="orModel" class="variant-select text-xs" onchange="saveOrSettings()">
-            <option value="">— server default —</option>
-            <optgroup label="OpenAI">
-              <option value="openai/gpt-4o">GPT-4o</option>
-              <option value="openai/gpt-4o-mini">GPT-4o mini</option>
-              <option value="openai/o3-mini">o3 mini</option>
-            </optgroup>
-            <optgroup label="Anthropic">
-              <option value="anthropic/claude-sonnet-4-5">Claude Sonnet 4.5</option>
-              <option value="anthropic/claude-3.5-haiku">Claude Haiku 3.5</option>
-            </optgroup>
-            <optgroup label="Google">
-              <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash</option>
-              <option value="google/gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro</option>
-            </optgroup>
-            <optgroup label="Meta">
-              <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
-              <option value="meta-llama/llama-4-maverick">Llama 4 Maverick</option>
-            </optgroup>
-            <optgroup label="Mistral">
-              <option value="mistralai/mistral-small-3.1-24b-instruct">Mistral Small 3.1</option>
-            </optgroup>
-            <optgroup label="DeepSeek">
-              <option value="deepseek/deepseek-r1">DeepSeek R1</option>
-              <option value="deepseek/deepseek-chat-v3-0324">DeepSeek V3</option>
-            </optgroup>
-          </select>
+          <input
+            id="orModel"
+            class="variant-select text-xs"
+            list="orModelList"
+            placeholder="e.g. openai/gpt-4o"
+            autocomplete="off"
+            oninput="saveOrSettings()"
+          />
+          <datalist id="orModelList">
+            <option value="openai/gpt-4o"></option>
+            <option value="openai/gpt-4o-mini"></option>
+            <option value="openai/o3-mini"></option>
+            <option value="anthropic/claude-sonnet-4-5"></option>
+            <option value="anthropic/claude-3.5-haiku"></option>
+            <option value="google/gemini-2.5-pro-preview-05-06"></option>
+            <option value="google/gemini-2.0-flash-001"></option>
+            <option value="meta-llama/llama-3.3-70b-instruct"></option>
+            <option value="deepseek/deepseek-r1"></option>
+            <option value="deepseek/deepseek-chat-v3-0324"></option>
+            <option value="mistralai/mistral-small-3.1-24b-instruct"></option>
+          </datalist>
+          <p class="text-gray-400 mt-1" style="font-size:10px">
+            Type any model ID your provider supports.
+          </p>
         </div>
       </div>
     </details>
@@ -2202,6 +2220,8 @@ async function sendQuestion() {
   try {
     const orKey = localStorage.getItem('or_key') || '';
     const orModel = localStorage.getItem('or_model') || '';
+    const orProvider = localStorage.getItem('or_provider') || 'openrouter';
+    const orBaseUrl = localStorage.getItem('or_base_url') || '';
     const body = { question, variant, history, chat_mode: isChatMode() };
     const marketProbability = extractMarketProbability(question);
     if (marketProbability != null) {
@@ -2213,6 +2233,7 @@ async function sendQuestion() {
     if (orKey && orModel) {
       body.openrouter_api_key = orKey;
       body.openrouter_model = orModel;
+      if (orProvider === 'custom' && orBaseUrl) body.provider_base_url = orBaseUrl;
     }
     // Clear attachments after send
     _attachments = [];
@@ -2721,20 +2742,41 @@ function loadChatModeToggle() { /* toggle removed; chat is the default */ }
 
 // ── OpenRouter settings ───────────────────────────────────────────────────────
 function saveOrSettings() {
+  const provider = document.getElementById('orProvider')?.value || 'openrouter';
   const key = document.getElementById('orKey')?.value.trim() || '';
-  const model = document.getElementById('orModel')?.value || '';
+  const model = document.getElementById('orModel')?.value.trim() || '';
+  const baseUrl = document.getElementById('orBaseUrl')?.value.trim() || '';
+  localStorage.setItem('or_provider', provider);
   if (key) localStorage.setItem('or_key', key); else localStorage.removeItem('or_key');
   if (model) localStorage.setItem('or_model', model); else localStorage.removeItem('or_model');
+  if (baseUrl) localStorage.setItem('or_base_url', baseUrl); else localStorage.removeItem('or_base_url');
+  // Show the endpoint field + tailor the key hint only for custom providers.
+  const isCustom = provider === 'custom';
+  const baseRow = document.getElementById('orBaseUrlRow');
+  if (baseRow) baseRow.hidden = !isCustom;
+  const hint = document.getElementById('orKeyHint');
+  if (hint) hint.style.display = isCustom ? 'none' : '';
   _updateModelLabel();
 }
 
 function loadOrSettings() {
+  const provider = localStorage.getItem('or_provider') || 'openrouter';
   const key = localStorage.getItem('or_key') || '';
   const model = localStorage.getItem('or_model') || '';
+  const baseUrl = localStorage.getItem('or_base_url') || '';
+  const provEl = document.getElementById('orProvider');
   const keyEl = document.getElementById('orKey');
   const modelEl = document.getElementById('orModel');
+  const baseEl = document.getElementById('orBaseUrl');
+  if (provEl) provEl.value = provider;
   if (keyEl) keyEl.value = key;
   if (modelEl && model) modelEl.value = model;
+  if (baseEl) baseEl.value = baseUrl;
+  const isCustom = provider === 'custom';
+  const baseRow = document.getElementById('orBaseUrlRow');
+  if (baseRow) baseRow.hidden = !isCustom;
+  const hint = document.getElementById('orKeyHint');
+  if (hint) hint.style.display = isCustom ? 'none' : '';
   // Open the details panel if a key is already saved
   if (key) {
     const det = document.getElementById('orDetails');

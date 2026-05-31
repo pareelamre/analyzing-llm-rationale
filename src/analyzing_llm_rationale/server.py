@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import hmac
 import html
+import ipaddress
 import json
 import os
 import re
@@ -18,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import duckdb
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -901,6 +903,16 @@ class PredictRequest(BaseModel):
         max_length=128,
         description="OpenRouter model ID (e.g. `openai/gpt-4o`, `anthropic/claude-3.5-sonnet`).",
     )
+    provider_base_url: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description=(
+            "Optional OpenAI-compatible chat-completions endpoint (e.g. "
+            "`https://api.openai.com/v1/chat/completions`). When set with "
+            "`openrouter_api_key` + `openrouter_model`, the request goes to your own "
+            "endpoint instead of OpenRouter. Must be public HTTPS."
+        ),
+    )
     chat_mode: bool = Field(
         False,
         description=(
@@ -968,6 +980,42 @@ class PredictRequest(BaseModel):
             return None
         if not value.startswith(("http://", "https://")):
             raise ValueError("market_url must start with http:// or https://.")
+        return value
+
+    @field_validator("provider_base_url")
+    @classmethod
+    def provider_base_url_must_be_safe(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        value = v.strip()
+        if not value:
+            return None
+        parsed = urlparse(value)
+        if parsed.scheme != "https":
+            raise ValueError("provider_base_url must start with https://.")
+        host = (parsed.hostname or "").lower()
+        # Block obvious internal targets to limit SSRF against the server's network.
+        if (
+            not host
+            or host == "localhost"
+            or host.endswith(".local")
+            or host.endswith(".internal")
+            or host == "metadata.google.internal"
+        ):
+            raise ValueError("provider_base_url host is not allowed.")
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            ip = None
+        if ip is not None and (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            raise ValueError("provider_base_url host is not allowed.")
         return value
 
 
@@ -1951,13 +1999,23 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
             messages.append({"role": role, "content": content[:4000]})
     messages.append({"role": "user", "content": user_prompt})
 
-    # Use user-supplied OpenRouter key/model if provided, otherwise fall back to server default.
+    # Use a user-supplied model if provided: a custom OpenAI-compatible endpoint
+    # when provider_base_url is set, otherwise OpenRouter. Falls back to the
+    # server default model when no key/model is given.
     if req.openrouter_api_key and req.openrouter_model:
-        from analyzing_llm_rationale.providers import OpenRouterProvider
-        provider = OpenRouterProvider(
-            model_name=req.openrouter_model,
-            api_key=req.openrouter_api_key,
-        )
+        if req.provider_base_url:
+            from analyzing_llm_rationale.providers import OpenAICompatibleProvider
+            provider = OpenAICompatibleProvider(
+                model_name=req.openrouter_model,
+                api_key=req.openrouter_api_key,
+                base_url=req.provider_base_url,
+            )
+        else:
+            from analyzing_llm_rationale.providers import OpenRouterProvider
+            provider = OpenRouterProvider(
+                model_name=req.openrouter_model,
+                api_key=req.openrouter_api_key,
+            )
         temperature = 0.7
         max_tokens = _state.get("max_tokens", 1024)
     else:
