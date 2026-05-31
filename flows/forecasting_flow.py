@@ -18,20 +18,22 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prefect import flow, task, get_run_logger
+from prefect import flow, get_run_logger, task
 from prefect.client.schemas.schedules import CronSchedule
 
 from analyzing_llm_rationale.db import (
     get_connection,
     ingest_dataset,
     store_news_articles,
+    store_pipeline_run,
 )
 from analyzing_llm_rationale.news_pipeline import NewsPipeline
 
@@ -53,6 +55,32 @@ def _load_question(question_id: int) -> dict:
         if int(r.get("id", -1)) == question_id:
             return r
     raise ValueError(f"Question ID {question_id} not found in dataset.")
+
+
+def _load_questions(question_ids: Optional[list[int]], limit: int) -> list[dict]:
+    if DATASET_PATH is None:
+        raise FileNotFoundError("Dataset file not found.")
+    records = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
+    if question_ids:
+        wanted = set(question_ids)
+        return [r for r in records if int(r.get("id", -1)) in wanted]
+    return records[:limit]
+
+
+@task(name="load-questions")
+def load_questions(question_ids: Optional[list[int]], limit: int) -> list[dict]:
+    loaded = _load_questions(question_ids, limit)
+    if not loaded:
+        raise ValueError("No matching questions found.")
+    return loaded
+
+
+@task(name="ingest-question-dataset")
+def ingest_question_dataset() -> int:
+    conn = get_connection()
+    loaded = ingest_dataset(conn=conn)
+    conn.close()
+    return loaded
 
 
 @task(name="fetch-and-rank-news", retries=1, retry_delay_seconds=10)
@@ -121,7 +149,7 @@ def run_inference(record: dict, articles: list[dict]) -> dict:
 
 
 @task(name="store-results")
-def store_results(prediction: dict, articles: list[dict]) -> None:
+def store_results(prediction: dict, articles: list[dict], started_at: str) -> None:
     logger = get_run_logger()
     conn = get_connection()
     run_id = str(uuid.uuid4())
@@ -145,40 +173,88 @@ def store_results(prediction: dict, articles: list[dict]) -> None:
         ],
     )
     store_news_articles(prediction["question_id"], articles, run_id=run_id, conn=conn)
+    store_pipeline_run(
+        run_id=run_id,
+        question_id=prediction["question_id"],
+        model=prediction["model"],
+        variant=prediction["variant"],
+        temperature=prediction["temperature"],
+        status="success",
+        article_count=len(articles),
+        started_at=started_at,
+        conn=conn,
+    )
     conn.close()
     logger.info("Stored prediction and %d articles in DuckDB.", len(articles))
 
 
 @flow(name="forecasting-pipeline")
-def forecasting_pipeline(question_id: int, top_k: int = 5) -> dict:
-    record = _load_question(question_id)
-    question = record["question"]
+def forecasting_pipeline(
+    question_id: Optional[int] = None,
+    question_ids: Optional[list[int]] = None,
+    limit: int = 1,
+    top_k: int = 5,
+) -> list[dict]:
+    ingest_question_dataset()
+    requested_ids = question_ids or ([question_id] if question_id is not None else None)
+    records = load_questions(requested_ids, limit)
 
-    articles = fetch_and_rank_news(question, top_k=top_k)
-    prediction = run_inference(record, articles)
-    store_results(prediction, articles)
+    predictions = []
+    for record in records:
+        started_at = datetime.now(timezone.utc).isoformat()
+        question = record["question"]
+        articles = fetch_and_rank_news(question, top_k=top_k)
+        prediction = run_inference(record, articles)
+        store_results(prediction, articles, started_at)
+        predictions.append(prediction)
 
-    return prediction
+    return predictions
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run forecasting pipeline for a question.")
-    parser.add_argument("--question-id", type=int, required=True)
+    parser.add_argument("--question-id", type=int, default=None)
+    parser.add_argument(
+        "--question-ids",
+        default=None,
+        help="Comma-separated question IDs for a batch run.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=1,
+        help="Number of dataset questions to process when no explicit IDs are provided.",
+    )
     parser.add_argument("--top-k", type=int, default=5, help="Number of articles to fetch.")
     parser.add_argument(
         "--deploy", action="store_true",
         help="Deploy as a scheduled Prefect flow (daily at 06:00 UTC).",
     )
+    parser.add_argument("--cron", default="0 6 * * *", help="Cron schedule for --deploy.")
     args = parser.parse_args()
+    question_ids = (
+        [int(value.strip()) for value in args.question_ids.split(",") if value.strip()]
+        if args.question_ids
+        else None
+    )
 
     if args.deploy:
         forecasting_pipeline.serve(
             name="daily-forecasting",
-            schedules=[CronSchedule(cron="0 6 * * *", timezone="UTC")],
+            parameters={
+                "question_id": args.question_id,
+                "question_ids": question_ids,
+                "limit": args.limit,
+                "top_k": args.top_k,
+            },
+            schedules=[CronSchedule(cron=args.cron, timezone="UTC")],
         )
     else:
         result = forecasting_pipeline(
-            question_id=args.question_id, top_k=args.top_k
+            question_id=args.question_id,
+            question_ids=question_ids,
+            limit=args.limit,
+            top_k=args.top_k,
         )
         print(json.dumps(result, indent=2))
 

@@ -14,8 +14,8 @@ from matplotlib.gridspec import GridSpec
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DETAIL_PATH = ROOT / "analysis" / "partial_shap_analysis" / "combined_mean_details.csv"
-IMPORTANCE_PATH = ROOT / "analysis" / "partial_shap_analysis" / "feature_importance.csv"
+DETAIL_PATH = ROOT / "analysis" / "shap_analysis" / "combined_mean_details.csv"
+IMPORTANCE_PATH = ROOT / "analysis" / "shap_analysis" / "feature_importance.csv"
 OUT_PNG = ROOT / "paper" / "rationale_shap_summary.png"
 OUT_PDF = ROOT / "paper" / "rationale_shap_summary.pdf"
 

@@ -1,6 +1,6 @@
-# Partial SHAP Analysis
+# SHAP Analysis
 
-This analysis uses the currently available LLM-judge outputs and predicts `forecast_correct` from the judged rationale attributes. The rationale-evaluation sample is `42660` model-variant-question rows when missing rationales are included; SHAP metrics below use the rows with complete judge scores.
+This analysis predicts `forecast_correct` from complete LLM-judge rationale attribute scores. The rationale-evaluation sample is `42660` model-variant-question rows when missing rationales are included; SHAP metrics below use the rows with complete judge scores.
 
 ## combined_mean
 

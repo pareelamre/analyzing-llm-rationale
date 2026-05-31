@@ -19,7 +19,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_predict
 ROOT = Path(__file__).resolve().parents[1]
 DATASET_PATH = ROOT / "forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json"
 RESULTS_ROOT = ROOT / "results"
-DEFAULT_OUTPUT_DIR = ROOT / "analysis" / "partial_shap_analysis"
+DEFAULT_OUTPUT_DIR = ROOT / "analysis" / "shap_analysis"
 DEFAULT_JUDGE_OUTPUT_DIRS = {
     "gemma-4-31b-it": ROOT / "analysis" / "llm_judge_rationale_eval_gemma" / "gemma-4-31b-it",
     "kimi-k2.5": ROOT / "analysis" / "llm_judge_rationale_eval_kimi" / "kimi-k2.5",
@@ -40,8 +40,8 @@ VARIANT_ALIASES = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run SHAP analysis on the currently available LLM-judge rationale scores. "
-            "This works on partial judge outputs too."
+            "Run SHAP analysis on LLM-judge rationale scores. "
+            "Rows without complete judge scores are skipped."
         )
     )
     parser.add_argument("--dataset", type=Path, default=DATASET_PATH)
@@ -283,9 +283,9 @@ def write_summary_md(
     feature_rows_by_dataset: dict[str, list[dict[str, Any]]],
 ) -> None:
     lines = [
-        "# Partial SHAP Analysis",
+        "# SHAP Analysis",
         "",
-        "This analysis uses the currently available LLM-judge outputs and predicts `forecast_correct` from the judged rationale attributes.",
+        "This analysis predicts `forecast_correct` from complete LLM-judge rationale attribute scores.",
         "",
     ]
     for dataset_name in sorted(metrics_by_dataset):

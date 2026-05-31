@@ -42,13 +42,14 @@ _state: Dict[str, Any] = {}
 _DESCRIPTION = """
 ## Overview
 
-The **LLM Forecasting API** runs probabilistic forecasts for
-[Metaculus](https://www.metaculus.com)-style forecasting questions using
-**GPT-OSS-120B** via the SCADS AI inference cluster.
+The **Foresea Intelligence API** turns market questions, linked evidence, and
+prediction-market prices into probabilistic forecasts that can sit behind
+trading dashboards, alerting systems, and research workflows.
 
 It supports binary, multiple-choice, numeric, and date forecasts. Each response
-includes a structured **rationale**, typed forecast fields, and optional evidence
-sources fetched from live news when the evidence pipeline is configured.
+includes a structured **rationale**, typed forecast fields, optional evidence
+sources fetched from live news, and optional market-edge analysis when you pass
+a market-implied probability.
 
 ---
 
@@ -58,8 +59,10 @@ sources fetched from live news when the evidence pipeline is configured.
 curl -X POST https://foresea.ink/predict \\
   -H "Content-Type: application/json" \\
   -d '{
-    "question": "What will US CPI inflation be in December 2026?",
-    "question_type": "numeric",
+    "question": "Will the Fed cut rates before September 30, 2026?",
+    "question_type": "binary",
+    "market_platform": "Polymarket",
+    "market_probability": 0.54,
     "variant": "variant0_neutral_baseline"
   }'
 ```
@@ -79,6 +82,18 @@ If omitted, the model will try to infer it.
 | `date` | `range_forecast` contains date percentiles |
 
 For multiple-choice forecasts, pass `options` when the answer set is known.
+
+---
+
+## Prediction-market context
+
+Pass `market_probability` when you know the current market-implied probability
+for the target outcome. For binary markets this defaults to the `Yes` side; set
+`market_outcome` to compare against `No` or a named multiple-choice outcome.
+
+Foresea returns `market_analysis` with model probability, market probability,
+percentage-point edge, and a stance (`model_above_market`, `model_below_market`,
+`in_line`, or `not_comparable`).
 
 ---
 
@@ -128,7 +143,7 @@ The `/health` endpoint is always unauthenticated.
 _TAGS = [
     {
         "name": "Inference",
-        "description": "Run probabilistic forecasts on binary, multiple-choice, numeric, and date forecasting questions.",
+        "description": "Run forecast and market-edge analysis for binary, multiple-choice, numeric, and date questions.",
     },
     {
         "name": "System",
@@ -362,7 +377,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="LLM Forecasting API",
+    title="Foresea Intelligence API",
     description=_DESCRIPTION,
     version="1.0.0",
     contact={
@@ -536,6 +551,8 @@ class PredictRequest(BaseModel):
             {
                 "question": "Will the Federal Reserve cut interest rates at least once before the end of 2025?",
                 "question_type": "binary",
+                "market_platform": "Polymarket",
+                "market_probability": 0.54,
             },
             {
                 "question": "Who will win the 2026 Formula 1 drivers championship?",
@@ -631,6 +648,31 @@ class PredictRequest(BaseModel):
         max_length=12,
         description="Candidate answers for `multiple_choice` questions (optional; the model can infer them).",
     )
+    market_platform: Optional[str] = Field(
+        None,
+        max_length=80,
+        description="Prediction market venue, e.g. `Polymarket`, `Kalshi`, `Manifold`, or `Metaculus`.",
+    )
+    market_url: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="URL for the prediction market being analyzed. Must start with `http://` or `https://`.",
+    )
+    market_outcome: Optional[str] = Field(
+        None,
+        max_length=120,
+        description=(
+            "Outcome whose market-implied probability is provided. Defaults to `Yes` for binary markets; "
+            "set this to `No` or to a multiple-choice option label when needed."
+        ),
+    )
+    market_probability: Optional[float] = Field(
+        None,
+        description=(
+            "Current market-implied probability for `market_outcome`. Use 0-1, or pass a percentage "
+            "from 0-100 and Foresea will normalize it."
+        ),
+    )
     openrouter_api_key: Optional[str] = Field(
         None,
         max_length=256,
@@ -686,6 +728,33 @@ class PredictRequest(BaseModel):
             raise ValueError(f"question_type must be one of {sorted(allowed)}.")
         return normalized
 
+    @field_validator("market_probability", mode="before")
+    @classmethod
+    def normalize_market_probability(cls, v: Optional[Any]) -> Optional[float]:
+        if v is None or v == "":
+            return None
+        try:
+            value = float(v)
+        except (TypeError, ValueError):
+            raise ValueError("market_probability must be a number.") from None
+        if 1.0 < value <= 100.0:
+            value = value / 100.0
+        if value < 0.0 or value > 1.0:
+            raise ValueError("market_probability must be between 0 and 1, or 0 and 100 percent.")
+        return value
+
+    @field_validator("market_url")
+    @classmethod
+    def market_url_must_be_http(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        value = v.strip()
+        if not value:
+            return None
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("market_url must start with http:// or https://.")
+        return value
+
 
 class OptionProb(BaseModel):
     """A single option and its probability in a multiple-choice forecast."""
@@ -701,6 +770,19 @@ class RangeForecast(BaseModel):
     p50: Optional[str] = Field(None, description="50th-percentile (median) estimate.")
     p90: Optional[str] = Field(None, description="90th-percentile (high) estimate.")
     unit: Optional[str] = Field(None, description="Unit of the estimate, e.g. 'USD', '%', 'people'.")
+
+
+class MarketAnalysis(BaseModel):
+    """Deterministic comparison between Foresea's forecast and a market price."""
+
+    platform: Optional[str] = Field(None, description="Prediction market venue supplied by the caller.")
+    market_url: Optional[str] = Field(None, description="Prediction market URL supplied by the caller.")
+    outcome: str = Field(..., description="Outcome being compared against the market price.")
+    market_probability: float = Field(..., ge=0.0, le=1.0, description="Market-implied probability for the outcome.")
+    model_probability: Optional[float] = Field(None, ge=0.0, le=1.0, description="Foresea probability for the same outcome.")
+    edge: Optional[float] = Field(None, description="Model probability minus market probability.")
+    stance: str = Field(..., description="`model_above_market`, `model_below_market`, `in_line`, or `not_comparable`.")
+    summary: str = Field(..., description="Short human-readable market comparison.")
 
 
 class PredictResponse(BaseModel):
@@ -735,6 +817,16 @@ class PredictResponse(BaseModel):
             ],
             "evidence_articles": [],
             "evidence_error": None,
+            "market_analysis": {
+                "platform": "Polymarket",
+                "market_url": "https://polymarket.com/event/example",
+                "outcome": "Yes",
+                "market_probability": 0.54,
+                "model_probability": 0.72,
+                "edge": 0.18,
+                "stance": "model_above_market",
+                "summary": "Foresea is 18 percentage points above the market on Yes.",
+            },
         }
     })
 
@@ -750,6 +842,7 @@ class PredictResponse(BaseModel):
     evidence_sources: List[EvidenceSource] = Field(default_factory=list, description="Deduplicated citations used as evidence.")
     evidence_articles: List[NewsArticle] = Field(default_factory=list, description="Full evidence articles passed to the model.")
     evidence_error: Optional[str] = Field(None, description="Non-null if evidence retrieval failed (prediction still returned).")
+    market_analysis: Optional[MarketAnalysis] = Field(None, description="Optional comparison against a supplied prediction-market probability.")
 
 
 class VertexPredictRequest(BaseModel):
@@ -937,6 +1030,12 @@ def _typing_instruction(
         instr += f"\nFor multiple_choice, assign probabilities across: {joined}."
     if not has_history:
         instr += "\nUse `confidence` only for binary forecasts; for multiple_choice, use option probabilities."
+    instr += (
+        "\nBefore writing the JSON, internally use this forecasting checklist: "
+        "rephrase the resolution target, consider arguments for and against, "
+        "weigh the most important drivers, check relevant base rates, and adjust "
+        "for overconfidence. Do not reveal the checklist; only return the requested JSON."
+    )
     return instr
 
 
@@ -946,6 +1045,110 @@ def _to_str(value: Any) -> Optional[str]:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value)
+
+
+def _format_percentage_points(value: float) -> str:
+    return f"{abs(value) * 100:.0f}"
+
+
+def _model_probability_for_market(
+    question_type: str,
+    predicted_answer: Optional[str],
+    confidence: Optional[float],
+    options: List[OptionProb],
+    outcome: str,
+) -> Optional[float]:
+    target = outcome.strip().lower()
+    predicted = (predicted_answer or "").strip().lower()
+
+    if question_type == "binary":
+        if confidence is None:
+            return None
+        if target in ("yes", "y"):
+            if predicted == "yes":
+                return confidence
+            if predicted == "no":
+                return 1.0 - confidence
+        if target in ("no", "n"):
+            if predicted == "no":
+                return confidence
+            if predicted == "yes":
+                return 1.0 - confidence
+        return None
+
+    if question_type == "multiple_choice":
+        for option in options:
+            if option.label.strip().lower() == target:
+                return option.probability
+        return None
+
+    return None
+
+
+def _build_market_analysis(
+    req: "PredictRequest",
+    question_type: str,
+    predicted_answer: Optional[str],
+    confidence: Optional[float],
+    options: List[OptionProb],
+) -> Optional[MarketAnalysis]:
+    if req.market_probability is None:
+        return None
+
+    outcome = (req.market_outcome or ("Yes" if question_type == "binary" else predicted_answer) or "").strip()
+    if not outcome:
+        outcome = "selected outcome"
+
+    model_probability = _model_probability_for_market(
+        question_type=question_type,
+        predicted_answer=predicted_answer,
+        confidence=confidence,
+        options=options,
+        outcome=outcome,
+    )
+
+    if model_probability is None:
+        return MarketAnalysis(
+            platform=req.market_platform,
+            market_url=req.market_url,
+            outcome=outcome,
+            market_probability=req.market_probability,
+            model_probability=None,
+            edge=None,
+            stance="not_comparable",
+            summary=(
+                "Foresea needs a binary or matching multiple-choice forecast "
+                "to compare this market price."
+            ),
+        )
+
+    edge = model_probability - req.market_probability
+    if abs(edge) < 0.03:
+        stance = "in_line"
+        summary = f"Foresea is within 3 percentage points of the market on {outcome}."
+    elif edge > 0:
+        stance = "model_above_market"
+        summary = (
+            f"Foresea is {_format_percentage_points(edge)} percentage points "
+            f"above the market on {outcome}."
+        )
+    else:
+        stance = "model_below_market"
+        summary = (
+            f"Foresea is {_format_percentage_points(edge)} percentage points "
+            f"below the market on {outcome}."
+        )
+
+    return MarketAnalysis(
+        platform=req.market_platform,
+        market_url=req.market_url,
+        outcome=outcome,
+        market_probability=req.market_probability,
+        model_probability=model_probability,
+        edge=edge,
+        stance=stance,
+        summary=summary,
+    )
 
 
 def _build_typed_response(
@@ -976,12 +1179,19 @@ def _build_typed_response(
                     p = 0.0
                 opts.append(OptionProb(label=str(o["label"]), probability=max(0.0, min(1.0, p))))
         top = max(opts, key=lambda x: x.probability) if opts else None
+        predicted_answer = top.label if top else None
+        confidence = top.probability if top else None
         return PredictResponse(
             question_type="multiple_choice",
             options=opts,
-            predicted_answer=top.label if top else None,
-            confidence=top.probability if top else None,
-            rationale=rationale, model_rationale=rationale, **base,
+            predicted_answer=predicted_answer,
+            confidence=confidence,
+            rationale=rationale,
+            model_rationale=rationale,
+            market_analysis=_build_market_analysis(
+                req, "multiple_choice", predicted_answer, confidence, opts
+            ),
+            **base,
         )
 
     if qtype in ("numeric", "date") and parsed:
@@ -996,7 +1206,12 @@ def _build_typed_response(
             range_forecast=rf,
             predicted_answer=_to_str(parsed.get("p50")),
             confidence=None,
-            rationale=rationale, model_rationale=rationale, **base,
+            rationale=rationale,
+            model_rationale=rationale,
+            market_analysis=_build_market_analysis(
+                req, qtype, _to_str(parsed.get("p50")), None, []
+            ),
+            **base,
         )
 
     # binary (default) — reuse the battle-tested parser
@@ -1010,11 +1225,18 @@ def _build_typed_response(
             rationale=text, model_rationale=text, **base,
         )
     brat = bparsed.get("rationale")
+    predicted_answer = bparsed.get("predicted_answer")
+    confidence = bparsed.get("confidence")
     return PredictResponse(
         question_type="binary",
-        predicted_answer=bparsed.get("predicted_answer"),
-        confidence=bparsed.get("confidence"),
-        rationale=brat, model_rationale=brat, **base,
+        predicted_answer=predicted_answer,
+        confidence=confidence,
+        rationale=brat,
+        model_rationale=brat,
+        market_analysis=_build_market_analysis(
+            req, "binary", predicted_answer, confidence, []
+        ),
+        **base,
     )
 
 
@@ -1297,6 +1519,7 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     - **`range_forecast`** — p10/p50/p90 bounds for numeric and date questions
     - **`rationale`** — 2–4 sentence explanation
     - **`evidence_sources`** — news articles used as context
+    - **`market_analysis`** — model-vs-market edge when `market_probability` is provided
 
     ### Choosing a variant
 
@@ -1318,7 +1541,9 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
       -H "Content-Type: application/json" \\
       -d '{
         "question": "Will oil prices exceed $100 per barrel in 2026?",
-        "question_type": "binary"
+        "question_type": "binary",
+        "market_platform": "Kalshi",
+        "market_probability": 0.31
       }'
     ```
 
@@ -1425,7 +1650,6 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     parsed = _parse_json_dict(content)
     if req.chat_mode:
         text = content.strip()
-        from analyzing_llm_rationale.providers import OpenRouterProvider
         model_key = req.openrouter_model or _state["model_key"]
         return PredictResponse(
             question_type="chat",

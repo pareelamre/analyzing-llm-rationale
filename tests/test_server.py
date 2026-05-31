@@ -145,6 +145,33 @@ class ServerTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["evidence_articles"][0]["summary"], "Evidence details")
 
+    def test_predict_returns_prediction_market_edge(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "question_type": "binary",
+                "market_platform": "Polymarket",
+                "market_url": "https://example.com/market",
+                "market_probability": 42,
+                "attach_evidence": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        analysis = payload["market_analysis"]
+        self.assertEqual(analysis["platform"], "Polymarket")
+        self.assertEqual(analysis["market_url"], "https://example.com/market")
+        self.assertEqual(analysis["outcome"], "Yes")
+        self.assertAlmostEqual(analysis["market_probability"], 0.42)
+        self.assertAlmostEqual(analysis["model_probability"], 0.7)
+        self.assertAlmostEqual(analysis["edge"], 0.28)
+        self.assertEqual(analysis["stance"], "model_above_market")
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Prediction Market Context:", prompt)
+        self.assertIn("Market-Implied Probability: 0.42", prompt)
+
     def test_records_anonymous_page_visit(self):
         response = self.client.post(
             "/analytics/visit",

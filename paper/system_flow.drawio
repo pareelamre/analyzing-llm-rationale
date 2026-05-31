@@ -1,0 +1,99 @@
+<mxfile host="65bd71144e">
+  <diagram id="system-flow-v2" name="Page-1">
+    <mxGraphModel dx="1427" dy="820" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1500" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="LLM rationale forecasting system" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=30;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="380" y="18" width="740" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="A config-driven runner varies prompt rationale, model, and temperature while holding the forecasting record fixed." style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=17;fontColor=#555555;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="260" y="62" width="980" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="generation_band" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7f9fb;strokeColor=#c7d0d9;strokeWidth=1.2;arcSize=4;" parent="1" vertex="1">
+          <mxGeometry x="22" y="114" width="1456" height="286" as="geometry"/>
+        </mxCell>
+        <mxCell id="generation_label" value="(a) Forecast generation and orchestration" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=23;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="42" y="128" width="520" height="34" as="geometry"/>
+        </mxCell>
+        <mxCell id="spec_box" value="Experiment specification&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;dataset + configs + prompt variants&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=21;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="54" y="208" width="210" height="92" as="geometry"/>
+        </mxCell>
+        <mxCell id="spec_note" value="fixed question, metadata, evidence summaries, FRS fields" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontColor=#666666;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="42" y="310" width="234" height="38" as="geometry"/>
+        </mxCell>
+        <mxCell id="cli_box" value="CLI resolves RunConfig&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;variant, model, temperature, shard, paths&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7d6;strokeColor=#111111;strokeWidth=2;fontSize=21;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="342" y="208" width="236" height="92" as="geometry"/>
+        </mxCell>
+        <mxCell id="provider_box" value="Provider abstraction&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;local Qwen or OpenAI-compatible endpoint&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=21;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="656" y="208" width="254" height="92" as="geometry"/>
+        </mxCell>
+        <mxCell id="provider_note" value="loads local model, resolves API keys, enforces context/window limits" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontColor=#666666;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="662" y="310" width="242" height="38" as="geometry"/>
+        </mxCell>
+        <mxCell id="loop_box" value="Resilient batch loop&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;resume completed IDs, shard work, retry/backoff, trim article text after context failures, parse and normalize JSON&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dff3ff;strokeColor=#111111;strokeWidth=2;fontSize=21;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="986" y="188" width="260" height="132" as="geometry"/>
+        </mxCell>
+        <mxCell id="outputs_box" value="Auditable run files&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;results JSON, error JSONL, run metadata with prompt hashes&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=21;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="1310" y="208" width="144" height="92" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.7;" parent="1" source="spec_box" target="cli_box" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.7;" parent="1" source="cli_box" target="provider_box" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.7;" parent="1" source="provider_box" target="loop_box" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.7;" parent="1" source="loop_box" target="outputs_box" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eval_band" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfbf8;strokeColor=#d2d2c9;strokeWidth=1.2;arcSize=4;" parent="1" vertex="1">
+          <mxGeometry x="22" y="436" width="1456" height="250" as="geometry"/>
+        </mxCell>
+        <mxCell id="eval_label" value="(b) Evaluation, rationale analysis, and paper assets" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=23;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="42" y="450" width="620" height="34" as="geometry"/>
+        </mxCell>
+        <mxCell id="verify_box" value="Schema and result checks&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;dataset validation, missing IDs, duplicates, incomplete rows&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=20;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="84" y="532" width="238" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="metrics_box" value="Forecast metrics&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;accuracy, Brier score, ECE across model x temperature x variant&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7d6;strokeColor=#111111;strokeWidth=2;fontSize=20;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="394" y="532" width="250" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="judge_box" value="Rationale scoring&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;LLM judge attributes for explanation quality&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=20;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="716" y="532" width="226" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="shap_box" value="Attribution analysis&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;SHAP over rationale attributes predicts forecast correctness&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dff3ff;strokeColor=#111111;strokeWidth=2;fontSize=20;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="1014" y="532" width="238" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="paper_box" value="Tables, figures, case studies&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;analysis CSV/JSON and paper-ready PDF/PNG assets&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=20;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="1300" y="532" width="150" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#666666;strokeWidth=1.5;" parent="1" source="outputs_box" target="verify_box" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1382" y="420"/>
+              <mxPoint x="203" y="420"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.5;" parent="1" source="verify_box" target="metrics_box" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.5;" parent="1" source="metrics_box" target="judge_box" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.5;" parent="1" source="judge_box" target="shap_box" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.5;" parent="1" source="shap_box" target="paper_box" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="footer" value="Mental model: configs choose what to vary; the batch loop makes generation resumable and auditable; downstream scripts turn structured outputs into forecast and rationale evidence." style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontStyle=1;fontColor=#222222;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="130" y="724" width="1240" height="52" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

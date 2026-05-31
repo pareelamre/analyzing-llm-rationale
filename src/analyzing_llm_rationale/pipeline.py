@@ -162,6 +162,10 @@ def build_user_prompt(
     publish_time = record.get("publish_time")
     resolve_time = record.get("resolve_time")
     days_open = record.get("days_open")
+    market_platform = str(record.get("market_platform") or "").strip()
+    market_url = str(record.get("market_url") or "").strip()
+    market_outcome = str(record.get("market_outcome") or "").strip()
+    market_probability = record.get("market_probability")
 
     prompt_suffix = user_prompt_template.replace("[question]", "").strip()
     parts = [f"Question: {question}"]
@@ -179,6 +183,16 @@ def build_user_prompt(
         parts.append(f"Resolve Time: {resolve_time}")
     if days_open is not None:
         parts.append(f"Days Open: {days_open}")
+    if any((market_platform, market_url, market_outcome, market_probability is not None)):
+        parts.append("Prediction Market Context:")
+        if market_platform:
+            parts.append(f"Market Platform: {market_platform}")
+        if market_url:
+            parts.append(f"Market URL: {market_url}")
+        if market_outcome:
+            parts.append(f"Market Outcome: {market_outcome}")
+        if market_probability is not None:
+            parts.append(f"Market-Implied Probability: {market_probability}")
 
     if article_detail == "summary":
         parts.append("Evidence Summaries:")

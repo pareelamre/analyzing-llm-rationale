@@ -1,0 +1,42 @@
+# Large local directories
+.cache/
+results/
+envs/
+logs/
+paper/
+presentation/
+slurm/
+analysis/
+
+# Git and CI
+.git/
+.github/
+
+# Dev artefacts
+__pycache__/
+*.pyc
+*.pyo
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.codex/
+
+# Tests and scripts (not needed at runtime)
+tests/
+scripts/
+
+# Data files (mount as volumes at runtime)
+*.jsonl
+forecasting_qa_news_metaculus_2025-02-01_to_today.metaculus_frs_format.json
+
+# API key files — never bake credentials into the image
+*_API_KEY.txt
+HF_TOKEN.txt
+OPEN_AI_API_KEY.txt
+DEEPSEEK_API_KEY.txt
+SCADS_AI_API_KEY.txt
+
+# Prompt text files are needed — exclude all other .txt but keep prompts/
+*.txt
+!prompts/*.txt

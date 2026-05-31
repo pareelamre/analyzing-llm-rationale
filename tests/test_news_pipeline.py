@@ -211,6 +211,45 @@ class NewsPipelineSourceTests(unittest.TestCase):
 
         self.assertIsNone(pipeline._llm)
         self.assertEqual(pipeline.plan_search_query("Will X happen?"), "Will X happen?")
+        self.assertEqual(pipeline.plan_search_queries("Will X happen?"), ["Will X happen?"])
+
+    def test_fetch_summarize_rank_uses_decomposed_search_queries(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._summarize_articles = False
+        calls = []
+
+        def fake_fetch(query, top_k):
+            calls.append((query, top_k))
+            return [
+                {
+                    "title": f"{query} article",
+                    "summary": f"{query} summary",
+                    "url": f"https://example.com/{query.replace(' ', '-')}",
+                }
+            ]
+
+        pipeline.plan_search_queries = lambda question: [
+            "Federal Reserve rate cut September 2026",
+            "Federal Reserve inflation base rates 2026",
+        ]
+        pipeline.fetch = fake_fetch
+        pipeline.rank = lambda question, articles: articles
+        pipeline.select_diverse_sources = lambda ranked, top_k: ranked[:top_k]
+
+        articles = pipeline.fetch_summarize_rank(
+            "Will the Federal Reserve cut rates before September 30, 2026?",
+            top_k=2,
+        )
+
+        self.assertEqual(
+            [call[0] for call in calls],
+            [
+                "Federal Reserve rate cut September 2026",
+                "Federal Reserve inflation base rates 2026",
+            ],
+        )
+        self.assertEqual(len(articles), 2)
+        self.assertEqual(articles[0]["search_query"], "Federal Reserve rate cut September 2026")
 
     def test_keyword_search_query_removes_forecast_filler(self):
         query = _keyword_search_query(

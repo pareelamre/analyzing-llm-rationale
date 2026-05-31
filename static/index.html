@@ -3,23 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Foresea is a forecasting interface that returns estimates, rationales, and source articles for yes/no, multiple-choice, numeric, and date questions." />
+  <meta name="description" content="Foresea is the intelligence layer for prediction markets: forecasts, evidence, rationales, and market-price gaps for tradeable questions." />
   <meta name="theme-color" content="#111111" />
   <link rel="canonical" href="https://foresea.ink/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Foresea" />
-  <meta property="og:title" content="Foresea | Forecasts with sources" />
-  <meta property="og:description" content="Ask a forecasting question and get an estimate, rationale, and the articles used as evidence." />
+  <meta property="og:title" content="Foresea | Prediction market intelligence" />
+  <meta property="og:description" content="Turn market questions into forecasts, evidence, rationales, and price-gap signals." />
   <meta property="og:url" content="https://foresea.ink/" />
   <meta property="og:image" content="https://foresea.ink/static/foresea-share-card.svg" />
   <meta property="og:image:type" content="image/svg+xml" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Foresea | Forecasts with sources" />
-  <meta name="twitter:description" content="Ask a forecasting question and get an estimate, rationale, and the articles used as evidence." />
+  <meta name="twitter:title" content="Foresea | Prediction market intelligence" />
+  <meta name="twitter:description" content="Turn market questions into forecasts, evidence, rationales, and price-gap signals." />
   <meta name="twitter:image" content="https://foresea.ink/static/foresea-share-card.svg" />
-  <title>Foresea</title>
+  <title>Foresea | Prediction market intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap" rel="stylesheet" />
@@ -40,6 +40,12 @@
       --paper:      #f4f4f6;
       --accent:     #111827;
       --accent-bg:  #eef2ff;
+      --signal:     #0f766e;
+      --signal-bg:  #ecfdf5;
+      --caution:    #a16207;
+      --caution-bg: #fffbeb;
+      --info:       #1d4ed8;
+      --info-bg:    #eff6ff;
       --font-db:    "Inter", "DB Neo Screen", "Helvetica Neue", Arial, sans-serif;
       --ease-soft:  cubic-bezier(.22, 1, .36, 1);
       --ease-fast:  cubic-bezier(.2, .8, .2, 1);
@@ -406,6 +412,195 @@
       cursor: pointer;
     }
     .quiet-link:hover { color: var(--ink); }
+    .market-prompt-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 14px;
+      max-width: 720px;
+    }
+    .market-prompt {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--text);
+      font-size: 12px;
+      padding: 8px 11px;
+      cursor: pointer;
+      transition: background var(--dur-med), border-color var(--dur-med), color var(--dur-med), transform var(--dur-med);
+    }
+    .market-prompt:hover {
+      border-color: var(--ink);
+      color: var(--ink);
+      transform: translateY(-1px);
+    }
+    .market-dashboard {
+      width: 100%;
+      max-width: 760px;
+      margin-top: 34px;
+      text-align: left;
+      overflow: hidden;
+      box-shadow: 0 18px 56px rgba(15,15,16,.07);
+    }
+    .market-table {
+      display: grid;
+      grid-template-columns: 1.2fr .62fr .62fr .78fr;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .market-table > div {
+      padding: 12px 14px;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      min-width: 0;
+    }
+    .market-table > div:nth-child(4n) { border-right: 0; }
+    .market-head {
+      color: var(--text-dim);
+      background: #fafafa;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+    }
+    .market-question-cell {
+      color: var(--ink);
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .market-gap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-weight: 600;
+    }
+    .market-gap.buy { color: var(--signal); background: var(--signal-bg); }
+    .market-gap.sell { color: #991b1b; background: #fef2f2; }
+    .market-gap.watch { color: var(--caution); background: var(--caution-bg); }
+    .market-stack {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border-top: 1px solid var(--border);
+    }
+    .market-stack-item {
+      background: #fff;
+      padding: 14px;
+      min-height: 92px;
+    }
+    .market-stack-item strong {
+      display: block;
+      color: var(--ink);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .market-stack-item span {
+      display: block;
+      color: var(--text-dim);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .market-empty {
+      display: grid;
+      grid-template-columns: minmax(0, 1.02fr) minmax(320px, .98fr);
+      gap: 20px;
+      align-items: start;
+      text-align: left;
+    }
+    .empty-copy {
+      padding-top: 18px;
+    }
+    .empty-copy h2 {
+      max-width: 650px;
+    }
+    .empty-copy p {
+      max-width: 540px;
+    }
+    .empty-market-panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 18px 52px rgba(15,15,16,.06);
+    }
+    .intel-row {
+      display: grid;
+      grid-template-columns: 96px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border-top: 1px solid var(--border);
+      padding: 13px 14px;
+      font-size: 12px;
+    }
+    .intel-row:first-child { border-top: 0; }
+    .intel-key {
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      font-size: 10px;
+    }
+    .intel-value {
+      color: var(--ink);
+      font-weight: 600;
+      min-width: 0;
+    }
+    .intel-note {
+      color: var(--text-dim);
+      text-align: right;
+      white-space: nowrap;
+    }
+    .market-lens {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .market-lens-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+    }
+    .market-lens-cell {
+      background: #fff;
+      padding: 12px;
+    }
+    .market-lens-cell .k {
+      color: var(--text-dim);
+      font-size: 10px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .market-lens-cell .v {
+      color: var(--ink);
+      font-weight: 700;
+      font-size: 20px;
+      line-height: 1.1;
+      margin-top: 5px;
+    }
+    .market-lens-cell .sub {
+      color: var(--text-dim);
+      font-size: 11px;
+      margin-top: 3px;
+    }
+    .market-lens-signal {
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+    }
+    .market-lens-signal strong {
+      color: var(--ink);
+    }
+    .market-lens-signal span {
+      color: var(--text-dim);
+    }
     .product-panel {
       background: #fff;
       border: 1px solid var(--border);
@@ -454,6 +649,8 @@
     @media (max-width: 900px) {
       .hero-grid { grid-template-columns: 1fr; }
       .hero-copy { min-height: auto; padding-bottom: 28px; }
+      .market-empty { grid-template-columns: 1fr; }
+      .empty-copy { padding-top: 0; }
     }
     @media (max-width: 640px) {
       .landing-nav { padding: 0 14px; }
@@ -462,6 +659,13 @@
       .hero-title { font-size: 44px; }
       .landing-question { grid-template-columns: 1fr; }
       .landing-question .hero-action { width: 100%; }
+      .market-table { grid-template-columns: 1fr 1fr; }
+      .market-table > div:nth-child(4n) { border-right: 1px solid var(--border); }
+      .market-table > div:nth-child(2n) { border-right: 0; }
+      .market-stack,
+      .market-lens-grid { grid-template-columns: 1fr; }
+      .intel-row { grid-template-columns: 1fr; gap: 4px; }
+      .intel-note { text-align: left; }
     }
 
     /* ── Tasteful polish ─────────────────────────────────────────────── */
@@ -827,26 +1031,65 @@
         <span id="landingUserName" class="user-name"></span>
         <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
       </div>
-      <button type="button" class="hero-action primary py-2" onclick="launchApp()">Launch</button>
+      <button type="button" class="hero-action primary py-2" onclick="launchApp()">Open desk</button>
     </div>
   </nav>
 
   <div class="landing-shell">
     <div class="hero-grid">
       <div class="hero-copy">
-        <p class="label mb-5">Foresea</p>
-        <h1 class="display hero-title">What do you want to forecast?</h1>
-        <p class="hero-text">Ask about an event, an option set, a number, or a date. Foresea will return a probability, rationale, and evidence.</p>
+        <p class="label mb-5">Prediction market intelligence</p>
+        <h1 class="display hero-title">Foresea turns market questions into tradeable signals.</h1>
+        <p class="hero-text">Forecast a listed market, compare it with the current quote, and get the evidence trail behind the probability.</p>
         <form class="landing-question" onsubmit="submitLandingQuestion(event)">
           <textarea
             id="landingQuestionInput"
             rows="2"
-            placeholder="Message Foresea"
+            placeholder="Paste a market question or ask for a forecast"
             oninput="autoResize(this)"
             onkeydown="handleLandingKey(event)"
           ></textarea>
-          <button class="hero-action primary" type="submit">Send</button>
+          <button class="hero-action primary" type="submit">Analyze</button>
         </form>
+        <div class="market-prompt-row" aria-label="Example market prompts">
+          <button type="button" class="market-prompt" onclick="startExample('Market at 42%: Will the Fed cut rates before September 30, 2026?')">Find an edge</button>
+          <button type="button" class="market-prompt" onclick="startExample('Compare the evidence for this market: Will US CPI inflation be at least 3.0% in December 2026?')">Evidence brief</button>
+          <button type="button" class="market-prompt" onclick="startExample('What probability should this market trade at: Will SpaceX complete a major Starship milestone before December 31, 2026?')">Fair value</button>
+        </div>
+        <div class="product-panel market-dashboard" aria-label="Foresea market intelligence preview">
+          <div class="panel-bar">
+            <span>Market desk</span>
+            <span>Forecast, evidence, gap</span>
+          </div>
+          <div class="market-table">
+            <div class="market-head">Question</div>
+            <div class="market-head">Market</div>
+            <div class="market-head">Foresea</div>
+            <div class="market-head">Signal</div>
+            <div class="market-question-cell">Will the Fed cut rates by Sep. 30, 2026?</div>
+            <div>42%</div>
+            <div>56%</div>
+            <div><span class="market-gap buy">+14 pp Yes</span></div>
+            <div class="market-question-cell">Will CPI be at least 3.0% in Dec. 2026?</div>
+            <div>31%</div>
+            <div>28%</div>
+            <div><span class="market-gap watch">Near fair</span></div>
+          </div>
+          <div class="market-stack">
+            <div class="market-stack-item">
+              <strong>Resolve the market</strong>
+              <span>Clarify the event, date, criteria, and answer type before scoring.</span>
+            </div>
+            <div class="market-stack-item">
+              <strong>Read the tape</strong>
+              <span>Fetch source-backed context and compress it into a forecast thesis.</span>
+            </div>
+            <div class="market-stack-item">
+              <strong>Price the gap</strong>
+              <span>Compare Foresea probability with the quote when a market price is supplied.</span>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -859,7 +1102,7 @@
 <div id="overlay" onclick="closeSidebar()" aria-hidden="true"></div>
 
 <!-- ── Sidebar ── -->
-<aside id="sidebar" class="sidebar overflow-hidden" aria-label="Forecast navigation" aria-hidden="false">
+<aside id="sidebar" class="sidebar overflow-hidden" aria-label="Market intelligence navigation" aria-hidden="false">
 
   <div class="flex items-center justify-between gap-2 px-1 py-1">
     <button type="button" class="brand-home min-w-0" onclick="showLanding()" aria-label="Go to landing page">
@@ -867,22 +1110,22 @@
       <span class="brand text-base">Foresea</span>
     </button>
     <div class="flex items-center gap-1">
-      <button class="sidebar-icon-btn" onclick="newConversation()" title="New chat" aria-label="New chat">＋</button>
+      <button class="sidebar-icon-btn" onclick="newConversation()" title="New market brief" aria-label="New market brief">＋</button>
       <button class="menu-btn sidebar-icon-btn" onclick="closeSidebar()" title="Close" aria-label="Close navigation">✕</button>
     </div>
   </div>
 
-  <button type="button" class="new-chat-btn text-left" onclick="newConversation()">New chat</button>
+  <button type="button" class="new-chat-btn text-left" onclick="newConversation()">New market brief</button>
 
   <!-- Conversation list -->
   <div class="flex-1 scrollable flex flex-col gap-1 min-h-0" data-lenis-prevent>
-    <p class="label px-1 mb-2">Chats</p>
+    <p class="label px-1 mb-2">Briefs</p>
     <div id="convList"></div>
   </div>
 
   <!-- Chat mode toggle -->
   <label class="flex items-center justify-between px-1 cursor-pointer select-none" style="min-height:32px">
-    <span class="text-xs" style="color:var(--text-dim)">Forecast output</span>
+    <span class="text-xs" style="color:var(--text-dim)">Market signal</span>
     <span class="tog-wrap" role="switch" aria-checked="true" id="chatModeToggle" tabindex="0"
           onclick="toggleChatMode()" onkeydown="if(event.key==='Enter'||event.key===' ')toggleChatMode()">
       <span class="tog-thumb"></span>
@@ -1033,7 +1276,7 @@
   </header>
 
   <!-- Messages -->
-  <div id="messages" data-lenis-prevent aria-live="polite" aria-label="Forecast conversation" class="scrollable flex-1 px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"></div>
+  <div id="messages" data-lenis-prevent aria-live="polite" aria-label="Market intelligence conversation" class="scrollable flex-1 px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"></div>
 
   <!-- Input -->
   <div class="px-3 sm:px-4 pb-4 sm:pb-5 pt-2 flex-shrink-0">
@@ -1044,7 +1287,7 @@
         <textarea
           id="questionInput"
           rows="1"
-          placeholder="Message Foresea"
+          placeholder="Ask about a market, quote, or resolution criteria"
           class="flex-1 bg-transparent border-none py-1 px-1"
           style="font-size: 16px;"
           oninput="autoResize(this)"
@@ -1077,7 +1320,7 @@
           <button class="attach-add-btn" onclick="addUrlAttachment()">Add</button>
         </div>
       </div>
-      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">Foresea can make mistakes. Verify important forecasts.</p>
+      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">Decision support only. Verify important markets.</p>
     </div>
   </div>
 
@@ -1114,6 +1357,12 @@ const VARIANT_DESCS = {
   variant7_uncertainty_language:   'Uncertainty language',
   variant8_temporal_anchors:       'Relevant dates',
 };
+const MARKET_EXAMPLES = [
+  'Market at 42%: Will the Fed cut rates before September 30, 2026?',
+  'Market at 31%: Will US CPI inflation be at least 3.0% in December 2026?',
+  'Which outcome is mispriced in the 2026 Formula 1 drivers championship market?',
+  'What is fair value for a market asking whether SpaceX completes a major Starship milestone before December 31, 2026?'
+];
 
 // ── State ────────────────────────────────────────────────────────────────────
 let storageKey = STORAGE_KEY;
@@ -1267,7 +1516,7 @@ function closeSidebar() {
 function newConversation() {
   closeSidebar();
   const id = 'conv_' + Date.now();
-  upsertConv(id, { id, title: 'New conversation', createdAt: Date.now(), updatedAt: Date.now(), messages: [] });
+  upsertConv(id, { id, title: 'New market brief', createdAt: Date.now(), updatedAt: Date.now(), messages: [] });
   activateConv(id);
 }
 
@@ -1276,7 +1525,7 @@ function activateConv(id) {
   activeId = id;
   renderSidebar();
   renderMessages();
-  document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New conversation';
+  document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New market brief';
 }
 
 function deleteConv(id, e) {
@@ -1333,23 +1582,49 @@ function renderMessages() {
 
   if (!conv || conv.messages.length === 0) {
     el.innerHTML = `
-      <div id="emptyState" class="max-w-3xl mx-auto w-full text-center pt-16 sm:pt-32 px-4">
-        <h2 class="display text-3xl sm:text-[44px] text-gray-900 leading-tight mb-3 font-semibold">
-          What can I help you forecast?
-        </h2>
-        <p class="text-[15px] text-gray-500 leading-relaxed max-w-xl mx-auto">
-          Ask anything forecastable. Foresea can answer directly or return probabilities, rationale, and sources.
-        </p>
-        <div class="mt-8 grid sm:grid-cols-2 gap-2.5 text-left">
-          ${[
-            'Will the Fed cut rates before September 30, 2026?',
-            'Who will win the 2026 Formula 1 drivers championship?',
-            'What will US CPI inflation be in December 2026?',
-            'When will the next major SpaceX Starship milestone occur?'
-          ].map(q => `
+      <div id="emptyState" class="max-w-6xl mx-auto w-full pt-10 sm:pt-20 px-4">
+        <div class="market-empty">
+          <div class="empty-copy">
+            <p class="label mb-4">Foresea market desk</p>
+            <h2 class="display text-3xl sm:text-[44px] text-gray-900 leading-tight mb-3 font-semibold">
+              The intelligence layer for prediction markets.
+            </h2>
+            <p class="text-[15px] text-gray-500 leading-relaxed">
+              Price a binary market, challenge consensus, or turn resolution criteria into a source-backed probability.
+            </p>
+            <div class="mt-8 grid gap-2.5 text-left">
+              ${MARKET_EXAMPLES.map(q => `
             <button type="button" class="empty-suggestion" onclick="startExample('${escAttr(q)}')">
               ${escHtml(q)}
             </button>`).join('')}
+            </div>
+          </div>
+          <div class="empty-market-panel" aria-label="Foresea market intelligence format">
+            <div class="panel-bar">
+              <span>Intelligence stack</span>
+              <span>Live brief format</span>
+            </div>
+            <div class="intel-row">
+              <span class="intel-key">Market</span>
+              <span class="intel-value">Will the Fed cut rates by Sep. 30, 2026?</span>
+              <span class="intel-note">binary</span>
+            </div>
+            <div class="intel-row">
+              <span class="intel-key">Quote</span>
+              <span class="intel-value">42% implied Yes</span>
+              <span class="intel-note">supplied</span>
+            </div>
+            <div class="intel-row">
+              <span class="intel-key">Foresea</span>
+              <span class="intel-value">56% Yes</span>
+              <span class="intel-note">+14 pp</span>
+            </div>
+            <div class="intel-row">
+              <span class="intel-key">Thesis</span>
+              <span class="intel-value">Policy path, inflation prints, and central-bank guidance.</span>
+              <span class="intel-note">sources</span>
+            </div>
+          </div>
         </div>
       </div>`;
     return;
@@ -1375,12 +1650,177 @@ function makeUserBubble(text) {
   return div;
 }
 
+function clamp01(value) {
+  if (!Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(1, value));
+}
+
+function binaryYesProbability(data) {
+  const conf = clamp01(Number(data?.confidence));
+  const answer = String(data?.predicted_answer || '').trim().toUpperCase();
+  if (conf == null || !answer) return null;
+  if (answer === 'YES') return conf;
+  if (answer === 'NO') return clamp01(1 - conf);
+  return null;
+}
+
+function extractMarketProbability(text) {
+  if (!text) return null;
+  const patterns = [
+    { re: /(?:market|quote|priced|price|trading|implied|odds|yes)\D{0,28}(\d{1,3}(?:\.\d+)?)\s*%/i, unit: 'percent' },
+    { re: /(?:market|quote|priced|price|trading|yes)\D{0,28}(\d{1,2}(?:\.\d+)?)\s*(?:c|cent|cents)\b/i, unit: 'cents' },
+    { re: /(?:market|quote|priced|price|trading|yes)\D{0,28}\$?(0?\.\d{1,3})\b/i, unit: 'decimal' },
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern.re);
+    if (!match) continue;
+    const raw = Number(match[1]);
+    if (!Number.isFinite(raw)) continue;
+    if (pattern.unit === 'decimal') return clamp01(raw);
+    if (raw >= 0 && raw <= 100) return clamp01(raw / 100);
+  }
+  return null;
+}
+
+function fmtPct01(value) {
+  return value == null ? '—' : Math.round(value * 100) + '%';
+}
+
+function fmtPp(value) {
+  if (value == null) return '—';
+  const n = Math.round(value * 100);
+  return (n > 0 ? '+' : '') + n + ' pp';
+}
+
+function marketSignal(gap) {
+  const abs = Math.abs(gap);
+  if (abs >= 0.12) {
+    return {
+      label: gap > 0 ? 'Yes underpriced' : 'Yes overpriced',
+      klass: gap > 0 ? 'buy' : 'sell',
+      detail: 'Large gap vs supplied quote',
+    };
+  }
+  if (abs >= 0.05) {
+    return {
+      label: gap > 0 ? 'Lean Yes' : 'Lean No',
+      klass: gap > 0 ? 'buy' : 'sell',
+      detail: 'Moderate gap vs supplied quote',
+    };
+  }
+  return { label: 'Near fair', klass: 'watch', detail: 'Within 5 pp of supplied quote' };
+}
+
+function marketSignalFromAnalysis(analysis) {
+  if (!analysis || analysis.edge == null) return null;
+  const outcome = analysis.outcome || 'outcome';
+  if (analysis.stance === 'model_above_market') {
+    return { label: `${outcome} underpriced`, klass: 'buy', detail: analysis.summary || 'Foresea is above market' };
+  }
+  if (analysis.stance === 'model_below_market') {
+    return { label: `${outcome} overpriced`, klass: 'sell', detail: analysis.summary || 'Foresea is below market' };
+  }
+  return { label: 'Near fair', klass: 'watch', detail: analysis.summary || 'Foresea is close to market' };
+}
+
+function detectMarketPlatform(text) {
+  const lowered = String(text || '').toLowerCase();
+  if (lowered.includes('polymarket')) return 'Polymarket';
+  if (lowered.includes('kalshi')) return 'Kalshi';
+  if (lowered.includes('manifold')) return 'Manifold';
+  if (lowered.includes('metaculus')) return 'Metaculus';
+  return null;
+}
+
+function buildMarketContext(question, data) {
+  const analysis = data?.market_analysis;
+  if (analysis && analysis.model_probability != null) {
+    return {
+      outcome: analysis.outcome || 'Yes',
+      yes_probability: clamp01(Number(analysis.model_probability)),
+      market_probability: clamp01(Number(analysis.market_probability)),
+      gap: analysis.edge == null ? null : Number(analysis.edge),
+      signal: marketSignalFromAnalysis(analysis),
+    };
+  }
+
+  if ((data?.question_type || 'binary') !== 'binary') return null;
+  const yesProbability = binaryYesProbability(data);
+  if (yesProbability == null) return null;
+  const marketProbability = extractMarketProbability(question);
+  const gap = marketProbability == null ? null : yesProbability - marketProbability;
+  return {
+    outcome: 'Yes',
+    yes_probability: yesProbability,
+    market_probability: marketProbability,
+    gap,
+    signal: gap == null ? null : marketSignal(gap),
+  };
+}
+
+function makeMarketLens(data) {
+  const ctx = data?.market_context || buildMarketContext('', data);
+  if (!ctx || ctx.yes_probability == null) return '';
+  const outcome = ctx.outcome || 'Yes';
+  const yes = Number(ctx.yes_probability);
+  const quote = ctx.market_probability == null ? null : Number(ctx.market_probability);
+  const gap = ctx.gap == null ? null : Number(ctx.gap);
+  const signal = ctx.signal || (gap == null ? null : marketSignal(gap));
+  if (quote == null) {
+    return `
+      <div class="market-lens mt-3">
+        <div class="market-lens-grid">
+          <div class="market-lens-cell">
+            <div class="k">Foresea ${escHtml(outcome)}</div>
+            <div class="v">${fmtPct01(yes)}</div>
+            <div class="sub">model-implied probability</div>
+          </div>
+          <div class="market-lens-cell">
+            <div class="k">Market quote</div>
+            <div class="v">—</div>
+            <div class="sub">add a price to compare</div>
+          </div>
+          <div class="market-lens-cell">
+            <div class="k">Gap</div>
+            <div class="v">—</div>
+            <div class="sub">waiting for quote</div>
+          </div>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="market-lens mt-3">
+      <div class="market-lens-grid">
+        <div class="market-lens-cell">
+          <div class="k">Market ${escHtml(outcome)}</div>
+          <div class="v">${fmtPct01(quote)}</div>
+          <div class="sub">supplied quote</div>
+        </div>
+        <div class="market-lens-cell">
+          <div class="k">Foresea ${escHtml(outcome)}</div>
+          <div class="v">${fmtPct01(yes)}</div>
+          <div class="sub">model-implied probability</div>
+        </div>
+        <div class="market-lens-cell">
+          <div class="k">Gap</div>
+          <div class="v">${fmtPp(gap)}</div>
+          <div class="sub">Foresea minus market</div>
+        </div>
+      </div>
+      <div class="market-lens-signal">
+        <strong><span class="market-gap ${escAttr(signal.klass)}">${escHtml(signal.label)}</span></strong>
+        <span>${escHtml(signal.detail)}</span>
+      </div>
+    </div>`;
+}
+
 function makeAIBubble(data, variant) {
   const qtype = data.question_type || 'binary';
   const rationale = data.rationale || '';
   const sources   = data.evidence_sources || [];
   const variantLabel = VARIANT_DESCS[variant] || variant || '';
   const p = x => Math.round((x || 0) * 100);
+  const modelKey = data.model_key || 'gpt-oss-120b';
 
   // Plain conversational reply — no forecast chrome
   if (qtype === 'chat') {
@@ -1400,7 +1840,7 @@ function makeAIBubble(data, variant) {
     verdict = `
       <div class="flex items-center gap-3 flex-wrap">
         <span class="yes-badge text-lg font-semibold px-4 py-1 rounded-sm">${escHtml(top.label)}</span>
-        <span class="text-gray-500 text-sm">${p(top.probability)}% most likely</span>
+        <span class="text-gray-500 text-sm">${p(top.probability)}% top outcome</span>
       </div>
       <div class="mt-3 space-y-2">
         ${opts.map((o, i) => `
@@ -1437,17 +1877,18 @@ function makeAIBubble(data, variant) {
       ${conf != null ? `
       <div class="mt-3">
         <div class="flex justify-between text-xs text-gray-500 mb-1">
-          <span class="label">Confidence</span><span class="text-gray-900 font-medium conf-num" data-conf="${conf}">${conf}%</span>
+          <span class="label">Answer confidence</span><span class="text-gray-900 font-medium conf-num" data-conf="${conf}">${conf}%</span>
         </div>
         <div style="width:100%;background:var(--paper);border-radius:2px;height:5px;overflow:hidden">
           <div class="conf-bar-fill" data-conf="${conf}" style="width:0%;height:100%;border-radius:2px"></div>
         </div>
-      </div>` : ''}`;
+      </div>` : ''}
+      `;
   }
 
   const sourcesHtml = sources.length ? `
     <div class="mt-4 pt-3 border-t border-gray-200">
-      <p class="label mb-2">Evidence sources</p>
+      <p class="label mb-2">Source feed</p>
       <div>${sources.map(s =>
         s.url
           ? `<a href="${escHtml(s.url)}" target="_blank" class="source-chip hover:opacity-80">${escHtml(s.source)}</a>`
@@ -1456,20 +1897,22 @@ function makeAIBubble(data, variant) {
     </div>` : '';
 
   const typeTag = qtype !== 'binary' ? ' · ' + qtype.replace(/_/g, ' ') : '';
+  const marketLensHtml = makeMarketLens(data);
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
   div.innerHTML = `
     <div class="msg-ai p-4 sm:p-5 space-y-3">
       ${verdict}
+      ${marketLensHtml}
       ${rationale ? `
         <div class="pt-2">
-          <p class="label mb-1">Rationale</p>
+          <p class="label mb-1">Forecast thesis</p>
           <p class="text-[15px] text-gray-700 leading-relaxed">${escHtml(rationale)}</p>
         </div>` : ''}
       ${sourcesHtml}
       <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
         <span class="logo-dot" style="width:5px;height:5px"></span>
-        gpt-oss-120b${typeTag} · ${escHtml(variantLabel)}
+        ${escHtml(modelKey)}${typeTag} · ${escHtml(variantLabel)}
       </div>
     </div>`;
   return div;
@@ -1516,6 +1959,12 @@ async function sendQuestion() {
     const orKey = localStorage.getItem('or_key') || '';
     const orModel = localStorage.getItem('or_model') || '';
     const body = { question, variant, history, chat_mode: isChatMode() };
+    const marketProbability = extractMarketProbability(question);
+    if (marketProbability != null) {
+      body.market_probability = marketProbability;
+      const platform = detectMarketPlatform(question);
+      if (platform) body.market_platform = platform;
+    }
     if (_attachments.length) body.news_articles = [..._attachments];
     if (orKey && orModel) {
       body.openrouter_api_key = orKey;
@@ -1535,6 +1984,7 @@ async function sendQuestion() {
     if (!resp.ok) {
       addError(data.detail || 'Server error');
     } else {
+      data.market_context = buildMarketContext(question, data);
       appendMessage(activeId, { role: 'assistant', data, variant, content: data.rationale || '' });
       const aiNode = makeAIBubble(data, variant);
       document.getElementById('messages').appendChild(aiNode);
@@ -1809,7 +2259,7 @@ function renderTrackRecord(d) {
   return `
     <div class="tr-inner">
       <p class="label">Track record</p>
-      <h2 class="display tr-hero-title">Forecasts, scored against reality.</h2>
+      <h2 class="display tr-hero-title">Market forecasts, scored against reality.</h2>
       ${stats}
       ${method}
       <p class="tr-section-title label">Calibration — predicted vs. resolved yes-rate</p>
@@ -1986,14 +2436,14 @@ function toggleChatMode() {
   const el = document.getElementById('chatModeToggle');
   if (el) el.setAttribute('aria-checked', next ? 'false' : 'true');
   const label = el?.previousElementSibling;
-  if (label) label.textContent = next ? 'Chat mode' : 'Forecast output';
+  if (label) label.textContent = next ? 'Chat mode' : 'Market signal';
 }
 function loadChatModeToggle() {
   const chat = isChatMode();
   const el = document.getElementById('chatModeToggle');
   if (el) el.setAttribute('aria-checked', chat ? 'false' : 'true');
   const label = el?.previousElementSibling;
-  if (label) label.textContent = chat ? 'Chat mode' : 'Forecast output';
+  if (label) label.textContent = chat ? 'Chat mode' : 'Market signal';
 }
 
 // ── OpenRouter settings ───────────────────────────────────────────────────────

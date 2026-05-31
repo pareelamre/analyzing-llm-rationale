@@ -403,8 +403,13 @@ class NewsPipeline:
 
     def plan_search_query(self, question: str) -> str:
         """Use a small LangChain planner step to turn a forecast into a news query."""
+        return self.plan_search_queries(question, max_queries=1)[0]
+
+    def plan_search_queries(self, question: str, max_queries: int = 4) -> List[str]:
+        """Generate a compact set of direct and decomposed news queries."""
+        max_queries = max(1, max_queries)
         if not self._use_query_planner or self._llm is None:
-            return question
+            return [question]
 
         try:
             from langchain_core.output_parsers import StrOutputParser
@@ -418,15 +423,28 @@ class NewsPipeline:
                 (
                     "user",
                     "Forecasting question:\n{question}\n\n"
-                    "Return one search query, no quotes, no explanation. "
+                    f"Return up to {max_queries} newline-separated queries, no numbering and no explanation.\n"
+                    "Include one direct event query, then decompose the forecast into key drivers, "
+                    "base-rate evidence, or resolution-relevant subquestions. "
                     "Preserve important entities, dates, and event terms.",
                 ),
             ])
             chain = prompt | self._llm | StrOutputParser()
             planned = chain.invoke({"question": question}).strip()
-            return planned[:200] or question
         except Exception:
-            return question
+            return [question]
+
+        queries: List[str] = []
+        for line in planned.splitlines():
+            query = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip().strip('"')
+            if not query:
+                continue
+            if query.lower() in {existing.lower() for existing in queries}:
+                continue
+            queries.append(query[:200])
+            if len(queries) >= max_queries:
+                break
+        return queries or [question]
 
     def summarize(self, article: dict) -> str:
         """Summarize a single article using LangChain + SCADS AI LLM."""
@@ -524,16 +542,21 @@ class NewsPipeline:
         self, question: str, top_k: int = 5
     ) -> List[dict]:
         """Full pipeline: fetch → summarize → rank → return top_k."""
-        search_query = self.plan_search_query(question)
-        raw = self.fetch(search_query, top_k=top_k * 2)
+        search_queries = self.plan_search_queries(question)
+        raw: List[dict] = []
+        for search_query in search_queries:
+            for article in self.fetch(search_query, top_k=max(top_k, 5)):
+                article.setdefault("search_query", search_query)
+                raw.append(article)
         if not raw:
             fallback_query = _keyword_search_query(question)
-            if fallback_query != search_query:
-                search_query = fallback_query
-                raw = self.fetch(search_query, top_k=top_k * 2)
+            if fallback_query not in search_queries:
+                for article in self.fetch(fallback_query, top_k=top_k * 2):
+                    article.setdefault("search_query", fallback_query)
+                    raw.append(article)
         for article in raw:
             if self._summarize_articles:
                 article["summary"] = self.summarize(article)
-            article["search_query"] = search_query
+            article.setdefault("search_query", search_queries[0])
         ranked = self.rank(question, raw)
         return self.select_diverse_sources(ranked, top_k)

@@ -95,6 +95,29 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("Full article text", prompt)
         self.assertNotIn("[question]", prompt)
 
+    def test_build_user_prompt_includes_prediction_market_context(self):
+        record = self.sample_record()
+        record.update(
+            {
+                "market_platform": "Polymarket",
+                "market_url": "https://example.com/market",
+                "market_outcome": "Yes",
+                "market_probability": 0.42,
+            }
+        )
+
+        prompt = build_user_prompt(
+            record,
+            user_prompt_template="[question]\nReturn JSON.",
+            article_detail="summary",
+        )
+
+        self.assertIn("Prediction Market Context:", prompt)
+        self.assertIn("Market Platform: Polymarket", prompt)
+        self.assertIn("Market URL: https://example.com/market", prompt)
+        self.assertIn("Market Outcome: Yes", prompt)
+        self.assertIn("Market-Implied Probability: 0.42", prompt)
+
     def test_configure_workspace_cache_env_uses_repo_cache_tree(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
