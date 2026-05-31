@@ -13,7 +13,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from analyzing_llm_rationale.server import _ANALYTICS_DB, _issue_session, _state, app  # noqa: E402
+from analyzing_llm_rationale.server import (  # noqa: E402
+    _ANALYTICS_DB,
+    _cache_get,
+    _cache_set,
+    _issue_session,
+    _local_cache,
+    _state,
+    app,
+)
 
 
 class FakeProvider:
@@ -53,6 +61,7 @@ class ServerTests(unittest.TestCase):
     def setUp(self):
         self.provider = FakeProvider()
         self.evidence_pipeline = FakeEvidencePipeline()
+        _local_cache.clear()
         _state.clear()
         _state.update({
             "provider": self.provider,
@@ -74,6 +83,7 @@ class ServerTests(unittest.TestCase):
 
     def tearDown(self):
         _state.clear()
+        _local_cache.clear()
         if _ANALYTICS_DB.exists():
             _ANALYTICS_DB.unlink()
 
@@ -360,6 +370,114 @@ class ServerTests(unittest.TestCase):
     def test_chat_conversation_sync_requires_session(self):
         response = self.client.get("/chat/conversations")
         self.assertEqual(response.status_code, 401)
+
+    def test_register_then_login_with_email_password(self):
+        register = self.client.post(
+            "/auth/register",
+            json={"email": "Trader@Example.com", "password": "supersecret1", "name": "Ada"},
+        )
+        self.assertEqual(register.status_code, 200)
+        body = register.json()
+        self.assertEqual(body["email"], "trader@example.com")
+        self.assertEqual(body["user_id"], "trader@example.com")
+        self.assertEqual(body["name"], "Ada")
+        self.assertTrue(body["token"])
+
+        # The token authenticates subsequent requests.
+        me = self.client.get("/auth/me", headers={"Authorization": f"Bearer {body['token']}"})
+        self.assertEqual(me.status_code, 200)
+        self.assertEqual(me.json()["email"], "trader@example.com")
+
+        # Login with the same credentials (email is case-insensitive).
+        login = self.client.post(
+            "/auth/login",
+            json={"email": "trader@example.com", "password": "supersecret1"},
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(login.json()["user_id"], "trader@example.com")
+
+    def test_register_rejects_duplicate_email(self):
+        payload = {"email": "dup@example.com", "password": "supersecret1"}
+        self.assertEqual(self.client.post("/auth/register", json=payload).status_code, 200)
+        second = self.client.post("/auth/register", json=payload)
+        self.assertEqual(second.status_code, 409)
+
+    def test_register_rejects_short_password(self):
+        response = self.client.post(
+            "/auth/register",
+            json={"email": "weak@example.com", "password": "short"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_register_rejects_invalid_email(self):
+        response = self.client.post(
+            "/auth/register",
+            json={"email": "not-an-email", "password": "supersecret1"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_login_with_wrong_password_is_unauthorized(self):
+        self.client.post(
+            "/auth/register",
+            json={"email": "real@example.com", "password": "supersecret1"},
+        )
+        response = self.client.post(
+            "/auth/login",
+            json={"email": "real@example.com", "password": "wrongpassword"},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_login_unknown_email_is_unauthorized(self):
+        response = self.client.post(
+            "/auth/login",
+            json={"email": "ghost@example.com", "password": "supersecret1"},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_identical_predict_requests_are_cached(self):
+        payload = {
+            "question": "Will the Fed cut rates before December 31, 2026?",
+            "question_type": "binary",
+            "attach_evidence": False,
+        }
+        first = self.client.post("/predict", json=payload)
+        second = self.client.post("/predict", json=payload)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json(), second.json())
+        # The model provider is invoked only once; the second call hits the cache.
+        self.assertEqual(len(self.provider.calls), 1)
+
+    def test_predict_with_history_is_not_cached(self):
+        payload = {
+            "question": "Will the Fed cut rates before December 31, 2026?",
+            "question_type": "binary",
+            "attach_evidence": False,
+            "history": [{"role": "user", "content": "earlier turn"}],
+        }
+        self.client.post("/predict", json=payload)
+        self.client.post("/predict", json=payload)
+        self.assertEqual(len(self.provider.calls), 2)
+
+    def test_evidence_retrieval_is_cached_across_requests(self):
+        payload = {
+            "question": "Will the Fed cut rates before July 31, 2026?",
+            "variant": "variant0_neutral_baseline",
+            "evidence_top_k": 3,
+            "history": [{"role": "user", "content": "x"}],  # disable full-response cache
+        }
+        self.client.post("/predict", json=payload)
+        self.client.post("/predict", json=payload)
+        # Evidence pipeline fetched once even though the model ran twice.
+        self.assertEqual(len(self.evidence_pipeline.calls), 1)
+        self.assertEqual(len(self.provider.calls), 2)
+
+    def test_cache_get_set_roundtrip_and_ttl(self):
+        _cache_set("unit-key", {"value": 7}, ttl=60)
+        self.assertEqual(_cache_get("unit-key"), {"value": 7})
+        self.assertIsNone(_cache_get("missing-key"))
+        _cache_set("zero-ttl", {"v": 1}, ttl=0)  # ttl<=0 is a no-op
+        self.assertIsNone(_cache_get("zero-ttl"))
 
 
 if __name__ == "__main__":

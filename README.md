@@ -152,6 +152,47 @@ curl https://foresea.ink/auth/config
 curl https://foresea.ink/health
 ```
 
+### Scaling and caching
+
+The server is built to scale horizontally on Cloud Run:
+
+- **Authentication** supports Google One-Tap *and* email/password
+  (`/auth/register`, `/auth/login`). Passwords are stored as salted
+  PBKDF2-HMAC-SHA256 hashes; accounts live in Cloud Datastore.
+- **Caching and rate limiting** use Redis when `REDIS_URL` is set, so they are
+  shared across instances; otherwise they fall back to per-instance in-memory
+  state and fail open. `/predict` (non-personalised requests), evidence
+  retrieval, and `/extract` URL fetches are cached; public GETs send
+  `Cache-Control`.
+
+| Var | Default | Description |
+|-----|---------|-------------|
+| `REDIS_URL` | unset | Memorystore/Redis URL. Shares cache + rate limits across instances. |
+| `PREDICT_CACHE_TTL` | `600` | Cache TTL (s) for non-personalised `/predict` responses. `0` disables. |
+| `EVIDENCE_CACHE_TTL` | `900` | Cache TTL (s) for evidence retrieval. |
+| `EXTRACT_CACHE_TTL` | `3600` | Cache TTL (s) for `/extract` URL fetches. |
+| `LOCAL_CACHE_MAX` | `1024` | Max entries in the in-memory fallback cache. |
+
+Raise the Cloud Run throughput ceiling (no idle cost while `min-instances=0`):
+
+```bash
+gcloud run services update analyzing-llm-rationale --region us-central1 \
+  --max-instances 20 --concurrency 40 --memory 1Gi
+```
+
+Once `max-instances > 1`, provision Memorystore for Redis (billable) and set
+`REDIS_URL` so rate limiting and caching stay correct across instances:
+
+```bash
+gcloud services enable redis.googleapis.com vpcaccess.googleapis.com compute.googleapis.com
+gcloud redis instances create foresea-cache --size=1 --region=us-central1 --tier=basic
+gcloud compute networks vpc-access connectors create foresea-vpc \
+  --region=us-central1 --range=10.8.0.0/28
+gcloud run services update analyzing-llm-rationale --region us-central1 \
+  --vpc-connector foresea-vpc \
+  --update-env-vars REDIS_URL=redis://<instance-host>:6379
+```
+
 ## Using the API
 
 The public Cloud Run API is the easiest integration target. It accepts

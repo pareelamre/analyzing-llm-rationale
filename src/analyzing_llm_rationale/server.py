@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import html
+import json
 import os
 import re
+import secrets
 import smtplib
 import threading
 import time
 import traceback
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
@@ -237,6 +240,99 @@ def _upsert_user(sub: str, email: str, name: str, picture: str) -> None:
     client.put(entity)
 
 
+# ── Email + password accounts ───────────────────────────────────────────────
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_PBKDF2_ITERATIONS = 200_000
+# A throwaway hash so failed logins for unknown emails still pay the PBKDF2 cost,
+# keeping response timing uniform whether or not the account exists.
+_DUMMY_PASSWORD_HASH = (
+    "pbkdf2_sha256$200000$"
+    "00000000000000000000000000000000$"
+    "0000000000000000000000000000000000000000000000000000000000000000"
+)
+
+
+def _normalise_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def _hash_password(password: str) -> str:
+    """Return a PBKDF2-HMAC-SHA256 hash string: ``algo$iters$salt_hex$hash_hex``."""
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ITERATIONS)
+    return f"pbkdf2_sha256${_PBKDF2_ITERATIONS}${salt.hex()}${digest.hex()}"
+
+
+def _verify_password(password: str, encoded: str) -> bool:
+    """Constant-time check of ``password`` against an encoded PBKDF2 hash."""
+    try:
+        _algo, iters_str, salt_hex, hash_hex = encoded.split("$")
+        iterations = int(iters_str)
+        salt = bytes.fromhex(salt_hex)
+        expected = bytes.fromhex(hash_hex)
+    except (ValueError, AttributeError):
+        return False
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return hmac.compare_digest(digest, expected)
+
+
+def _get_user_record(user_id: str) -> Optional[Dict[str, Any]]:
+    """Return the stored User record (dict) for ``user_id``, or None if absent."""
+    client = _get_datastore()
+    if client is None:
+        return _state.setdefault("password_users", {}).get(user_id)
+    entity = client.get(client.key("User", user_id))
+    return dict(entity) if entity is not None else None
+
+
+def _create_password_user(user_id: str, email: str, name: str, password_hash: str) -> None:
+    """Persist a new email/password account."""
+    now = datetime.now(timezone.utc)
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("password_users", {})[user_id] = {
+            "email": email,
+            "name": name,
+            "picture": "",
+            "password_hash": password_hash,
+            "auth_provider": "password",
+            "created_at": now,
+            "last_login": now,
+        }
+        return
+    from google.cloud import datastore as _ds
+    entity = _ds.Entity(
+        key=client.key("User", user_id),
+        exclude_from_indexes=("picture", "password_hash"),
+    )
+    entity.update(
+        email=email,
+        name=name,
+        picture="",
+        password_hash=password_hash,
+        auth_provider="password",
+        created_at=now,
+        last_login=now,
+    )
+    client.put(entity)
+
+
+def _touch_last_login(user_id: str) -> None:
+    """Best-effort update of ``last_login`` for an existing account."""
+    client = _get_datastore()
+    now = datetime.now(timezone.utc)
+    if client is None:
+        record = _state.setdefault("password_users", {}).get(user_id)
+        if record is not None:
+            record["last_login"] = now
+        return
+    entity = client.get(client.key("User", user_id))
+    if entity is not None:
+        entity["last_login"] = now
+        client.put(entity)
+
+
 def _conversation_key(client: Any, user_id: str, conversation_id: str) -> Any:
     return client.key("User", user_id, "Conversation", conversation_id)
 
@@ -349,14 +445,125 @@ def _delete_conversation(user_id: str, conversation_id: str) -> None:
     client.delete(key)
 
 
+# ── Shared cache / coordination (Redis, optional) ───────────────────────────
+_redis_client: Any = None
+_redis_initialised = False
+
+
+def _get_redis() -> Any:
+    """Return a shared Redis client when ``REDIS_URL`` is configured, else None.
+
+    Redis (Cloud Memorystore in production) lets multiple Cloud Run instances
+    share rate-limit counters and caches. When it is absent or unreachable,
+    callers fall back to per-instance in-memory state.
+    """
+    global _redis_client, _redis_initialised
+    if _redis_initialised:
+        return _redis_client
+    _redis_initialised = True
+    url = os.environ.get("REDIS_URL")
+    if not url:
+        return None
+    try:
+        import redis as _redis  # optional dependency
+        client = _redis.from_url(
+            url,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+            decode_responses=True,
+        )
+        client.ping()
+        _redis_client = client
+    except Exception:
+        _redis_client = None
+    return _redis_client
+
+
+# ── Cache (Redis-backed, per-instance in-memory fallback) ────────────────────
+_local_cache: "OrderedDict[str, Any]" = OrderedDict()
+_LOCAL_CACHE_MAX = int(os.environ.get("LOCAL_CACHE_MAX", "1024"))
+_EVIDENCE_CACHE_TTL = int(os.environ.get("EVIDENCE_CACHE_TTL", "900"))
+_EXTRACT_CACHE_TTL = int(os.environ.get("EXTRACT_CACHE_TTL", "3600"))
+_PREDICT_CACHE_TTL = int(os.environ.get("PREDICT_CACHE_TTL", "600"))
+
+
+def _cache_key(*parts: Any) -> str:
+    """Stable cache key from arbitrary JSON-serialisable parts."""
+    raw = json.dumps(parts, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _cache_get(key: str) -> Any:
+    """Return a cached value (Redis first, then in-memory), or None on miss."""
+    client = _get_redis()
+    if client is not None:
+        try:
+            raw = client.get(f"cache:{key}")
+            return json.loads(raw) if raw is not None else None
+        except Exception:
+            pass  # fall back to local cache
+    entry = _local_cache.get(key)
+    if entry is None:
+        return None
+    expires_at, value = entry
+    if expires_at < time.time():
+        _local_cache.pop(key, None)
+        return None
+    _local_cache.move_to_end(key)
+    return value
+
+
+def _cache_set(key: str, value: Any, ttl: int) -> None:
+    """Store a JSON-serialisable value with a TTL (seconds). No-op if ttl <= 0."""
+    if ttl <= 0:
+        return
+    client = _get_redis()
+    if client is not None:
+        try:
+            client.set(f"cache:{key}", json.dumps(value, default=str), ex=ttl)
+            return
+        except Exception:
+            pass  # fall back to local cache
+    _local_cache[key] = (time.time() + ttl, value)
+    _local_cache.move_to_end(key)
+    while len(_local_cache) > _LOCAL_CACHE_MAX:
+        _local_cache.popitem(last=False)
+
+
 # ── Rate limiter ──────────────────────────────────────────────────────────────
 class _RateLimiter:
+    """Sliding/fixed-window limiter.
+
+    Uses Redis (shared across instances) when available so the limit holds no
+    matter how many Cloud Run instances are running; otherwise it falls back to
+    a per-instance in-memory window. The fallback fails open, so a Redis outage
+    never blocks traffic — it only loosens enforcement.
+    """
+
     def __init__(self, calls: int = 20, period: int = 60):
         self._calls = calls
         self._period = period
         self._log: Dict[str, List[float]] = defaultdict(list)
 
     def is_allowed(self, key: str) -> bool:
+        client = _get_redis()
+        if client is not None:
+            try:
+                return self._is_allowed_redis(client, key)
+            except Exception:
+                pass  # fall through to in-memory on any Redis error
+        return self._is_allowed_local(key)
+
+    def _is_allowed_redis(self, client: Any, key: str) -> bool:
+        bucket = int(time.time() // self._period)
+        rkey = f"ratelimit:{key}:{bucket}"
+        pipe = client.pipeline()
+        pipe.incr(rkey, 1)
+        pipe.expire(rkey, self._period)
+        count = pipe.execute()[0]
+        return int(count) <= self._calls
+
+    def _is_allowed_local(self, key: str) -> bool:
         now = time.monotonic()
         window = now - self._period
         log = self._log[key]
@@ -484,7 +691,11 @@ if _STATIC_DIR.exists():
 
 @app.get("/", include_in_schema=False)
 async def index():
-    return FileResponse(str(_STATIC_DIR / "index.html"))
+    # Short TTL so deploys propagate quickly while CDNs/browsers still cache.
+    return FileResponse(
+        str(_STATIC_DIR / "index.html"),
+        headers={"Cache-Control": "public, max-age=300"},
+    )
 
 
 @app.get("/track-record", tags=["System"], summary="Public forecasting track record")
@@ -499,7 +710,11 @@ async def track_record():
     path = _STATIC_DIR / "track_record.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Track record not generated yet.")
-    return FileResponse(str(path), media_type="application/json")
+    return FileResponse(
+        str(path),
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
 
 
 # ── Request / response models ─────────────────────────────────────────────────
@@ -889,6 +1104,37 @@ class AnalyticsSummary(BaseModel):
 class GoogleAuthRequest(BaseModel):
     """Google One-Tap credential submitted by the browser."""
     credential: str = Field(..., max_length=8192)
+
+
+class RegisterRequest(BaseModel):
+    """Email + password sign-up submitted by the browser."""
+    email: str = Field(..., max_length=254, description="Account email address.")
+    password: str = Field(..., min_length=8, max_length=128, description="At least 8 characters.")
+    name: str = Field("", max_length=120, description="Optional display name.")
+
+    @field_validator("email")
+    @classmethod
+    def _valid_email(cls, v: str) -> str:
+        normalised = _normalise_email(v)
+        if not _EMAIL_RE.match(normalised):
+            raise ValueError("Enter a valid email address.")
+        return normalised
+
+    @field_validator("name")
+    @classmethod
+    def _strip_name(cls, v: str) -> str:
+        return (v or "").strip()
+
+
+class LoginRequest(BaseModel):
+    """Email + password sign-in submitted by the browser."""
+    email: str = Field(..., max_length=254)
+    password: str = Field(..., max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def _normalise(cls, v: str) -> str:
+        return _normalise_email(v)
 
 
 class SessionResponse(BaseModel):
@@ -1419,7 +1665,13 @@ async def extract_attachment(  # noqa: B008
         url = url.strip()
         if not url.startswith(("http://", "https://")):
             raise HTTPException(status_code=422, detail="URL must start with http:// or https://")
-        return await loop.run_in_executor(None, _extract_url_sync, url)
+        url_cache_key = _cache_key("extract_url", url)
+        cached = _cache_get(url_cache_key)
+        if cached is not None:
+            return cached
+        extracted = await loop.run_in_executor(None, _extract_url_sync, url)
+        _cache_set(url_cache_key, extracted, _EXTRACT_CACHE_TTL)
+        return extracted
     raise HTTPException(status_code=400, detail="Provide either a PDF file or a url.")
 
 
@@ -1447,6 +1699,42 @@ async def auth_google(req: GoogleAuthRequest) -> SessionResponse:
     await loop.run_in_executor(None, _upsert_user, sub, email, name, picture)
     token = _issue_session(sub, email, name, picture)
     return SessionResponse(token=token, user_id=sub, email=email, name=name, picture=picture)
+
+
+@app.post("/auth/register", tags=["Auth"], summary="Create an account", response_model=SessionResponse)
+async def auth_register(req: RegisterRequest) -> SessionResponse:
+    """Create an email/password account and return a session token.
+
+    The email becomes the account ID. Passwords are stored as salted
+    PBKDF2-HMAC-SHA256 hashes; the plaintext is never persisted.
+    """
+    user_id = req.email
+    loop = asyncio.get_running_loop()
+    existing = await loop.run_in_executor(None, _get_user_record, user_id)
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="An account with this email already exists.")
+    name = req.name or req.email.split("@")[0]
+    password_hash = _hash_password(req.password)
+    await loop.run_in_executor(None, _create_password_user, user_id, req.email, name, password_hash)
+    token = _issue_session(user_id, req.email, name, "")
+    return SessionResponse(token=token, user_id=user_id, email=req.email, name=name, picture="")
+
+
+@app.post("/auth/login", tags=["Auth"], summary="Sign in with email and password", response_model=SessionResponse)
+async def auth_login(req: LoginRequest) -> SessionResponse:
+    """Verify an email/password account and return a session token."""
+    user_id = req.email
+    loop = asyncio.get_running_loop()
+    record = await loop.run_in_executor(None, _get_user_record, user_id)
+    stored_hash = record.get("password_hash") if record else None
+    # Always run a verification so timing does not reveal whether the email exists.
+    if not _verify_password(req.password, stored_hash or _DUMMY_PASSWORD_HASH) or not stored_hash:
+        raise HTTPException(status_code=401, detail="Incorrect email or password.")
+    name = record.get("name") or req.email.split("@")[0]
+    picture = record.get("picture", "")
+    await loop.run_in_executor(None, _touch_last_login, user_id)
+    token = _issue_session(user_id, req.email, name, picture)
+    return SessionResponse(token=token, user_id=user_id, email=req.email, name=name, picture=picture)
 
 
 @app.get("/auth/me", tags=["Auth"], summary="Get current user", response_model=AuthMeResponse)
@@ -1588,6 +1876,40 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
             detail=f"Unknown variant '{req.variant}'. Valid: {sorted(variants)}",
         )
 
+    # Serve identical, non-personalised forecasts from cache to cut latency and
+    # model spend. Requests with conversation history or a caller's own
+    # OpenRouter key are never cached.
+    cacheable = (
+        _PREDICT_CACHE_TTL > 0
+        and not req.history
+        and not req.openrouter_api_key
+    )
+    predict_cache_key = None
+    if cacheable:
+        predict_cache_key = _cache_key(
+            "predict",
+            {
+                "question": req.question,
+                "description": req.description,
+                "variant": req.variant,
+                "question_type": req.question_type,
+                "options": req.options,
+                "chat_mode": req.chat_mode,
+                "attach_evidence": req.attach_evidence,
+                "evidence_top_k": req.evidence_top_k,
+                "news_articles": [a.model_dump() for a in req.news_articles],
+                "market_platform": req.market_platform,
+                "market_url": req.market_url,
+                "market_outcome": req.market_outcome,
+                "market_probability": req.market_probability,
+                "model_key": _state.get("model_key"),
+                "temperature": _state.get("temperature"),
+            },
+        )
+        cached = _cache_get(predict_cache_key)
+        if cached is not None:
+            return PredictResponse(**cached)
+
     prompt_text = _state["prompt_templates"][req.variant]
     system_prompt = _state["system_prompt"]
 
@@ -1602,13 +1924,18 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
         else:
             top_k = max(1, min(req.evidence_top_k, 10))
             loop = asyncio.get_running_loop()
-            try:
-                evidence_articles = await loop.run_in_executor(
-                    None,
-                    lambda: evidence_pipeline.fetch_summarize_rank(req.question, top_k=top_k),
-                )
-            except Exception as exc:
-                evidence_error = f"Evidence retrieval failed: {exc}"
+            evidence_cache_key = _cache_key("evidence", req.question, top_k)
+            evidence_articles = _cache_get(evidence_cache_key)
+            if evidence_articles is None:
+                try:
+                    evidence_articles = await loop.run_in_executor(
+                        None,
+                        lambda: evidence_pipeline.fetch_summarize_rank(req.question, top_k=top_k),
+                    )
+                    _cache_set(evidence_cache_key, evidence_articles, _EVIDENCE_CACHE_TTL)
+                except Exception as exc:
+                    evidence_articles = []
+                    evidence_error = f"Evidence retrieval failed: {exc}"
 
     evidence_articles = [_clean_article(a) for a in evidence_articles]
     record["news_articles"] = evidence_articles
@@ -1651,7 +1978,7 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
     if req.chat_mode:
         text = content.strip()
         model_key = req.openrouter_model or _state["model_key"]
-        return PredictResponse(
+        response = PredictResponse(
             question_type="chat",
             rationale=text, model_rationale=text,
             variant=req.variant, model_key=model_key,
@@ -1659,7 +1986,12 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
             evidence_articles=[NewsArticle(**a) for a in evidence_articles],
             evidence_error=evidence_error,
         )
-    return _build_typed_response(req, parsed, content, evidence_articles, evidence_error)
+    else:
+        response = _build_typed_response(req, parsed, content, evidence_articles, evidence_error)
+
+    if predict_cache_key is not None:
+        _cache_set(predict_cache_key, response.model_dump(), _PREDICT_CACHE_TTL)
+    return response
 
 
 @app.post(

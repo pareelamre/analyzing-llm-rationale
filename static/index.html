@@ -1007,6 +1007,190 @@
     .opt-track { height: 8px; background: var(--paper); border-radius: 2px; overflow: hidden; }
     .opt-fill { display: block; height: 100%; background: var(--border-2); border-radius: 2px; }
     .opt-fill.top { background: var(--accent); }
+
+    /* ── Glass surfaces ──────────────────────────────────────────────────── */
+    .glass {
+      background: rgba(255, 255, 255, .62);
+      backdrop-filter: blur(20px) saturate(160%);
+      -webkit-backdrop-filter: blur(20px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, .55);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, .65) inset,
+        0 24px 60px rgba(15, 15, 16, .14);
+    }
+
+    /* ── Sign-in entry buttons (logged-out nav/sidebar) ──────────────────── */
+    .btn-signin {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink);
+      background: rgba(255, 255, 255, .55);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--ink);
+      border-radius: 999px;
+      padding: 7px 15px;
+      cursor: pointer;
+      transition: background var(--dur-med), color var(--dur-med), transform var(--dur-fast);
+    }
+    .btn-signin:hover { background: var(--ink); color: #fff; }
+    .btn-signin:active { transform: translateY(1px); }
+    .sidebar-signin {
+      width: 100%;
+      text-align: center;
+      padding: 11px 14px;
+      font-size: 13px;
+    }
+    .sidebar-signin-hint {
+      font-size: 11px;
+      color: var(--text-mute);
+      margin-top: 8px;
+      line-height: 1.45;
+    }
+
+    /* ── Auth modal ──────────────────────────────────────────────────────── */
+    .auth-overlay {
+      position: fixed; inset: 0; z-index: 80;
+      display: none;
+      align-items: flex-start; justify-content: center;
+      padding: 20px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      background: rgba(15, 15, 16, .34);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      opacity: 0;
+      transition: opacity var(--dur-med) var(--ease-soft);
+    }
+    .auth-overlay.show { display: flex; opacity: 1; }
+    .auth-card {
+      width: 100%;
+      max-width: 392px;
+      margin: auto;
+      border-radius: 26px;
+      padding: 30px 28px 26px;
+      transform: translateY(12px) scale(.985);
+      opacity: 0;
+      transition: transform var(--dur-slow) var(--ease-soft), opacity var(--dur-med) var(--ease-soft);
+    }
+    .auth-overlay.show .auth-card { transform: none; opacity: 1; }
+    .auth-close {
+      position: absolute; top: 14px; right: 16px;
+      width: 30px; height: 30px; border-radius: 999px;
+      border: 0; background: transparent; color: var(--text-mute);
+      font-size: 18px; line-height: 1; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background var(--dur-med), color var(--dur-med);
+    }
+    .auth-close:hover { background: rgba(15,15,16,.06); color: var(--ink); }
+    .auth-brand {
+      display: inline-flex; align-items: center; gap: 9px;
+      margin-bottom: 16px;
+    }
+    .auth-title {
+      font-size: 22px; font-weight: 700; letter-spacing: 0;
+      color: var(--ink); line-height: 1.15;
+    }
+    .auth-sub {
+      font-size: 13px; color: var(--text-dim);
+      margin-top: 5px; margin-bottom: 18px; line-height: 1.5;
+    }
+
+    /* Clean Google button */
+    .auth-google { display: flex; justify-content: center; min-height: 44px; }
+    .auth-google .gsi-wrap {
+      border-radius: 12px;
+      border: 1px solid var(--border-2);
+      box-shadow: 0 1px 2px rgba(15,15,16,.05);
+      overflow: hidden;
+    }
+
+    .auth-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 18px 0;
+      font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text-mute);
+    }
+    .auth-divider::before, .auth-divider::after {
+      content: ""; flex: 1; height: 1px; background: var(--border-2);
+    }
+
+    .auth-field { margin-bottom: 13px; }
+    .auth-label {
+      display: block;
+      font-size: 12px; font-weight: 500; color: var(--text);
+      margin-bottom: 6px;
+    }
+    /* Tasteful black-bordered text fields */
+    .auth-input {
+      width: 100%;
+      font-size: 16px; /* >=16px avoids iOS focus zoom */
+      color: var(--ink);
+      background: rgba(255, 255, 255, .7);
+      border: 1.5px solid var(--ink);
+      border-radius: 13px;
+      padding: 12px 14px;
+      transition: box-shadow var(--dur-med), border-color var(--dur-med), background var(--dur-med);
+    }
+    .auth-input::placeholder { color: var(--text-mute); }
+    .auth-input:focus {
+      outline: none;
+      border-color: var(--ink);
+      background: #fff;
+      box-shadow: 0 0 0 4px rgba(15, 15, 16, .10);
+    }
+    .auth-input:disabled { opacity: .55; cursor: not-allowed; }
+
+    .auth-submit {
+      width: 100%;
+      margin-top: 4px;
+      background: var(--ink); color: #fff;
+      font-size: 14px; font-weight: 500;
+      border: 1.5px solid var(--ink);
+      border-radius: 999px;
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: background var(--dur-med), transform var(--dur-fast), opacity var(--dur-med);
+    }
+    .auth-submit:hover { background: #000; }
+    .auth-submit:active { transform: translateY(1px); }
+    .auth-submit:disabled { opacity: .5; cursor: progress; }
+
+    .auth-error {
+      font-size: 12.5px; line-height: 1.45;
+      color: #991b1b; background: #fef2f2;
+      border: 1px solid #fecaca; border-radius: 12px;
+      padding: 9px 12px; margin-bottom: 13px;
+    }
+    .auth-error[hidden] { display: none; }
+
+    .auth-switch {
+      text-align: center;
+      font-size: 13px; color: var(--text-dim);
+      margin-top: 18px;
+    }
+    .auth-switch button {
+      background: none; border: 0; padding: 0;
+      font-size: 13px; font-weight: 600; color: var(--ink);
+      cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+    }
+    .auth-fineprint {
+      text-align: center;
+      font-size: 11px; color: var(--text-mute);
+      margin-top: 16px; line-height: 1.5;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .auth-overlay, .auth-card { transition: none; }
+    }
+    @media (max-width: 640px) {
+      .auth-overlay { padding: 14px; }
+      .auth-card { border-radius: 22px; padding: 26px 20px 22px; }
+      .auth-title { font-size: 20px; }
+      .auth-google .gsi-wrap { width: 100% !important; }
+      /* Trim developer links so the landing nav fits narrow screens */
+      .nav-collapse { display: none; }
+      .btn-signin { padding: 7px 13px; }
+    }
   </style>
 </head>
 <body>
@@ -1022,10 +1206,10 @@
     </button>
     <div class="landing-links">
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
-      <a href="/docs" target="_blank" class="topbar-link">API docs</a>
-      <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
-      <!-- Auth — rendered by initAuth() -->
-      <div id="landingGsiWrap" class="gsi-wrap" hidden aria-label="Sign in with Google"></div>
+      <a href="/docs" target="_blank" class="topbar-link nav-collapse">API docs</a>
+      <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link nav-collapse">GitHub</a>
+      <!-- Auth — toggled by updateAuthUI() -->
+      <button type="button" id="landingSignInBtn" class="btn-signin" hidden onclick="openAuthModal('login')">Sign in</button>
       <div id="landingUserChip" class="user-chip" hidden>
         <img id="landingUserAvatar" src="" class="user-avatar" alt="" />
         <span id="landingUserName" class="user-name"></span>
@@ -1221,7 +1405,10 @@
 
   <div class="account-panel">
     <p class="label mb-2">Account</p>
-    <div id="sidebarGsiWrap" class="gsi-wrap" hidden aria-label="Sign in with Google"></div>
+    <div id="sidebarSignedOut" hidden>
+      <button type="button" class="btn-signin sidebar-signin" onclick="openAuthModal('login')">Sign in</button>
+      <p class="sidebar-signin-hint">Create an account to sync your market briefs across devices.</p>
+    </div>
     <div id="sidebarUserChip" hidden>
       <div class="account-row">
         <img id="sidebarUserAvatar" src="" class="user-avatar" alt="" />
@@ -1258,7 +1445,7 @@
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
       <!-- Auth -->
-      <div id="appGsiWrap" class="gsi-wrap" hidden aria-label="Sign in with Google"></div>
+      <button type="button" id="appSignInBtn" class="btn-signin" hidden onclick="openAuthModal('login')">Sign in</button>
       <div id="appUserChip" class="user-chip" hidden>
         <img id="appUserAvatar" src="" class="user-avatar" alt="" />
         <span id="appUserName" class="user-name"></span>
@@ -1326,6 +1513,53 @@
 
 </main>
 
+</div>
+
+<!-- ── Auth modal ── -->
+<div id="authOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-hidden="true" onclick="if(event.target===this)closeAuthModal()">
+  <div class="auth-card glass" style="position:relative">
+    <button type="button" class="auth-close" onclick="closeAuthModal()" aria-label="Close">✕</button>
+    <span class="auth-brand">
+      <span class="logo-dot"></span>
+      <span class="brand text-lg">Foresea</span>
+    </span>
+    <h2 id="authTitle" class="auth-title">Welcome back</h2>
+    <p id="authSub" class="auth-sub">Sign in to sync your market briefs and track record.</p>
+
+    <div id="authGoogleSection" hidden>
+      <div class="auth-google">
+        <div id="modalGsiWrap" class="gsi-wrap" aria-label="Continue with Google"></div>
+      </div>
+      <div class="auth-divider">or</div>
+    </div>
+
+    <form id="authForm" onsubmit="submitAuthForm(event)" novalidate>
+      <div id="authError" class="auth-error" role="alert" hidden></div>
+
+      <div id="authNameField" class="auth-field" hidden>
+        <label class="auth-label" for="authName">Name</label>
+        <input id="authName" class="auth-input" type="text" autocomplete="name" placeholder="Your name" />
+      </div>
+
+      <div class="auth-field">
+        <label class="auth-label" for="authEmail">Email</label>
+        <input id="authEmail" class="auth-input" type="email" autocomplete="email" placeholder="you@example.com" required />
+      </div>
+
+      <div class="auth-field">
+        <label class="auth-label" for="authPassword">Password</label>
+        <input id="authPassword" class="auth-input" type="password" autocomplete="current-password" placeholder="••••••••" required minlength="8" />
+      </div>
+
+      <button type="submit" id="authSubmit" class="auth-submit">Sign in</button>
+    </form>
+
+    <p class="auth-switch">
+      <span id="authSwitchText">New to Foresea?</span>
+      <button type="button" id="authSwitchBtn" onclick="toggleAuthMode()">Create an account</button>
+    </p>
+    <p class="auth-fineprint">By continuing you agree this is decision support only — verify important markets.</p>
+  </div>
 </div>
 
 <!-- ── Track record overlay ── -->
@@ -2530,13 +2764,13 @@ function _setAuthEl(id, show, data) {
 function updateAuthUI(user) {
   currentUser = user;
   const firstName = (user?.name || '').split(' ')[0];
-  const pic = user?.picture || '';
   const email = user?.email || '';
+  const pic = user?.picture || (user ? _setAvatarFallback(user?.name, email) : '');
 
   if (user) {
-    _setAuthEl('landingGsiWrap', false);
-    _setAuthEl('appGsiWrap', false);
-    _setAuthEl('sidebarGsiWrap', false);
+    _setAuthEl('landingSignInBtn', false);
+    _setAuthEl('appSignInBtn', false);
+    _setAuthEl('sidebarSignedOut', false);
     _setAuthEl('landingUserChip', true, {
       landingUserAvatar: pic,
       landingUserName: firstName,
@@ -2559,12 +2793,122 @@ function updateAuthUI(user) {
     _setAuthEl('appUserChip', false);
     _setAuthEl('headerUserChip', false);
     _setAuthEl('sidebarUserChip', false);
-    if (_gClientId) {
-      _setAuthEl('landingGsiWrap', true);
-      _setAuthEl('appGsiWrap', true);
-      _setAuthEl('sidebarGsiWrap', true);
-    }
+    _setAuthEl('landingSignInBtn', true);
+    _setAuthEl('appSignInBtn', true);
+    _setAuthEl('sidebarSignedOut', true);
   }
+}
+
+// ── Auth modal ───────────────────────────────────────────────────────────────
+let _authMode = 'login';
+let _authBusy = false;
+
+function _setAvatarFallback(name, email) {
+  // Build a deterministic data-URI avatar for password accounts (no Google photo).
+  const initial = ((name || email || '?').trim()[0] || '?').toUpperCase();
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">` +
+    `<rect width="40" height="40" rx="20" fill="#0f0f10"/>` +
+    `<text x="20" y="26" font-family="Inter,sans-serif" font-size="18" font-weight="600" ` +
+    `fill="#fff" text-anchor="middle">${initial}</text></svg>`;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+
+function setAuthMode(mode) {
+  _authMode = mode === 'register' ? 'register' : 'login';
+  const isRegister = _authMode === 'register';
+  document.getElementById('authTitle').textContent = isRegister ? 'Create your account' : 'Welcome back';
+  document.getElementById('authSub').textContent = isRegister
+    ? 'Forecast listed markets, compare quotes, and keep your briefs in sync.'
+    : 'Sign in to sync your market briefs and track record.';
+  document.getElementById('authSubmit').textContent = isRegister ? 'Create account' : 'Sign in';
+  document.getElementById('authSwitchText').textContent = isRegister ? 'Already have an account?' : 'New to Foresea?';
+  document.getElementById('authSwitchBtn').textContent = isRegister ? 'Sign in' : 'Create an account';
+  document.getElementById('authNameField').hidden = !isRegister;
+  document.getElementById('authPassword').setAttribute('autocomplete', isRegister ? 'new-password' : 'current-password');
+  _showAuthError('');
+}
+
+function toggleAuthMode() { setAuthMode(_authMode === 'login' ? 'register' : 'login'); }
+
+function openAuthModal(mode) {
+  setAuthMode(mode || 'login');
+  _showAuthError('');
+  const overlay = document.getElementById('authOverlay');
+  overlay.classList.add('show');
+  overlay.setAttribute('aria-hidden', 'false');
+  document.getElementById('authGoogleSection').hidden = !_gClientId;
+  if (_gClientId) renderGoogleButton('modalGsiWrap', 320);
+  setTimeout(() => document.getElementById('authEmail').focus(), 60);
+}
+
+function closeAuthModal() {
+  const overlay = document.getElementById('authOverlay');
+  overlay.classList.remove('show');
+  overlay.setAttribute('aria-hidden', 'true');
+  _authBusy = false;
+}
+
+function _showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+
+async function submitAuthForm(event) {
+  event.preventDefault();
+  if (_authBusy) return;
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const name = document.getElementById('authName').value.trim();
+  if (!email || !password) { _showAuthError('Enter your email and password.'); return; }
+  if (_authMode === 'register' && password.length < 8) {
+    _showAuthError('Password must be at least 8 characters.');
+    return;
+  }
+  _authBusy = true;
+  const submitBtn = document.getElementById('authSubmit');
+  const baseLabel = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = _authMode === 'register' ? 'Creating…' : 'Signing in…';
+  try {
+    const endpoint = _authMode === 'register' ? '/auth/register' : '/auth/login';
+    const body = _authMode === 'register' ? { email, password, name } : { email, password };
+    const r = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      _showAuthError(_extractError(d) || 'Something went wrong. Please try again.');
+      return;
+    }
+    const user = {
+      user_id: d.user_id,
+      name: d.name,
+      email: d.email,
+      picture: d.picture || _setAvatarFallback(d.name, d.email),
+    };
+    _saveSession(d.token, user);
+    updateAuthUI(user);
+    closeAuthModal();
+    document.getElementById('authForm').reset();
+    await syncConversationsAfterSignIn(user);
+  } catch (e) {
+    _showAuthError('Network error. Check your connection and try again.');
+  } finally {
+    _authBusy = false;
+    submitBtn.disabled = false;
+    submitBtn.textContent = baseLabel;
+  }
+}
+
+function _extractError(d) {
+  if (!d) return '';
+  if (typeof d.detail === 'string') return d.detail;
+  if (Array.isArray(d.detail) && d.detail[0]?.msg) return d.detail[0].msg.replace(/^Value error,\s*/, '');
+  return '';
 }
 
 async function handleGoogleCredential(response) {
@@ -2574,11 +2918,12 @@ async function handleGoogleCredential(response) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ credential: response.credential }),
     });
-    if (!r.ok) { console.error('Auth failed:', await r.text()); return; }
+    if (!r.ok) { _showAuthError('Google sign-in failed. Please try again.'); console.error('Auth failed:', await r.text()); return; }
     const d = await r.json();
     const user = { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
     _saveSession(d.token, user);
     updateAuthUI(user);
+    closeAuthModal();
     await syncConversationsAfterSignIn(user);
   } catch (e) { console.error('Auth error:', e); }
 }
@@ -2601,26 +2946,12 @@ function renderGoogleButton(id, width) {
   google.accounts.id.renderButton(wrap, {
     type: 'standard',
     theme: 'outline',
-    size: 'medium',
-    text: 'signin_with',
-    shape: 'rectangular',
-    logo_alignment: 'left',
+    size: 'large',
+    text: 'continue_with',
+    shape: 'pill',
+    logo_alignment: 'center',
     width,
   });
-  wrap.hidden = !!currentUser;
-}
-
-function triggerSignIn() {
-  if (window.google?.accounts?.id) {
-    google.accounts.id.prompt(notification => {
-      if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
-        renderGoogleButton('appGsiWrap', 160);
-        renderGoogleButton('sidebarGsiWrap', 210);
-        _setAuthEl('appGsiWrap', true);
-        _setAuthEl('sidebarGsiWrap', true);
-      }
-    });
-  }
 }
 
 function signOut() {
@@ -2638,6 +2969,8 @@ async function initAuth() {
     _saveSession(token, user);
     updateAuthUI(user);
     await syncConversationsAfterSignIn(user);
+  } else {
+    updateAuthUI(null);  // reveal the Sign in entry points
   }
 
   // 2. Fetch Google client ID from server
@@ -2649,7 +2982,7 @@ async function initAuth() {
     _gClientId = cfg.google_client_id;
   } catch { return; }
 
-  // 3. Load GIS and render sign-in button (unless already signed in)
+  // 3. Load GIS so the modal's "Continue with Google" button can render on demand.
   const script = document.createElement('script');
   script.src = 'https://accounts.google.com/gsi/client';
   script.onload = () => {
@@ -2658,14 +2991,21 @@ async function initAuth() {
       callback: handleGoogleCredential,
       auto_select: false,
     });
-    if (!currentUser) {
-      renderGoogleButton('landingGsiWrap', 140);
-      renderGoogleButton('appGsiWrap', 160);
-      renderGoogleButton('sidebarGsiWrap', 210);
+    // If the modal is already open (rare), render the button now.
+    if (document.getElementById('authOverlay').classList.contains('show')) {
+      document.getElementById('authGoogleSection').hidden = false;
+      renderGoogleButton('modalGsiWrap', 320);
     }
   };
   document.head.appendChild(script);
 }
+
+// Close the auth modal on Escape.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('authOverlay').classList.contains('show')) {
+    closeAuthModal();
+  }
+});
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 setHistoryState('app', 'replace');
