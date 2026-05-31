@@ -479,6 +479,35 @@ class ServerTests(unittest.TestCase):
         response = self.client.get("/chat/conversations")
         self.assertEqual(response.status_code, 401)
 
+    def test_github_auth_unconfigured_returns_503(self):
+        # GITHUB_CLIENT_ID/SECRET are unset in tests.
+        response = self.client.post("/auth/github", json={"code": "abc"})
+        self.assertEqual(response.status_code, 503)
+
+    def test_github_auth_issues_session(self):
+        import analyzing_llm_rationale.server as srv
+
+        profile = {
+            "sub": "github:123",
+            "email": "octo@example.com",
+            "name": "Octo Cat",
+            "picture": "https://avatars.example/octo.png",
+        }
+        with mock.patch.object(srv, "_exchange_github_code", lambda code, redirect_uri: profile):
+            response = self.client.post(
+                "/auth/github", json={"code": "abc", "redirect_uri": "https://foresea.ink/"}
+            )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["user_id"], "github:123")
+        self.assertEqual(body["email"], "octo@example.com")
+        self.assertTrue(body["token"])
+
+    def test_auth_config_exposes_github_client_id_field(self):
+        cfg = self.client.get("/auth/config").json()
+        self.assertIn("github_client_id", cfg)
+        self.assertIn("google_client_id", cfg)
+
     def test_register_then_login_with_email_password(self):
         register = self.client.post(
             "/auth/register",

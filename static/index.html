@@ -1192,6 +1192,17 @@
       border-radius: 999px;
       overflow: hidden;
     }
+    .auth-github {
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      width: 100%; margin-top: 10px;
+      background: #1f2328; color: #fff;
+      border: 1.5px solid #1f2328; border-radius: 999px;
+      padding: 11px 16px; font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: background var(--dur-med), transform var(--dur-fast);
+    }
+    .auth-github:hover { background: #000; }
+    .auth-github:active { transform: translateY(1px); }
+    .auth-github svg { width: 18px; height: 18px; }
 
     .auth-divider {
       display: flex; align-items: center; gap: 12px;
@@ -1618,10 +1629,14 @@
     <h2 id="authTitle" class="auth-title">Welcome back</h2>
     <p id="authSub" class="auth-sub">Sign in to sync your market briefs and track record.</p>
 
-    <div id="authGoogleSection" hidden>
-      <div class="auth-google">
+    <div id="authSocial" hidden>
+      <div id="authGoogleSection" class="auth-google" hidden>
         <div id="modalGsiWrap" class="gsi-wrap" aria-label="Continue with Google"></div>
       </div>
+      <button type="button" id="githubBtn" class="auth-github" hidden onclick="startGitHubLogin()">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        Continue with GitHub
+      </button>
       <div class="auth-divider">or</div>
     </div>
 
@@ -3040,7 +3055,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 let _gClientId = null;
+let _ghClientId = null;
 let currentUser = null;
+
+// ── GitHub OAuth (authorization-code flow) ────────────────────────────────────
+function _githubRedirectUri() { return location.origin + location.pathname; }
+
+function startGitHubLogin() {
+  if (!_ghClientId) return;
+  const state = (window.crypto?.randomUUID?.() || String(Math.random())).replace(/-/g, '');
+  try { localStorage.setItem('gh_oauth_state', state); } catch {}
+  const params = new URLSearchParams({
+    client_id: _ghClientId,
+    scope: 'read:user user:email',
+    redirect_uri: _githubRedirectUri(),
+    state,
+  });
+  window.location.href = 'https://github.com/login/oauth/authorize?' + params.toString();
+}
+
+async function _maybeCompleteGitHubLogin() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  if (!code || !state) return;
+  let expected = null;
+  try { expected = localStorage.getItem('gh_oauth_state'); } catch {}
+  // Clean the URL regardless so the code isn't reused or left visible.
+  const cleanUrl = location.origin + location.pathname;
+  history.replaceState(null, '', cleanUrl);
+  try { localStorage.removeItem('gh_oauth_state'); } catch {}
+  if (!expected || state !== expected) return;
+  try {
+    const r = await fetch('/auth/github', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, redirect_uri: cleanUrl }),
+    });
+    if (!r.ok) { console.error('GitHub auth failed:', await r.text()); return; }
+    const d = await r.json();
+    const user = { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
+    _saveSession(d.token, user);
+    updateAuthUI(user);
+    closeAuthModal();
+    await syncConversationsAfterSignIn(user);
+  } catch (e) { console.error('GitHub auth error:', e); }
+}
 
 function _loadStoredSession() {
   try {
@@ -3153,7 +3213,9 @@ function openAuthModal(mode) {
   const overlay = document.getElementById('authOverlay');
   overlay.classList.add('show');
   overlay.setAttribute('aria-hidden', 'false');
+  document.getElementById('authSocial').hidden = !(_gClientId || _ghClientId);
   document.getElementById('authGoogleSection').hidden = !_gClientId;
+  document.getElementById('githubBtn').hidden = !_ghClientId;
   // Render after layout so the button width matches the modal.
   if (_gClientId) requestAnimationFrame(() => renderGoogleButton('modalGsiWrap'));
   setTimeout(() => document.getElementById('authEmail').focus(), 60);
@@ -3293,16 +3355,20 @@ async function initAuth() {
     updateAuthUI(null);  // reveal the Sign in entry points
   }
 
-  // 2. Fetch Google client ID from server
+  // 2. Complete a GitHub OAuth round-trip if we just returned from GitHub.
+  await _maybeCompleteGitHubLogin();
+
+  // 3. Fetch public OAuth client IDs (Google + GitHub, independent of each other).
+  let cfg = {};
   try {
     const r = await fetch('/auth/config');
-    if (!r.ok) return;
-    const cfg = await r.json();
-    if (!cfg.google_client_id) return;
-    _gClientId = cfg.google_client_id;
+    if (r.ok) cfg = await r.json();
   } catch { return; }
+  _ghClientId = cfg.github_client_id || null;
+  if (!cfg.google_client_id) return;
+  _gClientId = cfg.google_client_id;
 
-  // 3. Load GIS so the modal's "Continue with Google" button can render on demand.
+  // 4. Load GIS so the modal's "Continue with Google" button can render on demand.
   const script = document.createElement('script');
   script.src = 'https://accounts.google.com/gsi/client';
   script.onload = () => {

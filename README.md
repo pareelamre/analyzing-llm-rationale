@@ -119,6 +119,10 @@ Required runtime environment:
 - `MODEL_DEVICE=cpu`: production Cloud Run runs the CPU image.
 - `CUSTOM_DOMAIN=foresea.ink`: redirects `*.run.app` requests to the public domain.
 - `GOOGLE_CLIENT_ID`: Google OAuth web client ID used by `/auth/config`.
+- `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`: GitHub OAuth app credentials. The
+  OAuth app's callback URL must be the site origin (e.g. `https://foresea.ink/`).
+  When unset, the "Continue with GitHub" button is hidden and `/auth/github`
+  returns 503. Sign-in also works with Google and email/password.
 - `SESSION_SECRET`: long random string used to sign browser session JWTs.
 
 Current Google OAuth client ID:

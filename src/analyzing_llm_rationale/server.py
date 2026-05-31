@@ -40,6 +40,8 @@ _ANALYTICS_DB = Path(os.environ.get("ANALYTICS_DB", "/tmp/foresea_analytics.duck
 
 _REQUIRED_API_KEY: Optional[str] = os.environ.get("API_KEY")
 _GOOGLE_CLIENT_ID: Optional[str] = os.environ.get("GOOGLE_CLIENT_ID")
+_GITHUB_CLIENT_ID: Optional[str] = os.environ.get("GITHUB_CLIENT_ID")
+_GITHUB_CLIENT_SECRET: Optional[str] = os.environ.get("GITHUB_CLIENT_SECRET")
 _SESSION_SECRET: str = os.environ.get("SESSION_SECRET", "change-me-in-production")
 _SESSION_TTL_DAYS = 30
 _state: Dict[str, Any] = {}
@@ -191,6 +193,49 @@ def _verify_google_token(credential: str) -> dict:
         return _verify(credential, _GRequest(), _GOOGLE_CLIENT_ID)
     except Exception as exc:
         raise HTTPException(status_code=401, detail=f"Invalid Google credential: {exc}") from exc
+
+
+def _exchange_github_code(code: str, redirect_uri: Optional[str]) -> dict:
+    """Exchange a GitHub OAuth code for a profile (id, email, name, avatar)."""
+    if not (_GITHUB_CLIENT_ID and _GITHUB_CLIENT_SECRET):
+        raise HTTPException(status_code=503, detail="GitHub auth is not configured on this server.")
+    import requests
+    try:
+        token_resp = requests.post(
+            "https://github.com/login/oauth/access_token",
+            headers={"Accept": "application/json"},
+            data={
+                "client_id": _GITHUB_CLIENT_ID,
+                "client_secret": _GITHUB_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": redirect_uri or "",
+            },
+            timeout=12,
+        )
+        token = token_resp.json().get("access_token")
+        if not token:
+            raise HTTPException(status_code=401, detail="GitHub did not return an access token.")
+        auth_headers = {"Authorization": f"Bearer {token}", "Accept": "application/json",
+                        "User-Agent": "foresea-auth"}
+        user = requests.get("https://api.github.com/user", headers=auth_headers, timeout=12).json()
+        email = user.get("email")
+        if not email:
+            emails = requests.get("https://api.github.com/user/emails", headers=auth_headers, timeout=12).json()
+            if isinstance(emails, list):
+                primary = next((e for e in emails if e.get("primary") and e.get("verified")), None)
+                email = (primary or (emails[0] if emails else {})).get("email", "")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=f"GitHub sign-in failed: {exc}") from exc
+    if not user.get("id"):
+        raise HTTPException(status_code=401, detail="GitHub profile could not be read.")
+    return {
+        "sub": f"github:{user['id']}",
+        "email": email or "",
+        "name": user.get("name") or user.get("login") or "",
+        "picture": user.get("avatar_url") or "",
+    }
 
 
 def _issue_session(sub: str, email: str, name: str, picture: str) -> str:
@@ -1239,6 +1284,12 @@ class GoogleAuthRequest(BaseModel):
     credential: str = Field(..., max_length=8192)
 
 
+class GitHubAuthRequest(BaseModel):
+    """GitHub OAuth authorization code returned to the browser."""
+    code: str = Field(..., max_length=512)
+    redirect_uri: Optional[str] = Field(None, max_length=2000)
+
+
 class RegisterRequest(BaseModel):
     """Email + password sign-up submitted by the browser."""
     email: str = Field(..., max_length=254, description="Account email address.")
@@ -1871,8 +1922,11 @@ async def extract_attachment(  # noqa: B008
 
 @app.get("/auth/config", tags=["Auth"], include_in_schema=False)
 async def auth_config() -> Dict[str, str]:
-    """Return the public Google OAuth client ID so the browser can initialise GIS."""
-    return {"google_client_id": _GOOGLE_CLIENT_ID or ""}
+    """Return public OAuth client IDs so the browser can offer sign-in options."""
+    return {
+        "google_client_id": _GOOGLE_CLIENT_ID or "",
+        "github_client_id": _GITHUB_CLIENT_ID or "",
+    }
 
 
 @app.post("/auth/google", tags=["Auth"], summary="Sign in with Google", response_model=SessionResponse)
@@ -1890,6 +1944,22 @@ async def auth_google(req: GoogleAuthRequest) -> SessionResponse:
     name = claims.get("name", "")
     picture = claims.get("picture", "")
     loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _upsert_user, sub, email, name, picture)
+    token = _issue_session(sub, email, name, picture)
+    return SessionResponse(token=token, user_id=sub, email=email, name=name, picture=picture)
+
+
+@app.post("/auth/github", tags=["Auth"], summary="Sign in with GitHub", response_model=SessionResponse)
+async def auth_github(req: GitHubAuthRequest) -> SessionResponse:
+    """Exchange a GitHub OAuth `code` for the user's profile and return a session token.
+
+    The browser sends users to GitHub's authorize URL, then posts the returned
+    `code` (and the same `redirect_uri`) here. Store the returned `token` like the
+    Google flow.
+    """
+    loop = asyncio.get_running_loop()
+    profile = await loop.run_in_executor(None, _exchange_github_code, req.code, req.redirect_uri)
+    sub, email, name, picture = profile["sub"], profile["email"], profile["name"], profile["picture"]
     await loop.run_in_executor(None, _upsert_user, sub, email, name, picture)
     token = _issue_session(sub, email, name, picture)
     return SessionResponse(token=token, user_id=sub, email=email, name=name, picture=picture)
