@@ -177,6 +177,41 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertIn("api.tavily.com", calls[0][0])
         self.assertEqual(calls[0][1]["api_key"], "tvly-key")
 
+    def test_fetch_web_prefers_searxng(self):
+        class FakeResp:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"results": [
+                    {"title": "CPI", "url": "https://sx.com/cpi", "content": "Inflation."},
+                ]}
+
+        calls = []
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            calls.append(url)
+            return FakeResp()
+
+        original = sys.modules.get("requests")
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+        try:
+            pipeline = NewsPipeline.__new__(NewsPipeline)
+            # SearXNG wins even when other providers are also configured.
+            pipeline._searxng_url = "https://searx.example/"
+            pipeline._tavily_key = "tvly-key"
+            pipeline._serper_key = "serper-key"
+            articles = pipeline._fetch_web("US CPI", limit=5)
+        finally:
+            if original is None:
+                sys.modules.pop("requests", None)
+            else:
+                sys.modules["requests"] = original
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["url"], "https://sx.com/cpi")
+        self.assertIn("searx.example/search", calls[0])
+
     def test_fetch_web_uses_serper_when_keyed(self):
         class FakeResp:
             def raise_for_status(self):

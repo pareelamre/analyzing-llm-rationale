@@ -257,17 +257,17 @@ class NewsPipeline:
         return unique
 
     def _fetch_web(self, query: str, limit: int = 10) -> List[dict]:
-        """General web search. Uses the first configured provider (Tavily,
-        Serper, Brave, or a self-hosted SearXNG), else a keyless DuckDuckGo
-        fallback. Each provider fails open to an empty list."""
+        """General web search. Uses the first configured provider — preferring a
+        self-hosted SearXNG, then Tavily, Serper, Brave — else a keyless
+        DuckDuckGo fallback. Each provider fails open to an empty list."""
+        if getattr(self, "_searxng_url", None):
+            return self._web_searxng(query, limit)
         if getattr(self, "_tavily_key", None):
             return self._web_tavily(query, limit)
         if getattr(self, "_serper_key", None):
             return self._web_serper(query, limit)
         if getattr(self, "_brave_key", None):
             return self._web_brave(query, limit)
-        if getattr(self, "_searxng_url", None):
-            return self._web_searxng(query, limit)
         return self._web_duckduckgo(query, limit)
 
     @staticmethod

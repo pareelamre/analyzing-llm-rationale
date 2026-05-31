@@ -176,7 +176,7 @@ The server is built to scale horizontally on Cloud Run:
 | `EVIDENCE_CACHE_TTL` | `900` | Cache TTL (s) for evidence retrieval. |
 | `EXTRACT_CACHE_TTL` | `3600` | Cache TTL (s) for `/extract` URL fetches. |
 | `LOCAL_CACHE_MAX` | `1024` | Max entries in the in-memory fallback cache. |
-| `TAVILY_API_KEY` / `SERPER_API_KEY` / `BRAVE_API_KEY` / `SEARXNG_URL` | unset | Enable web search as an evidence source (first one configured wins). Tavily and Serper have free, no-card tiers; SearXNG is self-hosted. When none is set, evidence comes from GDELT, Google News, and RSS. |
+| `SEARXNG_URL` / `TAVILY_API_KEY` / `SERPER_API_KEY` / `BRAVE_API_KEY` | unset | Enable web search as an evidence source. A self-hosted **SearXNG** is preferred when set, then Tavily, Serper, Brave. Tavily/Serper have free no-card tiers. When none is set, evidence comes from GDELT, Google News, and RSS. |
 | `NEWSAPI_KEY` | unset | Enables NewsAPI as an evidence source. |
 
 Raise the Cloud Run throughput ceiling (no idle cost while `min-instances=0`):
