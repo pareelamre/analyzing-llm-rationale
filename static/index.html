@@ -1098,6 +1098,25 @@
     .model-cancel { flex: 1; background: transparent; color: var(--text-dim); border: 1px solid var(--border-2); border-radius: 999px; padding: 8px; font-size: 12px; cursor: pointer; }
     .model-cancel:hover { color: var(--ink); border-color: var(--ink); }
 
+    /* ── Config panel (collapses model + agent skills) ────────────────────── */
+    .config-panel { border: 0; }
+    .config-summary {
+      cursor: pointer; list-style: none; display: flex; align-items: center; gap: 7px;
+      font-size: 13px; color: var(--text-dim); padding: 10px 12px; border-radius: 18px;
+      user-select: none; transition: background var(--dur-med), color var(--dur-med);
+    }
+    .config-summary::-webkit-details-marker { display: none; }
+    .config-summary:hover { background: #ececef; color: var(--ink); }
+    .config-panel[open] .config-summary { color: var(--ink); }
+    .config-chevron { transition: transform .15s; flex-shrink: 0; }
+    .config-panel[open] .config-chevron { transform: rotate(180deg); }
+    .config-active {
+      margin-left: auto; font-size: 11px; color: var(--text-mute);
+      max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .config-body { padding: 4px 10px 8px; display: flex; flex-direction: column; gap: 16px; }
+    .config-group { display: flex; flex-direction: column; gap: 6px; }
+
     /* ── Glass surfaces ──────────────────────────────────────────────────── */
     .glass {
       background: rgba(255, 255, 255, .62);
@@ -1431,27 +1450,22 @@
     </div>
   </details>
 
-  <!-- Model info / OpenRouter -->
-  <div class="border border-gray-200 rounded-sm bg-white p-3 text-xs text-gray-500 space-y-2">
-    <div class="flex justify-between items-center">
-      <span>Model</span>
-      <span id="activeModelLabel" class="text-gray-800 font-medium truncate ml-2 max-w-[120px]">gpt-oss-120b</span>
-    </div>
+  <!-- Config: model + agent skills, collapsed to keep the sidebar clean -->
+  <details class="config-panel" id="configDetails">
+    <summary class="config-summary">
+      <svg class="config-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Config</span>
+      <span id="activeModelLabel" class="config-active">gpt-oss-120b</span>
+    </summary>
+    <div class="config-body" onclick="event.stopPropagation()">
 
-    <!-- OpenRouter toggle -->
-    <details class="group" id="orDetails">
-      <summary class="cursor-pointer text-gray-500 hover:text-gray-900 flex items-center gap-1 list-none select-none" style="list-style:none">
-        <svg id="orChevron" width="10" height="10" viewBox="0 0 10 10" fill="none" style="transition:transform .15s">
-          <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Use your own model
-      </summary>
-      <div class="mt-2" onclick="event.stopPropagation()">
-        <!-- Saved models (rendered by renderModelList) -->
+      <!-- Model -->
+      <div class="config-group">
+        <p class="label" style="margin:0 0 2px">Model</p>
         <div id="modelList" class="model-list"></div>
         <button type="button" id="addModelBtn" class="model-add-btn" onclick="startAddModel()">+ Add a model</button>
-
-        <!-- Add / edit form -->
         <div id="modelForm" class="model-form" hidden>
           <div>
             <label class="label block mb-1" for="mfName">Name</label>
@@ -1499,40 +1513,42 @@
           <p class="text-gray-400" style="font-size:10px">Keys are stored only in your browser.</p>
         </div>
       </div>
-    </details>
 
-    <div class="pt-1 border-t border-gray-200">
-      <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70">API docs ↗</a>
-    </div>
-  </div>
+      <!-- Agent skills -->
+      <div class="config-group">
+        <div class="flex items-center justify-between">
+          <p class="label" style="margin:0">Agent skills</p>
+          <label class="flex items-center gap-1.5 cursor-pointer select-none" title="Route questions through the analysis agent">
+            <input type="checkbox" id="agentToggle" onchange="toggleAgent()" />
+            <span class="text-xs" style="color:var(--text-dim)">Use</span>
+          </label>
+        </div>
+        <div id="skillList" class="model-list"></div>
+        <button type="button" id="addSkillBtn" class="model-add-btn" onclick="startAddSkill()">+ Add a skill</button>
+        <div id="skillForm" class="model-form" hidden>
+          <div>
+            <label class="label block mb-1" for="sfName">Name</label>
+            <input id="sfName" class="variant-select text-xs" placeholder="e.g. Base rate check" autocomplete="off" />
+          </div>
+          <div>
+            <label class="label block mb-1" for="sfInstruction">Instruction</label>
+            <textarea id="sfInstruction" class="variant-select text-xs" rows="3" placeholder="What should this skill analyse?" style="resize:vertical;min-height:56px"></textarea>
+          </div>
+          <div id="sfError" class="model-form-error" hidden></div>
+          <div class="model-form-actions">
+            <button type="button" class="model-save" onclick="saveSkillForm()">Save</button>
+            <button type="button" class="model-cancel" onclick="cancelSkillForm()">Cancel</button>
+          </div>
+        </div>
+        <p class="text-gray-400" style="font-size:10px;margin-top:2px">When “Use” is on, the agent fetches evidence, forecasts, prices the edge, and runs your skills.</p>
+      </div>
 
-  <div class="account-panel">
-    <div class="flex items-center justify-between mb-2">
-      <p class="label" style="margin:0">Agent skills</p>
-      <label class="flex items-center gap-1.5 cursor-pointer select-none" title="Route questions through the analysis agent">
-        <input type="checkbox" id="agentToggle" onchange="toggleAgent()" />
-        <span class="text-xs" style="color:var(--text-dim)">Use</span>
-      </label>
-    </div>
-    <div id="skillList" class="model-list"></div>
-    <button type="button" id="addSkillBtn" class="model-add-btn" onclick="startAddSkill()">+ Add a skill</button>
-    <div id="skillForm" class="model-form" hidden>
-      <div>
-        <label class="label block mb-1" for="sfName">Name</label>
-        <input id="sfName" class="variant-select text-xs" placeholder="e.g. Base rate check" autocomplete="off" />
-      </div>
-      <div>
-        <label class="label block mb-1" for="sfInstruction">Instruction</label>
-        <textarea id="sfInstruction" class="variant-select text-xs" rows="3" placeholder="What should this skill analyse?" style="resize:vertical;min-height:56px"></textarea>
-      </div>
-      <div id="sfError" class="model-form-error" hidden></div>
-      <div class="model-form-actions">
-        <button type="button" class="model-save" onclick="saveSkillForm()">Save</button>
-        <button type="button" class="model-cancel" onclick="cancelSkillForm()">Cancel</button>
+      <!-- API docs -->
+      <div class="pt-2 border-t border-gray-200">
+        <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">API docs ↗</a>
       </div>
     </div>
-    <p class="text-gray-400" style="font-size:10px;margin-top:6px">When “Use” is on, the agent fetches evidence, forecasts, prices the edge, and runs your skills.</p>
-  </div>
+  </details>
 
   <div class="account-panel">
     <p class="label mb-2">Account</p>
@@ -3078,7 +3094,7 @@ function loadOrSettings() {
   _migrateLegacyModel();
   renderModelList();
   if (_loadModels().length) {
-    const det = document.getElementById('orDetails');
+    const det = document.getElementById('configDetails');
     if (det) det.open = true;
   }
   _updateModelLabel();
@@ -3166,6 +3182,10 @@ function loadAgentSkills() {
   const t = document.getElementById('agentToggle');
   if (t) t.checked = _agentEnabled();
   renderSkillList();
+  if (_loadSkills().length || _agentEnabled()) {
+    const d = document.getElementById('configDetails');
+    if (d) d.open = true;
+  }
 }
 
 // Format an /agent/analyze report as markdown for the chat bubble.
@@ -3185,17 +3205,6 @@ function _agentReportToMarkdown(d) {
   if (srcs.length) md += `\n\n---\n*Sources: ${srcs.join(', ')}*`;
   return md;
 }
-
-// Rotate chevron when details opens/closes
-document.addEventListener('DOMContentLoaded', () => {
-  const det = document.getElementById('orDetails');
-  const chev = document.getElementById('orChevron');
-  if (det && chev) {
-    det.addEventListener('toggle', () => {
-      chev.style.transform = det.open ? 'rotate(180deg)' : '';
-    });
-  }
-});
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 let _gClientId = null;
