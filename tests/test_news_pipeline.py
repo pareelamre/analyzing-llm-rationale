@@ -142,28 +142,27 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(articles[0]["search_query"], "Stooq - Wiadomosci Biznes")
         self.assertIn("static.stooq.com/rss/pl/b.rss", calls[0][0])
 
-    def test_fetch_web_maps_brave_results(self):
-        class FakeBraveResponse:
+    def test_fetch_web_uses_tavily_when_keyed(self):
+        class FakeResp:
             def raise_for_status(self):
                 return None
 
             def json(self):
-                return {"web": {"results": [
-                    {"title": "US CPI rises", "url": "https://ex.com/cpi",
-                     "description": "Inflation update.", "profile": {"name": "Example"}},
-                ]}}
+                return {"results": [
+                    {"title": "US CPI rises", "url": "https://ex.com/cpi", "content": "Inflation update."},
+                ]}
 
         calls = []
 
-        def fake_get(url, params, headers, timeout):
-            calls.append((url, params, headers))
-            return FakeBraveResponse()
+        def fake_post(url, json=None, headers=None, timeout=None):
+            calls.append((url, json, headers))
+            return FakeResp()
 
         original = sys.modules.get("requests")
-        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+        sys.modules["requests"] = SimpleNamespace(post=fake_post)
         try:
             pipeline = NewsPipeline.__new__(NewsPipeline)
-            pipeline._brave_key = "test-key"
+            pipeline._tavily_key = "tvly-key"
             articles = pipeline._fetch_web("US CPI inflation December 2026", limit=5)
         finally:
             if original is None:
@@ -172,10 +171,41 @@ class NewsPipelineSourceTests(unittest.TestCase):
                 sys.modules["requests"] = original
 
         self.assertEqual(len(articles), 1)
-        self.assertEqual(articles[0]["source"], "Example")
+        self.assertEqual(articles[0]["source"], "ex.com")
         self.assertEqual(articles[0]["source_channel"], "web")
         self.assertEqual(articles[0]["url"], "https://ex.com/cpi")
-        self.assertEqual(calls[0][2]["X-Subscription-Token"], "test-key")
+        self.assertIn("api.tavily.com", calls[0][0])
+        self.assertEqual(calls[0][1]["api_key"], "tvly-key")
+
+    def test_fetch_web_uses_serper_when_keyed(self):
+        class FakeResp:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"organic": [
+                    {"title": "CPI report", "link": "https://news.com/cpi", "snippet": "Prices up."},
+                ]}
+
+        def fake_post(url, json=None, headers=None, timeout=None):
+            return FakeResp()
+
+        original = sys.modules.get("requests")
+        sys.modules["requests"] = SimpleNamespace(post=fake_post)
+        try:
+            pipeline = NewsPipeline.__new__(NewsPipeline)
+            pipeline._tavily_key = None
+            pipeline._serper_key = "serper-key"
+            articles = pipeline._fetch_web("US CPI", limit=5)
+        finally:
+            if original is None:
+                sys.modules.pop("requests", None)
+            else:
+                sys.modules["requests"] = original
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["url"], "https://news.com/cpi")
+        self.assertEqual(articles[0]["source"], "news.com")
 
     def test_stooq_not_in_default_sources(self):
         from analyzing_llm_rationale.news_pipeline import DEFAULT_FETCH_SOURCES

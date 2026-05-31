@@ -23,7 +23,8 @@ STOOQ_RSS_FEEDS = (
 
 # Stooq (Polish stock-market RSS) is not in the defaults — it was query-agnostic
 # and leaked irrelevant headlines into evidence. It stays available if explicitly
-# configured. `web` is a real web search (Brave), active when BRAVE_API_KEY is set.
+# configured. `web` is real web search, active when a provider is configured:
+# TAVILY_API_KEY, SERPER_API_KEY, BRAVE_API_KEY, or SEARXNG_URL.
 DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "rss")
 SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "newsapi", "rss", "stooq")
 HIGH_CREDIBILITY_SOURCES = {
@@ -193,6 +194,9 @@ class NewsPipeline:
         self._embeddings = None
         self._newsapi_key = newsapi_key or os.environ.get("NEWSAPI_KEY")
         self._brave_key = os.environ.get("BRAVE_API_KEY")
+        self._tavily_key = os.environ.get("TAVILY_API_KEY")
+        self._serper_key = os.environ.get("SERPER_API_KEY")
+        self._searxng_url = os.environ.get("SEARXNG_URL")
         self._use_query_planner = use_query_planner
         self._fetch_sources = tuple(fetch_sources or DEFAULT_FETCH_SOURCES)
         self._summarize_articles = summarize_articles
@@ -218,7 +222,11 @@ class NewsPipeline:
         articles: List[dict] = []
         per_source_limit = max(top_k, 10)
 
-        if getattr(self, "_brave_key", None) and "web" in self._fetch_sources:
+        web_configured = any((
+            getattr(self, "_tavily_key", None), getattr(self, "_serper_key", None),
+            getattr(self, "_brave_key", None), getattr(self, "_searxng_url", None),
+        ))
+        if "web" in self._fetch_sources and web_configured:
             articles.extend(self._fetch_web(query, limit=per_source_limit))
 
         if self._newsapi_key and "newsapi" in self._fetch_sources:
@@ -249,31 +257,140 @@ class NewsPipeline:
         return unique
 
     def _fetch_web(self, query: str, limit: int = 10) -> List[dict]:
-        """General web search via the Brave Search API (needs BRAVE_API_KEY)."""
+        """General web search. Uses the first configured provider (Tavily,
+        Serper, Brave, or a self-hosted SearXNG), else a keyless DuckDuckGo
+        fallback. Each provider fails open to an empty list."""
+        if getattr(self, "_tavily_key", None):
+            return self._web_tavily(query, limit)
+        if getattr(self, "_serper_key", None):
+            return self._web_serper(query, limit)
+        if getattr(self, "_brave_key", None):
+            return self._web_brave(query, limit)
+        if getattr(self, "_searxng_url", None):
+            return self._web_searxng(query, limit)
+        return self._web_duckduckgo(query, limit)
+
+    @staticmethod
+    def _domain(url: str) -> str:
+        from urllib.parse import urlparse
+        return (urlparse(url).netloc or "").replace("www.", "") or "Web"
+
+    def _web_tavily(self, query: str, limit: int = 10) -> List[dict]:
+        try:
+            import requests
+            resp = requests.post(
+                "https://api.tavily.com/search",
+                json={"api_key": self._tavily_key, "query": query,
+                      "max_results": min(limit, 20), "search_depth": "basic"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            return [{
+                "title": r.get("title") or "", "url": r.get("url") or "",
+                "publish_date": r.get("published_date") or "",
+                "text": r.get("content") or "", "summary": r.get("content") or r.get("title") or "",
+                "source": self._domain(r.get("url") or ""), "source_channel": "web",
+            } for r in resp.json().get("results", [])]
+        except Exception:
+            return []
+
+    def _web_serper(self, query: str, limit: int = 10) -> List[dict]:
+        try:
+            import requests
+            resp = requests.post(
+                "https://google.serper.dev/search",
+                headers={"X-API-KEY": self._serper_key, "Content-Type": "application/json"},
+                json={"q": query, "num": min(limit, 20)},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            return [{
+                "title": r.get("title") or "", "url": r.get("link") or "",
+                "publish_date": r.get("date") or "",
+                "text": r.get("snippet") or "", "summary": r.get("snippet") or r.get("title") or "",
+                "source": self._domain(r.get("link") or ""), "source_channel": "web",
+            } for r in resp.json().get("organic", [])]
+        except Exception:
+            return []
+
+    def _web_brave(self, query: str, limit: int = 10) -> List[dict]:
         try:
             import requests
             resp = requests.get(
                 "https://api.search.brave.com/res/v1/web/search",
                 params={"q": query, "count": min(limit, 20)},
-                headers={
-                    "Accept": "application/json",
-                    "X-Subscription-Token": self._brave_key,
-                },
+                headers={"Accept": "application/json", "X-Subscription-Token": self._brave_key},
                 timeout=15,
             )
             resp.raise_for_status()
-            results = (resp.json().get("web") or {}).get("results", [])
-            articles = []
-            for item in results:
+            return [{
+                "title": r.get("title") or "", "url": r.get("url") or "",
+                "publish_date": r.get("page_age") or r.get("age") or "",
+                "text": r.get("description") or "", "summary": r.get("description") or r.get("title") or "",
+                "source": (r.get("profile") or {}).get("name") or self._domain(r.get("url") or ""),
+                "source_channel": "web",
+            } for r in (resp.json().get("web") or {}).get("results", [])]
+        except Exception:
+            return []
+
+    def _web_searxng(self, query: str, limit: int = 10) -> List[dict]:
+        try:
+            import requests
+            base = self._searxng_url.rstrip("/")
+            resp = requests.get(
+                f"{base}/search",
+                params={"q": query, "format": "json", "safesearch": 0},
+                headers={"User-Agent": "foresea-market-bot/1.0"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            return [{
+                "title": r.get("title") or "", "url": r.get("url") or "",
+                "publish_date": r.get("publishedDate") or "",
+                "text": r.get("content") or "", "summary": r.get("content") or r.get("title") or "",
+                "source": self._domain(r.get("url") or ""), "source_channel": "web",
+            } for r in resp.json().get("results", [])[:limit]]
+        except Exception:
+            return []
+
+    def _web_duckduckgo(self, query: str, limit: int = 10) -> List[dict]:
+        """Keyless best-effort fallback (HTML endpoint; may be rate-limited)."""
+        try:
+            from urllib.parse import parse_qs, unquote, urlparse
+
+            import requests
+            resp = requests.post(
+                "https://html.duckduckgo.com/html/",
+                data={"q": query},
+                headers={"User-Agent": "Mozilla/5.0 (compatible; foresea/1.0)"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            try:
+                from bs4 import BeautifulSoup
+            except ImportError:
+                return []
+            soup = BeautifulSoup(resp.text, "html.parser")
+            articles: List[dict] = []
+            for res in soup.select(".result"):
+                a = res.select_one("a.result__a")
+                if not a:
+                    continue
+                href = a.get("href") or ""
+                if "uddg=" in href:  # unwrap DuckDuckGo redirect
+                    href = unquote(parse_qs(urlparse(href).query).get("uddg", [href])[0])
+                title = a.get_text(" ", strip=True)
+                if not href or not title:
+                    continue
+                snippet = res.select_one(".result__snippet")
+                text = snippet.get_text(" ", strip=True) if snippet else ""
                 articles.append({
-                    "title": item.get("title") or "",
-                    "url": item.get("url") or "",
-                    "publish_date": item.get("page_age") or item.get("age") or "",
-                    "text": item.get("description") or "",
-                    "summary": item.get("description") or item.get("title") or "",
-                    "source": (item.get("profile") or {}).get("name") or item.get("url") or "Web",
-                    "source_channel": "web",
+                    "title": title, "url": href, "publish_date": "",
+                    "text": text, "summary": text or title,
+                    "source": self._domain(href), "source_channel": "web",
                 })
+                if len(articles) >= limit:
+                    break
             return articles
         except Exception:
             return []
