@@ -170,6 +170,7 @@
       display: inline-block; margin: 2px; transition: background var(--dur-med), border-color var(--dur-med), transform var(--dur-med), color var(--dur-med);
     }
     .source-chip:hover { background: #e9e9eb; }
+    .source-chip-src { margin-left: 6px; color: var(--text-mute); font-size: 10px; }
 
     /* Conversation items */
     .conv-item {
@@ -2266,6 +2267,26 @@ function makeMarketLens(data) {
     </div>`;
 }
 
+// Clickable source feed rendered at the bottom of an answer so the reader can
+// open the underlying articles. Prefers the article title, falls back to the
+// publisher name; the whole chip links to the article URL when we have one.
+function sourceFeedHtml(sources) {
+  const list = (sources || []).filter(s => s && (s.url || s.title || s.source));
+  if (!list.length) return '';
+  const chips = list.map(s => {
+    const label = s.title || s.source || s.url;
+    const sub = s.title && s.source ? `<span class="source-chip-src">${escHtml(s.source)}</span>` : '';
+    return s.url
+      ? `<a href="${escHtml(s.url)}" target="_blank" rel="noopener" class="source-chip hover:opacity-80" title="${escAttr(s.title || s.source || '')}">${escHtml(label)}${sub}</a>`
+      : `<span class="source-chip">${escHtml(label)}</span>`;
+  }).join('');
+  return `
+    <div class="mt-4 pt-3 border-t border-gray-200">
+      <p class="label mb-2">Sources</p>
+      <div>${chips}</div>
+    </div>`;
+}
+
 function makeAIBubble(data, variant) {
   const qtype = data.question_type || 'binary';
   const rationale = data.rationale || '';
@@ -2281,6 +2302,7 @@ function makeAIBubble(data, variant) {
     div.innerHTML = `
       <div class="msg-ai p-4 sm:p-5">
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
+        ${sourceFeedHtml(sources)}
       </div>`;
     return div;
   }
@@ -2338,15 +2360,7 @@ function makeAIBubble(data, variant) {
       `;
   }
 
-  const sourcesHtml = sources.length ? `
-    <div class="mt-4 pt-3 border-t border-gray-200">
-      <p class="label mb-2">Source feed</p>
-      <div>${sources.map(s =>
-        s.url
-          ? `<a href="${escHtml(s.url)}" target="_blank" class="source-chip hover:opacity-80">${escHtml(s.source)}</a>`
-          : `<span class="source-chip">${escHtml(s.source)}</span>`
-      ).join('')}</div>
-    </div>` : '';
+  const sourcesHtml = sourceFeedHtml(sources);
 
   const typeTag = qtype !== 'binary' ? ' · ' + qtype.replace(/_/g, ' ') : '';
   const marketLensHtml = makeMarketLens(data);
