@@ -6,13 +6,16 @@ import hmac
 import html
 import ipaddress
 import json
+import logging
 import os
+import random
 import re
 import secrets
 import smtplib
 import threading
 import time
 import traceback
+import uuid
 from collections import OrderedDict, defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -24,7 +27,7 @@ from urllib.parse import urlparse
 import duckdb
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -46,6 +49,22 @@ _GITHUB_CLIENT_SECRET: Optional[str] = os.environ.get("GITHUB_CLIENT_SECRET")
 _SESSION_SECRET: str = os.environ.get("SESSION_SECRET", "change-me-in-production")
 _SESSION_TTL_DAYS = 30
 _state: Dict[str, Any] = {}
+
+logger = logging.getLogger("foresea")
+
+# ── Resilience knobs (all free; env-overridable) ──────────────────────────────
+# Live forecast calls retry transient upstream failures with bounded backoff and
+# a per-attempt timeout, so a flaky SCADS AI response degrades gracefully into a
+# clean 503 instead of a raw 500. The batch pipeline already retries; this brings
+# the live /predict + agent paths up to the same standard.
+_PROVIDER_MAX_RETRIES = int(os.environ.get("PROVIDER_MAX_RETRIES", "2"))      # attempts = retries + 1
+_PROVIDER_TIMEOUT_S = float(os.environ.get("PROVIDER_TIMEOUT_S", "90"))       # per-attempt wall-clock budget
+_PROVIDER_BACKOFF_BASE_S = float(os.environ.get("PROVIDER_BACKOFF_BASE_S", "0.5"))
+# Reject oversized request bodies before they reach a handler. Generous enough
+# for PDF uploads on /extract, small enough to blunt memory-exhaustion abuse.
+_MAX_BODY_BYTES = int(os.environ.get("MAX_BODY_BYTES", str(12 * 1024 * 1024)))
+# Flipped to False during graceful shutdown so /ready drains in-flight traffic.
+_ready = True
 
 # Conversational system prompt for chat_mode — overrides the JSON-only forecast
 # prompt so replies are natural language, not a forecast template.
@@ -755,7 +774,15 @@ _rate_limiter = _RateLimiter(calls=20, period=60)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _ready
+    _ready = True
+    logger.info("foresea server starting up")
     yield
+    # Graceful shutdown: flip readiness so the load balancer stops routing new
+    # traffic while uvicorn drains in-flight requests on SIGTERM (Cloud Run
+    # instance recycle).
+    _ready = False
+    logger.info("foresea server shutting down (draining in-flight requests)")
 
 
 app = FastAPI(
@@ -806,26 +833,96 @@ async def host_redirect_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-# Middleware to catch unhandled exceptions and send an alert email
+# Middleware to catch unhandled exceptions: alert + return a scrubbed response.
+# Intentional HTTPExceptions are handled by FastAPI before reaching here, so
+# anything caught here is a genuine bug — never leak its traceback to the client.
 @app.middleware("http")
 async def exception_alert_middleware(request: Request, call_next):
     try:
         return await call_next(request)
     except Exception as exc:
-        # Build alert
+        request_id = getattr(request.state, "request_id", "-")
         tb = traceback.format_exc()
+        logger.error("unhandled error [%s] %s %s\n%s",
+                     request_id, request.method, request.url.path, tb)
         subject = f"Foresea server error: {type(exc).__name__}"
         body = (
+            f"Request ID: {request_id}\n"
             f"Request: {request.method} {request.url}\n"
             f"Host: {request.headers.get('host')}\n\n"
             f"Exception:\n{tb}"
         )
-        # Send email in background thread to avoid blocking
+        # Send email in background thread to avoid blocking the response.
         try:
             threading.Thread(target=_send_alert_email, args=(subject, body), daemon=True).start()
         except Exception:
             pass
-        raise
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error.", "request_id": request_id},
+            headers={"X-Request-ID": request_id},
+        )
+
+
+# Reject oversized request bodies up front (Content-Length based) so a handler
+# never has to buffer a hostile payload.
+@app.middleware("http")
+async def body_size_limit_middleware(request: Request, call_next):
+    cl = request.headers.get("content-length")
+    if cl is not None:
+        try:
+            if int(cl) > _MAX_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Request body exceeds the {_MAX_BODY_BYTES // (1024 * 1024)} MB limit."},
+                )
+        except ValueError:
+            pass
+    return await call_next(request)
+
+
+# Standard security headers on every response (table-stakes for a public API).
+_SECURITY_HEADERS = {
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+    # Permissive enough for the SPA's CDNs (Tailwind, jsDelivr, Google fonts/GIS)
+    # while still blocking arbitrary origins, plugins, and framing.
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com "
+        "https://cdn.jsdelivr.net https://accounts.google.com https://www.gstatic.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net "
+        "https://accounts.google.com; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "connect-src 'self' https://api.openai.com https://openrouter.ai https://accounts.google.com "
+        "https://www.gstatic.com; "
+        "frame-src https://accounts.google.com; "
+        "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+    ),
+}
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    for key, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(key, value)
+    return response
+
+
+# Assign a request ID to every request (honouring an inbound X-Request-ID) so
+# logs, error responses, and alerts can be correlated. Outermost middleware.
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 
 def _send_alert_email(subject: str, body: str) -> None:
@@ -859,6 +956,77 @@ def _send_alert_email(subject: str, body: str) -> None:
                 s.send_message(msg)
     except Exception:
         return
+
+
+async def _provider_chat(provider, messages, temperature, max_tokens) -> str:
+    """Run a blocking ``chat_completion`` in the default executor with a
+    per-attempt timeout and bounded exponential backoff (+jitter) on transient
+    failures.
+
+    ``ContextLimitError`` and non-retryable ``ProviderResponseError`` propagate
+    immediately — only ``RetryableProviderError`` and timeouts are retried.
+    Callers map the raised exception to a clean HTTP status via
+    :func:`_provider_http_error`.
+    """
+    from analyzing_llm_rationale.providers import (
+        ContextLimitError,
+        RetryableProviderError,
+    )
+
+    loop = asyncio.get_running_loop()
+    attempts = max(1, _PROVIDER_MAX_RETRIES + 1)
+    last_exc: Optional[Exception] = None
+    for attempt in range(attempts):
+        try:
+            return await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: provider.chat_completion(messages, temperature, max_tokens),
+                ),
+                timeout=_PROVIDER_TIMEOUT_S,
+            )
+        except ContextLimitError:
+            raise
+        except (RetryableProviderError, asyncio.TimeoutError) as exc:
+            last_exc = exc
+            if attempt == attempts - 1:
+                break
+            delay = _PROVIDER_BACKOFF_BASE_S * (2 ** attempt)
+            delay += random.uniform(0, delay * 0.25)  # jitter to avoid thundering herd
+            logger.warning(
+                "provider call failed (attempt %d/%d), retrying in %.2fs: %s",
+                attempt + 1, attempts, delay, type(exc).__name__,
+            )
+            await asyncio.sleep(delay)
+    assert last_exc is not None
+    raise last_exc
+
+
+def _provider_http_error(exc: Exception) -> HTTPException:
+    """Map a provider exception to a clean, non-leaky HTTPException.
+
+    The raw exception text (which can include upstream URLs/keys/prompts) is
+    logged server-side, never returned to the client.
+    """
+    from analyzing_llm_rationale.providers import (
+        ContextLimitError,
+        RetryableProviderError,
+    )
+
+    logger.error("provider error: %s: %s", type(exc).__name__, exc)
+    if isinstance(exc, ContextLimitError):
+        return HTTPException(
+            status_code=422,
+            detail="The question plus evidence is too long for the model's context window. Try a shorter question or fewer attachments.",
+        )
+    if isinstance(exc, (RetryableProviderError, asyncio.TimeoutError)):
+        return HTTPException(
+            status_code=503,
+            detail="The forecasting model is temporarily unavailable. Please retry in a moment.",
+            headers={"Retry-After": "10"},
+        )
+    return HTTPException(status_code=502, detail="The forecasting model returned an unexpected response.")
+
 
 if _STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
@@ -1943,6 +2111,31 @@ async def health() -> Dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get(
+    "/ready",
+    tags=["System"],
+    summary="Readiness check",
+    response_description="Whether the service is ready to serve traffic.",
+)
+async def ready() -> JSONResponse:
+    """Returns 200 when the server is initialised and accepting traffic, 503
+    otherwise (still booting, misconfigured, or draining on shutdown).
+
+    Unlike `/health` (liveness), this verifies the forecasting provider is
+    configured — use it for load-balancer readiness routing.
+    """
+    provider_ready = bool(_state.get("provider"))
+    ok = _ready and provider_ready
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={
+            "ready": ok,
+            "provider_configured": provider_ready,
+            "draining": not _ready,
+        },
+    )
+
+
 @app.post("/analytics/visit", tags=["System"], summary="Record anonymous page visit")
 async def record_visit(event: VisitRequest, request: Request) -> Dict[str, str]:
     """Record one anonymous page visit.
@@ -2499,14 +2692,10 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         temperature = _state["temperature"]
         max_tokens = _state["max_tokens"]
 
-    loop = asyncio.get_running_loop()
     try:
-        content = await loop.run_in_executor(
-            None,
-            lambda: provider.chat_completion(messages, temperature, max_tokens),
-        )
+        content = await _provider_chat(provider, messages, temperature, max_tokens)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Provider error: {exc}") from exc
+        raise _provider_http_error(exc) from exc
 
     parsed = _parse_json_dict(content)
     if req.chat_mode:
@@ -2659,14 +2848,12 @@ async def _run_agent_skill(skill: AgentSkill, context: str, provider, temperatur
         {"role": "system", "content": _AGENT_SKILL_SYSTEM},
         {"role": "user", "content": f"{context}\n\nSkill: {skill.name}\nInstruction: {skill.instruction}"},
     ]
-    loop = asyncio.get_running_loop()
     try:
-        output = await loop.run_in_executor(
-            None, lambda: provider.chat_completion(messages, temperature, max_tokens)
-        )
+        output = await _provider_chat(provider, messages, temperature, max_tokens)
         return AgentSkillResult(name=skill.name, output=(output or "").strip())
     except Exception as exc:
-        return AgentSkillResult(name=skill.name, output=f"(skill failed: {exc})")
+        logger.warning("agent skill %r failed: %s", skill.name, type(exc).__name__)
+        return AgentSkillResult(name=skill.name, output="(this analysis step is temporarily unavailable)")
 
 
 @app.post("/agent/analyze", tags=["Agents"], summary="Run the analysis agent on a live question", response_model=AgentReport)
