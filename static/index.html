@@ -2427,14 +2427,13 @@ async function sendQuestion() {
   document.getElementById('messages').appendChild(userNode);
   animateIn(userNode);
 
-  // Agent mode: if the input isn't a specific market to price, guide with examples.
+  // Agent mode: a "find me an edge" style request isn't a single market to
+  // price — run an edge scan (honouring any venue + topic named in the text)
+  // instead of forcing a forecast on the literal phrase.
   if (_agentEnabled() && _isDiscoveryRequest(question)) {
-    const data = { question_type: 'chat', rationale: _agentDiscoveryGuidance(), model_key: 'agent' };
-    appendMessage(activeId, { role: 'assistant', data, content: data.rationale });
-    const node = makeAIBubble(data);
-    document.getElementById('messages').appendChild(node);
-    animateIn(node); enhanceCard(node); scrollBottom();
+    const intent = _parseScanIntent(question);
     btn.disabled = false; input.focus();
+    runScan(intent.platform, intent.query, question);
     return;
   }
 
@@ -3458,24 +3457,48 @@ function _isDiscoveryRequest(q) {
   return false;
 }
 
-function _agentDiscoveryGuidance() {
-  return [
-    "I work a **specific** market or question and price it against the market — I don't go fishing for ideas on my own. Point me at one of these:",
-    "",
-    "- **A market question** — e.g. *Will the Fed cut rates before September 30, 2026?*",
-    "- **A quoted market** — e.g. *Market at 42%: Will [event] happen by [date]?*",
-    "- **A market link** — paste a Polymarket or Kalshi URL and I'll fetch the price",
-    "",
-    "To hunt for mispriced markets across a whole venue, use the **⚡ Scan** button on a new chat (or call `GET /agent/scan?platform=polymarket`).",
-  ].join("\n");
+// Words that describe the *intent* (scan/edge) or the *venue*, not the topic —
+// stripped out so what's left is the subject to filter markets by (e.g. "nba").
+const _SCAN_STOPWORDS = new Set([
+  'give','me','the','a','an','my','market','markets','edge','edges','on','live','find','found',
+  'show','get','got','spot','hunt','any','some','where','which','what','should','i','to','in',
+  'for','and','or','of','scan','foresea','price','priced','pricing','mispriced','mispricing',
+  'opportunity','opportunities','value','bet','bets','trade','trades','buy','back','wager','vs',
+  'against','best','good','today','now','right','currently','please','can','you',
+]);
+
+// Parse a discovery request into a scan: which venue(s) and what topic keyword.
+function _parseScanIntent(q) {
+  const t = (q || '').toLowerCase();
+  const poly = /poly(market)?/.test(t);
+  const kalshi = /kalshi/.test(t);
+  let platform = 'polymarket';
+  if (poly && kalshi) platform = 'all';
+  else if (kalshi) platform = 'kalshi';
+  else if (poly) platform = 'polymarket';
+  const query = t
+    .replace(/poly(market)?|kalshi/g, ' ')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w && !_SCAN_STOPWORDS.has(w))
+    .join(' ')
+    .trim();
+  return { platform, query };
 }
 
 // Scan agent: find mispriced markets on a venue and render them as a table.
-function _scanToMarkdown(d, venue) {
+function _scanToMarkdown(d, venue, topic) {
   const opps = d.opportunities || [];
   const recMap = { buy_yes: 'Buy YES', buy_no: 'Buy NO', hold: 'Hold', no_market_price: '—' };
   const pct = x => (x == null ? '—' : Math.round(x * 100) + '%');
-  let md = `**${venue} edge scan** — analysed ${d.scanned} live market(s), found **${opps.length}** mispriced.`;
+  const forTopic = topic ? ` for **${topic}**` : '';
+  if (!d.scanned) {
+    return `**${venue} edge scan${forTopic}** — I couldn't find any live${topic ? ` "${topic}"` : ''} markets to price right now. `
+      + (topic
+        ? `That keyword didn't match the contested markets I can see (I scan the most liquid ones). Try a broader term, or paste a specific market link and I'll price it directly.`
+        : `Try again shortly, or paste a specific market link.`);
+  }
+  let md = `**${venue} edge scan${forTopic}** — analysed ${d.scanned} live market(s), found **${opps.length}** mispriced.`;
   if (!opps.length) {
     return md + `\n\nNothing past the edge threshold right now — these look fairly priced.`;
   }
@@ -3489,11 +3512,14 @@ function _scanToMarkdown(d, venue) {
   return md + `\n\n*Decision support only — verify before trading.*`;
 }
 
-async function runScan(platform) {
+async function runScan(platform, query, customLabel) {
   if (currentView !== 'app') launchApp();
   if (!activeId) newConversation();
-  const venue = platform === 'kalshi' ? 'Kalshi' : 'Polymarket';
-  const label = `Scan ${venue} for mispriced markets`;
+  const venue = platform === 'all' ? 'Polymarket + Kalshi'
+    : platform === 'kalshi' ? 'Kalshi' : 'Polymarket';
+  const topic = (query || '').trim();
+  const label = customLabel
+    || `Scan ${venue}${topic ? ` for "${topic}"` : ''} for mispriced markets`;
   const emptyState = document.getElementById('emptyState');
   if (emptyState) emptyState.remove();
   appendMessage(activeId, { role: 'user', content: label });
@@ -3501,17 +3527,19 @@ async function runScan(platform) {
   document.getElementById('messages').appendChild(userNode);
   animateIn(userNode);
   const typingEl = addAgentProgress([
-    'Listing live markets',
+    topic ? `Finding ${topic} markets on ${venue}` : `Listing live markets on ${venue}`,
     'Forecasting each',
     'Pricing edges',
     'Ranking opportunities',
   ]);
   try {
-    const r = await fetch('/agent/scan?platform=' + encodeURIComponent(platform) + '&limit=4', { headers: authHeaders() });
+    let url = '/agent/scan?platform=' + encodeURIComponent(platform) + '&limit=4';
+    if (topic) url += '&query=' + encodeURIComponent(topic);
+    const r = await fetch(url, { headers: authHeaders() });
     const d = await _readJson(r);
     typingEl.remove();
     if (!r.ok) { addError(d.detail || 'Scan failed'); return; }
-    const data = { question_type: 'chat', rationale: _scanToMarkdown(d, venue), model_key: 'scan agent' };
+    const data = { question_type: 'chat', rationale: _scanToMarkdown(d, d.platform || venue, topic), model_key: 'scan agent' };
     appendMessage(activeId, { role: 'assistant', data, content: data.rationale });
     const aiNode = makeAIBubble(data);
     document.getElementById('messages').appendChild(aiNode);

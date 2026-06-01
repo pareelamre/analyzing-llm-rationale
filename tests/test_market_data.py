@@ -117,6 +117,26 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual([q["question"] for q in quotes], ["One"])
         self.assertAlmostEqual(quotes[0]["probability"], 0.6)
 
+    def test_list_polymarket_keyword_filter(self):
+        payload = [
+            {"question": "Will the Lakers win the NBA title?", "slug": "nba1",
+             "outcomes": '["Yes","No"]', "outcomePrices": '["0.4","0.6"]'},
+            {"question": "Will the Fed cut rates?", "slug": "fed",
+             "outcomes": '["Yes","No"]', "outcomePrices": '["0.5","0.5"]'},
+        ]
+        sys.modules["requests"] = _fake_requests(payload)
+        quotes = list_polymarket(limit=10, query="nba")
+        self.assertEqual([q["question"] for q in quotes], ["Will the Lakers win the NBA title?"])
+
+    def test_list_kalshi_keyword_filter(self):
+        payload = {"markets": [
+            {"ticker": "NBA1", "title": "Will an NBA team relocate?", "last_price": 45},
+            {"ticker": "CPI1", "title": "Will CPI exceed 3%?", "last_price": 50},
+        ]}
+        sys.modules["requests"] = _fake_requests(payload)
+        quotes = list_kalshi(limit=10, query="nba")
+        self.assertEqual([q["question"] for q in quotes], ["Will an NBA team relocate?"])
+
 
 if __name__ == "__main__":
     unittest.main()

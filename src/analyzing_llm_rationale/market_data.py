@@ -122,19 +122,24 @@ def fetch_polymarket(slug: Optional[str] = None, market_id: Optional[str] = None
     return _polymarket_quote(market)
 
 
-def list_polymarket(limit: int = 5) -> List[Dict[str, Any]]:
+def list_polymarket(limit: int = 5, query: Optional[str] = None) -> List[Dict[str, Any]]:
     """List liquid, contested binary Polymarket markets (for the edge scan).
 
     Pulls high-volume markets, then keeps binary Yes/No markets priced in the
-    mid-range so the scan focuses on genuinely contested questions.
+    mid-range so the scan focuses on genuinely contested questions. When
+    ``query`` is given, only markets whose question contains that keyword are
+    kept (best-effort, over the high-volume candidate pool).
     """
     limit = max(1, min(int(limit), 20))
+    want = (query or "").strip().lower()
+    # Search deeper when filtering by keyword, since matches may not be top-volume.
+    candidate_cap = min(500, limit * (60 if want else 10))
     data = _get_json(
         POLYMARKET_GAMMA_URL,
         params={
             "active": "true",
             "closed": "false",
-            "limit": min(100, limit * 10),
+            "limit": candidate_cap,
             "order": "volume24hr",
             "ascending": "false",
         },
@@ -147,6 +152,8 @@ def list_polymarket(limit: int = 5) -> List[Dict[str, Any]]:
         if prob is None or labels != {"yes", "no"}:
             continue
         if not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
+            continue
+        if want and want not in (quote["question"] or "").lower():
             continue
         quotes.append(quote)
         if len(quotes) >= limit:
@@ -196,16 +203,24 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     return _kalshi_quote(market)
 
 
-def list_kalshi(limit: int = 5) -> List[Dict[str, Any]]:
-    """List open, priced Kalshi markets (for the edge scan)."""
+def list_kalshi(limit: int = 5, query: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List open, priced Kalshi markets (for the edge scan).
+
+    When ``query`` is given, only markets whose title contains that keyword are
+    kept (best-effort, over the open-market candidate pool).
+    """
     limit = max(1, min(int(limit), 20))
-    data = _get_json(KALSHI_API_URL, params={"status": "open", "limit": min(200, limit * 20)})
+    want = (query or "").strip().lower()
+    candidate_cap = min(1000, limit * (100 if want else 20))
+    data = _get_json(KALSHI_API_URL, params={"status": "open", "limit": candidate_cap})
     markets = data.get("markets", []) if isinstance(data, dict) else []
     quotes: List[Dict[str, Any]] = []
     for market in markets:
         quote = _kalshi_quote(market)
         prob = quote["probability"]
         if prob is None or not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
+            continue
+        if want and want not in (quote["question"] or "").lower():
             continue
         quotes.append(quote)
         if len(quotes) >= limit:

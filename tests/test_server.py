@@ -337,7 +337,7 @@ class ServerTests(unittest.TestCase):
             {"platform": "Polymarket", "question": "Will event B happen by 2027?", "market_url": "https://p/b",
              "outcome": "Yes", "probability": 0.66, "outcomes": []},
         ]
-        with mock.patch.object(md, "list_polymarket", lambda limit=5: markets):
+        with mock.patch.object(md, "list_polymarket", lambda limit=5, query=None: markets):
             response = self.client.get("/agent/scan?platform=polymarket&limit=2&min_edge=0.1&evidence_top_k=2")
 
         self.assertEqual(response.status_code, 200)
@@ -349,6 +349,44 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(opp["question"], "Will event A happen by 2027?")
         self.assertAlmostEqual(opp["edge"], 0.30)
         self.assertEqual(opp["recommendation"], "buy_yes")
+
+    def test_agent_scan_both_venues_and_keyword(self):
+        import analyzing_llm_rationale.market_data as md
+
+        poly = [{"platform": "Polymarket", "question": "Will the Lakers win the NBA title by 2027?",
+                 "market_url": "https://p/nba", "outcome": "Yes", "probability": 0.40, "outcomes": []}]
+        kalshi = [{"platform": "Kalshi", "question": "Will an NBA team relocate by 2027?",
+                   "market_url": "https://k/nba", "outcome": "Yes", "probability": 0.42, "outcomes": []}]
+        seen = {}
+
+        def fake_poly(limit=5, query=None):
+            seen["poly_query"] = query
+            return poly
+
+        def fake_kalshi(limit=5, query=None):
+            seen["kalshi_query"] = query
+            return kalshi
+
+        with mock.patch.object(md, "list_polymarket", fake_poly), \
+             mock.patch.object(md, "list_kalshi", fake_kalshi):
+            response = self.client.get("/agent/scan?platform=all&query=nba&limit=2&min_edge=0.1&evidence_top_k=2")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["platform"], "Polymarket + Kalshi")
+        self.assertEqual(body["scanned"], 2)  # one from each venue
+        self.assertEqual(seen["poly_query"], "nba")
+        self.assertEqual(seen["kalshi_query"], "nba")
+
+    def test_agent_scan_empty_when_keyword_matches_nothing(self):
+        import analyzing_llm_rationale.market_data as md
+
+        with mock.patch.object(md, "list_polymarket", lambda limit=5, query=None: []):
+            response = self.client.get("/agent/scan?platform=polymarket&query=zzzznope")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["scanned"], 0)
+        self.assertEqual(body["opportunities"], [])
 
     def test_agent_scan_rejects_unknown_platform(self):
         response = self.client.get("/agent/scan?platform=betfair")

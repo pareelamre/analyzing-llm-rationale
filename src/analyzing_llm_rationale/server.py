@@ -3085,13 +3085,16 @@ async def agent_scan(
     limit: int = 4,
     min_edge: float = 0.1,
     evidence_top_k: int = 3,
+    query: Optional[str] = None,
 ) -> AgentScanResponse:
-    """Scan live markets on a venue and surface the most mispriced, ranked by edge.
+    """Scan live markets on one or both venues and surface the most mispriced.
 
-    Lists active markets (Polymarket or Kalshi), forecasts each, compares against
-    the market price, and returns those whose model-vs-market gap is at least
-    `min_edge`. Bounded by `limit` (max 8) since each market runs a full forecast;
-    results are cached briefly.
+    Lists active markets (Polymarket and/or Kalshi), forecasts each, compares
+    against the market price, and returns those whose model-vs-market gap is at
+    least `min_edge`. `platform` accepts `polymarket`, `kalshi`, or `all`/`both`.
+    `query` optionally filters to markets whose question contains that keyword
+    (e.g. `nba`). Bounded by `limit` per venue (max 8) since each market runs a
+    full forecast; results are cached briefly.
     """
     if request is not None:
         _check_rate_limit(request)
@@ -3100,27 +3103,41 @@ async def agent_scan(
         raise HTTPException(status_code=503, detail="Server not initialised")
 
     venue = (platform or "polymarket").strip().lower()
+    kw = (query or "").strip() or None
     limit = max(1, min(limit, 8))
     evidence_top_k = max(1, min(evidence_top_k, 6))
-    cache_key = _cache_key("scan", venue, limit, round(min_edge, 3), evidence_top_k, _state.get("model_key"))
+
+    if venue in ("all", "both") or ("poly" in venue and "kalshi" in venue):
+        venues = ["polymarket", "kalshi"]
+    elif "kalshi" in venue:
+        venues = ["kalshi"]
+    elif "poly" in venue:
+        venues = ["polymarket"]
+    else:
+        raise HTTPException(status_code=422, detail="platform must be 'polymarket', 'kalshi', or 'all'.")
+
+    cache_key = _cache_key("scan", ",".join(venues), kw or "", limit, round(min_edge, 3),
+                           evidence_top_k, _state.get("model_key"))
     cached = _cache_get(cache_key)
     if cached is not None:
         return AgentScanResponse(**cached)
 
     from analyzing_llm_rationale import market_data
     loop = asyncio.get_running_loop()
-    try:
-        if "poly" in venue:
-            quotes = await loop.run_in_executor(None, lambda: market_data.list_polymarket(limit))
-            platform_name = "Polymarket"
-        elif "kalshi" in venue:
-            quotes = await loop.run_in_executor(None, lambda: market_data.list_kalshi(limit))
-            platform_name = "Kalshi"
-        else:
-            raise HTTPException(status_code=422, detail="platform must be 'polymarket' or 'kalshi'.")
-    except market_data.MarketDataError as exc:
-        raise HTTPException(status_code=502, detail=f"Could not list markets: {exc}") from exc
-    quotes = quotes[:limit]
+    _listers = {"polymarket": market_data.list_polymarket, "kalshi": market_data.list_kalshi}
+    quotes: List[Dict[str, Any]] = []
+    list_errors: List[str] = []
+    for v in venues:
+        try:
+            vq = await loop.run_in_executor(None, lambda fn=_listers[v]: fn(limit=limit, query=kw))
+            quotes.extend(vq[:limit])
+        except market_data.MarketDataError as exc:
+            list_errors.append(f"{v}: {exc}")
+    if not quotes:
+        if list_errors and len(list_errors) == len(venues):
+            raise HTTPException(status_code=502, detail=f"Could not list markets: {'; '.join(list_errors)}")
+        return AgentScanResponse(platform=" + ".join(p.title() for p in venues), scanned=0, opportunities=[])
+    platform_name = " + ".join(p.title() for p in venues)
 
     async def _score(quote: Dict[str, Any]) -> Optional[ScanOpportunity]:
         try:
