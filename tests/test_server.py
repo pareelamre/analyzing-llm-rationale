@@ -697,6 +697,46 @@ class ServerTests(unittest.TestCase):
         # The model provider is invoked only once; the second call hits the cache.
         self.assertEqual(len(self.provider.calls), 1)
 
+    def test_short_followup_skips_fresh_evidence(self):
+        # A short follow-up in a thread should be answered from context, not a
+        # fresh literal web search (which derails on odd queries).
+        self.client.post(
+            "/predict",
+            json={
+                "question": "WE is 90+",
+                "attach_evidence": True,
+                "history": [
+                    {"role": "user", "content": "Who wins AL vs WE in the LPL series?"},
+                    {"role": "assistant", "content": "AL looks favoured ~60%."},
+                ],
+            },
+        )
+        self.assertEqual(self.evidence_pipeline.calls, [])  # no fresh retrieval
+
+    def test_substantive_question_with_history_still_retrieves(self):
+        self.client.post(
+            "/predict",
+            json={
+                "question": "Will the Federal Reserve cut interest rates before September 2026?",
+                "attach_evidence": True,
+                "evidence_top_k": 3,
+                "history": [{"role": "user", "content": "earlier turn"}],
+            },
+        )
+        self.assertEqual(len(self.evidence_pipeline.calls), 1)
+
+    def test_parse_market_url(self):
+        from analyzing_llm_rationale.server import _parse_market_url
+        self.assertEqual(
+            _parse_market_url("https://polymarket.com/esports/lpl/lol-al-we-2026-06-01"),
+            ("polymarket", "slug", "lol-al-we-2026-06-01"),
+        )
+        self.assertEqual(
+            _parse_market_url("check https://kalshi.com/markets/KXFED-26SEP now"),
+            ("kalshi", "ticker", "KXFED-26SEP"),
+        )
+        self.assertIsNone(_parse_market_url("just text"))
+
     def test_predict_with_history_is_not_cached(self):
         payload = {
             "question": "Will the Fed cut rates before December 31, 2026?",

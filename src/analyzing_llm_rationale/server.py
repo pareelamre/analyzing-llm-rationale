@@ -2407,7 +2407,13 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     evidence_articles = [article.model_dump() for article in req.news_articles]
     evidence_error = None
 
-    if req.attach_evidence and not evidence_articles:
+    # A short follow-up in an ongoing thread ("WE is 90+", "why?") makes a poor
+    # search query and derails on literal matches, so answer it from the
+    # conversation instead of fetching fresh evidence. Substantive questions
+    # (even mid-thread) still retrieve.
+    short_followup = bool(req.history) and len(req.question.split()) <= 6
+
+    if req.attach_evidence and not evidence_articles and not short_followup:
         evidence_pipeline = _state.get("evidence_pipeline")
         if evidence_pipeline is None:
             evidence_error = "Evidence pipeline is not configured on this server."
@@ -2613,6 +2619,28 @@ def _select_provider(
     return _state["provider"], _state["temperature"], _state["max_tokens"]
 
 
+def _parse_market_url(text: str) -> Optional[tuple]:
+    """Extract (venue, kind, identifier) from a Polymarket/Kalshi URL in `text`.
+
+    Polymarket: the slug is the last path segment
+    (e.g. .../lpl/lol-al-we-2026-06-01 -> slug). Kalshi: the segment after
+    /markets/ is the ticker. Returns None if no recognised URL is present.
+    """
+    for token in re.findall(r"https?://\S+", text or ""):
+        parsed = urlparse(token)
+        host = (parsed.hostname or "").lower()
+        parts = [p for p in parsed.path.split("/") if p]
+        if not parts:
+            continue
+        if "polymarket.com" in host:
+            return ("polymarket", "slug", parts[-1])
+        if "kalshi.com" in host and "markets" in parts:
+            i = parts.index("markets")
+            if i + 1 < len(parts):
+                return ("kalshi", "ticker", parts[i + 1])
+    return None
+
+
 def _agent_recommendation(edge: Optional[float], outcome: str) -> tuple[str, str]:
     """Deterministic call from the model-vs-market edge."""
     out = outcome or "Yes"
@@ -2657,18 +2685,35 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
 
     pipeline: List[str] = []
 
-    # 1. Resolve the market (live price) when an identifier is supplied.
+    # 1. Resolve the market (live price). Explicit identifiers win; otherwise try
+    #    to pull a Polymarket/Kalshi URL out of the question text.
     quote: Optional[MarketQuote] = None
-    if req.platform and (req.slug or req.market_id or req.ticker):
-        venue = req.platform.strip().lower()
-        if "poly" in venue:
-            quote = await _fetch_market_quote("polymarket", slug=req.slug, market_id=req.market_id)
-        elif "kalshi" in venue:
-            quote = await _fetch_market_quote("kalshi", ticker=req.ticker)
+    venue = (req.platform or "").strip().lower()
+    slug, market_id, ticker = req.slug, req.market_id, req.ticker
+    from_url = False
+    if not (venue and (slug or market_id or ticker)):
+        parsed = _parse_market_url(req.question or "")
+        if parsed:
+            venue, kind, ident = parsed
+            slug = ident if kind == "slug" else None
+            ticker = ident if kind == "ticker" else None
+            from_url = True
+    if venue and (slug or market_id or ticker):
+        try:
+            if "poly" in venue:
+                quote = await _fetch_market_quote("polymarket", slug=slug, market_id=market_id)
+            elif "kalshi" in venue:
+                quote = await _fetch_market_quote("kalshi", ticker=ticker)
+        except HTTPException:
+            if not from_url:
+                raise  # explicit identifier that didn't resolve -> surface the error
         if quote is not None:
             pipeline.append("resolve_market")
 
-    question = (req.question or (quote.question if quote else "") or "").strip()
+    # Prefer the market's real question when the user only pasted a link.
+    question = (req.question or "").strip()
+    if quote is not None and (not question or _parse_market_url(question)):
+        question = quote.question or question
     if not question:
         raise HTTPException(status_code=422, detail="Provide a question, or a platform plus market identifier.")
 
