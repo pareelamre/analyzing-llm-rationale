@@ -2442,10 +2442,13 @@ async function sendQuestion() {
     _renderChips();
     let data;
     if (_agentEnabled()) {
+      // Only carry history for short follow-ups ("why?", "what about June?");
+      // a full standalone question starts fresh so it can't inherit a prior topic.
+      const isFollowup = question.trim().split(/\s+/).length <= 6;
       const agentBody = {
         question,
         evidence_top_k: 5,
-        history,
+        history: isFollowup ? history : [],
         skills: _loadSkills().map(s => ({ name: s.name, instruction: s.instruction })),
       };
       if (marketProbability != null) agentBody.market_probability = marketProbability;
