@@ -175,6 +175,10 @@ _TAGS = [
         "description": "Autonomous analysis: orchestrate market fetch, evidence, forecast, edge, and custom skills into one report.",
     },
     {
+        "name": "Knowledge",
+        "description": "Per-user RAG knowledge base: ingest documents and retrieve them as evidence.",
+    },
+    {
         "name": "System",
         "description": "Health and liveness checks.",
     },
@@ -512,6 +516,93 @@ def _delete_conversation(user_id: str, conversation_id: str) -> None:
     if message_keys:
         client.delete_multi(message_keys)
     client.delete(key)
+
+
+# ── RAG knowledge base (per-user vector store on Datastore) ──────────────────
+
+def _rag_fetch(user_id: str, namespace: str, limit: int = 2000) -> List[Dict[str, Any]]:
+    """All stored chunks (with embeddings) for a user/namespace."""
+    client = _get_datastore()
+    if client is None:
+        store = _state.setdefault("rag", {}).get(user_id, [])
+        return [c for c in store if c.get("namespace") == namespace]
+    query = client.query(kind="VectorChunk", ancestor=client.key("User", user_id))
+    query.add_filter("namespace", "=", namespace)
+    return [dict(e) for e in query.fetch(limit=limit)]
+
+
+def _rag_add(user_id: str, namespace: str, items: List[Dict[str, Any]]) -> int:
+    """Chunk, embed, and store documents. Returns the number of chunks stored."""
+    from analyzing_llm_rationale import rag
+
+    chunks: List[tuple] = []
+    for item in items:
+        doc_id = item.get("doc_id") or ("doc_" + secrets.token_hex(6))
+        for ch in rag.chunk_text(item.get("text") or ""):
+            chunks.append((ch, item.get("title") or "", item.get("url") or "", item.get("source") or "", doc_id))
+    if not chunks:
+        return 0
+    vectors = rag.embed([c[0] for c in chunks])
+    if not vectors or not vectors[0]:
+        raise RuntimeError("Embeddings are unavailable on this server.")
+    now = datetime.now(timezone.utc)
+    records = [
+        {"namespace": namespace, "doc_id": doc_id, "text": text, "title": title,
+         "url": url, "source": source, "embedding": emb, "created_at": now}
+        for (text, title, url, source, doc_id), emb in zip(chunks, vectors)
+    ]
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("rag", {}).setdefault(user_id, []).extend(records)
+        return len(records)
+    from google.cloud import datastore as _ds
+    entities = []
+    for r in records:
+        entity = _ds.Entity(
+            key=client.key("User", user_id, "VectorChunk"),
+            exclude_from_indexes=("text", "embedding", "title", "url", "source"),
+        )
+        entity.update(r)
+        entities.append(entity)
+    for i in range(0, len(entities), 100):  # Datastore put_multi caps at 500
+        client.put_multi(entities[i:i + 100])
+    return len(records)
+
+
+def _rag_search(user_id: str, namespace: str, query: str, k: int = 5) -> List[Dict[str, Any]]:
+    from analyzing_llm_rationale import rag
+    qvec = rag.embed_one(query)
+    if not qvec:
+        return []
+    return rag.top_k(qvec, _rag_fetch(user_id, namespace), k=k)
+
+
+def _rag_documents(user_id: str, namespace: str) -> List[Dict[str, Any]]:
+    """Distinct ingested documents (grouped by doc_id) with chunk counts."""
+    docs: Dict[str, Dict[str, Any]] = {}
+    for c in _rag_fetch(user_id, namespace):
+        d = docs.setdefault(c.get("doc_id") or "", {
+            "doc_id": c.get("doc_id"), "title": c.get("title"),
+            "url": c.get("url"), "source": c.get("source"), "chunks": 0,
+        })
+        d["chunks"] += 1
+    return list(docs.values())
+
+
+def _rag_delete(user_id: str, namespace: str, doc_id: Optional[str] = None) -> int:
+    client = _get_datastore()
+    if client is None:
+        store = _state.setdefault("rag", {}).get(user_id, [])
+        keep = [c for c in store if not (c.get("namespace") == namespace and (doc_id is None or c.get("doc_id") == doc_id))]
+        removed = len(store) - len(keep)
+        _state["rag"][user_id] = keep
+        return removed
+    query = client.query(kind="VectorChunk", ancestor=client.key("User", user_id))
+    query.add_filter("namespace", "=", namespace)
+    keys = [e.key for e in query.fetch() if doc_id is None or e.get("doc_id") == doc_id]
+    for i in range(0, len(keys), 200):
+        client.delete_multi(keys[i:i + 200])
+    return len(keys)
 
 
 # ── Shared cache / coordination (Redis, optional) ───────────────────────────
@@ -1380,6 +1471,22 @@ class ChatConversationList(BaseModel):
     conversations: List[ChatConversation]
 
 
+class RagIngestRequest(BaseModel):
+    """Add a document to the user's knowledge base."""
+    text: Optional[str] = Field(None, max_length=200000, description="Raw text to ingest.")
+    url: Optional[str] = Field(None, max_length=2000, description="URL to fetch and ingest.")
+    title: str = Field("", max_length=300)
+    namespace: str = Field("kb", max_length=40, description="Corpus: 'kb', 'evidence', or 'forecasts'.")
+
+
+class RagSearchResult(BaseModel):
+    text: str = ""
+    title: str = ""
+    url: str = ""
+    source: str = ""
+    score: float = 0.0
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _check_api_key(request: Request) -> None:
     if not _REQUIRED_API_KEY:
@@ -2093,6 +2200,57 @@ async def delete_chat_conversation(conversation_id: str, request: Request) -> Di
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _delete_conversation, claims["sub"], conversation_id)
     return {"ok": True}
+
+
+@app.post("/rag/ingest", tags=["Knowledge"], summary="Add a document to your knowledge base")
+async def rag_ingest(req: RagIngestRequest, request: Request) -> Dict[str, Any]:
+    """Chunk, embed, and store a document (text or URL) in the signed-in user's
+    knowledge base, so the agent can retrieve it as evidence."""
+    claims = _require_session(request)
+    loop = asyncio.get_running_loop()
+    title, text, url = req.title, (req.text or "").strip(), (req.url or "").strip()
+    source = "Knowledge base"
+    if not text and url:
+        if not url.startswith(("http://", "https://")):
+            raise HTTPException(status_code=422, detail="url must start with http:// or https://")
+        extracted = await loop.run_in_executor(None, _extract_url_sync, url)
+        text = (extracted or {}).get("text") or ""
+        title = title or (extracted or {}).get("title") or url
+        source = (extracted or {}).get("source") or url
+    if not text:
+        raise HTTPException(status_code=422, detail="Provide text or a fetchable url.")
+    item = {"text": text[:200000], "title": title, "url": url, "source": source}
+    try:
+        added = await loop.run_in_executor(None, _rag_add, claims["sub"], req.namespace, [item])
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"chunks_added": added, "namespace": req.namespace}
+
+
+@app.get("/rag/search", tags=["Knowledge"], summary="Search your knowledge base", response_model=List[RagSearchResult])
+async def rag_search(request: Request, q: str, namespace: str = "kb", top_k: int = 5) -> List[RagSearchResult]:
+    claims = _require_session(request)
+    if not q.strip():
+        raise HTTPException(status_code=422, detail="Provide a query 'q'.")
+    loop = asyncio.get_running_loop()
+    hits = await loop.run_in_executor(None, _rag_search, claims["sub"], namespace, q, max(1, min(top_k, 20)))
+    return [RagSearchResult(**h) for h in hits]
+
+
+@app.get("/rag/documents", tags=["Knowledge"], summary="List your knowledge-base documents")
+async def rag_documents(request: Request, namespace: str = "kb") -> Dict[str, Any]:
+    claims = _require_session(request)
+    loop = asyncio.get_running_loop()
+    docs = await loop.run_in_executor(None, _rag_documents, claims["sub"], namespace)
+    return {"namespace": namespace, "documents": docs}
+
+
+@app.delete("/rag/documents", tags=["Knowledge"], summary="Delete knowledge-base documents")
+async def rag_delete(request: Request, namespace: str = "kb", doc_id: Optional[str] = None) -> Dict[str, int]:
+    claims = _require_session(request)
+    loop = asyncio.get_running_loop()
+    removed = await loop.run_in_executor(None, _rag_delete, claims["sub"], namespace, doc_id)
+    return {"removed": removed}
 
 
 @app.post(
