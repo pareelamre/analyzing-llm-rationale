@@ -148,6 +148,24 @@ index (pgvector on Cloud SQL, or Vertex AI Vector Search). Keep `rag.py`'s
 interface so only the persistence layer changes.
 **Acceptance:** Search stays fast (<300ms) at 10k+ chunks.
 
+## 16. Edge for head-to-head / multi-outcome markets
+**Goal:** A fetched head-to-head market (e.g. Polymarket "AL vs WE", outcomes
+`["AL","WE"]`) returns a price but no edge — the agent reports `no_market_price`
+because the binary Yes/No forecast doesn't map onto a named outcome, so
+`market_analysis` is None.
+- `server.py` `_build_typed_response`/`MarketAnalysis`: when `market_outcome` is a
+  named side (not Yes/No), forecast that outcome's probability (or run the
+  question as multiple_choice over the market's `outcomes`) and compute the edge
+  against `market_probability`. Also relabel the "no edge" case so it isn't
+  mislabelled `no_market_price` when a price exists.
+**Acceptance:** Pasting a head-to-head market URL yields an edge + buy/hold call,
+not `no_market_price`.
+
+## 17. SESSION_SECRET is too short
+Prod `SESSION_SECRET` is ~11 bytes (PyJWT warns; <32-byte min for HS256).
+Regenerate 32-byte hex and `gcloud secrets versions add SESSION_SECRET` (logs
+everyone out once). Same rotation pass as #15.
+
 ## 15. Rotate leaked credentials
 The Tavily, Serper, and GitHub OAuth secrets were pasted in chat during setup.
 Rotate them (new keys/secret → `gcloud secrets versions add ...`) when convenient.
