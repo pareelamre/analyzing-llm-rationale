@@ -41,6 +41,12 @@ def embeddings_available() -> bool:
     return _get_embedder() is not None
 
 
+def is_loaded() -> bool:
+    """True only if the embedder is already in memory — does NOT trigger a load.
+    Lets callers do cheap opportunistic indexing without paying a cold start."""
+    return _embedder_loaded and _embedder is not None
+
+
 def embed(texts: List[str]) -> List[List[float]]:
     """Return a normalized embedding per text, or [] per text if unavailable."""
     if not texts:

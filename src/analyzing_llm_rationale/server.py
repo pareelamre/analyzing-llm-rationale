@@ -28,6 +28,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from analyzing_llm_rationale import rag
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
     build_user_prompt,
@@ -277,6 +278,20 @@ def _require_session(request: Request) -> dict:
     if not auth.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Authorization: Bearer header.")
     return _decode_session(auth[7:])
+
+
+def _optional_user_id(request: Optional[Request]) -> Optional[str]:
+    """Decode the bearer token if present and valid; return the user id or None.
+    Never raises — used to personalise public endpoints for signed-in users."""
+    if request is None:
+        return None
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    try:
+        return _decode_session(auth[7:]).get("sub")
+    except Exception:
+        return None
 
 
 _ds_client: Any = None
@@ -2267,7 +2282,7 @@ async def rag_delete(request: Request, namespace: str = "kb", doc_id: Optional[s
     },
     response_model=PredictResponse,
 )
-async def predict(req: PredictRequest, request: Request = None) -> PredictResponse:
+async def predict(req: PredictRequest, request: Request = None, kb_user_id: Optional[str] = None) -> PredictResponse:
     """Submit a forecasting question and receive a typed structured prediction.
 
     The model returns:
@@ -2347,13 +2362,17 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
             detail=f"Unknown variant '{req.variant}'. Valid: {sorted(variants)}",
         )
 
+    # Signed-in users get personalised (knowledge-base) evidence, so their
+    # responses must never be shared via the cache.
+    rag_user_id = kb_user_id or _optional_user_id(request)
+
     # Serve identical, non-personalised forecasts from cache to cut latency and
-    # model spend. Requests with conversation history or a caller's own
-    # OpenRouter key are never cached.
+    # model spend. History, BYOK, or a signed-in user disable caching.
     cacheable = (
         _PREDICT_CACHE_TTL > 0
         and not req.history
         and not req.openrouter_api_key
+        and not rag_user_id
     )
     predict_cache_key = None
     if cacheable:
@@ -2409,6 +2428,28 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
                     evidence_error = f"Evidence retrieval failed: {exc}"
 
     evidence_articles = [_clean_article(a) for a in evidence_articles]
+
+    # Personalised retrieval: prepend the signed-in user's knowledge-base hits.
+    if rag_user_id:
+        try:
+            loop = asyncio.get_running_loop()
+            kb_hits = await loop.run_in_executor(
+                None, _rag_search, rag_user_id, "kb", req.question, 3
+            )
+            kb_articles = [
+                _clean_article({
+                    "title": h.get("title") or "Knowledge base",
+                    "summary": h.get("text"), "text": h.get("text"),
+                    "source": h.get("source") or "Knowledge base",
+                    "url": h.get("url") or None,
+                    "relevance_score": h.get("score"),
+                })
+                for h in kb_hits
+            ]
+            evidence_articles = kb_articles + evidence_articles
+        except Exception:
+            pass
+
     record["news_articles"] = evidence_articles
 
     if req.chat_mode:
@@ -2478,6 +2519,19 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
 
     if predict_cache_key is not None:
         _cache_set(predict_cache_key, response.model_dump(), _PREDICT_CACHE_TTL)
+
+    # Best-effort: index the forecast for "search my past forecasts", but only if
+    # the embedder is already loaded — never pay a cold start on the forecast path.
+    if rag_user_id and rag.is_loaded():
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, _rag_add, rag_user_id, "forecasts", [{
+                "text": f"Q: {req.question}\nForecast: {response.predicted_answer or response.question_type} — "
+                        f"{response.model_rationale or response.rationale or ''}",
+                "title": req.question[:300], "source": "Past forecast",
+            }])
+        except Exception:
+            pass
     return response
 
 
@@ -2633,7 +2687,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         openrouter_model=req.openrouter_model,
         provider_base_url=req.provider_base_url,
     )
-    result = await predict(pred_req)
+    result = await predict(pred_req, kb_user_id=_optional_user_id(request))
     pipeline.extend(["gather_evidence", "forecast"])
 
     analysis = result.market_analysis

@@ -1588,6 +1588,21 @@
         <p class="text-gray-400" style="font-size:10px;margin-top:2px">When “Use” is on, the agent fetches evidence, forecasts, prices the edge, and runs your skills.</p>
       </div>
 
+      <!-- Knowledge base -->
+      <div class="config-group">
+        <p class="label" style="margin:0">Knowledge base</p>
+        <div id="kbList" class="model-list"></div>
+        <div class="model-form" style="margin-top:0">
+          <input id="kbTitle" class="variant-select text-xs" placeholder="Title (optional)" autocomplete="off" />
+          <textarea id="kbText" class="variant-select text-xs" rows="2" placeholder="Paste text, or a URL to fetch" style="resize:vertical;min-height:46px"></textarea>
+          <div id="kbError" class="model-form-error" hidden></div>
+          <div class="model-form-actions">
+            <button type="button" class="model-save" onclick="ingestKb()">Add to knowledge base</button>
+          </div>
+        </div>
+        <p id="kbHint" class="text-gray-400" style="font-size:10px">Sign in to add docs. They're retrieved as evidence in your forecasts.</p>
+      </div>
+
       <!-- API docs -->
       <div class="pt-2 border-t border-gray-200">
         <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">API docs ↗</a>
@@ -3308,6 +3323,73 @@ function loadAgentSkills() {
   }
 }
 
+// ── Knowledge base (RAG) ──────────────────────────────────────────────────────
+function _kbError(msg) {
+  const el = document.getElementById('kbError');
+  if (el) { el.textContent = msg || ''; el.hidden = !msg; }
+}
+async function loadKb() {
+  const list = document.getElementById('kbList');
+  const hint = document.getElementById('kbHint');
+  if (!list) return;
+  if (!currentUser) {
+    list.innerHTML = '';
+    if (hint) hint.textContent = "Sign in to add docs. They're retrieved as evidence in your forecasts.";
+    return;
+  }
+  try {
+    const r = await fetch('/rag/documents', { headers: authHeaders() });
+    const d = await _readJson(r);
+    if (!r.ok) return;
+    renderKbList(d.documents || []);
+    if (hint) hint.textContent = (d.documents || []).length
+      ? 'Retrieved as evidence in your forecasts.'
+      : 'Add text or a URL; it becomes searchable evidence in your forecasts.';
+  } catch (_) {}
+}
+function renderKbList(docs) {
+  const host = document.getElementById('kbList');
+  if (!host) return;
+  host.innerHTML = docs.map(doc => `
+    <div class="model-row" style="cursor:default">
+      <div class="model-meta">
+        <div class="model-name">${escHtml(doc.title || doc.source || 'Document')}</div>
+        <div class="model-sub">${doc.chunks} chunk${doc.chunks === 1 ? '' : 's'}${doc.url ? ' · ' + escHtml(doc.url) : ''}</div>
+      </div>
+      <div class="model-actions">
+        <button type="button" class="model-icon-btn" title="Remove" onclick="deleteKbDoc('${escAttr(doc.doc_id || '')}')">✕</button>
+      </div>
+    </div>`).join('');
+}
+async function ingestKb() {
+  if (!currentUser) { _kbError('Sign in to add documents.'); return; }
+  const title = document.getElementById('kbTitle').value.trim();
+  const raw = document.getElementById('kbText').value.trim();
+  if (!raw) { _kbError('Paste some text or a URL.'); return; }
+  _kbError('');
+  const body = { title, namespace: 'kb' };
+  if (/^https?:\/\/\S+$/i.test(raw)) body.url = raw; else body.text = raw;
+  try {
+    const r = await fetch('/rag/ingest', {
+      method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body),
+    });
+    const d = await _readJson(r);
+    if (!r.ok) { _kbError(d.detail || 'Could not add document.'); return; }
+    document.getElementById('kbTitle').value = '';
+    document.getElementById('kbText').value = '';
+    loadKb();
+  } catch (e) { _kbError('Network error.'); }
+}
+async function deleteKbDoc(docId) {
+  if (!docId) return;
+  try {
+    await fetch('/rag/documents?namespace=kb&doc_id=' + encodeURIComponent(docId), {
+      method: 'DELETE', headers: authHeaders(),
+    });
+    loadKb();
+  } catch (_) {}
+}
+
 // Format an /agent/analyze report conversationally (Perplexity/Comet-style):
 // a natural-language read with the numbers woven in and clickable sources.
 function _agentReportToMarkdown(d) {
@@ -3517,6 +3599,7 @@ function _setAuthEl(id, show, data) {
 
 function updateAuthUI(user) {
   currentUser = user;
+  if (typeof loadKb === 'function') loadKb();  // refresh KB on sign-in/out
   const firstName = (user?.name || '').split(' ')[0];
   const email = user?.email || '';
   const pic = user?.picture || (user ? _setAvatarFallback(user?.name, email) : '');
@@ -3779,6 +3862,7 @@ updateVariantDesc();
 loadChatModeToggle();
 loadOrSettings();
 loadAgentSkills();
+loadKb();
 initAuth();
 const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);

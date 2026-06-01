@@ -365,6 +365,43 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(len(articles), 2)
         self.assertEqual(articles[1].title, "Bad")
 
+    def test_predict_includes_knowledge_base_for_signed_in_user(self):
+        from analyzing_llm_rationale import rag
+
+        class FakeEmbedder:
+            def encode(self, texts, normalize_embeddings=True):
+                import math
+                import re
+                vocab = ["fed", "rate", "cut", "cpi", "spacex"]
+                out = []
+                for t in texts:
+                    toks = set(re.findall(r"[a-z]+", t.lower()))
+                    v = [1.0 if w in toks else 0.0 for w in vocab]
+                    n = math.sqrt(sum(x * x for x in v)) or 1.0
+                    out.append([x / n for x in v])
+                return out
+
+        rag.set_embedder(FakeEmbedder())
+        try:
+            headers = {"Authorization": "Bearer " + _issue_session("kbuser", "k@e.com", "K", "")}
+            ingest = self.client.post(
+                "/rag/ingest",
+                json={"text": "The Fed will cut the rate soon.", "title": "My note"},
+                headers=headers,
+            )
+            self.assertEqual(ingest.status_code, 200)
+
+            response = self.client.post(
+                "/predict",
+                json={"question": "Will the Fed cut the rate this year?", "attach_evidence": False},
+                headers=headers,
+            )
+            self.assertEqual(response.status_code, 200)
+            sources = [s["source"] for s in response.json().get("evidence_sources", [])]
+            self.assertIn("Knowledge base", sources)
+        finally:
+            rag.set_embedder(None)
+
     def test_records_anonymous_page_visit(self):
         response = self.client.post(
             "/analytics/visit",
