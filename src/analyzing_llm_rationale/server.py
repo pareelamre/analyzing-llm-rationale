@@ -26,7 +26,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
@@ -855,7 +855,7 @@ class PredictRequest(BaseModel):
 
     question: str = Field(
         ...,
-        min_length=10,
+        min_length=1,
         max_length=2000,
         description=(
             "The forecasting question to evaluate. It should ask about a future or "
@@ -1002,6 +1002,14 @@ class PredictRequest(BaseModel):
             if signal in lowered:
                 raise ValueError("Invalid question content.")
         return v.strip()
+
+    @model_validator(mode="after")
+    def _standalone_question_must_be_substantive(self) -> "PredictRequest":
+        # A standalone question must be substantive; a follow-up (history present)
+        # can be short, e.g. "why?" or "what about June?".
+        if not self.history and len((self.question or "").strip()) < 10:
+            raise ValueError("question must be at least 10 characters (or include conversation history).")
+        return self
 
     @field_validator("variant")
     @classmethod
@@ -1154,6 +1162,7 @@ class AgentAnalyzeRequest(BaseModel):
     variant: str = Field("variant0_neutral_baseline", max_length=64)
     evidence_top_k: int = Field(5, ge=1, le=10)
     skills: List[AgentSkill] = Field(default_factory=list, max_length=5, description="Up to 5 custom skills to run.")
+    history: List[Dict[str, str]] = Field(default_factory=list, max_length=24, description="Prior conversation turns for follow-up context.")
     openrouter_api_key: Optional[str] = Field(None, max_length=256)
     openrouter_model: Optional[str] = Field(None, max_length=128)
     provider_base_url: Optional[str] = Field(None, max_length=2000)
@@ -2437,6 +2446,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         attach_evidence=True,
         evidence_top_k=req.evidence_top_k,
         variant=req.variant,
+        history=req.history,
         market_platform=(quote.platform if quote else req.platform),
         market_url=(quote.market_url if quote else None),
         market_outcome=(quote.outcome if quote else None),

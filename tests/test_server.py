@@ -290,6 +290,42 @@ class ServerTests(unittest.TestCase):
         response = self.client.post("/agent/analyze", json={"evidence_top_k": 3})
         self.assertEqual(response.status_code, 422)
 
+    def test_predict_rejects_short_standalone_question(self):
+        response = self.client.post("/predict", json={"question": "why?", "attach_evidence": False})
+        self.assertEqual(response.status_code, 422)
+
+    def test_predict_allows_short_followup_with_history(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "why?",
+                "attach_evidence": False,
+                "history": [
+                    {"role": "user", "content": "Will the Fed cut rates before 2027?"},
+                    {"role": "assistant", "content": "Probably yes."},
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_agent_analyze_passes_history_for_followups(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "what about by June instead?",
+                "attach_evidence": False,
+                "evidence_top_k": 2,
+                "history": [
+                    {"role": "user", "content": "Will the Fed cut rates before September 30, 2026?"},
+                    {"role": "assistant", "content": "I'd put Yes around 62%."},
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        # The prior turn reached the model, giving the follow-up context.
+        all_content = " ".join(m["content"] for m in self.provider.calls[0])
+        self.assertIn("September 30, 2026", all_content)
+
     def test_agent_scan_ranks_mispriced_markets(self):
         import analyzing_llm_rationale.market_data as md
 

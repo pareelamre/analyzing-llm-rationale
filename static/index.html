@@ -2437,6 +2437,7 @@ async function sendQuestion() {
       const agentBody = {
         question,
         evidence_top_k: 5,
+        history,
         skills: _loadSkills().map(s => ({ name: s.name, instruction: s.instruction })),
       };
       if (marketProbability != null) agentBody.market_probability = marketProbability;

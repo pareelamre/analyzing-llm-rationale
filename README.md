@@ -237,8 +237,10 @@ curl -X POST https://foresea.ink/agent/analyze \
 Custom **skills** are your own analysis steps — each runs as an extra model pass
 over the question, forecast, and evidence, and comes back as a named section in
 the report. Provide a `question` directly, or a `platform` + market identifier
-(`slug`/`market_id` for Polymarket, `ticker` for Kalshi). BYOK fields
-(`openrouter_api_key`, `openrouter_model`, `provider_base_url`) apply here too.
+(`slug`/`market_id` for Polymarket, `ticker` for Kalshi). Pass `history` (prior
+turns) for multi-turn follow-ups — with history, short follow-ups like "why?" or
+"what about June?" are answered in context. BYOK fields (`openrouter_api_key`,
+`openrouter_model`, `provider_base_url`) apply here too.
 The report includes `recommendation` (`buy_yes`/`buy_no`/`hold`/`no_market_price`),
 `edge`, `model_probability`, `market_probability`, `thesis`, `evidence_sources`,
 and `pipeline` (the ordered steps that ran).
