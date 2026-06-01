@@ -2061,19 +2061,33 @@ def _analytics_conn():
     return conn
 
 
-def _visitor_hash(request: Request) -> str:
+def _visitor_ip_ua(request: Request) -> tuple[str, str]:
     forwarded = request.headers.get("x-forwarded-for", "")
     ip = forwarded.split(",")[0].strip() if forwarded else ""
     if not ip and request.client:
         ip = request.client.host
-    user_agent = request.headers.get("user-agent", "")
+    return ip, request.headers.get("user-agent", "")
+
+
+def _visitor_hash(request: Request) -> str:
+    """Per-day salted visitor hash (used by the DuckDB fallback's daily uniques)."""
+    ip, user_agent = _visitor_ip_ua(request)
     day = time.strftime("%Y-%m-%d", time.gmtime())
     salt = os.environ.get("ANALYTICS_SALT", "foresea-analytics")
     raw = f"{day}:{ip}:{user_agent}:{salt}".encode("utf-8", errors="ignore")
     return hashlib.sha256(raw).hexdigest()
 
 
-def _record_visit(event: VisitRequest, request: Request) -> None:
+def _visitor_id(request: Request) -> str:
+    """Stable, day-independent visitor id (no raw IP stored) so cumulative
+    unique-visitor counts mean *distinct people over all time*, not per-day."""
+    ip, user_agent = _visitor_ip_ua(request)
+    salt = os.environ.get("ANALYTICS_SALT", "foresea-analytics")
+    raw = f"{ip}:{user_agent}:{salt}".encode("utf-8", errors="ignore")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _record_visit_duckdb(event: VisitRequest, request: Request) -> None:
     conn = _analytics_conn()
     try:
         conn.execute(
@@ -2091,6 +2105,84 @@ def _record_visit(event: VisitRequest, request: Request) -> None:
         )
     finally:
         conn.close()
+
+
+def _record_visit_datastore(event: VisitRequest, request: Request) -> None:
+    """Persist a visit in Cloud Datastore so counts survive instance recycles.
+
+    Cumulative totals live in an ``AnalyticsStats`` singleton updated in a
+    transaction; ``Visitor`` entities (keyed by the stable visitor id) dedupe
+    unique people; ``PageVisit`` rows back the 30-day daily breakdown. No raw
+    IP is ever stored.
+    """
+    client = _get_datastore()
+    from google.cloud import datastore as _ds
+
+    vid = _visitor_id(request)
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    now = datetime.now(timezone.utc)
+
+    with client.transaction():
+        visit = _ds.Entity(
+            client.key("PageVisit"),
+            exclude_from_indexes=("referrer", "user_agent", "timezone", "path"),
+        )
+        visit.update(
+            ts=now, day=day, path=event.path, referrer=event.referrer,
+            timezone=event.timezone, visitor_id=vid,
+            user_agent=request.headers.get("user-agent", "")[:1000],
+        )
+        client.put(visit)
+
+        stats_key = client.key("AnalyticsStats", "global")
+        stats = client.get(stats_key) or _ds.Entity(stats_key)
+        visitor_key = client.key("Visitor", vid)
+        is_new_visitor = client.get(visitor_key) is None
+        stats["total_visits"] = int(stats.get("total_visits", 0)) + 1
+        if is_new_visitor:
+            stats["unique_visitors"] = int(stats.get("unique_visitors", 0)) + 1
+            client.put(_ds.Entity(visitor_key))
+        client.put(stats)
+
+
+def _record_visit(event: VisitRequest, request: Request) -> None:
+    """Record a visit in Datastore when available, else the local DuckDB."""
+    if _get_datastore() is not None:
+        try:
+            _record_visit_datastore(event, request)
+            return
+        except Exception:
+            logger.warning("datastore visit record failed; falling back to duckdb", exc_info=True)
+    _record_visit_duckdb(event, request)
+
+
+def _analytics_summary_datastore() -> "AnalyticsSummary":
+    client = _get_datastore()
+    stats = client.get(client.key("AnalyticsStats", "global"))
+    total = int(stats["total_visits"]) if stats else 0
+    unique = int(stats["unique_visitors"]) if stats else 0
+
+    # Daily breakdown (last 30 days) from PageVisit rows; distinct counted in
+    # Python over a bounded window.
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    query = client.query(kind="PageVisit")
+    query.add_filter("ts", ">=", cutoff)
+    by_day: Dict[str, Dict[str, Any]] = {}
+    for e in query.fetch():
+        d = e.get("day") or e["ts"].strftime("%Y-%m-%d")
+        agg = by_day.setdefault(d, {"visits": 0, "visitors": set()})
+        agg["visits"] += 1
+        if e.get("visitor_id"):
+            agg["visitors"].add(e["visitor_id"])
+    rows = sorted(by_day.items(), reverse=True)[:30]
+    return AnalyticsSummary(
+        total_visits=total,
+        unique_visitors=unique,
+        by_day=[
+            {"day": d, "visits": agg["visits"], "unique_visitors": len(agg["visitors"])}
+            for d, agg in rows
+        ],
+    )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -2140,10 +2232,11 @@ async def ready() -> JSONResponse:
 async def record_visit(event: VisitRequest, request: Request) -> Dict[str, str]:
     """Record one anonymous page visit.
 
-    Stores no raw IP address. Unique visitors are estimated with a daily salted
-    hash of IP address and user agent.
+    Stores no raw IP address. Unique visitors are estimated with a salted hash
+    of IP address and user agent.
     """
-    _record_visit(event, request)
+    # Datastore/DuckDB I/O is blocking — keep it off the event loop.
+    await asyncio.get_running_loop().run_in_executor(None, _record_visit, event, request)
     return {"status": "ok"}
 
 
@@ -2152,8 +2245,18 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
     """Return basic page-visit counts.
 
     If `API_KEY` is configured, this endpoint requires `X-API-Key`.
+
+    Counts are persisted in Cloud Datastore when available (survive deploys /
+    instance recycles); otherwise they come from the local ephemeral DuckDB.
     """
     _check_api_key(request)
+    if _get_datastore() is not None:
+        try:
+            return await asyncio.get_running_loop().run_in_executor(
+                None, _analytics_summary_datastore
+            )
+        except Exception:
+            logger.warning("datastore summary failed; falling back to duckdb", exc_info=True)
     conn = _analytics_conn()
     try:
         total, unique_visitors = conn.execute(
