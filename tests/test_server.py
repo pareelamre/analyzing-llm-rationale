@@ -354,6 +354,17 @@ class ServerTests(unittest.TestCase):
         response = self.client.get("/agent/scan?platform=betfair")
         self.assertEqual(response.status_code, 422)
 
+    def test_news_articles_tolerates_invalid_fields(self):
+        from analyzing_llm_rationale.server import _news_articles
+        # A negative relevance_score (from negative cosine similarity) must not
+        # 500 the response — it's repaired/skipped, not raised.
+        articles = _news_articles([
+            {"title": "Good", "url": "https://x.com", "source": "X", "relevance_score": 0.5},
+            {"title": "Bad", "url": "https://y.com", "source": "Y", "relevance_score": -0.3},
+        ])
+        self.assertEqual(len(articles), 2)
+        self.assertEqual(articles[1].title, "Bad")
+
     def test_records_anonymous_page_visit(self):
         response = self.client.post(
             "/analytics/visit",

@@ -2356,6 +2356,14 @@ function makeAIBubble(data, variant) {
 }
 
 // ── Send ─────────────────────────────────────────────────────────────────────
+// Read a response body as JSON, but never throw on a non-JSON error body
+// (e.g. a 500 returning "Internal Server Error") — return a clean {detail}.
+async function _readJson(resp) {
+  const txt = await resp.text();
+  try { return txt ? JSON.parse(txt) : {}; }
+  catch { return { detail: (txt || '').slice(0, 300).trim() || ('HTTP ' + resp.status) }; }
+}
+
 async function sendQuestion() {
   const input = document.getElementById('questionInput');
   const question = input.value.trim();
@@ -2451,7 +2459,7 @@ async function sendQuestion() {
         headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(agentBody),
       });
-      const report = await resp.json();
+      const report = await _readJson(resp);
       typingEl.remove();
       if (!resp.ok) { addError(report.detail || 'Agent error'); return; }
       data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
@@ -2461,7 +2469,7 @@ async function sendQuestion() {
         headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(body),
       });
-      data = await resp.json();
+      data = await _readJson(resp);
       typingEl.remove();
       if (!resp.ok) { addError(data.detail || 'Server error'); return; }
       data.market_context = buildMarketContext(question, data);
@@ -2826,7 +2834,7 @@ async function loadTrackRecord() {
   try {
     const r = await fetch('/track-record');
     if (!r.ok) throw new Error('unavailable');
-    const d = await r.json();
+    const d = await _readJson(r);
     host.innerHTML = renderTrackRecord(d);
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#trackBody .tr-stat',
@@ -3404,7 +3412,7 @@ async function runScan(platform) {
   ]);
   try {
     const r = await fetch('/agent/scan?platform=' + encodeURIComponent(platform) + '&limit=4', { headers: authHeaders() });
-    const d = await r.json();
+    const d = await _readJson(r);
     typingEl.remove();
     if (!r.ok) { addError(d.detail || 'Scan failed'); return; }
     const data = { question_type: 'chat', rationale: _scanToMarkdown(d, venue), model_key: 'scan agent' };
@@ -3460,7 +3468,7 @@ async function _maybeCompleteGitHubLogin() {
       body: JSON.stringify({ code, redirect_uri: cleanUrl }),
     });
     if (!r.ok) { console.error('GitHub auth failed:', await r.text()); return; }
-    const d = await r.json();
+    const d = await _readJson(r);
     const user = { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
     _saveSession(d.token, user);
     updateAuthUI(user);
@@ -3665,7 +3673,7 @@ async function handleGoogleCredential(response) {
       body: JSON.stringify({ credential: response.credential }),
     });
     if (!r.ok) { _showAuthError('Google sign-in failed. Please try again.'); console.error('Auth failed:', await r.text()); return; }
-    const d = await r.json();
+    const d = await _readJson(r);
     const user = { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
     _saveSession(d.token, user);
     updateAuthUI(user);
@@ -3680,7 +3688,7 @@ async function _verifySession() {
   try {
     const r = await fetch('/auth/me', { headers: { Authorization: 'Bearer ' + token } });
     if (!r.ok) { _clearSession(); return null; }
-    const d = await r.json();
+    const d = await _readJson(r);
     return { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
   } catch { return user; /* offline: trust cached data */ }
 }

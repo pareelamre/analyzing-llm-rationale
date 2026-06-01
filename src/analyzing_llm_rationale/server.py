@@ -1415,6 +1415,26 @@ def _clean_article(article: Dict[str, Any]) -> Dict[str, Any]:
     return cleaned
 
 
+def _news_articles(articles: List[Dict[str, Any]]) -> List["NewsArticle"]:
+    """Build NewsArticle models, skipping/repairing any that fail validation so
+    one malformed source never 500s the whole response."""
+    out: List["NewsArticle"] = []
+    for a in articles:
+        try:
+            out.append(NewsArticle(**a))
+        except Exception:
+            try:
+                out.append(NewsArticle(
+                    title=(str(a.get("title") or "")[:500]) or None,
+                    summary=(str(a.get("summary") or "")[:4000]) or None,
+                    source=(str(a.get("source") or "")[:200]) or None,
+                    url=(str(a.get("url") or "")[:2000]) or None,
+                ))
+            except Exception:
+                continue
+    return out
+
+
 def _evidence_sources(articles: List[Dict[str, Any]]) -> List[EvidenceSource]:
     sources: List[EvidenceSource] = []
     seen: set = set()
@@ -1624,7 +1644,7 @@ def _build_typed_response(
         variant=req.variant,
         model_key=model_key,
         evidence_sources=_evidence_sources(evidence_articles),
-        evidence_articles=[NewsArticle(**a) for a in evidence_articles],
+        evidence_articles=_news_articles(evidence_articles),
         evidence_error=evidence_error,
     )
 
@@ -2292,7 +2312,7 @@ async def predict(req: PredictRequest, request: Request = None) -> PredictRespon
             rationale=text, model_rationale=text,
             variant=req.variant, model_key=model_key,
             evidence_sources=_evidence_sources(evidence_articles),
-            evidence_articles=[NewsArticle(**a) for a in evidence_articles],
+            evidence_articles=_news_articles(evidence_articles),
             evidence_error=evidence_error,
         )
     else:

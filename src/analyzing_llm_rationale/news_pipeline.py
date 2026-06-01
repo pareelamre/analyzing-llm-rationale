@@ -679,9 +679,12 @@ class NewsPipeline:
         scores = []
         for relevance, article in zip(relevance_scores, articles):
             credibility = _source_credibility(article)
+            # Cosine similarity can be negative; clamp to [0,1] so the blended
+            # relevance_score stays a valid 0..1 probability-like value.
+            rel = max(0.0, min(1.0, float(relevance)))
             article["source_credibility"] = round(credibility, 2)
-            article["relevance"] = round(float(relevance), 4)
-            scores.append((0.85 * relevance) + (0.15 * credibility))
+            article["relevance"] = round(rel, 4)
+            scores.append((0.85 * rel) + (0.15 * credibility))
 
         ranked = sorted(
             zip(scores, articles),
@@ -689,7 +692,7 @@ class NewsPipeline:
             reverse=True,
         )
         for score, article in ranked:
-            article["relevance_score"] = round(score, 4)
+            article["relevance_score"] = round(max(0.0, min(1.0, score)), 4)
         return [a for _, a in ranked]
 
     def select_diverse_sources(self, ranked: List[dict], top_k: int) -> List[dict]:
