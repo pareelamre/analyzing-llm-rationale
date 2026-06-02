@@ -2617,8 +2617,37 @@ function _isTableSep(line) {
   return t.includes('-') && /^\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?$/.test(t);
 }
 
+// Convert a chunk of LaTeX math into readable plain text (no KaTeX dependency).
+function _texToText(x) {
+  return String(x)
+    .replace(/\\d?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '($1) / ($2)')
+    .replace(/\\text\s*\{([^{}]*)\}/g, '$1')
+    .replace(/\\times/g, '×')
+    .replace(/\\approx/g, '≈')
+    .replace(/\\leq?/g, '≤')
+    .replace(/\\geq?/g, '≥')
+    .replace(/\\cdot/g, '·')
+    .replace(/\\pm/g, '±')
+    .replace(/\\div/g, '÷')
+    .replace(/\\neq/g, '≠')
+    .replace(/\\[,;:!\s]/g, ' ')
+    .replace(/\\\\/g, ' ')
+    .replace(/[{}]/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+// Strip LaTeX math delimiters the model sometimes emits (\[ \], \( \), $$ $$, $ $)
+// and render their contents as plain text, so they don't show as raw brackets.
+function _normalizeMath(s) {
+  return String(s ?? '')
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_, x) => _texToText(x))
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, x) => _texToText(x))
+    .replace(/\$\$([\s\S]*?)\$\$/g, (_, x) => _texToText(x))
+    .replace(/\$([^$\n]+?)\$/g, (_, x) => _texToText(x));
+}
+
 function renderMarkdown(text) {
-  const lines = escHtml(text || '').split(/\r?\n/);
+  const lines = escHtml(_normalizeMath(text)).split(/\r?\n/);
   let html = '';
   let list = null;            // 'ul' | 'ol'
   let para = [];
