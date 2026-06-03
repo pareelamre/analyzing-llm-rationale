@@ -1,0 +1,38 @@
+name: Datastore backup
+
+# Scheduled export of Cloud Datastore (users, conversations, analytics) to a
+# GCS bucket so the data has a recovery point and survives accidental
+# corruption/deletion. Zero idle cost: GitHub-hosted cron + a short-lived
+# export job; the bucket has a 30-day delete lifecycle.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # daily at 03:17 UTC
+  workflow_dispatch: {}      # allow manual runs from the Actions tab
+
+env:
+  GCP_PROJECT_ID: brave-drive-471109-d9
+  BACKUP_BUCKET: gs://brave-drive-471109-d9-datastore-backups
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Export Datastore to GCS
+        run: |
+          STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+          DEST="${BACKUP_BUCKET}/${STAMP}"
+          echo "Exporting Datastore -> ${DEST}"
+          gcloud datastore export "${DEST}" \
+            --project "${GCP_PROJECT_ID}"
+          echo "Backup complete: ${DEST}"
