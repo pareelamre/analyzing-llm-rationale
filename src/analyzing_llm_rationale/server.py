@@ -48,6 +48,11 @@ _GITHUB_CLIENT_ID: Optional[str] = os.environ.get("GITHUB_CLIENT_ID")
 _GITHUB_CLIENT_SECRET: Optional[str] = os.environ.get("GITHUB_CLIENT_SECRET")
 _SESSION_SECRET: str = os.environ.get("SESSION_SECRET", "change-me-in-production")
 _SESSION_TTL_DAYS = 30
+# Shared secret that gates the live track-record tick (compute-bearing). When
+# unset, the live track record is disabled and /track-record serves the static
+# backtest. The daily workflow sends it as X-Track-Token.
+_TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
+_TRACK_RECORD_VARIANT = os.environ.get("DEFAULT_VARIANT", "variant0_neutral_baseline")
 _state: Dict[str, Any] = {}
 
 logger = logging.getLogger("foresea")
@@ -1046,11 +1051,22 @@ async def index():
 async def track_record():
     """Return Foresea's resolved-forecast track record.
 
-    A backtest of `gpt-oss-120b` predictions scored against published Metaculus
-    outcomes: accuracy, Brier score, calibration (ECE), a reliability curve, and
-    a sample of individual resolved forecasts. Only questions with a known
-    real-world outcome are included.
+    Once the live, point-in-time record has resolved forecasts, this returns it
+    (forecasts made on live Polymarket/Kalshi markets and scored at resolution,
+    with skill-vs-market). Until then it falls back to the static backtest of
+    `gpt-oss-120b` against published Metaculus outcomes: accuracy, Brier score,
+    calibration (ECE), a reliability curve, and a sample of resolved forecasts.
     """
+    client = _get_datastore()
+    if client is not None:
+        try:
+            from analyzing_llm_rationale import track_record_live as trl
+            live = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: trl.read_aggregate(client))
+            if live and live.get("n_resolved"):
+                return JSONResponse(live, headers={"Cache-Control": "public, max-age=600"})
+        except Exception:
+            logger.warning("live track record read failed; serving static", exc_info=True)
     path = _STATIC_DIR / "track_record.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Track record not generated yet.")
@@ -3173,3 +3189,71 @@ async def agent_scan(
     response = AgentScanResponse(platform=platform_name, scanned=len(quotes), opportunities=opportunities)
     _cache_set(cache_key, response.model_dump(), _MARKET_CACHE_TTL * 10)
     return response
+
+
+async def _track_record_forecast(quote: Dict[str, Any], evidence_top_k: int):
+    """Forecast one market for the live track record; returns (model_p, market_p)."""
+    res = await predict(PredictRequest(
+        question=quote["question"],
+        attach_evidence=True,
+        evidence_top_k=evidence_top_k,
+        market_platform=quote.get("platform"),
+        market_url=quote.get("market_url"),
+        market_outcome=quote.get("outcome"),
+        market_probability=quote.get("probability"),
+    ))
+    analysis = res.market_analysis
+    if analysis is None or analysis.model_probability is None:
+        return None
+    return (analysis.model_probability, analysis.market_probability)
+
+
+@app.post("/track-record/tick", tags=["System"], summary="Advance the live track record")
+async def track_record_tick(request: Request = None) -> Dict[str, Any]:
+    """Score newly-resolved forecasts, record forecasts on freshly-seen markets,
+    and recompute the public aggregate. Token-protected (compute-bearing); meant
+    to be called once daily by a scheduled job.
+    """
+    if not _TRACK_RECORD_TOKEN:
+        raise HTTPException(status_code=503, detail="Live track record is not enabled (set TRACK_RECORD_TOKEN).")
+    token = request.headers.get("x-track-token") if request is not None else None
+    if not token or not hmac.compare_digest(token, _TRACK_RECORD_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Track-Token.")
+    if request is not None:
+        _check_rate_limit(request)
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+    client = _get_datastore()
+    if client is None:
+        raise HTTPException(status_code=503, detail="Datastore unavailable; the live track record requires it.")
+
+    from analyzing_llm_rationale import market_data
+    from analyzing_llm_rationale import track_record_live as trl
+
+    loop = asyncio.get_running_loop()
+    per_venue = 3
+    if request is not None:
+        try:
+            per_venue = max(1, min(int(request.query_params.get("per_venue", 3)), 5))
+        except (TypeError, ValueError):
+            per_venue = 3
+
+    # 1) Score anything that resolved since the last tick.
+    newly_resolved = await loop.run_in_executor(
+        None, lambda: trl.resolve_open_forecasts(client, market_data))
+    # 2) Record forecasts on newly-seen open markets (one per market, ever).
+    recorded = await trl.record_new_forecasts(
+        client, market_data, _track_record_forecast, per_venue=per_venue)
+    # 3) Recompute + persist the public aggregate.
+    agg = await loop.run_in_executor(None, lambda: trl.aggregate(
+        client,
+        model=_state.get("model_key", "gpt-oss-120b"),
+        variant=_TRACK_RECORD_VARIANT,
+        temperature=float(_state.get("temperature") or 0.0),
+    ))
+    return {
+        "recorded": recorded,
+        "newly_resolved": newly_resolved,
+        "n_resolved": agg.get("n_resolved"),
+        "n_open": agg.get("n_open"),
+    }

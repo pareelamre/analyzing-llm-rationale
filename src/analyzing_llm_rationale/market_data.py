@@ -101,6 +101,55 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def resolve_polymarket(slug: str) -> Optional[int]:
+    """Return 1/0 if a binary Polymarket market has resolved YES/NO, else None.
+
+    A market is resolved when ``closed`` and ``umaResolutionStatus == resolved``;
+    the winning outcome's ``outcomePrices`` entry settles to ~1. Used by the live
+    track record to score a forecast once its market resolves.
+    """
+    if not slug:
+        return None
+    data = _get_json(POLYMARKET_GAMMA_URL, params={"slug": slug})
+    if isinstance(data, list):
+        market = data[0] if data else None
+    elif isinstance(data, dict):
+        market = data
+    else:
+        market = None
+    if not market:
+        return None
+    closed = bool(market.get("closed"))
+    status = str(market.get("umaResolutionStatus") or "").strip().lower()
+    if not (closed and status == "resolved"):
+        return None
+    labels = _as_list(market.get("outcomes"))
+    prices = [_to_float(p) for p in _as_list(market.get("outcomePrices"))]
+    for i, label in enumerate(labels):
+        if str(label).strip().lower() == "yes" and i < len(prices) and prices[i] is not None:
+            return 1 if prices[i] >= 0.5 else 0
+    return None
+
+
+def resolve_kalshi(ticker: str) -> Optional[int]:
+    """Return 1/0 if a Kalshi market has settled YES/NO, else None.
+
+    A settled market has ``status`` in {settled, finalized} and ``result`` in
+    {yes, no}.
+    """
+    if not ticker:
+        return None
+    data = _get_json(f"{KALSHI_API_URL}/{ticker.strip().upper()}")
+    market = data.get("market") if isinstance(data, dict) else None
+    if not market:
+        return None
+    status = str(market.get("status") or "").strip().lower()
+    result = str(market.get("result") or "").strip().lower()
+    if status in ("settled", "finalized") and result in ("yes", "no"):
+        return 1 if result == "yes" else 0
+    return None
+
+
 def fetch_polymarket(slug: Optional[str] = None, market_id: Optional[str] = None) -> Dict[str, Any]:
     """Fetch a Polymarket market by slug or numeric id via the Gamma API."""
     if not slug and not market_id:

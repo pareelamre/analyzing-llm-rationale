@@ -13,6 +13,8 @@ from analyzing_llm_rationale.market_data import (  # noqa: E402
     fetch_polymarket,
     list_kalshi,
     list_polymarket,
+    resolve_kalshi,
+    resolve_polymarket,
 )
 
 
@@ -136,6 +138,34 @@ class MarketDataTests(unittest.TestCase):
         sys.modules["requests"] = _fake_requests(payload)
         quotes = list_kalshi(limit=10, query="nba")
         self.assertEqual([q["question"] for q in quotes], ["Will an NBA team relocate?"])
+
+    def test_resolve_polymarket_yes_no(self):
+        # Resolved YES (Yes price settled to 1).
+        sys.modules["requests"] = _fake_requests([
+            {"closed": True, "umaResolutionStatus": "resolved",
+             "outcomes": '["Yes","No"]', "outcomePrices": '["1","0"]'}
+        ])
+        self.assertEqual(resolve_polymarket("slug"), 1)
+        # Resolved NO.
+        sys.modules["requests"] = _fake_requests([
+            {"closed": True, "umaResolutionStatus": "resolved",
+             "outcomes": '["Yes","No"]', "outcomePrices": '["0","1"]'}
+        ])
+        self.assertEqual(resolve_polymarket("slug"), 0)
+        # Still open -> None.
+        sys.modules["requests"] = _fake_requests([
+            {"closed": False, "umaResolutionStatus": "",
+             "outcomes": '["Yes","No"]', "outcomePrices": '["0.5","0.5"]'}
+        ])
+        self.assertIsNone(resolve_polymarket("slug"))
+
+    def test_resolve_kalshi_settled(self):
+        sys.modules["requests"] = _fake_requests({"market": {"status": "finalized", "result": "yes"}})
+        self.assertEqual(resolve_kalshi("T1"), 1)
+        sys.modules["requests"] = _fake_requests({"market": {"status": "settled", "result": "no"}})
+        self.assertEqual(resolve_kalshi("T1"), 0)
+        sys.modules["requests"] = _fake_requests({"market": {"status": "active", "result": ""}})
+        self.assertIsNone(resolve_kalshi("T1"))
 
 
 if __name__ == "__main__":

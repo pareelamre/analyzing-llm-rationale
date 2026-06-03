@@ -1,0 +1,31 @@
+name: Track record tick
+
+# Advances the live, point-in-time track record once a day: scores forecasts
+# whose markets resolved, records forecasts on freshly-seen open markets, and
+# recomputes the public aggregate served at /track-record.
+#
+# Requires the repo secret TRACK_RECORD_TOKEN to match the server's
+# TRACK_RECORD_TOKEN env var. Until both are set, the endpoint returns 503 and
+# /track-record keeps serving the static backtest (safe no-op).
+
+on:
+  schedule:
+    - cron: "23 6 * * *"   # daily at 06:23 UTC
+  workflow_dispatch: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Advance live track record
+        run: |
+          if [ -z "${{ secrets.TRACK_RECORD_TOKEN }}" ]; then
+            echo "TRACK_RECORD_TOKEN secret not set — skipping (feature not enabled yet)."
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/tick.json -w "%{http_code}" -X POST \
+            "https://foresea.ink/track-record/tick?per_venue=3" \
+            -H "X-Track-Token: ${{ secrets.TRACK_RECORD_TOKEN }}")
+          echo "HTTP $code"; cat /tmp/tick.json; echo
+          test "$code" = "200"

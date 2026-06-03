@@ -392,6 +392,18 @@ class ServerTests(unittest.TestCase):
         response = self.client.get("/agent/scan?platform=betfair")
         self.assertEqual(response.status_code, 422)
 
+    def test_track_record_tick_disabled_without_token(self):
+        import analyzing_llm_rationale.server as srv
+        with mock.patch.object(srv, "_TRACK_RECORD_TOKEN", None):
+            r = self.client.post("/track-record/tick")
+        self.assertEqual(r.status_code, 503)
+
+    def test_track_record_tick_rejects_bad_token(self):
+        import analyzing_llm_rationale.server as srv
+        with mock.patch.object(srv, "_TRACK_RECORD_TOKEN", "secret-token"):
+            r = self.client.post("/track-record/tick", headers={"X-Track-Token": "wrong"})
+        self.assertEqual(r.status_code, 401)
+
     def test_news_articles_tolerates_invalid_fields(self):
         from analyzing_llm_rationale.server import _news_articles
         # A negative relevance_score (from negative cosine similarity) must not
