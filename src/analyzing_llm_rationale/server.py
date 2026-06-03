@@ -1063,7 +1063,7 @@ async def track_record():
             from analyzing_llm_rationale import track_record_live as trl
             live = await asyncio.get_running_loop().run_in_executor(
                 None, lambda: trl.read_aggregate(client))
-            if live and live.get("n_resolved"):
+            if live and live.get("n_snapshots_resolved"):
                 return JSONResponse(live, headers={"Cache-Control": "public, max-age=600"})
         except Exception:
             logger.warning("live track record read failed; serving static", exc_info=True)
@@ -3238,13 +3238,13 @@ async def track_record_tick(request: Request = None) -> Dict[str, Any]:
         except (TypeError, ValueError):
             per_venue = 3
 
-    # 1) Score anything that resolved since the last tick.
+    # 1) Score snapshots whose markets resolved since the last tick.
     newly_resolved = await loop.run_in_executor(
-        None, lambda: trl.resolve_open_forecasts(client, market_data))
-    # 2) Record forecasts on newly-seen open markets (one per market, ever).
-    recorded = await trl.record_new_forecasts(
+        None, lambda: trl.resolve_open_snapshots(client, market_data))
+    # 2) Take today's forecast snapshot for tracked-open + newly-seen markets.
+    recorded = await trl.record_snapshots(
         client, market_data, _track_record_forecast, per_venue=per_venue)
-    # 3) Recompute + persist the public aggregate.
+    # 3) Recompute + persist the public aggregate (overall + by horizon).
     agg = await loop.run_in_executor(None, lambda: trl.aggregate(
         client,
         model=_state.get("model_key", "gpt-oss-120b"),
@@ -3252,8 +3252,8 @@ async def track_record_tick(request: Request = None) -> Dict[str, Any]:
         temperature=float(_state.get("temperature") or 0.0),
     ))
     return {
-        "recorded": recorded,
-        "newly_resolved": newly_resolved,
-        "n_resolved": agg.get("n_resolved"),
-        "n_open": agg.get("n_open"),
+        "snapshots_recorded": recorded,
+        "snapshots_resolved": newly_resolved,
+        "n_markets_resolved": agg.get("n_markets_resolved"),
+        "n_markets_open": agg.get("n_markets_open"),
     }

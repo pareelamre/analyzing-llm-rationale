@@ -98,6 +98,7 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "outcome": outcome,
         "probability": probability,
         "outcomes": options,
+        "close_time": market.get("endDate") or market.get("endDateIso"),
     }
 
 
@@ -237,6 +238,7 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
             {"label": "Yes", "probability": probability},
             {"label": "No", "probability": no_probability},
         ],
+        "close_time": market.get("close_time"),
     }
 
 
