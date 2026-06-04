@@ -17,7 +17,7 @@ import time
 import traceback
 import uuid
 from collections import OrderedDict, defaultdict
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
@@ -47,6 +47,8 @@ from analyzing_llm_rationale.pipeline import (
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _STATIC_DIR = _REPO_ROOT / "static"
 _ANALYTICS_DB = Path(os.environ.get("ANALYTICS_DB", "/tmp/foresea_analytics.duckdb"))
+_CANONICAL = "https://foresea.ink"
+_MCP_ENDPOINT = f"{_CANONICAL}/mcp/"
 
 _REQUIRED_API_KEY: Optional[str] = os.environ.get("API_KEY")
 _GOOGLE_CLIENT_ID: Optional[str] = os.environ.get("GOOGLE_CLIENT_ID")
@@ -60,6 +62,8 @@ _SESSION_TTL_DAYS = 30
 _TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
 _TRACK_RECORD_VARIANT = os.environ.get("DEFAULT_VARIANT", "variant0_neutral_baseline")
 _state: Dict[str, Any] = {}
+_PUBLIC_MCP = None
+_PUBLIC_MCP_APP = None
 
 logger = logging.getLogger("foresea")
 
@@ -788,12 +792,16 @@ async def lifespan(app: FastAPI):
     global _ready
     _ready = True
     logger.info("foresea server starting up")
-    yield
-    # Graceful shutdown: flip readiness so the load balancer stops routing new
-    # traffic while uvicorn drains in-flight requests on SIGTERM (Cloud Run
-    # instance recycle).
-    _ready = False
-    logger.info("foresea server shutting down (draining in-flight requests)")
+    async with AsyncExitStack() as stack:
+        if _PUBLIC_MCP is not None:
+            await stack.enter_async_context(_PUBLIC_MCP.session_manager.run())
+            logger.info("foresea public MCP endpoint mounted at /mcp")
+        yield
+        # Graceful shutdown: flip readiness so the load balancer stops routing new
+        # traffic while uvicorn drains in-flight requests on SIGTERM (Cloud Run
+        # instance recycle).
+        _ready = False
+        logger.info("foresea server shutting down (draining in-flight requests)")
 
 
 app = FastAPI(
@@ -824,8 +832,44 @@ app.add_middleware(
     ],
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Content-Type", "X-API-Key", "Authorization"],
+    allow_headers=[
+        "Content-Type",
+        "X-API-Key",
+        "Authorization",
+        "Mcp-Session-Id",
+        "MCP-Protocol-Version",
+    ],
+    expose_headers=["Mcp-Session-Id", "X-Request-ID"],
 )
+
+
+def _mount_public_mcp_endpoint() -> None:
+    """Expose Foresea as a remote MCP server when the SDK is installed."""
+    global _PUBLIC_MCP, _PUBLIC_MCP_APP
+    if os.environ.get("DISABLE_PUBLIC_MCP", "").lower() in {"1", "true", "yes"}:
+        return
+    try:
+        from analyzing_llm_rationale.mcp_server import create_mcp_server
+
+        timeout_s = float(os.environ.get("FORESEA_MCP_TIMEOUT_S", "120"))
+        _PUBLIC_MCP = create_mcp_server(
+            base_url=os.environ.get("FORESEA_MCP_UPSTREAM_URL", _CANONICAL),
+            api_key=os.environ.get("FORESEA_MCP_UPSTREAM_API_KEY")
+            or os.environ.get("FORESEA_API_KEY")
+            or os.environ.get("API_KEY"),
+            timeout_s=timeout_s,
+            host="0.0.0.0",
+            streamable_http_path="/",
+        )
+        _PUBLIC_MCP_APP = _PUBLIC_MCP.streamable_http_app()
+        app.mount("/mcp", _PUBLIC_MCP_APP)
+    except Exception as exc:
+        _PUBLIC_MCP = None
+        _PUBLIC_MCP_APP = None
+        logger.warning("public MCP endpoint disabled: %s", exc)
+
+
+_mount_public_mcp_endpoint()
 
 
 # Redirect middleware: send requests from run.app hosts to the custom domain
@@ -1054,7 +1098,6 @@ async def index():
 
 
 # ── AI-agent / crawler discoverability ────────────────────────────────────────
-_CANONICAL = "https://foresea.ink"
 
 
 @app.get("/robots.txt", include_in_schema=False)
@@ -1069,9 +1112,56 @@ async def robots_txt():
         lines += [f"User-agent: {b}", "Allow: /", ""]
     lines += [f"Sitemap: {_CANONICAL}/sitemap.xml",
               f"# Machine-readable guide for LLMs: {_CANONICAL}/llms.txt",
+              f"# Remote MCP server: {_MCP_ENDPOINT}",
+              f"# MCP discovery manifest: {_CANONICAL}/.well-known/mcp/server.json",
               f"# OpenAPI spec: {_CANONICAL}/openapi.json"]
     return PlainTextResponse("\n".join(lines),
                              headers={"Cache-Control": "public, max-age=86400"})
+
+
+def _mcp_server_manifest() -> Dict[str, Any]:
+    return {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "ink.foresea/forecasting",
+        "title": "Foresea Forecasting",
+        "description": "Forecast future events and scan prediction-market edges.",
+        "version": "1.0.0",
+        "websiteUrl": _CANONICAL,
+        "repository": {
+            "url": "https://github.com/pareelamre/analyzing-llm-rationale",
+            "source": "github",
+        },
+        "remotes": [
+            {
+                "type": "streamable-http",
+                "url": _MCP_ENDPOINT,
+            }
+        ],
+        "_meta": {
+            "ink.foresea/tools": [
+                "foresea_forecast",
+                "foresea_analyze_market",
+                "foresea_scan_markets",
+                "foresea_track_record",
+            ],
+            "ink.foresea/resources": [
+                "foresea://track-record",
+                "foresea://openapi.json",
+            ],
+        },
+    }
+
+
+@app.get("/.well-known/mcp/server.json", include_in_schema=False)
+async def mcp_server_json():
+    """MCP Registry discovery metadata for Foresea's public remote MCP server."""
+    return JSONResponse(_mcp_server_manifest(), headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/.well-known/mcp.json", include_in_schema=False)
+async def mcp_json_alias():
+    """Compatibility alias for MCP clients that probe the older well-known path."""
+    return JSONResponse(_mcp_server_manifest(), headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/llms.txt", include_in_schema=False)
@@ -1085,6 +1175,9 @@ async def llms_txt():
 > Free to use, with an open JSON API agents can call directly.
 
 ## Use the API
+- [Remote MCP server]({_MCP_ENDPOINT}): Streamable HTTP MCP endpoint for agents.
+  Tools: `foresea_forecast`, `foresea_analyze_market`, `foresea_scan_markets`,
+  `foresea_track_record`. Discovery manifest: `{_CANONICAL}/.well-known/mcp/server.json`.
 - [Forecast](\
 {_CANONICAL}/docs): `POST {_CANONICAL}/predict` with `{{"question": "..."}}` returns a
   structured forecast (binary / multiple-choice / numeric / date), a confidence,

@@ -426,13 +426,32 @@ class ServerTests(unittest.TestCase):
         self.assertIn("ClaudeBot", r.text)
         self.assertIn("PerplexityBot", r.text)
         self.assertIn("Sitemap: https://foresea.ink/sitemap.xml", r.text)
+        self.assertIn("Remote MCP server: https://foresea.ink/mcp/", r.text)
+        self.assertIn("MCP discovery manifest", r.text)
 
     def test_llms_txt_describes_api(self):
         r = self.client.get("/llms.txt")
         self.assertEqual(r.status_code, 200)
         self.assertIn("# Foresea", r.text)
+        self.assertIn("Remote MCP server", r.text)
+        self.assertIn("https://foresea.ink/mcp/", r.text)
+        self.assertIn("foresea_forecast", r.text)
         self.assertIn("/predict", r.text)
         self.assertIn("/openapi.json", r.text)
+
+    def test_mcp_discovery_manifest(self):
+        r = self.client.get("/.well-known/mcp/server.json")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["name"], "ink.foresea/forecasting")
+        self.assertEqual(body["remotes"][0]["type"], "streamable-http")
+        self.assertEqual(body["remotes"][0]["url"], "https://foresea.ink/mcp/")
+        self.assertIn("foresea_scan_markets", body["_meta"]["ink.foresea/tools"])
+
+    def test_mcp_discovery_manifest_compat_alias(self):
+        r = self.client.get("/.well-known/mcp.json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["remotes"][0]["url"], "https://foresea.ink/mcp/")
 
     def test_sitemap_xml(self):
         r = self.client.get("/sitemap.xml")

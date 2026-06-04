@@ -261,6 +261,86 @@ scanned, opportunities: [{question, market_url, market_probability,
 model_probability, edge, recommendation}]}`. In the web app, the desk's
 **"⚡ Scan Polymarket for mispriced markets"** button calls this.
 
+### MCP server: let AI agents call Foresea as tools
+
+Foresea exposes a public remote MCP server at:
+
+```text
+https://foresea.ink/mcp/
+```
+
+It is advertised for discovery at:
+
+```text
+https://foresea.ink/.well-known/mcp/server.json
+```
+
+The remote MCP server is a thin tool layer over the public API. It exposes:
+
+- `foresea_forecast`: calls `POST /predict`.
+- `foresea_analyze_market`: calls `POST /agent/analyze`.
+- `foresea_scan_markets`: calls `GET /agent/scan`.
+- `foresea_track_record`: calls `GET /track-record`.
+- Resources: `foresea://track-record` and `foresea://openapi.json`.
+
+Use `https://foresea.ink/mcp/` directly in MCP clients that support remote
+Streamable HTTP servers. For clients that still require a local stdio command,
+run the wrapper locally.
+
+The official MCP Python SDK requires Python 3.10+. If your shell is still on the
+system Python 3.9, create a repo-local Python 3.11 MCP environment with `uv`:
+
+```bash
+uv venv --python 3.11 .venv-mcp
+
+uv pip install --python .venv-mcp/bin/python --no-deps -e .
+uv pip install --python .venv-mcp/bin/python "mcp>=1.27.1" requests pyyaml pip
+
+source .venv-mcp/bin/activate
+analyze-llm-rationale mcp-server
+```
+
+That lightweight install avoids pulling the full inference dependency stack
+(notably Torch/CUDA) when all you need is the MCP wrapper. In a full Python
+3.10+ development environment, `pip install -e ".[mcp]"` is also valid.
+
+MCP client config example:
+
+```json
+{
+  "mcpServers": {
+    "foresea": {
+      "url": "https://foresea.ink/mcp/"
+    }
+  }
+}
+```
+
+For a local HTTP MCP endpoint:
+
+```bash
+.venv-mcp/bin/analyze-llm-rationale mcp-server \
+  --transport streamable-http \
+  --host 127.0.0.1 \
+  --port 8787
+```
+
+Connect MCP clients to `http://127.0.0.1:8787/mcp`. If a private deployment
+requires auth, set `FORESEA_API_KEY` or pass `--api-key`; the wrapper forwards it
+as `X-API-Key`.
+
+Quick verification:
+
+```bash
+.venv-mcp/bin/python - <<'PY'
+import importlib.metadata as md
+from analyzing_llm_rationale.mcp_server import create_mcp_server
+
+print(md.version("mcp"))
+print(create_mcp_server().name)
+PY
+```
+
 ### Fetch live market prices
 
 Pull the current market-implied probability straight from a venue, then feed it

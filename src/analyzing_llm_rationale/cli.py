@@ -224,6 +224,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the LangChain query-planning step and search with the raw question.",
     )
 
+    mcp_parser = subparsers.add_parser("mcp-server", help="Start the Foresea MCP server wrapper.")
+    mcp_parser.add_argument(
+        "--transport",
+        choices=["stdio", "streamable-http", "sse"],
+        default=os.environ.get("FORESEA_MCP_TRANSPORT", "stdio"),
+        help="MCP transport. Use stdio for local agent clients; streamable-http for a local HTTP MCP endpoint.",
+    )
+    mcp_parser.add_argument(
+        "--base-url",
+        default=os.environ.get("FORESEA_BASE_URL", "https://foresea.ink"),
+        help="Foresea API base URL to wrap.",
+    )
+    mcp_parser.add_argument(
+        "--api-key",
+        default=os.environ.get("FORESEA_API_KEY") or os.environ.get("API_KEY"),
+        help="Optional Foresea API key for deployments that require X-API-Key.",
+    )
+    mcp_parser.add_argument(
+        "--timeout-s",
+        type=float,
+        default=float(os.environ.get("FORESEA_MCP_TIMEOUT_S", "120")),
+        help="HTTP timeout for calls from the MCP server to Foresea.",
+    )
+    mcp_parser.add_argument(
+        "--host",
+        default=os.environ.get("FORESEA_MCP_HOST", "127.0.0.1"),
+        help="Host for streamable-http or sse transports.",
+    )
+    mcp_parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("FORESEA_MCP_PORT", "8000")),
+        help="Port for streamable-http or sse transports.",
+    )
+
     return parser
 
 
@@ -572,6 +607,28 @@ def serve_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def mcp_server_command(args: argparse.Namespace) -> int:
+    try:
+        from analyzing_llm_rationale.mcp_server import run_mcp_server
+    except RuntimeError as exc:
+        print(str(exc))
+        return 1
+
+    try:
+        run_mcp_server(
+            transport=args.transport,
+            base_url=args.base_url,
+            api_key=args.api_key,
+            timeout_s=args.timeout_s,
+            host=args.host,
+            port=args.port,
+        )
+    except RuntimeError as exc:
+        print(str(exc))
+        return 1
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -590,5 +647,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return serve_command(args)
     if args.command == "fetch-and-rank":
         return fetch_and_rank_command(args)
+    if args.command == "mcp-server":
+        return mcp_server_command(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
