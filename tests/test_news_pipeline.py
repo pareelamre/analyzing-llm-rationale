@@ -422,5 +422,62 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertNotIn("before", query)
 
 
+class RelevanceFilterTests(unittest.TestCase):
+    Q = "Will the San Antonio Spurs win the 2026 NBA Finals?"
+
+    def test_lexical_relevance_ignores_stopwords(self):
+        # Irrelevant junk (no topical overlap) scores 0 — not nonzero for "the".
+        self.assertEqual(_lexical_relevance(self.Q, "6 7 meme compilation the best of"), 0.0)
+        self.assertEqual(_lexical_relevance(self.Q, "South Dakota road project the table of"), 0.0)
+        # A genuinely relevant article scores high.
+        self.assertGreater(
+            _lexical_relevance(self.Q, "The Spurs clinch a 2026 NBA Finals berth in San Antonio"), 0.5)
+
+    def _pipeline(self, min_relevance):
+        return NewsPipeline(use_query_planner=False, summarize_articles=False,
+                            use_embeddings=False, min_relevance=min_relevance)
+
+    def test_floor_drops_irrelevant_sources(self):
+        ranked = [
+            {"title": "Spurs clinch Finals berth", "relevance": 0.8, "source_channel": "web", "url": "a"},
+            {"title": "6 7 meme", "relevance": 0.04, "source_channel": "web", "url": "b"},
+            {"title": "SD.gov roads", "relevance": 0.0, "source_channel": "gdelt", "url": "c"},
+        ]
+        out = self._pipeline(0.3).select_diverse_sources(ranked, 5)
+        self.assertEqual([a["url"] for a in out], ["a"])  # only the relevant one survives
+
+    def test_all_junk_returns_no_sources(self):
+        ranked = [
+            {"title": "meme", "relevance": 0.05, "source_channel": "web", "url": "b"},
+            {"title": "unrelated pdf", "relevance": 0.02, "source_channel": "google-news", "url": "c"},
+        ]
+        # Better to cite nothing (-> honest low-confidence) than ground on junk.
+        self.assertEqual(self._pipeline(0.3).select_diverse_sources(ranked, 5), [])
+
+    def test_floor_off_by_default(self):
+        ranked = [{"title": "x", "relevance": 0.01, "source_channel": "web", "url": "a"}]
+        self.assertEqual(len(self._pipeline(0.0).select_diverse_sources(ranked, 5)), 1)
+
+    def test_semantic_ranking_via_injected_embedder(self):
+        # Fake shared embedder: topical texts -> [1,0], junk -> [0,1].
+        def fake_embed(texts):
+            return [[1.0, 0.0] if ("spurs" in t.lower() or "finals" in t.lower())
+                    else [0.0, 1.0] for t in texts]
+
+        pipe = NewsPipeline(use_query_planner=False, summarize_articles=False,
+                            use_embeddings=False, embed_fn=fake_embed, min_relevance=0.25)
+        ranked = pipe.rank(self.Q, [
+            {"title": "random 6 7 meme", "source_channel": "web", "url": "junk"},
+            {"title": "Spurs reach the NBA Finals", "source_channel": "web", "url": "real"},
+        ])
+        # Semantic match puts the relevant article first with ~1.0 relevance, junk ~0.
+        self.assertEqual(ranked[0]["url"], "real")
+        self.assertGreater(ranked[0]["relevance"], 0.9)
+        self.assertLess(ranked[1]["relevance"], 0.1)
+        # And the floor then drops the junk entirely.
+        kept = pipe.select_diverse_sources(ranked, 5)
+        self.assertEqual([a["url"] for a in kept], ["real"])
+
+
 if __name__ == "__main__":
     unittest.main()

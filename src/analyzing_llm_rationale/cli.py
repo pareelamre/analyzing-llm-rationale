@@ -542,6 +542,7 @@ def serve_command(args: argparse.Namespace) -> int:
     _state["evidence_pipeline"] = None
     if not args.disable_evidence:
         try:
+            from analyzing_llm_rationale import rag
             from analyzing_llm_rationale.news_pipeline import NewsPipeline
 
             base_url = args.api_base_url or args._resolved_model_config.api_base_url or "https://llm.scads.ai/v1"
@@ -556,6 +557,12 @@ def serve_command(args: argparse.Namespace) -> int:
                 fetch_sources=args.evidence_source or ("web", "gdelt", "google-news"),
                 summarize_articles=False,
                 use_embeddings=False,
+                # Semantic relevance via the shared mounted embedder (one model
+                # instance — no second copy / OOM), with a lexical fallback.
+                embed_fn=rag.embed,
+                # Drop topically-irrelevant sources (memes, unrelated PDFs) so they
+                # can't ground or be cited by a forecast. Cosine scale; tunable.
+                min_relevance=float(os.environ.get("EVIDENCE_MIN_RELEVANCE", "0.25")),
             )
         except Exception as exc:
             print(f"Evidence retrieval disabled: {exc}")

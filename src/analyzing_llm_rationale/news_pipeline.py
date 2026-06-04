@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import List, Optional, Sequence
+from typing import Callable, List, Optional, Sequence
 from urllib.parse import urlencode
 from xml.etree import ElementTree
 
@@ -120,8 +120,22 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (norm_a * norm_b))
 
 
+# Function words carry no topical signal; counting them lets irrelevant junk
+# (a meme video, an unrelated PDF) score nonzero just for containing "the".
+_RELEVANCE_STOPWORDS = frozenset({
+    "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "by", "at",
+    "as", "is", "are", "be", "was", "were", "will", "would", "can", "could",
+    "this", "that", "these", "those", "it", "its", "with", "from", "into",
+    "over", "under", "up", "down", "out", "than", "then", "before", "after",
+    "do", "does", "did", "have", "has", "had", "not", "no", "yes", "if", "any",
+    "some", "more", "most", "who", "what", "when", "where", "which", "how",
+})
+
+
 def _lexical_relevance(query: str, text: str) -> float:
-    query_terms = set(re.findall(r"[a-z0-9]+", query.lower()))
+    """Fraction of the query's *content* words that appear in the text."""
+    query_terms = {t for t in re.findall(r"[a-z0-9]+", query.lower())
+                   if t not in _RELEVANCE_STOPWORDS}
     text_terms = set(re.findall(r"[a-z0-9]+", text.lower()))
     if not query_terms or not text_terms:
         return 0.0
@@ -172,6 +186,8 @@ class NewsPipeline:
         fetch_sources: Optional[Sequence[str]] = None,
         summarize_articles: bool = True,
         use_embeddings: bool = True,
+        min_relevance: float = 0.0,
+        embed_fn: "Optional[Callable[[List[str]], List[List[float]]]]" = None,
     ):
         self._llm = None
         if use_query_planner or summarize_articles:
@@ -201,6 +217,14 @@ class NewsPipeline:
         self._fetch_sources = tuple(fetch_sources or DEFAULT_FETCH_SOURCES)
         self._summarize_articles = summarize_articles
         self._use_embeddings = use_embeddings
+        # Optional shared embedder (text list -> vectors). When provided, ranking
+        # is SEMANTIC and reuses one model instance (e.g. the server's mounted
+        # embedder) instead of loading a second copy. Falls back to lexical.
+        self._embed_fn = embed_fn
+        # Drop any source below this topical-relevance floor before it can be
+        # used as evidence or cited — so irrelevant junk can't ground/hallucinate
+        # the forecast. If nothing clears the floor, no sources are returned.
+        self._min_relevance = max(0.0, float(min_relevance))
 
     def _get_embeddings(self):
         if not self._use_embeddings:
@@ -216,6 +240,27 @@ class NewsPipeline:
             except (ImportError, Exception):
                 pass  # rank() will fall back to original order
         return self._embeddings
+
+    def _embed_texts(self, texts: List[str]):
+        """Embed texts to np vectors for semantic ranking, or None to signal a
+        lexical fallback. Prefers an injected shared embedder; else a local
+        sentence-transformers model when ``use_embeddings`` is on."""
+        embed_fn = getattr(self, "_embed_fn", None)
+        if embed_fn is not None:
+            try:
+                vecs = embed_fn(list(texts))
+            except Exception:
+                vecs = None
+            if vecs and all(len(v) for v in vecs):
+                return np.array(vecs, dtype=float)
+            return None
+        embeddings = self._get_embeddings()
+        if embeddings is None:
+            return None
+        try:
+            return np.array(embeddings.embed_documents(list(texts)), dtype=float)
+        except Exception:
+            return None
 
     def fetch(self, query: str, top_k: int = 10) -> List[dict]:
         """Return up to top_k raw article dicts from configured news sources."""
@@ -655,7 +700,6 @@ class NewsPipeline:
         if not articles:
             return []
 
-        embeddings = self._get_embeddings()
         texts = [
             " ".join(
                 str(value)
@@ -666,15 +710,12 @@ class NewsPipeline:
         ]
         texts = [t if t.strip() else " " for t in texts]
 
-        if embeddings is None:
+        vectors = self._embed_texts([question] + texts)  # semantic when available
+        if vectors is None:
             relevance_scores = [_lexical_relevance(question, text) for text in texts]
         else:
-            try:
-                q_vec = np.array(embeddings.embed_query(question))
-                doc_vecs = np.array(embeddings.embed_documents(texts))
-                relevance_scores = [_cosine_similarity(q_vec, d) for d in doc_vecs]
-            except Exception:
-                relevance_scores = [_lexical_relevance(question, text) for text in texts]
+            q_vec, doc_vecs = vectors[0], vectors[1:]
+            relevance_scores = [_cosine_similarity(q_vec, d) for d in doc_vecs]
 
         scores = []
         for relevance, article in zip(relevance_scores, articles):
@@ -707,12 +748,13 @@ class NewsPipeline:
             url = article.get("url") or f"{article.get('source', '')}:{article.get('title', '')}"
             if url in seen_urls or len(selected) >= top_k:
                 return
-            # Query-agnostic channels (Stooq, generic RSS) must clear a relevance
-            # floor, so they no longer pad evidence for unrelated questions.
-            if (
-                article.get("source_channel") in _QUERY_AGNOSTIC_CHANNELS
-                and article.get("relevance", 1.0) < _MIN_GENERIC_RELEVANCE
-            ):
+            # Relevance floor for ALL sources, so irrelevant junk (memes, unrelated
+            # PDFs) can't be cited or ground the forecast. Query-agnostic channels
+            # (Stooq, generic RSS) clear the stricter of the two floors.
+            floor = getattr(self, "_min_relevance", 0.0)
+            if article.get("source_channel") in _QUERY_AGNOSTIC_CHANNELS:
+                floor = max(floor, _MIN_GENERIC_RELEVANCE)
+            if article.get("relevance", 1.0) < floor:
                 return
             seen_urls.add(url)
             selected.append(article)
