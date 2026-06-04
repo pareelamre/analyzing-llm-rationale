@@ -3224,13 +3224,17 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         q = f"{question}\n\n[Self-calibration context]\n{grounding_note}"
     rule = ("You MUST call the `forecast` tool before your final answer — it produces "
             "the probability and edge the report needs. Never state a probability "
-            "without having called `forecast` for it.")
+            "without having called `forecast` for it. For example, after finding a "
+            "market with scan_markets/get_market, call forecast with that market's "
+            "question and its market_probability, then base your answer on that result.")
+    backstopped = False
     try:
         res = await agent_capabilities.run_tool_loop(
             q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule)
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
         if not last:
+            backstopped = True
             await _tool_forecast({"question": question,
                                   "market_probability": (quote.probability if quote else req.market_probability)})
     except Exception as exc:
@@ -3250,7 +3254,11 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         model_probability=last.get("model_probability"), edge=edge, stance=last.get("stance"),
         recommendation=recommendation, recommendation_detail=detail, confidence=last.get("confidence"),
         question_type=last.get("question_type", "binary"),
-        thesis=res.get("answer", ""), evidence_sources=last.get("evidence_sources", []),
+        # When we had to backstop the forecast, the model's prose can cite a
+        # different number than the structured forecast that drives the
+        # recommendation — so use the forecast's own rationale to stay consistent.
+        thesis=(last.get("thesis") if backstopped and last.get("thesis") else res.get("answer", "")),
+        evidence_sources=last.get("evidence_sources", []),
         grounding=grounding_note, tool_transcript=res.get("transcript", []),
     )
 
