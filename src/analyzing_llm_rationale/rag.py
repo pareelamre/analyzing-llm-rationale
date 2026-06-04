@@ -8,7 +8,7 @@ this module a pure, testable helper layer.
 from __future__ import annotations
 
 import os
-from typing import List
+from typing import List, Optional
 
 EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
 EMBED_DIM = 384
@@ -18,8 +18,19 @@ EMBED_DIM = 384
 # When unset (local/dev/tests), fall back to the model name (HF resolves it).
 EMBED_MODEL_PATH = os.environ.get("EMBED_MODEL_PATH", EMBED_MODEL_NAME)
 
+# Cross-encoder reranker (the precision stage of hybrid retrieval). A tiny
+# TinyBERT-L-2 model (~17 MB) so it fits alongside the bi-encoder on a small
+# instance. By default it lives next to the embedder on the same mounted GCS
+# volume (so no extra env var is needed in prod); falls back gracefully if absent.
+_MODELS_DIR = os.path.dirname(EMBED_MODEL_PATH) if "/" in EMBED_MODEL_PATH else ""
+RERANK_MODEL_PATH = os.environ.get("EMBED_RERANK_PATH") or (
+    os.path.join(_MODELS_DIR, "ms-marco-tinybert") if _MODELS_DIR
+    else "cross-encoder/ms-marco-TinyBERT-L-2-v2")
+
 _embedder = None
 _embedder_loaded = False
+_reranker = None
+_reranker_loaded = False
 
 
 def _get_embedder():
@@ -41,6 +52,41 @@ def set_embedder(fn) -> None:
     global _embedder, _embedder_loaded
     _embedder = fn
     _embedder_loaded = True
+
+
+def _get_reranker():
+    global _reranker, _reranker_loaded
+    if _reranker_loaded:
+        return _reranker
+    _reranker_loaded = True
+    try:
+        from sentence_transformers import CrossEncoder
+        _reranker = CrossEncoder(RERANK_MODEL_PATH, device="cpu")
+    except Exception:
+        _reranker = None  # not mounted / unavailable -> callers fall back to hybrid
+    return _reranker
+
+
+def set_reranker(fn) -> None:
+    """Inject a reranker (tests) — object with .predict(list[(q,d)])->scores, or None."""
+    global _reranker, _reranker_loaded
+    _reranker = fn
+    _reranker_loaded = True
+
+
+def rerank(query: str, texts: List[str]) -> Optional[List[float]]:
+    """Cross-encoder relevance scores for (query, text) pairs, or None if the
+    reranker is unavailable (caller then keeps the hybrid order)."""
+    if not texts:
+        return []
+    model = _get_reranker()
+    if model is None:
+        return None
+    try:
+        scores = model.predict([(query, t) for t in texts])
+        return [float(s) for s in scores]
+    except Exception:
+        return None
 
 
 def embeddings_available() -> bool:

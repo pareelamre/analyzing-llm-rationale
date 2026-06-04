@@ -142,6 +142,52 @@ def _lexical_relevance(query: str, text: str) -> float:
     return len(query_terms & text_terms) / len(query_terms)
 
 
+def _content_terms(text: str) -> List[str]:
+    return [t for t in re.findall(r"[a-z0-9]+", (text or "").lower())
+            if t not in _RELEVANCE_STOPWORDS]
+
+
+def _bm25_scores(query_terms: List[str], doc_token_lists: List[List[str]],
+                 k1: float = 1.5, b: float = 0.75) -> List[float]:
+    """Classic BM25 over a small candidate set — the lexical half of hybrid
+    retrieval (catches exact keyword/entity matches dense embeddings can miss)."""
+    import math
+
+    n = len(doc_token_lists)
+    if n == 0 or not query_terms:
+        return [0.0] * n
+    df: dict = {}
+    for tokens in doc_token_lists:
+        for term in set(tokens):
+            df[term] = df.get(term, 0) + 1
+    avgdl = sum(len(t) for t in doc_token_lists) / n or 1.0
+    scores: List[float] = []
+    for tokens in doc_token_lists:
+        tf: dict = {}
+        for term in tokens:
+            tf[term] = tf.get(term, 0) + 1
+        dl = len(tokens) or 1
+        s = 0.0
+        for q in query_terms:
+            if q not in tf:
+                continue
+            idf = math.log(1 + (n - df.get(q, 0) + 0.5) / (df.get(q, 0) + 0.5))
+            s += idf * (tf[q] * (k1 + 1)) / (tf[q] + k1 * (1 - b + b * dl / avgdl))
+        scores.append(s)
+    return scores
+
+
+def _rrf_fuse(orderings: List[List[int]], n: int, k: int = 60) -> List[float]:
+    """Reciprocal Rank Fusion: combine several rankings (each a list of doc
+    indices, best-first) into one score per doc. The standard way to fuse
+    lexical + dense retrieval."""
+    score = [0.0] * n
+    for order in orderings:
+        for rank, idx in enumerate(order):
+            score[idx] += 1.0 / (k + rank + 1)
+    return score
+
+
 def _is_finance_query(text: str) -> bool:
     """True when the question mentions markets/finance, gating Stooq retrieval."""
     terms = set(re.findall(r"[a-z&0-9]+", (text or "").lower()))
@@ -188,6 +234,8 @@ class NewsPipeline:
         use_embeddings: bool = True,
         min_relevance: float = 0.0,
         embed_fn: "Optional[Callable[[List[str]], List[List[float]]]]" = None,
+        rerank_fn: "Optional[Callable[[str, List[str]], List[float]]]" = None,
+        rerank_top_k: int = 12,
     ):
         self._llm = None
         if use_query_planner or summarize_articles:
@@ -221,6 +269,10 @@ class NewsPipeline:
         # is SEMANTIC and reuses one model instance (e.g. the server's mounted
         # embedder) instead of loading a second copy. Falls back to lexical.
         self._embed_fn = embed_fn
+        # Optional cross-encoder reranker (query, texts) -> per-text relevance
+        # scores. When set, the top candidates are reranked for precision.
+        self._rerank_fn = rerank_fn
+        self._rerank_top_k = max(1, int(rerank_top_k))
         # Drop any source below this topical-relevance floor before it can be
         # used as evidence or cited — so irrelevant junk can't ground/hallucinate
         # the forecast. If nothing clears the floor, no sources are returned.
@@ -696,7 +748,12 @@ class NewsPipeline:
             return text[:500]
 
     def rank(self, question: str, articles: List[dict]) -> List[dict]:
-        """Return articles sorted by semantic relevance to the question (highest first)."""
+        """Rank articles by relevance using **hybrid retrieval** (dense cosine +
+        BM25, fused with Reciprocal Rank Fusion) and, when a cross-encoder
+        ``rerank_fn`` is configured, a **reranking** precision stage over the top
+        candidates. ``article['relevance']`` holds the semantic (cosine) score,
+        which drives the downstream relevance floor; ordering uses the hybrid /
+        reranked score."""
         if not articles:
             return []
 
@@ -709,32 +766,57 @@ class NewsPipeline:
             for a in articles
         ]
         texts = [t if t.strip() else " " for t in texts]
+        n = len(texts)
 
-        vectors = self._embed_texts([question] + texts)  # semantic when available
+        # Dense semantic relevance (also the junk-filter signal).
+        vectors = self._embed_texts([question] + texts)
         if vectors is None:
-            relevance_scores = [_lexical_relevance(question, text) for text in texts]
+            dense_rel = [_lexical_relevance(question, t) for t in texts]
+            has_dense = False
         else:
             q_vec, doc_vecs = vectors[0], vectors[1:]
-            relevance_scores = [_cosine_similarity(q_vec, d) for d in doc_vecs]
+            dense_rel = [max(0.0, min(1.0, float(_cosine_similarity(q_vec, d)))) for d in doc_vecs]
+            has_dense = True
 
-        scores = []
-        for relevance, article in zip(relevance_scores, articles):
+        # Lexical BM25 (the other half of hybrid retrieval).
+        q_terms = _content_terms(question)
+        bm25 = _bm25_scores(q_terms, [re.findall(r"[a-z0-9]+", t.lower()) for t in texts])
+
+        # Fuse dense + BM25 rankings via RRF (or fall back to whichever exists).
+        dense_order = sorted(range(n), key=lambda i: dense_rel[i], reverse=True)
+        if has_dense and any(bm25):
+            bm25_order = sorted(range(n), key=lambda i: bm25[i], reverse=True)
+            order_score = _rrf_fuse([dense_order, bm25_order], n)
+        elif has_dense:
+            order_score = list(dense_rel)
+        else:
+            order_score = bm25 if any(bm25) else list(dense_rel)
+        order = sorted(range(n), key=lambda i: order_score[i], reverse=True)
+
+        # Cross-encoder reranking of the top candidates (precision stage).
+        rerank_fn = getattr(self, "_rerank_fn", None)
+        rerank_top_k = getattr(self, "_rerank_top_k", 12)
+        rerank_scores: dict = {}
+        if rerank_fn is not None and len(order) > 1:
+            head = order[:rerank_top_k]
+            try:
+                rr = rerank_fn(question, [texts[i] for i in head])
+            except Exception:
+                rr = None
+            if rr and len(rr) == len(head):
+                rerank_scores = {i: float(s) for i, s in zip(head, rr)}
+                head = [i for _, i in sorted(zip(rr, head), key=lambda x: x[0], reverse=True)]
+                order = head + order[rerank_top_k:]
+
+        for i, article in enumerate(articles):
             credibility = _source_credibility(article)
-            # Cosine similarity can be negative; clamp to [0,1] so the blended
-            # relevance_score stays a valid 0..1 probability-like value.
-            rel = max(0.0, min(1.0, float(relevance)))
             article["source_credibility"] = round(credibility, 2)
-            article["relevance"] = round(rel, 4)
-            scores.append((0.85 * rel) + (0.15 * credibility))
-
-        ranked = sorted(
-            zip(scores, articles),
-            key=lambda x: x[0],
-            reverse=True,
-        )
-        for score, article in ranked:
-            article["relevance_score"] = round(max(0.0, min(1.0, score)), 4)
-        return [a for _, a in ranked]
+            article["relevance"] = round(dense_rel[i], 4)
+            article["bm25"] = round(bm25[i], 4)
+            if i in rerank_scores:
+                article["rerank_score"] = round(rerank_scores[i], 4)
+            article["relevance_score"] = round(max(0.0, min(1.0, 0.85 * dense_rel[i] + 0.15 * credibility)), 4)
+        return [articles[i] for i in order]
 
     def select_diverse_sources(self, ranked: List[dict], top_k: int) -> List[dict]:
         """Pick a relevant final set while avoiding one-source evidence packs."""

@@ -9,9 +9,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale.news_pipeline import (  # noqa: E402
     NewsPipeline,
+    _bm25_scores,
     _is_finance_query,
     _keyword_search_query,
     _lexical_relevance,
+    _rrf_fuse,
 )
 
 
@@ -457,6 +459,51 @@ class RelevanceFilterTests(unittest.TestCase):
     def test_floor_off_by_default(self):
         ranked = [{"title": "x", "relevance": 0.01, "source_channel": "web", "url": "a"}]
         self.assertEqual(len(self._pipeline(0.0).select_diverse_sources(ranked, 5)), 1)
+
+    def test_bm25_scores_rank_relevant_higher(self):
+        scores = _bm25_scores(["fed", "rate", "cut"],
+                              [["fed", "rate", "cut", "decision"], ["weather", "today", "sunny"]])
+        self.assertGreater(scores[0], scores[1])
+        self.assertEqual(scores[1], 0.0)
+
+    def test_rrf_fuse_combines_rankings(self):
+        # Doc 0 ranked first by both -> highest fused score.
+        fused = _rrf_fuse([[0, 1, 2], [0, 2, 1]], 3)
+        self.assertGreater(fused[0], fused[1])
+        self.assertGreater(fused[0], fused[2])
+        # Agreement on the loser keeps it last.
+        self.assertLessEqual(fused[1], fused[0])
+
+    def test_cross_encoder_rerank_reorders_and_annotates(self):
+        # Equal dense vectors so the reranker decides the head order.
+        def fake_embed(texts):
+            return [[1.0, 0.0] for _ in texts]
+
+        def fake_rerank(query, texts):
+            return [1.0 if "finals" in t.lower() else 0.1 for t in texts]
+
+        pipe = NewsPipeline(use_query_planner=False, summarize_articles=False,
+                            use_embeddings=False, embed_fn=fake_embed,
+                            rerank_fn=fake_rerank, min_relevance=0.0)
+        ranked = pipe.rank("Who wins the NBA Finals?", [
+            {"title": "A weather report for tomorrow", "url": "w"},
+            {"title": "Spurs reach the NBA Finals", "url": "f"},
+        ])
+        self.assertEqual(ranked[0]["url"], "f")          # reranker promoted the Finals article
+        self.assertEqual(ranked[0]["rerank_score"], 1.0)
+
+    def test_rerank_failure_falls_back_to_hybrid(self):
+        def fake_embed(texts):
+            return [[1.0, 0.0] for _ in texts]
+
+        def boom(query, texts):
+            raise RuntimeError("reranker down")
+
+        pipe = NewsPipeline(use_query_planner=False, summarize_articles=False,
+                            use_embeddings=False, embed_fn=fake_embed, rerank_fn=boom)
+        # Must not raise — falls back to the hybrid order.
+        ranked = pipe.rank("NBA Finals", [{"title": "Spurs NBA Finals", "url": "a"}])
+        self.assertEqual(len(ranked), 1)
 
     def test_semantic_ranking_via_injected_embedder(self):
         # Fake shared embedder: topical texts -> [1,0], junk -> [0,1].

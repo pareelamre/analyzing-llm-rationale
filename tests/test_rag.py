@@ -43,6 +43,19 @@ class RagHelperTests(unittest.TestCase):
     def test_cosine(self):
         self.assertAlmostEqual(rag.cosine([1, 0], [1, 0]), 1.0)
         self.assertAlmostEqual(rag.cosine([1, 0], [0, 1]), 0.0)
+
+    def test_rerank_uses_injected_model_and_falls_back(self):
+        try:
+            class FakeCE:
+                def predict(self, pairs):
+                    return [len(d) for _q, d in pairs]
+            rag.set_reranker(FakeCE())
+            self.assertEqual(rag.rerank("q", ["a", "abc"]), [1.0, 3.0])
+            rag.set_reranker(None)
+            self.assertIsNone(rag.rerank("q", ["a"]))  # unavailable -> None (hybrid fallback)
+            self.assertEqual(rag.rerank("q", []), [])
+        finally:
+            rag.set_reranker(None)
         self.assertEqual(rag.cosine([], [1]), 0.0)
 
     def test_top_k_ranks_and_filters(self):
