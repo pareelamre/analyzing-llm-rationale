@@ -3192,7 +3192,8 @@ async def agent_scan(
 
 
 async def _track_record_forecast(quote: Dict[str, Any], evidence_top_k: int):
-    """Forecast one market for the live track record; returns (model_p, market_p)."""
+    """Forecast one market for the live track record. Returns a feature dict
+    (model/market probability + evidence count) or None on failure."""
     res = await predict(PredictRequest(
         question=quote["question"],
         attach_evidence=True,
@@ -3205,7 +3206,11 @@ async def _track_record_forecast(quote: Dict[str, Any], evidence_top_k: int):
     analysis = res.market_analysis
     if analysis is None or analysis.model_probability is None:
         return None
-    return (analysis.model_probability, analysis.market_probability)
+    return {
+        "model_probability": analysis.model_probability,
+        "market_probability": analysis.market_probability,
+        "evidence_count": len(res.evidence_sources or []),
+    }
 
 
 @app.post("/track-record/tick", tags=["System"], summary="Advance the live track record")

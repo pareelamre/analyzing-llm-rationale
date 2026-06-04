@@ -30,8 +30,15 @@ SNAPSHOT_KIND = "ForecastSnapshot"
 AGG_KIND = "TrackRecordLive"
 AGG_ID = "global"
 
-# (quote_dict, evidence_top_k) -> (model_prob, market_prob) | None
-ForecastFn = Callable[[Dict[str, Any], int], Awaitable[Optional[Tuple[float, float]]]]
+# (quote_dict, evidence_top_k) -> {"model_probability", "market_probability",
+# "evidence_count", ...} | None
+ForecastFn = Callable[[Dict[str, Any], int], Awaitable[Optional[Dict[str, Any]]]]
+
+# Calibration only kicks in once there's enough resolved data AND the raw
+# forecasts are actually miscalibrated — otherwise it's a no-op (see aggregate).
+MIN_CALIBRATION_SAMPLES = 30
+CALIBRATION_ECE_THRESHOLD = 0.05
+CALIBRATION_CV_FOLDS = 5
 
 # Horizon buckets (days-to-resolution at the moment the forecast was made).
 # Ordered long → short; the long buckets carry the credible skill signal.
@@ -181,12 +188,13 @@ async def record_snapshots(
             scored = await forecast_fn(quote, evidence_top_k)
         except Exception:
             scored = None
-        if not scored or scored[0] is None:
+        if not scored or scored.get("model_probability") is None:
             continue
-        model_prob, mkt_prob = scored
+        model_prob = scored["model_probability"]
+        mkt_prob = scored.get("market_probability")
         mkt_prob = mkt_prob if mkt_prob is not None else market_prob
         lead = _lead_time_days(quote.get("close_time"))
-        entity = _ds.Entity(key, exclude_from_indexes=("question", "market_url", "close_time"))
+        entity = _ds.Entity(key, exclude_from_indexes=("question", "market_url", "close_time", "category"))
         entity.update(
             platform=quote.get("platform"),
             ident=ident,
@@ -199,6 +207,10 @@ async def record_snapshots(
             close_time=quote.get("close_time"),
             lead_time_days=lead,
             horizon=_horizon_label(lead),
+            # Training features captured at forecast time (cheap now, lost if not stored).
+            category=quote.get("category"),
+            market_volume=quote.get("volume"),
+            evidence_count=scored.get("evidence_count"),
             resolved=False,
             outcome=None,
         )
@@ -263,6 +275,136 @@ def _bucket_stats(rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "skill_vs_market": round(market_b - model_b, 4),
         "accuracy": round(acc, 4),
     }
+
+
+def _ece(rows: List[Dict[str, Any]], bins: int = 10) -> Optional[float]:
+    """Expected calibration error: avg |confidence − accuracy| weighted by bin size."""
+    n = len(rows)
+    if not n:
+        return None
+    total = 0.0
+    for b in range(bins):
+        lo, hi = b / bins, (b + 1) / bins
+        sel = [r for r in rows
+               if r["model_probability"] >= lo
+               and (r["model_probability"] < hi or (b == bins - 1 and r["model_probability"] <= hi))]
+        if not sel:
+            continue
+        conf = sum(r["model_probability"] for r in sel) / len(sel)
+        acc = sum(r["outcome"] for r in sel) / len(sel)
+        total += abs(conf - acc) * len(sel)
+    return total / n
+
+
+def _pav(ys: List[float], ws: List[float]) -> List[float]:
+    """Pool-adjacent-violators → non-decreasing fit (per input point)."""
+    vals: List[float] = []
+    wts: List[float] = []
+    cnts: List[int] = []
+    for y, w in zip(ys, ws):
+        v, ww, c = float(y), float(w), 1
+        while vals and vals[-1] > v:
+            pv, pw, pc = vals.pop(), wts.pop(), cnts.pop()
+            v = (pv * pw + v * ww) / (pw + ww)
+            ww += pw
+            c += pc
+        vals.append(v)
+        wts.append(ww)
+        cnts.append(c)
+    out: List[float] = []
+    for v, c in zip(vals, cnts):
+        out.extend([v] * c)
+    return out
+
+
+def _fit_isotonic(pairs: List[Tuple[float, int]]) -> Tuple[List[float], List[float]]:
+    """Fit isotonic regression (model prob → outcome); returns dedup'd breakpoints."""
+    pts = sorted(pairs, key=lambda p: p[0])
+    xs = [float(p[0]) for p in pts]
+    fitted = _pav([float(p[1]) for p in pts], [1.0] * len(pts))
+    bx: List[float] = []
+    by: List[float] = []
+    i = 0
+    while i < len(xs):
+        j = i
+        while j + 1 < len(xs) and xs[j + 1] == xs[i]:
+            j += 1
+        bx.append(xs[i])
+        by.append(sum(fitted[i:j + 1]) / (j + 1 - i))
+        i = j + 1
+    return bx, by
+
+
+def _apply_isotonic(breakpoints: Tuple[List[float], List[float]], x: float) -> float:
+    xs, ys = breakpoints
+    if not xs:
+        return x
+    if x <= xs[0]:
+        return max(0.0, min(1.0, ys[0]))
+    if x >= xs[-1]:
+        return max(0.0, min(1.0, ys[-1]))
+    for i in range(len(xs) - 1):
+        if xs[i] <= x <= xs[i + 1]:
+            span = xs[i + 1] - xs[i]
+            if span == 0:
+                return max(0.0, min(1.0, ys[i + 1]))
+            t = (x - xs[i]) / span
+            return max(0.0, min(1.0, ys[i] + t * (ys[i + 1] - ys[i])))
+    return max(0.0, min(1.0, ys[-1]))
+
+
+def _cv_calibrated_brier(rows: List[Dict[str, Any]], folds: int) -> Optional[float]:
+    """Honest (out-of-fold) calibrated Brier so we don't report in-sample optimism."""
+    n = len(rows)
+    folds = min(folds, n)
+    if folds < 2:
+        return None
+    order = sorted(range(n), key=lambda i: rows[i]["model_probability"])
+    fold_of = {i: k % folds for k, i in enumerate(order)}
+    se, cnt = 0.0, 0
+    for f in range(folds):
+        train = [(rows[i]["model_probability"], rows[i]["outcome"]) for i in range(n) if fold_of[i] != f]
+        test = [i for i in range(n) if fold_of[i] == f]
+        if not train or not test:
+            continue
+        bp = _fit_isotonic(train)
+        for i in test:
+            cal = _apply_isotonic(bp, rows[i]["model_probability"])
+            se += (cal - rows[i]["outcome"]) ** 2
+            cnt += 1
+    return se / cnt if cnt else None
+
+
+def _calibration_report(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Fit + evaluate a calibration map — but ONLY when it's actually warranted
+    (enough resolved data AND the raw forecasts are meaningfully miscalibrated).
+    Otherwise it's a transparent no-op. Reports calibrated-vs-raw skill."""
+    n = len(resolved)
+    if n < MIN_CALIBRATION_SAMPLES:
+        return {"applied": False, "reason": "insufficient_data",
+                "n_resolved": n, "min_required": MIN_CALIBRATION_SAMPLES}
+    raw_ece = _ece(resolved)
+    if raw_ece is None or raw_ece < CALIBRATION_ECE_THRESHOLD:
+        return {"applied": False, "reason": "already_well_calibrated",
+                "n_resolved": n, "raw_ece": round(raw_ece, 4) if raw_ece is not None else None,
+                "threshold": CALIBRATION_ECE_THRESHOLD}
+    raw_brier = sum(brier(r["model_probability"], r["outcome"]) for r in resolved) / n
+    market_brier = sum(r["market_brier"] for r in resolved) / n
+    cal_brier_cv = _cv_calibrated_brier(resolved, CALIBRATION_CV_FOLDS)
+    xs, ys = _fit_isotonic([(r["model_probability"], r["outcome"]) for r in resolved])
+    report = {
+        "applied": True,
+        "method": "isotonic",
+        "n_resolved": n,
+        "raw_ece": round(raw_ece, 4),
+        "raw_brier": round(raw_brier, 4),
+        "calibrated_brier_cv": round(cal_brier_cv, 4) if cal_brier_cv is not None else None,
+        "raw_skill_vs_market": round(market_brier - raw_brier, 4),
+        "breakpoints": [[round(x, 4), round(y, 4)] for x, y in zip(xs, ys)],
+    }
+    if cal_brier_cv is not None:
+        report["calibrated_skill_vs_market"] = round(market_brier - cal_brier_cv, 4)
+    return report
 
 
 def aggregate(client, *, model: str, variant: str, temperature: float,
@@ -333,6 +475,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "overall": overall,
         "by_horizon": by_horizon,
         "trajectories": trajectories,
+        "calibration_model": _calibration_report(resolved),
     })
 
     entity = _ds.Entity(client.key(AGG_KIND, AGG_ID), exclude_from_indexes=("payload",))

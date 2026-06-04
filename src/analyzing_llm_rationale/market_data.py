@@ -127,6 +127,8 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "probability": probability,
         "outcomes": options,
         "close_time": market.get("endDate") or market.get("endDateIso"),
+        "volume": _to_float(market.get("volume24hr") or market.get("volume")),
+        "category": market.get("category"),
     }
 
 
@@ -274,6 +276,8 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
             {"label": "No", "probability": no_probability},
         ],
         "close_time": market.get("close_time"),
+        "volume": _to_float(market.get("volume_24h_fp") or market.get("volume")),
+        "category": None,  # set from the event in list_kalshi
     }
 
 
@@ -310,6 +314,7 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
     quotes: List[Dict[str, Any]] = []
     for event in events:
         title = event.get("title") or ""
+        category = event.get("category")
         for market in event.get("markets", []) or []:
             if market.get("mve_collection_ticker"):
                 continue  # skip multi-leg parlay markets
@@ -320,6 +325,7 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
             sub = (market.get("yes_sub_title") or "").strip()
             question = f"{title} — {sub}" if (sub and sub.lower() not in title.lower()) else (title or quote["question"])
             quote["question"] = question
+            quote["category"] = category
             if want and want not in question.lower():
                 continue
             if not _within_close_window(quote.get("close_time"), min_close_days, max_close_days):
