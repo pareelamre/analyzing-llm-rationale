@@ -74,7 +74,7 @@ Tool = Callable[[Dict[str, Any]], Awaitable[str]]
 ChatFn = Callable[[List[Dict[str, str]]], Awaitable[str]]
 
 
-def build_system_prompt(tool_specs: List[Dict[str, str]], max_steps: int) -> str:
+def build_system_prompt(tool_specs: List[Dict[str, str]], max_steps: int, extra_rules: str = "") -> str:
     lines = [
         "You are a forecasting research agent. You gather information by calling "
         "tools, then give a final answer.",
@@ -89,6 +89,8 @@ def build_system_prompt(tool_specs: List[Dict[str, str]], max_steps: int) -> str
     ]
     for t in tool_specs:
         lines.append(f"- {t['name']}({t.get('args', '')}): {t['description']}")
+    if extra_rules:
+        lines.extend(["", extra_rules])
     return "\n".join(lines)
 
 
@@ -127,9 +129,10 @@ async def run_tool_loop(
     *,
     max_steps: int = 5,
     obs_limit: int = 4000,
+    extra_rules: str = "",
 ) -> Dict[str, Any]:
     """Drive the ReAct loop. Returns {answer, transcript, steps, truncated}."""
-    system = build_system_prompt(tool_specs, max_steps)
+    system = build_system_prompt(tool_specs, max_steps, extra_rules)
     messages: List[Dict[str, str]] = [
         {"role": "system", "content": system},
         {"role": "user", "content": f"Question: {question}"},

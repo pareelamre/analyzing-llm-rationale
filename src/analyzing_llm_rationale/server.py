@@ -3222,8 +3222,17 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     q = question
     if grounding_note:
         q = f"{question}\n\n[Self-calibration context]\n{grounding_note}"
+    rule = ("You MUST call the `forecast` tool before your final answer — it produces "
+            "the probability and edge the report needs. Never state a probability "
+            "without having called `forecast` for it.")
     try:
-        res = await agent_capabilities.run_tool_loop(q, tools, specs, chat_fn, max_steps=req.max_tool_steps)
+        res = await agent_capabilities.run_tool_loop(
+            q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule)
+        # Deterministic backstop: if the model answered without ever calling
+        # `forecast`, run it ourselves so edge/recommendation always populate.
+        if not last:
+            await _tool_forecast({"question": question,
+                                  "market_probability": (quote.probability if quote else req.market_probability)})
     except Exception as exc:
         raise _provider_http_error(exc) from exc
 

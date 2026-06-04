@@ -51,6 +51,14 @@ class ParseActionTests(unittest.TestCase):
         self.assertIsNone(ac.parse_action("just prose, no json here"))
 
 
+class SystemPromptTests(unittest.TestCase):
+    def test_extra_rules_included(self):
+        rule = "You MUST call the forecast tool before answering."
+        prompt = ac.build_system_prompt([{"name": "forecast", "description": "d"}], 4, extra_rules=rule)
+        self.assertIn(rule, prompt)
+        self.assertIn("forecast", prompt)
+
+
 class ToolLoopTests(unittest.TestCase):
     def test_calls_tool_then_finalizes(self):
         seen = []

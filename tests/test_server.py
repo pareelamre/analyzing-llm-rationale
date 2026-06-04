@@ -276,7 +276,8 @@ class ServerTests(unittest.TestCase):
 
     def test_agent_analyze_tool_loop_runs(self):
         # FakeProvider returns forecast JSON (no action/final), so the loop treats
-        # it as a final answer and returns cleanly without calling tools.
+        # it as a final answer without calling tools — the deterministic backstop
+        # must then run `forecast` itself so structured fields populate.
         response = self.client.post(
             "/agent/analyze",
             json={"question": "Will it rain tomorrow?", "tool_loop": True, "max_tool_steps": 2},
@@ -284,7 +285,8 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         report = response.json()
         self.assertIn("tool_loop", report["pipeline"])
-        self.assertIn("recommendation", report)
+        self.assertIn("forecast", report["pipeline"])           # backstop forecast ran
+        self.assertAlmostEqual(report["model_probability"], 0.7)  # populated, not null
 
     def test_agent_analyze_fetches_market_and_recommends(self):
         import analyzing_llm_rationale.market_data as md
