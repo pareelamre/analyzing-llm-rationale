@@ -419,6 +419,33 @@ class ServerTests(unittest.TestCase):
         response = self.client.get("/agent/scan?platform=betfair")
         self.assertEqual(response.status_code, 422)
 
+    def test_robots_txt_welcomes_ai_crawlers(self):
+        r = self.client.get("/robots.txt")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("GPTBot", r.text)
+        self.assertIn("ClaudeBot", r.text)
+        self.assertIn("PerplexityBot", r.text)
+        self.assertIn("Sitemap: https://foresea.ink/sitemap.xml", r.text)
+
+    def test_llms_txt_describes_api(self):
+        r = self.client.get("/llms.txt")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("# Foresea", r.text)
+        self.assertIn("/predict", r.text)
+        self.assertIn("/openapi.json", r.text)
+
+    def test_sitemap_xml(self):
+        r = self.client.get("/sitemap.xml")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("application/xml", r.headers.get("content-type", ""))
+        self.assertIn("https://foresea.ink/", r.text)
+
+    def test_openapi_spec_is_public(self):
+        # Agents introspect the API via the OpenAPI spec.
+        r = self.client.get("/openapi.json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["info"]["title"], "Foresea Intelligence API")
+
     def test_track_record_tick_disabled_without_token(self):
         import analyzing_llm_rationale.server as srv
         with mock.patch.object(srv, "_TRACK_RECORD_TOKEN", None):

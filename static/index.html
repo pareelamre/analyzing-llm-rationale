@@ -20,6 +20,25 @@
   <meta name="twitter:description" content="Turn market questions into forecasts, evidence, rationales, and price-gap signals." />
   <meta name="twitter:image" content="https://foresea.ink/static/foresea-share-card.svg" />
   <title>Foresea | Prediction market intelligence</title>
+  <!-- Structured data so AI agents + search understand the service and its free API -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Foresea",
+    "url": "https://foresea.ink/",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "Foresea turns prediction-market questions into calibrated probability forecasts with evidence, rationales, and the model-vs-market edge. Free, with an open JSON API.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "creator": { "@type": "Person", "name": "Pareel Amre" },
+    "potentialAction": {
+      "@type": "Action",
+      "name": "Forecast a question",
+      "target": "https://foresea.ink/predict"
+    }
+  }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap" rel="stylesheet" />

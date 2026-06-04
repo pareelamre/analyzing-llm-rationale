@@ -27,7 +27,13 @@ from urllib.parse import urlparse
 import duckdb
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -1045,6 +1051,73 @@ async def index():
         str(_STATIC_DIR / "index.html"),
         headers={"Cache-Control": "no-cache"},
     )
+
+
+# ── AI-agent / crawler discoverability ────────────────────────────────────────
+_CANONICAL = "https://foresea.ink"
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt():
+    """Welcome search + AI/LLM crawlers (most of these are blocked by default on
+    other sites); point them at the sitemap and the machine-readable llms.txt."""
+    bots = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "anthropic-ai",
+            "Claude-Web", "PerplexityBot", "Perplexity-User", "Google-Extended",
+            "Applebot-Extended", "CCBot", "Bingbot", "Googlebot"]
+    lines = ["# Foresea welcomes AI agents and crawlers.", "User-agent: *", "Allow: /", ""]
+    for b in bots:
+        lines += [f"User-agent: {b}", "Allow: /", ""]
+    lines += [f"Sitemap: {_CANONICAL}/sitemap.xml",
+              f"# Machine-readable guide for LLMs: {_CANONICAL}/llms.txt",
+              f"# OpenAPI spec: {_CANONICAL}/openapi.json"]
+    return PlainTextResponse("\n".join(lines),
+                             headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/llms.txt", include_in_schema=False)
+async def llms_txt():
+    """llms.txt (llmstxt.org): a concise, token-efficient guide that tells an LLM
+    agent what Foresea is and exactly how to call it."""
+    body = f"""# Foresea
+
+> Foresea turns prediction-market questions into calibrated probability forecasts
+> with supporting evidence, a written rationale, and the model-vs-market edge.
+> Free to use, with an open JSON API agents can call directly.
+
+## Use the API
+- [Forecast](\
+{_CANONICAL}/docs): `POST {_CANONICAL}/predict` with `{{"question": "..."}}` returns a
+  structured forecast (binary / multiple-choice / numeric / date), a confidence,
+  a rationale, and relevant evidence sources. No auth required.
+- [Agent analysis]({_CANONICAL}/docs): `POST {_CANONICAL}/agent/analyze` runs an
+  end-to-end analysis of a live market (fetch price, gather evidence, forecast,
+  compute edge) and returns one structured report.
+- [Edge scan]({_CANONICAL}/docs): `GET {_CANONICAL}/agent/scan?platform=polymarket`
+  surfaces mispriced live markets (also `kalshi`, or `all`).
+- [OpenAPI spec]({_CANONICAL}/openapi.json): full machine-readable API description.
+
+## Track record
+- [Live accuracy]({_CANONICAL}/track-record): point-in-time forecasts scored
+  against prediction-market outcomes, with skill-vs-market by horizon.
+
+## About
+- [Web app]({_CANONICAL}/): ask any forecasting question in natural language.
+- [Source](https://github.com/pareelamre/analyzing-llm-rationale)
+"""
+    return PlainTextResponse(body, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap_xml():
+    urls = [(f"{_CANONICAL}/", "daily", "1.0"),
+            (f"{_CANONICAL}/track-record", "daily", "0.8"),
+            (f"{_CANONICAL}/docs", "weekly", "0.6")]
+    items = "".join(
+        f"<url><loc>{loc}</loc><changefreq>{cf}</changefreq><priority>{pr}</priority></url>"
+        for loc, cf, pr in urls)
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>'
+    return Response(xml, media_type="application/xml",
+                    headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/track-record", tags=["System"], summary="Public forecasting track record")
