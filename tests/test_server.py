@@ -261,6 +261,31 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(len(report["skills"]), 1)
         self.assertEqual(report["skills"][0]["name"], "Base rate check")
 
+    def test_agent_analyze_builtin_skills(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "evidence_top_k": 2,
+                "builtin_skills": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        names = {s["name"] for s in response.json()["skills"]}
+        self.assertEqual(names, {"Base rate", "Scenario decomposition", "Red team", "Key drivers"})
+
+    def test_agent_analyze_tool_loop_runs(self):
+        # FakeProvider returns forecast JSON (no action/final), so the loop treats
+        # it as a final answer and returns cleanly without calling tools.
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "Will it rain tomorrow?", "tool_loop": True, "max_tool_steps": 2},
+        )
+        self.assertEqual(response.status_code, 200)
+        report = response.json()
+        self.assertIn("tool_loop", report["pipeline"])
+        self.assertIn("recommendation", report)
+
     def test_agent_analyze_fetches_market_and_recommends(self):
         import analyzing_llm_rationale.market_data as md
 

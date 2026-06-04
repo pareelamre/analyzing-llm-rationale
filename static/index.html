@@ -2475,6 +2475,8 @@ async function sendQuestion() {
         evidence_top_k: 5,
         history,  // full thread context — only a new brief resets it
         skills: _loadSkills().map(s => ({ name: s.name, instruction: s.instruction })),
+        builtin_skills: true,    // base-rate / scenario / red-team / key-drivers toolkit
+        ground_in_record: true,  // condition on the model's own live calibration
       };
       if (marketProbability != null) agentBody.market_probability = marketProbability;
       if (activeModel) {
@@ -3456,6 +3458,8 @@ function _agentReportToMarkdown(d) {
   }
 
   (d.skills || []).forEach(s => { md += `\n\n**${s.name}.** ${s.output}`; });
+
+  if (d.grounding) md += `\n\n> _${d.grounding.replace(/\n/g, ' ')}_`;
 
   // Clickable, de-duplicated source citations.
   const seen = new Set();

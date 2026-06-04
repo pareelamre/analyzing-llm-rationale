@@ -31,7 +31,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from analyzing_llm_rationale import rag
+from analyzing_llm_rationale import agent_capabilities, rag
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
     build_user_prompt,
@@ -1452,6 +1452,10 @@ class AgentAnalyzeRequest(BaseModel):
     variant: str = Field("variant0_neutral_baseline", max_length=64)
     evidence_top_k: int = Field(5, ge=1, le=10)
     skills: List[AgentSkill] = Field(default_factory=list, max_length=5, description="Up to 5 custom skills to run.")
+    builtin_skills: bool = Field(False, description="Also run the built-in forecasting toolkit (base rate, scenario decomposition, red team, key drivers).")
+    ground_in_record: bool = Field(False, description="Condition the forecast on the model's own live track-record calibration.")
+    tool_loop: bool = Field(False, description="Use a ReAct tool-using loop (model plans + calls tools) instead of the fixed pipeline.")
+    max_tool_steps: int = Field(5, ge=1, le=8, description="Max tool calls in the loop.")
     history: List[Dict[str, str]] = Field(default_factory=list, max_length=24, description="Prior conversation turns for follow-up context.")
     openrouter_api_key: Optional[str] = Field(None, max_length=256)
     openrouter_model: Optional[str] = Field(None, max_length=128)
@@ -1476,6 +1480,8 @@ class AgentReport(BaseModel):
     thesis: str = ""
     evidence_sources: List["EvidenceSource"] = Field(default_factory=list)
     skills: List[AgentSkillResult] = Field(default_factory=list)
+    grounding: Optional[str] = Field(None, description="Track-record self-calibration note applied to the forecast.")
+    tool_transcript: List[Dict[str, Any]] = Field(default_factory=list, description="Tool calls + observations when the tool loop ran.")
 
 
 class ScanOpportunity(BaseModel):
@@ -3023,13 +3029,35 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
     if not question:
         raise HTTPException(status_code=422, detail="Provide a question, or a platform plus market identifier.")
 
+    # Optional: self-calibration grounding from the live track record.
+    grounding_note = None
+    if req.ground_in_record:
+        client = _get_datastore()
+        if client is not None:
+            from analyzing_llm_rationale import track_record_live as trl
+            agg = await asyncio.get_running_loop().run_in_executor(None, lambda: trl.read_aggregate(client))
+            grounding_note = agent_capabilities.build_grounding_note(agg) or None
+            if grounding_note:
+                pipeline.append("ground_in_record")
+
+    # Optional: ReAct tool-using loop instead of the fixed pipeline below.
+    if req.tool_loop:
+        return await _agent_tool_loop(req, request, question, quote, grounding_note)
+
+    # Feed the calibration note to the forecast as a prior (via history, so it
+    # doesn't suppress live evidence retrieval the way news_articles would).
+    history = list(req.history)
+    if grounding_note:
+        history = history + [{"role": "user",
+                              "content": f"[Self-calibration context — apply as a prior, not a hard rule]\n{grounding_note}"}]
+
     # 2. Evidence + forecast + edge — reuse the /predict pipeline.
     pred_req = PredictRequest(
         question=question,
         attach_evidence=True,
         evidence_top_k=req.evidence_top_k,
         variant=req.variant,
-        history=req.history,
+        history=history,
         market_platform=(quote.platform if quote else req.platform),
         market_url=(quote.market_url if quote else None),
         market_outcome=(quote.outcome if quote else None),
@@ -3050,9 +3078,14 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
     if analysis is not None:
         pipeline.append("price_edge")
 
-    # 3. Custom skills — run the caller's own analysis steps over the context.
+    # 3. Skills — the built-in forecasting toolkit (optional) plus the caller's
+    #    own custom steps, all run over the forecast context.
+    skills_to_run: List[AgentSkill] = []
+    if req.builtin_skills:
+        skills_to_run.extend(AgentSkill(**s) for s in agent_capabilities.builtin_skills())
+    skills_to_run.extend(req.skills)
     skill_results: List[AgentSkillResult] = []
-    if req.skills:
+    if skills_to_run:
         provider, temperature, max_tokens = _select_provider(
             req.openrouter_api_key, req.openrouter_model, req.provider_base_url
         )
@@ -3068,7 +3101,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
             f"Evidence:\n{sources_txt}"
         )
         skill_results = await asyncio.gather(
-            *(_run_agent_skill(s, context, provider, temperature, max_tokens) for s in req.skills)
+            *(_run_agent_skill(s, context, provider, temperature, max_tokens) for s in skills_to_run)
         )
         pipeline.append("skills")
 
@@ -3091,6 +3124,125 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         thesis=result.model_rationale or result.rationale or "",
         evidence_sources=result.evidence_sources,
         skills=list(skill_results),
+        grounding=grounding_note,
+    )
+
+
+async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
+                           quote: "Optional[MarketQuote]", grounding_note: Optional[str]) -> "AgentReport":
+    """ReAct tool-using loop: the model plans and calls tools (forecast, market
+    fetch, evidence search, venue scan, track record), then answers. Falls back
+    cleanly to a no-edge report if no forecast tool was used."""
+    from analyzing_llm_rationale import market_data
+    from analyzing_llm_rationale import track_record_live as trl
+
+    provider, temperature, max_tokens = _select_provider(
+        req.openrouter_api_key, req.openrouter_model, req.provider_base_url)
+    loop = asyncio.get_running_loop()
+    last: Dict[str, Any] = {}
+
+    async def _tool_forecast(args):
+        q = str(args.get("question") or question)
+        mp = args.get("market_probability")
+        r = await predict(PredictRequest(
+            question=q, attach_evidence=True, evidence_top_k=req.evidence_top_k, variant=req.variant,
+            market_probability=mp, openrouter_api_key=req.openrouter_api_key,
+            openrouter_model=req.openrouter_model, provider_base_url=req.provider_base_url),
+            kb_user_id=_optional_user_id(request))
+        a = r.market_analysis
+        last.update(answer=r.predicted_answer, confidence=r.confidence,
+                    model_probability=(a.model_probability if a else r.confidence),
+                    market_probability=(a.market_probability if a else mp),
+                    edge=(a.edge if a else None), stance=(a.stance if a else None),
+                    thesis=r.model_rationale or r.rationale or "", question_type=r.question_type,
+                    evidence_sources=list(r.evidence_sources))
+        msg = f"Forecast: {r.predicted_answer} (confidence {r.confidence})."
+        if a and a.edge is not None:
+            msg += (f" Model {round((a.model_probability or 0) * 100)}% vs market "
+                    f"{round((a.market_probability or 0) * 100)}%, edge {round(a.edge * 100):+d} pts.")
+        return msg + " " + (r.model_rationale or r.rationale or "")[:600]
+
+    async def _tool_get_market(args):
+        plat = str(args.get("platform", "")).lower()
+        try:
+            if "poly" in plat:
+                q = await _fetch_market_quote("polymarket", slug=args.get("slug"), market_id=args.get("market_id"))
+            elif "kalshi" in plat:
+                q = await _fetch_market_quote("kalshi", ticker=args.get("ticker"))
+            else:
+                return "Specify platform 'polymarket' or 'kalshi' plus a slug/ticker."
+        except HTTPException as exc:
+            return f"(market fetch failed: {exc.detail})"
+        return f"{q.platform}: {q.question} — {q.outcome} at {round((q.probability or 0) * 100)}% ({q.market_url})"
+
+    async def _tool_search_evidence(args):
+        ep = _state.get("evidence_pipeline")
+        if ep is None:
+            return "(evidence retrieval not configured)"
+        query = str(args.get("query") or question)
+        try:
+            arts = await loop.run_in_executor(None, lambda: ep.fetch_summarize_rank(query, top_k=5))
+        except Exception:
+            return "(evidence retrieval failed)"
+        return "\n".join(f"- {a.get('source', '?')}: {a.get('title', '')}" for a in (arts or [])[:6]) or "No evidence found."
+
+    async def _tool_scan(args):
+        plat = str(args.get("platform", "polymarket")).lower()
+        fn = market_data.list_polymarket if "poly" in plat else market_data.list_kalshi if "kalshi" in plat else None
+        if fn is None:
+            return "platform must be 'polymarket' or 'kalshi'"
+        try:
+            qs = await loop.run_in_executor(None, lambda: fn(limit=5, query=args.get("query")))
+        except Exception:
+            return "(listing failed)"
+        return "\n".join(f"- [{q.get('platform')}] {(q.get('question') or '')[:70]} @ "
+                         f"{round((q.get('probability') or 0) * 100)}%" for q in qs) or "No markets found."
+
+    async def _tool_track_record(args):
+        client = _get_datastore()
+        if client is None:
+            return "(track record unavailable)"
+        agg = await loop.run_in_executor(None, lambda: trl.read_aggregate(client))
+        return agent_capabilities.build_grounding_note(agg) or "No resolved forecasts yet."
+
+    tools = {"forecast": _tool_forecast, "get_market": _tool_get_market,
+             "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,
+             "track_record": _tool_track_record}
+    specs = [
+        {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
+        {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
+        {"name": "search_evidence", "args": "query", "description": "Retrieve recent news headlines relevant to a query."},
+        {"name": "scan_markets", "args": "platform, query?", "description": "List live markets on a venue (optionally filtered by keyword)."},
+        {"name": "track_record", "args": "", "description": "Get the model's own live calibration / skill-vs-market."},
+    ]
+
+    async def chat_fn(messages):
+        return await _provider_chat(provider, messages, temperature, max_tokens)
+
+    q = question
+    if grounding_note:
+        q = f"{question}\n\n[Self-calibration context]\n{grounding_note}"
+    try:
+        res = await agent_capabilities.run_tool_loop(q, tools, specs, chat_fn, max_steps=req.max_tool_steps)
+    except Exception as exc:
+        raise _provider_http_error(exc) from exc
+
+    outcome = (quote.outcome if quote else None) or "Yes"
+    edge = last.get("edge")
+    recommendation, detail = _agent_recommendation(edge, outcome)
+    pipeline = ["tool_loop"] + (["forecast"] if last else [])
+    if grounding_note:
+        pipeline.insert(0, "ground_in_record")
+    return AgentReport(
+        question=question, pipeline=pipeline,
+        platform=(quote.platform if quote else req.platform),
+        market_url=(quote.market_url if quote else None),
+        outcome=outcome, market_probability=last.get("market_probability"),
+        model_probability=last.get("model_probability"), edge=edge, stance=last.get("stance"),
+        recommendation=recommendation, recommendation_detail=detail, confidence=last.get("confidence"),
+        question_type=last.get("question_type", "binary"),
+        thesis=res.get("answer", ""), evidence_sources=last.get("evidence_sources", []),
+        grounding=grounding_note, tool_transcript=res.get("transcript", []),
     )
 
 
