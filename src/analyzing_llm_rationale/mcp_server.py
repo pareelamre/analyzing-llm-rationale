@@ -116,6 +116,7 @@ class ForeseaClient:
         api_key: Optional[str] = None,
         timeout_s: Optional[float] = None,
         session: Optional[Any] = None,
+        async_session: Optional[Any] = None,
     ):
         self.base_url = (base_url or os.environ.get("FORESEA_BASE_URL") or DEFAULT_FORESEA_BASE_URL).rstrip("/")
         self.api_key = (
@@ -125,6 +126,7 @@ class ForeseaClient:
         )
         self.timeout_s = timeout_s if timeout_s is not None else _timeout_from_env()
         self._session = session or requests.Session()
+        self._async_session = async_session
 
     def _headers(self) -> Dict[str, str]:
         headers = {
@@ -164,11 +166,52 @@ class ForeseaClient:
             raise ForeseaApiError(response.status_code, "Foresea returned a non-object JSON response.")
         return payload
 
+    async def _arequest(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        async def _send(session: Any):
+            return await session.request(
+                method,
+                self._url(path),
+                headers=self._headers(),
+                json=json_body,
+                params=params,
+                timeout=self.timeout_s,
+            )
+
+        if self._async_session is not None:
+            response = await _send(self._async_session)
+        else:
+            import httpx
+
+            async with httpx.AsyncClient() as session:
+                response = await _send(session)
+        if response.status_code >= 400:
+            raise ForeseaApiError(response.status_code, _response_detail(response))
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ForeseaApiError(response.status_code, "Foresea returned non-JSON response.") from exc
+        if not isinstance(payload, dict):
+            raise ForeseaApiError(response.status_code, "Foresea returned a non-object JSON response.")
+        return payload
+
     def forecast(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return self._request("POST", "/predict", json_body=payload)
 
+    async def aforecast(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._arequest("POST", "/predict", json_body=payload)
+
     def analyze(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return self._request("POST", "/agent/analyze", json_body=payload)
+
+    async def aanalyze(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return await self._arequest("POST", "/agent/analyze", json_body=payload)
 
     def scan_markets(
         self,
@@ -188,11 +231,35 @@ class ForeseaClient:
         })
         return self._request("GET", "/agent/scan", params=params)
 
+    async def ascan_markets(
+        self,
+        *,
+        platform: str = "polymarket",
+        limit: int = 4,
+        min_edge: float = 0.1,
+        evidence_top_k: int = 3,
+        query: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        params = _strip_empty({
+            "platform": platform,
+            "limit": limit,
+            "min_edge": min_edge,
+            "evidence_top_k": evidence_top_k,
+            "query": query,
+        })
+        return await self._arequest("GET", "/agent/scan", params=params)
+
     def track_record(self) -> Dict[str, Any]:
         return self._request("GET", "/track-record")
 
+    async def atrack_record(self) -> Dict[str, Any]:
+        return await self._arequest("GET", "/track-record")
+
     def openapi(self) -> Dict[str, Any]:
         return self._request("GET", "/openapi.json")
+
+    async def aopenapi(self) -> Dict[str, Any]:
+        return await self._arequest("GET", "/openapi.json")
 
 
 def _response_detail(response: Any) -> str:
@@ -255,8 +322,14 @@ def create_mcp_server(
         except ForeseaApiError as exc:
             raise ToolError(f"Foresea API error ({exc.status_code}): {exc.detail}") from exc
 
+    async def _call_tool_async(fn, *args, **kwargs) -> Dict[str, Any]:
+        try:
+            return await fn(*args, **kwargs)
+        except ForeseaApiError as exc:
+            raise ToolError(f"Foresea API error ({exc.status_code}): {exc.detail}") from exc
+
     @mcp.tool()
-    def foresea_forecast(
+    async def foresea_forecast(
         question: str,
         description: str = "",
         resolution_criteria: str = "",
@@ -288,10 +361,10 @@ def create_mcp_server(
             market_outcome=market_outcome,
             market_probability=market_probability,
         )
-        return _call_tool(client.forecast, payload)
+        return await _call_tool_async(client.aforecast, payload)
 
     @mcp.tool()
-    def foresea_analyze_market(
+    async def foresea_analyze_market(
         question: Optional[str] = None,
         platform: Optional[str] = None,
         slug: Optional[str] = None,
@@ -323,10 +396,10 @@ def create_mcp_server(
             tool_loop=tool_loop,
             max_tool_steps=max_tool_steps,
         )
-        return _call_tool(client.analyze, payload)
+        return await _call_tool_async(client.aanalyze, payload)
 
     @mcp.tool()
-    def foresea_scan_markets(
+    async def foresea_scan_markets(
         platform: str = "polymarket",
         limit: int = 4,
         min_edge: float = 0.1,
@@ -335,8 +408,8 @@ def create_mcp_server(
     ) -> Dict[str, Any]:
         """Scan Polymarket, Kalshi, or both venues for live markets where Foresea sees a large edge."""
 
-        return _call_tool(
-            client.scan_markets,
+        return await _call_tool_async(
+            client.ascan_markets,
             platform=platform,
             limit=limit,
             min_edge=min_edge,
@@ -345,30 +418,30 @@ def create_mcp_server(
         )
 
     @mcp.tool()
-    def foresea_track_record() -> Dict[str, Any]:
+    async def foresea_track_record() -> Dict[str, Any]:
         """Return Foresea's public track record and calibration summary."""
 
-        return _call_tool(client.track_record)
+        return await _call_tool_async(client.atrack_record)
 
     @mcp.resource(
         "foresea://track-record",
         name="Foresea track record",
         mime_type="application/json",
     )
-    def track_record_resource() -> str:
+    async def track_record_resource() -> str:
         """Foresea's public resolved-forecast track record."""
 
-        return json.dumps(_call_tool(client.track_record), sort_keys=True)
+        return json.dumps(await _call_tool_async(client.atrack_record), sort_keys=True)
 
     @mcp.resource(
         "foresea://openapi.json",
         name="Foresea OpenAPI schema",
         mime_type="application/json",
     )
-    def openapi_resource() -> str:
+    async def openapi_resource() -> str:
         """Foresea's public OpenAPI schema."""
 
-        return json.dumps(_call_tool(client.openapi), sort_keys=True)
+        return json.dumps(await _call_tool_async(client.aopenapi), sort_keys=True)
 
     @mcp.prompt()
     def foresea_forecast_prompt(question: str) -> str:

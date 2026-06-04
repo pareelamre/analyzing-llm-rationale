@@ -38,6 +38,11 @@ class FakeSession:
         return self.responses.pop(0)
 
 
+class FakeAsyncSession(FakeSession):
+    async def request(self, method, url, headers=None, json=None, params=None, timeout=None):
+        return super().request(method, url, headers=headers, json=json, params=params, timeout=timeout)
+
+
 class PayloadTests(unittest.TestCase):
     def test_predict_payload_maps_optional_market_fields(self):
         payload = mcp.build_predict_payload(
@@ -127,6 +132,37 @@ class ForeseaClientTests(unittest.TestCase):
             client.openapi()
 
         self.assertIn("non-JSON", ctx.exception.detail)
+
+
+class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
+    async def test_async_forecast_posts_predict_without_blocking_server_loop(self):
+        session = FakeAsyncSession(FakeResponse(payload={"predicted_answer": "No"}))
+        client = mcp.ForeseaClient(
+            base_url="https://foresea.test/",
+            api_key="secret",
+            timeout_s=11,
+            async_session=session,
+        )
+
+        result = await client.aforecast({"question": "Will Y happen?"})
+
+        self.assertEqual(result, {"predicted_answer": "No"})
+        call = session.calls[0]
+        self.assertEqual(call["method"], "POST")
+        self.assertEqual(call["url"], "https://foresea.test/predict")
+        self.assertEqual(call["headers"]["X-API-Key"], "secret")
+        self.assertEqual(call["json"], {"question": "Will Y happen?"})
+        self.assertEqual(call["timeout"], 11)
+
+    async def test_async_http_error_parses_detail(self):
+        session = FakeAsyncSession(FakeResponse(status_code=503, payload={"detail": "temporarily unavailable"}))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", async_session=session)
+
+        with self.assertRaises(mcp.ForeseaApiError) as ctx:
+            await client.atrack_record()
+
+        self.assertEqual(ctx.exception.status_code, 503)
+        self.assertEqual(ctx.exception.detail, "temporarily unavailable")
 
 
 if __name__ == "__main__":
