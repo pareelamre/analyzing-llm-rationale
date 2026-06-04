@@ -7,10 +7,16 @@ this module a pure, testable helper layer.
 """
 from __future__ import annotations
 
+import os
 from typing import List
 
 EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
 EMBED_DIM = 384
+
+# In production the model is mounted from a GCS volume; EMBED_MODEL_PATH points
+# at that mount (a local dir of real files) so loading is offline and reliable.
+# When unset (local/dev/tests), fall back to the model name (HF resolves it).
+EMBED_MODEL_PATH = os.environ.get("EMBED_MODEL_PATH", EMBED_MODEL_NAME)
 
 _embedder = None
 _embedder_loaded = False
@@ -23,7 +29,7 @@ def _get_embedder():
     _embedder_loaded = True
     try:
         from sentence_transformers import SentenceTransformer
-        _embedder = SentenceTransformer(EMBED_MODEL_NAME, device="cpu")
+        _embedder = SentenceTransformer(EMBED_MODEL_PATH, device="cpu")
     except Exception:
         _embedder = None
     return _embedder
