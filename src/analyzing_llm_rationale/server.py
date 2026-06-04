@@ -3246,10 +3246,14 @@ async def track_record_tick(request: Request = None) -> Dict[str, Any]:
     # 1) Score snapshots whose markets resolved since the last tick.
     newly_resolved = await loop.run_in_executor(
         None, lambda: trl.resolve_open_snapshots(client, market_data))
-    # 2) Take today's forecast snapshot for tracked-open + newly-seen markets.
+    # 2) Cheap hourly price points (live price, no LLM) for tracked-open markets.
+    price_points = await loop.run_in_executor(
+        None, lambda: trl.record_price_points(client, market_data))
+    # 3) Daily forecast snapshot (per-day dedup keeps the LLM forecast to once/day
+    #    per market) for tracked-open + newly-discovered markets.
     recorded = await trl.record_snapshots(
         client, market_data, _track_record_forecast, per_venue=per_venue)
-    # 3) Recompute + persist the public aggregate (overall + by horizon).
+    # 4) Recompute + persist the public aggregate (overall + by horizon).
     agg = await loop.run_in_executor(None, lambda: trl.aggregate(
         client,
         model=_state.get("model_key", "gpt-oss-120b"),
@@ -3258,6 +3262,7 @@ async def track_record_tick(request: Request = None) -> Dict[str, Any]:
     ))
     return {
         "snapshots_recorded": recorded,
+        "price_points_recorded": price_points,
         "snapshots_resolved": newly_resolved,
         "n_markets_resolved": agg.get("n_markets_resolved"),
         "n_markets_open": agg.get("n_markets_open"),

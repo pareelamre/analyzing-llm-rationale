@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 SNAPSHOT_KIND = "ForecastSnapshot"
+PRICE_KIND = "MarketPricePoint"
 AGG_KIND = "TrackRecordLive"
 AGG_ID = "global"
 
@@ -261,6 +262,42 @@ def resolve_open_snapshots(client, market_data) -> int:
     return scored
 
 
+def record_price_points(client, market_data) -> int:
+    """Append an hourly *price* point for each tracked-still-open market.
+
+    This is the cheap, high-frequency half of the trajectory: it re-fetches the
+    live market price only (no LLM forecast, no evidence), so we track price
+    movement up to the last moment without paying inference cost every hour. One
+    point per market per UTC hour.
+    """
+    from google.cloud import datastore as _ds
+
+    now = _now()
+    hour_key = now.strftime("%Y-%m-%dT%H")
+    recorded = 0
+    for meta in _open_idents(client).values():
+        platform = meta.get("platform") or ""
+        ident = meta.get("ident") or ""
+        quote = _fetch_current_quote(market_data, platform, ident)
+        if not quote or quote.get("probability") is None:
+            continue
+        key = client.key(PRICE_KIND, f"{platform}:{ident}:{hour_key}")
+        if client.get(key) is not None:
+            continue  # already recorded this market this hour
+        entity = _ds.Entity(key)
+        entity.update(
+            platform=platform,
+            ident=ident,
+            market_probability=float(quote["probability"]),
+            ts=now,
+            close_time=quote.get("close_time"),
+            lead_time_days=_lead_time_days(quote.get("close_time")),
+        )
+        client.put(entity)
+        recorded += 1
+    return recorded
+
+
 def _bucket_stats(rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not rows:
         return None
@@ -458,6 +495,10 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
                         reverse=True)[:trajectory_samples]:
         snaps_sorted = sorted(snaps, key=lambda x: x.get("snapshot_ts") or _now())
         first = snaps_sorted[0]
+        # Dense hourly price line for this market (the cheap high-frequency half).
+        price_q = client.query(kind=PRICE_KIND)
+        price_q.add_filter("ident", "=", first.get("ident"))
+        price_points = sorted(price_q.fetch(), key=lambda p: p.get("ts") or _now())
         trajectories.append({
             "question": first.get("question"),
             "platform": first.get("platform"),
@@ -469,6 +510,10 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
                 "model": round(float(s["model_probability"]), 3),
                 "market": round(float(s["market_probability"]), 3),
             } for s in snaps_sorted],
+            "price_points": [{
+                "ts": p["ts"].isoformat() if hasattr(p.get("ts"), "isoformat") else str(p.get("ts")),
+                "market": round(float(p["market_probability"]), 3),
+            } for p in price_points],
         })
 
     payload.update({

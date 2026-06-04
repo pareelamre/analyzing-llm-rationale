@@ -1,8 +1,9 @@
 name: Track record tick
 
-# Advances the live, point-in-time track record once a day: scores forecasts
-# whose markets resolved, records forecasts on freshly-seen open markets, and
-# recomputes the public aggregate served at /track-record.
+# Advances the live, point-in-time track record hourly: scores forecasts whose
+# markets resolved, appends an hourly price point per open market (cheap, no
+# LLM), takes the daily LLM forecast (per-day dedup keeps it once/day per
+# market), and recomputes the public aggregate served at /track-record.
 #
 # Requires the repo secret TRACK_RECORD_TOKEN to match the server's
 # TRACK_RECORD_TOKEN env var. Until both are set, the endpoint returns 503 and
@@ -10,7 +11,7 @@ name: Track record tick
 
 on:
   schedule:
-    - cron: "23 6 * * *"   # daily at 06:23 UTC
+    - cron: "17 * * * *"   # hourly at :17 (cheap price points; LLM forecast still daily per market)
   workflow_dispatch: {}
 
 jobs:

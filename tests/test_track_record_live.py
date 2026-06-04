@@ -155,6 +155,36 @@ class TrajectoryTests(unittest.TestCase):
         traj = {t["question"]: t for t in agg["trajectories"]}
         self.assertEqual(len(traj["Will A happen?"]["points"]), 2)
 
+    def test_hourly_price_points_dedup_per_hour(self):
+        far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        self._record(md, "2026-06-03")  # 2 open markets (A, B)
+        h9 = datetime(2026, 6, 4, 9, 0, tzinfo=timezone.utc)
+        h10 = datetime(2026, 6, 4, 10, 0, tzinfo=timezone.utc)
+        with mock.patch.object(trl, "_now", return_value=h9):
+            self.assertEqual(trl.record_price_points(self.client, md), 2)
+            self.assertEqual(trl.record_price_points(self.client, md), 0)  # same hour -> dedup
+        with mock.patch.object(trl, "_now", return_value=h10):
+            self.assertEqual(trl.record_price_points(self.client, md), 2)  # new hour
+        pts = [e for (k, _i), e in self.client.store.items() if k == trl.PRICE_KIND]
+        self.assertEqual(len(pts), 4)
+        # Price points carry the market price only — no model forecast / no LLM.
+        self.assertIn("market_probability", pts[0])
+        self.assertNotIn("model_probability", pts[0])
+
+    def test_trajectory_includes_price_points(self):
+        far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        self._record(md, "2026-06-03")
+        with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, 12, tzinfo=timezone.utc)):
+            trl.record_price_points(self.client, md)
+        md.resolve_polymarket = lambda ident: 1
+        md.resolve_kalshi = lambda ident: 0
+        trl.resolve_open_snapshots(self.client, md)
+        agg = trl.aggregate(self.client, model="m", variant="v", temperature=0.0)
+        traj = {t["question"]: t for t in agg["trajectories"]}
+        self.assertGreaterEqual(len(traj["Will A happen?"]["price_points"]), 1)
+
     def test_training_features_captured(self):
         far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)
