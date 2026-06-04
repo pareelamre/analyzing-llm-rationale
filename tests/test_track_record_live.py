@@ -70,8 +70,8 @@ def _fake_market_data(close_iso):
     md._kalshi = {"platform": "Kalshi", "question": "Will B happen?",
                   "market_url": "https://kalshi.com/markets/TICKERB", "outcome": "Yes",
                   "probability": 0.45, "close_time": close_iso}
-    md.list_polymarket = lambda limit=3: [dict(md._poly)]
-    md.list_kalshi = lambda limit=3: [dict(md._kalshi)]
+    md.list_polymarket = lambda limit=3, **kw: [dict(md._poly)]
+    md.list_kalshi = lambda limit=3, **kw: [dict(md._kalshi)]
     md.fetch_polymarket = lambda slug=None, market_id=None: dict(md._poly)
     md.fetch_kalshi = lambda ticker: dict(md._kalshi)
     md.resolve_polymarket = lambda ident: None

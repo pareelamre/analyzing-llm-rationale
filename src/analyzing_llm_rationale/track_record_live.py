@@ -129,6 +129,7 @@ async def record_snapshots(
     evidence_top_k: int = 3,
     max_active: int = 20,
     min_discovery_lead_days: float = 2.0,
+    max_discovery_lead_days: float = 365.0,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
     newly-discovered markets, capturing the live price + a fresh forecast."""
@@ -143,11 +144,17 @@ async def record_snapshots(
         if quote and quote.get("probability") is not None:
             targets.append(quote)
 
-    # 2) Discover new markets (skip ultra-short ones — no room for a trajectory).
+    # 2) Discover new markets within the resolution-horizon window (skip
+    #    ultra-short ones — no room for a trajectory — and multi-year ones that
+    #    would never resolve during the experiment).
     discovered: List[Dict[str, Any]] = []
     for lister in (market_data.list_polymarket, market_data.list_kalshi):
         try:
-            discovered.extend(lister(limit=per_venue)[:per_venue])
+            discovered.extend(lister(
+                limit=per_venue,
+                min_close_days=min_discovery_lead_days,
+                max_close_days=max_discovery_lead_days,
+            )[:per_venue])
         except market_data.MarketDataError:
             continue
     known = {(q.get("platform"), ident_from_url(q.get("platform", ""), q.get("market_url", ""))) for q in targets}
@@ -156,8 +163,8 @@ async def record_snapshots(
         if (q.get("platform"), ident) in known or q.get("probability") is None:
             continue
         lead = _lead_time_days(q.get("close_time"))
-        if lead is not None and lead < min_discovery_lead_days:
-            continue  # resolves too soon to build a meaningful trajectory
+        if lead is not None and not (min_discovery_lead_days <= lead <= max_discovery_lead_days):
+            continue  # outside the useful resolution window
         targets.append(q)
         known.add((q.get("platform"), ident))
 

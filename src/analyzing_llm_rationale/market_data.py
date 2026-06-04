@@ -15,10 +15,12 @@ Each fetcher returns a normalized dict compatible with the ``/predict``
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 POLYMARKET_GAMMA_URL = "https://gamma-api.polymarket.com/markets"
 KALSHI_API_URL = "https://api.elections.kalshi.com/trade-api/v2/markets"
+KALSHI_EVENTS_URL = "https://api.elections.kalshi.com/trade-api/v2/events"
 _TIMEOUT_S = 12
 _HEADERS = {"User-Agent": "foresea-market-bot/1.0"}
 
@@ -68,6 +70,32 @@ def _to_float(value: Any) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _within_close_window(close_time: Any, min_days: Optional[float], max_days: Optional[float]) -> bool:
+    """Whether a market's resolution time falls in [min_days, max_days] from now.
+
+    Used to keep the track record to markets that will actually resolve in a
+    useful window (not same-day noise, not multi-decade markets that never
+    score). ``None`` bounds disable that side; an unparseable/absent close time
+    is kept only when there's no max bound.
+    """
+    if min_days is None and max_days is None:
+        return True
+    if not close_time:
+        return max_days is None
+    try:
+        cdt = datetime.fromisoformat(str(close_time).strip().replace("Z", "+00:00"))
+    except ValueError:
+        return max_days is None
+    if cdt.tzinfo is None:
+        cdt = cdt.replace(tzinfo=timezone.utc)
+    lead = (cdt - datetime.now(timezone.utc)).total_seconds() / 86400.0
+    if min_days is not None and lead < min_days:
+        return False
+    if max_days is not None and lead > max_days:
+        return False
+    return True
 
 
 def _primary_outcome(options: List[Dict[str, Any]]) -> tuple[str, Optional[float]]:
@@ -172,18 +200,22 @@ def fetch_polymarket(slug: Optional[str] = None, market_id: Optional[str] = None
     return _polymarket_quote(market)
 
 
-def list_polymarket(limit: int = 5, query: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_polymarket(limit: int = 5, query: Optional[str] = None,
+                    min_close_days: Optional[float] = None,
+                    max_close_days: Optional[float] = None) -> List[Dict[str, Any]]:
     """List liquid, contested binary Polymarket markets (for the edge scan).
 
     Pulls high-volume markets, then keeps binary Yes/No markets priced in the
     mid-range so the scan focuses on genuinely contested questions. When
     ``query`` is given, only markets whose question contains that keyword are
-    kept (best-effort, over the high-volume candidate pool).
+    kept. ``min_close_days``/``max_close_days`` optionally restrict to a
+    resolution-horizon window (used by the live track record).
     """
     limit = max(1, min(int(limit), 20))
     want = (query or "").strip().lower()
-    # Search deeper when filtering by keyword, since matches may not be top-volume.
-    candidate_cap = min(500, limit * (60 if want else 10))
+    # Search deeper when filtering by keyword/horizon, since matches may not be top-volume.
+    deeper = bool(want or min_close_days is not None or max_close_days is not None)
+    candidate_cap = min(500, limit * (60 if deeper else 10))
     data = _get_json(
         POLYMARKET_GAMMA_URL,
         params={
@@ -205,6 +237,8 @@ def list_polymarket(limit: int = 5, query: Optional[str] = None) -> List[Dict[st
             continue
         if want and want not in (quote["question"] or "").lower():
             continue
+        if not _within_close_window(quote.get("close_time"), min_close_days, max_close_days):
+            continue
         quotes.append(quote)
         if len(quotes) >= limit:
             break
@@ -213,24 +247,25 @@ def list_polymarket(limit: int = 5, query: Optional[str] = None) -> List[Dict[st
 
 def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
     ticker = (market.get("ticker") or "").strip().upper()
-    # Kalshi prices are in cents (0..100). Prefer last trade, else bid/ask midpoint.
-    last = market.get("last_price")
-    yes_bid = market.get("yes_bid")
-    yes_ask = market.get("yes_ask")
-    cents: Optional[float]
-    if last:
-        cents = float(last)
-    elif yes_bid is not None and yes_ask is not None:
-        cents = (float(yes_bid) + float(yes_ask)) / 2.0
-    elif yes_bid is not None:
-        cents = float(yes_bid)
+    # Kalshi prices are in the *_dollars fields (0..1). Prefer last trade, else
+    # bid/ask midpoint. (The legacy cents fields last_price/yes_bid/yes_ask were
+    # removed from the API.)
+    last = _to_float(market.get("last_price_dollars"))
+    yes_bid = _to_float(market.get("yes_bid_dollars"))
+    yes_ask = _to_float(market.get("yes_ask_dollars"))
+    if last is not None and 0.0 < last < 1.0:
+        probability = last
+    elif yes_bid is not None and yes_ask is not None and (yes_bid > 0.0 or yes_ask < 1.0):
+        probability = (yes_bid + yes_ask) / 2.0
+    elif yes_bid is not None and yes_bid > 0.0:
+        probability = yes_bid
     else:
-        cents = None
-    probability = round(cents / 100.0, 4) if cents is not None else None
+        probability = None
+    probability = round(probability, 4) if probability is not None else None
     no_probability = round(1.0 - probability, 4) if probability is not None else None
     return {
         "platform": "Kalshi",
-        "question": market.get("title") or market.get("subtitle") or ticker,
+        "question": market.get("title") or market.get("yes_sub_title") or market.get("subtitle") or ticker,
         "market_url": f"https://kalshi.com/markets/{ticker}" if ticker else "",
         "outcome": "Yes",
         "probability": probability,
@@ -254,26 +289,42 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     return _kalshi_quote(market)
 
 
-def list_kalshi(limit: int = 5, query: Optional[str] = None) -> List[Dict[str, Any]]:
-    """List open, priced Kalshi markets (for the edge scan).
+def list_kalshi(limit: int = 5, query: Optional[str] = None,
+                min_close_days: Optional[float] = None,
+                max_close_days: Optional[float] = None) -> List[Dict[str, Any]]:
+    """List open, priced Kalshi markets via the ``/events`` endpoint.
 
-    When ``query`` is given, only markets whose title contains that keyword are
-    kept (best-effort, over the open-market candidate pool).
+    The flat ``/markets?status=open`` listing is saturated by auto-generated
+    multi-leg "MVE" parlay markets, so we pull real markets grouped under events
+    instead, skip MVE legs, and build a readable question from the event title
+    (plus the candidate sub-title for multi-outcome events). ``query`` filters by
+    keyword; ``min_close_days``/``max_close_days`` restrict the resolution
+    horizon. Results are sorted soonest-resolving first.
     """
     limit = max(1, min(int(limit), 20))
     want = (query or "").strip().lower()
-    candidate_cap = min(1000, limit * (100 if want else 20))
-    data = _get_json(KALSHI_API_URL, params={"status": "open", "limit": candidate_cap})
-    markets = data.get("markets", []) if isinstance(data, dict) else []
+    data = _get_json(KALSHI_EVENTS_URL, params={
+        "status": "open", "with_nested_markets": "true", "limit": 200,
+    })
+    events = data.get("events", []) if isinstance(data, dict) else []
     quotes: List[Dict[str, Any]] = []
-    for market in markets:
-        quote = _kalshi_quote(market)
-        prob = quote["probability"]
-        if prob is None or not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
-            continue
-        if want and want not in (quote["question"] or "").lower():
-            continue
-        quotes.append(quote)
-        if len(quotes) >= limit:
-            break
-    return quotes
+    for event in events:
+        title = event.get("title") or ""
+        for market in event.get("markets", []) or []:
+            if market.get("mve_collection_ticker"):
+                continue  # skip multi-leg parlay markets
+            quote = _kalshi_quote(market)
+            prob = quote["probability"]
+            if prob is None or not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
+                continue
+            sub = (market.get("yes_sub_title") or "").strip()
+            question = f"{title} — {sub}" if (sub and sub.lower() not in title.lower()) else (title or quote["question"])
+            quote["question"] = question
+            if want and want not in question.lower():
+                continue
+            if not _within_close_window(quote.get("close_time"), min_close_days, max_close_days):
+                continue
+            quotes.append(quote)
+    # Prefer soonest-resolving so the track record accrues scored outcomes sooner.
+    quotes.sort(key=lambda q: q.get("close_time") or "9999")
+    return quotes[:limit]

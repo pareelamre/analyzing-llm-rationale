@@ -74,8 +74,8 @@ class MarketDataTests(unittest.TestCase):
         with self.assertRaises(MarketDataError):
             fetch_polymarket(slug="missing")
 
-    def test_kalshi_converts_cents_to_probability(self):
-        payload = {"market": {"ticker": "KXTEST", "title": "Will Y?", "last_price": 42}}
+    def test_kalshi_reads_dollar_price(self):
+        payload = {"market": {"ticker": "KXTEST", "title": "Will Y?", "last_price_dollars": "0.42"}}
         sys.modules["requests"] = _fake_requests(payload)
 
         quote = fetch_kalshi("kxtest")
@@ -87,7 +87,8 @@ class MarketDataTests(unittest.TestCase):
         self.assertAlmostEqual(quote["outcomes"][1]["probability"], 0.58)
 
     def test_kalshi_uses_bid_ask_midpoint_without_last_price(self):
-        payload = {"market": {"ticker": "KXT", "title": "t", "last_price": None, "yes_bid": 40, "yes_ask": 50}}
+        payload = {"market": {"ticker": "KXT", "title": "t",
+                              "last_price_dollars": None, "yes_bid_dollars": "0.40", "yes_ask_dollars": "0.50"}}
         sys.modules["requests"] = _fake_requests(payload)
 
         quote = fetch_kalshi("KXT")
@@ -109,14 +110,19 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual([q["question"] for q in quotes], ["A?"])
         self.assertAlmostEqual(quotes[0]["probability"], 0.3)
 
-    def test_list_kalshi_skips_unpriced(self):
-        payload = {"markets": [
-            {"ticker": "T1", "title": "One", "last_price": 60},
-            {"ticker": "T2", "title": "Two", "last_price": None, "yes_bid": None, "yes_ask": None},
-        ]}
+    def test_list_kalshi_via_events_skips_unpriced_and_mve(self):
+        payload = {"events": [{"title": "Event One", "markets": [
+            {"ticker": "T1", "title": "One", "last_price_dollars": "0.60",
+             "close_time": "2026-12-01T00:00:00Z"},
+            {"ticker": "T2", "title": "Two", "last_price_dollars": None,
+             "yes_bid_dollars": None, "yes_ask_dollars": None},
+            {"ticker": "T3", "title": "Parlay", "last_price_dollars": "0.50",
+             "mve_collection_ticker": "KXMVE-X"},
+        ]}]}
         sys.modules["requests"] = _fake_requests(payload)
         quotes = list_kalshi(limit=10)
-        self.assertEqual([q["question"] for q in quotes], ["One"])
+        # Unpriced (T2) and MVE parlay (T3) dropped; only the real priced binary kept.
+        self.assertEqual([q["question"] for q in quotes], ["Event One"])
         self.assertAlmostEqual(quotes[0]["probability"], 0.6)
 
     def test_list_polymarket_keyword_filter(self):
@@ -131,13 +137,23 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual([q["question"] for q in quotes], ["Will the Lakers win the NBA title?"])
 
     def test_list_kalshi_keyword_filter(self):
-        payload = {"markets": [
-            {"ticker": "NBA1", "title": "Will an NBA team relocate?", "last_price": 45},
-            {"ticker": "CPI1", "title": "Will CPI exceed 3%?", "last_price": 50},
+        payload = {"events": [
+            {"title": "Will an NBA team relocate?", "markets": [
+                {"ticker": "NBA1", "last_price_dollars": "0.45", "close_time": "2026-12-01T00:00:00Z"}]},
+            {"title": "Will CPI exceed 3%?", "markets": [
+                {"ticker": "CPI1", "last_price_dollars": "0.50", "close_time": "2026-12-01T00:00:00Z"}]},
         ]}
         sys.modules["requests"] = _fake_requests(payload)
         quotes = list_kalshi(limit=10, query="nba")
         self.assertEqual([q["question"] for q in quotes], ["Will an NBA team relocate?"])
+
+    def test_list_kalshi_horizon_window(self):
+        payload = {"events": [{"title": "soon vs far", "markets": [
+            {"ticker": "SOON", "yes_sub_title": "soon", "last_price_dollars": "0.50",
+             "close_time": "2099-01-01T00:00:00Z"},   # ~decades out -> excluded by max
+        ]}]}
+        sys.modules["requests"] = _fake_requests(payload)
+        self.assertEqual(list_kalshi(limit=10, min_close_days=2, max_close_days=365), [])
 
     def test_resolve_polymarket_yes_no(self):
         # Resolved YES (Yes price settled to 1).
