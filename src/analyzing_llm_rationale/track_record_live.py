@@ -533,3 +533,46 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
 def read_aggregate(client) -> Optional[Dict[str, Any]]:
     entity = client.get(client.key(AGG_KIND, AGG_ID))
     return dict(entity["payload"]) if entity and entity.get("payload") else None
+
+
+def format_digest(aggregate: Optional[Dict[str, Any]]) -> str:
+    """A shareable, honest markdown summary of the live track record — content
+    for a weekly post. Built from the aggregate so it never overstates."""
+    cta = "Tracked live, scored at resolution — no cherry-picking. https://foresea.ink/track-record"
+    n = (aggregate or {}).get("n_snapshots_resolved") or 0
+    if not aggregate or not n:
+        n_open = (aggregate or {}).get("n_markets_open") or 0
+        return ("**Foresea forecast track record**\n\n"
+                f"Now tracking {n_open} live market(s) point-in-time; none have resolved yet, "
+                "so there are no scores to report. Every forecast is logged before resolution "
+                "and graded when the market settles.\n\n" + cta)
+
+    overall = aggregate.get("overall") or {}
+    n_markets = aggregate.get("n_markets_resolved") or 0
+    n_open = aggregate.get("n_markets_open") or 0
+    lines = [f"**Foresea forecast track record** — {n_markets} resolved, {n_open} open"]
+    acc = overall.get("accuracy")
+    mb, kb = overall.get("model_brier"), overall.get("market_brier")
+    skill = overall.get("skill_vs_market")
+    if acc is not None:
+        lines.append(f"\nHit rate: {round(acc * 100)}% across {n} forecasts.")
+    if mb is not None and kb is not None:
+        lines.append(f"Brier: {mb} (model) vs {kb} (market).")
+    if skill is not None:
+        verb = "beating the market" if skill > 0 else "trailing the market" if skill < 0 else "level with the market"
+        lines.append(f"Skill vs market: {skill:+.3f} — {verb}.")
+
+    horizons = [b for b in (aggregate.get("by_horizon") or []) if b.get("n")]
+    if horizons:
+        lines.append("\nBy how far ahead the call was made:")
+        for b in horizons:
+            s = b.get("skill_vs_market")
+            s_txt = f"{s:+.3f}" if s is not None else "n/a"
+            lines.append(f"- {b.get('horizon')}: skill {s_txt} (n={b.get('n')})")
+
+    cal = aggregate.get("calibration_model") or {}
+    if cal.get("applied"):
+        lines.append(f"\nCalibration in progress (raw ECE {cal.get('raw_ece')}).")
+
+    lines.append("\n" + cta)
+    return "\n".join(lines)

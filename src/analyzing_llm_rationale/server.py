@@ -153,6 +153,28 @@ percentage-point edge, and a stance (`model_above_market`, `model_below_market`,
 
 ---
 
+## Trading execution
+
+Foresea can preview and submit guarded orders for Kalshi and Polymarket:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /trading/accounts` | Return configured/not-configured venue status without exposing secrets |
+| `POST /trading/preview` | Normalize and validate an order without placing it |
+| `POST /trading/orders` | Submit a live order after explicit confirmation |
+
+Live trading is disabled unless `FORESEA_ENABLE_TRADING=true`. Every live order
+requires a signed-in user session, `execute=true`, and the exact confirmation
+phrase `PLACE REAL ORDER`. Market/IOC/FOK-style orders are separately blocked
+unless `FORESEA_ALLOW_MARKET_ORDERS=true`. Exchange credentials are read only
+from server-side environment variables or Secret Manager mounts.
+
+`/agent/analyze` may return a directional recommendation, but it never places an
+order. Use `/trading/preview` first, review the normalized order, then call
+`/trading/orders` only when you intend to submit a real order.
+
+---
+
 ## Prompt variants
 
 The `variant` field controls how the LLM is prompted. Choose the variant that
@@ -187,7 +209,9 @@ When the server is configured with `API_KEY`, all prediction endpoints require:
 X-API-Key: <your-key>
 ```
 
-The `/health` endpoint is always unauthenticated.
+The `/health` endpoint is always unauthenticated. Per-user endpoints such as
+RAG, chat history, and trading require an `Authorization: Bearer <session-token>`
+header returned by the sign-in endpoints.
 
 ---
 
@@ -204,6 +228,10 @@ _TAGS = [
     {
         "name": "Markets",
         "description": "Fetch live prices from prediction-market venues (Polymarket, Kalshi).",
+    },
+    {
+        "name": "Trading",
+        "description": "Preview and submit guarded prediction-market orders for authenticated users.",
     },
     {
         "name": "Agents",
@@ -1213,6 +1241,67 @@ async def sitemap_xml():
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/track-record/digest", tags=["System"], summary="Shareable track-record summary")
+async def track_record_digest():
+    """A short, shareable markdown summary of the live track record — ready to
+    post (a weekly recap). Built from the resolved-forecast aggregate so it
+    never overstates."""
+    from analyzing_llm_rationale import track_record_live as trl
+    client = _get_datastore()
+    aggregate = None
+    if client is not None:
+        try:
+            aggregate = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: trl.read_aggregate(client))
+        except Exception:
+            logger.warning("digest: track record read failed", exc_info=True)
+    return PlainTextResponse(trl.format_digest(aggregate),
+                             headers={"Cache-Control": "public, max-age=600"})
+
+
+class BenchmarkForecast(BaseModel):
+    """One resolved forecast to score: a probability and the realized outcome."""
+    probability: float = Field(..., ge=0.0, le=1.0, description="Forecast probability of YES (0–1).")
+    outcome: int = Field(..., ge=0, le=1, description="Realized outcome: 1 (YES) or 0 (NO).")
+    market_probability: Optional[float] = Field(None, ge=0.0, le=1.0, description="Market price at forecast time, for skill-vs-market.")
+    question: Optional[str] = Field(None, max_length=500)
+
+
+class BenchmarkRequest(BaseModel):
+    """Score any forecaster's resolved calls — an AI-forecaster benchmark."""
+    forecasts: List[BenchmarkForecast] = Field(..., min_length=1, max_length=5000)
+    label: Optional[str] = Field(None, max_length=120, description="Optional name for this forecaster/run.")
+
+
+@app.post("/benchmark/score", tags=["System"], summary="Score a set of resolved forecasts")
+async def benchmark_score(req: BenchmarkRequest, request: Request = None) -> Dict[str, Any]:
+    """Grade any forecaster's resolved predictions: Brier score, accuracy, ECE
+    (calibration), and — when market prices are supplied — skill vs the market.
+    Lets you benchmark an LLM, a person, or another model against the same yardstick
+    Foresea grades itself on."""
+    if request is not None:
+        _check_rate_limit(request)
+    from analyzing_llm_rationale import track_record_live as trl
+    rows = [{"model_probability": f.probability, "outcome": f.outcome} for f in req.forecasts]
+    n = len(rows)
+    brier = sum((r["model_probability"] - r["outcome"]) ** 2 for r in rows) / n
+    accuracy = sum(1 for r in rows if (r["model_probability"] >= 0.5) == (r["outcome"] == 1)) / n
+    ece = trl._ece(rows)
+    result: Dict[str, Any] = {
+        "label": req.label,
+        "n": n,
+        "brier_score": round(brier, 4),
+        "accuracy": round(accuracy, 4),
+        "ece": round(ece, 4) if ece is not None else None,
+    }
+    market = [f for f in req.forecasts if f.market_probability is not None]
+    if len(market) == n:
+        market_brier = sum((f.market_probability - f.outcome) ** 2 for f in req.forecasts) / n
+        result["market_brier_score"] = round(market_brier, 4)
+        result["skill_vs_market"] = round(market_brier - brier, 4)
+    return result
+
+
 @app.get("/track-record", tags=["System"], summary="Public forecasting track record")
 async def track_record():
     """Return Foresea's resolved-forecast track record.
@@ -1594,6 +1683,71 @@ class MarketQuote(BaseModel):
     outcome: str = Field("", description="Primary outcome (prefers 'Yes').")
     probability: Optional[float] = Field(None, description="Market-implied probability for `outcome` (0..1).")
     outcomes: List[MarketOption] = Field(default_factory=list, description="All outcomes with their probabilities.")
+
+
+class TradingAccountStatus(BaseModel):
+    """Server-side trading readiness without exposing exchange secrets."""
+    trading_enabled: bool
+    max_order_notional: float
+    allow_market_orders: bool
+    confirmation_phrase: str
+    credential_source: str
+    venues: Dict[str, Dict[str, Any]]
+
+
+class TradeOrderRequest(BaseModel):
+    """A guarded prediction-market order request.
+
+    `/trading/preview` validates this without execution. `/trading/orders` only
+    submits when `execute=true`, the confirmation phrase is exact, and server
+    live-trading env flags are enabled.
+    """
+    platform: str = Field(..., max_length=20, description="`kalshi` or `polymarket`.")
+    action: str = Field("buy", max_length=10, description="`buy` or `sell`.")
+    outcome: str = Field("yes", max_length=10, description="Outcome side: `yes` or `no`.")
+    order_type: str = Field("limit", max_length=20, description="`limit` or `market`.")
+    price: Optional[float] = Field(
+        None,
+        gt=0.0,
+        lt=1.0,
+        description="Limit price, or worst acceptable price for market/IOC-style orders.",
+    )
+    quantity: float = Field(..., gt=0.0, description="Contracts/shares. For Polymarket market-buy, max_cost may define spend.")
+    max_cost: Optional[float] = Field(None, gt=0.0, description="Polymarket market-buy spend cap in USD.")
+    ticker: Optional[str] = Field(None, max_length=120, description="Kalshi market ticker.")
+    token_id: Optional[str] = Field(None, max_length=200, description="Polymarket CLOB outcome token id.")
+    slug: Optional[str] = Field(None, max_length=200, description="Polymarket market slug for token resolution.")
+    market_id: Optional[str] = Field(None, max_length=80, description="Polymarket market id for token resolution.")
+    time_in_force: Optional[str] = Field(None, max_length=40, description="Venue-specific TIF, e.g. GTC/FOK or good_till_canceled.")
+    post_only: bool = Field(False, description="Reject rather than cross the book when supported.")
+    reduce_only: bool = Field(False, description="Kalshi reduce-only flag.")
+    tick_size: Optional[str] = Field(None, max_length=20, description="Polymarket tick size override.")
+    neg_risk: Optional[bool] = Field(None, description="Polymarket negative-risk market flag.")
+    client_order_id: Optional[str] = Field(None, max_length=128, description="Caller-provided idempotency/order id.")
+    cancel_order_on_pause: bool = Field(False, description="Kalshi cancel-on-pause flag.")
+    subaccount: Optional[int] = Field(None, ge=0, le=32, description="Kalshi subaccount number.")
+    exchange_index: int = Field(0, ge=0, description="Kalshi exchange shard index; currently 0.")
+    execute: bool = Field(False, description="Must be true on `/trading/orders` for live execution.")
+    confirmation: Optional[str] = Field(None, max_length=80, description="Must equal the server confirmation phrase.")
+
+
+class TradeOrderPreviewResponse(BaseModel):
+    ok: bool
+    platform: str
+    would_execute: bool
+    requires_confirmation: bool
+    confirmation_phrase: str
+    trading_enabled: bool
+    max_order_notional: float
+    estimated_notional: float
+    warnings: List[str] = Field(default_factory=list)
+    normalized_order: Dict[str, Any]
+
+
+class TradeOrderResponse(TradeOrderPreviewResponse):
+    submitted: bool
+    user_id: str
+    venue_response: Dict[str, Any]
 
 
 class AgentSkill(BaseModel):
@@ -2538,6 +2692,82 @@ async def market_kalshi(request: Request, ticker: str) -> "MarketQuote":
     if not ticker.strip():
         raise HTTPException(status_code=422, detail="Provide a Kalshi 'ticker'.")
     return await _fetch_market_quote("kalshi", ticker=ticker)
+
+
+def _trading_http_exception(exc: Exception) -> HTTPException:
+    from analyzing_llm_rationale import trading
+
+    if isinstance(exc, trading.TradingValidationError):
+        return HTTPException(status_code=422, detail=str(exc))
+    if isinstance(exc, (trading.TradingDisabledError, trading.TradingNotConfiguredError)):
+        return HTTPException(status_code=503, detail=str(exc))
+    if isinstance(exc, trading.TradingExecutionError):
+        return HTTPException(status_code=502, detail=str(exc))
+    return HTTPException(status_code=500, detail=f"Trading error: {exc}")
+
+
+@app.get(
+    "/trading/accounts",
+    tags=["Trading"],
+    summary="Check configured trading venues",
+    response_model=TradingAccountStatus,
+)
+async def trading_accounts(request: Request) -> TradingAccountStatus:
+    """Return configured/not-configured status for server-side exchange credentials.
+
+    This endpoint never returns private keys, API secrets, or passphrases. Live
+    order submission still requires `/trading/orders` confirmation.
+    """
+    _check_rate_limit(request)
+    _require_session(request)
+    from analyzing_llm_rationale import trading
+
+    try:
+        return TradingAccountStatus(**trading.account_status())
+    except Exception as exc:
+        raise _trading_http_exception(exc) from exc
+
+
+@app.post(
+    "/trading/preview",
+    tags=["Trading"],
+    summary="Preview a guarded prediction-market order",
+    response_model=TradeOrderPreviewResponse,
+)
+async def trading_preview(req: TradeOrderRequest, request: Request) -> TradeOrderPreviewResponse:
+    """Validate and normalize a Kalshi/Polymarket order without placing it."""
+    _check_rate_limit(request)
+    _require_session(request)
+    from analyzing_llm_rationale import trading
+
+    try:
+        payload = req.model_dump(exclude_none=True)
+        return TradeOrderPreviewResponse(**trading.preview_order(payload))
+    except Exception as exc:
+        raise _trading_http_exception(exc) from exc
+
+
+@app.post(
+    "/trading/orders",
+    tags=["Trading"],
+    summary="Submit a confirmed prediction-market order",
+    response_model=TradeOrderResponse,
+)
+async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderResponse:
+    """Submit a live order after preview guardrails and exact confirmation.
+
+    Live execution is disabled unless `FORESEA_ENABLE_TRADING=true`. Market/IOC
+    style orders are separately disabled unless `FORESEA_ALLOW_MARKET_ORDERS=true`.
+    """
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    from analyzing_llm_rationale import trading
+
+    try:
+        payload = req.model_dump(exclude_none=True)
+        return TradeOrderResponse(**trading.place_order(payload, user_id=claims["sub"]))
+    except Exception as exc:
+        raise _trading_http_exception(exc) from exc
 
 
 @app.post("/extract", tags=["System"], summary="Extract text from a PDF file or URL")

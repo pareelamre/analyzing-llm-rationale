@@ -242,6 +242,54 @@ class ServerTests(unittest.TestCase):
             response = self.client.get("/markets/kalshi?ticker=NOPE")
         self.assertEqual(response.status_code, 404)
 
+    def test_trading_accounts_requires_session(self):
+        response = self.client.get("/trading/accounts")
+        self.assertEqual(response.status_code, 401)
+
+    def test_trading_preview_requires_session(self):
+        response = self.client.post(
+            "/trading/preview",
+            json={"platform": "kalshi", "ticker": "KXTEST", "price": 0.5, "quantity": 1},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_authenticated_trading_preview_returns_normalized_order(self):
+        token = _issue_session("trader-1", "trader@example.com", "Trader", "")
+        response = self.client.post(
+            "/trading/preview",
+            json={
+                "platform": "kalshi",
+                "ticker": "KXTEST",
+                "action": "buy",
+                "outcome": "yes",
+                "price": 0.44,
+                "quantity": 2,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["would_execute"])
+        self.assertEqual(body["normalized_order"]["exchange_order"]["side"], "bid")
+
+    def test_trading_order_disabled_by_default(self):
+        token = _issue_session("trader-1", "trader@example.com", "Trader", "")
+        with mock.patch.dict(os.environ, {"FORESEA_ENABLE_TRADING": "false"}, clear=False):
+            response = self.client.post(
+                "/trading/orders",
+                json={
+                    "platform": "kalshi",
+                    "ticker": "KXTEST",
+                    "price": 0.50,
+                    "quantity": 1,
+                    "execute": True,
+                    "confirmation": "PLACE REAL ORDER",
+                },
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("Live trading is disabled", response.json()["detail"])
+
     def test_agent_analyze_question_only_runs_skill(self):
         response = self.client.post(
             "/agent/analyze",
@@ -458,6 +506,36 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("application/xml", r.headers.get("content-type", ""))
         self.assertIn("https://foresea.ink/", r.text)
+
+    def test_track_record_digest(self):
+        r = self.client.get("/track-record/digest")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Foresea forecast track record", r.text)
+
+    def test_benchmark_score(self):
+        r = self.client.post("/benchmark/score", json={
+            "label": "test-forecaster",
+            "forecasts": [
+                {"probability": 0.8, "outcome": 1, "market_probability": 0.6},
+                {"probability": 0.3, "outcome": 0, "market_probability": 0.5},
+                {"probability": 0.9, "outcome": 1, "market_probability": 0.7},
+            ],
+        })
+        self.assertEqual(r.status_code, 200)
+        b = r.json()
+        self.assertEqual(b["n"], 3)
+        self.assertEqual(b["label"], "test-forecaster")
+        # All three calls correct -> accuracy 1.0; market provided -> skill present.
+        self.assertEqual(b["accuracy"], 1.0)
+        self.assertIn("skill_vs_market", b)
+        self.assertIsNotNone(b["ece"])
+
+    def test_benchmark_score_without_market(self):
+        r = self.client.post("/benchmark/score", json={
+            "forecasts": [{"probability": 0.7, "outcome": 1}],
+        })
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn("skill_vs_market", r.json())  # no market probs -> no skill
 
     def test_openapi_spec_is_public(self):
         # Agents introspect the API via the OpenAPI spec.

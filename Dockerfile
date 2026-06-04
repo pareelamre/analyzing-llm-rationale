@@ -8,7 +8,7 @@ COPY configs/ configs/
 COPY prompts/ prompts/
 COPY static/ static/
 
-RUN pip install --no-cache-dir -e ".[serve,tracking,pipeline]"
+RUN pip install --no-cache-dir -e ".[serve,tracking,pipeline,trading]"
 
 # The RAG embedding model is NOT baked into the image — it's mounted at runtime
 # from a GCS volume at HF_HOME (Cloud Run --add-volume). This keeps the image
@@ -33,7 +33,7 @@ COPY static/ static/
 
 # Install CPU-only torch first so pip doesn't pull CUDA wheels when resolving the package deps
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -e ".[serve,tracking,pipeline]"
+    pip install --no-cache-dir -e ".[serve,tracking,pipeline,trading]"
 
 # The RAG embedding model is NOT baked into the image — it's mounted at runtime
 # from a GCS volume at HF_HOME (Cloud Run --add-volume). This keeps the image

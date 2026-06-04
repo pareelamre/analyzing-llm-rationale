@@ -33,6 +33,7 @@ analysis = [
   "shap>=0.46.0",
 ]
 serve = [
+  "cryptography>=42",
   "duckdb>=1.0",
   "email-validator>=2.0",
   "fastapi>=0.111",
@@ -62,6 +63,10 @@ pipeline = [
 mcp = [
   "httpx>=0.28",
   "mcp>=1.27.1; python_version >= '3.10'",
+]
+trading = [
+  "cryptography>=42",
+  "py-clob-client-v2>=1.0.1; python_version >= '3.10'",
 ]
 
 [project.scripts]

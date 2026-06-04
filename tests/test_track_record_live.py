@@ -203,6 +203,24 @@ class TrajectoryTests(unittest.TestCase):
         self.assertFalse(agg["calibration_model"]["applied"])
 
 
+class DigestTests(unittest.TestCase):
+    def test_empty_digest(self):
+        out = trl.format_digest(None)
+        self.assertIn("Foresea forecast track record", out)
+        self.assertIn("foresea.ink/track-record", out)
+
+    def test_populated_digest(self):
+        agg = {"n_snapshots_resolved": 12, "n_markets_resolved": 8, "n_markets_open": 5,
+               "overall": {"accuracy": 0.75, "model_brier": 0.18, "market_brier": 0.22,
+                           "skill_vs_market": 0.04},
+               "by_horizon": [{"horizon": "7-14d", "n": 5, "skill_vs_market": 0.06}]}
+        out = trl.format_digest(agg)
+        self.assertIn("8 resolved", out)
+        self.assertIn("75%", out)
+        self.assertIn("beating the market", out)
+        self.assertIn("7-14d", out)
+
+
 class CalibrationTests(unittest.TestCase):
     def test_isotonic_is_monotonic_and_corrects_bias(self):
         # Raw probs all 0.8 but true base rate 0.5 -> isotonic should map ~0.8 -> ~0.5.

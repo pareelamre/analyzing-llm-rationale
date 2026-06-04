@@ -213,6 +213,9 @@ evidence articles. It is built for resolvable forecasts, not general Q&A.
 - `GET /markets/kalshi`: fetch a live Kalshi quote (see below).
 - `POST /agent/analyze`: orchestrated end-to-end analysis of a live question (see below).
 - `GET /agent/scan`: scan a venue for mispriced markets, ranked by edge (see below).
+- `GET /trading/accounts`: authenticated trading-readiness status, no secrets returned.
+- `POST /trading/preview`: authenticated dry-run order normalization.
+- `POST /trading/orders`: authenticated live order submission with explicit confirmation.
 
 ### Agent: automated intelligence layer
 
@@ -372,6 +375,93 @@ Both return a normalised quote:
 
 `probability` is `null` for unpriced/illiquid markets. Quotes are cached briefly
 (`MARKET_CACHE_TTL`, default 30s).
+
+### Trading execution: Polymarket and Kalshi
+
+Foresea can submit guarded prediction-market orders, but live execution is
+disabled by default. Keep this separate from `/agent/analyze`: the agent can
+recommend `buy_yes`/`buy_no`, but order submission requires a signed-in user,
+server-side exchange credentials, `FORESEA_ENABLE_TRADING=true`, `execute=true`,
+and the exact confirmation phrase `PLACE REAL ORDER`.
+
+Credentials are read only from the server environment, so use Cloud Run Secret
+Manager mounts or environment secrets. Do not collect private keys in the
+browser or store exchange secrets in Datastore.
+
+```bash
+# Global guardrails
+export FORESEA_ENABLE_TRADING=false          # must be true for live orders
+export FORESEA_MAX_ORDER_NOTIONAL=50         # local cap per order, USD
+export FORESEA_ALLOW_MARKET_ORDERS=false     # separate gate for IOC/FOK-style orders
+
+# Kalshi authenticated REST (RSA-PSS signing)
+export KALSHI_API_KEY_ID=<kalshi-key-id>
+export KALSHI_PRIVATE_KEY_FILE=/secrets/kalshi-private-key.pem
+export KALSHI_BASE_URL=https://external-api.kalshi.com/trade-api/v2
+
+# Polymarket CLOB SDK
+export POLYMARKET_PRIVATE_KEY=<wallet-private-key>
+export POLYMARKET_API_KEY=<clob-api-key>
+export POLYMARKET_API_SECRET=<clob-api-secret>
+export POLYMARKET_API_PASSPHRASE=<clob-api-passphrase>
+export POLYMARKET_FUNDER_ADDRESS=<optional-funder-address>
+export POLYMARKET_SIGNATURE_TYPE=<optional-signature-type>
+```
+
+Install the optional SDKs in production with:
+
+```bash
+pip install -e ".[serve,trading]"
+```
+
+The Docker image installs `trading`, so Cloud Run only needs secrets/env vars.
+
+Check configured venues:
+
+```bash
+curl https://foresea.ink/trading/accounts \
+  -H "Authorization: Bearer $FORESEA_SESSION"
+```
+
+Preview a Kalshi order without execution:
+
+```bash
+curl -X POST https://foresea.ink/trading/preview \
+  -H "Authorization: Bearer $FORESEA_SESSION" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "platform": "kalshi",
+    "ticker": "KXFED-26SEP-C",
+    "action": "buy",
+    "outcome": "yes",
+    "price": 0.42,
+    "quantity": 1
+  }'
+```
+
+Submit a live order only after reviewing the preview:
+
+```bash
+curl -X POST https://foresea.ink/trading/orders \
+  -H "Authorization: Bearer $FORESEA_SESSION" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "platform": "kalshi",
+    "ticker": "KXFED-26SEP-C",
+    "action": "buy",
+    "outcome": "yes",
+    "price": 0.42,
+    "quantity": 1,
+    "execute": true,
+    "confirmation": "PLACE REAL ORDER"
+  }'
+```
+
+For Polymarket, pass the CLOB `token_id` for the exact outcome, or pass
+`slug`/`market_id` plus `outcome` and Foresea will resolve the token id from the
+public market record. Limit orders use `quantity` as shares. Market-buy orders
+use `max_cost` as USD spend when supplied and remain blocked unless
+`FORESEA_ALLOW_MARKET_ORDERS=true`.
 
 ### Request fields
 
