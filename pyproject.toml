@@ -85,4 +85,6 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
-ignore = ["E501"]
+# B905 (zip-without-explicit-strict) requires the `strict=` kwarg, which is
+# Python 3.10+. We also run/test on 3.9, so don't force it.
+ignore = ["E501", "B905"]

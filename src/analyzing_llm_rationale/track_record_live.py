@@ -340,7 +340,7 @@ def _pav(ys: List[float], ws: List[float]) -> List[float]:
     vals: List[float] = []
     wts: List[float] = []
     cnts: List[int] = []
-    for y, w in zip(ys, ws, strict=False):
+    for y, w in zip(ys, ws):
         v, ww, c = float(y), float(w), 1
         while vals and vals[-1] > v:
             pv, pw, pc = vals.pop(), wts.pop(), cnts.pop()
@@ -351,7 +351,7 @@ def _pav(ys: List[float], ws: List[float]) -> List[float]:
         wts.append(ww)
         cnts.append(c)
     out: List[float] = []
-    for v, c in zip(vals, cnts, strict=False):
+    for v, c in zip(vals, cnts):
         out.extend([v] * c)
     return out
 
@@ -439,7 +439,7 @@ def _calibration_report(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
         "raw_brier": round(raw_brier, 4),
         "calibrated_brier_cv": round(cal_brier_cv, 4) if cal_brier_cv is not None else None,
         "raw_skill_vs_market": round(market_brier - raw_brier, 4),
-        "breakpoints": [[round(x, 4), round(y, 4)] for x, y in zip(xs, ys, strict=False)],
+        "breakpoints": [[round(x, 4), round(y, 4)] for x, y in zip(xs, ys)],
     }
     if cal_brier_cv is not None:
         report["calibrated_skill_vs_market"] = round(market_brier - cal_brier_cv, 4)

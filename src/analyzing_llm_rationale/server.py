@@ -577,7 +577,7 @@ def _put_conversation(user_id: str, conversation: Dict[str, Any]) -> Dict[str, A
         if stale_keys:
             client.delete_multi(stale_keys)
         message_entities = []
-        for message, message_key in zip(messages, message_keys, strict=False):
+        for message, message_key in zip(messages, message_keys):
             message_entity = _ds.Entity(key=message_key, exclude_from_indexes=("content", "data"))
             message_entity.update(message)
             message_entities.append(message_entity)
@@ -631,7 +631,7 @@ def _rag_add(user_id: str, namespace: str, items: List[Dict[str, Any]]) -> int:
     records = [
         {"namespace": namespace, "doc_id": doc_id, "text": text, "title": title,
          "url": url, "source": source, "embedding": emb, "created_at": now}
-        for (text, title, url, source, doc_id), emb in zip(chunks, vectors, strict=False)
+        for (text, title, url, source, doc_id), emb in zip(chunks, vectors)
     ]
     client = _get_datastore()
     if client is None:
