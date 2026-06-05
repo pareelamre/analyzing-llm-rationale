@@ -7,7 +7,7 @@ name = "analyzing-llm-rationale"
 version = "0.1.0"
 description = "Batch inference tooling for forecasting rationale experiments."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT"
 authors = [
   { name = "Pareel Amre" },
@@ -46,7 +46,7 @@ serve = [
   "beautifulsoup4>=4.12",
   "redis>=5.0",
   "httpx>=0.28",
-  "mcp>=1.27.1; python_version >= '3.10'",
+  "mcp>=1.27.1",
 ]
 tracking = [
   "mlflow>=2.13",
@@ -62,11 +62,11 @@ pipeline = [
 ]
 mcp = [
   "httpx>=0.28",
-  "mcp>=1.27.1; python_version >= '3.10'",
+  "mcp>=1.27.1",
 ]
 trading = [
   "cryptography>=42",
-  "py-clob-client-v2>=1.0.1; python_version >= '3.10'",
+  "py-clob-client-v2>=1.0.1",
 ]
 
 [project.scripts]
@@ -79,7 +79,7 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 100
 src = ["src", "tests"]
 

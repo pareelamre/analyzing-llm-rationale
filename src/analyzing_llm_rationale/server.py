@@ -56,11 +56,15 @@ _GITHUB_CLIENT_ID: Optional[str] = os.environ.get("GITHUB_CLIENT_ID")
 _GITHUB_CLIENT_SECRET: Optional[str] = os.environ.get("GITHUB_CLIENT_SECRET")
 _SESSION_SECRET: str = os.environ.get("SESSION_SECRET", "change-me-in-production")
 _SESSION_TTL_DAYS = 30
-# Shared secret that gates the live track-record tick (compute-bearing). When
-# unset, the live track record is disabled and /track-record serves the static
-# backtest. The daily workflow sends it as X-Track-Token.
-_TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
-_TRACK_RECORD_VARIANT = os.environ.get("DEFAULT_VARIANT", "variant0_neutral_baseline")
+# The live track record is produced by a GitHub Action and committed to the repo
+# (static/track_record_live.json). The server reads that committed file — at
+# runtime from raw GitHub (so it tracks hourly commits without a redeploy),
+# falling back to the bundled copy, then to the static backtest.
+_TRACK_RECORD_LIVE_URL = os.environ.get(
+    "TRACK_RECORD_LIVE_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/static/track_record_live.json",
+)
+_TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "600"))
 _state: Dict[str, Any] = {}
 _PUBLIC_MCP = None
 _PUBLIC_MCP_APP = None
@@ -572,7 +576,7 @@ def _put_conversation(user_id: str, conversation: Dict[str, Any]) -> Dict[str, A
         if stale_keys:
             client.delete_multi(stale_keys)
         message_entities = []
-        for message, message_key in zip(messages, message_keys):
+        for message, message_key in zip(messages, message_keys, strict=False):
             message_entity = _ds.Entity(key=message_key, exclude_from_indexes=("content", "data"))
             message_entity.update(message)
             message_entities.append(message_entity)
@@ -626,7 +630,7 @@ def _rag_add(user_id: str, namespace: str, items: List[Dict[str, Any]]) -> int:
     records = [
         {"namespace": namespace, "doc_id": doc_id, "text": text, "title": title,
          "url": url, "source": source, "embedding": emb, "created_at": now}
-        for (text, title, url, source, doc_id), emb in zip(chunks, vectors)
+        for (text, title, url, source, doc_id), emb in zip(chunks, vectors, strict=False)
     ]
     client = _get_datastore()
     if client is None:
@@ -765,6 +769,38 @@ def _cache_set(key: str, value: Any, ttl: int) -> None:
     _local_cache.move_to_end(key)
     while len(_local_cache) > _LOCAL_CACHE_MAX:
         _local_cache.popitem(last=False)
+
+
+def _read_live_track_record() -> Optional[Dict[str, Any]]:
+    """Return the committed live track-record aggregate, or None.
+
+    Tries (cached): raw GitHub copy → bundled file. Synchronous; call via
+    ``run_in_executor`` from async handlers. Fails open to None so the caller
+    falls back to the static backtest.
+    """
+    import requests
+
+    cache_key = _cache_key("track_record_live")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    payload: Optional[Dict[str, Any]] = None
+    try:
+        resp = requests.get(_TRACK_RECORD_LIVE_URL, timeout=6)
+        if resp.status_code == 200:
+            payload = resp.json()
+    except Exception:
+        logger.warning("live track record fetch failed; trying bundled copy", exc_info=True)
+    if payload is None:
+        bundled = _STATIC_DIR / "track_record_live.json"
+        if bundled.exists():
+            try:
+                payload = json.loads(bundled.read_text())
+            except Exception:
+                logger.warning("bundled live track record unreadable", exc_info=True)
+    if payload is not None:
+        _cache_set(cache_key, payload, _TRACK_RECORD_LIVE_TTL)
+    return payload
 
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
@@ -1247,14 +1283,7 @@ async def track_record_digest():
     post (a weekly recap). Built from the resolved-forecast aggregate so it
     never overstates."""
     from analyzing_llm_rationale import track_record_live as trl
-    client = _get_datastore()
-    aggregate = None
-    if client is not None:
-        try:
-            aggregate = await asyncio.get_running_loop().run_in_executor(
-                None, lambda: trl.read_aggregate(client))
-        except Exception:
-            logger.warning("digest: track record read failed", exc_info=True)
+    aggregate = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
     return PlainTextResponse(trl.format_digest(aggregate),
                              headers={"Cache-Control": "public, max-age=600"})
 
@@ -1312,16 +1341,9 @@ async def track_record():
     `gpt-oss-120b` against published Metaculus outcomes: accuracy, Brier score,
     calibration (ECE), a reliability curve, and a sample of resolved forecasts.
     """
-    client = _get_datastore()
-    if client is not None:
-        try:
-            from analyzing_llm_rationale import track_record_live as trl
-            live = await asyncio.get_running_loop().run_in_executor(
-                None, lambda: trl.read_aggregate(client))
-            if live and live.get("n_snapshots_resolved"):
-                return JSONResponse(live, headers={"Cache-Control": "public, max-age=600"})
-        except Exception:
-            logger.warning("live track record read failed; serving static", exc_info=True)
+    live = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
+    if live and live.get("n_snapshots_resolved"):
+        return JSONResponse(live, headers={"Cache-Control": "public, max-age=600"})
     path = _STATIC_DIR / "track_record.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Track record not generated yet.")
@@ -3428,13 +3450,10 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
     # Optional: self-calibration grounding from the live track record.
     grounding_note = None
     if req.ground_in_record:
-        client = _get_datastore()
-        if client is not None:
-            from analyzing_llm_rationale import track_record_live as trl
-            agg = await asyncio.get_running_loop().run_in_executor(None, lambda: trl.read_aggregate(client))
-            grounding_note = agent_capabilities.build_grounding_note(agg) or None
-            if grounding_note:
-                pipeline.append("ground_in_record")
+        agg = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
+        grounding_note = agent_capabilities.build_grounding_note(agg) or None
+        if grounding_note:
+            pipeline.append("ground_in_record")
 
     # Optional: ReAct tool-using loop instead of the fixed pipeline below.
     if req.tool_loop:
@@ -3530,7 +3549,6 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     fetch, evidence search, venue scan, track record), then answers. Falls back
     cleanly to a no-edge report if no forecast tool was used."""
     from analyzing_llm_rationale import market_data
-    from analyzing_llm_rationale import track_record_live as trl
 
     provider, temperature, max_tokens = _select_provider(
         req.openrouter_api_key, req.openrouter_model, req.provider_base_url)
@@ -3595,10 +3613,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                          f"{round((q.get('probability') or 0) * 100)}%" for q in qs) or "No markets found."
 
     async def _tool_track_record(args):
-        client = _get_datastore()
-        if client is None:
-            return "(track record unavailable)"
-        agg = await loop.run_in_executor(None, lambda: trl.read_aggregate(client))
+        agg = await loop.run_in_executor(None, _read_live_track_record)
         return agent_capabilities.build_grounding_note(agg) or "No resolved forecasts yet."
 
     tools = {"forecast": _tool_forecast, "get_market": _tool_get_market,
@@ -3756,79 +3771,8 @@ async def agent_scan(
     return response
 
 
-async def _track_record_forecast(quote: Dict[str, Any], evidence_top_k: int):
-    """Forecast one market for the live track record. Returns a feature dict
-    (model/market probability + evidence count) or None on failure."""
-    res = await predict(PredictRequest(
-        question=quote["question"],
-        attach_evidence=True,
-        evidence_top_k=evidence_top_k,
-        market_platform=quote.get("platform"),
-        market_url=quote.get("market_url"),
-        market_outcome=quote.get("outcome"),
-        market_probability=quote.get("probability"),
-    ))
-    analysis = res.market_analysis
-    if analysis is None or analysis.model_probability is None:
-        return None
-    return {
-        "model_probability": analysis.model_probability,
-        "market_probability": analysis.market_probability,
-        "evidence_count": len(res.evidence_sources or []),
-    }
-
-
-@app.post("/track-record/tick", tags=["System"], summary="Advance the live track record")
-async def track_record_tick(request: Request = None) -> Dict[str, Any]:
-    """Score newly-resolved forecasts, record forecasts on freshly-seen markets,
-    and recompute the public aggregate. Token-protected (compute-bearing); meant
-    to be called once daily by a scheduled job.
-    """
-    if not _TRACK_RECORD_TOKEN:
-        raise HTTPException(status_code=503, detail="Live track record is not enabled (set TRACK_RECORD_TOKEN).")
-    token = request.headers.get("x-track-token") if request is not None else None
-    if not token or not hmac.compare_digest(token, _TRACK_RECORD_TOKEN):
-        raise HTTPException(status_code=401, detail="Invalid or missing X-Track-Token.")
-    if request is not None:
-        _check_rate_limit(request)
-    if not _state:
-        raise HTTPException(status_code=503, detail="Server not initialised")
-    client = _get_datastore()
-    if client is None:
-        raise HTTPException(status_code=503, detail="Datastore unavailable; the live track record requires it.")
-
-    from analyzing_llm_rationale import market_data
-    from analyzing_llm_rationale import track_record_live as trl
-
-    loop = asyncio.get_running_loop()
-    per_venue = 3
-    if request is not None:
-        try:
-            per_venue = max(1, min(int(request.query_params.get("per_venue", 3)), 5))
-        except (TypeError, ValueError):
-            per_venue = 3
-
-    # 1) Score snapshots whose markets resolved since the last tick.
-    newly_resolved = await loop.run_in_executor(
-        None, lambda: trl.resolve_open_snapshots(client, market_data))
-    # 2) Cheap hourly price points (live price, no LLM) for tracked-open markets.
-    price_points = await loop.run_in_executor(
-        None, lambda: trl.record_price_points(client, market_data))
-    # 3) Daily forecast snapshot (per-day dedup keeps the LLM forecast to once/day
-    #    per market) for tracked-open + newly-discovered markets.
-    recorded = await trl.record_snapshots(
-        client, market_data, _track_record_forecast, per_venue=per_venue)
-    # 4) Recompute + persist the public aggregate (overall + by horizon).
-    agg = await loop.run_in_executor(None, lambda: trl.aggregate(
-        client,
-        model=_state.get("model_key", "gpt-oss-120b"),
-        variant=_TRACK_RECORD_VARIANT,
-        temperature=float(_state.get("temperature") or 0.0),
-    ))
-    return {
-        "snapshots_recorded": recorded,
-        "price_points_recorded": price_points,
-        "snapshots_resolved": newly_resolved,
-        "n_markets_resolved": agg.get("n_markets_resolved"),
-        "n_markets_open": agg.get("n_markets_open"),
-    }
+# The live track record is advanced by a GitHub Action (see
+# .github/workflows/track-record-tick.yml + scripts/track_record_tick.py), which
+# commits the public aggregate to static/track_record_live.json. The server only
+# *serves* that result (see _read_live_track_record + GET /track-record) — no
+# batch work runs on Cloud Run, which is what kept OOM/timeout-failing.

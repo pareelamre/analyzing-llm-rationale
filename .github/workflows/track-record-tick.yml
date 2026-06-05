@@ -1,32 +1,60 @@
 name: Track record tick
 
-# Advances the live, point-in-time track record hourly: scores forecasts whose
-# markets resolved, appends an hourly price point per open market (cheap, no
-# LLM), takes the daily LLM forecast (per-day dedup keeps it once/day per
-# market), and recomputes the public aggregate served at /track-record.
+# Advances the live, point-in-time track record and commits it back to the repo
+# (git-scraping). Each run scores forecasts whose markets resolved, appends a
+# cheap hourly price point per open market, takes the daily LLM forecast (one
+# /predict call per market — inference stays server-side), recomputes the public
+# aggregate, and commits:
+#   data/track_record_store.json   — full entity store (source of truth)
+#   static/track_record_live.json  — public aggregate served at GET /track-record
 #
-# Requires the repo secret TRACK_RECORD_TOKEN to match the server's
-# TRACK_RECORD_TOKEN env var. Until both are set, the endpoint returns 503 and
-# /track-record keeps serving the static backtest (safe no-op).
+# This used to POST to a Cloud Run endpoint that ran the whole loop in one
+# request and kept OOM/timeout-failing. Running it on the Actions runner (16 GB /
+# 6 h) removes that failure class; Cloud Run only serves the committed result.
 
 on:
   schedule:
     - cron: "17 * * * *"   # hourly at :17 (cheap price points; LLM forecast still daily per market)
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
+concurrency:
+  group: track-record-tick
+  cancel-in-progress: false
+
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install --quiet requests
+
       - name: Advance live track record
+        env:
+          FORESEA_BASE_URL: https://foresea.ink
+          PER_VENUE: "3"
+          PREDICT_API_KEY: ${{ secrets.PREDICT_API_KEY }}
+        run: python scripts/track_record_tick.py
+
+      - name: Commit updated track record
         run: |
-          if [ -z "${{ secrets.TRACK_RECORD_TOKEN }}" ]; then
-            echo "TRACK_RECORD_TOKEN secret not set — skipping (feature not enabled yet)."
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/track_record_store.json static/track_record_live.json
+          if git diff --cached --quiet; then
+            echo "No track-record changes to commit."
             exit 0
           fi
-          code=$(curl -sS -o /tmp/tick.json -w "%{http_code}" -X POST \
-            "https://foresea.ink/track-record/tick?per_venue=3" \
-            -H "X-Track-Token: ${{ secrets.TRACK_RECORD_TOKEN }}")
-          echo "HTTP $code"; cat /tmp/tick.json; echo
-          test "$code" = "200"
+          git commit -m "track record: hourly tick [skip ci]"
+          # Re-base on any concurrent change before pushing (single writer, but be safe).
+          git pull --rebase --autostash origin main || true
+          git push origin HEAD:main

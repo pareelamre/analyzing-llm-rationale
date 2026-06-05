@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import tempfile
 import types
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -14,6 +15,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale import track_record_live as trl  # noqa: E402
+from analyzing_llm_rationale.trackrec_store import Entity, FileStore  # noqa: E402
 
 
 class FakeEntity(dict):
@@ -219,6 +221,61 @@ class DigestTests(unittest.TestCase):
         self.assertIn("75%", out)
         self.assertIn("beating the market", out)
         self.assertIn("7-14d", out)
+
+
+class FileStoreTests(unittest.TestCase):
+    def test_round_trips_entities_datetimes_and_queries(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "store.json"
+            store = FileStore(path)
+            ts = datetime(2026, 6, 5, 12, 30, tzinfo=timezone.utc)
+            entity = Entity(store.key("Thing", "one"))
+            entity.update(status="open", ts=ts)
+            store.put(entity)
+
+            reloaded = FileStore(path)
+            got = reloaded.get(reloaded.key("Thing", "one"))
+            self.assertIsNotNone(got)
+            self.assertEqual(got.key.name, "one")
+            self.assertEqual(got["ts"], ts)
+
+            query = reloaded.query(kind="Thing")
+            query.add_filter("status", "=", "open")
+            self.assertEqual([e.key.name for e in query.fetch()], ["one"])
+
+    def test_aggregate_persists_for_readback(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "store.json"
+            store = FileStore(path)
+            snap = Entity(store.key(trl.SNAPSHOT_KIND, "Kalshi:TICK:2026-06-05"))
+            snap.update(
+                platform="Kalshi",
+                ident="TICK",
+                question="Will it happen?",
+                market_url="https://kalshi.com/markets/TICK",
+                snapshot_ts=datetime(2026, 6, 5, 12, tzinfo=timezone.utc),
+                snapshot_date="2026-06-05",
+                model_probability=0.7,
+                market_probability=0.4,
+                lead_time_days=10.0,
+                horizon="7-14d",
+                resolved=True,
+                outcome=1,
+                resolved_ts=datetime(2026, 6, 6, 12, tzinfo=timezone.utc),
+                model_brier=trl.brier(0.7, 1),
+                market_brier=trl.brier(0.4, 1),
+                model_correct=True,
+            )
+            store.put(snap)
+
+            agg = trl.aggregate(store, model="m", variant="v", temperature=0.0)
+            self.assertEqual(agg["n_snapshots_resolved"], 1)
+
+            reloaded = FileStore(path)
+            readback = trl.read_aggregate(reloaded)
+            self.assertIsNotNone(readback)
+            self.assertEqual(readback["overall"]["accuracy"], 1.0)
+            self.assertEqual(readback["by_horizon"][0]["horizon"], "7-14d")
 
 
 class CalibrationTests(unittest.TestCase):

@@ -179,6 +179,20 @@ The server is built to scale horizontally on Cloud Run:
 | `SEARXNG_URL` / `TAVILY_API_KEY` / `SERPER_API_KEY` / `BRAVE_API_KEY` | unset | Enable web search as an evidence source. A self-hosted **SearXNG** is preferred when set, then Tavily, Serper, Brave. Tavily/Serper have free no-card tiers. When none is set, evidence comes from GDELT, Google News, and RSS. |
 | `NEWSAPI_KEY` | unset | Enables NewsAPI as an evidence source. |
 
+### Live track record
+
+`GET /track-record` serves the public forecast track record. The heavy tick loop
+does not run on Cloud Run: `.github/workflows/track-record-tick.yml` runs hourly
+on GitHub Actions, updates `data/track_record_store.json` as the source-of-truth
+entity store, writes the public aggregate to `static/track_record_live.json`, and
+commits both files back to `main`. At runtime, Cloud Run fetches the committed
+aggregate from raw GitHub, falling back to the bundled file and then the static
+backtest in `static/track_record.json`.
+
+The Action calls `/predict` once per newly snapshotted market. If `/predict` is
+protected, set the GitHub secret `PREDICT_API_KEY`; no `TRACK_RECORD_TOKEN` or
+server-side `/track-record/tick` endpoint is required.
+
 Raise the Cloud Run throughput ceiling (no idle cost while `min-instances=0`):
 
 ```bash
@@ -208,6 +222,8 @@ evidence articles. It is built for resolvable forecasts, not general Q&A.
 ### Endpoints
 
 - `GET /health`: service health check.
+- `GET /track-record`: public live track record, falling back to the static backtest.
+- `GET /track-record/digest`: shareable markdown summary of the live track record.
 - `POST /predict`: public prediction endpoint.
 - `GET /markets/polymarket`: fetch a live Polymarket quote (see below).
 - `GET /markets/kalshi`: fetch a live Kalshi quote (see below).
@@ -290,8 +306,8 @@ Use `https://foresea.ink/mcp/` directly in MCP clients that support remote
 Streamable HTTP servers. For clients that still require a local stdio command,
 run the wrapper locally.
 
-The official MCP Python SDK requires Python 3.10+. If your shell is still on the
-system Python 3.9, create a repo-local Python 3.11 MCP environment with `uv`:
+The repo targets Python 3.10+ because the official MCP Python SDK requires it.
+To create a repo-local Python 3.11 MCP environment with `uv`:
 
 ```bash
 uv venv --python 3.11 .venv-mcp
@@ -304,8 +320,8 @@ analyze-llm-rationale mcp-server
 ```
 
 That lightweight install avoids pulling the full inference dependency stack
-(notably Torch/CUDA) when all you need is the MCP wrapper. In a full Python
-3.10+ development environment, `pip install -e ".[mcp]"` is also valid.
+(notably Torch/CUDA) when all you need is the MCP wrapper. In a full development
+environment, `pip install -e ".[mcp]"` is also valid.
 
 MCP client config example:
 

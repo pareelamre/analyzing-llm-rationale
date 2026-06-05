@@ -15,10 +15,10 @@ export SCADS_AI_API_KEY=<key>       # SCADS AI — used by all hosted models
 export NEWSAPI_KEY=<key>            # Optional — improves news fetch quality
 ```
 
-If `pip install -e .` fails (editable install issue with system Python), sync source files manually:
+Use Python 3.10+ for local development. If `pip install -e .` fails (editable install issue with system Python), sync source files manually:
 ```bash
 cp src/analyzing_llm_rationale/*.py \
-   /home/paam844f/.local/lib/python3.9/site-packages/analyzing_llm_rationale/
+   /home/paam844f/.local/lib/python3.10/site-packages/analyzing_llm_rationale/
 ```
 
 Or prefix commands with `PYTHONPATH=src`.

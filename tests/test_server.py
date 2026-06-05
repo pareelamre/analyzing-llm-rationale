@@ -543,17 +543,27 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["info"]["title"], "Foresea Intelligence API")
 
-    def test_track_record_tick_disabled_without_token(self):
-        import analyzing_llm_rationale.server as srv
-        with mock.patch.object(srv, "_TRACK_RECORD_TOKEN", None):
-            r = self.client.post("/track-record/tick")
-        self.assertEqual(r.status_code, 503)
+    def test_track_record_tick_endpoint_removed(self):
+        # The compute-bearing tick now runs in a GitHub Action, not on Cloud Run.
+        r = self.client.post("/track-record/tick")
+        self.assertIn(r.status_code, (404, 405))
 
-    def test_track_record_tick_rejects_bad_token(self):
+    def test_track_record_serves_backtest_when_no_resolved_live(self):
         import analyzing_llm_rationale.server as srv
-        with mock.patch.object(srv, "_TRACK_RECORD_TOKEN", "secret-token"):
-            r = self.client.post("/track-record/tick", headers={"X-Track-Token": "wrong"})
-        self.assertEqual(r.status_code, 401)
+        # No resolved live forecasts → fall back to the static backtest.
+        with mock.patch.object(srv, "_read_live_track_record",
+                               return_value={"n_snapshots_resolved": 0}):
+            r = self.client.get("/track-record")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("methodology", r.json())
+
+    def test_track_record_serves_live_when_resolved(self):
+        import analyzing_llm_rationale.server as srv
+        live = {"source": "live", "n_snapshots_resolved": 5, "overall": {"accuracy": 0.6}}
+        with mock.patch.object(srv, "_read_live_track_record", return_value=live):
+            r = self.client.get("/track-record")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["source"], "live")
 
     def test_news_articles_tolerates_invalid_fields(self):
         from analyzing_llm_rationale.server import _news_articles

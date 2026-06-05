@@ -804,8 +804,8 @@ class NewsPipeline:
             except Exception:
                 rr = None
             if rr and len(rr) == len(head):
-                rerank_scores = {i: float(s) for i, s in zip(head, rr)}
-                head = [i for _, i in sorted(zip(rr, head), key=lambda x: x[0], reverse=True)]
+                rerank_scores = {i: float(s) for i, s in zip(head, rr, strict=False)}
+                head = [i for _, i in sorted(zip(rr, head, strict=False), key=lambda x: x[0], reverse=True)]
                 order = head + order[rerank_top_k:]
 
         for i, article in enumerate(articles):

@@ -103,7 +103,7 @@ def ece(examples: list[Example], bins: int = 10) -> float:
         bin_accuracy[idx] += ex.correct
 
     total_error = 0.0
-    for count, conf_sum, acc_sum in zip(bin_counts, bin_confidence, bin_accuracy):
+    for count, conf_sum, acc_sum in zip(bin_counts, bin_confidence, bin_accuracy, strict=False):
         if count == 0:
             continue
         avg_conf = conf_sum / count

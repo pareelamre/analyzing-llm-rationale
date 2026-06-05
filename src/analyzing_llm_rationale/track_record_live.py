@@ -12,11 +12,13 @@ long horizons is the credible signal; near-resolution snapshots naturally
 converge to ~0 skill (both the model and the market are nearly certain) — that's
 expected and shown honestly rather than passed off as edge.
 
-Storage is Cloud Datastore (persistent + backed up). Functions take their
-dependencies (datastore client, ``market_data`` module, an async forecast
+Storage is a file-backed, Datastore-compatible store (``trackrec_store``): the
+daily tick runs in a GitHub Action and commits the JSON store + public aggregate
+back to the repo (git-scraping), so no batch work runs on Cloud Run. Functions
+take their dependencies (store client, ``market_data`` module, an async forecast
 callable) as arguments so they can be unit-tested with fakes.
 
-Datastore kinds:
+Store kinds:
 - ``ForecastSnapshot`` keyed ``"{platform}:{ident}:{date}"`` — one snapshot per
   market per UTC day.
 - ``TrackRecordLive`` singleton ``"global"`` — the precomputed public aggregate.
@@ -25,6 +27,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+
+from analyzing_llm_rationale import trackrec_store as _ds
 
 SNAPSHOT_KIND = "ForecastSnapshot"
 PRICE_KIND = "MarketPricePoint"
@@ -141,7 +145,6 @@ async def record_snapshots(
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
     newly-discovered markets, capturing the live price + a fresh forecast."""
-    from google.cloud import datastore as _ds
 
     today = _today()
 
@@ -270,7 +273,6 @@ def record_price_points(client, market_data) -> int:
     movement up to the last moment without paying inference cost every hour. One
     point per market per UTC hour.
     """
-    from google.cloud import datastore as _ds
 
     now = _now()
     hour_key = now.strftime("%Y-%m-%dT%H")
@@ -338,7 +340,7 @@ def _pav(ys: List[float], ws: List[float]) -> List[float]:
     vals: List[float] = []
     wts: List[float] = []
     cnts: List[int] = []
-    for y, w in zip(ys, ws):
+    for y, w in zip(ys, ws, strict=False):
         v, ww, c = float(y), float(w), 1
         while vals and vals[-1] > v:
             pv, pw, pc = vals.pop(), wts.pop(), cnts.pop()
@@ -349,7 +351,7 @@ def _pav(ys: List[float], ws: List[float]) -> List[float]:
         wts.append(ww)
         cnts.append(c)
     out: List[float] = []
-    for v, c in zip(vals, cnts):
+    for v, c in zip(vals, cnts, strict=False):
         out.extend([v] * c)
     return out
 
@@ -437,7 +439,7 @@ def _calibration_report(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
         "raw_brier": round(raw_brier, 4),
         "calibrated_brier_cv": round(cal_brier_cv, 4) if cal_brier_cv is not None else None,
         "raw_skill_vs_market": round(market_brier - raw_brier, 4),
-        "breakpoints": [[round(x, 4), round(y, 4)] for x, y in zip(xs, ys)],
+        "breakpoints": [[round(x, 4), round(y, 4)] for x, y in zip(xs, ys, strict=False)],
     }
     if cal_brier_cv is not None:
         report["calibrated_skill_vs_market"] = round(market_brier - cal_brier_cv, 4)
@@ -447,7 +449,6 @@ def _calibration_report(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
 def aggregate(client, *, model: str, variant: str, temperature: float,
               trajectory_samples: int = 8) -> Dict[str, Any]:
     """Recompute the public aggregate (overall + by-horizon) and persist it."""
-    from google.cloud import datastore as _ds
 
     resolved: List[Dict[str, Any]] = []
     open_idents: set = set()
