@@ -4,6 +4,7 @@ import argparse
 import base64
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -258,6 +259,53 @@ def build_parser() -> argparse.ArgumentParser:
         default=int(os.environ.get("FORESEA_MCP_PORT", "8000")),
         help="Port for streamable-http or sse transports.",
     )
+
+    autoresearch_parser = subparsers.add_parser(
+        "autoresearch",
+        help="Run one Foresea autoresearch candidate prompt experiment.",
+    )
+    autoresearch_parser.add_argument("--provider", choices=REMOTE_PROVIDER_CHOICES, default=None)
+    autoresearch_parser.add_argument("--model", default="gpt-oss-120b")
+    autoresearch_parser.add_argument("--models-config", type=Path, default=repo_root() / "configs" / "models.yaml")
+    autoresearch_parser.add_argument("--input-path", type=Path, default=defaults["input_path"])
+    autoresearch_parser.add_argument("--system-prompt-path", type=Path, default=defaults["system_prompt_path"])
+    autoresearch_parser.add_argument(
+        "--candidate-prompt-path",
+        type=Path,
+        default=repo_root() / "autoresearch" / "candidate_prompt.txt",
+    )
+    autoresearch_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=repo_root() / "analysis" / "autoresearch",
+    )
+    autoresearch_parser.add_argument("--baseline-results-path", type=Path, default=None)
+    autoresearch_parser.add_argument("--promote-to", type=Path, default=None)
+    autoresearch_parser.add_argument(
+        "--metric",
+        choices=["brier_score", "accuracy", "ece"],
+        default="brier_score",
+    )
+    autoresearch_parser.add_argument("--min-delta", type=float, default=0.0)
+    autoresearch_parser.add_argument("--max-records", type=int, default=int(os.environ.get("AUTORESEARCH_MAX_RECORDS", "50")))
+    autoresearch_parser.add_argument("--temperature", type=float, default=0.0)
+    autoresearch_parser.add_argument("--max-tokens", type=int, default=int(os.environ.get("MAX_TOKENS", "1024")))
+    autoresearch_parser.add_argument("--max-attempts", type=int, default=int(os.environ.get("RETRY_MAX", "2")))
+    autoresearch_parser.add_argument(
+        "--retry-base-sleep-s",
+        type=float,
+        default=float(os.environ.get("RETRY_BASE_SLEEP_S", "1.5")),
+    )
+    autoresearch_parser.add_argument("--full-article-text", action="store_true")
+    autoresearch_parser.add_argument("--bins", type=int, default=10)
+    autoresearch_parser.add_argument("--model-label", default=None)
+    autoresearch_parser.add_argument("--local-model-name", default=None)
+    autoresearch_parser.add_argument("--router-model-name", default=None)
+    autoresearch_parser.add_argument("--api-base-url", default=None)
+    autoresearch_parser.add_argument("--api-key-env-var", default=None)
+    autoresearch_parser.add_argument("--api-key-file", default=None)
+    autoresearch_parser.add_argument("--device", default=os.environ.get("MODEL_DEVICE", "cuda"))
+    autoresearch_parser.add_argument("--request-timeout-s", type=float, default=float(os.environ.get("REQUEST_TIMEOUT_S", "120")))
 
     return parser
 
@@ -629,7 +677,44 @@ def mcp_server_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def autoresearch_command(args: argparse.Namespace) -> int:
+    from analyzing_llm_rationale.autoresearch import AutoresearchConfig, run_autoresearch_once
+
+    args = resolve_model_args(args)
+    provider = build_provider(args)
+    report = run_autoresearch_once(
+        AutoresearchConfig(
+            input_path=args.input_path,
+            system_prompt_path=args.system_prompt_path,
+            candidate_prompt_path=args.candidate_prompt_path,
+            output_dir=args.output_dir,
+            baseline_results_path=args.baseline_results_path,
+            promote_to=args.promote_to,
+            metric=args.metric,
+            max_records=args.max_records,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            max_attempts=args.max_attempts,
+            retry_base_sleep_s=args.retry_base_sleep_s,
+            drop_article_text=not args.full_article_text,
+            bins=args.bins,
+            min_delta=args.min_delta,
+            model_key=args.model,
+            model_label=args.model_label,
+            provider_name=args.provider,
+            model_identifier=args.local_model_name if args.provider == "local-qwen" else args.router_model_name,
+        ),
+        provider,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    if sys.version_info < (3, 10):
+        print("analyzing-llm-rationale requires Python 3.10 or newer.", file=sys.stderr)
+        return 1
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -649,5 +734,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return fetch_and_rank_command(args)
     if args.command == "mcp-server":
         return mcp_server_command(args)
+    if args.command == "autoresearch":
+        return autoresearch_command(args)
     parser.error(f"Unknown command: {args.command}")
     return 2

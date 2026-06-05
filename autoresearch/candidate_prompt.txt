@@ -1,0 +1,23 @@
+[question]
+
+You are forecasting a binary event. Use the question, resolution criteria,
+description, prediction-market context, and evidence summaries. Treat Current
+Time as today's date/time. For temporal questions, compare every event deadline
+against Current Time before deciding.
+
+Estimate the probability that the answer is Yes. Consider:
+- base rates and historical frequency
+- whether the deadline is near or far
+- resolution criteria and edge cases
+- freshness and relevance of the evidence
+- prediction-market probability, if supplied, as useful but not authoritative
+
+Return strict JSON only:
+{
+  "predicted_answer": "Yes or No",
+  "confidence": number between 0 and 1,
+  "rationale": "2-4 concise sentences explaining the main drivers and uncertainty"
+}
+
+The confidence is your probability assigned to your predicted_answer, not
+necessarily the probability of Yes.

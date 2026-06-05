@@ -723,6 +723,42 @@ Useful options:
 - `verify-results --variant ...`: verify completeness, duplicates, malformed rows, and missing IDs.
 - `validate-dataset`: validate the dataset schema before a run.
 
+## Foresea Autoresearch
+
+Foresea has a Karpathy-style autoresearch harness for prompt experiments: edit
+one candidate prompt, run a fixed benchmark slice, score one metric, and append
+an auditable experiment log. The research surface is
+`autoresearch/candidate_prompt.txt`; agent instructions live in
+`autoresearch/program.md`. The default `--model gpt-oss-120b` uses the
+SCADS-hosted OpenAI-compatible endpoint from `configs/models.yaml`
+(`SCADS_AI_API_KEY` or `SCADS_AI_API_KEY.txt`).
+
+Run one candidate experiment:
+
+```bash
+PYTHONPATH=src python -m analyzing_llm_rationale autoresearch \
+  --model gpt-oss-120b \
+  --candidate-prompt-path autoresearch/candidate_prompt.txt \
+  --max-records 50 \
+  --metric brier_score
+```
+
+Compare against a baseline and promote only if the candidate improves:
+
+```bash
+PYTHONPATH=src python -m analyzing_llm_rationale autoresearch \
+  --model gpt-oss-120b \
+  --candidate-prompt-path autoresearch/candidate_prompt.txt \
+  --baseline-results-path results/GPT-OSS-120B/temperature_00/results_variant0_neutral_baseline.json \
+  --promote-to prompts/variant0_neutral_baseline.txt \
+  --max-records 50 \
+  --metric brier_score \
+  --min-delta 0.001
+```
+
+Each run writes `analysis/autoresearch/runs/<run_id>/score.json` and appends a
+machine-readable row to `analysis/autoresearch/experiments.jsonl`.
+
 ## Reproducing Core Outputs
 
 Validate an existing result file:
