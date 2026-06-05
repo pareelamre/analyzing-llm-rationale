@@ -84,12 +84,15 @@ class PipelineTests(unittest.TestCase):
         }
 
     def test_build_user_prompt_can_drop_article_text(self):
+        record = self.sample_record()
+        record["current_time"] = "2026-06-05T12:00:00Z"
         prompt = build_user_prompt(
-            self.sample_record(),
+            record,
             user_prompt_template="[question]\nReturn JSON.",
             article_detail="summary",
         )
         self.assertIn("Question: Will event X happen?", prompt)
+        self.assertIn("Current Time: 2026-06-05T12:00:00Z", prompt)
         self.assertIn("Evidence Summaries:", prompt)
         self.assertIn('"summary_llm": "LLM summary"', prompt)
         self.assertNotIn("Full article text", prompt)

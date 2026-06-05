@@ -8,6 +8,7 @@ import re
 import time
 import traceback
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
@@ -51,6 +52,11 @@ SUMMARY_ARTICLE_FIELDS = (
     "frs",
     "credibility",
 )
+
+
+def current_utc_timestamp() -> str:
+    """Timestamp injected into prompts so temporal questions have a clear anchor."""
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 DIGIT_WORDS = {
     "zero": 0,
@@ -161,6 +167,7 @@ def build_user_prompt(
     created_time = record.get("created_time")
     publish_time = record.get("publish_time")
     resolve_time = record.get("resolve_time")
+    current_time = record.get("current_time") or record.get("current_timestamp") or current_utc_timestamp()
     days_open = record.get("days_open")
     market_platform = str(record.get("market_platform") or "").strip()
     market_url = str(record.get("market_url") or "").strip()
@@ -169,6 +176,7 @@ def build_user_prompt(
 
     prompt_suffix = user_prompt_template.replace("[question]", "").strip()
     parts = [f"Question: {question}"]
+    parts.append(f"Current Time: {current_time}")
     if description:
         parts.append(f"Description: {description}")
     if resolution:

@@ -182,6 +182,7 @@ class ServerTests(unittest.TestCase):
         self.assertAlmostEqual(analysis["edge"], 0.28)
         self.assertEqual(analysis["stance"], "model_above_market")
         prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Current Time:", prompt)
         self.assertIn("Prediction Market Context:", prompt)
         self.assertIn("Market-Implied Probability: 0.42", prompt)
 

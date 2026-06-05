@@ -93,7 +93,8 @@ _CHAT_SYSTEM_PROMPT = (
     "Use light markdown — short paragraphs, **bold** for key points, and bullet or "
     "numbered lists when they help. Ground your answer in the provided evidence "
     "summaries and any prediction-market context when relevant, and be honest about "
-    "uncertainty. If the question implies a probability, you may express it in prose "
+    "uncertainty. Treat the provided Current Time as today's date/time for temporal "
+    "phrases and deadlines. If the question implies a probability, you may express it in prose "
     "(e.g., \"around 60%\") and, when a market price is given, briefly note whether "
     "you lean above or below it. Do NOT output JSON, key/value objects, or a rigid "
     "forecast template — just talk to the user."
@@ -3111,10 +3112,12 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         and not rag_user_id
     )
     predict_cache_key = None
+    prompt_date = datetime.now(timezone.utc).date().isoformat()
     if cacheable:
         predict_cache_key = _cache_key(
             "predict",
             {
+                "prompt_date": prompt_date,
                 "question": req.question,
                 "description": req.description,
                 "variant": req.variant,
