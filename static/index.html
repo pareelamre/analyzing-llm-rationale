@@ -1389,6 +1389,11 @@
       transition: background var(--dur-med), color var(--dur-med);
     }
     .auth-close:hover { background: rgba(15,15,16,.06); color: var(--ink); }
+    .feedback-star {
+      font-size: 24px; cursor: pointer; color: var(--border);
+      transition: color 0.15s; user-select: none;
+    }
+    .feedback-star.active, .feedback-star:hover { color: #f59e0b; }
     .auth-brand {
       display: inline-flex; align-items: center; gap: 9px;
       margin-bottom: 16px;
@@ -1535,6 +1540,7 @@
         <span id="landingUserName" class="user-name"></span>
         <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
       </div>
+      <button type="button" class="topbar-link nav-collapse" onclick="openFeedback()" title="Send feedback">Feedback</button>
       <button type="button" class="hero-action primary py-2" onclick="launchApp()">Open desk</button>
     </div>
   </nav>
@@ -1923,12 +1929,37 @@
           <button class="attach-add-btn" onclick="addUrlAttachment()">Add</button>
         </div>
       </div>
-      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">Decision support only. Verify important markets.</p>
+      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">Decision support only. Verify important markets. · <button type="button" class="underline hover:text-gray-300 bg-transparent border-0 p-0 cursor-pointer" onclick="openFeedback()">Feedback</button></p>
     </div>
   </div>
 
 </main>
 
+</div>
+
+<!-- ── Feedback modal ── -->
+<div id="feedbackOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle" aria-hidden="true" onclick="if(event.target===this)closeFeedback()">
+  <div class="auth-card glass" style="position:relative;max-width:420px">
+    <button type="button" class="auth-close" onclick="closeFeedback()" aria-label="Close">✕</button>
+    <span class="auth-brand">
+      <span class="logo-dot"></span>
+      <span class="brand text-lg">Feedback</span>
+    </span>
+    <p class="auth-sub" style="margin-top:6px">What's working? What's broken? We read everything.</p>
+    <div style="margin-top:14px">
+      <div id="feedbackStars" style="display:flex;gap:8px;margin-bottom:14px" role="group" aria-label="Rating">
+        <span class="feedback-star" data-v="1" onclick="setFeedbackRating(1)" title="1 star">★</span>
+        <span class="feedback-star" data-v="2" onclick="setFeedbackRating(2)" title="2 stars">★</span>
+        <span class="feedback-star" data-v="3" onclick="setFeedbackRating(3)" title="3 stars">★</span>
+        <span class="feedback-star" data-v="4" onclick="setFeedbackRating(4)" title="4 stars">★</span>
+        <span class="feedback-star" data-v="5" onclick="setFeedbackRating(5)" title="5 stars">★</span>
+      </div>
+      <textarea id="feedbackMsg" rows="4" placeholder="Your feedback…" style="width:100%;box-sizing:border-box;background:var(--surface-alt,#1a1a1f);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;resize:vertical;font-family:inherit"></textarea>
+      <input id="feedbackEmail" type="email" placeholder="Email (optional — for a reply)" style="width:100%;box-sizing:border-box;background:var(--surface-alt,#1a1a1f);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-size:14px;margin-top:8px;font-family:inherit" />
+      <button type="button" class="hero-action primary" style="width:100%;margin-top:12px;justify-content:center" onclick="submitFeedback()">Send</button>
+      <p id="feedbackStatus" style="text-align:center;font-size:13px;margin-top:8px;min-height:18px"></p>
+    </div>
+  </div>
 </div>
 
 <!-- ── Auth modal ── -->
@@ -4430,6 +4461,62 @@ function closeAuthModal() {
   overlay.classList.remove('show');
   overlay.setAttribute('aria-hidden', 'true');
   _authBusy = false;
+}
+
+// ── Feedback modal ──────────────────────────────────────────────────────────
+let _feedbackRating = 0;
+
+function openFeedback() {
+  _feedbackRating = 0;
+  document.querySelectorAll('.feedback-star').forEach(s => s.classList.remove('active'));
+  document.getElementById('feedbackMsg').value = '';
+  document.getElementById('feedbackEmail').value = '';
+  document.getElementById('feedbackStatus').textContent = '';
+  const overlay = document.getElementById('feedbackOverlay');
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('show');
+  setTimeout(() => document.getElementById('feedbackMsg').focus(), 80);
+}
+
+function closeFeedback() {
+  const overlay = document.getElementById('feedbackOverlay');
+  overlay.classList.remove('show');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function setFeedbackRating(v) {
+  _feedbackRating = v;
+  document.querySelectorAll('.feedback-star').forEach(s => {
+    s.classList.toggle('active', parseInt(s.dataset.v) <= v);
+  });
+}
+
+async function submitFeedback() {
+  const msg = document.getElementById('feedbackMsg').value.trim();
+  const email = document.getElementById('feedbackEmail').value.trim();
+  const status = document.getElementById('feedbackStatus');
+  if (!msg) { status.textContent = 'Please write something first.'; return; }
+  status.textContent = 'Sending…';
+  try {
+    const r = await fetch('/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: msg,
+        rating: _feedbackRating || null,
+        email: email || null,
+        page: location.pathname,
+      }),
+    });
+    if (r.ok) {
+      status.textContent = 'Thank you — feedback received!';
+      setTimeout(closeFeedback, 1600);
+    } else {
+      status.textContent = 'Something went wrong. Try again?';
+    }
+  } catch {
+    status.textContent = 'Network error. Try again?';
+  }
 }
 
 function _showAuthError(msg) {

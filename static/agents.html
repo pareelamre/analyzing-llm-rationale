@@ -137,6 +137,25 @@
       <code>foresea_scan_markets</code>, <code>foresea_radar</code>, and <code>foresea_track_record</code>.
     </p>
 
+    <h3 style="margin-top:1.4em">Recommended system prompt</h3>
+    <p class="small">
+      Paste this into your Claude Desktop config's <code>system_prompt</code> field so Claude
+      reaches for Foresea tools proactively — without it the tools are available but Claude
+      may not think to call them.
+    </p>
+    <pre><code>You have access to Foresea (foresea.ink), a calibrated AI forecasting engine.
+Use foresea_forecast whenever the user asks about probability, likelihood, chances,
+or whether something will happen. Use foresea_analyze_market when the user mentions
+a specific Polymarket or Kalshi market. Use foresea_scan_markets when the user wants
+to find trading opportunities. Use foresea_edge_board for the current ranked edge
+list. Use foresea_track_record to verify Foresea's accuracy before acting on a
+forecast. Always call the tool rather than guessing — Foresea has live evidence and
+a calibrated track record.</code></pre>
+    <p class="small">
+      You can also fetch this snippet programmatically via the MCP server:<br>
+      <code>prompts/get</code> → <code>foresea_system_prompt</code>
+    </p>
+
     <h2>HTTP Endpoints</h2>
     <div class="endpoint">
       <h3>Stream a conversational forecast</h3>

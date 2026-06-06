@@ -370,13 +370,17 @@ def create_mcp_server(
         market_outcome: Optional[str] = None,
         market_probability: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Estimate the probability of any resolvable future question, with a written
-        rationale and supporting evidence — and, if you pass a market price or URL,
-        the edge vs the market. Use this whenever you need a calibrated probability for
-        something that will resolve yes/no (also handles multiple-choice / numeric / date).
+        """Call this whenever the user asks about probability, likelihood, or whether
+        something will happen. Good triggers: "Will X happen?", "What are the chances
+        of Y?", "How likely is Z?", "What's the probability that…", "Do you think X
+        will…", "Should I bet on…". Returns a calibrated YES/NO probability (or
+        numeric/date range) with written rationale and supporting news evidence.
+        If you also have a market price (market_probability) or URL (market_url), pass
+        it to get the model-vs-market edge — how mispriced the market is.
         Example: question="Will the Fed cut rates by March 2026?", market_probability=0.4
         → {predicted_answer:"No", confidence:0.62, rationale, evidence_sources,
-        market_analysis:{model_probability, edge:+0.14, stance:"model_above_market"}}."""
+        market_analysis:{model_probability:0.54, edge:+0.14, stance:"model_above_market"}}
+        Handles: binary YES/NO, multiple-choice, numeric ranges, and date questions."""
 
         payload = build_predict_payload(
             question=question,
@@ -411,11 +415,14 @@ def create_mcp_server(
         tool_loop: bool = False,
         max_tool_steps: int = 5,
     ) -> Dict[str, Any]:
-        """End-to-end analysis of one live prediction market. Give a Polymarket slug,
-        Kalshi ticker, market URL, or a question — Foresea fetches the current price,
-        gathers evidence, forecasts, computes the model-vs-market edge, and returns a
-        recommendation. Use when you have a specific market to evaluate (vs scan_markets
-        to find them). Example: platform="polymarket", slug="fed-rate-cut-march-2026"
+        """Call this when the user mentions a specific prediction market by URL, slug,
+        or ticker — or asks whether a particular market is over/underpriced. Good
+        triggers: "Is this Polymarket fair?", "What's the edge on kalshi:XXXXX?",
+        "Should I buy/sell this market?", user pastes a Polymarket or Kalshi URL.
+        Fetches the live price, gathers evidence, forecasts, computes model-vs-market
+        edge, and returns a recommendation. Use foresea_forecast instead when there is
+        no specific live market — just a general probability question.
+        Example: platform="polymarket", slug="fed-rate-cut-march-2026"
         → {model_probability, market_probability, edge, stance, recommendation, thesis}."""
 
         payload = build_agent_analyze_payload(
@@ -443,10 +450,14 @@ def create_mcp_server(
         evidence_top_k: int = 3,
         query: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Discover live Polymarket/Kalshi markets Foresea thinks are mispriced: returns
-        markets ranked by disagreement (|model − market|), each with the model
-        probability, market price, and edge. Use to find forecasting/trading
-        opportunities. Example: platform="kalshi", min_edge=0.1
+        """Call this when the user wants to find mispriced or interesting markets, not
+        evaluate a specific one. Good triggers: "What should I bet on?", "Find me
+        trading opportunities", "Which markets are mispriced right now?", "What's
+        Foresea's best edge today?", "Scan Polymarket for opportunities".
+        Returns markets ranked by model-vs-market disagreement, each with model
+        probability, market price, and edge. For a specific market, use
+        foresea_analyze_market instead.
+        Example: platform="kalshi", min_edge=0.1
         → [{question, market_probability, model_probability, edge, market_url}]."""
 
         return await _call_tool_async(
@@ -460,20 +471,23 @@ def create_mcp_server(
 
     @mcp.tool()
     async def foresea_track_record() -> Dict[str, Any]:
-        """Foresea's public resolved-forecast track record: accuracy, Brier score,
-        calibration (ECE), and skill-vs-market by horizon — the proof of how well its
-        forecasts have actually done. Call this to decide how much to trust a Foresea
-        forecast before acting on it."""
+        """Call this when the user asks how reliable or accurate Foresea is, or wants
+        to know whether to trust a forecast. Good triggers: "How good is Foresea?",
+        "What's the track record?", "Has it been right before?", "Is it calibrated?",
+        "What's the Brier score?". Returns accuracy, Brier score, calibration (ECE),
+        and skill-vs-market broken down by time horizon."""
 
         return await _call_tool_async(client.atrack_record)
 
     @mcp.tool()
     async def foresea_edge_board() -> Dict[str, Any]:
-        """Live model-vs-market edge board: open markets ranked by disagreement, each
-        with the explicit trade (Buy YES/NO @ price, implied odds) and whether
-        disagreements that size have historically paid (`skill_significant`). Includes
-        by-edge calibration, market lead/lag, and a multi-model paper-trading
-        comparison. Use to find — and sanity-check — the strongest current edges."""
+        """Call this when the user wants the current top trading opportunities with
+        explicit trade directions and historical backing. Good triggers: "What are
+        the best bets right now?", "Show me the edge board", "Which model is winning
+        the paper-trading competition?", "What's the strongest edge today?",
+        "Are these edges statistically significant?". Returns open markets ranked by
+        model-vs-market disagreement, each with Buy YES/NO direction, implied odds,
+        whether the edge is historically significant, and a multi-model comparison."""
 
         return await _call_tool_async(client.aedge_board)
 
@@ -505,6 +519,24 @@ def create_mcp_server(
             "Use the foresea_forecast tool to forecast this resolvable question. "
             "Report the predicted answer, probability or range, rationale, evidence, "
             f"and any model-vs-market edge.\n\nQuestion: {question}"
+        )
+
+    @mcp.prompt()
+    def foresea_system_prompt() -> str:
+        """Returns the recommended system prompt snippet for Claude Desktop users.
+        Paste this into your claude_desktop_config.json system prompt to make Claude
+        proactively use Foresea tools for forecasting questions."""
+
+        return (
+            "You have access to Foresea (foresea.ink), a calibrated AI forecasting "
+            "engine. Use foresea_forecast whenever the user asks about probability, "
+            "likelihood, chances, or whether something will happen. Use "
+            "foresea_analyze_market when the user mentions a specific Polymarket or "
+            "Kalshi market. Use foresea_scan_markets when the user wants to find "
+            "trading opportunities. Use foresea_edge_board for the current ranked "
+            "edge list. Use foresea_track_record to verify Foresea's accuracy before "
+            "acting on a forecast. Always call the tool rather than guessing — "
+            "Foresea has live evidence and a calibrated track record."
         )
 
     return mcp

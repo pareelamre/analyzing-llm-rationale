@@ -2451,6 +2451,15 @@ class VertexPredictResponse(BaseModel):
     )
 
 
+class FeedbackRequest(BaseModel):
+    """User-submitted feedback."""
+
+    message: str = Field(..., min_length=1, max_length=4000)
+    rating: Optional[int] = Field(None, ge=1, le=5)
+    email: Optional[str] = Field(None, max_length=200)
+    page: Optional[str] = Field(None, max_length=500)
+
+
 class VisitRequest(BaseModel):
     """Anonymous browser visit event."""
 
@@ -3318,6 +3327,26 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
             for day, visits, unique_count in rows
         ],
     )
+
+
+@app.post("/feedback", tags=["System"], summary="Submit user feedback")
+async def submit_feedback(fb: FeedbackRequest, request: Request) -> Dict[str, str]:
+    """Accept feedback from the UI and forward it by email."""
+    stars = f"{fb.rating}/5" if fb.rating else "unrated"
+    reply_to = fb.email or "anonymous"
+    page = fb.page or "/"
+    ip = request.client.host if request.client else "unknown"
+    subject = f"[Foresea feedback] {stars} from {reply_to}"
+    body = (
+        f"Rating: {stars}\n"
+        f"From: {reply_to}\n"
+        f"Page: {page}\n"
+        f"IP: {ip}\n\n"
+        f"{fb.message}"
+    )
+    threading.Thread(target=_send_alert_email, args=(subject, body), daemon=True).start()
+    logger.info("feedback received rating=%s from=%s", fb.rating, reply_to)
+    return {"status": "ok"}
 
 
 _MARKET_CACHE_TTL = int(os.environ.get("MARKET_CACHE_TTL", "30"))
