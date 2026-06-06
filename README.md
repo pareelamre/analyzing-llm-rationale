@@ -318,6 +318,42 @@ The remote MCP server is a thin tool layer over the public API. It exposes:
 - `foresea_edge_board`: calls `GET /edge-board` — live model-vs-market disagreements ranked, each tagged with the resolved track record of gaps that size (`by_edge` calibration + `lead_lag`).
 - Resources: `foresea://track-record` and `foresea://openapi.json`.
 
+#### Add Foresea to your agent (10 seconds)
+
+It's a remote, **anonymous** Streamable-HTTP server — no key, no install. Point any MCP client at the URL:
+
+```bash
+# Claude Code
+claude mcp add --transport http foresea https://foresea.ink/mcp/
+```
+
+```jsonc
+// Cursor / Cline / Claude Desktop (mcp.json)
+{ "mcpServers": { "foresea": { "url": "https://foresea.ink/mcp/" } } }
+```
+
+```python
+# Python — official MCP SDK (3.10+)
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+
+async with streamablehttp_client("https://foresea.ink/mcp/") as (r, w, _):
+    async with ClientSession(r, w) as s:
+        await s.initialize()
+        print(await s.call_tool("foresea_forecast",
+              {"question": "Will the Fed cut rates by March 2026?", "market_probability": 0.4}))
+```
+
+```python
+# LangChain (langchain-mcp-adapters) — Foresea tools in any LangGraph agent
+from langchain_mcp_adapters.client import MultiServerMCPClient
+client = MultiServerMCPClient({"foresea": {"url": "https://foresea.ink/mcp/", "transport": "streamable_http"}})
+tools = await client.get_tools()   # foresea_forecast, foresea_analyze_market, ...
+```
+
+A runnable end-to-end demo (scan → forecast → edge) is in
+[`examples/foresea_agent_demo.py`](examples/foresea_agent_demo.py).
+
 Use `https://foresea.ink/mcp/` directly in MCP clients that support remote
 Streamable HTTP servers. For clients that still require a local stdio command,
 run the wrapper locally.
