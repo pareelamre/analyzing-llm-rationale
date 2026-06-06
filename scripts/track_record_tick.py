@@ -53,7 +53,7 @@ MODEL = os.environ.get("TRACK_MODEL", "gpt-oss-120b")
 # first is the primary (the public track record); the rest are graded alongside.
 # Each must be in the server's /predict allowlist.
 TRACK_MODELS = [m.strip() for m in os.environ.get(
-    "TRACK_MODELS", "gpt-oss-120b,gemma-4-31b-it,kimi-k2.5").split(",") if m.strip()]
+    "TRACK_MODELS", "gpt-oss-120b,gemma-4-31b-it,kimi-k2.6").split(",") if m.strip()]
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 TEMPERATURE = float(os.environ.get("TRACK_TEMPERATURE", "0.0") or 0.0)
 PER_VENUE = max(1, min(int(os.environ.get("PER_VENUE", "3") or 3), 5))

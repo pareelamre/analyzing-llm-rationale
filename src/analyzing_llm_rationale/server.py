@@ -1578,7 +1578,7 @@ class PredictRequest(BaseModel):
         max_length=64,
         description=(
             "Optional alternate server-hosted model to forecast with, from the "
-            "allowlist (`gpt-oss-120b`, `gemma-4-31b-it`, `kimi-k2.5`). Uses the "
+            "allowlist (`gpt-oss-120b`, `gemma-4-31b-it`, `kimi-k2.6`). Uses the "
             "server's own key — no BYOK needed. Powers the multi-model paper-trading "
             "comparison."
         ),
@@ -3388,7 +3388,7 @@ _SCADS_BASE_URL = os.environ.get("SCADS_BASE_URL", "https://llm.scads.ai/v1/chat
 _SCADS_MODEL_ALLOWLIST = {
     "gpt-oss-120b": "openai/gpt-oss-120b",
     "gemma-4-31b-it": "google/gemma-4-31B-it",
-    "kimi-k2.5": "moonshotai/Kimi-K2.5",
+    "kimi-k2.6": "moonshotai/Kimi-K2.6",
 }
 
 
