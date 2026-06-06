@@ -105,13 +105,7 @@ Production is served from the custom domain:
 https://foresea.ink
 ```
 
-The Cloud Run service is:
-
-```text
-project: brave-drive-471109-d9
-region: us-central1
-service: analyzing-llm-rationale
-```
+The Cloud Run service name, project ID, and region are set at deploy time via `gcloud run deploy`.
 
 Required runtime environment:
 
@@ -125,28 +119,22 @@ Required runtime environment:
   returns 503. Sign-in also works with Google and email/password.
 - `SESSION_SECRET`: long random string used to sign browser session JWTs.
 
-Current Google OAuth client ID:
-
-```text
-REDACTED_OAUTH_CLIENT_ID.apps.googleusercontent.com
-```
-
 The OAuth client must allow these JavaScript origins:
 
 ```text
 https://foresea.ink
 https://www.foresea.ink
-https://REDACTED_CLOUD_RUN_URL.run.app
+https://<cloud-run-service-url>.run.app
 ```
 
 To update non-secret environment variables without replacing the existing
 `SESSION_SECRET`, use `--update-env-vars`:
 
 ```bash
-gcloud run services update analyzing-llm-rationale \
-  --region us-central1 \
-  --project brave-drive-471109-d9 \
-  --update-env-vars MODEL_DEVICE=cpu,CUSTOM_DOMAIN=foresea.ink,GOOGLE_CLIENT_ID='REDACTED_OAUTH_CLIENT_ID.apps.googleusercontent.com'
+gcloud run services update <service-name> \
+  --region <region> \
+  --project <project-id> \
+  --update-env-vars MODEL_DEVICE=cpu,CUSTOM_DOMAIN=foresea.ink,GOOGLE_CLIENT_ID='<your-google-client-id>'
 ```
 
 Verify the deployed auth config and health endpoint:
@@ -189,9 +177,12 @@ commits both files back to `main`. At runtime, Cloud Run fetches the committed
 aggregate from raw GitHub, falling back to the bundled file and then the static
 backtest in `static/track_record.json`.
 
-The Action calls `/predict` once per newly snapshotted market. If `/predict` is
-protected, set the GitHub secret `PREDICT_API_KEY`; no `TRACK_RECORD_TOKEN` or
-server-side `/track-record/tick` endpoint is required.
+The Action discovers short-to-medium-horizon Polymarket/Kalshi markets in
+separate close-date bands (`2-7`, `7-14`, `14-30`, `30-60` days by default) and
+calls `/predict` once per newly snapshotted market/model. If `/predict` is
+protected, set the GitHub secret `PREDICT_API_KEY`; no server-side
+`/track-record/tick` endpoint is required. `TRACK_RECORD_TOKEN` is optional and
+only enables the agent-enrolled market bridge.
 
 ### Foresea Radar
 
@@ -239,6 +230,7 @@ evidence articles. It is built for resolvable forecasts, not general Q&A.
 - `GET /health`: service health check.
 - `GET /track-record`: public live track record, falling back to the static backtest.
 - `GET /track-record/digest`: shareable markdown summary of the live track record.
+- `GET /pr-agent`: opt-in agent-to-agent outreach packet for Foresea discovery.
 - `POST /predict`: public prediction endpoint.
 - `GET /markets/polymarket`: fetch a live Polymarket quote (see below).
 - `GET /markets/kalshi`: fetch a live Kalshi quote (see below).
@@ -316,7 +308,58 @@ The remote MCP server is a thin tool layer over the public API. It exposes:
 - `foresea_scan_markets`: calls `GET /agent/scan`.
 - `foresea_track_record`: calls `GET /track-record`.
 - `foresea_edge_board`: calls `GET /edge-board` — live model-vs-market disagreements ranked, each tagged with the resolved track record of gaps that size (`by_edge` calibration + `lead_lag`).
-- Resources: `foresea://track-record` and `foresea://openapi.json`.
+- `foresea_pr_agent`: calls `GET /pr-agent` — concise copy and install metadata for agents/catalogs that ask how to describe Foresea.
+- Resources: `foresea://track-record`, `foresea://pr-agent`, and `foresea://openapi.json`.
+
+### PR agent — agent-to-agent distribution
+
+`GET /pr-agent?audience=mcp` returns an opt-in outreach packet that other agents,
+MCP catalogs, and tool directories can quote when introducing Foresea. It includes
+the one-liner, install command, MCP/OpenAPI links, talking points, and an explicit
+no-spam policy.
+
+For operator-run cold outreach to explicit agent endpoints, prepare a target list
+and use the local runner. It dry-runs by default and only sends with `--send`:
+
+```bash
+python scripts/pr_agent_outreach.py --targets outreach-targets.json
+python scripts/pr_agent_outreach.py --targets outreach-targets.json --send
+```
+
+Target file shape:
+
+```json
+{
+  "targets": [
+    {
+      "name": "Example Agent Directory",
+      "endpoint": "https://agent-directory.example/inbox",
+      "audience": "catalog",
+      "headers": {"Authorization": "Bearer ..."}
+    }
+  ]
+}
+```
+
+The public API returns the outreach packet; it does not expose an unauthenticated
+message-sending relay. The scheduled GitHub Action
+`.github/workflows/pr-agent-outreach.yml` runs every 5 minutes against
+`data/pr_outreach_targets.json`, sends with `--send`, and records contacted
+targets in `data/pr_outreach_state.json` so repeated scheduled runs do not
+re-contact the same agent. For a literal always-running local process, run:
+
+```bash
+python scripts/pr_agent_outreach.py \
+  --targets data/pr_outreach_targets.json \
+  --state data/pr_outreach_state.json \
+  --send --watch --interval-s 300
+```
+
+Header values can reference GitHub Actions secrets via environment variables, for
+example `"Authorization": "$PR_AGENT_TARGET_AUTH"`.
+
+Seeded target: AgentNDX (`https://agentndx.ai/api/submit`), using its public MCP
+server submission form fields.
 
 #### Add Foresea to your agent (10 seconds)
 
