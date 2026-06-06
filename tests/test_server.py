@@ -539,6 +539,8 @@ class ServerTests(unittest.TestCase):
         self.assertIn("ClaudeBot", r.text)
         self.assertIn("PerplexityBot", r.text)
         self.assertIn("Sitemap: https://foresea.ink/sitemap.xml", r.text)
+        self.assertIn("Agent integration guide: https://foresea.ink/agents", r.text)
+        self.assertIn("Agent manifest: https://foresea.ink/.well-known/agent.json", r.text)
         self.assertIn("Remote MCP server: https://foresea.ink/mcp/", r.text)
         self.assertIn("MCP discovery manifest", r.text)
 
@@ -546,11 +548,44 @@ class ServerTests(unittest.TestCase):
         r = self.client.get("/llms.txt")
         self.assertEqual(r.status_code, 200)
         self.assertIn("# Foresea", r.text)
+        self.assertIn("Agent integration guide", r.text)
+        self.assertIn("/.well-known/agent.json", r.text)
         self.assertIn("Remote MCP server", r.text)
         self.assertIn("https://foresea.ink/mcp/", r.text)
         self.assertIn("foresea_forecast", r.text)
+        self.assertIn("/predict/stream", r.text)
         self.assertIn("/predict", r.text)
         self.assertIn("/openapi.json", r.text)
+
+    def test_agents_page(self):
+        r = self.client.get("/agents")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/html", r.headers.get("content-type", ""))
+        self.assertIn("Agent integration surface", r.text)
+        self.assertIn("https://foresea.ink/mcp/", r.text)
+        self.assertIn("/predict/stream", r.text)
+
+    def test_agent_manifest(self):
+        r = self.client.get("/.well-known/agent.json")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["name"], "Foresea")
+        self.assertEqual(body["mcp"]["endpoint"], "https://foresea.ink/mcp/")
+        self.assertEqual(body["http"]["streaming_forecast"]["path"], "/predict/stream")
+        self.assertIn("foresea_radar", body["mcp"]["tools"])
+
+    def test_agent_manifest_alias(self):
+        r = self.client.get("/agent.json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["agent_integration_url"], "https://foresea.ink/agents")
+
+    def test_ai_plugin_manifest(self):
+        r = self.client.get("/.well-known/ai-plugin.json")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["name_for_model"], "foresea")
+        self.assertEqual(body["auth"]["type"], "none")
+        self.assertEqual(body["api"]["url"], "https://foresea.ink/openapi.json")
 
     def test_mcp_discovery_manifest(self):
         r = self.client.get("/.well-known/mcp/server.json")
@@ -571,6 +606,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn("application/xml", r.headers.get("content-type", ""))
         self.assertIn("https://foresea.ink/", r.text)
+        self.assertIn("https://foresea.ink/agents", r.text)
 
     def test_track_record_digest(self):
         r = self.client.get("/track-record/digest")

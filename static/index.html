@@ -19,6 +19,9 @@
   <meta name="twitter:title" content="Foresea | Prediction market intelligence" />
   <meta name="twitter:description" content="Turn market questions into forecasts, evidence, rationales, and price-gap signals." />
   <meta name="twitter:image" content="https://foresea.ink/static/foresea-share-card.svg" />
+  <link rel="alternate" type="text/plain" href="https://foresea.ink/llms.txt" title="Foresea llms.txt" />
+  <link rel="alternate" type="application/json" href="https://foresea.ink/.well-known/agent.json" title="Foresea agent manifest" />
+  <link rel="alternate" type="application/json" href="https://foresea.ink/openapi.json" title="Foresea OpenAPI" />
   <title>Foresea | Prediction market intelligence</title>
   <!-- Structured data so AI agents + search understand the service and its free API -->
   <script type="application/ld+json">
@@ -1497,6 +1500,7 @@
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openRadar()">Radar</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
+      <a href="/agents" target="_blank" class="topbar-link nav-collapse">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link nav-collapse">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link nav-collapse">GitHub</a>
       <!-- Auth — toggled by updateAuthUI() -->
@@ -1777,6 +1781,7 @@
 
       <!-- API docs -->
       <div class="pt-2 border-t border-gray-200">
+        <a href="/agents" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">Agent integration ↗</a><br />
         <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">API docs ↗</a>
       </div>
     </div>
@@ -1823,6 +1828,7 @@
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openRadar()">Radar</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
+      <a href="/agents" target="_blank" class="topbar-link">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
       <!-- Auth -->

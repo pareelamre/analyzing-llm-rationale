@@ -322,10 +322,12 @@ def create_mcp_server(
     mcp = FastMCP(
         name="Foresea",
         instructions=(
-            "Foresea forecasts resolvable future events and prediction-market "
-            "questions. Use forecast for a single question, analyze_market for "
-            "end-to-end market analysis, scan_markets to find model-vs-market edges, "
-            "and edge_board for the live ranked disagreements with their proven edge."
+            "Foresea gives calibrated probabilities for any resolvable future event, "
+            "with evidence and the edge vs prediction markets — and it publishes a "
+            "resolved track record so you can see how right it's been. Use forecast for "
+            "any yes/no question, analyze_market to evaluate a specific Polymarket/Kalshi "
+            "market, scan_markets / edge_board to find mispriced markets, and "
+            "track_record to gauge how much to trust a forecast before acting."
         ),
         website_url=client.base_url,
         host=host,
@@ -368,7 +370,13 @@ def create_mcp_server(
         market_outcome: Optional[str] = None,
         market_probability: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Forecast one resolvable question and return probability, rationale, evidence, and optional market edge."""
+        """Estimate the probability of any resolvable future question, with a written
+        rationale and supporting evidence — and, if you pass a market price or URL,
+        the edge vs the market. Use this whenever you need a calibrated probability for
+        something that will resolve yes/no (also handles multiple-choice / numeric / date).
+        Example: question="Will the Fed cut rates by March 2026?", market_probability=0.4
+        → {predicted_answer:"No", confidence:0.62, rationale, evidence_sources,
+        market_analysis:{model_probability, edge:+0.14, stance:"model_above_market"}}."""
 
         payload = build_predict_payload(
             question=question,
@@ -403,7 +411,12 @@ def create_mcp_server(
         tool_loop: bool = False,
         max_tool_steps: int = 5,
     ) -> Dict[str, Any]:
-        """Run Foresea's end-to-end market agent: resolve market, gather evidence, forecast, compute edge, and recommend."""
+        """End-to-end analysis of one live prediction market. Give a Polymarket slug,
+        Kalshi ticker, market URL, or a question — Foresea fetches the current price,
+        gathers evidence, forecasts, computes the model-vs-market edge, and returns a
+        recommendation. Use when you have a specific market to evaluate (vs scan_markets
+        to find them). Example: platform="polymarket", slug="fed-rate-cut-march-2026"
+        → {model_probability, market_probability, edge, stance, recommendation, thesis}."""
 
         payload = build_agent_analyze_payload(
             question=question,
@@ -430,7 +443,11 @@ def create_mcp_server(
         evidence_top_k: int = 3,
         query: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Scan Polymarket, Kalshi, or both venues for live markets where Foresea sees a large edge."""
+        """Discover live Polymarket/Kalshi markets Foresea thinks are mispriced: returns
+        markets ranked by disagreement (|model − market|), each with the model
+        probability, market price, and edge. Use to find forecasting/trading
+        opportunities. Example: platform="kalshi", min_edge=0.1
+        → [{question, market_probability, model_probability, edge, market_url}]."""
 
         return await _call_tool_async(
             client.ascan_markets,
@@ -443,17 +460,20 @@ def create_mcp_server(
 
     @mcp.tool()
     async def foresea_track_record() -> Dict[str, Any]:
-        """Return Foresea's public track record and calibration summary."""
+        """Foresea's public resolved-forecast track record: accuracy, Brier score,
+        calibration (ECE), and skill-vs-market by horizon — the proof of how well its
+        forecasts have actually done. Call this to decide how much to trust a Foresea
+        forecast before acting on it."""
 
         return await _call_tool_async(client.atrack_record)
 
     @mcp.tool()
     async def foresea_edge_board() -> Dict[str, Any]:
-        """Live model-vs-market edge board: open markets ranked by how much Foresea's
-        fair probability disagrees with the price, each tagged with the resolved
-        track record of disagreements that size (skill-vs-market + significance),
-        plus by-edge calibration and market lead/lag — i.e. where the disagreement
-        is, and whether disagreement that size has actually paid."""
+        """Live model-vs-market edge board: open markets ranked by disagreement, each
+        with the explicit trade (Buy YES/NO @ price, implied odds) and whether
+        disagreements that size have historically paid (`skill_significant`). Includes
+        by-edge calibration, market lead/lag, and a multi-model paper-trading
+        comparison. Use to find — and sanity-check — the strongest current edges."""
 
         return await _call_tool_async(client.aedge_board)
 

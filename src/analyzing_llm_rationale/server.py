@@ -1337,6 +1337,15 @@ async def index():
     )
 
 
+@app.get("/agents", include_in_schema=False)
+async def agents_page():
+    """Human- and crawler-readable integration surface for AI agents."""
+    return FileResponse(
+        str(_STATIC_DIR / "agents.html"),
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
 # ── AI-agent / crawler discoverability ────────────────────────────────────────
 
 
@@ -1351,6 +1360,8 @@ async def robots_txt():
     for b in bots:
         lines += [f"User-agent: {b}", "Allow: /", ""]
     lines += [f"Sitemap: {_CANONICAL}/sitemap.xml",
+              f"# Agent integration guide: {_CANONICAL}/agents",
+              f"# Agent manifest: {_CANONICAL}/.well-known/agent.json",
               f"# Machine-readable guide for LLMs: {_CANONICAL}/llms.txt",
               f"# Remote MCP server: {_MCP_ENDPOINT}",
               f"# MCP discovery manifest: {_CANONICAL}/.well-known/mcp/server.json",
@@ -1395,6 +1406,91 @@ def _mcp_server_manifest() -> Dict[str, Any]:
     }
 
 
+def _agent_manifest() -> Dict[str, Any]:
+    return {
+        "schema_version": "2026-06-06",
+        "name": "Foresea",
+        "description": (
+            "Prediction-market intelligence for AI agents: forecast questions, "
+            "scan live markets, compare market prices to Foresea probabilities, "
+            "and inspect public track record."
+        ),
+        "homepage_url": _CANONICAL,
+        "agent_integration_url": f"{_CANONICAL}/agents",
+        "llms_txt_url": f"{_CANONICAL}/llms.txt",
+        "openapi_url": f"{_CANONICAL}/openapi.json",
+        "mcp": {
+            "endpoint": _MCP_ENDPOINT,
+            "manifest_url": f"{_CANONICAL}/.well-known/mcp/server.json",
+            "transport": "streamable-http",
+            "tools": [
+                "foresea_forecast",
+                "foresea_analyze_market",
+                "foresea_scan_markets",
+                "foresea_edge_board",
+                "foresea_radar",
+                "foresea_track_record",
+            ],
+            "resources": [
+                "foresea://track-record",
+                "foresea://radar",
+                "foresea://openapi.json",
+            ],
+        },
+        "http": {
+            "base_url": _CANONICAL,
+            "streaming_forecast": {
+                "method": "POST",
+                "path": "/predict/stream",
+                "content_type": "text/event-stream",
+                "events": ["meta", "delta", "done", "error"],
+            },
+            "structured_forecast": {"method": "POST", "path": "/predict"},
+            "market_analysis": {"method": "POST", "path": "/agent/analyze"},
+            "market_scan": {"method": "GET", "path": "/agent/scan"},
+            "radar": {"method": "GET", "path": "/radar"},
+            "track_record": {"method": "GET", "path": "/track-record"},
+        },
+        "recommended_workflow": [
+            "Read llms.txt or this manifest for discovery.",
+            "Use radar or agent_scan to find candidate markets.",
+            "Use predict or predict_stream for probabilities and rationale.",
+            "Compare against track_record before trusting new domains.",
+            "Preserve evidence links in downstream responses.",
+        ],
+        "auth": {
+            "required_for_public_forecasts": False,
+            "required_for_private_conversation_sync": True,
+        },
+    }
+
+
+def _ai_plugin_manifest() -> Dict[str, Any]:
+    return {
+        "schema_version": "v1",
+        "name_for_human": "Foresea",
+        "name_for_model": "foresea",
+        "description_for_human": (
+            "Forecast prediction-market questions, scan market edges, and inspect Foresea's track record."
+        ),
+        "description_for_model": (
+            "Use Foresea to answer forecasting and prediction-market questions. "
+            "Call /predict for structured probability forecasts, /predict/stream "
+            "for streaming conversational output, /agent/scan for live market scans, "
+            "/radar for unusual market moves, and /track-record for calibration evidence."
+        ),
+        "auth": {"type": "none"},
+        "api": {
+            "type": "openapi",
+            "url": f"{_CANONICAL}/openapi.json",
+            "is_user_authenticated": False,
+        },
+        "logo_url": f"{_CANONICAL}/static/foresea-share-card.svg",
+        "contact_email": "pareel.amre@gmail.com",
+        "legal_info_url": f"{_CANONICAL}/",
+    }
+
+
 @app.get("/.well-known/mcp/server.json", include_in_schema=False)
 async def mcp_server_json():
     """MCP Registry discovery metadata for Foresea's public remote MCP server."""
@@ -1405,6 +1501,24 @@ async def mcp_server_json():
 async def mcp_json_alias():
     """Compatibility alias for MCP clients that probe the older well-known path."""
     return JSONResponse(_mcp_server_manifest(), headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/.well-known/agent.json", include_in_schema=False)
+async def agent_json():
+    """General-purpose manifest for agents that probe well-known integration metadata."""
+    return JSONResponse(_agent_manifest(), headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/agent.json", include_in_schema=False)
+async def agent_json_alias():
+    """Root-level compatibility alias for agent manifests."""
+    return JSONResponse(_agent_manifest(), headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/.well-known/ai-plugin.json", include_in_schema=False)
+async def ai_plugin_json():
+    """Plugin-style manifest for compatible agent clients."""
+    return JSONResponse(_ai_plugin_manifest(), headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/llms.txt", include_in_schema=False)
@@ -1418,13 +1532,21 @@ async def llms_txt():
 > Free to use, with an open JSON API agents can call directly.
 
 ## Use the API
+- [Agent integration guide]({_CANONICAL}/agents): practical entry point for AI
+  agents, with MCP, OpenAPI, streaming, radar, and track-record examples.
+- [Agent manifest]({_CANONICAL}/.well-known/agent.json): machine-readable
+  endpoints, recommended workflow, and resource list.
 - [Remote MCP server]({_MCP_ENDPOINT}): Streamable HTTP MCP endpoint for agents.
   Tools: `foresea_forecast`, `foresea_analyze_market`, `foresea_scan_markets`,
-  `foresea_track_record`. Discovery manifest: `{_CANONICAL}/.well-known/mcp/server.json`.
+  `foresea_radar`, `foresea_track_record`. Discovery manifest:
+  `{_CANONICAL}/.well-known/mcp/server.json`.
 - [Forecast](\
 {_CANONICAL}/docs): `POST {_CANONICAL}/predict` with `{{"question": "..."}}` returns a
   structured forecast (binary / multiple-choice / numeric / date), a confidence,
   a rationale, and relevant evidence sources. No auth required.
+- [Streaming forecast]({_CANONICAL}/docs): `POST {_CANONICAL}/predict/stream`
+  returns SSE events (`meta`, `delta`, `done`, `error`) for live agent-facing
+  conversational output.
 - [Agent analysis]({_CANONICAL}/docs): `POST {_CANONICAL}/agent/analyze` runs an
   end-to-end analysis of a live market (fetch price, gather evidence, forecast,
   compute edge) and returns one structured report.
@@ -1448,6 +1570,7 @@ async def llms_txt():
 @app.get("/sitemap.xml", include_in_schema=False)
 async def sitemap_xml():
     urls = [(f"{_CANONICAL}/", "daily", "1.0"),
+            (f"{_CANONICAL}/agents", "weekly", "0.9"),
             (f"{_CANONICAL}/track-record", "daily", "0.8"),
             (f"{_CANONICAL}/radar", "daily", "0.8"),
             (f"{_CANONICAL}/docs", "weekly", "0.6")]

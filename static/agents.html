@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Agent integration guide for Foresea: MCP, OpenAPI, streaming forecasts, radar, track record, and market scans." />
+  <link rel="canonical" href="https://foresea.ink/agents" />
+  <link rel="alternate" type="text/plain" href="https://foresea.ink/llms.txt" title="Foresea llms.txt" />
+  <link rel="alternate" type="application/json" href="https://foresea.ink/.well-known/agent.json" title="Foresea agent manifest" />
+  <link rel="alternate" type="application/json" href="https://foresea.ink/openapi.json" title="Foresea OpenAPI" />
+  <title>Foresea Agent Integration</title>
+  <style>
+    :root {
+      --ink: #101114;
+      --text: #30343b;
+      --muted: #6f7480;
+      --line: #e5e7eb;
+      --paper: #f7f8fa;
+      --signal: #0f766e;
+      --code: #111827;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: #fff;
+      line-height: 1.55;
+    }
+    a { color: var(--ink); text-underline-offset: 3px; }
+    header {
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    nav, main { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+    nav { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 700; text-decoration: none; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink); display: inline-block; }
+    .links { display: flex; flex-wrap: wrap; gap: 14px; font-size: 14px; }
+    main { padding-top: 56px; padding-bottom: 72px; }
+    h1, h2, h3 { color: var(--ink); line-height: 1.12; margin: 0; }
+    h1 { font-size: clamp(34px, 7vw, 64px); letter-spacing: 0; max-width: 760px; }
+    h2 { font-size: 24px; margin-top: 42px; padding-top: 20px; border-top: 1px solid var(--line); }
+    h3 { font-size: 17px; margin-top: 22px; }
+    p { max-width: 760px; }
+    .lead { color: var(--muted); font-size: 18px; margin-top: 18px; }
+    .quick {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 30px 0;
+    }
+    .tile {
+      border: 1px solid var(--line);
+      padding: 16px;
+      background: #fff;
+      min-height: 124px;
+    }
+    .tile strong { display: block; color: var(--ink); margin-bottom: 8px; }
+    .tile span { color: var(--muted); font-size: 14px; }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    code { background: var(--paper); padding: 2px 5px; border-radius: 4px; }
+    pre {
+      background: var(--code);
+      color: #f9fafb;
+      padding: 16px;
+      overflow: auto;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    pre code { background: transparent; color: inherit; padding: 0; }
+    .endpoint { border-left: 3px solid var(--signal); padding-left: 14px; margin-top: 18px; }
+    ul { padding-left: 20px; }
+    li { margin: 7px 0; }
+    .small { color: var(--muted); font-size: 13px; }
+    @media (max-width: 760px) {
+      .quick { grid-template-columns: 1fr; }
+      nav { align-items: flex-start; flex-direction: column; padding-top: 14px; padding-bottom: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav aria-label="Agent integration navigation">
+      <a class="brand" href="/"><span class="dot"></span><span>Foresea</span></a>
+      <div class="links">
+        <a href="/mcp/">MCP</a>
+        <a href="/openapi.json">OpenAPI</a>
+        <a href="/llms.txt">llms.txt</a>
+        <a href="/docs">Docs</a>
+      </div>
+    </nav>
+  </header>
+  <main>
+    <h1>Agent integration surface for prediction-market intelligence</h1>
+    <p class="lead">
+      Foresea exposes forecasting, market-edge analysis, radar, and track-record data through
+      public agent-readable endpoints. Use MCP for tool-calling agents, OpenAPI for HTTP agents,
+      and server-sent events when an agent wants live conversational output.
+    </p>
+
+    <section class="quick" aria-label="Fast integration options">
+      <a class="tile" href="/mcp/"><strong>Remote MCP</strong><span>Connect agents directly to Foresea tools over streamable HTTP.</span></a>
+      <a class="tile" href="/openapi.json"><strong>OpenAPI</strong><span>Let HTTP agents discover typed endpoints and schemas.</span></a>
+      <a class="tile" href="/.well-known/agent.json"><strong>Agent manifest</strong><span>Machine-readable entry points, resources, and recommended workflows.</span></a>
+    </section>
+
+    <h2>Recommended Agent Workflow</h2>
+    <ol>
+      <li>Read <code>/llms.txt</code> or <code>/.well-known/agent.json</code> for tool discovery.</li>
+      <li>Use <code>/radar</code> or <code>/agent/scan</code> to find candidate markets.</li>
+      <li>Use <code>/predict</code> for structured probabilities or <code>/predict/stream</code> for live prose.</li>
+      <li>Compare against <code>/track-record</code> before trusting the model on a new domain.</li>
+      <li>Use evidence links returned by the API when presenting a forecast to a user.</li>
+    </ol>
+
+    <h2>MCP</h2>
+    <p>
+      Remote MCP endpoint: <a href="/mcp/"><code>https://foresea.ink/mcp/</code></a>.
+      Discovery manifest: <a href="/.well-known/mcp/server.json"><code>/.well-known/mcp/server.json</code></a>.
+    </p>
+    <pre><code>{
+  "mcpServers": {
+    "foresea": {
+      "url": "https://foresea.ink/mcp/"
+    }
+  }
+}</code></pre>
+    <p class="small">
+      Primary tools include <code>foresea_forecast</code>, <code>foresea_analyze_market</code>,
+      <code>foresea_scan_markets</code>, <code>foresea_radar</code>, and <code>foresea_track_record</code>.
+    </p>
+
+    <h2>HTTP Endpoints</h2>
+    <div class="endpoint">
+      <h3>Stream a conversational forecast</h3>
+      <p><code>POST /predict/stream</code> returns server-sent events: <code>meta</code>, <code>delta</code>, <code>done</code>, and <code>error</code>.</p>
+      <pre><code>curl -N https://foresea.ink/predict/stream \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Will the Fed cut rates before September 30, 2026?","attach_evidence":false}'</code></pre>
+    </div>
+    <div class="endpoint">
+      <h3>Get a structured probability</h3>
+      <p><code>POST /predict</code> returns typed JSON with probability, rationale, evidence, and optional market-edge analysis.</p>
+      <pre><code>curl https://foresea.ink/predict \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Will oil exceed $100 before the end of 2026?","market_probability":0.31}'</code></pre>
+    </div>
+    <div class="endpoint">
+      <h3>Scan or monitor markets</h3>
+      <ul>
+        <li><code>GET /radar</code> - daily unusual-market radar.</li>
+        <li><code>GET /agent/scan?platform=all&amp;query=crypto</code> - live market scan.</li>
+        <li><code>GET /track-record</code> - public accuracy and calibration record.</li>
+      </ul>
+    </div>
+
+    <h2>Discovery Files</h2>
+    <ul>
+      <li><a href="/llms.txt"><code>/llms.txt</code></a> - compact guide for LLM context windows.</li>
+      <li><a href="/.well-known/agent.json"><code>/.well-known/agent.json</code></a> - Foresea agent manifest.</li>
+      <li><a href="/.well-known/ai-plugin.json"><code>/.well-known/ai-plugin.json</code></a> - plugin-style manifest for compatible clients.</li>
+      <li><a href="/openapi.json"><code>/openapi.json</code></a> - full API schema.</li>
+      <li><a href="/robots.txt"><code>/robots.txt</code></a> - crawler policy and discovery hints.</li>
+    </ul>
+  </main>
+</body>
+</html>
