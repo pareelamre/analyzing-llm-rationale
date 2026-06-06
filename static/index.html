@@ -1639,7 +1639,6 @@
       <span class="brand text-base">Foresea</span>
     </button>
     <div class="flex items-center gap-1">
-      <button class="sidebar-icon-btn" onclick="newConversation()" title="New market brief" aria-label="New market brief">＋</button>
       <button class="menu-btn sidebar-icon-btn" onclick="closeSidebar()" title="Close" aria-label="Close navigation">✕</button>
     </div>
   </div>
@@ -1839,10 +1838,7 @@
         <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
       </div>
     </nav>
-    <div id="headerUserChip" class="user-chip" hidden title="Signed in">
-      <img id="headerUserAvatar" src="" class="user-avatar" alt="" />
-      <span id="headerUserName" class="user-name hidden sm:inline"></span>
-    </div>
+
     <div class="hidden sm:flex items-center gap-1.5 flex-shrink-0 border border-gray-200 rounded-full px-2 py-1">
       <span class="live-pulse rounded-full inline-block" style="width:6px;height:6px;background:var(--accent)"></span>
       <span class="text-xs text-gray-500">Live</span>
@@ -4282,10 +4278,6 @@ function updateAuthUI(user) {
       appUserAvatar: pic,
       appUserName: firstName,
     });
-    _setAuthEl('headerUserChip', true, {
-      headerUserAvatar: pic,
-      headerUserName: firstName,
-    });
     _setAuthEl('sidebarUserChip', true, {
       sidebarUserAvatar: pic,
       sidebarUserName: firstName,
@@ -4294,7 +4286,6 @@ function updateAuthUI(user) {
   } else {
     _setAuthEl('landingUserChip', false);
     _setAuthEl('appUserChip', false);
-    _setAuthEl('headerUserChip', false);
     _setAuthEl('sidebarUserChip', false);
     _setAuthEl('landingSignInBtn', true);
     _setAuthEl('appSignInBtn', true);
