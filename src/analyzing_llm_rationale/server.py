@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import duckdb
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -2141,6 +2141,33 @@ class PredictRequest(BaseModel):
             raise ValueError("provider_base_url host is not allowed.")
         return value
 
+    ollama_base_url: Optional[str] = Field(
+        None,
+        max_length=500,
+        description=(
+            "Base URL of an Ollama instance, e.g. `http://localhost:11434`. "
+            "No API key required. Cloud-metadata hosts are blocked; "
+            "for foresea.ink the instance must be reachable from the server."
+        ),
+    )
+
+    @field_validator("ollama_base_url")
+    @classmethod
+    def ollama_base_url_must_be_safe(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        value = v.strip().rstrip("/")
+        if not value:
+            return None
+        parsed = urlparse(value)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("ollama_base_url must start with http:// or https://.")
+        host = (parsed.hostname or "").lower()
+        _blocked = {"metadata.google.internal", "169.254.169.254"}
+        if not host or host in _blocked or host.endswith(".internal"):
+            raise ValueError("ollama_base_url host is not allowed.")
+        return value
+
 
 class OptionProb(BaseModel):
     """A single option and its probability in a multiple-choice forecast."""
@@ -2283,6 +2310,7 @@ class AgentAnalyzeRequest(BaseModel):
     openrouter_api_key: Optional[str] = Field(None, max_length=256)
     openrouter_model: Optional[str] = Field(None, max_length=128)
     provider_base_url: Optional[str] = Field(None, max_length=2000)
+    ollama_base_url: Optional[str] = Field(None, max_length=500)
 
 
 class AgentReport(BaseModel):
@@ -2964,6 +2992,13 @@ def _select_predict_provider(req: "PredictRequest"):
     if alt_provider is not None:
         # Server-hosted alternate model (allowlisted SCADS), server's own key.
         return alt_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
+    if req.ollama_base_url and req.openrouter_model:
+        from analyzing_llm_rationale.providers import OllamaProvider
+        provider = OllamaProvider(
+            model_name=req.openrouter_model,
+            base_url=f"{req.ollama_base_url}/v1/chat/completions",
+        )
+        return provider, 0.7, _state.get("max_tokens", 1024)
     if req.openrouter_api_key and req.openrouter_model:
         if req.provider_base_url:
             from analyzing_llm_rationale.providers import OpenAICompatibleProvider
@@ -3406,6 +3441,48 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
         return TradeOrderResponse(**trading.place_order(payload, user_id=claims["sub"]))
     except Exception as exc:
         raise _trading_http_exception(exc) from exc
+
+
+@app.get("/providers/models", tags=["System"], summary="List models from a provider base URL")
+async def list_provider_models(base_url: str = Query(..., max_length=500)):
+    """Fetch available models from an OpenAI-compatible or Ollama endpoint.
+
+    Pass `base_url` (e.g. `http://localhost:11434`). Returns `{models: [...]}`.
+    Cloud-metadata hosts are blocked.
+    """
+    import ipaddress as _ip
+    from urllib.parse import urlparse as _up
+
+    parsed = _up(base_url.strip().rstrip("/"))
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=422, detail="base_url must be http:// or https://")
+    host = (parsed.hostname or "").lower()
+    blocked = {"metadata.google.internal", "169.254.169.254"}
+    if not host or host in blocked or host.endswith(".internal"):
+        raise HTTPException(status_code=422, detail="base_url host is not allowed")
+    try:
+        ip = _ip.ip_address(host)
+        if ip == _ip.ip_address("169.254.169.254"):
+            raise HTTPException(status_code=422, detail="base_url host is not allowed")
+    except ValueError:
+        pass
+
+    import httpx
+    errors = []
+    for path in ("/api/tags", "/v1/models"):
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.get(f"{base_url.rstrip('/')}{path}")
+            if resp.status_code == 200:
+                data = resp.json()
+                if path == "/api/tags":
+                    models = [m.get("name", "") for m in data.get("models", [])]
+                else:
+                    models = [m.get("id", "") for m in data.get("data", [])]
+                return {"models": [m for m in models if m]}
+        except Exception as exc:
+            errors.append(str(exc))
+    raise HTTPException(status_code=502, detail=f"Could not reach provider: {'; '.join(errors)}")
 
 
 @app.post("/extract", tags=["System"], summary="Extract text from a PDF file or URL")
@@ -3999,10 +4076,17 @@ def _select_provider(
     openrouter_api_key: Optional[str],
     openrouter_model: Optional[str],
     provider_base_url: Optional[str],
+    ollama_base_url: Optional[str] = None,
 ):
     """Return (provider, temperature, max_tokens): BYOK model if given, else the server default."""
+    max_tokens = _state.get("max_tokens", 1024)
+    if ollama_base_url and openrouter_model:
+        from analyzing_llm_rationale.providers import OllamaProvider
+        return OllamaProvider(
+            model_name=openrouter_model,
+            base_url=f"{ollama_base_url}/v1/chat/completions",
+        ), 0.7, max_tokens
     if openrouter_api_key and openrouter_model:
-        max_tokens = _state.get("max_tokens", 1024)
         if provider_base_url:
             from analyzing_llm_rationale.providers import OpenAICompatibleProvider
             return (
@@ -4168,7 +4252,8 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
     skill_results: List[AgentSkillResult] = []
     if skills_to_run:
         provider, temperature, max_tokens = _select_provider(
-            req.openrouter_api_key, req.openrouter_model, req.provider_base_url
+            req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
+            getattr(req, "ollama_base_url", None),
         )
         sources_txt = "\n".join(
             f"- {s.source}: {s.title}" for s in result.evidence_sources[:8]
@@ -4217,7 +4302,9 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     from analyzing_llm_rationale import market_data
 
     provider, temperature, max_tokens = _select_provider(
-        req.openrouter_api_key, req.openrouter_model, req.provider_base_url)
+        req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
+        getattr(req, "ollama_base_url", None),
+    )
     loop = asyncio.get_running_loop()
     last: Dict[str, Any] = {}
 

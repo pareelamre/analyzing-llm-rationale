@@ -1695,21 +1695,25 @@
             <label class="label block mb-1" for="mfProvider">Provider</label>
             <select id="mfProvider" class="variant-select text-xs" onchange="_mfToggleBaseUrl()">
               <option value="openrouter">OpenRouter</option>
+              <option value="ollama">Ollama (local / self-hosted)</option>
               <option value="custom">Custom (OpenAI-compatible)</option>
             </select>
           </div>
           <div id="mfBaseUrlRow" hidden>
-            <label class="label block mb-1" for="mfBaseUrl">Endpoint URL</label>
-            <input id="mfBaseUrl" type="url" class="variant-select text-xs" placeholder="https://api.openai.com/v1/chat/completions" autocomplete="off" />
-            <p class="text-gray-400 mt-1" style="font-size:10px">OpenAI-compatible <code>/chat/completions</code>. Public HTTPS only.</p>
+            <label class="label block mb-1" for="mfBaseUrl">Base URL</label>
+            <input id="mfBaseUrl" type="url" class="variant-select text-xs" placeholder="http://localhost:11434" autocomplete="off" />
+            <p id="mfBaseUrlHint" class="text-gray-400 mt-1" style="font-size:10px"></p>
           </div>
-          <div>
+          <div id="mfKeyRow">
             <label class="label block mb-1" for="mfKey">API key</label>
             <input id="mfKey" type="password" class="variant-select text-xs" placeholder="sk-…" autocomplete="off" />
             <p id="mfKeyHint" class="text-gray-400 mt-1" style="font-size:10px">Get an OpenRouter key at <a href="https://openrouter.ai/keys" target="_blank" class="underline">openrouter.ai/keys</a>.</p>
           </div>
           <div>
-            <label class="label block mb-1" for="mfModel">Model</label>
+            <div class="flex items-center justify-between mb-1">
+              <label class="label" for="mfModel">Model</label>
+              <button type="button" id="mfFetchModels" class="model-cancel" style="font-size:10px;padding:2px 8px" onclick="_mfFetchModels()" hidden>Fetch models</button>
+            </div>
             <input id="mfModel" class="variant-select text-xs" list="orModelList" placeholder="e.g. openai/gpt-4o" autocomplete="off" />
             <datalist id="orModelList">
               <option value="openai/gpt-4o"></option>
@@ -2767,8 +2771,12 @@ async function sendQuestion() {
     }
     if (_attachments.length) body.news_articles = [..._attachments];
     if (activeModel) {
-      body.openrouter_api_key = activeModel.apiKey;
       body.openrouter_model = activeModel.model;
+      if (activeModel.provider === 'ollama') {
+        body.ollama_base_url = activeModel.baseUrl;
+      } else {
+        body.openrouter_api_key = activeModel.apiKey;
+      }
       if (activeModel.provider === 'custom' && activeModel.baseUrl) {
         body.provider_base_url = activeModel.baseUrl;
       }
@@ -2788,8 +2796,12 @@ async function sendQuestion() {
       };
       if (marketProbability != null) agentBody.market_probability = marketProbability;
       if (activeModel) {
-        agentBody.openrouter_api_key = activeModel.apiKey;
         agentBody.openrouter_model = activeModel.model;
+        if (activeModel.provider === 'ollama') {
+          agentBody.ollama_base_url = activeModel.baseUrl;
+        } else {
+          agentBody.openrouter_api_key = activeModel.apiKey;
+        }
         if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
       }
       const resp = await fetch('/agent/analyze', {
@@ -3781,10 +3793,49 @@ function renderModelList() {
 
 let _editingModelId = null;
 function _mfToggleBaseUrl() {
-  const custom = document.getElementById('mfProvider').value === 'custom';
-  document.getElementById('mfBaseUrlRow').hidden = !custom;
-  const hint = document.getElementById('mfKeyHint');
-  if (hint) hint.style.display = custom ? 'none' : '';
+  const provider = document.getElementById('mfProvider').value;
+  const isOllama = provider === 'ollama';
+  const isCustom = provider === 'custom';
+  document.getElementById('mfBaseUrlRow').hidden = !(isOllama || isCustom);
+  document.getElementById('mfFetchModels').hidden = !isOllama;
+  const keyRow = document.getElementById('mfKeyRow');
+  if (keyRow) keyRow.hidden = isOllama;
+  const urlInput = document.getElementById('mfBaseUrl');
+  const urlHint = document.getElementById('mfBaseUrlHint');
+  const keyHint = document.getElementById('mfKeyHint');
+  if (isOllama) {
+    if (urlInput && !urlInput.value) urlInput.value = 'http://localhost:11434';
+    urlInput.placeholder = 'http://localhost:11434';
+    if (urlHint) urlHint.textContent = 'No API key needed. Must be reachable from the server — use ngrok/Tailscale for foresea.ink.';
+  } else if (isCustom) {
+    urlInput.placeholder = 'https://api.openai.com/v1/chat/completions';
+    if (urlHint) urlHint.textContent = 'OpenAI-compatible /chat/completions endpoint. Public HTTPS only.';
+    if (keyHint) keyHint.style.display = 'none';
+  } else {
+    if (keyHint) keyHint.style.display = '';
+  }
+}
+
+async function _mfFetchModels() {
+  const baseUrl = document.getElementById('mfBaseUrl').value.trim();
+  if (!baseUrl) { _mfError('Enter an Ollama URL first.'); return; }
+  const btn = document.getElementById('mfFetchModels');
+  btn.textContent = 'Fetching…'; btn.disabled = true;
+  try {
+    const resp = await fetch(`/providers/models?base_url=${encodeURIComponent(baseUrl)}`);
+    const data = await resp.json();
+    if (!resp.ok) { _mfError(data.detail || 'Could not reach Ollama.'); return; }
+    const models = data.models || [];
+    if (!models.length) { _mfError('No models found — is Ollama running?'); return; }
+    const dl = document.getElementById('orModelList');
+    dl.innerHTML = models.map(m => `<option value="${m}"></option>`).join('');
+    document.getElementById('mfModel').value = models[0];
+    _mfError('');
+  } catch (e) {
+    _mfError('Could not reach Ollama: ' + e.message);
+  } finally {
+    btn.textContent = 'Fetch models'; btn.disabled = false;
+  }
 }
 function _showModelForm(show) {
   document.getElementById('modelForm').hidden = !show;
@@ -3800,6 +3851,14 @@ function startAddModel() {
     document.getElementById(id).value = val;
   }
   document.getElementById('mfProvider').value = 'openrouter';
+  // reset datalist to OpenRouter defaults
+  document.getElementById('orModelList').innerHTML = [
+    'openai/gpt-4o','openai/gpt-4o-mini','openai/o3-mini',
+    'anthropic/claude-sonnet-4-5','anthropic/claude-3.5-haiku',
+    'google/gemini-2.5-pro-preview-05-06','google/gemini-2.0-flash-001',
+    'meta-llama/llama-3.3-70b-instruct','deepseek/deepseek-r1',
+    'deepseek/deepseek-chat-v3-0324','mistralai/mistral-small-3.1-24b-instruct',
+  ].map(m => `<option value="${m}"></option>`).join('');
   _mfError(''); _mfToggleBaseUrl(); _showModelForm(true);
 }
 function editModel(id) {
@@ -3820,7 +3879,9 @@ function saveModelForm() {
   const baseUrl = document.getElementById('mfBaseUrl').value.trim();
   const apiKey = document.getElementById('mfKey').value.trim();
   const model = document.getElementById('mfModel').value.trim();
-  if (!apiKey || !model) { _mfError('API key and model are required.'); return; }
+  if (!model) { _mfError('Model is required.'); return; }
+  if (provider !== 'ollama' && !apiKey) { _mfError('API key is required.'); return; }
+  if (provider === 'ollama' && !baseUrl) { _mfError('Ollama URL is required.'); return; }
   if (provider === 'custom' && !/^https:\/\//i.test(baseUrl)) {
     _mfError('Custom endpoint must be a public https:// URL.'); return;
   }

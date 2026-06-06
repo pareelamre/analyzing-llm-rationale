@@ -285,6 +285,21 @@ class OpenRouterProvider(OpenAICompatibleProvider):
 
 
 @dataclass
+class OllamaProvider(OpenAICompatibleProvider):
+    """Local or self-hosted Ollama — no API key required."""
+    base_url: str = "http://localhost:11434/v1/chat/completions"
+    api_key: str = "ollama"  # Ollama ignores the key; any non-empty string works
+    missing_api_key_message: str = ""
+
+    def __post_init__(self) -> None:
+        import requests
+        if not self.api_key:
+            self.api_key = "ollama"
+        self._requests = requests
+        self._session = requests.Session()
+
+
+@dataclass
 class LocalQwenProvider(ChatProvider):
     model_name: str = "Qwen/Qwen2.5-7B-Instruct"
     device: str = "cuda"
