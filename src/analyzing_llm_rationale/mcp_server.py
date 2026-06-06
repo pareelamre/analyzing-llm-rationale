@@ -1,11 +1,23 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from typing import Any, Dict, List, Optional
 
 import requests
+
+logger = logging.getLogger(__name__)
+
+# tool method (aforecast/...) -> public tool name, for usage logging.
+_TOOL_NAMES = {
+    "forecast": "foresea_forecast", "aforecast": "foresea_forecast",
+    "analyze": "foresea_analyze_market", "aanalyze": "foresea_analyze_market",
+    "scan_markets": "foresea_scan_markets", "ascan_markets": "foresea_scan_markets",
+    "track_record": "foresea_track_record", "atrack_record": "foresea_track_record",
+    "edge_board": "foresea_edge_board", "aedge_board": "foresea_edge_board",
+}
 
 DEFAULT_FORESEA_BASE_URL = "https://foresea.ink"
 DEFAULT_TIMEOUT_S = 120.0
@@ -323,13 +335,18 @@ def create_mcp_server(
         json_response=True,
     )
 
+    def _tool_name(fn) -> str:
+        return _TOOL_NAMES.get(getattr(fn, "__name__", ""), getattr(fn, "__name__", "?"))
+
     def _call_tool(fn, *args, **kwargs) -> Dict[str, Any]:
+        logger.info("mcp_tool_call tool=%s", _tool_name(fn))
         try:
             return fn(*args, **kwargs)
         except ForeseaApiError as exc:
             raise ToolError(f"Foresea API error ({exc.status_code}): {exc.detail}") from exc
 
     async def _call_tool_async(fn, *args, **kwargs) -> Dict[str, Any]:
+        logger.info("mcp_tool_call tool=%s", _tool_name(fn))
         try:
             return await fn(*args, **kwargs)
         except ForeseaApiError as exc:
