@@ -1749,7 +1749,13 @@ async def pending_markets(request: Request = None, limit: int = 50) -> Dict[str,
             q.order = ["first_seen_ts"]
         except Exception:
             pass
-        return list(q.fetch(limit=limit))
+        try:
+            return list(q.fetch(limit=limit))
+        except Exception:
+            # Composite index may not exist yet; fall back to unordered fetch.
+            q2 = client.query(kind=_ENROLLED_MARKET_KIND)
+            q2.add_filter("enrolled", "=", False)
+            return list(q2.fetch(limit=limit))
 
     rows = await asyncio.get_running_loop().run_in_executor(None, _query)
     markets = [{
