@@ -135,12 +135,12 @@
       "track_record": null
     },
     {
-      "abs_edge": 0.019,
-      "edge": 0.019,
+      "abs_edge": 0.015,
+      "edge": 0.015,
       "edge_bucket": "0-5pp",
       "horizon": "14-30d",
       "lead_days": 24.8,
-      "market_probability": 0.201,
+      "market_probability": 0.205,
       "market_url": "https://polymarket.com/market/will-the-san-antonio-spurs-win-the-2026-nba-finals",
       "model_probability": 0.22,
       "platform": "Polymarket",
@@ -163,20 +163,6 @@
       "track_record": null
     },
     {
-      "abs_edge": 0.003,
-      "edge": 0.003,
-      "edge_bucket": "0-5pp",
-      "horizon": "30d+",
-      "lead_days": 43.9,
-      "market_probability": 0.097,
-      "market_url": "https://polymarket.com/market/will-portugal-win-the-2026-fifa-world-cup-912",
-      "model_probability": 0.1,
-      "platform": "Polymarket",
-      "question": "Will Portugal win the 2026 FIFA World Cup?",
-      "stance": "model_above_market",
-      "track_record": null
-    },
-    {
       "abs_edge": 0.001,
       "edge": 0.001,
       "edge_bucket": "0-5pp",
@@ -189,9 +175,23 @@
       "question": "Volodymyr Zelenskyy and Vladimir Putin meet before Jul 1, 2026?",
       "stance": "model_above_market",
       "track_record": null
+    },
+    {
+      "abs_edge": 0.0,
+      "edge": 0.0,
+      "edge_bucket": "0-5pp",
+      "horizon": "30d+",
+      "lead_days": 43.9,
+      "market_probability": 0.1,
+      "market_url": "https://polymarket.com/market/will-portugal-win-the-2026-fifa-world-cup-912",
+      "model_probability": 0.1,
+      "platform": "Polymarket",
+      "question": "Will Portugal win the 2026 FIFA World Cup?",
+      "stance": "model_above_market",
+      "track_record": null
     }
   ],
-  "generated_at": "2026-06-06T05:06:21.029760+00:00",
+  "generated_at": "2026-06-06T08:02:32.021111+00:00",
   "lead_lag": null,
   "methodology": "Forecast trajectories on live Polymarket/Kalshi markets: a fresh point-in-time forecast each day (latest price + latest news, no look-ahead) until the market resolves, then every snapshot is scored. Skill vs market = market Brier \u2212 model Brier, reported by forecast horizon; long-horizon skill is the meaningful signal.",
   "model": "gpt-oss-120b",
