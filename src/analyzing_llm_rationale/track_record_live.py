@@ -421,6 +421,73 @@ def lead_lag(by_market: Dict[Tuple[str, str], List[Dict[str, Any]]],
     }
 
 
+def paper_pnl(resolved: List[Dict[str, Any]],
+              edge_calib: Optional[List[Dict[str, Any]]] = None,
+              *, min_edge: float = _EDGE_MIN, stake_cap: float = 0.25) -> Optional[Dict[str, Any]]:
+    """Hypothetical paper PnL of an edge-driven strategy over resolved snapshots.
+
+    For each resolved snapshot where the model disagreed with the price by
+    ≥ ``min_edge``, place a hypothetical bet on the model's side at the market
+    price; at resolution a winning $1 of exposure returns ``(1 − p)/p``, a loser
+    returns −1. Three sizings are reported: flat (pure signal), edge-weighted
+    (bet the disagreement), and validated-only (flat, but only in edge buckets
+    whose resolved track record is statistically significant).
+
+    **Paper only** — no fees, slippage, liquidity, or correlation across
+    snapshots of the same market. It's an upper-bound signal check, the evidence
+    that would justify ever enabling the guarded live executor in ``trading.py``,
+    not a live PnL.
+    """
+    sig_buckets = {b["edge_bucket"] for b in (edge_calib or []) if b.get("skill_significant")}
+
+    def _run(sizing, *, validated: bool = False) -> Optional[Dict[str, Any]]:
+        staked = pnl = wins = 0.0
+        n = 0
+        cum = 0.0
+        curve: List[float] = []
+        for r in sorted(resolved, key=lambda x: x.get("resolved_ts") or _now()):
+            edge = _edge(r)
+            if edge < min_edge:
+                continue
+            if validated and _edge_label(edge) not in sig_buckets:
+                continue
+            model_p, market_p = float(r["model_probability"]), float(r["market_probability"])
+            side_yes = model_p > market_p
+            p_side = market_p if side_yes else (1.0 - market_p)
+            if not (0.0 < p_side < 1.0):
+                continue
+            win = (int(r["outcome"]) == 1) == side_yes
+            stake = sizing(edge)
+            profit = stake * ((1.0 - p_side) / p_side if win else -1.0)
+            staked += stake
+            pnl += profit
+            wins += 1 if win else 0
+            n += 1
+            cum += profit
+            curve.append(round(cum, 4))
+        if not n:
+            return None
+        return {
+            "n_bets": n,
+            "total_staked": round(staked, 4),
+            "pnl": round(pnl, 4),
+            "roi": round(pnl / staked, 4) if staked else None,
+            "win_rate": round(wins / n, 4),
+            "equity_curve": curve[-60:],
+        }
+
+    flat = _run(lambda e: 1.0)
+    if flat is None:
+        return None
+    return {
+        "min_edge": min_edge,
+        "disclaimer": "Hypothetical/paper: no fees, slippage, or liquidity. Upper-bound signal check, not live PnL.",
+        "flat": flat,
+        "edge_weighted": _run(lambda e: min(e, stake_cap)),
+        "validated_only": _run(lambda e: 1.0, validated=True),
+    }
+
+
 def build_edge_board(open_rows: List[Dict[str, Any]],
                      latest_price: Dict[str, float],
                      edge_calib: List[Dict[str, Any]],
@@ -690,6 +757,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "by_horizon": by_horizon,
         "by_edge": by_edge,
         "lead_lag": lead_lag(by_market),
+        "paper_pnl": paper_pnl(resolved, by_edge),
         "edge_board": build_edge_board(open_rows, latest_price, by_edge),
         "trajectories": trajectories,
         "calibration_model": _calibration_report(resolved),

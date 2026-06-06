@@ -377,6 +377,28 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertTrue(top["track_record"]["skill_significant"])
         self.assertIsNone(board[1]["track_record"])  # 0-5pp gap has no calibration row
 
+    def test_paper_pnl_positive_on_winning_edge(self):
+        resolved = [self._res(0.8, 0.5, 1) for _ in range(10)]
+        pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
+        self.assertEqual(pnl["flat"]["n_bets"], 10)
+        self.assertEqual(pnl["flat"]["win_rate"], 1.0)
+        self.assertAlmostEqual(pnl["flat"]["roi"], 1.0, places=3)   # (1-0.5)/0.5 per win
+        self.assertGreater(pnl["flat"]["pnl"], 0)
+        self.assertEqual(len(pnl["flat"]["equity_curve"]), 10)
+        self.assertIsNotNone(pnl["validated_only"])                 # 20pp+ bucket is significant
+        self.assertEqual(pnl["validated_only"]["n_bets"], 10)
+
+    def test_paper_pnl_none_when_no_qualifying_disagreement(self):
+        resolved = [self._res(0.52, 0.5, 1) for _ in range(5)]      # 2pp < min_edge
+        self.assertIsNone(trl.paper_pnl(resolved, []))
+
+    def test_paper_pnl_validated_only_skips_unproven_buckets(self):
+        # Coin-flip disagreements -> bucket not significant -> validated_only empty.
+        resolved = ([self._res(0.8, 0.5, 1)] * 5) + ([self._res(0.8, 0.5, 0)] * 5)
+        pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
+        self.assertIsNotNone(pnl["flat"])
+        self.assertIsNone(pnl["validated_only"])
+
     def test_edge_board_uses_latest_live_price_over_snapshot(self):
         now = datetime.now(timezone.utc)
         rows = [{"platform": "Polymarket", "ident": "A", "model_probability": 0.8,

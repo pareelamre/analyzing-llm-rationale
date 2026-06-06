@@ -1368,6 +1368,9 @@ async def edge_board():
       proof of whether bigger gaps actually resolved in the model's favour.
     - ``lead_lag``: whether the market has historically moved *toward* the model
       after a disagreement (the model leading the price).
+    - ``paper_pnl``: hypothetical paper-trading return of betting the edge over
+      resolved snapshots (flat / edge-weighted / validated-only). Paper only — no
+      fees or slippage; not live trading.
     """
     live = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
     live = live or {}
@@ -1377,6 +1380,7 @@ async def edge_board():
             "edge_board": live.get("edge_board", []),
             "by_edge": live.get("by_edge", []),
             "lead_lag": live.get("lead_lag"),
+            "paper_pnl": live.get("paper_pnl"),
             "n_markets_open": live.get("n_markets_open", 0),
             "n_snapshots_resolved": live.get("n_snapshots_resolved", 0),
         },
