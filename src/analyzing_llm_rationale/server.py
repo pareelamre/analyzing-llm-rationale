@@ -22,7 +22,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import duckdb
@@ -862,6 +862,63 @@ def _read_live_track_record() -> Optional[Dict[str, Any]]:
     if payload is not None:
         _cache_set(cache_key, payload, _TRACK_RECORD_LIVE_TTL)
     return payload
+
+
+# ── Evolution-loop feedback: live calibration + model auto-selection ──────────
+_AUTO_SELECT_MODEL = os.environ.get("AUTO_SELECT_MODEL", "1").lower() not in {"0", "false", "no"}
+_MODEL_SWITCH_MARGIN = float(os.environ.get("MODEL_SWITCH_MARGIN", "0.02"))
+
+
+def _calibration_map() -> Optional[Tuple[List[float], List[float]]]:
+    """Live isotonic calibration breakpoints (xs, ys) — only when the track record
+    has enough resolved data AND the raw forecasts are meaningfully miscalibrated
+    (`calibration_model.applied`). Else None (no adjustment). Cached read."""
+    try:
+        cal = (_read_live_track_record() or {}).get("calibration_model") or {}
+        if not cal.get("applied"):
+            return None
+        bps = cal.get("breakpoints") or []
+        if len(bps) < 2:
+            return None
+        return ([float(b[0]) for b in bps], [float(b[1]) for b in bps])
+    except Exception:
+        return None
+
+
+def _calibrate_probability(p: Optional[float]) -> Optional[float]:
+    """Recalibrate a P(yes) using the live isotonic map, or pass it through."""
+    if p is None:
+        return None
+    m = _calibration_map()
+    if m is None:
+        return p
+    from analyzing_llm_rationale import track_record_live as _trl
+    return _trl._apply_isotonic(m, float(p))
+
+
+def _auto_selected_model() -> Optional[str]:
+    """Best validated-paper-edge model from the live `models_comparison`, gated on
+    a margin over the configured default (anti-thrash). Returns an allowlisted
+    label to forecast with, or None to keep the default. No-op until resolved data
+    produces a significant per-model edge."""
+    if not _AUTO_SELECT_MODEL:
+        return None
+    try:
+        comp = (_read_live_track_record() or {}).get("models_comparison") or []
+        default = _state.get("model_key")
+        inc_roi = next((m.get("paper_roi_validated") for m in comp if m.get("model") == default), None)
+        best, best_roi = None, None
+        for m in comp:
+            label, roi = m.get("model"), m.get("paper_roi_validated")
+            if label in _SCADS_MODEL_ALLOWLIST and roi is not None and (best_roi is None or roi > best_roi):
+                best, best_roi = label, roi
+        if not best or best == default:
+            return None
+        if inc_roi is None or best_roi - inc_roi >= _MODEL_SWITCH_MARGIN:
+            return best
+        return None
+    except Exception:
+        return None
 
 
 def _read_radar() -> Optional[Dict[str, Any]]:
@@ -1955,7 +2012,8 @@ class MarketAnalysis(BaseModel):
     market_url: Optional[str] = Field(None, description="Prediction market URL supplied by the caller.")
     outcome: str = Field(..., description="Outcome being compared against the market price.")
     market_probability: float = Field(..., ge=0.0, le=1.0, description="Market-implied probability for the outcome.")
-    model_probability: Optional[float] = Field(None, ge=0.0, le=1.0, description="Foresea probability for the same outcome.")
+    model_probability: Optional[float] = Field(None, ge=0.0, le=1.0, description="Foresea probability for the same outcome (recalibrated from the live track record when warranted).")
+    model_probability_raw: Optional[float] = Field(None, ge=0.0, le=1.0, description="Raw model probability before live calibration (only set when calibration was applied).")
     edge: Optional[float] = Field(None, description="Model probability minus market probability.")
     stance: str = Field(..., description="`model_above_market`, `model_below_market`, `in_line`, or `not_comparable`.")
     summary: str = Field(..., description="Short human-readable market comparison.")
@@ -2525,6 +2583,15 @@ def _build_market_analysis(
             ),
         )
 
+    # Evolution-loop feedback: recalibrate the probability using the live track
+    # record's isotonic map when (and only when) it's warranted. Keep the raw value
+    # for transparency and drive the edge off the calibrated estimate.
+    raw_model_probability = model_probability
+    calibrated = _calibrate_probability(model_probability)
+    applied_calibration = calibrated is not None and abs(calibrated - raw_model_probability) > 1e-9
+    if applied_calibration:
+        model_probability = calibrated
+
     edge = model_probability - req.market_probability
     if abs(edge) < 0.03:
         stance = "in_line"
@@ -2542,12 +2609,15 @@ def _build_market_analysis(
             f"below the market on {outcome}."
         )
 
+    if applied_calibration:
+        summary += " (recalibrated from the live track record)."
     return MarketAnalysis(
         platform=req.market_platform,
         market_url=req.market_url,
         outcome=outcome,
         market_probability=req.market_probability,
         model_probability=model_probability,
+        model_probability_raw=round(raw_model_probability, 4) if applied_calibration else None,
         edge=edge,
         stance=stance,
         summary=summary,
@@ -2756,6 +2826,13 @@ def _select_predict_provider(req: "PredictRequest"):
                 api_key=req.openrouter_api_key,
             )
         return provider, 0.7, _state.get("max_tokens", 1024)
+    # Evolution-loop feedback: route to the model with the best validated paper-edge
+    # when the live track record warrants it (no-op until resolved data exists).
+    auto = _auto_selected_model()
+    if auto:
+        auto_provider = _scads_alt_provider(auto)
+        if auto_provider is not None:
+            return auto_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
     return _state["provider"], _state["temperature"], _state["max_tokens"]
 
 

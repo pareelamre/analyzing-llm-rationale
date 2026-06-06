@@ -143,5 +143,39 @@ class EvolutionLoopTests(unittest.TestCase):
         self.assertNotIn((server._ENROLLED_MARKET_KIND, "polymarket:m9"), self.fake.store)
 
 
+class FeedbackTests(unittest.TestCase):
+    # ── 4a: live calibration ──
+    def test_calibrate_applies_when_warranted(self):
+        live = {"calibration_model": {"applied": True, "breakpoints": [[0.0, 0.0], [1.0, 0.5]]}}
+        with mock.patch.object(server, "_read_live_track_record", return_value=live):
+            self.assertAlmostEqual(server._calibrate_probability(0.5), 0.25, places=3)
+
+    def test_calibrate_passthrough_when_not_applied(self):
+        with mock.patch.object(server, "_read_live_track_record",
+                               return_value={"calibration_model": {"applied": False}}):
+            self.assertEqual(server._calibrate_probability(0.8), 0.8)
+
+    # ── 4b: model auto-selection ──
+    def test_auto_select_picks_best_validated_model(self):
+        live = {"models_comparison": [
+            {"model": "gpt-oss-120b", "paper_roi_validated": 0.01},
+            {"model": "gemma-4-31b-it", "paper_roi_validated": 0.10},
+        ]}
+        with mock.patch.dict(server._state, {"model_key": "gpt-oss-120b"}), \
+                mock.patch.object(server, "_AUTO_SELECT_MODEL", True), \
+                mock.patch.object(server, "_read_live_track_record", return_value=live):
+            self.assertEqual(server._auto_selected_model(), "gemma-4-31b-it")
+
+    def test_auto_select_respects_margin(self):
+        live = {"models_comparison": [
+            {"model": "gpt-oss-120b", "paper_roi_validated": 0.10},
+            {"model": "gemma-4-31b-it", "paper_roi_validated": 0.105},  # +0.005 < 0.02 margin
+        ]}
+        with mock.patch.dict(server._state, {"model_key": "gpt-oss-120b"}), \
+                mock.patch.object(server, "_AUTO_SELECT_MODEL", True), \
+                mock.patch.object(server, "_read_live_track_record", return_value=live):
+            self.assertIsNone(server._auto_selected_model())
+
+
 if __name__ == "__main__":
     unittest.main()
