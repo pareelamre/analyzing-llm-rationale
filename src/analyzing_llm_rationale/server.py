@@ -39,7 +39,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from analyzing_llm_rationale import agent_capabilities, rag, venue_mcp
+from analyzing_llm_rationale import agent_capabilities, pr_agent, rag, venue_mcp
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
     build_user_prompt,
@@ -1035,15 +1035,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_cors_origins = [
+    "https://foresea.ink",
+    "https://www.foresea.ink",
+    "http://localhost:8000",
+    "http://localhost:3000",
+]
+if os.environ.get("CORS_EXTRA_ORIGIN"):
+    _cors_origins.append(os.environ["CORS_EXTRA_ORIGIN"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://foresea.ink",
-        "https://www.foresea.ink",
-        "https://REDACTED_CLOUD_RUN_URL.run.app",
-        "http://localhost:8000",
-        "http://localhost:3000",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=[
@@ -1396,10 +1399,12 @@ def _mcp_server_manifest() -> Dict[str, Any]:
                 "foresea_track_record",
                 "foresea_edge_board",
                 "foresea_radar",
+                "foresea_pr_agent",
             ],
             "ink.foresea/resources": [
                 "foresea://track-record",
                 "foresea://radar",
+                "foresea://pr-agent",
                 "foresea://openapi.json",
             ],
         },
@@ -1430,10 +1435,12 @@ def _agent_manifest() -> Dict[str, Any]:
                 "foresea_edge_board",
                 "foresea_radar",
                 "foresea_track_record",
+                "foresea_pr_agent",
             ],
             "resources": [
                 "foresea://track-record",
                 "foresea://radar",
+                "foresea://pr-agent",
                 "foresea://openapi.json",
             ],
         },
@@ -1450,6 +1457,7 @@ def _agent_manifest() -> Dict[str, Any]:
             "market_scan": {"method": "GET", "path": "/agent/scan"},
             "radar": {"method": "GET", "path": "/radar"},
             "track_record": {"method": "GET", "path": "/track-record"},
+            "pr_agent": {"method": "GET", "path": "/pr-agent"},
         },
         "recommended_workflow": [
             "Read llms.txt or this manifest for discovery.",
@@ -1457,6 +1465,7 @@ def _agent_manifest() -> Dict[str, Any]:
             "Use predict or predict_stream for probabilities and rationale.",
             "Compare against track_record before trusting new domains.",
             "Preserve evidence links in downstream responses.",
+            "Use pr_agent for concise agent-to-agent introductions when users approve outreach.",
         ],
         "auth": {
             "required_for_public_forecasts": False,
@@ -1521,6 +1530,24 @@ async def ai_plugin_json():
     return JSONResponse(_ai_plugin_manifest(), headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/pr-agent", tags=["Agents"], summary="Foresea PR agent outreach packet")
+async def pr_agent_packet(audience: str = "agent"):
+    """Agent-readable Foresea introduction material for opt-in outreach."""
+    return JSONResponse(
+        pr_agent.build_pr_agent_packet(audience=audience, canonical=_CANONICAL),
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/.well-known/foresea-pr-agent.json", include_in_schema=False)
+async def pr_agent_json():
+    """Compatibility discovery endpoint for Foresea's PR/outreach agent."""
+    return JSONResponse(
+        pr_agent.build_pr_agent_packet(canonical=_CANONICAL),
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
 @app.get("/llms.txt", include_in_schema=False)
 async def llms_txt():
     """llms.txt (llmstxt.org): a concise, token-efficient guide that tells an LLM
@@ -1538,7 +1565,7 @@ async def llms_txt():
   endpoints, recommended workflow, and resource list.
 - [Remote MCP server]({_MCP_ENDPOINT}): Streamable HTTP MCP endpoint for agents.
   Tools: `foresea_forecast`, `foresea_analyze_market`, `foresea_scan_markets`,
-  `foresea_radar`, `foresea_track_record`. Discovery manifest:
+  `foresea_radar`, `foresea_track_record`, `foresea_pr_agent`. Discovery manifest:
   `{_CANONICAL}/.well-known/mcp/server.json`.
 - [Forecast](\
 {_CANONICAL}/docs): `POST {_CANONICAL}/predict` with `{{"question": "..."}}` returns a
@@ -1554,6 +1581,8 @@ async def llms_txt():
   surfaces mispriced live markets (also `kalshi`, or `all`).
 - [Radar]({_CANONICAL}/radar): daily niche-market radar from Reddit, Polymarket,
   Kalshi, and Foresea's committed live snapshots.
+- [PR agent]({_CANONICAL}/pr-agent): concise agent-to-agent outreach packet for
+  opt-in introductions. It does not send unsolicited messages.
 - [OpenAPI spec]({_CANONICAL}/openapi.json): full machine-readable API description.
 
 ## Track record
@@ -1571,6 +1600,7 @@ async def llms_txt():
 async def sitemap_xml():
     urls = [(f"{_CANONICAL}/", "daily", "1.0"),
             (f"{_CANONICAL}/agents", "weekly", "0.9"),
+            (f"{_CANONICAL}/pr-agent", "weekly", "0.8"),
             (f"{_CANONICAL}/track-record", "daily", "0.8"),
             (f"{_CANONICAL}/radar", "daily", "0.8"),
             (f"{_CANONICAL}/docs", "weekly", "0.6")]

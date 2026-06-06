@@ -98,25 +98,17 @@ All hosted models use `openai-compatible` provider pointing to `https://llm.scad
 
 ### Cloud Run (public, scales to zero)
 ```
-https://REDACTED_CLOUD_RUN_URL.run.app
+https://foresea.ink
 ```
 - `GET /health` → `{"status": "ok"}`
 - `POST /predict` — PredictRequest → PredictResponse
 
-### Vertex AI endpoint (requires Bearer token)
-```
-https://us-central1-aiplatform.googleapis.com/v1/projects/brave-drive-471109-d9/locations/us-central1/endpoints/7325853011580813312:predict
-```
-- `POST` with `{"instances": [PredictRequest]}` → `{"predictions": [PredictResponse]}`
-
 ### CI/CD
 Push to `main` triggers GitHub Actions:
 1. `ci.yml` — lint + tests
-2. `docker.yml` — build CPU image → push to GHCR + GCP Artifact Registry → deploy to Cloud Run → upload to Vertex AI + deploy to endpoint
+2. `docker.yml` — build CPU image → push to GHCR + GCP Artifact Registry → deploy to Cloud Run
 
-GCP project: `brave-drive-471109-d9`, region: `us-central1`.
 Required GitHub secrets: `GCP_SA_KEY`.
-Required GitHub variables: `VERTEX_ENDPOINT_ID=7325853011580813312`.
 
 ## Adding a new prompt variant
 

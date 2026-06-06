@@ -28,7 +28,7 @@ from analyzing_llm_rationale.validation import (
     verify_result_records,
 )
 
-_GCP_PROJECT_ID = "brave-drive-471109-d9"
+_GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "")
 
 
 def _fetch_secret_from_gcp(secret_name: str) -> Optional[str]:
