@@ -1,0 +1,47 @@
+{
+  "targets": [
+    {
+      "name": "AgentNDX",
+      "endpoint": "https://agentndx.ai/api/submit",
+      "audience": "catalog",
+      "transport": "form",
+      "form": {
+        "name": "Foresea",
+        "github_url": "https://github.com/pareelamre/analyzing-llm-rationale",
+        "homepage_url": "https://foresea.ink",
+        "protocols": ["MCP"],
+        "description": "Remote MCP server for prediction-market forecasting, market-edge scans, and public track-record checks.",
+        "contact": "pareel.amre@gmail.com"
+      }
+    },
+    {
+      "name": "MCP.Directory",
+      "endpoint": "https://mcp.directory/api/submit-server",
+      "audience": "catalog",
+      "transport": "json",
+      "body": {
+        "githubUrl": "https://github.com/pareelamre/analyzing-llm-rationale",
+        "description": "Prediction-market forecasts, market-edge scans, and public track-record checks.",
+        "email": "pareel.amre@gmail.com"
+      }
+    },
+    {
+      "name": "mcpub",
+      "endpoint": "https://mcpub.dev/mcp",
+      "audience": "mcp",
+      "transport": "json",
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+          "name": "submit",
+          "arguments": {
+            "url": "https://foresea.ink",
+            "description": "Remote MCP server for prediction-market forecasting, market-edge scans, and public track-record checks."
+          }
+        }
+      }
+    }
+  ]
+}
