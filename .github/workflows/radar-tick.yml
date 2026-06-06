@@ -1,0 +1,52 @@
+name: Radar tick
+
+# Builds the public Radar artifact on GitHub Actions and commits it back to the
+# repo. Cloud Run serves static/radar.json and does no Radar scraping/batch
+# forecasting on visitor requests.
+
+on:
+  schedule:
+    - cron: "37 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: radar-tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install --quiet requests beautifulsoup4
+
+      - name: Build Radar artifact
+        env:
+          FORESEA_BASE_URL: https://foresea.ink
+          RADAR_LIMIT: "10"
+          RADAR_FORECASTS: "10"
+          PREDICT_API_KEY: ${{ secrets.PREDICT_API_KEY }}
+        run: python scripts/radar_tick.py
+
+      - name: Commit updated Radar
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/radar.json
+          if git diff --cached --quiet; then
+            echo "No Radar changes to commit."
+            exit 0
+          fi
+          git commit -m "radar: hourly tick [skip ci]"
+          git pull --rebase --autostash origin main || true
+          git push origin HEAD:main

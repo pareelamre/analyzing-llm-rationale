@@ -123,11 +123,18 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "platform": "Polymarket",
         "question": market.get("question") or market.get("title") or "",
         "market_url": f"https://polymarket.com/market/{slug}" if slug else "",
+        "ident": slug,
         "outcome": outcome,
         "probability": probability,
         "outcomes": options,
         "close_time": market.get("endDate") or market.get("endDateIso"),
         "volume": _to_float(market.get("volume24hr") or market.get("volume")),
+        "liquidity": _to_float(market.get("liquidity") or market.get("liquidityNum")),
+        "price_change_24h": _to_float(
+            market.get("oneDayPriceChange")
+            or market.get("priceChange24hr")
+            or market.get("priceChange24h")
+        ),
         "category": market.get("category"),
     }
 
@@ -269,6 +276,7 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "platform": "Kalshi",
         "question": market.get("title") or market.get("yes_sub_title") or market.get("subtitle") or ticker,
         "market_url": f"https://kalshi.com/markets/{ticker}" if ticker else "",
+        "ident": ticker,
         "outcome": "Yes",
         "probability": probability,
         "outcomes": [
@@ -277,6 +285,12 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         ],
         "close_time": market.get("close_time"),
         "volume": _to_float(market.get("volume_24h_fp") or market.get("volume")),
+        "liquidity": _to_float(market.get("open_interest") or market.get("liquidity")),
+        "price_change_24h": _to_float(
+            market.get("price_change_24h")
+            or market.get("last_price_change_dollars")
+            or market.get("change_dollars")
+        ),
         "category": None,  # set from the event in list_kalshi
     }
 

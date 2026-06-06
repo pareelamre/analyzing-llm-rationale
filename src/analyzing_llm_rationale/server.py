@@ -65,6 +65,11 @@ _TRACK_RECORD_LIVE_URL = os.environ.get(
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/static/track_record_live.json",
 )
 _TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "600"))
+_RADAR_URL = os.environ.get(
+    "RADAR_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/static/radar.json",
+)
+_RADAR_TTL = int(os.environ.get("RADAR_TTL", "900"))
 _state: Dict[str, Any] = {}
 _PUBLIC_MCP = None
 _PUBLIC_MCP_APP = None
@@ -804,6 +809,38 @@ def _read_live_track_record() -> Optional[Dict[str, Any]]:
     return payload
 
 
+def _read_radar() -> Optional[Dict[str, Any]]:
+    """Return the committed Radar artifact, or None.
+
+    Radar is built by GitHub Actions and committed to ``static/radar.json``.
+    Cloud Run only serves the committed JSON (raw GitHub first, bundled file
+    second) so venue scraping and batch forecasts never run on visitor requests.
+    """
+    import requests
+
+    cache_key = _cache_key("radar_artifact")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    payload: Optional[Dict[str, Any]] = None
+    try:
+        resp = requests.get(_RADAR_URL, timeout=6)
+        if resp.status_code == 200:
+            payload = resp.json()
+    except Exception:
+        logger.warning("radar artifact fetch failed; trying bundled copy", exc_info=True)
+    if payload is None:
+        bundled = _STATIC_DIR / "radar.json"
+        if bundled.exists():
+            try:
+                payload = json.loads(bundled.read_text())
+            except Exception:
+                logger.warning("bundled radar artifact unreadable", exc_info=True)
+    if payload is not None:
+        _cache_set(cache_key, payload, _RADAR_TTL)
+    return payload
+
+
 # ── Rate limiter ──────────────────────────────────────────────────────────────
 class _RateLimiter:
     """Sliding/fixed-window limiter.
@@ -1209,9 +1246,11 @@ def _mcp_server_manifest() -> Dict[str, Any]:
                 "foresea_scan_markets",
                 "foresea_track_record",
                 "foresea_edge_board",
+                "foresea_radar",
             ],
             "ink.foresea/resources": [
                 "foresea://track-record",
+                "foresea://radar",
                 "foresea://openapi.json",
             ],
         },
@@ -1253,6 +1292,8 @@ async def llms_txt():
   compute edge) and returns one structured report.
 - [Edge scan]({_CANONICAL}/docs): `GET {_CANONICAL}/agent/scan?platform=polymarket`
   surfaces mispriced live markets (also `kalshi`, or `all`).
+- [Radar]({_CANONICAL}/radar): daily niche-market radar from Reddit, Polymarket,
+  Kalshi, and Foresea's committed live snapshots.
 - [OpenAPI spec]({_CANONICAL}/openapi.json): full machine-readable API description.
 
 ## Track record
@@ -1270,6 +1311,7 @@ async def llms_txt():
 async def sitemap_xml():
     urls = [(f"{_CANONICAL}/", "daily", "1.0"),
             (f"{_CANONICAL}/track-record", "daily", "0.8"),
+            (f"{_CANONICAL}/radar", "daily", "0.8"),
             (f"{_CANONICAL}/docs", "weekly", "0.6")]
     items = "".join(
         f"<url><loc>{loc}</loc><changefreq>{cf}</changefreq><priority>{pr}</priority></url>"
@@ -1387,6 +1429,28 @@ async def edge_board():
         },
         headers={"Cache-Control": "public, max-age=300"},
     )
+
+
+@app.get("/radar", tags=["Markets"], summary="Foresea Radar: niche prediction-market opportunities")
+async def radar(limit: int = 10, include_reddit: bool = True):
+    """Daily niche-market radar from Reddit, Polymarket, Kalshi, and Foresea's
+    committed live snapshots.
+
+    The endpoint serves the committed ``static/radar.json`` artifact built by
+    GitHub Actions. The Action may run fresh `/predict` forecasts before
+    committing; Cloud Run never does Radar scraping or batch forecasting on page
+    load.
+    """
+    limit = max(1, min(int(limit), 25))
+    payload = await asyncio.get_running_loop().run_in_executor(None, _read_radar)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Radar artifact not generated yet.")
+    payload = dict(payload)
+    items = list(payload.get("items") or [])
+    payload["items"] = items[:limit]
+    if not include_reddit:
+        payload["reddit_discussions"] = []
+    return JSONResponse(payload, headers={"Cache-Control": f"public, max-age={_RADAR_TTL}"})
 
 
 # ── Request / response models ─────────────────────────────────────────────────

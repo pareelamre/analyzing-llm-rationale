@@ -193,6 +193,21 @@ The Action calls `/predict` once per newly snapshotted market. If `/predict` is
 protected, set the GitHub secret `PREDICT_API_KEY`; no `TRACK_RECORD_TOKEN` or
 server-side `/track-record/tick` endpoint is required.
 
+### Foresea Radar
+
+`GET /radar` serves the public niche-market radar used by the web app's Radar
+view. `.github/workflows/radar-tick.yml` runs hourly on GitHub Actions, fetches
+Polymarket/Kalshi/Reddit candidates, calls `/predict` for fresh Foresea
+probabilities, writes `static/radar.json`, and commits it back to `main`.
+Cloud Run only serves that committed JSON artifact, so Radar avoids OOMs without
+avoiding inference.
+
+Radar items include market price, Foresea probability, edge, credibility score,
+evidence links, tracking status, and tags such as `thin liquidity`,
+`resolution-rule risk`, `news catalyst`, `crowded sports market`, `near-term`,
+and `tracked live`. The endpoint is cached with `RADAR_TTL` (default `900`
+seconds).
+
 Raise the Cloud Run throughput ceiling (no idle cost while `min-instances=0`):
 
 ```bash

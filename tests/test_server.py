@@ -243,6 +243,46 @@ class ServerTests(unittest.TestCase):
             response = self.client.get("/markets/kalshi?ticker=NOPE")
         self.assertEqual(response.status_code, 404)
 
+    def test_radar_endpoint_returns_cached_market_surface(self):
+        import analyzing_llm_rationale.server as server_mod
+
+        payload = {
+            "generated_at": "2026-06-06T00:00:00Z",
+            "items": [
+                {
+                    "question": "Will test market resolve yes?",
+                    "platform": "Kalshi",
+                    "market_probability": 0.42,
+                    "foresea_probability": 0.55,
+                    "tags": ["tracked live"],
+                    "credibility_score": 82,
+                }
+            ],
+            "reddit_discussions": [],
+            "unusual_moves": [],
+            "tracked_live": [],
+            "tag_definitions": {},
+        }
+        with mock.patch.object(server_mod, "_read_radar", return_value=payload) as read_radar:
+            response = self.client.get("/radar?limit=50&include_reddit=false")
+            response2 = self.client.get("/radar?limit=25&include_reddit=false")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["items"][0]["question"], "Will test market resolve yes?")
+        self.assertIn("max-age", response.headers["cache-control"])
+        self.assertEqual(body["reddit_discussions"], [])
+        self.assertEqual(response2.status_code, 200)
+        self.assertEqual(read_radar.call_count, 2)
+
+    def test_radar_endpoint_404_when_artifact_missing(self):
+        import analyzing_llm_rationale.server as server_mod
+
+        with mock.patch.object(server_mod, "_read_radar", return_value=None):
+            response = self.client.get("/radar")
+
+        self.assertEqual(response.status_code, 404)
+
     def test_trading_accounts_requires_session(self):
         response = self.client.get("/trading/accounts")
         self.assertEqual(response.status_code, 401)
