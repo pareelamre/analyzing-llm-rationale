@@ -775,6 +775,13 @@
     }
     .tr-bar { height: 8px; background: var(--paper); border-radius: 2px; overflow: hidden; }
     .tr-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+    .eb-h { margin-top: 32px; margin-bottom: 10px; font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+    .eb-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+    .eb-table th { text-align: left; color: var(--text-dim); font-weight: 500; padding: 6px 10px; border-bottom: 1px solid #ececec; white-space: nowrap; }
+    .eb-table td { padding: 8px 10px; border-bottom: 1px solid var(--paper); vertical-align: top; }
+    .eb-calib-row { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-dim); padding: 4px 0; }
+    .eb-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--paper); color: var(--text-dim); white-space: nowrap; }
+    .eb-badge.eb-sig { background: #e7f6ee; color: #0a7a4a; }
     .tr-log { display: flex; flex-direction: column; }
     .tr-log-row {
       display: grid; grid-template-columns: 18px 1fr auto; gap: 13px;
@@ -1389,6 +1396,7 @@
     </button>
     <div class="landing-links">
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
+      <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
       <a href="/docs" target="_blank" class="topbar-link nav-collapse">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link nav-collapse">GitHub</a>
       <!-- Auth — toggled by updateAuthUI() -->
@@ -1669,6 +1677,7 @@
     </div>
     <nav class="hidden md:flex items-center gap-4 flex-shrink-0" aria-label="App navigation">
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
+      <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
       <!-- Auth -->
@@ -1810,6 +1819,20 @@
     <button id="trackCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeTrackRecord()">Close</button>
   </div>
   <div id="trackBody" class="tr-body" data-lenis-prevent></div>
+</div>
+
+<div id="edgeOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="edgeDialogTitle" aria-hidden="true" tabindex="-1">
+  <div class="tr-head">
+    <div class="flex items-center gap-2">
+      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
+        <span class="logo-dot"></span>
+        <span class="brand text-lg">Foresea</span>
+      </button>
+      <h2 id="edgeDialogTitle" class="sr-only">Foresea edge board</h2>
+    </div>
+    <button id="edgeCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeEdgeBoard()">Close</button>
+  </div>
+  <div id="edgeBody" class="tr-body" data-lenis-prevent></div>
 </div>
 
 <script>
@@ -2931,6 +2954,125 @@ async function loadTrackRecord() {
   } catch (e) {
     host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Track record is not available yet.</p></div>';
   }
+}
+let edgeLoaded = false;
+async function openEdgeBoard({ updateHistory = true } = {}) {
+  const ov = document.getElementById('edgeOverlay');
+  if (ov.classList.contains('open')) return;
+  lastFocusedBeforeDialog = document.activeElement;
+  ov.classList.add('open');
+  ov.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  if (window.Motion && !prefersReduced()) {
+    Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
+  }
+  if (!edgeLoaded) { edgeLoaded = true; await loadEdgeBoard(); }
+  setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
+}
+function closeEdgeBoard() {
+  const ov = document.getElementById('edgeOverlay');
+  if (!ov.classList.contains('open')) return;
+  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
+  const finish = () => {
+    ov.classList.remove('open');
+    ov.setAttribute('aria-hidden', 'true');
+    ov.style.opacity = '';
+    document.body.style.overflow = inApp ? 'hidden' : 'auto';
+    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
+  };
+  if (window.Motion && !prefersReduced()) {
+    Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
+  } else { finish(); }
+}
+async function loadEdgeBoard() {
+  const host = document.getElementById('edgeBody');
+  host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading edge board…</p></div>';
+  try {
+    const r = await fetch('/edge-board');
+    if (!r.ok) throw new Error('unavailable');
+    host.innerHTML = renderEdgeBoard(await _readJson(r));
+    if (window.Motion && !prefersReduced()) {
+      Motion.animate('#edgeBody .tr-stat',
+        { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
+        { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
+      host.querySelectorAll('.eb-row').forEach(el => { el.style.opacity = '0'; });
+      Motion.inView('#edgeBody .eb-row', (entry) => {
+        Motion.animate(entry.target, { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
+          { duration: 0.35, easing: EASE });
+      }, { amount: 0.1 });
+    }
+  } catch (e) {
+    host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Edge board is not available yet.</p></div>';
+  }
+}
+function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
+function _roiPct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + pct(x) + '%'; }
+function renderEdgeBoard(d) {
+  const board = d.edge_board || [], byEdge = d.by_edge || [], comp = d.models_comparison || [];
+  const pnl = d.paper_pnl, ll = d.lead_lag;
+  const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
+  const conv = ll && ll.market_converged_to_model_pct != null ? pct(ll.market_converged_to_model_pct) + '%' : '—';
+  const stats = `
+    <div class="tr-stats">
+      <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">Open markets</div></div>
+      <div class="tr-stat"><div class="v">${(d.n_snapshots_resolved || 0)}</div><div class="k label">Resolved forecasts</div></div>
+      <div class="tr-stat"><div class="v">${conv}</div><div class="k label">Market follows model</div></div>
+    </div>`;
+  let compHtml;
+  if (comp.length) {
+    compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Paper ROI</th><th>Validated</th></tr></thead><tbody>` +
+      comp.map(m => `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
+        `<td>${m.accuracy == null ? '—' : pct(m.accuracy) + '%'}</td><td>${_sg(m.skill_vs_market)}</td>` +
+        `<td>${_roiPct(m.paper_roi)}</td><td>${_roiPct(m.paper_roi_validated)}</td></tr>`).join('') + `</tbody></table>`;
+  } else {
+    compHtml = `<p class="text-sm text-gray-500">Model comparison (gpt-oss-120b vs Gemma vs Kimi) fills in as forecasts resolve.</p>`;
+  }
+  let pnlHtml;
+  if (pnl && pnl.flat) {
+    const roi = s => s ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets') : '—';
+    pnlHtml = `<div class="tr-stats">
+      <div class="tr-stat"><div class="v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div></div>
+      <div class="tr-stat"><div class="v">${roi(pnl.edge_weighted)}</div><div class="k label">Edge-weighted</div></div>
+      <div class="tr-stat"><div class="v">${roi(pnl.validated_only)}</div><div class="k label">Validated-only</div></div>
+    </div><p class="text-xs text-gray-400">${escHtml(pnl.disclaimer || '')}</p>`;
+  } else {
+    pnlHtml = `<p class="text-sm text-gray-500">Hypothetical paper PnL starts once disagreements resolve. No fees/slippage — a signal check, not live trading.</p>`;
+  }
+  let calibHtml;
+  if (byEdge.length) {
+    calibHtml = byEdge.map(b => {
+      const sig = b.skill_significant ? '<span class="eb-badge eb-sig">proven edge</span>' : '<span class="eb-badge">not yet proven</span>';
+      return `<div class="eb-calib-row eb-row"><span style="width:90px;font-weight:600">${b.edge_bucket}</span><span style="flex:1">skill ${_sg(b.skill_vs_market)} (n=${b.n})</span>${sig}</div>`;
+    }).join('');
+  } else {
+    calibHtml = `<p class="text-sm text-gray-500">Edge calibration — whether bigger disagreements actually pay — builds as markets resolve.</p>`;
+  }
+  let boardHtml;
+  if (board.length) {
+    boardHtml = `<table class="eb-table"><thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Market</th><th>Edge</th><th>Bucket</th><th>Track record</th></tr></thead><tbody>` +
+      board.map(e => {
+        const tr = e.track_record;
+        const badge = !tr ? '—' : (tr.skill_significant
+          ? `<span class="eb-badge eb-sig">proven (n=${tr.n})</span>`
+          : `<span class="eb-badge">unproven (n=${tr.n ?? 0})</span>`);
+        const url = e.market_url ? `href="${escHtml(e.market_url)}" target="_blank" rel="noopener"` : '';
+        return `<tr class="eb-row"><td style="max-width:280px"><a ${url} style="color:inherit">${escHtml((e.question || '').slice(0, 90))}</a></td>` +
+          `<td>${escHtml(e.platform || '')}</td><td>${pct(e.model_probability)}%</td><td>${pct(e.market_probability)}%</td>` +
+          `<td><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td><td>${e.edge_bucket}</td><td>${badge}</td></tr>`;
+      }).join('') + `</tbody></table>`;
+  } else {
+    boardHtml = `<p class="text-sm text-gray-500">No open markets tracked yet.</p>`;
+  }
+  return `<div class="tr-inner">
+    <p class="label">Edge board</p>
+    <h3 class="text-xl font-semibold mb-1">Where our fair value disagrees with the market — and whether that's paid</h3>
+    <p class="tr-method">Live model-vs-market gaps, ranked. Calibration, lead/lag and paper PnL come from resolved forecasts only — hypothetical, no fees or slippage. ${gen ? 'Updated ' + gen + '.' : ''}</p>
+    ${stats}
+    <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
+    <h4 class="eb-h">Hypothetical paper PnL · betting the edge</h4>${pnlHtml}
+    <h4 class="eb-h">Does disagreement pay? · edge calibration</h4>${calibHtml}
+    <h4 class="eb-h">Live disagreements</h4>${boardHtml}
+  </div>`;
 }
 function renderTrackRecord(d) {
   const stats = `
