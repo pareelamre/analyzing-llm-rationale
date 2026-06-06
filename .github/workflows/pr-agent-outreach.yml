@@ -38,6 +38,7 @@ jobs:
       - name: Run PR agent outreach
         env:
           PR_AGENT_TARGET_AUTH: ${{ secrets.PR_AGENT_TARGET_AUTH }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           resend_flag=""
           if [ "${{ github.event.inputs.resend }}" = "true" ]; then
@@ -47,6 +48,7 @@ jobs:
             --targets data/pr_outreach_targets.json \
             --state data/pr_outreach_state.json \
             --send \
+            --discover \
             --out data/pr_outreach_last_run.json \
             $resend_flag
 
@@ -54,7 +56,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/pr_outreach_state.json data/pr_outreach_last_run.json
+          git add data/pr_outreach_targets.json data/pr_outreach_state.json data/pr_outreach_last_run.json
           if git diff --cached --quiet; then
             echo "No outreach state changes to commit."
             exit 0

@@ -358,8 +358,15 @@ python scripts/pr_agent_outreach.py \
 Header values can reference GitHub Actions secrets via environment variables, for
 example `"Authorization": "$PR_AGENT_TARGET_AUTH"`.
 
-Seeded target: AgentNDX (`https://agentndx.ai/api/submit`), using its public MCP
-server submission form fields.
+Seeded automated targets:
+
+- AgentNDX (`https://agentndx.ai/api/submit`) — public MCP/A2A/x402 review form.
+- MCP.Directory (`https://mcp.directory/api/submit-server`) — public JSON submit route.
+- mcpub (`https://mcpub.dev/mcp`) — public MCP JSON-RPC `submit` tool.
+
+Additional listing work that is not suitable for the scheduled HTTP sender lives
+in `data/pr_manual_targets.json`. Current manual/GitHub target: mcp.so issue
+`https://github.com/daodao97/chatmcp/issues/213`.
 
 #### Add Foresea to your agent (10 seconds)
 
