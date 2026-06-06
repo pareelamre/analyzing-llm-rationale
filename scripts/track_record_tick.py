@@ -49,6 +49,11 @@ PUBLIC_PATH = Path(os.environ.get("TRACK_PUBLIC_PATH") or ROOT / "static" / "tra
 
 BASE_URL = os.environ.get("FORESEA_BASE_URL", "https://foresea.ink").rstrip("/")
 MODEL = os.environ.get("TRACK_MODEL", "gpt-oss-120b")
+# Models to forecast each market with, for the paper-trading comparison. The
+# first is the primary (the public track record); the rest are graded alongside.
+# Each must be in the server's /predict allowlist.
+TRACK_MODELS = [m.strip() for m in os.environ.get(
+    "TRACK_MODELS", "gpt-oss-120b,gemma-4-31b-it,kimi-k2.5").split(",") if m.strip()]
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 TEMPERATURE = float(os.environ.get("TRACK_TEMPERATURE", "0.0") or 0.0)
 PER_VENUE = max(1, min(int(os.environ.get("PER_VENUE", "3") or 3), 5))
@@ -82,8 +87,10 @@ def _post_predict(payload: dict) -> dict | None:
     return None
 
 
-async def forecast_fn(quote: dict, evidence_top_k: int) -> dict | None:
-    """Forecast one market via /predict; mirror server._track_record_forecast."""
+async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None) -> dict | None:
+    """Forecast one market via /predict with a chosen model; mirror
+    server._track_record_forecast. ``model`` selects an allowlisted server-hosted
+    model (server's own key) for the paper-trading comparison."""
     payload = {
         "question": quote["question"],
         "attach_evidence": True,
@@ -93,6 +100,8 @@ async def forecast_fn(quote: dict, evidence_top_k: int) -> dict | None:
         "market_outcome": quote.get("outcome"),
         "market_probability": quote.get("probability"),
     }
+    if model:
+        payload["model"] = model
     loop = asyncio.get_running_loop()
     res = await loop.run_in_executor(None, _post_predict, payload)
     if not res:
@@ -113,8 +122,9 @@ async def main() -> int:
     newly_resolved = trl.resolve_open_snapshots(store, market_data)
     price_points = trl.record_price_points(store, market_data)
     recorded = await trl.record_snapshots(
-        store, market_data, forecast_fn, per_venue=PER_VENUE)
-    agg = trl.aggregate(store, model=MODEL, variant=VARIANT, temperature=TEMPERATURE)
+        store, market_data, forecast_fn,
+        models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE)
+    agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)
 
     PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)
     PUBLIC_PATH.write_text(json.dumps(agg, indent=2, sort_keys=True) + "\n")

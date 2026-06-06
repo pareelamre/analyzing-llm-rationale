@@ -1381,6 +1381,7 @@ async def edge_board():
             "by_edge": live.get("by_edge", []),
             "lead_lag": live.get("lead_lag"),
             "paper_pnl": live.get("paper_pnl"),
+            "models_comparison": live.get("models_comparison", []),
             "n_markets_open": live.get("n_markets_open", 0),
             "n_snapshots_resolved": live.get("n_snapshots_resolved", 0),
         },
@@ -1571,6 +1572,16 @@ class PredictRequest(BaseModel):
         None,
         max_length=128,
         description="OpenRouter model ID (e.g. `openai/gpt-4o`, `anthropic/claude-3.5-sonnet`).",
+    )
+    model: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "Optional alternate server-hosted model to forecast with, from the "
+            "allowlist (`gpt-oss-120b`, `gemma-4-31b-it`, `kimi-k2.5`). Uses the "
+            "server's own key — no BYOK needed. Powers the multi-model paper-trading "
+            "comparison."
+        ),
     )
     provider_base_url: Optional[str] = Field(
         None,
@@ -3250,7 +3261,13 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     # Use a user-supplied model if provided: a custom OpenAI-compatible endpoint
     # when provider_base_url is set, otherwise OpenRouter. Falls back to the
     # server default model when no key/model is given.
-    if req.openrouter_api_key and req.openrouter_model:
+    alt_provider = _scads_alt_provider(req.model) if req.model else None
+    if alt_provider is not None:
+        # Server-hosted alternate model (allowlisted SCADS), server's own key.
+        provider = alt_provider
+        temperature = _state.get("temperature", 0.0)
+        max_tokens = _state.get("max_tokens", 1024)
+    elif req.openrouter_api_key and req.openrouter_model:
         if req.provider_base_url:
             from analyzing_llm_rationale.providers import OpenAICompatibleProvider
             provider = OpenAICompatibleProvider(
@@ -3363,6 +3380,30 @@ _AGENT_SKILL_SYSTEM = (
     "Do not output JSON or restate the whole forecast — add the specific insight "
     "the skill asks for."
 )
+
+
+# Alternate server-hosted SCADS models the public API may forecast with (using
+# the server's own key) — for the multi-model paper-trading comparison.
+_SCADS_BASE_URL = os.environ.get("SCADS_BASE_URL", "https://llm.scads.ai/v1/chat/completions")
+_SCADS_MODEL_ALLOWLIST = {
+    "gpt-oss-120b": "openai/gpt-oss-120b",
+    "gemma-4-31b-it": "google/gemma-4-31B-it",
+    "kimi-k2.5": "moonshotai/Kimi-K2.5",
+}
+
+
+def _scads_alt_provider(model_label: str):
+    """Build a provider for an allowlisted alternate SCADS model using the server's
+    own key. Returns None if the label is the server default or not allowlisted."""
+    label = (model_label or "").strip()
+    if not label or label == _state.get("model_key") or label not in _SCADS_MODEL_ALLOWLIST:
+        return None
+    scads_key = os.environ.get("SCADS_AI_API_KEY")
+    if not scads_key:
+        raise HTTPException(status_code=503, detail="Alternate models are not configured on this server.")
+    from analyzing_llm_rationale.providers import OpenAICompatibleProvider
+    return OpenAICompatibleProvider(
+        model_name=_SCADS_MODEL_ALLOWLIST[label], api_key=scads_key, base_url=_SCADS_BASE_URL)
 
 
 def _select_provider(

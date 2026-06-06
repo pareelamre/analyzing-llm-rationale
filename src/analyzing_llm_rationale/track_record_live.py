@@ -35,9 +35,9 @@ PRICE_KIND = "MarketPricePoint"
 AGG_KIND = "TrackRecordLive"
 AGG_ID = "global"
 
-# (quote_dict, evidence_top_k) -> {"model_probability", "market_probability",
-# "evidence_count", ...} | None
-ForecastFn = Callable[[Dict[str, Any], int], Awaitable[Optional[Dict[str, Any]]]]
+# (quote_dict, evidence_top_k, model_label) -> {"model_probability",
+# "market_probability", "evidence_count", ...} | None
+ForecastFn = Callable[[Dict[str, Any], int, Optional[str]], Awaitable[Optional[Dict[str, Any]]]]
 
 # Calibration only kicks in once there's enough resolved data AND the raw
 # forecasts are actually miscalibrated — otherwise it's a no-op (see aggregate).
@@ -137,6 +137,8 @@ async def record_snapshots(
     market_data,
     forecast_fn: ForecastFn,
     *,
+    models: Optional[List[str]] = None,
+    default_model: str = "gpt-oss-120b",
     per_venue: int = 3,
     evidence_top_k: int = 3,
     max_active: int = 20,
@@ -144,8 +146,12 @@ async def record_snapshots(
     max_discovery_lead_days: float = 365.0,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
-    newly-discovered markets, capturing the live price + a fresh forecast."""
+    newly-discovered markets, capturing the live price + a fresh forecast.
 
+    With multiple ``models`` (labels passed to ``forecast_fn``), each market is
+    forecast once per model per day — the per-model snapshots back the
+    paper-trading comparison. One snapshot per (market, model, day)."""
+    model_list = list(models) if models else [default_model]
     today = _today()
 
     # 1) Markets we're already tracking that are still open → re-fetch live quote.
@@ -184,42 +190,43 @@ async def record_snapshots(
         ident = ident_from_url(quote.get("platform", ""), quote.get("market_url", ""))
         if not ident:
             continue
-        key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{today}")
-        if client.get(key) is not None:
-            continue  # already snapshotted this market today
         market_prob = quote.get("probability")
-        try:
-            scored = await forecast_fn(quote, evidence_top_k)
-        except Exception:
-            scored = None
-        if not scored or scored.get("model_probability") is None:
-            continue
-        model_prob = scored["model_probability"]
-        mkt_prob = scored.get("market_probability")
-        mkt_prob = mkt_prob if mkt_prob is not None else market_prob
         lead = _lead_time_days(quote.get("close_time"))
-        entity = _ds.Entity(key, exclude_from_indexes=("question", "market_url", "close_time", "category"))
-        entity.update(
-            platform=quote.get("platform"),
-            ident=ident,
-            question=quote.get("question"),
-            market_url=quote.get("market_url"),
-            snapshot_ts=_now(),
-            snapshot_date=today,
-            model_probability=float(model_prob),
-            market_probability=float(mkt_prob),
-            close_time=quote.get("close_time"),
-            lead_time_days=lead,
-            horizon=_horizon_label(lead),
-            # Training features captured at forecast time (cheap now, lost if not stored).
-            category=quote.get("category"),
-            market_volume=quote.get("volume"),
-            evidence_count=scored.get("evidence_count"),
-            resolved=False,
-            outcome=None,
-        )
-        client.put(entity)
-        recorded += 1
+        for model in model_list:
+            key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{today}")
+            if client.get(key) is not None:
+                continue  # already snapshotted this market+model today
+            try:
+                scored = await forecast_fn(quote, evidence_top_k, model)
+            except Exception:
+                scored = None
+            if not scored or scored.get("model_probability") is None:
+                continue
+            mkt_prob = scored.get("market_probability")
+            mkt_prob = mkt_prob if mkt_prob is not None else market_prob
+            entity = _ds.Entity(key, exclude_from_indexes=("question", "market_url", "close_time", "category"))
+            entity.update(
+                platform=quote.get("platform"),
+                ident=ident,
+                model=model,
+                question=quote.get("question"),
+                market_url=quote.get("market_url"),
+                snapshot_ts=_now(),
+                snapshot_date=today,
+                model_probability=float(scored["model_probability"]),
+                market_probability=float(mkt_prob),
+                close_time=quote.get("close_time"),
+                lead_time_days=lead,
+                horizon=_horizon_label(lead),
+                # Training features captured at forecast time (cheap now, lost if not stored).
+                category=quote.get("category"),
+                market_volume=quote.get("volume"),
+                evidence_count=scored.get("evidence_count"),
+                resolved=False,
+                outcome=None,
+            )
+            client.put(entity)
+            recorded += 1
     return recorded
 
 
@@ -488,6 +495,36 @@ def paper_pnl(resolved: List[Dict[str, Any]],
     }
 
 
+def build_models_comparison(resolved: List[Dict[str, Any]], *,
+                            default_model: str) -> List[Dict[str, Any]]:
+    """Per-model leaderboard over resolved snapshots: accuracy, skill-vs-market,
+    and hypothetical paper-trading ROI (flat + validated-only) — so gpt-oss-120b,
+    Gemma, and Kimi are graded on the same markets. Ranked best-paper-edge first."""
+    by_model: Dict[str, List[Dict[str, Any]]] = {}
+    for r in resolved:
+        by_model.setdefault(r.get("model") or default_model, []).append(r)
+    out: List[Dict[str, Any]] = []
+    for mlabel, rows in by_model.items():
+        ov = _bucket_stats(rows) or {}
+        pp = paper_pnl(rows, edge_calibration(rows))
+        out.append({
+            "model": mlabel,
+            "n_snapshots_resolved": len(rows),
+            "n_markets_resolved": len({(r.get("platform"), r.get("ident")) for r in rows}),
+            "accuracy": ov.get("accuracy"),
+            "model_brier": ov.get("model_brier"),
+            "skill_vs_market": ov.get("skill_vs_market"),
+            "paper_roi": ((pp or {}).get("flat") or {}).get("roi"),
+            "paper_roi_validated": ((pp or {}).get("validated_only") or {}).get("roi"),
+            "paper_pnl": pp,
+        })
+    out.sort(key=lambda m: (m["paper_roi_validated"] if m["paper_roi_validated"] is not None else -9.0,
+                            m["paper_roi"] if m["paper_roi"] is not None else -9.0,
+                            m["skill_vs_market"] if m["skill_vs_market"] is not None else -9.0),
+             reverse=True)
+    return out
+
+
 def build_edge_board(open_rows: List[Dict[str, Any]],
                      latest_price: Dict[str, float],
                      edge_calib: List[Dict[str, Any]],
@@ -692,7 +729,12 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             _latest_price_ts[ident] = ts
             latest_price[ident] = float(p.get("market_probability") or 0.0)
 
-    n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved})
+    # The public sections describe the primary model; the comparison spans all.
+    # Snapshots predating the multi-model split have no `model` field → primary.
+    resolved_primary = [r for r in resolved if (r.get("model") or model) == model]
+    open_primary = [r for r in open_rows if (r.get("model") or model) == model]
+    open_idents = {(r.get("platform"), r.get("ident")) for r in open_primary}
+    n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_primary})
 
     payload: Dict[str, Any] = {
         "source": "live",
@@ -707,22 +749,22 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             "Skill vs market = market Brier − model Brier, reported by forecast "
             "horizon; long-horizon skill is the meaningful signal."
         ),
-        "n_snapshots_resolved": len(resolved),
+        "n_snapshots_resolved": len(resolved_primary),
         "n_markets_resolved": n_markets_resolved,
         "n_markets_open": len(open_idents),
     }
 
-    overall = _bucket_stats(resolved)
+    overall = _bucket_stats(resolved_primary)
     by_horizon = []
     for label, _lo, _hi in _HORIZONS:
-        stats = _bucket_stats([r for r in resolved if r.get("horizon") == label])
+        stats = _bucket_stats([r for r in resolved_primary if r.get("horizon") == label])
         if stats:
             stats["horizon"] = label
             by_horizon.append(stats)
 
     # Trajectory samples: a few resolved markets with their snapshot series.
     by_market: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
-    for r in resolved:
+    for r in resolved_primary:
         by_market.setdefault((r.get("platform"), r.get("ident")), []).append(r)
     trajectories = []
     for snaps in sorted(by_market.values(),
@@ -751,16 +793,17 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             } for p in price_points],
         })
 
-    by_edge = edge_calibration(resolved)
+    by_edge = edge_calibration(resolved_primary)
     payload.update({
         "overall": overall,
         "by_horizon": by_horizon,
         "by_edge": by_edge,
         "lead_lag": lead_lag(by_market),
-        "paper_pnl": paper_pnl(resolved, by_edge),
-        "edge_board": build_edge_board(open_rows, latest_price, by_edge),
+        "paper_pnl": paper_pnl(resolved_primary, by_edge),
+        "edge_board": build_edge_board(open_primary, latest_price, by_edge),
+        "models_comparison": build_models_comparison(resolved, default_model=model),
         "trajectories": trajectories,
-        "calibration_model": _calibration_report(resolved),
+        "calibration_model": _calibration_report(resolved_primary),
     })
 
     entity = _ds.Entity(client.key(AGG_KIND, AGG_ID), exclude_from_indexes=("payload",))

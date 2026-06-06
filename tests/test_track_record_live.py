@@ -90,7 +90,7 @@ class TrajectoryTests(unittest.TestCase):
         self._p.start()
         self.model_probs = {"Will A happen?": 0.70, "Will B happen?": 0.30}
 
-        async def forecast_fn(quote, top_k):
+        async def forecast_fn(quote, top_k, model=None):
             return {"model_probability": self.model_probs[quote["question"]],
                     "market_probability": quote["probability"], "evidence_count": 2}
 
@@ -101,7 +101,8 @@ class TrajectoryTests(unittest.TestCase):
 
     def _record(self, md, day):
         with mock.patch.object(trl, "_today", return_value=day):
-            return asyncio.run(trl.record_snapshots(self.client, md, self.forecast_fn, per_venue=3))
+            return asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m", per_venue=3))
 
     def test_lead_time_and_horizon_labels(self):
         self.assertEqual(trl._horizon_label(20.0), "14-30d")
@@ -398,6 +399,22 @@ class EdgeAnalyticsTests(unittest.TestCase):
         pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
         self.assertIsNotNone(pnl["flat"])
         self.assertIsNone(pnl["validated_only"])
+
+    def test_models_comparison_ranks_models_by_paper_edge(self):
+        # gpt-oss disagrees and wins; gemma disagrees and loses -> gpt-oss ranks first.
+        good = [dict(self._res(0.8, 0.5, 1), model="gpt-oss-120b", platform="P", ident=f"g{i}")
+                for i in range(8)]
+        bad = [dict(self._res(0.8, 0.5, 0), model="gemma-4-31b-it", platform="P", ident=f"b{i}")
+               for i in range(8)]
+        comp = trl.build_models_comparison(good + bad, default_model="gpt-oss-120b")
+        self.assertEqual([m["model"] for m in comp], ["gpt-oss-120b", "gemma-4-31b-it"])
+        self.assertEqual(comp[0]["n_snapshots_resolved"], 8)
+        self.assertGreater(comp[0]["paper_roi"], comp[1]["paper_roi"])
+
+    def test_models_comparison_defaults_missing_model_label(self):
+        rows = [dict(self._res(0.8, 0.5, 1), platform="P", ident=f"x{i}") for i in range(3)]
+        comp = trl.build_models_comparison(rows, default_model="gpt-oss-120b")
+        self.assertEqual(comp[0]["model"], "gpt-oss-120b")  # missing model -> primary
 
     def test_edge_board_uses_latest_live_price_over_snapshot(self):
         now = datetime.now(timezone.utc)
