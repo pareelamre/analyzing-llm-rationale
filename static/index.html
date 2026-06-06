@@ -3155,11 +3155,6 @@ async function loadEdgeBoard() {
       Motion.animate('#edgeBody .tr-stat',
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
         { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
-      host.querySelectorAll('.eb-row').forEach(el => { el.style.opacity = '0'; });
-      Motion.inView('#edgeBody .eb-row', (entry) => {
-        Motion.animate(entry.target, { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
-          { duration: 0.35, easing: EASE });
-      }, { amount: 0.1 });
     }
   } catch (e) {
     host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Edge board is not available yet.</p></div>';
