@@ -58,6 +58,9 @@ VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 TEMPERATURE = float(os.environ.get("TRACK_TEMPERATURE", "0.0") or 0.0)
 PER_VENUE = max(1, min(int(os.environ.get("PER_VENUE", "3") or 3), 5))
 PREDICT_API_KEY = os.environ.get("PREDICT_API_KEY") or None
+# Gates the evolution-loop bridge (pending-markets / mark-enrolled). When unset,
+# the tick simply doesn't pull agent-enrolled seeds (discovery still runs).
+TRACK_RECORD_TOKEN = os.environ.get("TRACK_RECORD_TOKEN") or None
 
 _PREDICT_TIMEOUT_S = 120
 _PREDICT_RETRIES = 3
@@ -85,6 +88,38 @@ def _post_predict(payload: dict) -> dict | None:
             time.sleep(2 ** attempt)
     print(f"  predict failed: {last_err}", file=sys.stderr)
     return None
+
+
+def _get_pending_markets() -> list[tuple[str, str]]:
+    """Pull agent-enrolled markets from the server's bridge. Fail-open to []."""
+    if not TRACK_RECORD_TOKEN:
+        return []
+    req = urllib.request.Request(
+        f"{BASE_URL}/track-record/pending-markets?limit=50",
+        headers={"X-Track-Token": TRACK_RECORD_TOKEN})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+        return [(m.get("platform"), m.get("ident")) for m in data.get("markets", [])
+                if m.get("platform") and m.get("ident")]
+    except Exception as exc:  # noqa: BLE001
+        print(f"  pending-markets fetch failed: {exc}", file=sys.stderr)
+        return []
+
+
+def _mark_enrolled(idents: list[str]) -> None:
+    """Tell the server which agent-enrolled markets are now tracked. Fail-open."""
+    if not TRACK_RECORD_TOKEN or not idents:
+        return
+    body = json.dumps({"idents": idents}).encode()
+    req = urllib.request.Request(
+        f"{BASE_URL}/track-record/mark-enrolled", data=body,
+        headers={"Content-Type": "application/json", "X-Track-Token": TRACK_RECORD_TOKEN})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+    except Exception as exc:  # noqa: BLE001
+        print(f"  mark-enrolled failed: {exc}", file=sys.stderr)
 
 
 async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None) -> dict | None:
@@ -119,11 +154,15 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
 async def main() -> int:
     store = FileStore(STORE_PATH)
 
+    seeds = _get_pending_markets()  # agent-enrolled markets from the evolution-loop bridge
     newly_resolved = trl.resolve_open_snapshots(store, market_data)
     price_points = trl.record_price_points(store, market_data)
     recorded = await trl.record_snapshots(
         store, market_data, forecast_fn,
-        models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE)
+        models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE,
+        seed_idents=seeds)
+    # Flip enrolled markets out of the pending queue (and let the server prune).
+    _mark_enrolled([f"{p}:{i}" for p, i in seeds])
     agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)
 
     PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)

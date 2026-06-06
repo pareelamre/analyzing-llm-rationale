@@ -109,6 +109,17 @@ class TrajectoryTests(unittest.TestCase):
         self.assertEqual(trl._horizon_label(0.5), "<1d")
         self.assertEqual(trl._horizon_label(8.0), "7-14d")
 
+    def test_seed_idents_enroll_market_without_discovery(self):
+        far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        with mock.patch.object(trl, "_today", return_value="2026-06-03"):
+            recorded = asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m",
+                per_venue=0, seed_idents=[("Polymarket", "slug-a")]))
+        self.assertGreaterEqual(recorded, 1)
+        snaps = [e for (k, _i), e in self.client.store.items() if k == trl.SNAPSHOT_KIND]
+        self.assertTrue(any(s.get("ident") == "slug-a" for s in snaps))
+
     def test_short_dated_market_not_discovered(self):
         # Market resolves in 6 hours -> below min_discovery_lead_days, skipped.
         soon = (datetime.now(timezone.utc) + timedelta(hours=6)).isoformat()

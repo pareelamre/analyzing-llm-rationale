@@ -67,6 +67,9 @@ _TRACK_RECORD_LIVE_URL = os.environ.get(
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/static/track_record_live.json",
 )
 _TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "600"))
+# Shared secret gating the evolution-loop bridge endpoints (pending-markets /
+# mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
+_TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
 _RADAR_URL = os.environ.get(
     "RADAR_URL",
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/static/radar.json",
@@ -400,6 +403,56 @@ def _upsert_user(sub: str, email: str, name: str, picture: str) -> None:
         last_login=datetime.now(timezone.utc),
     )
     client.put(entity)
+
+
+# Datastore kind: agent-forecast markets to enrol into the live track record.
+_ENROLLED_MARKET_KIND = "AgentEnrolledMarket"
+
+
+def _enroll_market_sync(platform: str, ident: str, market_url: str,
+                        question: str, source: str) -> None:
+    """Record an agent-forecast market as a *pointer* for the track-record Action to
+    enrol. Writes ONLY this Datastore pointer — never the track-record store itself
+    (that stays Action-owned; see scripts/track_record_tick.py). Best-effort: no-op
+    if Datastore is unavailable, never raises into the request path."""
+    client = _get_datastore()
+    if client is None:
+        return
+    try:
+        from google.cloud import datastore as _ds
+        key = client.key(_ENROLLED_MARKET_KIND, f"{platform}:{ident}")
+        entity = client.get(key)
+        now = datetime.now(timezone.utc)
+        if entity is None:
+            entity = _ds.Entity(key=key, exclude_from_indexes=("market_url", "question"))
+            entity["first_seen_ts"] = now
+            entity["seen_count"] = 0
+            entity["enrolled"] = False
+        entity.update(
+            platform=platform,
+            ident=ident,
+            market_url=market_url,
+            question=(question or "")[:500],
+            last_seen_ts=now,
+            seen_count=int(entity.get("seen_count") or 0) + 1,
+            request_source=source,
+        )
+        client.put(entity)
+    except Exception:
+        logger.warning("market enrollment failed", exc_info=True)
+
+
+async def _enroll_market(platform: Optional[str], ident: Optional[str],
+                         market_url: Optional[str], question: str, source: str) -> None:
+    """Fire-and-forget enrolment off the request path (executor + swallow errors)."""
+    if not platform or not ident or not market_url:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None, _enroll_market_sync, platform, ident, market_url, question, source)
+    except Exception:
+        pass
 
 
 # ── Email + password accounts ───────────────────────────────────────────────
@@ -1457,6 +1510,86 @@ async def edge_board():
         },
         headers={"Cache-Control": "public, max-age=300"},
     )
+
+
+def _require_track_token(request: Optional[Request]) -> None:
+    """Gate the evolution-loop bridge endpoints with the shared TRACK_RECORD_TOKEN."""
+    if not _TRACK_RECORD_TOKEN:
+        raise HTTPException(status_code=503, detail="Evolution-loop bridge is not enabled (set TRACK_RECORD_TOKEN).")
+    token = request.headers.get("x-track-token") if request is not None else None
+    if not token or not hmac.compare_digest(token, _TRACK_RECORD_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Track-Token.")
+
+
+@app.get("/track-record/pending-markets", tags=["System"], summary="Agent-enrolled markets awaiting tracking")
+async def pending_markets(request: Request = None, limit: int = 50) -> Dict[str, Any]:
+    """Markets that agents forecast against (via /predict or /agent/analyze) that
+    aren't yet in the live track record. The track-record Action pulls these and
+    seeds them so they get tracked + scored. Token-gated (`X-Track-Token`)."""
+    _require_track_token(request)
+    limit = max(1, min(int(limit or 50), 200))
+    client = _get_datastore()
+    if client is None:
+        return {"markets": []}
+
+    def _query():
+        q = client.query(kind=_ENROLLED_MARKET_KIND)
+        q.add_filter("enrolled", "=", False)
+        try:
+            q.order = ["first_seen_ts"]
+        except Exception:
+            pass
+        return list(q.fetch(limit=limit))
+
+    rows = await asyncio.get_running_loop().run_in_executor(None, _query)
+    markets = [{
+        "platform": e.get("platform"),
+        "ident": e.get("ident"),
+        "market_url": e.get("market_url"),
+        "question": e.get("question"),
+        "seen_count": e.get("seen_count"),
+        "first_seen_ts": e["first_seen_ts"].isoformat() if hasattr(e.get("first_seen_ts"), "isoformat") else None,
+    } for e in rows]
+    return {"markets": markets}
+
+
+class MarkEnrolledRequest(BaseModel):
+    """Idents (``"platform:ident"``) the Action has now started tracking."""
+    idents: List[str] = Field(default_factory=list, max_length=500)
+
+
+@app.post("/track-record/mark-enrolled", tags=["System"], summary="Mark agent-enrolled markets as tracked")
+async def mark_enrolled(req: MarkEnrolledRequest, request: Request = None) -> Dict[str, Any]:
+    """Flip `enrolled=True` on markets the Action has started tracking (so they
+    leave the pending queue), and prune old tracked/stale pointers. Token-gated."""
+    _require_track_token(request)
+    client = _get_datastore()
+    if client is None:
+        return {"marked": 0, "pruned": 0}
+
+    def _apply():
+        from google.cloud import datastore as _ds  # noqa: F401
+        marked = 0
+        for ident_key in req.idents[:500]:
+            key = client.key(_ENROLLED_MARKET_KIND, ident_key)
+            ent = client.get(key)
+            if ent is not None and not ent.get("enrolled"):
+                ent["enrolled"] = True
+                ent["enrolled_ts"] = datetime.now(timezone.utc)
+                client.put(ent)
+                marked += 1
+        # Prune: drop tracked pointers older than 30 days to bound growth.
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        pq = client.query(kind=_ENROLLED_MARKET_KIND)
+        pq.add_filter("enrolled", "=", True)
+        stale = [e.key for e in pq.fetch()
+                 if e.get("enrolled_ts") and e["enrolled_ts"] < cutoff]
+        for i in range(0, len(stale), 100):
+            client.delete_multi(stale[i:i + 100])
+        return marked, len(stale)
+
+    marked, pruned = await asyncio.get_running_loop().run_in_executor(None, _apply)
+    return {"marked": marked, "pruned": pruned}
 
 
 @app.get("/radar", tags=["Markets"], summary="Foresea Radar: niche prediction-market opportunities")
@@ -3417,6 +3550,22 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     if predict_cache_key is not None:
         _cache_set(predict_cache_key, response.model_dump(), _PREDICT_CACHE_TTL)
 
+    # Evolution loop: enrol the market this forecast was made against so the
+    # track-record Action tracks + scores it (a Datastore pointer only — never the
+    # track-record store). Prefer the structured market_analysis; fall back to a
+    # market URL pasted into the question text.
+    from analyzing_llm_rationale import track_record_live as _trl
+    _ma = getattr(response, "market_analysis", None)
+    if _ma is not None and _ma.market_url and _ma.model_probability is not None:
+        _ident = _trl.ident_from_url(_ma.platform or "", _ma.market_url)
+        await _enroll_market(_ma.platform, _ident, _ma.market_url, req.question, "predict")
+    else:
+        _purl = _parse_market_url(req.question or "")
+        _m = re.search(r"https?://\S+", req.question or "")
+        if _purl and _m:
+            _venue, _kind, _id = _purl
+            await _enroll_market(_venue, _id, _m.group(0).rstrip(").,"), req.question, "predict")
+
     # Best-effort: index the forecast for "search my past forecasts", but only if
     # the embedder is already loaded — never pay a cold start on the forecast path.
     if rag_user_id and rag.is_loaded():
@@ -3944,7 +4093,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     pipeline = ["tool_loop"] + (["forecast"] if last else [])
     if grounding_note:
         pipeline.insert(0, "ground_in_record")
-    return AgentReport(
+    report = AgentReport(
         question=question, pipeline=pipeline,
         platform=(quote.platform if quote else req.platform),
         market_url=(quote.market_url if quote else None),
@@ -3959,6 +4108,12 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         evidence_sources=last.get("evidence_sources", []),
         grounding=grounding_note, tool_transcript=res.get("transcript", []),
     )
+    # Evolution loop: enrol the analysed market into the live track record (pointer only).
+    if report.market_url and report.model_probability is not None:
+        from analyzing_llm_rationale import track_record_live as _trl
+        _ident = _trl.ident_from_url(report.platform or "", report.market_url)
+        await _enroll_market(report.platform, _ident, report.market_url, question, "agent_analyze")
+    return report
 
 
 @app.get("/agent/scan", tags=["Agents"], summary="Scan a venue for mispriced markets", response_model=AgentScanResponse)

@@ -144,9 +144,11 @@ async def record_snapshots(
     max_active: int = 20,
     min_discovery_lead_days: float = 2.0,
     max_discovery_lead_days: float = 365.0,
+    seed_idents: Optional[List[Tuple[str, str]]] = None,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
-    newly-discovered markets, capturing the live price + a fresh forecast.
+    agent-enrolled ``seed_idents`` and newly-discovered markets, capturing the live
+    price + a fresh forecast.
 
     With multiple ``models`` (labels passed to ``forecast_fn``), each market is
     forecast once per model per day — the per-model snapshots back the
@@ -160,6 +162,23 @@ async def record_snapshots(
         quote = _fetch_current_quote(market_data, meta["platform"] or "", meta["ident"] or "")
         if quote and quote.get("probability") is not None:
             targets.append(quote)
+
+    # 1.5) Agent-enrolled seeds (explicit agent forecasts via the evolution-loop
+    #      bridge). Added before discovery so user-driven markets win the max_active
+    #      cap, and tracked even if short-dated — an agent explicitly asked.
+    seen = {(q.get("platform"), ident_from_url(q.get("platform", ""), q.get("market_url", "")))
+            for q in targets}
+    for plat, ident in (seed_idents or []):
+        if not ident:
+            continue
+        quote = _fetch_current_quote(market_data, plat or "", ident or "")
+        if not quote or quote.get("probability") is None:
+            continue
+        key = (quote.get("platform"), ident_from_url(quote.get("platform", ""), quote.get("market_url", "")))
+        if key in seen:
+            continue
+        targets.append(quote)
+        seen.add(key)
 
     # 2) Discover new markets within the resolution-horizon window (skip
     #    ultra-short ones — no room for a trajectory — and multi-year ones that

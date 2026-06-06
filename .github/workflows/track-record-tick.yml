@@ -43,6 +43,8 @@ jobs:
           FORESEA_BASE_URL: https://foresea.ink
           PER_VENUE: "3"
           PREDICT_API_KEY: ${{ secrets.PREDICT_API_KEY }}
+          # Pulls agent-enrolled markets from the evolution-loop bridge (no-op until set).
+          TRACK_RECORD_TOKEN: ${{ secrets.TRACK_RECORD_TOKEN }}
         run: python scripts/track_record_tick.py
 
       - name: Commit updated track record
