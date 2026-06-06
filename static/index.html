@@ -3204,16 +3204,20 @@ function renderEdgeBoard(d) {
   }
   let boardHtml;
   if (board.length) {
-    boardHtml = `<table class="eb-table"><thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Market</th><th>Edge</th><th>Bucket</th><th>Track record</th></tr></thead><tbody>` +
+    boardHtml = `<table class="eb-table"><thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Market</th><th>Edge</th><th>Trade</th><th>Bucket</th><th>Track record</th></tr></thead><tbody>` +
       board.map(e => {
         const tr = e.track_record;
         const badge = !tr ? '—' : (tr.skill_significant
           ? `<span class="eb-badge eb-sig">proven (n=${tr.n})</span>`
           : `<span class="eb-badge">unproven (n=${tr.n ?? 0})</span>`);
         const url = e.market_url ? `href="${escHtml(e.market_url)}" target="_blank" rel="noopener"` : '';
-        return `<tr class="eb-row"><td style="max-width:280px"><a ${url} style="color:inherit">${escHtml((e.question || '').slice(0, 90))}</a></td>` +
+        const trade = e.side
+          ? `Buy ${e.side} @ ${Math.round((e.entry_price || 0) * 100)}¢` +
+            (e.payout_odds ? ` <span style="color:#999">≈${e.payout_odds}:1</span>` : '')
+          : '—';
+        return `<tr class="eb-row"><td style="max-width:260px"><a ${url} style="color:inherit">${escHtml((e.question || '').slice(0, 90))}</a></td>` +
           `<td>${escHtml(e.platform || '')}</td><td>${pct(e.model_probability)}%</td><td>${pct(e.market_probability)}%</td>` +
-          `<td><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td><td>${e.edge_bucket}</td><td>${badge}</td></tr>`;
+          `<td><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td><td style="white-space:nowrap">${trade}</td><td>${e.edge_bucket}</td><td>${badge}</td></tr>`;
       }).join('') + `</tbody></table>`;
   } else {
     boardHtml = `<p class="text-sm text-gray-500">No open markets tracked yet.</p>`;

@@ -552,6 +552,12 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
         signed = model_p - market_p
         label = _edge_label(abs(signed))
         tr = by_edge.get(label)
+        # The directional trade: buy the model's side at that side's price. Buying
+        # YES is the same position as fading NO (binary markets are symmetric); the
+        # payout is asymmetric, though — a $1 winner returns (1 − price)/price.
+        side = "YES" if signed > 0 else "NO" if signed < 0 else None
+        entry = market_p if signed > 0 else (1.0 - market_p) if signed < 0 else None
+        payout_odds = round((1.0 - entry) / entry, 1) if entry and 0.0 < entry < 1.0 else None
         board.append({
             "question": r.get("question"),
             "platform": platform,
@@ -564,6 +570,9 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "abs_edge": round(abs(signed), 3),
             "stance": ("model_above_market" if signed > 0
                        else "model_below_market" if signed < 0 else "agree"),
+            "side": side,
+            "entry_price": round(entry, 3) if entry is not None else None,
+            "payout_odds": payout_odds,
             "edge_bucket": label,
             "track_record": {
                 "n": tr.get("n"),

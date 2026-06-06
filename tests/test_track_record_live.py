@@ -416,6 +416,22 @@ class EdgeAnalyticsTests(unittest.TestCase):
         comp = trl.build_models_comparison(rows, default_model="gpt-oss-120b")
         self.assertEqual(comp[0]["model"], "gpt-oss-120b")  # missing model -> primary
 
+    def test_edge_board_trade_direction_and_payout_odds(self):
+        now = datetime.now(timezone.utc)
+        rows = [
+            {"platform": "P", "ident": "A", "model_probability": 0.9, "market_probability": 0.02,
+             "snapshot_ts": now, "question": "AGI", "market_url": "u", "horizon": "30d+", "lead_time_days": 40.0},
+            {"platform": "P", "ident": "B", "model_probability": 0.1, "market_probability": 0.40,
+             "snapshot_ts": now, "question": "NO", "market_url": "u", "horizon": "30d+", "lead_time_days": 40.0},
+        ]
+        bd = {b["question"]: b for b in trl.build_edge_board(rows, {"A": 0.02, "B": 0.40}, [])}
+        a = bd["AGI"]  # model 0.9 > market 0.02 -> buy YES cheap, ~49:1
+        self.assertEqual((a["side"], a["entry_price"]), ("YES", 0.02))
+        self.assertEqual(a["payout_odds"], round((1 - 0.02) / 0.02, 1))
+        b = bd["NO"]   # model 0.1 < market 0.40 -> buy NO at 0.60
+        self.assertEqual((b["side"], b["entry_price"]), ("NO", 0.6))
+        self.assertEqual(b["payout_odds"], round((1 - 0.6) / 0.6, 1))
+
     def test_edge_board_uses_latest_live_price_over_snapshot(self):
         now = datetime.now(timezone.utc)
         rows = [{"platform": "Polymarket", "ident": "A", "model_probability": 0.8,
