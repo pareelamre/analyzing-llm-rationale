@@ -2558,6 +2558,10 @@ def _check_api_key(request: Request) -> None:
 
 
 def _check_rate_limit(request: Request) -> None:
+    # Requests carrying the server API key are trusted (e.g. the tick Action)
+    # and bypass the per-IP rate limit.
+    if _REQUIRED_API_KEY and request.headers.get("X-API-Key", "") == _REQUIRED_API_KEY:
+        return
     ip = request.client.host if request.client else "unknown"
     if not _rate_limiter.is_allowed(ip):
         raise HTTPException(
