@@ -566,6 +566,32 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["source"], "live")
 
+    def test_edge_board_returns_disagreements_and_calibration(self):
+        import analyzing_llm_rationale.server as srv
+        live = {
+            "generated_at": "2026-06-06T00:00:00+00:00",
+            "n_markets_open": 1,
+            "n_snapshots_resolved": 20,
+            "edge_board": [{"platform": "Polymarket", "edge": 0.3, "edge_bucket": "20pp+",
+                            "track_record": {"skill_significant": True}}],
+            "by_edge": [{"edge_bucket": "20pp+", "skill_vs_market": 0.05, "skill_significant": True}],
+            "lead_lag": {"market_converged_to_model_pct": 0.7},
+        }
+        with mock.patch.object(srv, "_read_live_track_record", return_value=live):
+            r = self.client.get("/edge-board")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["edge_board"][0]["edge"], 0.3)
+        self.assertTrue(body["by_edge"][0]["skill_significant"])
+        self.assertEqual(body["lead_lag"]["market_converged_to_model_pct"], 0.7)
+
+    def test_edge_board_empty_when_no_live_file(self):
+        import analyzing_llm_rationale.server as srv
+        with mock.patch.object(srv, "_read_live_track_record", return_value=None):
+            r = self.client.get("/edge-board")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["edge_board"], [])
+
     def test_news_articles_tolerates_invalid_fields(self):
         from analyzing_llm_rationale.server import _news_articles
         # A negative relevance_score (from negative cosine similarity) must not

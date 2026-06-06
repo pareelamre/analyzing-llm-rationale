@@ -316,6 +316,162 @@ def _bucket_stats(rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     }
 
 
+# Disagreement (edge) buckets: |model − market| at forecast time. Ordered big →
+# small because the credible question is whether *bigger* disagreement actually
+# resolved in the model's favour — small gaps are noise either way.
+_EDGE_BUCKETS = [
+    ("20pp+", 0.20, float("inf")),
+    ("10-20pp", 0.10, 0.20),
+    ("5-10pp", 0.05, 0.10),
+    ("0-5pp", 0.0, 0.05),
+]
+
+# Minimum disagreement to count a snapshot as a real "edge" for lead/lag + board.
+_EDGE_MIN = 0.05
+
+
+def _edge(row: Dict[str, Any]) -> float:
+    """Absolute model-vs-market disagreement for a snapshot."""
+    return abs(float(row.get("model_probability") or 0.0)
+               - float(row.get("market_probability") or 0.0))
+
+
+def _edge_label(edge: float) -> str:
+    for label, lo, hi in _EDGE_BUCKETS:
+        if lo <= edge < hi:
+            return label
+    return "20pp+" if edge >= 0.20 else "0-5pp"
+
+
+def _skill_ci(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """95% CI on skill-vs-market (mean of per-snapshot market_brier − model_brier).
+
+    ``significant`` is True only when the lower bound clears 0 — i.e. the
+    disagreement beat the market by more than sampling noise. This is the gate
+    that turns "we disagree" into "this disagreement has proven edge".
+    """
+    n = len(rows)
+    if n == 0:
+        return {"skill_ci_low": None, "skill_ci_high": None, "skill_significant": False}
+    diffs = [float(r["market_brier"]) - float(r["model_brier"]) for r in rows]
+    mean = sum(diffs) / n
+    if n < 2:
+        return {"skill_ci_low": None, "skill_ci_high": None, "skill_significant": False}
+    var = sum((d - mean) ** 2 for d in diffs) / (n - 1)
+    se = (var / n) ** 0.5
+    low, high = mean - 1.96 * se, mean + 1.96 * se
+    return {"skill_ci_low": round(low, 4), "skill_ci_high": round(high, 4),
+            "skill_significant": low > 0}
+
+
+def edge_calibration(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Realized skill-vs-market bucketed by disagreement size — the proof that
+    (or whether) a bigger model-vs-market gap actually paid at resolution."""
+    out: List[Dict[str, Any]] = []
+    for label, lo, hi in _EDGE_BUCKETS:
+        bucket = [r for r in resolved if lo <= _edge(r) < hi]
+        stats = _bucket_stats(bucket)
+        if stats:
+            stats["edge_bucket"] = label
+            stats.update(_skill_ci(bucket))
+            out.append(stats)
+    return out
+
+
+def lead_lag(by_market: Dict[Tuple[str, str], List[Dict[str, Any]]],
+             min_edge: float = _EDGE_MIN) -> Optional[Dict[str, Any]]:
+    """Did the *market* move toward the model after a disagreement?
+
+    For each resolved market, take the first snapshot where the model disagreed
+    with the price by ≥ ``min_edge`` and measure how far the price subsequently
+    travelled toward the model's value (and whether the model's side won). High
+    convergence = the model led and the market followed — edge evidence that
+    shows up before resolution, using the dense price trajectory.
+    """
+    fracs: List[float] = []
+    converged = right = 0
+    n = 0
+    for snaps in by_market.values():
+        ordered = sorted(snaps, key=lambda s: s.get("snapshot_ts") or _now())
+        first = next((s for s in ordered if _edge(s) >= min_edge), None)
+        if first is None:
+            continue
+        m0 = float(first["model_probability"])
+        p0 = float(first["market_probability"])
+        direction = m0 - p0
+        if abs(direction) < 1e-9:
+            continue
+        p_final = float(ordered[-1]["market_probability"])
+        outcome = int(first["outcome"])
+        n += 1
+        if (p_final - p0) * direction > 0:
+            converged += 1
+        if (outcome - p0) * direction > 0:
+            right += 1
+        # Fraction of the price→model gap the market closed (clamped for overshoot).
+        fracs.append(max(-1.0, min(2.0, (p_final - p0) / direction)))
+    if not n:
+        return None
+    return {
+        "n_markets": n,
+        "min_edge": min_edge,
+        "market_converged_to_model_pct": round(converged / n, 4),
+        "model_right_pct": round(right / n, 4),
+        "avg_convergence_fraction": round(sum(fracs) / len(fracs), 4),
+    }
+
+
+def build_edge_board(open_rows: List[Dict[str, Any]],
+                     latest_price: Dict[str, float],
+                     edge_calib: List[Dict[str, Any]],
+                     *, limit: int = 20) -> List[Dict[str, Any]]:
+    """Current open markets ranked by live model-vs-market disagreement, each
+    annotated with its disagreement bucket's resolved track record — so a gap is
+    shown *with* the earned credibility of gaps that size (``skill_significant``),
+    not as a raw claim."""
+    by_edge = {b["edge_bucket"]: b for b in (edge_calib or [])}
+    latest: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for r in open_rows:
+        key = (r.get("platform"), r.get("ident"))
+        cur = latest.get(key)
+        if cur is None or (r.get("snapshot_ts") or _now()) > (cur.get("snapshot_ts") or _now()):
+            latest[key] = r
+
+    board: List[Dict[str, Any]] = []
+    for (platform, ident), r in latest.items():
+        if r.get("model_probability") is None:
+            continue
+        market_p = latest_price.get(ident, r.get("market_probability"))
+        if market_p is None:
+            continue
+        model_p, market_p = float(r["model_probability"]), float(market_p)
+        signed = model_p - market_p
+        label = _edge_label(abs(signed))
+        tr = by_edge.get(label)
+        board.append({
+            "question": r.get("question"),
+            "platform": platform,
+            "market_url": r.get("market_url"),
+            "horizon": r.get("horizon"),
+            "lead_days": round(r["lead_time_days"], 1) if r.get("lead_time_days") is not None else None,
+            "model_probability": round(model_p, 3),
+            "market_probability": round(market_p, 3),
+            "edge": round(signed, 3),
+            "abs_edge": round(abs(signed), 3),
+            "stance": ("model_above_market" if signed > 0
+                       else "model_below_market" if signed < 0 else "agree"),
+            "edge_bucket": label,
+            "track_record": {
+                "n": tr.get("n"),
+                "skill_vs_market": tr.get("skill_vs_market"),
+                "skill_ci_low": tr.get("skill_ci_low"),
+                "skill_significant": tr.get("skill_significant"),
+            } if tr else None,
+        })
+    board.sort(key=lambda x: x["abs_edge"], reverse=True)
+    return board[:limit]
+
+
 def _ece(rows: List[Dict[str, Any]], bins: int = 10) -> Optional[float]:
     """Expected calibration error: avg |confidence − accuracy| weighted by bin size."""
     n = len(rows)
@@ -451,12 +607,23 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     """Recompute the public aggregate (overall + by-horizon) and persist it."""
 
     resolved: List[Dict[str, Any]] = []
-    open_idents: set = set()
+    open_rows: List[Dict[str, Any]] = []
     for e in client.query(kind=SNAPSHOT_KIND).fetch():
         if e.get("resolved") and e.get("outcome") is not None:
             resolved.append(dict(e))
         else:
-            open_idents.add((e.get("platform"), e.get("ident")))
+            open_rows.append(dict(e))
+    open_idents = {(r.get("platform"), r.get("ident")) for r in open_rows}
+
+    # Latest live price per market (for the Edge Board's current disagreement).
+    latest_price: Dict[str, float] = {}
+    _latest_price_ts: Dict[str, Any] = {}
+    for p in client.query(kind=PRICE_KIND).fetch():
+        ident = p.get("ident")
+        ts = p.get("ts") or _now()
+        if ident not in _latest_price_ts or ts > _latest_price_ts[ident]:
+            _latest_price_ts[ident] = ts
+            latest_price[ident] = float(p.get("market_probability") or 0.0)
 
     n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved})
 
@@ -517,9 +684,13 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             } for p in price_points],
         })
 
+    by_edge = edge_calibration(resolved)
     payload.update({
         "overall": overall,
         "by_horizon": by_horizon,
+        "by_edge": by_edge,
+        "lead_lag": lead_lag(by_market),
+        "edge_board": build_edge_board(open_rows, latest_price, by_edge),
         "trajectories": trajectories,
         "calibration_model": _calibration_report(resolved),
     })

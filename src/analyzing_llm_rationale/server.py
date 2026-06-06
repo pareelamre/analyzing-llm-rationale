@@ -1208,6 +1208,7 @@ def _mcp_server_manifest() -> Dict[str, Any]:
                 "foresea_analyze_market",
                 "foresea_scan_markets",
                 "foresea_track_record",
+                "foresea_edge_board",
             ],
             "ink.foresea/resources": [
                 "foresea://track-record",
@@ -1352,6 +1353,34 @@ async def track_record():
         str(path),
         media_type="application/json",
         headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+@app.get("/edge-board", tags=["System"], summary="Live model-vs-market edge board")
+async def edge_board():
+    """Where Foresea's evidence-based fair probability most disagrees with the
+    market price right now — and whether that kind of disagreement has paid.
+
+    - ``edge_board``: open markets ranked by live disagreement, each tagged with
+      the resolved track record of gaps that size (``track_record.skill_significant``
+      flags disagreements our own history has proven beat the market).
+    - ``by_edge``: realized skill-vs-market bucketed by disagreement size — the
+      proof of whether bigger gaps actually resolved in the model's favour.
+    - ``lead_lag``: whether the market has historically moved *toward* the model
+      after a disagreement (the model leading the price).
+    """
+    live = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
+    live = live or {}
+    return JSONResponse(
+        {
+            "generated_at": live.get("generated_at"),
+            "edge_board": live.get("edge_board", []),
+            "by_edge": live.get("by_edge", []),
+            "lead_lag": live.get("lead_lag"),
+            "n_markets_open": live.get("n_markets_open", 0),
+            "n_snapshots_resolved": live.get("n_snapshots_resolved", 0),
+        },
+        headers={"Cache-Control": "public, max-age=300"},
     )
 
 

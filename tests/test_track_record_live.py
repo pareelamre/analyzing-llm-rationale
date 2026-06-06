@@ -314,5 +314,79 @@ class CalibrationTests(unittest.TestCase):
         self.assertLess(rep["calibrated_brier_cv"], rep["raw_brier"])
 
 
+class EdgeAnalyticsTests(unittest.TestCase):
+    """Edge calibration, lead/lag, and the live edge board."""
+
+    def _res(self, model_p, market_p, outcome):
+        return {"model_probability": model_p, "market_probability": market_p,
+                "outcome": outcome,
+                "model_brier": trl.brier(model_p, outcome),
+                "market_brier": trl.brier(market_p, outcome),
+                "model_correct": (model_p >= 0.5) == (outcome == 1)}
+
+    def test_edge_calibration_significant_when_disagreement_pays(self):
+        # 20 forecasts disagreeing by 30pp and resolving in the model's favour.
+        resolved = [self._res(0.8, 0.5, 1) for _ in range(20)]
+        buckets = {b["edge_bucket"]: b for b in trl.edge_calibration(resolved)}
+        self.assertIn("20pp+", buckets)
+        b = buckets["20pp+"]
+        self.assertEqual(b["n"], 20)
+        self.assertGreater(b["skill_vs_market"], 0)
+        self.assertTrue(b["skill_significant"])          # CI lower bound clears 0
+
+    def test_edge_calibration_not_significant_when_disagreement_is_coinflip(self):
+        resolved = ([self._res(0.8, 0.5, 1)] * 10) + ([self._res(0.8, 0.5, 0)] * 10)
+        buckets = {b["edge_bucket"]: b for b in trl.edge_calibration(resolved)}
+        self.assertFalse(buckets["20pp+"]["skill_significant"])
+
+    def test_lead_lag_detects_market_moving_toward_model(self):
+        now = datetime.now(timezone.utc)
+
+        def snap(ts, m, k, outcome):
+            return {"snapshot_ts": ts, "model_probability": m,
+                    "market_probability": k, "outcome": outcome}
+
+        by_market = {("Polymarket", "A"): [
+            snap(now, 0.8, 0.5, 1),                         # disagree by +30pp
+            snap(now + timedelta(hours=2), 0.8, 0.7, 1),    # price drifts toward model
+        ]}
+        ll = trl.lead_lag(by_market)
+        self.assertEqual(ll["n_markets"], 1)
+        self.assertEqual(ll["market_converged_to_model_pct"], 1.0)
+        self.assertEqual(ll["model_right_pct"], 1.0)
+        self.assertAlmostEqual(ll["avg_convergence_fraction"], (0.7 - 0.5) / (0.8 - 0.5), places=3)
+
+    def test_edge_board_ranks_by_disagreement_and_annotates(self):
+        now = datetime.now(timezone.utc)
+        open_rows = [
+            {"platform": "Polymarket", "ident": "A", "model_probability": 0.8,
+             "market_probability": 0.5, "snapshot_ts": now, "question": "Q1",
+             "market_url": "u1", "horizon": "30d+", "lead_time_days": 40.0},
+            {"platform": "Kalshi", "ident": "B", "model_probability": 0.52,
+             "market_probability": 0.5, "snapshot_ts": now, "question": "Q2",
+             "market_url": "u2", "horizon": "7-14d", "lead_time_days": 10.0},
+        ]
+        edge_calib = [{"edge_bucket": "20pp+", "n": 20, "skill_vs_market": 0.05,
+                       "skill_ci_low": 0.02, "skill_significant": True}]
+        board = trl.build_edge_board(open_rows, {"A": 0.5, "B": 0.5}, edge_calib)
+        self.assertEqual([e["platform"] for e in board], ["Polymarket", "Kalshi"])  # by abs edge
+        top = board[0]
+        self.assertEqual(top["edge"], 0.3)
+        self.assertEqual(top["edge_bucket"], "20pp+")
+        self.assertEqual(top["stance"], "model_above_market")
+        self.assertTrue(top["track_record"]["skill_significant"])
+        self.assertIsNone(board[1]["track_record"])  # 0-5pp gap has no calibration row
+
+    def test_edge_board_uses_latest_live_price_over_snapshot(self):
+        now = datetime.now(timezone.utc)
+        rows = [{"platform": "Polymarket", "ident": "A", "model_probability": 0.8,
+                 "market_probability": 0.79, "snapshot_ts": now, "question": "Q",
+                 "market_url": "u", "horizon": "30d+", "lead_time_days": 40.0}]
+        # Snapshot price was 0.79 (tiny gap); live price has since dropped to 0.50.
+        board = trl.build_edge_board(rows, {"A": 0.50}, [])
+        self.assertEqual(board[0]["market_probability"], 0.5)
+        self.assertEqual(board[0]["edge"], 0.3)
+
+
 if __name__ == "__main__":
     unittest.main()

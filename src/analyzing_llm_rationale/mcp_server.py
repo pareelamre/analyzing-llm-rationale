@@ -255,6 +255,12 @@ class ForeseaClient:
     async def atrack_record(self) -> Dict[str, Any]:
         return await self._arequest("GET", "/track-record")
 
+    def edge_board(self) -> Dict[str, Any]:
+        return self._request("GET", "/edge-board")
+
+    async def aedge_board(self) -> Dict[str, Any]:
+        return await self._arequest("GET", "/edge-board")
+
     def openapi(self) -> Dict[str, Any]:
         return self._request("GET", "/openapi.json")
 
@@ -306,7 +312,8 @@ def create_mcp_server(
         instructions=(
             "Foresea forecasts resolvable future events and prediction-market "
             "questions. Use forecast for a single question, analyze_market for "
-            "end-to-end market analysis, and scan_markets to find model-vs-market edges."
+            "end-to-end market analysis, scan_markets to find model-vs-market edges, "
+            "and edge_board for the live ranked disagreements with their proven edge."
         ),
         website_url=client.base_url,
         host=host,
@@ -422,6 +429,16 @@ def create_mcp_server(
         """Return Foresea's public track record and calibration summary."""
 
         return await _call_tool_async(client.atrack_record)
+
+    @mcp.tool()
+    async def foresea_edge_board() -> Dict[str, Any]:
+        """Live model-vs-market edge board: open markets ranked by how much Foresea's
+        fair probability disagrees with the price, each tagged with the resolved
+        track record of disagreements that size (skill-vs-market + significance),
+        plus by-edge calibration and market lead/lag — i.e. where the disagreement
+        is, and whether disagreement that size has actually paid."""
+
+        return await _call_tool_async(client.aedge_board)
 
     @mcp.resource(
         "foresea://track-record",

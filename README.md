@@ -300,6 +300,7 @@ The remote MCP server is a thin tool layer over the public API. It exposes:
 - `foresea_analyze_market`: calls `POST /agent/analyze`.
 - `foresea_scan_markets`: calls `GET /agent/scan`.
 - `foresea_track_record`: calls `GET /track-record`.
+- `foresea_edge_board`: calls `GET /edge-board` — live model-vs-market disagreements ranked, each tagged with the resolved track record of gaps that size (`by_edge` calibration + `lead_lag`).
 - Resources: `foresea://track-record` and `foresea://openapi.json`.
 
 Use `https://foresea.ink/mcp/` directly in MCP clients that support remote
