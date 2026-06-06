@@ -353,6 +353,11 @@
       align-items: center;
       gap: 18px;
     }
+    .landing-data-links {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
     .landing-shell {
       max-width: 840px;
       margin: 0 auto;
@@ -752,7 +757,8 @@
     }
     @media (max-width: 640px) {
       .landing-nav { padding: 0 14px; }
-      .landing-links { gap: 12px; }
+      .landing-links { gap: 10px; }
+      .landing-data-links { gap: 12px; }
       .landing-shell { padding-top: 28px; }
       .hero-title { font-size: 36px; }
       .landing-question { grid-template-columns: 1fr; }
@@ -778,6 +784,23 @@
       .agent-mode-btn { padding: 0 9px; }
     }
 
+    @media (max-width: 560px) {
+      .landing-nav {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: 52px;
+        padding: 10px 14px 0;
+      }
+      .landing-data-links {
+        order: 10;
+        width: 100%;
+        justify-content: center;
+        gap: 16px;
+        padding: 8px 0 10px;
+        border-top: 1px solid var(--border);
+        margin-top: 4px;
+      }
+    }
     /* ── Tasteful polish ─────────────────────────────────────────────── */
 
     /* Fine grain texture overlay — editorial paper feel */
@@ -1496,13 +1519,15 @@
       <span class="logo-dot"></span>
       <span class="brand text-xl">Foresea</span>
     </button>
-    <div class="landing-links">
+    <div class="landing-data-links">
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openRadar()">Radar</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
       <a href="/agents" target="_blank" class="topbar-link nav-collapse">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link nav-collapse">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link nav-collapse">GitHub</a>
+    </div>
+    <div class="landing-links">
       <!-- Auth — toggled by updateAuthUI() -->
       <button type="button" id="landingSignInBtn" class="btn-signin" hidden onclick="openAuthModal('login')">Sign in</button>
       <div id="landingUserChip" class="user-chip" hidden>
