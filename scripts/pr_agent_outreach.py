@@ -88,7 +88,16 @@ def _run_once(args) -> int:
     if args.out:
         args.out.write_text(text + "\n")
     print(text)
-    return 0 if all(r["status"] in {"dry_run", "sent"} for r in results) else 1
+    # API rejections (409 already-registered, 403 Cloudflare, 404 gone, 405 method
+    # not allowed, 422 validation error) are expected when contacting directories and
+    # should not fail CI. Only exit 1 if _every_ attempted send failed with a
+    # network-level error (no HTTP response at all), which indicates a genuine
+    # infrastructure problem rather than normal endpoint churn.
+    attempted = [r for r in results if r.get("status") not in {"dry_run", "skipped"}]
+    all_network_errors = bool(attempted) and all(
+        r.get("status") == "failed" and not r.get("status_code") for r in attempted
+    )
+    return 1 if all_network_errors else 0
 
 
 def main() -> int:
