@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 from analyzing_llm_rationale.cache_env import configure_workspace_cache_env
 
@@ -36,8 +37,16 @@ class ChatProvider:
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: int,
-        ) -> str:
+    ) -> str:
         raise NotImplementedError
+
+    def stream_chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ) -> Iterator[str]:
+        yield self.chat_completion(messages, temperature, max_tokens)
 
 
 def resolve_hf_token() -> Optional[str]:
@@ -105,12 +114,14 @@ class OpenAICompatibleProvider(ChatProvider):
         self._requests = requests
         self._session = requests.Session()
 
-    def chat_completion(
+    def _payload(
         self,
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: int,
-    ) -> str:
+        *,
+        stream: bool = False,
+    ) -> Dict[str, Any]:
         payload = {
             "model": self.model_name,
             "messages": messages,
@@ -127,13 +138,26 @@ class OpenAICompatibleProvider(ChatProvider):
             payload["max_completion_tokens"] = max_tokens
         else:
             payload["max_tokens"] = max_tokens
-        headers = {
+        if stream:
+            payload["stream"] = True
+        return payload
+
+    def _headers(self) -> Dict[str, str]:
+        return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+
+    def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        payload = self._payload(messages, temperature, max_tokens)
         response = self._session.post(
             self.base_url,
-            headers=headers,
+            headers=self._headers(),
             json=payload,
             timeout=self.request_timeout_s,
         )
@@ -154,6 +178,49 @@ class OpenAICompatibleProvider(ChatProvider):
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise ProviderResponseError(f"Malformed provider response: {exc}") from exc
 
+    def stream_chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ) -> Iterator[str]:
+        response = self._session.post(
+            self.base_url,
+            headers=self._headers(),
+            json=self._payload(messages, temperature, max_tokens, stream=True),
+            timeout=self.request_timeout_s,
+            stream=True,
+        )
+        response_text = response.text[:500] if response.status_code != 200 else ""
+        if response.status_code == 400 and "maximum context length" in response_text.lower():
+            raise ContextLimitError(response_text)
+        if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
+            raise RetryableProviderError(f"status={response.status_code} body={response_text}")
+        if response.status_code != 200:
+            raise ProviderResponseError(f"status={response.status_code} body={response_text}")
+
+        for raw in response.iter_lines(decode_unicode=True):
+            if not raw:
+                continue
+            line = raw.strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                obj = json.loads(data)
+                choice = (obj.get("choices") or [{}])[0]
+                delta = choice.get("delta") or {}
+                text = delta.get("content")
+                if text is None:
+                    message = choice.get("message") or {}
+                    text = message.get("content")
+            except (AttributeError, IndexError, TypeError, ValueError) as exc:
+                raise ProviderResponseError(f"Malformed provider stream: {exc}") from exc
+            if text:
+                yield text
+
 
 @dataclass
 class HuggingFaceRouterProvider(OpenAICompatibleProvider):
@@ -167,27 +234,42 @@ class OpenRouterProvider(OpenAICompatibleProvider):
     base_url: str = "https://openrouter.ai/api/v1/chat/completions"
     missing_api_key_message: str = "OpenRouter API key required."
 
-    def chat_completion(
+    def _payload(
         self,
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: int,
-    ) -> str:
+        *,
+        stream: bool = False,
+    ) -> Dict[str, Any]:
         payload = {
             "model": self.model_name,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        headers = {
+        if stream:
+            payload["stream"] = True
+        return payload
+
+    def _headers(self) -> Dict[str, str]:
+        return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://foresea.ink",
             "X-Title": "Foresea",
         }
+
+    def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        payload = self._payload(messages, temperature, max_tokens)
         response = self._session.post(
             self.base_url,
-            headers=headers,
+            headers=self._headers(),
             json=payload,
             timeout=self.request_timeout_s,
         )

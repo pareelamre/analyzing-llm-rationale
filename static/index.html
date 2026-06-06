@@ -2594,6 +2594,111 @@ async function _readJson(resp) {
   catch { return { detail: (txt || '').slice(0, 300).trim() || ('HTTP ' + resp.status) }; }
 }
 
+function _parseSseBlock(block) {
+  let event = 'message';
+  const dataLines = [];
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+  }
+  const dataText = dataLines.join('\n');
+  let data = {};
+  try { data = dataText ? JSON.parse(dataText) : {}; }
+  catch { data = { detail: dataText }; }
+  return { event, data };
+}
+
+async function streamPredict(body, variant, convId, typingEl) {
+  const resp = await fetch('/predict/stream', {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok || !resp.body) return { ok: false, fallback: true };
+
+  const messagesEl = document.getElementById('messages');
+  let typingRemoved = false;
+  let bubble = null;
+  let contentEl = null;
+  let text = '';
+  const removeTyping = () => {
+    if (!typingRemoved) {
+      typingEl.remove();
+      typingRemoved = true;
+    }
+  };
+  const ensureBubble = () => {
+    if (bubble) return;
+    removeTyping();
+    bubble = document.createElement('div');
+    bubble.className = 'max-w-2xl mx-auto w-full';
+    bubble.innerHTML = `
+      <div class="msg-ai p-4 sm:p-5">
+        <div class="chat-md text-[15px] text-gray-700 leading-relaxed"></div>
+      </div>`;
+    contentEl = bubble.querySelector('.chat-md');
+    messagesEl.appendChild(bubble);
+    animateIn(bubble);
+    scrollBottom();
+  };
+  const finish = (finalData) => {
+    const data = finalData || {
+      question_type: 'chat',
+      rationale: text,
+      model_key: body.openrouter_model || body.model || 'gpt-oss-120b',
+    };
+    appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    const finalNode = makeAIBubble(data, variant);
+    if (bubble) bubble.replaceWith(finalNode);
+    else {
+      removeTyping();
+      messagesEl.appendChild(finalNode);
+    }
+    animateIn(finalNode);
+    enhanceCard(finalNode);
+    scrollBottom();
+  };
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || '';
+    for (const block of blocks) {
+      if (!block.trim()) continue;
+      const { event, data } = _parseSseBlock(block);
+      if (event === 'delta') {
+        ensureBubble();
+        text += data.text || '';
+        contentEl.innerHTML = renderMarkdown(_chatText(text));
+        scrollBottom();
+      } else if (event === 'done') {
+        finish(data.response);
+        return { ok: true };
+      } else if (event === 'error') {
+        removeTyping();
+        return { ok: false, fallback: false, detail: data.detail || 'Streaming error' };
+      }
+    }
+  }
+  if (buffer.trim()) {
+    const { event, data } = _parseSseBlock(buffer);
+    if (event === 'done') {
+      finish(data.response);
+      return { ok: true };
+    }
+  }
+  if (text) {
+    finish(null);
+    return { ok: true };
+  }
+  return { ok: false, fallback: true };
+}
+
 async function sendQuestion() {
   const input = document.getElementById('questionInput');
   const question = input.value.trim();
@@ -2695,6 +2800,15 @@ async function sendQuestion() {
       if (!resp.ok) { addError(report.detail || 'Agent error'); return; }
       data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
     } else {
+      if (isChatMode()) {
+        const streamed = await streamPredict(body, variant, activeId, typingEl);
+        if (streamed.ok) return;
+        if (!streamed.fallback) {
+          typingEl.remove();
+          addError(streamed.detail || 'Streaming error');
+          return;
+        }
+      }
       const resp = await fetch('/predict', {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),

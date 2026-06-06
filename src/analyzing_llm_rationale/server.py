@@ -8,6 +8,7 @@ import ipaddress
 import json
 import logging
 import os
+import queue
 import random
 import re
 import secrets
@@ -33,6 +34,7 @@ from fastapi.responses import (
     PlainTextResponse,
     RedirectResponse,
     Response,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -1157,6 +1159,32 @@ async def _provider_chat(provider, messages, temperature, max_tokens) -> str:
             await asyncio.sleep(delay)
     assert last_exc is not None
     raise last_exc
+
+
+async def _provider_stream_chat(provider, messages, temperature, max_tokens):
+    """Yield provider tokens from a blocking stream without blocking the event loop."""
+    q: "queue.Queue[Any]" = queue.Queue()
+    sentinel = object()
+
+    def worker() -> None:
+        try:
+            for chunk in provider.stream_chat_completion(messages, temperature, max_tokens):
+                if chunk:
+                    q.put(chunk)
+        except Exception as exc:
+            q.put(exc)
+        finally:
+            q.put(sentinel)
+
+    threading.Thread(target=worker, daemon=True).start()
+    loop = asyncio.get_running_loop()
+    while True:
+        item = await loop.run_in_executor(None, q.get)
+        if item is sentinel:
+            break
+        if isinstance(item, Exception):
+            raise item
+        yield str(item)
 
 
 def _provider_http_error(exc: Exception) -> HTTPException:
@@ -2402,7 +2430,7 @@ def _build_typed_response(
 ) -> "PredictResponse":
     qtype = (req.question_type or (parsed.get("type") if parsed else None) or "binary").lower()
     rationale = parsed.get("rationale") if parsed else None
-    model_key = req.openrouter_model or _state["model_key"]
+    model_key = _model_key_for_request(req)
     base = dict(
         variant=req.variant,
         model_key=model_key,
@@ -2480,6 +2508,122 @@ def _build_typed_response(
         ),
         **base,
     )
+
+
+def _model_key_for_request(req: "PredictRequest") -> str:
+    model_label = (req.model or "").strip()
+    if model_label and model_label in _SCADS_MODEL_ALLOWLIST:
+        return model_label
+    return req.openrouter_model or _state["model_key"]
+
+
+async def _prepare_predict_messages(
+    req: "PredictRequest",
+    rag_user_id: Optional[str],
+) -> tuple[List[Dict[str, str]], List[Dict[str, Any]], Optional[str]]:
+    prompt_text = _state["prompt_templates"][req.variant]
+    system_prompt = _state["system_prompt"]
+
+    record = req.model_dump()
+    evidence_articles = [article.model_dump() for article in req.news_articles]
+    evidence_error = None
+
+    # A short follow-up in an ongoing thread ("WE is 90+", "why?") makes a poor
+    # search query and derails on literal matches, so answer it from the
+    # conversation instead of fetching fresh evidence. Substantive questions
+    # (even mid-thread) still retrieve.
+    short_followup = bool(req.history) and len(req.question.split()) <= 6
+
+    if req.attach_evidence and not evidence_articles and not short_followup:
+        evidence_pipeline = _state.get("evidence_pipeline")
+        if evidence_pipeline is None:
+            evidence_error = "Evidence pipeline is not configured on this server."
+        else:
+            top_k = max(1, min(req.evidence_top_k, 10))
+            loop = asyncio.get_running_loop()
+            evidence_cache_key = _cache_key("evidence", req.question, top_k)
+            evidence_articles = _cache_get(evidence_cache_key)
+            if evidence_articles is None:
+                try:
+                    evidence_articles = await loop.run_in_executor(
+                        None,
+                        lambda: evidence_pipeline.fetch_summarize_rank(req.question, top_k=top_k),
+                    )
+                    _cache_set(evidence_cache_key, evidence_articles, _EVIDENCE_CACHE_TTL)
+                except Exception as exc:
+                    evidence_articles = []
+                    evidence_error = f"Evidence retrieval failed: {exc}"
+
+    evidence_articles = [_clean_article(a) for a in evidence_articles]
+
+    # Personalised retrieval: prepend the signed-in user's knowledge-base hits.
+    if rag_user_id:
+        try:
+            loop = asyncio.get_running_loop()
+            kb_hits = await loop.run_in_executor(
+                None, _rag_search, rag_user_id, "kb", req.question, 3
+            )
+            kb_articles = [
+                _clean_article({
+                    "title": h.get("title") or "Knowledge base",
+                    "summary": h.get("text"),
+                    "text": h.get("text"),
+                    "source": h.get("source") or "Knowledge base",
+                    "url": h.get("url") or None,
+                    "relevance_score": h.get("score"),
+                })
+                for h in kb_hits
+            ]
+            evidence_articles = kb_articles + evidence_articles
+        except Exception:
+            pass
+
+    record["news_articles"] = evidence_articles
+
+    if req.chat_mode:
+        # Conversational mode: drop the JSON-only forecast template entirely so the
+        # model replies in natural language. Pass an empty template so the user
+        # prompt is just the question + evidence/market context, no JSON suffix.
+        system_prompt = _CHAT_SYSTEM_PROMPT
+        user_prompt = build_user_prompt(record, "[question]", "full")
+    else:
+        user_prompt = build_user_prompt(record, prompt_text, "full")
+        user_prompt += _typing_instruction(req.question_type, req.options, has_history=bool(req.history))
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for turn in req.history[-12:]:
+        role = turn.get("role")
+        content = (turn.get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content[:4000]})
+    messages.append({"role": "user", "content": user_prompt})
+    return messages, evidence_articles, evidence_error
+
+
+def _select_predict_provider(req: "PredictRequest"):
+    # Use a user-supplied model if provided: a custom OpenAI-compatible endpoint
+    # when provider_base_url is set, otherwise OpenRouter. Falls back to the
+    # server default model when no key/model is given.
+    alt_provider = _scads_alt_provider(req.model) if req.model else None
+    if alt_provider is not None:
+        # Server-hosted alternate model (allowlisted SCADS), server's own key.
+        return alt_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
+    if req.openrouter_api_key and req.openrouter_model:
+        if req.provider_base_url:
+            from analyzing_llm_rationale.providers import OpenAICompatibleProvider
+            provider = OpenAICompatibleProvider(
+                model_name=req.openrouter_model,
+                api_key=req.openrouter_api_key,
+                base_url=req.provider_base_url,
+            )
+        else:
+            from analyzing_llm_rationale.providers import OpenRouterProvider
+            provider = OpenRouterProvider(
+                model_name=req.openrouter_model,
+                api_key=req.openrouter_api_key,
+            )
+        return provider, 0.7, _state.get("max_tokens", 1024)
+    return _state["provider"], _state["temperature"], _state["max_tokens"]
 
 
 # ── Attachment extraction ─────────────────────────────────────────────────────
@@ -3247,110 +3391,8 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         if cached is not None:
             return PredictResponse(**cached)
 
-    prompt_text = _state["prompt_templates"][req.variant]
-    system_prompt = _state["system_prompt"]
-
-    record = req.model_dump()
-    evidence_articles = [article.model_dump() for article in req.news_articles]
-    evidence_error = None
-
-    # A short follow-up in an ongoing thread ("WE is 90+", "why?") makes a poor
-    # search query and derails on literal matches, so answer it from the
-    # conversation instead of fetching fresh evidence. Substantive questions
-    # (even mid-thread) still retrieve.
-    short_followup = bool(req.history) and len(req.question.split()) <= 6
-
-    if req.attach_evidence and not evidence_articles and not short_followup:
-        evidence_pipeline = _state.get("evidence_pipeline")
-        if evidence_pipeline is None:
-            evidence_error = "Evidence pipeline is not configured on this server."
-        else:
-            top_k = max(1, min(req.evidence_top_k, 10))
-            loop = asyncio.get_running_loop()
-            evidence_cache_key = _cache_key("evidence", req.question, top_k)
-            evidence_articles = _cache_get(evidence_cache_key)
-            if evidence_articles is None:
-                try:
-                    evidence_articles = await loop.run_in_executor(
-                        None,
-                        lambda: evidence_pipeline.fetch_summarize_rank(req.question, top_k=top_k),
-                    )
-                    _cache_set(evidence_cache_key, evidence_articles, _EVIDENCE_CACHE_TTL)
-                except Exception as exc:
-                    evidence_articles = []
-                    evidence_error = f"Evidence retrieval failed: {exc}"
-
-    evidence_articles = [_clean_article(a) for a in evidence_articles]
-
-    # Personalised retrieval: prepend the signed-in user's knowledge-base hits.
-    if rag_user_id:
-        try:
-            loop = asyncio.get_running_loop()
-            kb_hits = await loop.run_in_executor(
-                None, _rag_search, rag_user_id, "kb", req.question, 3
-            )
-            kb_articles = [
-                _clean_article({
-                    "title": h.get("title") or "Knowledge base",
-                    "summary": h.get("text"), "text": h.get("text"),
-                    "source": h.get("source") or "Knowledge base",
-                    "url": h.get("url") or None,
-                    "relevance_score": h.get("score"),
-                })
-                for h in kb_hits
-            ]
-            evidence_articles = kb_articles + evidence_articles
-        except Exception:
-            pass
-
-    record["news_articles"] = evidence_articles
-
-    if req.chat_mode:
-        # Conversational mode: drop the JSON-only forecast template entirely so the
-        # model replies in natural language. Pass an empty template so the user
-        # prompt is just the question + evidence/market context, no JSON suffix.
-        system_prompt = _CHAT_SYSTEM_PROMPT
-        user_prompt = build_user_prompt(record, "[question]", "full")
-    else:
-        user_prompt = build_user_prompt(record, prompt_text, "full")
-        user_prompt += _typing_instruction(req.question_type, req.options, has_history=bool(req.history))
-    messages = [{"role": "system", "content": system_prompt}]
-    for turn in req.history[-12:]:
-        role = turn.get("role")
-        content = (turn.get("content") or "").strip()
-        if role in ("user", "assistant") and content:
-            messages.append({"role": role, "content": content[:4000]})
-    messages.append({"role": "user", "content": user_prompt})
-
-    # Use a user-supplied model if provided: a custom OpenAI-compatible endpoint
-    # when provider_base_url is set, otherwise OpenRouter. Falls back to the
-    # server default model when no key/model is given.
-    alt_provider = _scads_alt_provider(req.model) if req.model else None
-    if alt_provider is not None:
-        # Server-hosted alternate model (allowlisted SCADS), server's own key.
-        provider = alt_provider
-        temperature = _state.get("temperature", 0.0)
-        max_tokens = _state.get("max_tokens", 1024)
-    elif req.openrouter_api_key and req.openrouter_model:
-        if req.provider_base_url:
-            from analyzing_llm_rationale.providers import OpenAICompatibleProvider
-            provider = OpenAICompatibleProvider(
-                model_name=req.openrouter_model,
-                api_key=req.openrouter_api_key,
-                base_url=req.provider_base_url,
-            )
-        else:
-            from analyzing_llm_rationale.providers import OpenRouterProvider
-            provider = OpenRouterProvider(
-                model_name=req.openrouter_model,
-                api_key=req.openrouter_api_key,
-            )
-        temperature = 0.7
-        max_tokens = _state.get("max_tokens", 1024)
-    else:
-        provider = _state["provider"]
-        temperature = _state["temperature"]
-        max_tokens = _state["max_tokens"]
+    messages, evidence_articles, evidence_error = await _prepare_predict_messages(req, rag_user_id)
+    provider, temperature, max_tokens = _select_predict_provider(req)
 
     try:
         content = await _provider_chat(provider, messages, temperature, max_tokens)
@@ -3360,7 +3402,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     parsed = _parse_json_dict(content)
     if req.chat_mode:
         text = content.strip()
-        model_key = req.openrouter_model or _state["model_key"]
+        model_key = _model_key_for_request(req)
         response = PredictResponse(
             question_type="chat",
             rationale=text, model_rationale=text,
@@ -3388,6 +3430,110 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         except Exception:
             pass
     return response
+
+
+def _sse_event(event: str, data: Dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@app.post(
+    "/predict/stream",
+    tags=["Inference"],
+    summary="Stream a conversational forecasting response",
+    response_description="Server-sent events containing model text deltas and a final PredictResponse payload.",
+)
+async def predict_stream(req: PredictRequest, request: Request) -> StreamingResponse:
+    """Stream chat-mode model output as server-sent events.
+
+    The final `done` event contains the same `PredictResponse` shape that `/predict`
+    returns for chat-mode requests. Structured forecast calls should keep using
+    `/predict`; this endpoint forces conversational output.
+    """
+    _check_rate_limit(request)
+    _check_api_key(request)
+
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+
+    stream_req = req.model_copy(update={"chat_mode": True})
+    variants = _state["variants"]
+    if stream_req.variant not in variants:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown variant '{stream_req.variant}'. Valid: {sorted(variants)}",
+        )
+
+    rag_user_id = _optional_user_id(request)
+
+    async def events():
+        yield _sse_event("meta", {
+            "status": "preparing",
+            "question_type": "chat",
+            "variant": stream_req.variant,
+            "model_key": _model_key_for_request(stream_req),
+        })
+        try:
+            messages, evidence_articles, evidence_error = await _prepare_predict_messages(
+                stream_req, rag_user_id
+            )
+            provider, temperature, max_tokens = _select_predict_provider(stream_req)
+        except HTTPException as exc:
+            yield _sse_event("error", {"status_code": exc.status_code, "detail": exc.detail})
+            return
+        except Exception:
+            logger.exception("predict stream setup failed")
+            yield _sse_event("error", {
+                "status_code": 500,
+                "detail": "The streaming request could not be prepared.",
+            })
+            return
+
+        yield _sse_event("meta", {
+            "status": "streaming",
+            "question_type": "chat",
+            "variant": stream_req.variant,
+            "model_key": _model_key_for_request(stream_req),
+            "evidence_sources": [s.model_dump(mode="json") for s in _evidence_sources(evidence_articles)],
+            "evidence_articles": [a.model_dump(mode="json") for a in _news_articles(evidence_articles)],
+            "evidence_error": evidence_error,
+        })
+
+        chunks: List[str] = []
+        try:
+            async for chunk in _provider_stream_chat(provider, messages, temperature, max_tokens):
+                if await request.is_disconnected():
+                    return
+                chunks.append(chunk)
+                yield _sse_event("delta", {"text": chunk})
+        except Exception as exc:
+            http_exc = _provider_http_error(exc)
+            yield _sse_event("error", {
+                "status_code": http_exc.status_code,
+                "detail": http_exc.detail,
+            })
+            return
+
+        text = "".join(chunks).strip()
+        response = PredictResponse(
+            question_type="chat",
+            rationale=text,
+            model_rationale=text,
+            variant=stream_req.variant,
+            model_key=_model_key_for_request(stream_req),
+            evidence_sources=_evidence_sources(evidence_articles),
+            evidence_articles=_news_articles(evidence_articles),
+            evidence_error=evidence_error,
+        )
+        yield _sse_event("done", {"response": response.model_dump(mode="json")})
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post(

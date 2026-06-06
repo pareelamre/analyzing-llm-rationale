@@ -39,6 +39,11 @@ class FakeProvider:
         self.calls.append(messages)
         return json.dumps(self.response)
 
+    def stream_chat_completion(self, messages, temperature, max_tokens):
+        self.calls.append(messages)
+        yield "Streaming "
+        yield "answer."
+
 
 class FakeEvidencePipeline:
     def __init__(self):
@@ -119,6 +124,25 @@ class ServerTests(unittest.TestCase):
             [("Will the Fed cut rates before July 31, 2026?", 3)],
         )
         self.assertIn("Central bank signals", self.provider.calls[0][1]["content"])
+
+    def test_predict_stream_chat_returns_sse_chunks(self):
+        response = self.client.post(
+            "/predict/stream",
+            json={
+                "question": "Will the Fed cut rates before July 31, 2026?",
+                "chat_mode": True,
+                "attach_evidence": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"].split(";")[0], "text/event-stream")
+        body = response.text
+        self.assertIn("event: meta", body)
+        self.assertIn("event: delta", body)
+        self.assertIn("Streaming ", body)
+        self.assertIn("event: done", body)
+        self.assertIn("Streaming answer.", body)
 
     def test_predict_uses_supplied_articles_without_fetching(self):
         response = self.client.post(
