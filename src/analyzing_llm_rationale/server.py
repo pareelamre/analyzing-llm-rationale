@@ -39,7 +39,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from analyzing_llm_rationale import agent_capabilities, rag
+from analyzing_llm_rationale import agent_capabilities, rag, venue_mcp
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
     build_user_prompt,
@@ -4139,6 +4139,18 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         {"name": "scan_markets", "args": "platform, query?", "description": "List live markets on a venue (optionally filtered by keyword)."},
         {"name": "track_record", "args": "", "description": "Get the model's own live calibration / skill-vs-market."},
     ]
+
+    # Optional: proxy the venues' own MCP tools (orderbook/depth/etc.) when
+    # POLYMARKET_MCP_URL / KALSHI_MCP_URL are set. Additive + best-effort; venue
+    # output is untrusted context (Foresea's forecast stays the source of truth).
+    if venue_mcp.configured_venues():
+        try:
+            for _ns, _meta in (await venue_mcp.discover_tools()).items():
+                tools[_ns] = venue_mcp.make_tool_fn(_meta["url"], _meta["name"])
+                specs.append({"name": _ns, "args": "venue-specific JSON",
+                              "description": _meta["description"][:200]})
+        except Exception:
+            logger.warning("venue MCP discovery failed", exc_info=True)
 
     async def chat_fn(messages):
         return await _provider_chat(provider, messages, temperature, max_tokens)
