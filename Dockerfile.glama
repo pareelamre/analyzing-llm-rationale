@@ -1,0 +1,23 @@
+# Lightweight image for Glama's MCP "start + introspect" check.
+#
+# Runs ONLY the Foresea MCP wrapper over stdio — a thin proxy to
+# https://foresea.ink — without the heavy inference stack (Torch/CUDA etc.) that
+# the full server image (./Dockerfile) pulls in. Glama just needs the server to
+# start and answer an MCP introspection (initialize + tools/list), which this does.
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src ./src
+
+# Mirror the documented lightweight MCP install: the package without its full
+# dependency set, plus only what the wrapper needs.
+RUN pip install --no-cache-dir --no-deps -e . \
+ && pip install --no-cache-dir "mcp>=1.27.1" requests pyyaml
+
+ENV FORESEA_MCP_TRANSPORT=stdio \
+    FORESEA_BASE_URL=https://foresea.ink
+
+# stdio MCP server (default transport) — exposes foresea_forecast,
+# foresea_analyze_market, foresea_scan_markets, foresea_edge_board, foresea_track_record.
+ENTRYPOINT ["analyze-llm-rationale", "mcp-server"]
