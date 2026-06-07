@@ -26,6 +26,7 @@ DOMAINS = [
     "sports",
     "entertainment",
     "science",
+    "society",
     "other",
 ]
 
@@ -83,6 +84,17 @@ _DOMAIN_KEYWORDS: Dict[str, List[str]] = {
         "spacex", "rocket", "mars", "moon", "space station", "vaccine", "drug",
         "fda", "clinical trial", "pandemic", "virus", "earthquake", "hurricane",
         "wildfire", "species", "genome", "crispr", "particle",
+        "population", "life expectancy", "mortality", "fertility", "birth rate",
+        "energy", "renewable", "solar", "nuclear power", "fusion",
+    ],
+    "society": [
+        "social media", "reddit", "twitter", "facebook", "instagram", "tiktok",
+        "platform", "users", "monthly active", "app", "internet", "online",
+        "poverty", "inequality", "housing", "homelessness", "crime",
+        "education", "university", "school", "literacy",
+        "healthcare", "hospital", "insurance", "opioid",
+        "immigration", "refugee", "border crossing",
+        "charity", "donation", "philanthropy", "givewell",
     ],
 }
 
@@ -136,9 +148,10 @@ def _extract_entities(text: str) -> List[str]:
     found: Dict[str, str] = {}  # lower → canonical
 
     # Known entities first (highest precision).
-    lower = text.lower()
+    # Use word-boundary regex so "UN" doesn't match inside "under", "until", etc.
     for key, canonical in _KNOWN_LOWER.items():
-        if key in lower:
+        pattern = r'(?<![a-z])' + re.escape(key) + r'(?![a-z])'
+        if re.search(pattern, text, re.IGNORECASE):
             found[key] = canonical
 
     # Capitalised phrases not already covered.
