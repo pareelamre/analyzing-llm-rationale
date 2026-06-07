@@ -28,6 +28,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
+from analyzing_llm_rationale.entity_tagger import tag_question
+
 from analyzing_llm_rationale import trackrec_store as _ds
 
 SNAPSHOT_KIND = "ForecastSnapshot"
@@ -241,7 +243,8 @@ async def record_snapshots(
                 continue
             mkt_prob = scored.get("market_probability")
             mkt_prob = mkt_prob if mkt_prob is not None else market_prob
-            entity = _ds.Entity(key, exclude_from_indexes=("question", "market_url", "close_time", "category"))
+            tags = tag_question(quote.get("question") or "", quote.get("category"))
+            entity = _ds.Entity(key, exclude_from_indexes=("question", "market_url", "close_time", "category", "entities"))
             entity.update(
                 platform=quote.get("platform"),
                 ident=ident,
@@ -262,6 +265,9 @@ async def record_snapshots(
                 resolved=False,
                 outcome=None,
                 drift_reforecast=existing is not None,
+                # Knowledge-graph seed fields.
+                domain=tags["domain"],
+                entities=tags["entities"],
             )
             client.put(entity)
             recorded += 1
@@ -621,6 +627,7 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "question": r.get("question"),
             "platform": platform,
             "market_url": r.get("market_url"),
+            "domain": r.get("domain") or "other",
             "horizon": r.get("horizon"),
             "lead_days": round(current_lead, 1) if current_lead is not None else None,
             "model_probability": round(model_p, 3),
@@ -885,10 +892,42 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         })
 
     by_edge = edge_calibration(resolved_primary)
+
+    # Domain-level calibration: Foresea's accuracy profile by question category.
+    # Requires resolved data; returns empty list until markets settle.
+    by_domain: List[Dict[str, Any]] = []
+    domain_rows: Dict[str, List[Dict[str, Any]]] = {}
+    for r in resolved_primary:
+        d = r.get("domain") or "other"
+        domain_rows.setdefault(d, []).append(r)
+    for domain, rows in sorted(domain_rows.items()):
+        stats = _bucket_stats(rows)
+        if stats:
+            stats["domain"] = domain
+            by_domain.append(stats)
+    by_domain.sort(key=lambda x: x.get("n", 0), reverse=True)
+
+    # Open-market entity index: unique entities across all open snapshots
+    # (primary model only), sorted by frequency — seeds the knowledge graph.
+    entity_freq: Dict[str, int] = {}
+    domain_open: Dict[str, int] = {}
+    for r in open_primary:
+        for ent in (r.get("entities") or []):
+            entity_freq[ent] = entity_freq.get(ent, 0) + 1
+        d = r.get("domain") or "other"
+        domain_open[d] = domain_open.get(d, 0) + 1
+    kg_entities = sorted(entity_freq.items(), key=lambda x: -x[1])
+    kg_summary = {
+        "top_entities": [{"entity": e, "count": c} for e, c in kg_entities[:30]],
+        "domain_distribution": dict(sorted(domain_open.items(), key=lambda x: -x[1])),
+        "n_tagged": sum(1 for r in open_primary if r.get("domain")),
+    }
+
     payload.update({
         "overall": overall,
         "by_horizon": by_horizon,
         "by_edge": by_edge,
+        "by_domain": by_domain,
         "lead_lag": lead_lag(by_market),
         "paper_pnl": paper_pnl(resolved_primary, by_edge),
         "edge_board": build_edge_board(open_primary, latest_price, by_edge,
@@ -896,6 +935,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "models_comparison": build_models_comparison(resolved, default_model=model),
         "trajectories": trajectories,
         "calibration_model": _calibration_report(resolved_primary),
+        "knowledge_graph": kg_summary,
     })
 
     entity = _ds.Entity(client.key(AGG_KIND, AGG_ID), exclude_from_indexes=("payload",))

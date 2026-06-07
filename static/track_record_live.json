@@ -1,196 +1,341 @@
 {
-  "by_edge": [],
+  "source": "live",
+  "generated_at": "2026-06-07T22:16:12.039071+00:00",
+  "model": "gpt-oss-120b",
+  "variant": "variant0_neutral_baseline",
+  "temperature": 1.0,
+  "methodology": "Forecast trajectories on live Polymarket/Kalshi markets: a fresh point-in-time forecast each day (latest price + latest news, no look-ahead) until the market resolves, then every snapshot is scored. Skill vs market = market Brier \u2212 model Brier, reported by forecast horizon; long-horizon skill is the meaningful signal.",
+  "n_snapshots_resolved": 0,
+  "n_markets_resolved": 0,
+  "n_markets_open": 20,
+  "overall": null,
   "by_horizon": [],
-  "calibration_model": {
-    "applied": false,
-    "min_required": 30,
-    "n_resolved": 0,
-    "reason": "insufficient_data"
-  },
+  "by_edge": [],
+  "by_domain": [],
+  "lead_lag": null,
+  "paper_pnl": null,
   "edge_board": [
     {
-      "abs_edge": 0.56,
-      "edge": 0.56,
-      "edge_bucket": "20pp+",
-      "entry_price": 0.09,
-      "horizon": "14-30d",
-      "lead_days": 23.3,
-      "market_probability": 0.09,
-      "market_url": "https://kalshi.com/markets/KXMEDIARELEASEPRISONBREAK-30JAN01/KXMEDIARELEASEPRISONBREAK-30JAN01-26JUL01",
-      "model_probability": 0.65,
-      "payout_odds": 10.1,
-      "platform": "Kalshi",
       "question": "Will A New Season of Prison Break be released Worldwide before Jan 1, 2030?",
-      "side": "YES",
+      "platform": "Kalshi",
+      "market_url": "https://kalshi.com/markets/KXMEDIARELEASEPRISONBREAK-30JAN01/KXMEDIARELEASEPRISONBREAK-30JAN01-26JUL01",
+      "domain": "entertainment",
+      "horizon": "14-30d",
+      "lead_days": 23.2,
+      "model_probability": 0.65,
+      "market_probability": 0.09,
+      "edge": 0.56,
+      "abs_edge": 0.56,
       "stance": "model_above_market",
+      "side": "YES",
+      "entry_price": 0.09,
+      "payout_odds": 10.1,
+      "edge_bucket": "20pp+",
       "track_record": null
     },
     {
-      "abs_edge": 0.355,
-      "edge": -0.355,
-      "edge_bucket": "20pp+",
-      "entry_price": 0.495,
+      "question": "Will an artwork sell for $150 million by December 31?",
+      "platform": "Polymarket",
+      "market_url": "https://polymarket.com/market/will-an-artwork-sell-for-150-million-by-december-31",
+      "domain": "other",
       "horizon": "30d+",
       "lead_days": 207.3,
-      "market_probability": 0.505,
-      "market_url": "https://polymarket.com/market/will-an-artwork-sell-for-150-million-by-december-31",
       "model_probability": 0.15,
-      "payout_odds": 1.0,
-      "platform": "Polymarket",
-      "question": "Will an artwork sell for $150 million by December 31?",
-      "side": "NO",
+      "market_probability": 0.505,
+      "edge": -0.355,
+      "abs_edge": 0.355,
       "stance": "model_below_market",
+      "side": "NO",
+      "entry_price": 0.495,
+      "payout_odds": 1.0,
+      "edge_bucket": "20pp+",
       "track_record": null
     },
     {
-      "abs_edge": 0.133,
-      "edge": 0.133,
-      "edge_bucket": "10-20pp",
-      "entry_price": 0.057,
+      "question": "Will Germany win the 2026 FIFA World Cup?",
+      "platform": "Polymarket",
+      "market_url": "https://polymarket.com/market/will-germany-win-the-2026-fifa-world-cup-467",
+      "domain": "sports",
       "horizon": "30d+",
       "lead_days": 42.1,
-      "market_probability": 0.057,
-      "market_url": "https://polymarket.com/market/will-germany-win-the-2026-fifa-world-cup-467",
       "model_probability": 0.19,
-      "payout_odds": 16.7,
-      "platform": "Polymarket",
-      "question": "Will Germany win the 2026 FIFA World Cup?",
-      "side": "YES",
+      "market_probability": 0.057,
+      "edge": 0.133,
+      "abs_edge": 0.133,
       "stance": "model_above_market",
+      "side": "YES",
+      "entry_price": 0.057,
+      "payout_odds": 16.7,
+      "edge_bucket": "10-20pp",
       "track_record": null
     },
     {
-      "abs_edge": 0.075,
-      "edge": 0.075,
-      "edge_bucket": "5-10pp",
-      "entry_price": 0.066,
+      "question": "Will China invade Taiwan by end of 2026?",
+      "platform": "Polymarket",
+      "market_url": "https://polymarket.com/market/will-china-invade-taiwan-before-2027",
+      "domain": "geopolitics",
       "horizon": "30d+",
       "lead_days": 206.1,
-      "market_probability": 0.066,
-      "market_url": "https://polymarket.com/market/will-china-invade-taiwan-before-2027",
       "model_probability": 0.14,
-      "payout_odds": 14.3,
-      "platform": "Polymarket",
-      "question": "Will China invade Taiwan by end of 2026?",
-      "side": "YES",
+      "market_probability": 0.067,
+      "edge": 0.074,
+      "abs_edge": 0.074,
       "stance": "model_above_market",
+      "side": "YES",
+      "entry_price": 0.067,
+      "payout_odds": 14.0,
+      "edge_bucket": "5-10pp",
       "track_record": null
     },
     {
-      "abs_edge": 0.07,
-      "edge": 0.07,
-      "edge_bucket": "5-10pp",
-      "entry_price": 0.03,
-      "horizon": "14-30d",
-      "lead_days": 23.3,
-      "market_probability": 0.03,
-      "market_url": "https://kalshi.com/markets/KXZELENSKYPUTIN-29/KXZELENSKYPUTIN-29-26JUL",
-      "model_probability": 0.1,
-      "payout_odds": 32.3,
-      "platform": "Kalshi",
       "question": "Volodymyr Zelenskyy and Vladimir Putin meet before Jul 1, 2026?",
-      "side": "YES",
+      "platform": "Kalshi",
+      "market_url": "https://kalshi.com/markets/KXZELENSKYPUTIN-29/KXZELENSKYPUTIN-29-26JUL",
+      "domain": "geopolitics",
+      "horizon": "14-30d",
+      "lead_days": 23.2,
+      "model_probability": 0.1,
+      "market_probability": 0.03,
+      "edge": 0.07,
+      "abs_edge": 0.07,
       "stance": "model_above_market",
+      "side": "YES",
+      "entry_price": 0.03,
+      "payout_odds": 32.3,
+      "edge_bucket": "5-10pp",
       "track_record": null
     },
     {
-      "abs_edge": 0.062,
-      "edge": 0.062,
-      "edge_bucket": "5-10pp",
-      "entry_price": 0.088,
+      "question": "Will Argentina win the 2026 FIFA World Cup?",
+      "platform": "Polymarket",
+      "market_url": "https://polymarket.com/market/will-argentina-win-the-2026-fifa-world-cup-245",
+      "domain": "sports",
       "horizon": "30d+",
       "lead_days": 42.1,
-      "market_probability": 0.088,
-      "market_url": "https://polymarket.com/market/will-argentina-win-the-2026-fifa-world-cup-245",
       "model_probability": 0.15,
+      "market_probability": 0.088,
+      "edge": 0.062,
+      "abs_edge": 0.062,
+      "stance": "model_above_market",
+      "side": "YES",
+      "entry_price": 0.088,
       "payout_odds": 10.3,
-      "platform": "Polymarket",
-      "question": "Will Argentina win the 2026 FIFA World Cup?",
-      "side": "YES",
-      "stance": "model_above_market",
+      "edge_bucket": "5-10pp",
       "track_record": null
     },
     {
-      "abs_edge": 0.04,
-      "edge": 0.04,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.06,
-      "horizon": "30d+",
-      "lead_days": 114.3,
-      "market_probability": 0.06,
-      "market_url": "https://kalshi.com/markets/KXNFLRETIRE-MEVANS5/KXNFLRETIRE-MEVANS5-2627",
-      "model_probability": 0.1,
-      "payout_odds": 15.7,
-      "platform": "Kalshi",
       "question": "Will Mike Evans announce his retirement before the 2026-27 NFL season?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": null
-    },
-    {
-      "abs_edge": 0.04,
-      "edge": 0.04,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.06,
-      "horizon": "30d+",
-      "lead_days": 114.3,
-      "market_probability": 0.06,
-      "market_url": "https://kalshi.com/markets/KXNFLRETIRE-MSTAFFORD9/KXNFLRETIRE-MSTAFFORD9-2627",
-      "model_probability": 0.1,
-      "payout_odds": 15.7,
       "platform": "Kalshi",
-      "question": "Will Matthew Stafford announce his retirement before the 2026-27 NFL season?",
-      "side": "YES",
+      "market_url": "https://kalshi.com/markets/KXNFLRETIRE-MEVANS5/KXNFLRETIRE-MEVANS5-2627",
+      "domain": "sports",
+      "horizon": "30d+",
+      "lead_days": 114.2,
+      "model_probability": 0.1,
+      "market_probability": 0.06,
+      "edge": 0.04,
+      "abs_edge": 0.04,
       "stance": "model_above_market",
+      "side": "YES",
+      "entry_price": 0.06,
+      "payout_odds": 15.7,
+      "edge_bucket": "0-5pp",
       "track_record": null
     },
     {
-      "abs_edge": 0.03,
-      "edge": -0.03,
+      "question": "Will Matthew Stafford announce his retirement before the 2026-27 NFL season?",
+      "platform": "Kalshi",
+      "market_url": "https://kalshi.com/markets/KXNFLRETIRE-MSTAFFORD9/KXNFLRETIRE-MSTAFFORD9-2627",
+      "domain": "sports",
+      "horizon": "30d+",
+      "lead_days": 114.2,
+      "model_probability": 0.1,
+      "market_probability": 0.06,
+      "edge": 0.04,
+      "abs_edge": 0.04,
+      "stance": "model_above_market",
+      "side": "YES",
+      "entry_price": 0.06,
+      "payout_odds": 15.7,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.35,
-      "horizon": "14-30d",
-      "lead_days": 22.1,
-      "market_probability": 0.65,
-      "market_url": "https://polymarket.com/market/will-victor-marx-win-the-2026-colorado-governor-republican-primary-election",
-      "model_probability": 0.62,
-      "payout_odds": 1.9,
+      "track_record": null
+    },
+    {
+      "question": "Will the San Antonio Spurs win the 2026 NBA Finals?",
       "platform": "Polymarket",
-      "question": "Will Victor Marx win the 2026 Colorado Governor Republican primary election?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": null
-    },
-    {
-      "abs_edge": 0.029,
-      "edge": 0.029,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.221,
+      "market_url": "https://polymarket.com/market/will-the-san-antonio-spurs-win-the-2026-nba-finals",
+      "domain": "sports",
       "horizon": "14-30d",
       "lead_days": 23.1,
-      "market_probability": 0.221,
-      "market_url": "https://polymarket.com/market/will-the-san-antonio-spurs-win-the-2026-nba-finals",
       "model_probability": 0.25,
-      "payout_odds": 3.5,
-      "platform": "Polymarket",
-      "question": "Will the San Antonio Spurs win the 2026 NBA Finals?",
-      "side": "YES",
+      "market_probability": 0.217,
+      "edge": 0.033,
+      "abs_edge": 0.033,
       "stance": "model_above_market",
+      "side": "YES",
+      "entry_price": 0.217,
+      "payout_odds": 3.6,
+      "edge_bucket": "0-5pp",
+      "track_record": null
+    },
+    {
+      "question": "US x Iran permanent peace deal by June 15, 2026?",
+      "platform": "Polymarket",
+      "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-june-15-2026-734-856-129",
+      "domain": "geopolitics",
+      "horizon": "7-14d",
+      "lead_days": 7.1,
+      "model_probability": 0.08,
+      "market_probability": 0.055,
+      "edge": 0.025,
+      "abs_edge": 0.025,
+      "stance": "model_above_market",
+      "side": "YES",
+      "entry_price": 0.055,
+      "payout_odds": 17.2,
+      "edge_bucket": "0-5pp",
       "track_record": null
     }
   ],
-  "generated_at": "2026-06-07T20:46:40.474016+00:00",
-  "lead_lag": null,
-  "methodology": "Forecast trajectories on live Polymarket/Kalshi markets: a fresh point-in-time forecast each day (latest price + latest news, no look-ahead) until the market resolves, then every snapshot is scored. Skill vs market = market Brier \u2212 model Brier, reported by forecast horizon; long-horizon skill is the meaningful signal.",
-  "model": "gpt-oss-120b",
   "models_comparison": [],
-  "n_markets_open": 26,
-  "n_markets_resolved": 0,
-  "n_snapshots_resolved": 0,
-  "overall": null,
-  "paper_pnl": null,
-  "source": "live",
-  "temperature": 0.0,
   "trajectories": [],
-  "variant": "variant0_neutral_baseline"
+  "calibration_model": {
+    "applied": false,
+    "reason": "insufficient_data",
+    "n_resolved": 0,
+    "min_required": 30
+  },
+  "knowledge_graph": {
+    "top_entities": [
+      {
+        "entity": "FIFA",
+        "count": 27
+      },
+      {
+        "entity": "World Cup",
+        "count": 27
+      },
+      {
+        "entity": "UN",
+        "count": 19
+      },
+      {
+        "entity": "NFL",
+        "count": 8
+      },
+      {
+        "entity": "Finals",
+        "count": 7
+      },
+      {
+        "entity": "NBA",
+        "count": 7
+      },
+      {
+        "entity": "Iran",
+        "count": 6
+      },
+      {
+        "entity": "US",
+        "count": 6
+      },
+      {
+        "entity": "Brazil",
+        "count": 6
+      },
+      {
+        "entity": "England",
+        "count": 6
+      },
+      {
+        "entity": "Harry Styles",
+        "count": 5
+      },
+      {
+        "entity": "Prison Break",
+        "count": 5
+      },
+      {
+        "entity": "Mike Evans",
+        "count": 5
+      },
+      {
+        "entity": "Matthew Stafford",
+        "count": 5
+      },
+      {
+        "entity": "France",
+        "count": 5
+      },
+      {
+        "entity": "New York Knicks",
+        "count": 5
+      },
+      {
+        "entity": "Artificial General Intelligence",
+        "count": 4
+      },
+      {
+        "entity": "Zoe Kravitz",
+        "count": 4
+      },
+      {
+        "entity": "Portugal",
+        "count": 4
+      },
+      {
+        "entity": "Vladimir Putin",
+        "count": 3
+      },
+      {
+        "entity": "Volodymyr Zelenskyy",
+        "count": 3
+      },
+      {
+        "entity": "Retirement",
+        "count": 2
+      },
+      {
+        "entity": "Argentina",
+        "count": 2
+      },
+      {
+        "entity": "China",
+        "count": 2
+      },
+      {
+        "entity": "Taiwan",
+        "count": 2
+      },
+      {
+        "entity": "Germany",
+        "count": 2
+      },
+      {
+        "entity": "Spain",
+        "count": 2
+      },
+      {
+        "entity": "San Antonio Spurs",
+        "count": 2
+      },
+      {
+        "entity": "Colorado Governor Republican",
+        "count": 2
+      },
+      {
+        "entity": "Victor Marx",
+        "count": 2
+      }
+    ],
+    "domain_distribution": {
+      "sports": 44,
+      "geopolitics": 12,
+      "entertainment": 10,
+      "technology": 5,
+      "other": 2,
+      "elections": 2,
+      "crypto": 1
+    },
+    "n_tagged": 76
+  }
 }
