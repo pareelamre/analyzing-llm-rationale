@@ -135,7 +135,7 @@ _STOP_WORDS = {
     "september", "october", "november", "december",
     "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
     # common question/date words that produce false positives
-    "before", "after", "between", "worldwide", "global", "season", "announce",
+    "between", "worldwide", "global", "season", "announce",
     "achieve", "release", "win", "lose", "reach", "meet", "sign", "pass",
     "become", "remain", "stay", "enter", "leave", "join", "exit",
 }

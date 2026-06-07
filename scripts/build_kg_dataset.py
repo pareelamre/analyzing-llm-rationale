@@ -142,6 +142,9 @@ def build(
             continue
 
         created_time = _parse_dt(rec.get("created_time") or rec.get("publish_time"))
+
+        if created_after_dt and (created_time is None or created_time < created_after_dt):
+            continue
         horizon_days: Optional[float] = None
         if created_time and resolve_time:
             horizon_days = round((resolve_time - created_time).total_seconds() / 86400, 1)
@@ -198,8 +201,12 @@ def main():
     parser.add_argument("--output", default=str(_DEFAULT_OUTPUT))
     parser.add_argument("--min-articles", type=int, default=0,
                         help="Drop records with fewer than N pre-resolution articles")
+    parser.add_argument("--min-created", default=None,
+                        help="Only include questions created on or after this date (YYYY-MM-DD)")
     args = parser.parse_args()
-    build(Path(args.input), Path(args.output), min_articles=args.min_articles)
+    build(Path(args.input), Path(args.output),
+          min_articles=args.min_articles,
+          created_after=args.min_created)
 
 
 if __name__ == "__main__":

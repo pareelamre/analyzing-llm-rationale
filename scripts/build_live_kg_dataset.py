@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -226,7 +227,8 @@ def _fetch_kalshi(after_dt: datetime, limit: int) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
     cursor: Optional[str] = None
     seen_tickers: set = set()
-    seen_events: set = set()   # one market per event_ticker to avoid correlated clusters
+    seen_events: set = set()   # one market per event_ticker
+    seen_title_keys: set = set()  # deduplicate "which X wins this week" type patterns
 
     print("  Kalshi: fetching settled markets…")
     while len(results) < limit:
@@ -254,8 +256,17 @@ def _fetch_kalshi(after_dt: datetime, limit: int) -> List[Dict[str, Any]]:
             if category in ("Crypto", "Financials", "Sports", "Mentions", "Climate and Weather"):
                 continue
 
-            # One record per event — skip if we already captured a market from this event
+            # One record per event_ticker
             if event_ticker and event_ticker in seen_events:
+                continue
+
+            # Deduplicate "which X wins this week/today" style events by normalised title.
+            # These produce many distinct event_tickers (one per song/show/candidate)
+            # all sharing the same human-readable question title.
+            title_key = re.sub(r'\s+', ' ', title.lower().strip())
+            # Strip trailing date/ordinal so "Top Netflix Show this week" unifies
+            title_key = re.sub(r'\b(this week|today|tonight|on \w+ \d+[,\s]|\d{4})\b.*$', '', title_key).strip()
+            if title_key in seen_title_keys:
                 continue
 
             for m in event.get("markets", []) or []:
@@ -284,6 +295,7 @@ def _fetch_kalshi(after_dt: datetime, limit: int) -> List[Dict[str, Any]]:
                 seen_tickers.add(ticker)
                 if event_ticker:
                     seen_events.add(event_ticker)
+                seen_title_keys.add(title_key)
                 results.append(_record(
                     source="kalshi",
                     ident=ticker,
