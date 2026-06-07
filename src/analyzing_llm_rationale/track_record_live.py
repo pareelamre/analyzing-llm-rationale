@@ -28,9 +28,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
-from analyzing_llm_rationale.entity_tagger import tag_question
-
 from analyzing_llm_rationale import trackrec_store as _ds
+from analyzing_llm_rationale.entity_tagger import tag_question
 
 SNAPSHOT_KIND = "ForecastSnapshot"
 PRICE_KIND = "MarketPricePoint"

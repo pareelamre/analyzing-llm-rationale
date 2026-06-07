@@ -266,7 +266,7 @@ def _fetch_polymarket(after_dt: datetime, limit: int) -> List[Dict[str, Any]]:
             end_dt = _parse_dt(m.get("endDate") or m.get("endDateIso"))
             if not end_dt or end_dt < after_dt:
                 continue
-            labels = [str(l).strip().lower() for l in _as_list(m.get("outcomes"))]
+            labels = [str(lbl).strip().lower() for lbl in _as_list(m.get("outcomes"))]
             prices = [_to_float(p) for p in _as_list(m.get("outcomePrices"))]
             if set(labels) != {"yes", "no"}:
                 continue
