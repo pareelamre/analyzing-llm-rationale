@@ -146,7 +146,6 @@ async def record_snapshots(
     default_model: str = "gpt-oss-120b",
     per_venue: int = 3,
     evidence_top_k: int = 3,
-    max_active: int = 20,
     min_discovery_lead_days: float = 2.0,
     max_discovery_lead_days: float = 365.0,
     seed_idents: Optional[List[Tuple[str, str]]] = None,
@@ -175,8 +174,8 @@ async def record_snapshots(
             targets.append(quote)
 
     # 1.5) Agent-enrolled seeds (explicit agent forecasts via the evolution-loop
-    #      bridge). Added before discovery so user-driven markets win the max_active
-    #      cap, and tracked even if short-dated — an agent explicitly asked.
+    #      bridge). Added before discovery so user-driven markets are included,
+    #      and tracked even if short-dated — an agent explicitly asked.
     seen = {(q.get("platform"), ident_from_url(q.get("platform", ""), q.get("market_url", "")))
             for q in targets}
     for plat, ident in (seed_idents or []):
@@ -216,7 +215,7 @@ async def record_snapshots(
         known.add((q.get("platform"), ident))
 
     recorded = 0
-    for quote in targets[:max_active]:
+    for quote in targets:
         ident = ident_from_url(quote.get("platform", ""), quote.get("market_url", ""))
         if not ident:
             continue
