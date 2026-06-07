@@ -3984,11 +3984,13 @@ def _sse_event(event: str, data: Dict[str, Any]) -> str:
     response_description="Server-sent events containing model text deltas and a final PredictResponse payload.",
 )
 async def predict_stream(req: PredictRequest, request: Request) -> StreamingResponse:
-    """Stream chat-mode model output as server-sent events.
+    """Stream model output as server-sent events, for all question types.
 
-    The final `done` event contains the same `PredictResponse` shape that `/predict`
-    returns for chat-mode requests. Structured forecast calls should keep using
-    `/predict`; this endpoint forces conversational output.
+    Delta events carry raw text chunks as they arrive so the UI can render the
+    rationale progressively. The final ``done`` event contains the same fully-
+    parsed ``PredictResponse`` shape that ``/predict`` returns, including
+    structured fields (``predicted_answer``, ``confidence``, etc.) for binary,
+    numeric, and multiple-choice questions.
     """
     _check_rate_limit(request)
     _check_api_key(request)
@@ -3996,12 +3998,11 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
 
-    stream_req = req.model_copy(update={"chat_mode": True})
     variants = _state["variants"]
-    if stream_req.variant not in variants:
+    if req.variant not in variants:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown variant '{stream_req.variant}'. Valid: {sorted(variants)}",
+            detail=f"Unknown variant '{req.variant}'. Valid: {sorted(variants)}",
         )
 
     rag_user_id = _optional_user_id(request)
@@ -4009,15 +4010,14 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
     async def events():
         yield _sse_event("meta", {
             "status": "preparing",
-            "question_type": "chat",
-            "variant": stream_req.variant,
-            "model_key": _model_key_for_request(stream_req),
+            "variant": req.variant,
+            "model_key": _model_key_for_request(req),
         })
         try:
             messages, evidence_articles, evidence_error = await _prepare_predict_messages(
-                stream_req, rag_user_id
+                req, rag_user_id
             )
-            provider, temperature, max_tokens = _select_predict_provider(stream_req)
+            provider, temperature, max_tokens = _select_predict_provider(req)
         except HTTPException as exc:
             yield _sse_event("error", {"status_code": exc.status_code, "detail": exc.detail})
             return
@@ -4031,9 +4031,8 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
 
         yield _sse_event("meta", {
             "status": "streaming",
-            "question_type": "chat",
-            "variant": stream_req.variant,
-            "model_key": _model_key_for_request(stream_req),
+            "variant": req.variant,
+            "model_key": _model_key_for_request(req),
             "evidence_sources": [s.model_dump(mode="json") for s in _evidence_sources(evidence_articles)],
             "evidence_articles": [a.model_dump(mode="json") for a in _news_articles(evidence_articles)],
             "evidence_error": evidence_error,
@@ -4055,16 +4054,9 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             return
 
         text = "".join(chunks).strip()
-        response = PredictResponse(
-            question_type="chat",
-            rationale=text,
-            model_rationale=text,
-            variant=stream_req.variant,
-            model_key=_model_key_for_request(stream_req),
-            evidence_sources=_evidence_sources(evidence_articles),
-            evidence_articles=_news_articles(evidence_articles),
-            evidence_error=evidence_error,
-        )
+        parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
+                                             "rationale", "options", "p10", "p50", "p90", "unit"))
+        response = _build_typed_response(req, parsed, text, evidence_articles, evidence_error)
         yield _sse_event("done", {"response": response.model_dump(mode="json")})
 
     return StreamingResponse(

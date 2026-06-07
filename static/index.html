@@ -2709,6 +2709,7 @@ async function streamPredict(body, variant, convId, typingEl) {
       rationale: text,
       model_key: body.openrouter_model || body.model || 'gpt-oss-120b',
     };
+    if (data.question_type !== 'chat') data.market_context = buildMarketContext(body.question, data);
     appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     const finalNode = makeAIBubble(data, variant);
     if (bubble) bubble.replaceWith(finalNode);
@@ -2870,15 +2871,14 @@ async function sendQuestion() {
       if (!resp.ok) { addError(report.detail || 'Agent error'); return; }
       data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
     } else {
-      if (isChatMode()) {
-        const streamed = await streamPredict(body, variant, activeId, typingEl);
-        if (streamed.ok) return;
-        if (!streamed.fallback) {
-          typingEl.remove();
-          addError(streamed.detail || 'Streaming error');
-          return;
-        }
+      const streamed = await streamPredict(body, variant, activeId, typingEl);
+      if (streamed.ok) return;
+      if (!streamed.fallback) {
+        typingEl.remove();
+        addError(streamed.detail || 'Streaming error');
+        return;
       }
+      // Streaming failed (network/server) — fall back to blocking request
       const resp = await fetch('/predict', {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -2974,19 +2974,26 @@ function _mdInline(s) {
 // of raw braces. Falls back to the original string for normal text.
 function _chatText(s) {
   const t = String(s ?? '').trim();
-  if (t.startsWith('{') && t.endsWith('}')) {
-    try {
-      const o = JSON.parse(t);
-      const prose = o.rationale || o.model_rationale || o.answer || o.response || o.text || '';
-      if (prose) {
-        let prefix = '';
-        if (o.predicted_answer) {
-          const conf = o.confidence != null ? ` · ${Math.round(o.confidence * 100)}% confidence` : '';
-          prefix = `**${o.predicted_answer}**${conf}\n\n`;
+  if (t.startsWith('{')) {
+    // Complete JSON — extract prose only
+    if (t.endsWith('}')) {
+      try {
+        const o = JSON.parse(t);
+        const prose = o.rationale || o.model_rationale || o.answer || o.response || o.text || '';
+        if (prose) {
+          let prefix = '';
+          if (o.predicted_answer) {
+            const conf = o.confidence != null ? ` · ${Math.round(o.confidence * 100)}% confidence` : '';
+            prefix = `**${o.predicted_answer}**${conf}\n\n`;
+          }
+          return prefix + prose;
         }
-        return prefix + prose;
-      }
-    } catch (_) { /* not JSON — render as-is */ }
+      } catch (_) { /* fall through */ }
+    }
+    // Partial JSON streaming — surface the rationale as it arrives, hide preamble fields
+    const m = t.match(/"rationale"\s*:\s*"((?:[^"\\]|\\.)*)/);
+    if (m) return m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    return '';
   }
   return t;
 }
