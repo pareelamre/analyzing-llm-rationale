@@ -569,6 +569,9 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
                      *,
                      latest_price_ts: Optional[Dict[str, Any]] = None,
                      price_staleness_hours: float = 26.0,
+                     min_lead_days: float = 3.0,
+                     min_abs_edge: float = 0.02,
+                     max_per_close_window: int = 2,
                      limit: int = 20) -> List[Dict[str, Any]]:
     """Current open markets ranked by live model-vs-market disagreement, each
     annotated with its disagreement bucket's resolved track record — so a gap is
@@ -582,12 +585,15 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
         if cur is None or (r.get("snapshot_ts") or _now()) > (cur.get("snapshot_ts") or _now()):
             latest[key] = r
 
-    _cutoff = _now() if latest_price_ts is None else None
     _stale_secs = price_staleness_hours * 3600.0
 
     board: List[Dict[str, Any]] = []
     for (platform, ident), r in latest.items():
         if r.get("model_probability") is None:
+            continue
+        # Drop markets expiring within min_lead_days (stale/near-expiry signal).
+        current_lead = _lead_time_days(r.get("close_time"))
+        if current_lead is not None and current_lead < min_lead_days:
             continue
         # Require a recent price point — markets delisted at source stop getting
         # price points recorded, so their stale snapshot price would be noise.
@@ -600,6 +606,9 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             continue
         model_p, market_p = float(r["model_probability"]), float(market_p)
         signed = model_p - market_p
+        # Drop tiny disagreements — below min_abs_edge they're noise, not signal.
+        if abs(signed) < min_abs_edge:
+            continue
         label = _edge_label(abs(signed))
         tr = by_edge.get(label)
         # The directional trade: buy the model's side at that side's price. Buying
@@ -613,7 +622,7 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "platform": platform,
             "market_url": r.get("market_url"),
             "horizon": r.get("horizon"),
-            "lead_days": round(r["lead_time_days"], 1) if r.get("lead_time_days") is not None else None,
+            "lead_days": round(current_lead, 1) if current_lead is not None else None,
             "model_probability": round(model_p, 3),
             "market_probability": round(market_p, 3),
             "edge": round(signed, 3),
@@ -624,6 +633,7 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "entry_price": round(entry, 3) if entry is not None else None,
             "payout_odds": payout_odds,
             "edge_bucket": label,
+            "close_time": r.get("close_time"),
             "track_record": {
                 "n": tr.get("n"),
                 "skill_vs_market": tr.get("skill_vs_market"),
@@ -632,7 +642,29 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             } if tr else None,
         })
     board.sort(key=lambda x: x["abs_edge"], reverse=True)
-    return board[:limit]
+
+    # Deduplicate correlated markets: cap entries sharing the same platform and
+    # close-week (e.g. 7 World Cup team markets → keep the top max_per_close_window).
+    seen_windows: Dict[Tuple[str, str], int] = {}
+    deduped: List[Dict[str, Any]] = []
+    for item in board:
+        close_t = item.get("close_time") or ""
+        try:
+            close_dt = datetime.fromisoformat(close_t.replace("Z", "+00:00"))
+            # Bucket by platform + ISO year-week (Mon-Sun window)
+            window = (item["platform"] or "", close_dt.strftime("%G-W%V"))
+        except Exception:
+            window = (item["platform"] or "", close_t[:7])
+        count = seen_windows.get(window, 0)
+        if count < max_per_close_window:
+            seen_windows[window] = count + 1
+            deduped.append(item)
+
+    # Strip the close_time helper field before returning
+    for item in deduped:
+        item.pop("close_time", None)
+
+    return deduped[:limit]
 
 
 def _ece(rows: List[Dict[str, Any]], bins: int = 10) -> Optional[float]:

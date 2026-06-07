@@ -275,7 +275,9 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "platform": "Kalshi",
         "question": market.get("title") or market.get("yes_sub_title") or market.get("subtitle") or ticker,
-        "market_url": f"https://kalshi.com/markets/{ticker}" if ticker else "",
+        "market_url": (f"https://kalshi.com/markets/{market.get('event_ticker')}/{ticker}"
+                       if market.get("event_ticker") else
+                       f"https://kalshi.com/markets/{ticker}") if ticker else "",
         "ident": ticker,
         "outcome": "Yes",
         "probability": probability,
