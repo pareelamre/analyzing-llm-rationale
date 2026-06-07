@@ -61,6 +61,10 @@ PREDICT_API_KEY = os.environ.get("PREDICT_API_KEY") or None
 # Gates the evolution-loop bridge (pending-markets / mark-enrolled). When unset,
 # the tick simply doesn't pull agent-enrolled seeds (discovery still runs).
 TRACK_RECORD_TOKEN = os.environ.get("TRACK_RECORD_TOKEN") or None
+# Re-forecast a market if its live price has moved more than this many pp since
+# today's snapshot. Prevents stale model probability from being paired with a
+# current price on the edge board. Set to 1.0 to disable drift re-forecasting.
+PRICE_DRIFT_THRESHOLD = float(os.environ.get("PRICE_DRIFT_THRESHOLD") or trl.PRICE_DRIFT_THRESHOLD)
 
 _PREDICT_TIMEOUT_S = 120
 _PREDICT_RETRIES = 3
@@ -160,7 +164,7 @@ async def main() -> int:
     recorded = await trl.record_snapshots(
         store, market_data, forecast_fn,
         models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE,
-        seed_idents=seeds)
+        seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD)
     # Flip enrolled markets out of the pending queue (and let the server prune).
     _mark_enrolled([f"{p}:{i}" for p, i in seeds])
     agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)

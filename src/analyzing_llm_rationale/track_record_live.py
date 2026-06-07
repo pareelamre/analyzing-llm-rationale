@@ -42,6 +42,11 @@ ForecastFn = Callable[[Dict[str, Any], int, Optional[str]], Awaitable[Optional[D
 # Calibration only kicks in once there's enough resolved data AND the raw
 # forecasts are actually miscalibrated — otherwise it's a no-op (see aggregate).
 MIN_CALIBRATION_SAMPLES = 30
+
+# Re-forecast a market mid-day when the live price has moved more than this many
+# probability points since the snapshot was taken. Keeps the edge board accurate
+# after large price swings without re-forecasting every stable market every hour.
+PRICE_DRIFT_THRESHOLD = 0.05
 CALIBRATION_ECE_THRESHOLD = 0.05
 CALIBRATION_CV_FOLDS = 5
 
@@ -145,6 +150,7 @@ async def record_snapshots(
     min_discovery_lead_days: float = 2.0,
     max_discovery_lead_days: float = 365.0,
     seed_idents: Optional[List[Tuple[str, str]]] = None,
+    price_drift_threshold: float = PRICE_DRIFT_THRESHOLD,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
     agent-enrolled ``seed_idents`` and newly-discovered markets, capturing the live
@@ -152,7 +158,12 @@ async def record_snapshots(
 
     With multiple ``models`` (labels passed to ``forecast_fn``), each market is
     forecast once per model per day — the per-model snapshots back the
-    paper-trading comparison. One snapshot per (market, model, day)."""
+    paper-trading comparison. One snapshot per (market, model, day).
+
+    ``price_drift_threshold``: if the live market price has moved more than this
+    many probability points since today's snapshot was taken, discard it and
+    re-forecast so the edge board reflects the new information rather than a
+    stale model opinion paired with a current price."""
     model_list = list(models) if models else [default_model]
     today = _today()
 
@@ -213,8 +224,16 @@ async def record_snapshots(
         lead = _lead_time_days(quote.get("close_time"))
         for model in model_list:
             key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{today}")
-            if client.get(key) is not None:
-                continue  # already snapshotted this market+model today
+            existing = client.get(key)
+            if existing is not None:
+                # Skip unless the live price has drifted significantly since the snapshot.
+                # A large move signals new information the original forecast didn't see;
+                # re-forecasting keeps the edge board paired: current model vs current price.
+                last_market_prob = float(existing.get("market_probability") or 0.0)
+                current_prob = float(market_prob) if market_prob is not None else last_market_prob
+                if abs(current_prob - last_market_prob) <= price_drift_threshold:
+                    continue  # price stable — today's snapshot is still good
+                # Fall through: price drifted — re-forecast and overwrite today's snapshot.
             try:
                 scored = await forecast_fn(quote, evidence_top_k, model)
             except Exception:
@@ -243,6 +262,7 @@ async def record_snapshots(
                 evidence_count=scored.get("evidence_count"),
                 resolved=False,
                 outcome=None,
+                drift_reforecast=existing is not None,
             )
             client.put(entity)
             recorded += 1
