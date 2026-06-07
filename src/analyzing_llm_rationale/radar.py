@@ -17,8 +17,8 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from analyzing_llm_rationale import market_data
 
-_REDDIT_OLD = "https://old.reddit.com/r/{sub}/new/"
-_HEADERS = {"User-Agent": "foresea-radar/1.0"}
+_REDDIT_RSS = "https://www.reddit.com/r/{sub}/new/.rss?limit=25"
+_HEADERS = {"User-Agent": "foresea-radar/1.0 (by /u/pareelamre)"}
 
 _SEED_MARKETS = [
     {
@@ -217,30 +217,31 @@ def _fetch_seed(seed: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 def fetch_reddit_discussions(subreddits: Iterable[str] = ("PredictionMarkets", "Polymarket", "Kalshi"),
                              limit_per_sub: int = 8) -> List[Dict[str, Any]]:
     import requests
-    from bs4 import BeautifulSoup
 
+    _ATOM = "http://www.w3.org/2005/Atom"
     rows: List[Dict[str, Any]] = []
     for sub in subreddits:
         try:
-            resp = requests.get(_REDDIT_OLD.format(sub=sub), headers=_HEADERS, timeout=8)
+            import xml.etree.ElementTree as ET
+
+            resp = requests.get(_REDDIT_RSS.format(sub=sub), headers=_HEADERS, timeout=8)
             if resp.status_code != 200:
                 continue
+            root = ET.fromstring(resp.text)
         except Exception:
             continue
-        soup = BeautifulSoup(resp.text, "html.parser")
-        for thing in soup.select("div.thing")[:limit_per_sub]:
-            title_el = thing.select_one("a.title")
-            if not title_el:
+        for entry in list(root.findall(f"{{{_ATOM}}}entry"))[:limit_per_sub]:
+            title_el = entry.find(f"{{{_ATOM}}}title")
+            link_el = entry.find(f"{{{_ATOM}}}link")
+            title = (title_el.text or "").strip() if title_el is not None else ""
+            if not title:
                 continue
-            comments_el = thing.select_one("a.comments")
-            title = title_el.get_text(" ", strip=True)
-            url = comments_el.get("href") if comments_el else title_el.get("href")
-            score = thing.get("data-score")
+            url = link_el.get("href", "") if link_el is not None else ""
             rows.append({
                 "subreddit": sub,
                 "title": title,
                 "url": url,
-                "score": int(score) if score and score.isdigit() else None,
+                "score": None,
                 "topic": _wordish_topic(title),
             })
     return rows[:30]
