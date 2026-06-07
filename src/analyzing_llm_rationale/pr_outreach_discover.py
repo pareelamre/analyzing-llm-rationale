@@ -159,20 +159,6 @@ STATIC_SEEDS: List[Dict[str, Any]] = [
     },
     # ── Broader AI tool directories ───────────────────────────────────────────
     {
-        "name": "There's An AI For That",
-        "endpoint": "https://theresanai.com/api/tools",
-        "audience": "catalog",
-        "transport": "json",
-        "body": {
-            "name": "Foresea",
-            "description": "AI forecasting engine for prediction markets. Ask any probability question and get a calibrated YES/NO answer with sources, live market edge, and a public track record.",
-            "url": "https://foresea.ink",
-            "category": "Research",
-            "pricing": "Free",
-            "contact": "pareel.amre@gmail.com",
-        },
-    },
-    {
         "name": "Futurepedia",
         "endpoint": "https://www.futurepedia.io/api/tool-submissions",
         "audience": "catalog",
