@@ -14,25 +14,80 @@ import time
 from typing import Any, Dict, List, Optional, Set
 
 # Static seed list — add new directories here.
-# transport="webhook" means POST the standard Foresea PR-agent JSON packet.
+# transport="webhook" → POST the standard Foresea PR-agent JSON packet.
+# transport="json"    → POST a custom `body` dict.
+# transport="form"    → POST a `form` dict as multipart/form-data.
 STATIC_SEEDS: List[Dict[str, Any]] = [
+    # ── MCP-specific registries ───────────────────────────────────────────────
+    {
+        "name": "Glama",
+        "endpoint": "https://glama.ai/api/mcp/servers",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "Foresea",
+            "url": "https://foresea.ink/mcp/",
+            "repositoryUrl": "https://github.com/pareelamre/analyzing-llm-rationale",
+            "description": "Remote MCP server for prediction-market forecasting: calibrated YES/NO probabilities, live edge scans, and public track-record verification.",
+        },
+    },
     {
         "name": "mcp.so",
-        "endpoint": "https://mcp.so/api/submit",
+        "endpoint": "https://mcp.so/api/servers",
         "audience": "catalog",
         "transport": "json",
         "body": {
             "name": "Foresea",
             "url": "https://foresea.ink/mcp/",
             "github": "https://github.com/pareelamre/analyzing-llm-rationale",
-            "description": "Remote MCP server for prediction-market forecasting, edge scans, and public track-record verification.",
+            "description": "Remote MCP server: calibrated forecasts, live market edge scans, and public track record for prediction markets.",
         },
     },
     {
-        "name": "Toolbase",
-        "endpoint": "https://toolbase.ai/api/mcp/register",
+        "name": "PulseMCP",
+        "endpoint": "https://api.pulsemcp.com/v0beta/servers",
         "audience": "catalog",
-        "transport": "webhook",
+        "transport": "json",
+        "body": {
+            "github_url": "https://github.com/pareelamre/analyzing-llm-rationale",
+            "contact_email": "pareel.amre@gmail.com",
+        },
+    },
+    {
+        "name": "mcp-get",
+        "endpoint": "https://mcp-get.com/api/servers/submit",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "foresea",
+            "description": "Prediction-market forecasts, edge scans, and public track-record checks via remote MCP.",
+            "vendor": "Foresea",
+            "sourceUrl": "https://github.com/pareelamre/analyzing-llm-rationale",
+            "homepage": "https://foresea.ink",
+            "license": "MIT",
+        },
+    },
+    {
+        "name": "Smithery registry",
+        "endpoint": "https://smithery.ai/api/v1/servers",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "repoUrl": "https://github.com/pareelamre/analyzing-llm-rationale",
+            "serverUrl": "https://foresea.ink/mcp/",
+        },
+    },
+    {
+        "name": "MCPHunt",
+        "endpoint": "https://mcphunt.com/api/servers",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "Foresea",
+            "url": "https://foresea.ink/mcp/",
+            "repo": "https://github.com/pareelamre/analyzing-llm-rationale",
+            "description": "Calibrated AI forecasting on prediction markets — forecasts, edge scans, track record.",
+        },
     },
     {
         "name": "mcp.run",
@@ -47,38 +102,6 @@ STATIC_SEEDS: List[Dict[str, Any]] = [
         },
     },
     {
-        "name": "PulseMCP",
-        "endpoint": "https://api.pulsemcp.com/v0/submit",
-        "audience": "catalog",
-        "transport": "json",
-        "body": {
-            "github_url": "https://github.com/pareelamre/analyzing-llm-rationale",
-            "contact": "pareel.amre@gmail.com",
-        },
-    },
-    {
-        "name": "Smithery registry",
-        "endpoint": "https://smithery.ai/api/registry/submit",
-        "audience": "catalog",
-        "transport": "json",
-        "body": {
-            "repoUrl": "https://github.com/pareelamre/analyzing-llm-rationale",
-            "serverUrl": "https://foresea.ink/mcp/",
-        },
-    },
-    {
-        "name": "MCPHunt",
-        "endpoint": "https://mcphunt.com/api/submit",
-        "audience": "catalog",
-        "transport": "webhook",
-    },
-    {
-        "name": "AITool.fyi MCP",
-        "endpoint": "https://aitool.fyi/api/mcp/submit",
-        "audience": "catalog",
-        "transport": "webhook",
-    },
-    {
         "name": "OpenTools.ai",
         "endpoint": "https://opentools.ai/api/mcp/register",
         "audience": "catalog",
@@ -87,7 +110,121 @@ STATIC_SEEDS: List[Dict[str, Any]] = [
             "name": "Foresea",
             "url": "https://foresea.ink/mcp/",
             "repo": "https://github.com/pareelamre/analyzing-llm-rationale",
-            "description": "Prediction-market intelligence — forecasts, edge scans, and track-record checks.",
+            "description": "Prediction-market intelligence — calibrated forecasts, edge scans, and track-record checks.",
+        },
+    },
+    {
+        "name": "Toolbase",
+        "endpoint": "https://api.toolbase.ai/v1/mcp/register",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "Foresea",
+            "endpoint": "https://foresea.ink/mcp/",
+            "description": "Calibrated AI forecasting on prediction markets.",
+            "homepage": "https://foresea.ink",
+        },
+    },
+    # ── AI-agent / LLM tool directories ──────────────────────────────────────
+    {
+        "name": "AgentNDX",
+        "endpoint": "https://agentndx.ai/api/submit",
+        "audience": "catalog",
+        "transport": "webhook",
+    },
+    {
+        "name": "ACI.dev",
+        "endpoint": "https://api.aci.dev/v1/tools/submit",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "Foresea",
+            "description": "Calibrated AI forecasting for prediction markets — YES/NO probabilities, edge scans, multi-model track record.",
+            "homepage": "https://foresea.ink",
+            "mcp_url": "https://foresea.ink/mcp/",
+            "github": "https://github.com/pareelamre/analyzing-llm-rationale",
+        },
+    },
+    {
+        "name": "Composio MCP",
+        "endpoint": "https://backend.composio.dev/api/v1/mcp/servers",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "Foresea",
+            "description": "Remote MCP server: calibrated prediction-market forecasts, live edge scans, public track record.",
+            "url": "https://foresea.ink/mcp/",
+            "homepage": "https://foresea.ink",
+        },
+    },
+    # ── Broader AI tool directories ───────────────────────────────────────────
+    {
+        "name": "There's An AI For That",
+        "endpoint": "https://theresanai.com/api/tools",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "Foresea",
+            "description": "AI forecasting engine for prediction markets. Ask any probability question and get a calibrated YES/NO answer with sources, live market edge, and a public track record.",
+            "url": "https://foresea.ink",
+            "category": "Research",
+            "pricing": "Free",
+            "contact": "pareel.amre@gmail.com",
+        },
+    },
+    {
+        "name": "Futurepedia",
+        "endpoint": "https://www.futurepedia.io/api/tool-submissions",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "Foresea",
+            "tagline": "Calibrated AI forecasting for prediction markets",
+            "description": "Ask any probability question and get a calibrated YES/NO answer with evidence, live market edge analysis, and a public track record. Includes an MCP server for Claude Desktop and other AI agents.",
+            "url": "https://foresea.ink",
+            "categories": ["AI Tools", "Finance", "Research"],
+            "pricing": "Free",
+            "email": "pareel.amre@gmail.com",
+        },
+    },
+    {
+        "name": "TopAI.tools",
+        "endpoint": "https://topai.tools/api/submit",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "Foresea",
+            "url": "https://foresea.ink",
+            "description": "AI forecasting engine for prediction markets — calibrated probabilities, market edge scans, and public track record.",
+            "category": "Research & Analysis",
+            "email": "pareel.amre@gmail.com",
+        },
+    },
+    {
+        "name": "AI Tools Club",
+        "endpoint": "https://aitools.club/api/submit",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "Foresea",
+            "url": "https://foresea.ink",
+            "description": "Calibrated AI forecasting for prediction markets with live edge scans and public track record.",
+            "tags": ["forecasting", "prediction markets", "MCP", "AI agents"],
+        },
+    },
+    {
+        "name": "AIToolsDirectory",
+        "endpoint": "https://www.aitoolsdirectory.com/api/submit",
+        "audience": "catalog",
+        "transport": "json",
+        "body": {
+            "name": "Foresea",
+            "website": "https://foresea.ink",
+            "shortDescription": "AI forecasting for prediction markets",
+            "description": "Ask any probability question and get a calibrated YES/NO answer with evidence, live market edge, and a public track record. MCP server available for Claude Desktop.",
+            "category": "Research",
+            "pricing": "Free",
+            "email": "pareel.amre@gmail.com",
         },
     },
 ]

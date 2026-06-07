@@ -194,14 +194,19 @@ def mark_sent(state: Dict[str, Any], results: Iterable[Dict[str, Any]]) -> Dict[
     sent = state.setdefault("sent", {})
     now = datetime.now(timezone.utc).isoformat()
     for result in results:
-        if result.get("status") != "sent":
+        status = result.get("status")
+        status_code = result.get("status_code")
+        # Record any result that got an HTTP response (success or API rejection).
+        # Skip pure network errors (no status_code) so they're retried next run.
+        if status not in {"sent", "failed"} or (status == "failed" and not status_code):
             continue
         key = f"{result.get('target')}|{result.get('endpoint')}"
         sent[key] = {
             "target": result.get("target"),
             "endpoint": result.get("endpoint"),
             "sent_at": now,
-            "status_code": result.get("status_code"),
+            "status_code": status_code,
+            "outcome": "sent" if status == "sent" else "rejected",
         }
     state["updated_at"] = now
     return state
