@@ -2090,8 +2090,25 @@ function loadStore() {
   try { return JSON.parse(localStorage.getItem(storageKey)) || { conversations: {} }; }
   catch { return { conversations: {} }; }
 }
+function _slimMsg(msg) {
+  // Strip full article text from stored messages — evidence_sources (compact
+  // citations) are kept for display; evidence_articles (full text) are only
+  // needed at inference time and can easily be 50-100 KB per message.
+  if (!msg.data?.evidence_articles?.length) return msg;
+  const slim = { ...msg, data: { ...msg.data, evidence_articles: [] } };
+  return slim;
+}
 function saveStore() {
-  try { localStorage.setItem(storageKey, JSON.stringify(store)); } catch {}
+  const payload = JSON.stringify(store);
+  try {
+    localStorage.setItem(storageKey, payload);
+  } catch (e) {
+    // Quota exceeded — prune the oldest half of conversations and retry once.
+    const ids = sortedIds();
+    const toDrop = ids.slice(Math.floor(ids.length / 2));
+    toDrop.forEach(id => delete store.conversations[id]);
+    try { localStorage.setItem(storageKey, JSON.stringify(store)); } catch {}
+  }
 }
 function getConv(id) { return store.conversations[id]; }
 function newMessageId() {
@@ -2099,7 +2116,7 @@ function newMessageId() {
   return 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
 }
 function normaliseMessage(msg) {
-  return Object.assign({ id: newMessageId(), createdAt: Date.now() }, msg);
+  return Object.assign({ id: newMessageId(), createdAt: Date.now() }, _slimMsg(msg));
 }
 function upsertConv(id, patch) {
   store.conversations[id] = Object.assign(store.conversations[id] || {}, patch);
