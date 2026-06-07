@@ -3313,6 +3313,36 @@ async function loadTrackRecord() {
   }
 }
 let edgeLoaded = false;
+let _edgePriceTimer = null;
+
+async function refreshEdgePrices() {
+  try {
+    const r = await fetch('/live-prices');
+    if (!r.ok) return;
+    const data = await r.json();
+    const prices = data.prices || {};
+    document.querySelectorAll('#edgeBody .eb-row[data-ident]').forEach(row => {
+      const ident = row.dataset.ident;
+      if (!(ident in prices)) return;
+      const marketP = prices[ident];
+      const modelP = parseFloat(row.dataset.modelP || '0');
+      const edge = modelP - marketP;
+      const side = edge > 0.001 ? 'YES' : edge < -0.001 ? 'NO' : null;
+      const entry = edge > 0 ? marketP : (1 - marketP);
+      const payoutOdds = (entry > 0 && entry < 1) ? Math.round((1 - entry) / entry * 10) / 10 : null;
+      row.querySelector('.eb-live-market').textContent = Math.round(marketP * 100) + '%';
+      row.querySelector('.eb-live-edge').innerHTML = `<b style="color:${edge >= 0 ? '#0a7' : '#c33'}">${edge >= 0 ? '+' : ''}${edge.toFixed(3)}</b>`;
+      if (side) {
+        const entryC = Math.round(entry * 100);
+        row.querySelector('.eb-live-trade').innerHTML = `Buy ${side} @ ${entryC}¢` +
+          (payoutOdds ? ` <span style="color:#999">≈${payoutOdds}:1</span>` : '');
+      }
+    });
+    const ts = document.getElementById('edgeLiveTs');
+    if (ts) ts.textContent = '· prices live ' + new Date().toLocaleTimeString();
+  } catch (_) {}
+}
+
 async function openEdgeBoard({ updateHistory = true } = {}) {
   const ov = document.getElementById('edgeOverlay');
   if (ov.classList.contains('open')) return;
@@ -3325,9 +3355,13 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   }
   if (!edgeLoaded) { edgeLoaded = true; await loadEdgeBoard(); }
+  refreshEdgePrices();
+  _edgePriceTimer = setInterval(refreshEdgePrices, 60000);
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
 function closeEdgeBoard({ updateHistory = true } = {}) {
+  clearInterval(_edgePriceTimer);
+  _edgePriceTimer = null;
   const ov = document.getElementById('edgeOverlay');
   if (!ov.classList.contains('open')) return;
   if (updateHistory && (history.state?.view === 'edge-app' || history.state?.view === 'edge-landing')) {
@@ -3417,9 +3451,9 @@ function renderEdgeBoard(d) {
           ? `Buy ${e.side} @ ${Math.round((e.entry_price || 0) * 100)}¢` +
             (e.payout_odds ? ` <span style="color:#999">≈${e.payout_odds}:1</span>` : '')
           : '—';
-        return `<tr class="eb-row"><td style="max-width:260px"><a ${url} style="color:inherit">${escHtml((e.question || '').slice(0, 90))}</a></td>` +
-          `<td>${escHtml(e.platform || '')}</td><td>${pct(e.model_probability)}%</td><td>${pct(e.market_probability)}%</td>` +
-          `<td><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td><td style="white-space:nowrap">${trade}</td><td>${e.edge_bucket}</td><td>${badge}</td></tr>`;
+        return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}"><td style="max-width:260px"><a ${url} style="color:inherit">${escHtml((e.question || '').slice(0, 90))}</a></td>` +
+          `<td>${escHtml(e.platform || '')}</td><td>${pct(e.model_probability)}%</td><td class="eb-live-market">${pct(e.market_probability)}%</td>` +
+          `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td><td class="eb-live-trade" style="white-space:nowrap">${trade}</td><td>${e.edge_bucket}</td><td>${badge}</td></tr>`;
       }).join('') + `</tbody></table>`;
   } else {
     boardHtml = `<p class="text-sm text-gray-500">No open markets tracked yet.</p>`;
@@ -3432,7 +3466,7 @@ function renderEdgeBoard(d) {
     <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
     <h4 class="eb-h">Hypothetical paper PnL · betting the edge</h4>${pnlHtml}
     <h4 class="eb-h">Does disagreement pay? · edge calibration</h4>${calibHtml}
-    <h4 class="eb-h">Live disagreements</h4>${boardHtml}
+    <h4 class="eb-h">Live disagreements <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;
 }
 let radarLoaded = false;

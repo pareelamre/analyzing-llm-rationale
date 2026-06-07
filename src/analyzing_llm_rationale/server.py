@@ -1726,6 +1726,48 @@ async def edge_board():
     )
 
 
+@app.get("/live-prices", tags=["System"], summary="Real-time market prices for tracked open markets")
+async def live_prices():
+    """Current market prices fetched directly from Polymarket/Kalshi for every
+    market currently on the edge board. Used by the frontend to refresh market
+    prices in real time without re-running model forecasts.
+
+    Returns ``{prices: {ident: probability}, generated_at}``. Cached 30 s.
+    """
+    cache_key = _cache_key("live_prices")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return JSONResponse(cached, headers={"Cache-Control": "public, max-age=30"})
+
+    live = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
+    board = (live or {}).get("edge_board") or []
+
+    from analyzing_llm_rationale import market_data as _md
+
+    async def _fetch_one(item: dict) -> tuple[str, float | None]:
+        ident = item.get("ident") or ""
+        platform = (item.get("platform") or "").lower()
+        loop = asyncio.get_running_loop()
+        try:
+            if "poly" in platform:
+                q = await loop.run_in_executor(None, lambda: _md.fetch_polymarket(slug=ident))
+            elif "kalshi" in platform:
+                q = await loop.run_in_executor(None, lambda: _md.fetch_kalshi(ident))
+            else:
+                return ident, None
+            prob = q.get("probability")
+            return ident, float(prob) if prob is not None else None
+        except Exception:
+            return ident, None
+
+    tasks = [_fetch_one(item) for item in board if item.get("ident")]
+    results = await asyncio.gather(*tasks)
+    prices = {ident: p for ident, p in results if p is not None}
+    payload = {"prices": prices, "generated_at": datetime.now(timezone.utc).isoformat()}
+    _cache_set(cache_key, payload, 30)
+    return JSONResponse(payload, headers={"Cache-Control": "public, max-age=30"})
+
+
 def _require_track_token(request: Optional[Request]) -> None:
     """Gate the evolution-loop bridge endpoints with the shared TRACK_RECORD_TOKEN."""
     if not _TRACK_RECORD_TOKEN:
