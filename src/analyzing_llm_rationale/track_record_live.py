@@ -567,7 +567,10 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
 def build_edge_board(open_rows: List[Dict[str, Any]],
                      latest_price: Dict[str, float],
                      edge_calib: List[Dict[str, Any]],
-                     *, limit: int = 20) -> List[Dict[str, Any]]:
+                     *,
+                     latest_price_ts: Optional[Dict[str, Any]] = None,
+                     price_staleness_hours: float = 26.0,
+                     limit: int = 20) -> List[Dict[str, Any]]:
     """Current open markets ranked by live model-vs-market disagreement, each
     annotated with its disagreement bucket's resolved track record — so a gap is
     shown *with* the earned credibility of gaps that size (``skill_significant``),
@@ -580,11 +583,20 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
         if cur is None or (r.get("snapshot_ts") or _now()) > (cur.get("snapshot_ts") or _now()):
             latest[key] = r
 
+    _cutoff = _now() if latest_price_ts is None else None
+    _stale_secs = price_staleness_hours * 3600.0
+
     board: List[Dict[str, Any]] = []
     for (platform, ident), r in latest.items():
         if r.get("model_probability") is None:
             continue
-        market_p = latest_price.get(ident, r.get("market_probability"))
+        # Require a recent price point — markets delisted at source stop getting
+        # price points recorded, so their stale snapshot price would be noise.
+        if latest_price_ts is not None:
+            ts = _parse_dt(latest_price_ts.get(ident))
+            if ts is None or (_now() - ts).total_seconds() > _stale_secs:
+                continue
+        market_p = latest_price.get(ident)
         if market_p is None:
             continue
         model_p, market_p = float(r["model_probability"]), float(market_p)
@@ -848,7 +860,8 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "by_edge": by_edge,
         "lead_lag": lead_lag(by_market),
         "paper_pnl": paper_pnl(resolved_primary, by_edge),
-        "edge_board": build_edge_board(open_primary, latest_price, by_edge),
+        "edge_board": build_edge_board(open_primary, latest_price, by_edge,
+                                       latest_price_ts=_latest_price_ts),
         "models_comparison": build_models_comparison(resolved, default_model=model),
         "trajectories": trajectories,
         "calibration_model": _calibration_report(resolved_primary),
