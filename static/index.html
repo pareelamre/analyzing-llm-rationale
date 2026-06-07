@@ -3160,11 +3160,24 @@ function updateVariantDesc() {
   const v = document.getElementById('variantSelect').value;
   document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
 }
+const _VIEW_URL = {
+  'landing':       '/',
+  'app':           '#ask',
+  'track-landing': '#track',
+  'track-app':     '#track-app',
+  'radar-landing': '#radar',
+  'radar-app':     '#radar-app',
+  'edge-landing':  '#edge',
+  'edge-app':      '#edge-app',
+};
+const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
+
 function setHistoryState(view, mode = 'push') {
   if (isApplyingHistory || !window.history) return;
   const state = { view };
-  if (mode === 'replace') history.replaceState(state, '', window.location.pathname);
-  else if (history.state?.view !== view) history.pushState(state, '', window.location.pathname);
+  const url = _VIEW_URL[view] ?? '#ask';
+  if (mode === 'replace') history.replaceState(state, '', url);
+  else if (history.state?.view !== view) history.pushState(state, '', url);
 }
 function showLanding({ updateHistory = true } = {}) {
   closeSidebar();
@@ -3307,15 +3320,20 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+  if (updateHistory) setHistoryState(currentView === 'app' ? 'edge-app' : 'edge-landing');
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   }
   if (!edgeLoaded) { edgeLoaded = true; await loadEdgeBoard(); }
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
-function closeEdgeBoard() {
+function closeEdgeBoard({ updateHistory = true } = {}) {
   const ov = document.getElementById('edgeOverlay');
   if (!ov.classList.contains('open')) return;
+  if (updateHistory && (history.state?.view === 'edge-app' || history.state?.view === 'edge-landing')) {
+    history.back();
+    return;
+  }
   const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
     ov.classList.remove('open');
@@ -3647,6 +3665,16 @@ function applyHistoryState(state) {
   } else if (view === 'radar-landing') {
     showLanding({ updateHistory: false });
     openRadar({ updateHistory: false });
+  } else if (view === 'edge-app') {
+    closeRadar({ updateHistory: false });
+    closeTrackRecord({ updateHistory: false });
+    launchApp({ updateHistory: false });
+    openEdgeBoard({ updateHistory: false });
+  } else if (view === 'edge-landing') {
+    closeRadar({ updateHistory: false });
+    closeTrackRecord({ updateHistory: false });
+    showLanding({ updateHistory: false });
+    openEdgeBoard({ updateHistory: false });
   } else {
     showLanding({ updateHistory: false });
   }
@@ -3657,9 +3685,11 @@ window.addEventListener('resize', syncSidebarA11y);
 document.addEventListener('keydown', event => {
   const track = document.getElementById('trackOverlay');
   const radar = document.getElementById('radarOverlay');
+  const edge = document.getElementById('edgeOverlay');
   const sidebar = document.getElementById('sidebar');
   const trackOpen = track.classList.contains('open');
   const radarOpen = radar.classList.contains('open');
+  const edgeOpen = edge.classList.contains('open');
   const sidebarOpen = sidebar.classList.contains('open');
 
   if (event.key === 'Escape') {
@@ -3669,6 +3699,9 @@ document.addEventListener('keydown', event => {
     } else if (trackOpen) {
       event.preventDefault();
       closeTrackRecord();
+    } else if (edgeOpen) {
+      event.preventDefault();
+      closeEdgeBoard();
     } else if (sidebarOpen) {
       event.preventDefault();
       closeSidebar();
@@ -3680,6 +3713,8 @@ document.addEventListener('keydown', event => {
     trapFocus(event, radar);
   } else if (trackOpen) {
     trapFocus(event, track);
+  } else if (edgeOpen) {
+    trapFocus(event, edge);
   } else if (sidebarOpen) {
     trapFocus(event, sidebar);
   }
@@ -4685,7 +4720,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-setHistoryState('app', 'replace');
+const _initView = _URL_VIEW[window.location.hash || '/'] ?? 'app';
+setHistoryState(_initView, 'replace');
 syncSidebarA11y();
 recordPageVisit();
 updateVariantDesc();
@@ -4697,10 +4733,7 @@ initAuth();
 const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);
 else newConversation();
-document.getElementById('landingPage').classList.add('hidden-view');
-document.getElementById('appShell').classList.remove('hidden-view');
-currentView = 'app';
-document.body.style.overflow = 'auto';
+applyHistoryState({ view: _initView });
 
 // ── Smooth scroll + entrance choreography ────────────────────────────────────
 (function initMotion() {
