@@ -822,6 +822,10 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_primary}
     n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_primary})
 
+    # Compute edge board early so the stat can reflect its actual length.
+    by_edge_early = edge_calibration([r for r in resolved if (r.get("model") or model) == model])
+    edge_board_result = build_edge_board(open_primary, latest_price, by_edge_early)
+
     payload: Dict[str, Any] = {
         "source": "live",
         "generated_at": _now().isoformat(),
@@ -837,7 +841,8 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         ),
         "n_snapshots_resolved": len(resolved_primary),
         "n_markets_resolved": n_markets_resolved,
-        "n_markets_open": len(open_idents),
+        "n_markets_open": len(edge_board_result),
+        "n_markets_tracked": len(open_idents),
     }
 
     overall = _bucket_stats(resolved_primary)
@@ -879,7 +884,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             } for p in price_points],
         })
 
-    by_edge = edge_calibration(resolved_primary)
+    by_edge = by_edge_early  # already computed above for the board stat
 
     # Domain-level calibration: Foresea's accuracy profile by question category.
     # Requires resolved data; returns empty list until markets settle.
@@ -918,7 +923,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "by_domain": by_domain,
         "lead_lag": lead_lag(by_market),
         "paper_pnl": paper_pnl(resolved_primary, by_edge),
-        "edge_board": build_edge_board(open_primary, latest_price, by_edge),
+        "edge_board": edge_board_result,
         "models_comparison": build_models_comparison(resolved, default_model=model),
         "trajectories": trajectories,
         "calibration_model": _calibration_report(resolved_primary),

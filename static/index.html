@@ -3612,7 +3612,7 @@ function renderEdgeBoard(d) {
   const conv = ll && ll.market_converged_to_model_pct != null ? pct(ll.market_converged_to_model_pct) + '%' : '—';
   const stats = `
     <div class="tr-stats">
-      <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">Open markets</div></div>
+      <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div>${d.n_markets_tracked ? `<div class="k" style="font-size:11px;color:var(--text-dim)">tracking ${d.n_markets_tracked}</div>` : ''}</div>
       <div class="tr-stat"><div class="v">${(d.n_snapshots_resolved || 0)}</div><div class="k label">Resolved forecasts</div></div>
       <div class="tr-stat"><div class="v">${conv}</div><div class="k label">Market follows model</div></div>
     </div>`;
