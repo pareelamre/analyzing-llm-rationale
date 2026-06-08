@@ -26,7 +26,7 @@ STOOQ_RSS_FEEDS = (
 # configured. `web` is real web search, active when a provider is configured:
 # TAVILY_API_KEY, SERPER_API_KEY, BRAVE_API_KEY, or SEARXNG_URL.
 DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "rss")
-SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "newsapi", "rss", "stooq")
+SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "newsapi", "rss", "stooq", "fred")
 HIGH_CREDIBILITY_SOURCES = {
     "abc news",
     "al jazeera",
@@ -62,6 +62,7 @@ CHANNEL_CREDIBILITY = {
     "google-news": 0.70,
     "rss": 0.68,
     "stooq": 0.55,
+    "fred": 0.90,  # St. Louis Fed official data
 }
 
 # Channels that return generic, query-agnostic headlines (Stooq market RSS,
@@ -261,6 +262,7 @@ class NewsPipeline:
         self._tavily_key = os.environ.get("TAVILY_API_KEY")
         self._serper_key = os.environ.get("SERPER_API_KEY")
         self._searxng_url = os.environ.get("SEARXNG_URL")
+        self._fred_key = os.environ.get("FRED_API_KEY")
         self._use_query_planner = use_query_planner
         self._fetch_sources = tuple(fetch_sources or DEFAULT_FETCH_SOURCES)
         self._summarize_articles = summarize_articles
@@ -337,6 +339,9 @@ class NewsPipeline:
 
         if "stooq" in self._fetch_sources and _is_finance_query(query):
             articles.extend(self._fetch_stooq(limit=per_source_limit))
+
+        if "fred" in self._fetch_sources and self._fred_key and _is_finance_query(query):
+            articles.extend(self._fetch_fred(query, limit=5))
 
         if "rss" in self._fetch_sources:
             articles.extend(self._fetch_rss(limit=per_source_limit))
@@ -649,6 +654,87 @@ class NewsPipeline:
                     })
             except Exception:
                 continue
+        return articles
+
+    def _fetch_fred(self, query: str, limit: int = 5) -> List[dict]:
+        """Fetch FRED economic time series matching the query as evidence items.
+
+        Searches the St. Louis Fed API for series relevant to the question, then
+        fetches recent observations for the top matches. Only called when
+        _is_finance_query() is True and FRED_API_KEY is set.
+        """
+        try:
+            import requests
+        except ImportError:
+            return []
+
+        _FRED_BASE = "https://api.stlouisfed.org/fred"
+        articles: List[dict] = []
+
+        try:
+            search_text = _keyword_search_query(query, max_terms=8)
+            resp = requests.get(
+                f"{_FRED_BASE}/series/search",
+                params={
+                    "search_text": search_text,
+                    "api_key": self._fred_key,
+                    "file_type": "json",
+                    "limit": limit,
+                    "order_by": "popularity",
+                    "sort_order": "desc",
+                },
+                timeout=15,
+            )
+            resp.raise_for_status()
+            series_list = resp.json().get("seriess", [])
+        except Exception:
+            return []
+
+        for series in series_list[:limit]:
+            series_id = series.get("id", "")
+            if not series_id:
+                continue
+            title = series.get("title", series_id)
+            units = series.get("units_short") or series.get("units") or ""
+            frequency = series.get("frequency_short") or series.get("frequency") or ""
+
+            try:
+                obs_resp = requests.get(
+                    f"{_FRED_BASE}/series/observations",
+                    params={
+                        "series_id": series_id,
+                        "api_key": self._fred_key,
+                        "file_type": "json",
+                        "limit": 12,
+                        "sort_order": "desc",
+                    },
+                    timeout=15,
+                )
+                obs_resp.raise_for_status()
+                observations = obs_resp.json().get("observations", [])
+            except Exception:
+                continue
+
+            obs_lines = [
+                f"{o['date']}: {o['value']} {units}".strip()
+                for o in observations[:8]
+                if o.get("value") and o["value"] != "."
+            ]
+            if not obs_lines:
+                continue
+
+            freq_label = f" ({frequency})" if frequency else ""
+            text = f"{title}{freq_label}\nRecent values (most recent first):\n" + "\n".join(obs_lines)
+            articles.append({
+                "title": f"FRED: {title}",
+                "url": f"https://fred.stlouisfed.org/series/{series_id}",
+                "text": text,
+                "summary": obs_lines[0],
+                "source": "FRED (St. Louis Fed)",
+                "source_channel": "fred",
+                "publish_date": observations[0].get("date", "") if observations else "",
+            })
+
         return articles
 
     def _fetch_rss(self, limit: int = 20) -> List[dict]:

@@ -3007,10 +3007,22 @@ function _chatText(s) {
         }
       } catch (_) { /* fall through */ }
     }
-    // Partial JSON streaming — surface the rationale as it arrives, hide preamble fields
+    // Partial JSON streaming — show predicted_answer as soon as it's available,
+    // then append rationale text as it arrives. This prevents a blank bubble
+    // while the JSON preamble streams before the rationale field begins.
+    let prefix = '';
+    const ansM = t.match(/"predicted_answer"\s*:\s*"([^"\\]*)"/);
+    const confM = t.match(/"confidence"\s*:\s*([\d.]+)/);
+    if (ansM) {
+      const confStr = confM ? ` · ${Math.round(parseFloat(confM[1]) * 100)}% confidence` : '';
+      prefix = `**${ansM[1]}**${confStr}\n\n`;
+    }
     const m = t.match(/"rationale"\s*:\s*"((?:[^"\\]|\\.)*)/);
-    if (m) return m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-    return '';
+    if (m) {
+      const rationale = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      return prefix + rationale;
+    }
+    return prefix;
   }
   return t;
 }
