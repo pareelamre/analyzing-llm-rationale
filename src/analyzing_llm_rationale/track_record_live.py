@@ -573,8 +573,8 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
                      edge_calib: List[Dict[str, Any]],
                      *,
                      min_abs_edge: float = 0.02,
-                     max_per_close_window: int = 2,
-                     limit: int = 20) -> List[Dict[str, Any]]:
+                     max_per_close_window: int = 10,
+                     limit: int = 50) -> List[Dict[str, Any]]:
     """Current open markets ranked by live model-vs-market disagreement, each
     annotated with its disagreement bucket's resolved track record — so a gap is
     shown *with* the earned credibility of gaps that size (``skill_significant``),
@@ -596,6 +596,8 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
         # if latest_price has no entry the market is gone from the venue.
         market_p = latest_price.get(ident)
         if market_p is None:
+            continue
+        if not r.get("market_url"):
             continue
         model_p, market_p = float(r["model_probability"]), float(market_p)
         signed = model_p - market_p

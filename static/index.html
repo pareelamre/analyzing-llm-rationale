@@ -875,6 +875,11 @@
     .eb-calib-row { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-dim); padding: 4px 0; }
     .eb-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--paper); color: var(--text-dim); white-space: nowrap; }
     .eb-badge.eb-sig { background: #e7f6ee; color: #0a7a4a; }
+    .eb-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; justify-content: center; }
+    .eb-page-btn { padding: 5px 16px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 12.5px; cursor: pointer; color: var(--text-dim); transition: background .15s; }
+    .eb-page-btn:hover:not(:disabled) { background: var(--paper); color: var(--text); }
+    .eb-page-btn:disabled { opacity: .38; cursor: default; }
+    .eb-page-info { font-size: 12px; color: var(--text-dim); min-width: 60px; text-align: center; }
     .radar-grid { display: grid; gap: 12px; margin-top: 20px; }
     .radar-card {
       border: 1px solid var(--border);
@@ -3434,8 +3439,57 @@ async function loadEdgeBoard() {
 }
 function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
 function _roiPct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + pct(x) + '%'; }
+
+const _EB_PAGE_SIZE = 10;
+let _ebPage = 0;
+let _ebBoardData = [];
+
+function _ebGoPage(n) {
+  _ebPage = n;
+  const sec = document.getElementById('eb-board-section');
+  if (sec) sec.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+}
+
+function _renderBoardPage(board, page) {
+  if (!board.length) return '<p class="text-sm text-gray-500">No open markets tracked yet.</p>';
+  const pages = Math.ceil(board.length / _EB_PAGE_SIZE);
+  const slice = board.slice(page * _EB_PAGE_SIZE, (page + 1) * _EB_PAGE_SIZE);
+  const rows = slice.map(e => {
+    const tr = e.track_record;
+    const badge = !tr ? '—' : (tr.skill_significant
+      ? `<span class="eb-badge eb-sig">proven (n=${tr.n})</span>`
+      : `<span class="eb-badge">unproven (n=${tr.n ?? 0})</span>`);
+    const url = e.market_url ? `href="${escHtml(e.market_url)}" target="_blank" rel="noopener"` : '';
+    const trade = e.side
+      ? `Buy ${e.side} @ ${Math.round((e.entry_price || 0) * 100)}¢` +
+        (e.payout_odds ? ` <span style="color:#999">≈${e.payout_odds}:1</span>` : '')
+      : '—';
+    return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}">` +
+      `<td style="max-width:260px"><a ${url} style="color:inherit">${escHtml((e.question || '').slice(0, 90))}</a></td>` +
+      `<td>${escHtml(e.platform || '')}</td><td>${pct(e.model_probability)}%</td>` +
+      `<td class="eb-live-market">${pct(e.market_probability)}%</td>` +
+      `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td>` +
+      `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
+      `<td>${e.edge_bucket}</td><td>${badge}</td></tr>`;
+  }).join('');
+  const tableHtml = `<table class="eb-table"><thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Market</th><th>Edge</th><th>Trade</th><th>Bucket</th><th>Track record</th></tr></thead><tbody>${rows}</tbody></table>`;
+  let pagination = '';
+  if (pages > 1) {
+    const prev = page > 0
+      ? `<button class="eb-page-btn" onclick="_ebGoPage(${page - 1})">← Prev</button>`
+      : `<button class="eb-page-btn" disabled>← Prev</button>`;
+    const next = page < pages - 1
+      ? `<button class="eb-page-btn" onclick="_ebGoPage(${page + 1})">Next →</button>`
+      : `<button class="eb-page-btn" disabled>Next →</button>`;
+    pagination = `<div class="eb-pagination">${prev}<span class="eb-page-info">${page + 1} / ${pages}</span>${next}</div>`;
+  }
+  return tableHtml + pagination;
+}
+
 function renderEdgeBoard(d) {
   const board = d.edge_board || [], byEdge = d.by_edge || [], comp = d.models_comparison || [];
+  _ebBoardData = board;
+  _ebPage = 0;
   const pnl = d.paper_pnl, ll = d.lead_lag;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   const conv = ll && ll.market_converged_to_model_pct != null ? pct(ll.market_converged_to_model_pct) + '%' : '—';
@@ -3474,26 +3528,7 @@ function renderEdgeBoard(d) {
   } else {
     calibHtml = `<p class="text-sm text-gray-500">Edge calibration — whether bigger disagreements actually pay — builds as markets resolve.</p>`;
   }
-  let boardHtml;
-  if (board.length) {
-    boardHtml = `<table class="eb-table"><thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Market</th><th>Edge</th><th>Trade</th><th>Bucket</th><th>Track record</th></tr></thead><tbody>` +
-      board.map(e => {
-        const tr = e.track_record;
-        const badge = !tr ? '—' : (tr.skill_significant
-          ? `<span class="eb-badge eb-sig">proven (n=${tr.n})</span>`
-          : `<span class="eb-badge">unproven (n=${tr.n ?? 0})</span>`);
-        const url = e.market_url ? `href="${escHtml(e.market_url)}" target="_blank" rel="noopener"` : '';
-        const trade = e.side
-          ? `Buy ${e.side} @ ${Math.round((e.entry_price || 0) * 100)}¢` +
-            (e.payout_odds ? ` <span style="color:#999">≈${e.payout_odds}:1</span>` : '')
-          : '—';
-        return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}"><td style="max-width:260px"><a ${url} style="color:inherit">${escHtml((e.question || '').slice(0, 90))}</a></td>` +
-          `<td>${escHtml(e.platform || '')}</td><td>${pct(e.model_probability)}%</td><td class="eb-live-market">${pct(e.market_probability)}%</td>` +
-          `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td><td class="eb-live-trade" style="white-space:nowrap">${trade}</td><td>${e.edge_bucket}</td><td>${badge}</td></tr>`;
-      }).join('') + `</tbody></table>`;
-  } else {
-    boardHtml = `<p class="text-sm text-gray-500">No open markets tracked yet.</p>`;
-  }
+  const boardHtml = `<div id="eb-board-section">${_renderBoardPage(board, 0)}</div>`;
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced — and our track record of being right about it</h3>
