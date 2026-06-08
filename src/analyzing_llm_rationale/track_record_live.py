@@ -572,7 +572,6 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
                      latest_price: Dict[str, float],
                      edge_calib: List[Dict[str, Any]],
                      *,
-                     min_lead_days: float = 3.0,
                      min_abs_edge: float = 0.02,
                      max_per_close_window: int = 2,
                      limit: int = 20) -> List[Dict[str, Any]]:
@@ -592,10 +591,7 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
     for (platform, ident), r in latest.items():
         if r.get("model_probability") is None:
             continue
-        # Drop markets expiring within min_lead_days (stale/near-expiry signal).
         current_lead = _lead_time_days(r.get("close_time"))
-        if current_lead is not None and current_lead < min_lead_days:
-            continue
         # Only show markets the venue API is still actively pricing —
         # if latest_price has no entry the market is gone from the venue.
         market_p = latest_price.get(ident)
