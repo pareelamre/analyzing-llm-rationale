@@ -572,11 +572,8 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
                      latest_price: Dict[str, float],
                      edge_calib: List[Dict[str, Any]],
                      *,
-                     latest_price_ts: Optional[Dict[str, Any]] = None,
-                     price_staleness_hours: float = 26.0,
                      min_lead_days: float = 3.0,
                      min_abs_edge: float = 0.02,
-                     max_abs_edge: float = 0.45,
                      max_per_close_window: int = 2,
                      limit: int = 20) -> List[Dict[str, Any]]:
     """Current open markets ranked by live model-vs-market disagreement, each
@@ -591,8 +588,6 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
         if cur is None or (r.get("snapshot_ts") or _now()) > (cur.get("snapshot_ts") or _now()):
             latest[key] = r
 
-    _stale_secs = price_staleness_hours * 3600.0
-
     board: List[Dict[str, Any]] = []
     for (platform, ident), r in latest.items():
         if r.get("model_probability") is None:
@@ -601,21 +596,14 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
         current_lead = _lead_time_days(r.get("close_time"))
         if current_lead is not None and current_lead < min_lead_days:
             continue
-        # Require a recent price point — markets delisted at source stop getting
-        # price points recorded, so their stale snapshot price would be noise.
-        if latest_price_ts is not None:
-            ts = _parse_dt(latest_price_ts.get(ident))
-            if ts is None or (_now() - ts).total_seconds() > _stale_secs:
-                continue
+        # Only show markets the venue API is still actively pricing —
+        # if latest_price has no entry the market is gone from the venue.
         market_p = latest_price.get(ident)
         if market_p is None:
             continue
         model_p, market_p = float(r["model_probability"]), float(market_p)
         signed = model_p - market_p
-        # Drop tiny or implausibly large disagreements. Below min_abs_edge is
-        # noise; above max_abs_edge almost always means the model is wrong
-        # (e.g. 65% vs 9% for a low-probability event), not that the market is.
-        if abs(signed) < min_abs_edge or abs(signed) > max_abs_edge:
+        if abs(signed) < min_abs_edge:
             continue
         label = _edge_label(abs(signed))
         tr = by_edge.get(label)
@@ -932,8 +920,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "by_domain": by_domain,
         "lead_lag": lead_lag(by_market),
         "paper_pnl": paper_pnl(resolved_primary, by_edge),
-        "edge_board": build_edge_board(open_primary, latest_price, by_edge,
-                                       latest_price_ts=_latest_price_ts),
+        "edge_board": build_edge_board(open_primary, latest_price, by_edge),
         "models_comparison": build_models_comparison(resolved, default_model=model),
         "trajectories": trajectories,
         "calibration_model": _calibration_report(resolved_primary),
