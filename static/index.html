@@ -427,6 +427,24 @@
       border-color: #c8c8d0;
       box-shadow: 0 20px 58px rgba(15,15,16,.12);
     }
+    .landing-answer {
+      max-width: 720px;
+      width: 100%;
+      margin-top: 18px;
+      border: 1px solid var(--border-2);
+      border-radius: 18px;
+      background: #fff;
+      padding: 20px 24px;
+      box-shadow: 0 8px 28px rgba(15,15,16,.06);
+      display: none;
+    }
+    .landing-answer.visible { display: block; }
+    .landing-answer-content { font-size: 15px; line-height: 1.65; color: var(--text); }
+    .landing-answer-actions { display: flex; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--paper); }
+    .landing-answer-btn { font-size: 13px; padding: 7px 18px; border-radius: 20px; border: 1px solid var(--border-2); background: #fff; cursor: pointer; color: var(--text-dim); transition: background .15s; }
+    .landing-answer-btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .landing-answer-btn:hover { background: var(--paper); }
+    .landing-answer-btn.primary:hover { background: #111; }
     .quiet-link {
       margin-top: 10px;
       font-size: 12px;
@@ -1564,8 +1582,15 @@
             oninput="autoResize(this)"
             onkeydown="handleLandingKey(event)"
           ></textarea>
-          <button class="hero-action primary" type="submit">Analyze</button>
+          <button class="hero-action primary" type="submit" id="landingSubmitBtn">Analyze</button>
         </form>
+        <div id="landingAnswer" class="landing-answer" aria-live="polite">
+          <div class="landing-answer-content chat-md" id="landingAnswerContent"></div>
+          <div class="landing-answer-actions" id="landingAnswerActions" style="display:none">
+            <button class="landing-answer-btn primary" onclick="_landingOpenInApp()">Continue in app →</button>
+            <button class="landing-answer-btn" onclick="_landingReset()">Ask another</button>
+          </div>
+        </div>
         <div class="market-prompt-row" aria-label="Example market prompts">
           <button type="button" class="market-prompt" onclick="startExample('Market at 42%: Will the Fed cut rates before September 30, 2026?')">Find an edge</button>
           <button type="button" class="market-prompt" onclick="startExample('Compare the evidence for this market: Will US CPI inflation be at least 3.0% in December 2026?')">Evidence brief</button>
@@ -3250,18 +3275,110 @@ function fillExample(question) {
   input.focus();
 }
 function startExample(question) {
-  startForecast(question);
+  const onLanding = !document.getElementById('appShell') ||
+    document.getElementById('landingPage')?.style.display !== 'none' &&
+    !document.getElementById('appShell').classList.contains('visible');
+  if (onLanding) {
+    const input = document.getElementById('landingQuestionInput');
+    if (input) input.value = question;
+    _streamLandingQuestion(question);
+  } else {
+    startForecast(question);
+  }
 }
+let _landingLastQuestion = '';
+let _landingLastData = null;
+
 function submitLandingQuestion(event) {
   event.preventDefault();
   const input = document.getElementById('landingQuestionInput');
   const question = input.value.trim();
-  if (!question) {
-    input.focus();
-    return;
-  }
-  startForecast(question);
+  if (!question) { input.focus(); return; }
+  _streamLandingQuestion(question);
 }
+
+async function _streamLandingQuestion(question) {
+  _landingLastQuestion = question;
+  _landingLastData = null;
+  const answerEl = document.getElementById('landingAnswer');
+  const contentEl = document.getElementById('landingAnswerContent');
+  const actionsEl = document.getElementById('landingAnswerActions');
+  const btn = document.getElementById('landingSubmitBtn');
+  btn.disabled = true;
+  actionsEl.style.display = 'none';
+  contentEl.innerHTML = '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>';
+  answerEl.classList.add('visible');
+  answerEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  const body = { question, variant: 'variant0_neutral_baseline', history: [] };
+  try {
+    const resp = await fetch('/predict/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok || !resp.body) throw new Error('stream unavailable');
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', text = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || '';
+      for (const block of blocks) {
+        if (!block.trim()) continue;
+        const { event, data } = _parseSseBlock(block);
+        if (event === 'delta') {
+          text += data.text || '';
+          contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>';
+        } else if (event === 'done') {
+          _landingLastData = data.response;
+          contentEl.innerHTML = renderMarkdown(_chatText(JSON.stringify(data.response || {})) || data.response?.rationale || text);
+          actionsEl.style.display = 'flex';
+          btn.disabled = false;
+          return;
+        } else if (event === 'error') {
+          throw new Error(data.detail || 'error');
+        }
+      }
+    }
+    // Stream ended without done event
+    if (text) contentEl.innerHTML = renderMarkdown(_chatText(text));
+    actionsEl.style.display = 'flex';
+  } catch (_) {
+    // Fall back to blocking /predict
+    try {
+      const r = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const d = await _readJson(r);
+      _landingLastData = d;
+      contentEl.innerHTML = renderMarkdown(d.rationale || d.model_rationale || 'No response.');
+      actionsEl.style.display = 'flex';
+    } catch (_2) {
+      contentEl.innerHTML = '<span style="color:#c33">Could not reach Foresea. Please try again.</span>';
+    }
+  }
+  btn.disabled = false;
+}
+
+function _landingOpenInApp() {
+  startForecast(_landingLastQuestion);
+}
+
+function _landingReset() {
+  const answerEl = document.getElementById('landingAnswer');
+  answerEl.classList.remove('visible');
+  const input = document.getElementById('landingQuestionInput');
+  input.value = '';
+  input.focus();
+}
+
 function startForecast(question) {
   launchApp();
   if (!activeId || (getConv(activeId)?.messages || []).length > 0) {
