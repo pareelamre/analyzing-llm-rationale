@@ -576,6 +576,7 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
                      price_staleness_hours: float = 26.0,
                      min_lead_days: float = 3.0,
                      min_abs_edge: float = 0.02,
+                     max_abs_edge: float = 0.45,
                      max_per_close_window: int = 2,
                      limit: int = 20) -> List[Dict[str, Any]]:
     """Current open markets ranked by live model-vs-market disagreement, each
@@ -611,8 +612,10 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             continue
         model_p, market_p = float(r["model_probability"]), float(market_p)
         signed = model_p - market_p
-        # Drop tiny disagreements — below min_abs_edge they're noise, not signal.
-        if abs(signed) < min_abs_edge:
+        # Drop tiny or implausibly large disagreements. Below min_abs_edge is
+        # noise; above max_abs_edge almost always means the model is wrong
+        # (e.g. 65% vs 9% for a low-probability event), not that the market is.
+        if abs(signed) < min_abs_edge or abs(signed) > max_abs_edge:
             continue
         label = _edge_label(abs(signed))
         tr = by_edge.get(label)
