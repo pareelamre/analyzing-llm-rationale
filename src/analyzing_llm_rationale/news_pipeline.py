@@ -25,8 +25,8 @@ STOOQ_RSS_FEEDS = (
 # and leaked irrelevant headlines into evidence. It stays available if explicitly
 # configured. `web` is real web search, active when a provider is configured:
 # TAVILY_API_KEY, SERPER_API_KEY, BRAVE_API_KEY, or SEARXNG_URL.
-DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "rss")
-SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "newsapi", "rss", "stooq", "fred")
+DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "rss", "open-meteo")
+SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "newsapi", "rss", "stooq", "fred", "open-meteo")
 HIGH_CREDIBILITY_SOURCES = {
     "abc news",
     "al jazeera",
@@ -62,7 +62,8 @@ CHANNEL_CREDIBILITY = {
     "google-news": 0.70,
     "rss": 0.68,
     "stooq": 0.55,
-    "fred": 0.90,  # St. Louis Fed official data
+    "fred": 0.90,       # St. Louis Fed official data
+    "open-meteo": 0.88, # ECMWF/GFS ensemble forecast
 }
 
 # Channels that return generic, query-agnostic headlines (Stooq market RSS,
@@ -71,6 +72,25 @@ CHANNEL_CREDIBILITY = {
 # so they stop padding evidence for unrelated or conversational queries.
 _QUERY_AGNOSTIC_CHANNELS = ("stooq", "rss")
 _MIN_GENERIC_RELEVANCE = 0.1
+
+# Open-Meteo is fetched only for weather-related questions.
+_WEATHER_HINTS = {
+    "snow", "snowing", "snowfall", "blizzard", "snowstorm",
+    "rain", "rainfall", "rainy", "raining", "drizzle",
+    "temperature", "temp", "degrees", "fahrenheit", "celsius",
+    "weather", "forecast", "precipitation",
+    "hurricane", "tornado", "typhoon", "cyclone", "tropical",
+    "flood", "flooding", "storm", "thunderstorm", "lightning",
+    "frost", "freeze", "freezing", "ice", "icy", "hail",
+    "wind", "windspeed", "gust",
+    "drought", "humid", "humidity", "heatwave",
+}
+
+# Pattern to extract a location from weather questions like
+# "Will it snow in Chicago on Dec 25?" → "Chicago"
+_WEATHER_LOC_RE = re.compile(
+    r'\b(?:in|at|for|near|around)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})'
+)
 
 # Stooq only carries financial-market data, so it is fetched only when the
 # question is finance/markets related.
@@ -193,6 +213,29 @@ def _is_finance_query(text: str) -> bool:
     """True when the question mentions markets/finance, gating Stooq retrieval."""
     terms = set(re.findall(r"[a-z&0-9]+", (text or "").lower()))
     return bool(terms & _FINANCE_HINTS)
+
+
+def _is_weather_query(text: str) -> bool:
+    """True when the question is about weather conditions, gating Open-Meteo retrieval."""
+    terms = set(re.findall(r"[a-z]+", (text or "").lower()))
+    return bool(terms & _WEATHER_HINTS)
+
+
+def _extract_weather_location(query: str) -> str:
+    """Extract a city/place name from a weather question.
+
+    Tries preposition-anchored extraction first ("in Chicago"), then falls
+    back to the first capitalized non-question-word in the text.
+    """
+    m = _WEATHER_LOC_RE.search(query)
+    if m:
+        return m.group(1)
+    _QW = {"Will", "When", "What", "Which", "Is", "Are", "Does", "Can", "Would", "Should"}
+    for word in query.split():
+        clean = word.strip("?,.'\"")
+        if clean and clean[0].isupper() and clean not in _QW and len(clean) > 2:
+            return clean
+    return ""
 
 
 def _keyword_search_query(question: str, max_terms: int = 12) -> str:
@@ -342,6 +385,9 @@ class NewsPipeline:
 
         if "fred" in self._fetch_sources and self._fred_key and _is_finance_query(query):
             articles.extend(self._fetch_fred(query, limit=5))
+
+        if "open-meteo" in self._fetch_sources and _is_weather_query(query):
+            articles.extend(self._fetch_open_meteo(query))
 
         if "rss" in self._fetch_sources:
             articles.extend(self._fetch_rss(limit=per_source_limit))
@@ -736,6 +782,111 @@ class NewsPipeline:
             })
 
         return articles
+
+    def _fetch_open_meteo(self, query: str) -> List[dict]:
+        """Fetch a 14-day weather forecast from Open-Meteo for the location in query.
+
+        Geocodes the city extracted from the question, fetches temperature,
+        precipitation probability, snowfall, rain, and wind. Returns one
+        evidence item with the full day-by-day table so the LLM can reason
+        against the specific date/threshold in the question.
+        Only called when _is_weather_query() is True.
+        """
+        try:
+            import requests
+        except ImportError:
+            return []
+
+        location = _extract_weather_location(query)
+        if not location:
+            return []
+
+        try:
+            geo = requests.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": location, "count": 1, "language": "en", "format": "json"},
+                timeout=10,
+            )
+            geo.raise_for_status()
+            results = geo.json().get("results", [])
+            if not results:
+                return []
+            r = results[0]
+            lat, lon = r["latitude"], r["longitude"]
+            loc_name = ", ".join(filter(None, [
+                r.get("name", location),
+                r.get("admin1", ""),
+                r.get("country", ""),
+            ]))
+        except Exception:
+            return []
+
+        try:
+            fc = requests.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "daily": ",".join([
+                        "temperature_2m_max",
+                        "temperature_2m_min",
+                        "precipitation_probability_max",
+                        "precipitation_sum",
+                        "snowfall_sum",
+                        "rain_sum",
+                        "windspeed_10m_max",
+                    ]),
+                    "temperature_unit": "fahrenheit",
+                    "windspeed_unit": "mph",
+                    "precipitation_unit": "inch",
+                    "forecast_days": 14,
+                    "timezone": "auto",
+                },
+                timeout=10,
+            )
+            fc.raise_for_status()
+            daily = fc.json().get("daily", {})
+        except Exception:
+            return []
+
+        dates = daily.get("time", [])
+        if not dates:
+            return []
+
+        def _g(key: str, i: int):
+            col = daily.get(key, [])
+            return col[i] if i < len(col) else None
+
+        lines = []
+        for i, date in enumerate(dates):
+            tmax, tmin = _g("temperature_2m_max", i), _g("temperature_2m_min", i)
+            pprob = _g("precipitation_probability_max", i)
+            snow = _g("snowfall_sum", i)
+            rain = _g("rain_sum", i)
+            wind = _g("windspeed_10m_max", i)
+            parts = [date]
+            if tmax is not None and tmin is not None:
+                parts.append(f"temp {tmin:.0f}–{tmax:.0f}°F")
+            if pprob is not None:
+                parts.append(f"precip {pprob:.0f}%")
+            if snow and snow > 0:
+                parts.append(f"snow {snow:.1f}in")
+            if rain and rain > 0:
+                parts.append(f"rain {rain:.2f}in")
+            if wind is not None:
+                parts.append(f"wind {wind:.0f}mph")
+            lines.append("  ".join(parts))
+
+        text = f"Open-Meteo 14-day forecast for {loc_name}:\n" + "\n".join(lines)
+        return [{
+            "title": f"Weather forecast: {loc_name} (14-day)",
+            "url": "https://open-meteo.com/",
+            "text": text,
+            "summary": lines[0] if lines else "",
+            "source": "Open-Meteo",
+            "source_channel": "open-meteo",
+            "publish_date": dates[0] if dates else "",
+        }]
 
     def _fetch_rss(self, limit: int = 20) -> List[dict]:
         try:
