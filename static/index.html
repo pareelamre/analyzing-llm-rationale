@@ -3886,10 +3886,17 @@ function syncSidebarA11y() {
 }
 function applyHistoryState(state) {
   isApplyingHistory = true;
-  const view = state?.view || 'landing';
+  // Infer view from URL hash when state is missing (e.g. external link / fresh load)
+  const view = state?.view
+    || _URL_VIEW[window.location.hash]
+    || (window.location.hash ? 'landing' : 'landing');
+
+  // Close all overlays first — avoids every case having to enumerate which to close
+  closeTrackRecord({ updateHistory: false });
+  closeRadar({ updateHistory: false });
+  closeEdgeBoard({ updateHistory: false });
+
   if (view === 'app') {
-    closeTrackRecord({ updateHistory: false });
-    closeRadar({ updateHistory: false });
     launchApp({ updateHistory: false });
   } else if (view === 'track-app') {
     launchApp({ updateHistory: false });
@@ -3897,20 +3904,16 @@ function applyHistoryState(state) {
   } else if (view === 'radar-app') {
     launchApp({ updateHistory: false });
     openRadar({ updateHistory: false });
+  } else if (view === 'edge-app') {
+    launchApp({ updateHistory: false });
+    openEdgeBoard({ updateHistory: false });
   } else if (view === 'track-landing') {
     showLanding({ updateHistory: false });
     openTrackRecord({ updateHistory: false });
   } else if (view === 'radar-landing') {
     showLanding({ updateHistory: false });
     openRadar({ updateHistory: false });
-  } else if (view === 'edge-app') {
-    closeRadar({ updateHistory: false });
-    closeTrackRecord({ updateHistory: false });
-    launchApp({ updateHistory: false });
-    openEdgeBoard({ updateHistory: false });
   } else if (view === 'edge-landing') {
-    closeRadar({ updateHistory: false });
-    closeTrackRecord({ updateHistory: false });
     showLanding({ updateHistory: false });
     openEdgeBoard({ updateHistory: false });
   } else {
