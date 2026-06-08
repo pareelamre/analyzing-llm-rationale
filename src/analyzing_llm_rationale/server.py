@@ -211,7 +211,7 @@ best matches the information you have available:
 
 ## Rate limiting
 
-**20 requests per minute per IP address.** Exceeding this returns `429 Too Many Requests`
+**`RATE_LIMIT_PER_MIN` requests per minute per IP address (default 200).** Exceeding this returns `429 Too Many Requests`
 with a `Retry-After: 60` header.
 
 ---
@@ -1002,7 +1002,7 @@ class _RateLimiter:
         return True
 
 
-_rate_limiter = _RateLimiter(calls=20, period=60)
+_rate_limiter = _RateLimiter(calls=int(os.environ.get("RATE_LIMIT_PER_MIN", "200")), period=60)
 
 
 @asynccontextmanager
@@ -2621,7 +2621,7 @@ def _check_rate_limit(request: Request) -> None:
     if not _rate_limiter.is_allowed(ip):
         raise HTTPException(
             status_code=429,
-            detail="Rate limit exceeded — 20 requests per minute per IP.",
+            detail=f"Rate limit exceeded — {_rate_limiter._calls} requests per minute per IP.",
             headers={"Retry-After": "60"},
         )
 
