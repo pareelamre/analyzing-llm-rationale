@@ -1607,19 +1607,13 @@
             <span>Market desk</span>
             <span>Forecast, evidence, gap</span>
           </div>
-          <div class="market-table">
+          <div class="market-table" id="landingMarketTable">
             <div class="market-head">Question</div>
             <div class="market-head">Market</div>
             <div class="market-head">Foresea</div>
             <div class="market-head">Signal</div>
-            <div class="market-question-cell">Will the Fed cut rates by Sep. 30, 2026?</div>
-            <div>42%</div>
-            <div>56%</div>
-            <div><span class="market-gap buy">+14 pp Yes</span></div>
-            <div class="market-question-cell">Will CPI be at least 3.0% in Dec. 2026?</div>
-            <div>31%</div>
-            <div>28%</div>
-            <div><span class="market-gap watch">Near fair</span></div>
+            <div class="market-question-cell" style="color:var(--text-dim)">Loading…</div>
+            <div></div><div></div><div></div>
           </div>
           <div class="market-stack">
             <div class="market-stack-item">
@@ -1641,42 +1635,9 @@
             <span>Radar</span>
             <button type="button" onclick="openRadar()">Open Radar</button>
           </div>
-          <div class="homepage-radar-list">
+          <div class="homepage-radar-list" id="landingRadarList">
             <div class="homepage-radar-item">
-              <div class="homepage-radar-q">US x Iran permanent peace deal by June 15, 2026?</div>
-              <div>
-                <span class="homepage-radar-k">Market</span>
-                <span class="homepage-radar-v">9%</span>
-              </div>
-              <div>
-                <span class="homepage-radar-k">Foresea</span>
-                <span class="homepage-radar-v">15%</span>
-              </div>
-              <span class="homepage-radar-tag hot">near-term</span>
-            </div>
-            <div class="homepage-radar-item">
-              <div class="homepage-radar-q">Will an artwork sell for $150 million by Dec. 31?</div>
-              <div>
-                <span class="homepage-radar-k">Market</span>
-                <span class="homepage-radar-v">41%</span>
-              </div>
-              <div>
-                <span class="homepage-radar-k">Signal</span>
-                <span class="homepage-radar-v">Thin</span>
-              </div>
-              <span class="homepage-radar-tag">rule risk</span>
-            </div>
-            <div class="homepage-radar-item">
-              <div class="homepage-radar-q">Colorado GOP governor primary: Victor Marx</div>
-              <div>
-                <span class="homepage-radar-k">Market</span>
-                <span class="homepage-radar-v">56%</span>
-              </div>
-              <div>
-                <span class="homepage-radar-k">Foresea</span>
-                <span class="homepage-radar-v">60%</span>
-              </div>
-              <span class="homepage-radar-tag hot">news catalyst</span>
+              <div class="homepage-radar-q" style="color:var(--text-dim)">Loading…</div>
             </div>
           </div>
         </div>
@@ -3554,6 +3515,61 @@ async function loadEdgeBoard() {
     host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Edge board is not available yet.</p></div>';
   }
 }
+async function loadLandingPanels() {
+  try {
+    const r = await fetch('/edge-board');
+    if (!r.ok) return;
+    const d = await _readJson(r);
+    const board = (d.edge_board || []).filter(e => e.market_url);
+    _renderLandingMarketTable(board.slice(0, 2));
+    _renderLandingRadar(board.slice(2, 5));
+  } catch (_) { /* leave placeholders */ }
+}
+
+function _renderLandingMarketTable(items) {
+  const el = document.getElementById('landingMarketTable');
+  if (!el) return;
+  if (!items.length) {
+    el.innerHTML = '<div class="market-head">Question</div><div class="market-head">Market</div><div class="market-head">Foresea</div><div class="market-head">Signal</div>' +
+      '<div class="market-question-cell" style="color:var(--text-dim)">No live markets yet.</div><div></div><div></div><div></div>';
+    return;
+  }
+  let html = '<div class="market-head">Question</div><div class="market-head">Market</div><div class="market-head">Foresea</div><div class="market-head">Signal</div>';
+  for (const e of items) {
+    const mkt = Math.round((e.market_probability || 0) * 100);
+    const mdl = Math.round((e.model_probability || 0) * 100);
+    const diff = mdl - mkt;
+    const dir = diff > 0 ? 'buy' : diff < 0 ? 'sell' : 'watch';
+    const label = Math.abs(diff) < 3 ? 'Near fair'
+      : (diff > 0 ? `+${diff} pp Yes` : `${diff} pp No`);
+    const q = (e.question || '').slice(0, 72);
+    html += `<div class="market-question-cell"><a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${escHtml(q)}</a></div>` +
+      `<div>${mkt}%</div><div>${mdl}%</div>` +
+      `<div><span class="market-gap ${dir}">${escHtml(label)}</span></div>`;
+  }
+  el.innerHTML = html;
+}
+
+function _renderLandingRadar(items) {
+  const el = document.getElementById('landingRadarList');
+  if (!el) return;
+  if (!items.length) { el.innerHTML = '<div class="homepage-radar-item"><div class="homepage-radar-q" style="color:var(--text-dim)">No radar signals yet.</div></div>'; return; }
+  el.innerHTML = items.map(e => {
+    const mkt = Math.round((e.market_probability || 0) * 100);
+    const mdl = Math.round((e.model_probability || 0) * 100);
+    const diff = mdl - mkt;
+    const hot = Math.abs(diff) >= 10;
+    const tag = e.domain || e.edge_bucket || '';
+    const q = (e.question || '').slice(0, 80);
+    return `<div class="homepage-radar-item">
+      <div class="homepage-radar-q"><a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${escHtml(q)}</a></div>
+      <div><span class="homepage-radar-k">Market</span><span class="homepage-radar-v">${mkt}%</span></div>
+      <div><span class="homepage-radar-k">Foresea</span><span class="homepage-radar-v">${mdl}%</span></div>
+      ${tag ? `<span class="homepage-radar-tag${hot ? ' hot' : ''}">${escHtml(tag)}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
 function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
 function _roiPct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + pct(x) + '%'; }
 
@@ -4952,6 +4968,7 @@ loadOrSettings();
 loadAgentSkills();
 loadKb();
 initAuth();
+loadLandingPanels();
 const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);
 else newConversation();
