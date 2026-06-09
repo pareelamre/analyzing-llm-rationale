@@ -1277,6 +1277,15 @@
     .model-form-actions { display: flex; gap: 8px; }
     .model-save { flex: 1; background: var(--ink); color: #fff; border: 0; border-radius: 999px; padding: 8px; font-size: 12px; font-weight: 500; cursor: pointer; }
     .model-save:hover { background: #000; }
+    .fav-star { background: transparent; border: 0; cursor: pointer; font-size: 15px; line-height: 1; color: #cbd5e1; padding: 0; transition: color var(--dur-med), transform var(--dur-med); }
+    .fav-star:hover { transform: scale(1.18); color: #f59e0b; }
+    .fav-star.on { color: #f59e0b; }
+    .wl-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .wl-row:last-child { border-bottom: 0; }
+    .wl-meta { flex: 1; min-width: 0; }
+    .wl-q { font-size: 12px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wl-sub { font-size: 10px; color: var(--text-dim); }
+    .wl-price { font-size: 12px; font-weight: 600; white-space: nowrap; }
     .model-cancel { flex: 1; background: transparent; color: var(--text-dim); border: 1px solid var(--border-2); border-radius: 999px; padding: 8px; font-size: 12px; cursor: pointer; }
     .model-cancel:hover { color: var(--ink); border-color: var(--ink); }
 
@@ -1804,11 +1813,73 @@
         <p id="kbHint" class="text-gray-400" style="font-size:10px">Sign in to add docs. They're retrieved as evidence in your forecasts.</p>
       </div>
 
+      <!-- Exchange accounts (bring-your-own trading) -->
+      <div class="config-group">
+        <p class="label" style="margin:0 0 2px">Exchange accounts</p>
+        <p class="text-gray-400" style="font-size:10px;margin:0 0 6px;line-height:1.5">
+          Connect your own Kalshi or Polymarket account to place real orders.
+          Keys are stored only in this browser, sent per order to sign, and
+          <strong>never saved on our servers</strong>. Only connect on a device you trust.
+        </p>
+        <details class="model-form" style="margin-top:0">
+          <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
+            Kalshi <span id="kalshiChip" style="font-size:10px;padding:1px 7px;border-radius:999px;background:#eee;color:#777">Not connected</span>
+          </summary>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+            <input id="vcKalshiKeyId" class="variant-select text-xs" placeholder="API key ID" autocomplete="off" />
+            <textarea id="vcKalshiPriv" class="variant-select text-xs" rows="3" placeholder="RSA private key (PEM)" style="resize:vertical;min-height:54px;font-family:monospace;font-size:11px"></textarea>
+            <input id="vcKalshiBase" class="variant-select text-xs" placeholder="Base URL (optional)" autocomplete="off" />
+            <div class="model-form-actions">
+              <button type="button" class="model-save" onclick="saveVenueCreds('kalshi')">Save &amp; verify</button>
+              <button type="button" class="model-cancel" onclick="disconnectVenue('kalshi')">Disconnect</button>
+            </div>
+          </div>
+        </details>
+        <details class="model-form" style="margin-top:6px">
+          <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
+            Polymarket <span id="polyChip" style="font-size:10px;padding:1px 7px;border-radius:999px;background:#eee;color:#777">Not connected</span>
+          </summary>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+            <input id="vcPolyPriv" type="password" class="variant-select text-xs" placeholder="Wallet private key" autocomplete="off" />
+            <input id="vcPolyKey" class="variant-select text-xs" placeholder="CLOB API key" autocomplete="off" />
+            <input id="vcPolySecret" type="password" class="variant-select text-xs" placeholder="CLOB API secret" autocomplete="off" />
+            <input id="vcPolyPass" type="password" class="variant-select text-xs" placeholder="CLOB API passphrase" autocomplete="off" />
+            <input id="vcPolyHost" class="variant-select text-xs" placeholder="CLOB host (optional)" autocomplete="off" />
+            <input id="vcPolyFunder" class="variant-select text-xs" placeholder="Funder address (optional)" autocomplete="off" />
+            <div class="model-form-actions">
+              <button type="button" class="model-save" onclick="saveVenueCreds('polymarket')">Save &amp; verify</button>
+              <button type="button" class="model-cancel" onclick="disconnectVenue('polymarket')">Disconnect</button>
+            </div>
+          </div>
+        </details>
+        <div id="venueErr" class="model-form-error" hidden></div>
+        <button type="button" class="model-add-btn" onclick="openTradeModal()">Place an order ↗</button>
+      </div>
+
       <!-- API docs -->
       <div class="pt-2 border-t border-gray-200">
         <a href="/agents" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">Agent integration ↗</a><br />
         <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">API docs ↗</a>
       </div>
+    </div>
+  </details>
+
+  <!-- Watchlist: favourited markets + live prices -->
+  <details class="config-panel" id="watchlistDetails">
+    <summary class="config-summary">
+      <svg class="config-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Watchlist</span>
+      <span id="watchlistCount" class="config-active"></span>
+    </summary>
+    <div class="config-body" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-gray-400" style="font-size:10px;margin:0">Star a market on the Edge board to watch it here.</p>
+        <button type="button" class="model-cancel" style="font-size:10px;padding:2px 8px" onclick="refreshWatchlist()">Refresh</button>
+      </div>
+      <div id="watchlistList" class="model-list"></div>
+      <p id="watchlistHint" class="text-gray-400" style="font-size:10px;margin-top:4px">Sign in to sync your watchlist and get email updates.</p>
     </div>
   </details>
 
@@ -1949,6 +2020,42 @@
       <input id="feedbackEmail" type="email" placeholder="Email (optional — for a reply)" style="width:100%;box-sizing:border-box;background:var(--surface-alt,#1a1a1f);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-size:14px;margin-top:8px;font-family:inherit" />
       <button type="button" class="hero-action primary" style="width:100%;margin-top:12px;justify-content:center" onclick="submitFeedback()">Send</button>
       <p id="feedbackStatus" style="text-align:center;font-size:13px;margin-top:8px;min-height:18px"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Trade modal (place an order on your own connected account) ── -->
+<div id="tradeOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="tradeTitle" aria-hidden="true" onclick="if(event.target===this)closeTradeModal()">
+  <div class="auth-card glass" style="position:relative;max-width:440px">
+    <button type="button" class="auth-close" onclick="closeTradeModal()" aria-label="Close">✕</button>
+    <span class="auth-brand"><span class="logo-dot"></span><span class="brand text-lg" id="tradeTitle">Place an order</span></span>
+    <p class="auth-sub" style="margin-top:6px">Signs with the exchange account you connected. Preview first — real orders need a typed confirmation.</p>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px">
+        <select id="trPlatform" class="variant-select text-xs" style="flex:1" onchange="_trToggleIdent()">
+          <option value="kalshi">Kalshi</option>
+          <option value="polymarket">Polymarket</option>
+        </select>
+        <select id="trAction" class="variant-select text-xs" style="flex:1">
+          <option value="buy">Buy</option><option value="sell">Sell</option>
+        </select>
+        <select id="trOutcome" class="variant-select text-xs" style="flex:1">
+          <option value="yes">Yes</option><option value="no">No</option>
+        </select>
+      </div>
+      <input id="trKalshiTicker" class="variant-select text-xs" placeholder="Kalshi ticker (e.g. KXTEST)" autocomplete="off" />
+      <input id="trPolyToken" class="variant-select text-xs" placeholder="Polymarket token id or market slug" autocomplete="off" hidden />
+      <div style="display:flex;gap:8px">
+        <input id="trPrice" type="number" step="0.01" min="0.01" max="0.99" class="variant-select text-xs" placeholder="Limit price 0–1" style="flex:1" />
+        <input id="trQty" type="number" step="1" min="1" class="variant-select text-xs" placeholder="Quantity" style="flex:1" />
+      </div>
+      <button type="button" class="model-save" style="width:100%;justify-content:center" onclick="previewTrade()">Preview order</button>
+      <div id="trPreview" class="model-list" style="font-size:12px"></div>
+      <div id="trConfirmRow" hidden>
+        <input id="trConfirm" class="variant-select text-xs" placeholder="Type PLACE REAL ORDER to confirm" autocomplete="off" style="font-family:monospace" />
+        <button type="button" class="hero-action primary" style="width:100%;margin-top:8px;justify-content:center" onclick="submitTrade()">Place real order</button>
+      </div>
+      <div id="trError" class="model-form-error" hidden></div>
     </div>
   </div>
 </div>
@@ -2972,9 +3079,14 @@ function escAttr(s) {
 function _mdInline(s) {
   return s
     .replace(/`([^`]+)`/g, '<code class="md-code">$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    // Bold: non-greedy across any chars so the span can contain a nested italic
+    // or punctuation (the old [^*]+ silently failed and left literal **).
+    .replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
     .replace(/__([^_]+)__/g, '<strong>$1</strong>')
-    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    // Italic: only when the * looks like an emphasis delimiter — a non-word char
+    // before the opening * and a non-word char after the closing *. This stops
+    // arithmetic/ranges like 12*18 or 2025*2026 from turning into <em>.
+    .replace(/(^|[^\w*])\*(?!\s)([^*\n]+?)\*(?![\w])/g, '$1<em>$2</em>')
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
              '<a href="$2" target="_blank" rel="noopener" class="md-link">$1</a>');
 }
@@ -3050,6 +3162,18 @@ function _texToText(x) {
     .replace(/[ \t]+/g, ' ')
     .trim();
 }
+// Reformat bare ISO dates (YYYY-MM-DD) the model emits into a readable
+// "9 June 2026" so chat prose reads naturally. Leaves partial/invalid dates and
+// non-date hyphenated numbers untouched.
+const _MD_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+function _prettyDates(s) {
+  return String(s ?? '').replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (m, y, mo, d) => {
+    const mi = parseInt(mo, 10) - 1, day = parseInt(d, 10);
+    if (mi < 0 || mi > 11 || day < 1 || day > 31) return m;
+    return `${day} ${_MD_MONTHS[mi]} ${y}`;
+  });
+}
 // Strip LaTeX math delimiters the model sometimes emits (\[ \], \( \), $$ $$, $ $)
 // and render their contents as plain text, so they don't show as raw brackets.
 function _normalizeMath(s) {
@@ -3061,7 +3185,7 @@ function _normalizeMath(s) {
 }
 
 function renderMarkdown(text) {
-  const lines = escHtml(_normalizeMath(text)).split(/\r?\n/);
+  const lines = escHtml(_prettyDates(_normalizeMath(text))).split(/\r?\n/);
   let html = '';
   let list = null;            // 'ul' | 'ol'
   let para = [];
@@ -3597,7 +3721,13 @@ function _renderBoardPage(board, page) {
       ? `Buy ${e.side} @ ${Math.round((e.entry_price || 0) * 100)}¢` +
         (e.payout_odds ? ` <span style="color:#999">≈${e.payout_odds}:1</span>` : '')
       : '—';
+    const favKey = (e.platform && e.ident) ? `${String(e.platform).toLowerCase()}:${e.ident}` : '';
+    const star = favKey
+      ? `<button type="button" class="fav-star ${_isFav(favKey) ? 'on' : ''}" title="Watch this market"
+           onclick='toggleFavorite(${JSON.stringify({ key: favKey, question: e.question || '', platform: e.platform || '', ident: e.ident || '', market_url: e.market_url || '', model_probability: e.model_probability ?? null, market_probability: e.market_probability ?? null }).replace(/'/g, "&#39;")}, this)'>${_isFav(favKey) ? '★' : '☆'}</button>`
+      : '';
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}">` +
+      `<td style="width:24px;text-align:center">${star}</td>` +
       `<td style="max-width:260px"><a ${url} style="color:inherit">${escHtml((e.question || '').slice(0, 90))}</a></td>` +
       `<td>${escHtml(e.platform || '')}</td><td>${pct(e.model_probability)}%</td>` +
       `<td class="eb-live-market">${pct(e.market_probability)}%</td>` +
@@ -3605,7 +3735,7 @@ function _renderBoardPage(board, page) {
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
       `<td>${e.edge_bucket}</td><td>${badge}</td></tr>`;
   }).join('');
-  const tableHtml = `<table class="eb-table"><thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Crowd</th><th>Edge</th><th>Trade</th><th>Bucket</th><th>Track record</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Model</th><th>Crowd</th><th>Edge</th><th>Trade</th><th>Bucket</th><th>Track record</th></tr></thead><tbody>${rows}</tbody></table>`;
   let pagination = '';
   if (pages > 1) {
     const prev = page > 0
@@ -4247,12 +4377,364 @@ function loadOrSettings() {
     if (det) det.open = true;
   }
   _updateModelLabel();
+  _initVenueAccounts();
+  _initFavorites();
 }
 
 function _updateModelLabel() {
   const m = getActiveModelConfig();
   const label = document.getElementById('activeModelLabel');
   if (label) label.textContent = m ? m.model.split('/').pop() : 'gpt-oss-120b';
+}
+
+// ── Exchange accounts (bring-your-own trading) ───────────────────────────────
+// Credentials live ONLY in this browser (localStorage `foresea_venue_creds`,
+// keyed exactly as the server's venue_credentials fields) and are sent per
+// order to sign. They are never persisted server-side.
+const _VENUE_FIELDS = {
+  kalshi: {
+    vcKalshiKeyId: 'kalshi_api_key_id',
+    vcKalshiPriv: 'kalshi_private_key',
+    vcKalshiBase: 'kalshi_base_url',
+  },
+  polymarket: {
+    vcPolyPriv: 'polymarket_private_key',
+    vcPolyKey: 'polymarket_api_key',
+    vcPolySecret: 'polymarket_api_secret',
+    vcPolyPass: 'polymarket_api_passphrase',
+    vcPolyHost: 'polymarket_clob_host',
+    vcPolyFunder: 'polymarket_funder_address',
+  },
+};
+const _VENUE_REQUIRED = {
+  kalshi: ['kalshi_api_key_id', 'kalshi_private_key'],
+  polymarket: ['polymarket_private_key', 'polymarket_api_key', 'polymarket_api_secret', 'polymarket_api_passphrase'],
+};
+
+function _loadVenueCreds() {
+  try { return JSON.parse(localStorage.getItem('foresea_venue_creds') || '{}') || {}; }
+  catch { return {}; }
+}
+function _saveVenueCredsStore(obj) {
+  localStorage.setItem('foresea_venue_creds', JSON.stringify(obj));
+}
+// Combined non-empty credentials to attach to a trading request.
+function _allVenueCreds() {
+  const store = _loadVenueCreds();
+  const out = {};
+  for (const [k, v] of Object.entries(store)) {
+    if (v != null && String(v).trim() !== '') out[k] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+function _venueConnected(platform) {
+  const store = _loadVenueCreds();
+  return _VENUE_REQUIRED[platform].every(k => String(store[k] || '').trim() !== '');
+}
+
+function _fillVenueInputs() {
+  const store = _loadVenueCreds();
+  for (const map of Object.values(_VENUE_FIELDS)) {
+    for (const [id, key] of Object.entries(map)) {
+      const el = document.getElementById(id);
+      if (el) el.value = store[key] || '';
+    }
+  }
+}
+function renderVenueStatus() {
+  [['kalshi', 'kalshiChip'], ['polymarket', 'polyChip']].forEach(([platform, chipId]) => {
+    const chip = document.getElementById(chipId);
+    if (!chip) return;
+    const on = _venueConnected(platform);
+    chip.textContent = on ? 'Connected ✓' : 'Not connected';
+    chip.style.background = on ? '#dcfce7' : '#eee';
+    chip.style.color = on ? '#15803d' : '#777';
+  });
+}
+
+async function saveVenueCreds(platform) {
+  _venueErr('');
+  if (!currentUser) { _venueErr('Sign in to connect an exchange account.'); openAuthModal('login'); return; }
+  const store = _loadVenueCreds();
+  for (const [id, key] of Object.entries(_VENUE_FIELDS[platform])) {
+    const el = document.getElementById(id);
+    const val = el ? el.value.trim() : '';
+    if (val) store[key] = val; else delete store[key];
+  }
+  if (!_VENUE_REQUIRED[platform].every(k => store[k])) {
+    _venueErr(`Missing required ${platform} fields.`); return;
+  }
+  _saveVenueCredsStore(store);
+  renderVenueStatus();
+  // Validate against the server without persisting (e.g. RSA key parses).
+  try {
+    const r = await fetch('/trading/accounts/check', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ venue_credentials: _allVenueCreds() }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { _venueErr(d.detail || 'Could not verify credentials.'); return; }
+    const v = (d.venues || {})[platform] || {};
+    if (!v.configured) {
+      _venueErr(`${platform} credentials look incomplete or invalid.`);
+    } else if (!d.byo_trading_enabled) {
+      _venueErr('Connected. Note: live BYO trading is not enabled on the server yet.');
+    }
+  } catch (e) {
+    _venueErr('Could not reach Foresea to verify: ' + e.message);
+  }
+}
+
+function disconnectVenue(platform) {
+  const store = _loadVenueCreds();
+  for (const key of Object.values(_VENUE_FIELDS[platform])) delete store[key];
+  _saveVenueCredsStore(store);
+  for (const id of Object.keys(_VENUE_FIELDS[platform])) {
+    const el = document.getElementById(id); if (el) el.value = '';
+  }
+  renderVenueStatus();
+  _venueErr('');
+}
+function _venueErr(msg) {
+  const el = document.getElementById('venueErr');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+function _initVenueAccounts() {
+  _fillVenueInputs();
+  renderVenueStatus();
+}
+
+// ── Trade modal ──────────────────────────────────────────────────────────────
+function openTradeModal(prefill) {
+  if (!currentUser) { openAuthModal('login'); return; }
+  _trError(''); _trResetPreview();
+  if (prefill && prefill.platform) {
+    const p = String(prefill.platform).toLowerCase().includes('kalshi') ? 'kalshi' : 'polymarket';
+    document.getElementById('trPlatform').value = p;
+    if (prefill.ident) {
+      if (p === 'kalshi') document.getElementById('trKalshiTicker').value = prefill.ident;
+      else document.getElementById('trPolyToken').value = prefill.ident;
+    }
+  }
+  _trToggleIdent();
+  const ov = document.getElementById('tradeOverlay');
+  ov.classList.add('show'); ov.setAttribute('aria-hidden', 'false');
+}
+function closeTradeModal() {
+  const ov = document.getElementById('tradeOverlay');
+  ov.classList.remove('show'); ov.setAttribute('aria-hidden', 'true');
+}
+function _trToggleIdent() {
+  const poly = document.getElementById('trPlatform').value === 'polymarket';
+  document.getElementById('trKalshiTicker').hidden = poly;
+  document.getElementById('trPolyToken').hidden = !poly;
+}
+function _trError(msg) {
+  const el = document.getElementById('trError');
+  if (!el) return;
+  el.textContent = msg || ''; el.hidden = !msg;
+}
+function _trResetPreview() {
+  document.getElementById('trPreview').innerHTML = '';
+  document.getElementById('trConfirmRow').hidden = true;
+  const c = document.getElementById('trConfirm'); if (c) c.value = '';
+}
+function _tradeBody() {
+  const platform = document.getElementById('trPlatform').value;
+  const body = {
+    platform,
+    action: document.getElementById('trAction').value,
+    outcome: document.getElementById('trOutcome').value,
+    order_type: 'limit',
+    price: parseFloat(document.getElementById('trPrice').value),
+    quantity: parseFloat(document.getElementById('trQty').value),
+    venue_credentials: _allVenueCreds(),
+  };
+  if (platform === 'kalshi') {
+    body.ticker = document.getElementById('trKalshiTicker').value.trim();
+  } else {
+    const id = document.getElementById('trPolyToken').value.trim();
+    if (/^\d+$/.test(id)) body.token_id = id; else body.slug = id;
+  }
+  return body;
+}
+function _validTradeInputs(body) {
+  if (!(body.price > 0 && body.price < 1)) { _trError('Enter a limit price between 0 and 1.'); return false; }
+  if (!(body.quantity > 0)) { _trError('Enter a quantity.'); return false; }
+  if (body.platform === 'kalshi' && !body.ticker) { _trError('Enter a Kalshi ticker.'); return false; }
+  if (body.platform === 'polymarket' && !body.token_id && !body.slug) { _trError('Enter a token id or slug.'); return false; }
+  if (!_venueConnected(body.platform)) { _trError(`Connect your ${body.platform} account first (Config → Exchange accounts).`); return false; }
+  return true;
+}
+
+async function previewTrade() {
+  _trError(''); _trResetPreview();
+  const body = _tradeBody();
+  if (!_validTradeInputs(body)) return;
+  try {
+    const r = await fetch('/trading/preview', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { _trError(d.detail || 'Preview failed.'); return; }
+    const o = d.normalized_order || {};
+    const warns = (d.warnings || []).map(w => `<div style="color:#b45309">• ${escHtml(w)}</div>`).join('');
+    document.getElementById('trPreview').innerHTML = `
+      <div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px">
+        <div><b>${escHtml(o.platform)}</b> ${escHtml(o.action)} ${escHtml(o.outcome)} · ${escHtml(o.order_type)}</div>
+        <div>price ${o.price} × qty ${o.quantity}</div>
+        <div>est. notional <b>$${d.estimated_notional}</b> (cap $${d.max_order_notional})</div>
+        ${warns}
+      </div>`;
+    document.getElementById('trConfirmRow').hidden = false;
+  } catch (e) {
+    _trError('Could not reach Foresea: ' + e.message);
+  }
+}
+
+async function submitTrade() {
+  _trError('');
+  const confirmation = document.getElementById('trConfirm').value;
+  if (confirmation !== 'PLACE REAL ORDER') { _trError('Type PLACE REAL ORDER exactly to confirm.'); return; }
+  const body = _tradeBody();
+  if (!_validTradeInputs(body)) return;
+  body.execute = true;
+  body.confirmation = confirmation;
+  try {
+    const r = await fetch('/trading/orders', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { _trError(d.detail || 'Order failed.'); return; }
+    document.getElementById('trPreview').innerHTML =
+      `<div style="padding:8px 10px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;color:#15803d">Order submitted ✓</div>`;
+    document.getElementById('trConfirmRow').hidden = true;
+  } catch (e) {
+    _trError('Could not reach Foresea: ' + e.message);
+  }
+}
+
+// ── Favourite markets / watchlist ────────────────────────────────────────────
+// Stored in localStorage `foresea_favorites` (keyed by `{platform}:{ident}`);
+// when signed in, mirrored to the server (/favorites) so it syncs across devices
+// and feeds the email digest.
+function _loadFavorites() {
+  try { return JSON.parse(localStorage.getItem('foresea_favorites') || '{}') || {}; }
+  catch { return {}; }
+}
+function _saveFavorites(obj) { localStorage.setItem('foresea_favorites', JSON.stringify(obj)); }
+function _isFav(key) { return Object.prototype.hasOwnProperty.call(_loadFavorites(), key); }
+
+async function toggleFavorite(fav, btn) {
+  const store = _loadFavorites();
+  const on = !_isFav(fav.key);
+  if (on) {
+    fav.notify = true;
+    fav.createdAt = Date.now();
+    store[fav.key] = fav;
+  } else {
+    delete store[fav.key];
+  }
+  _saveFavorites(store);
+  if (btn) { btn.classList.toggle('on', on); btn.textContent = on ? '★' : '☆'; }
+  renderWatchlist();
+  // Best-effort server sync (only when signed in).
+  if (currentUser) {
+    try {
+      if (on) {
+        await fetch('/favorites/' + encodeURIComponent(fav.key), {
+          method: 'PUT',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ ...fav, notify: fav.notify !== false }),
+        });
+      } else {
+        await fetch('/favorites/' + encodeURIComponent(fav.key), {
+          method: 'DELETE', headers: authHeaders(),
+        });
+      }
+    } catch (_) { /* keep the local copy; sync retries on next load */ }
+  }
+}
+
+async function _syncFavoritesFromServer() {
+  if (!currentUser) return;
+  try {
+    const r = await fetch('/favorites', { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    const store = _loadFavorites();
+    (d.favorites || []).forEach(f => { store[f.key] = f; });
+    _saveFavorites(store);
+    renderWatchlist();
+    _refreshEdgeStars();
+  } catch (_) { /* offline — local copy stands */ }
+}
+
+function _refreshEdgeStars() {
+  document.querySelectorAll('.fav-star').forEach(btn => {
+    const m = (btn.getAttribute('onclick') || '').match(/"key":"([^"]+)"/);
+    if (!m) return;
+    const on = _isFav(m[1]);
+    btn.classList.toggle('on', on);
+    btn.textContent = on ? '★' : '☆';
+  });
+}
+
+function renderWatchlist() {
+  const host = document.getElementById('watchlistList');
+  if (!host) return;
+  const favs = Object.values(_loadFavorites()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const countEl = document.getElementById('watchlistCount');
+  if (countEl) countEl.textContent = favs.length ? String(favs.length) : '';
+  const hint = document.getElementById('watchlistHint');
+  if (hint) hint.hidden = !!currentUser && favs.length > 0;
+  if (!favs.length) {
+    host.innerHTML = '<p class="text-gray-400" style="font-size:11px">No markets watched yet.</p>';
+    return;
+  }
+  host.innerHTML = favs.map(f => {
+    const sub = [f.platform, f.market_probability != null ? `crowd ${Math.round(f.market_probability * 100)}%` : '',
+      f.model_probability != null ? `model ${Math.round(f.model_probability * 100)}%` : '']
+      .filter(Boolean).join(' · ');
+    const q = escHtml((f.question || f.key).slice(0, 80));
+    const link = f.market_url ? `href="${escHtml(f.market_url)}" target="_blank" rel="noopener"` : '';
+    return `<div class="wl-row" data-key="${escAttr(f.key)}">
+      <div class="wl-meta">
+        <div class="wl-q"><a ${link} style="color:inherit;text-decoration:none">${q}</a></div>
+        <div class="wl-sub">${escHtml(sub)}</div>
+      </div>
+      <span class="wl-price" data-price></span>
+      <button type="button" class="fav-star on" title="Remove" onclick='toggleFavorite(${JSON.stringify({ key: f.key }).replace(/'/g, "&#39;")}, null); this.closest(".wl-row").remove();'>★</button>
+    </div>`;
+  }).join('');
+}
+
+async function refreshWatchlist() {
+  renderWatchlist();
+  if (!currentUser) return;
+  try {
+    const r = await fetch('/favorites/prices', { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    const prices = d.prices || {};
+    document.querySelectorAll('#watchlistList .wl-row').forEach(row => {
+      const key = row.getAttribute('data-key');
+      const el = row.querySelector('[data-price]');
+      if (el && prices[key] != null) el.textContent = Math.round(prices[key] * 100) + '¢';
+    });
+  } catch (_) { /* prices are best-effort */ }
+}
+
+function _initFavorites() {
+  renderWatchlist();
+  _syncFavoritesFromServer();
 }
 
 // ── Agent skills manager ──────────────────────────────────────────────────────
@@ -4655,6 +5137,9 @@ function _setAuthEl(id, show, data) {
 function updateAuthUI(user) {
   currentUser = user;
   if (typeof loadKb === 'function') loadKb();  // refresh KB on sign-in/out
+  if (typeof _syncFavoritesFromServer === 'function') {
+    if (user) _syncFavoritesFromServer(); else renderWatchlist();
+  }
   const firstName = (user?.name || '').split(' ')[0];
   const email = user?.email || '';
   const pic = user?.picture || (user ? _setAvatarFallback(user?.name, email) : '');

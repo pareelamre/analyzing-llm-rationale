@@ -1,0 +1,45 @@
+name: Favourites digest
+
+# Emails each user a digest of how their watchlisted (favourited) markets moved.
+# Runs off the request path with Datastore + SMTP credentials (never on Cloud
+# Run). No-ops cleanly when SMTP is not configured, so it's safe to enable early.
+
+on:
+  schedule:
+    - cron: "0 13 * * *"   # daily at 13:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: favorites-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install --quiet requests google-cloud-datastore
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Send watchlist digests
+        env:
+          CUSTOM_DOMAIN: https://foresea.ink
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          ALERT_FROM: ${{ secrets.ALERT_FROM }}
+        run: python scripts/favorites_digest.py

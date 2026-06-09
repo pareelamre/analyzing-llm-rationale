@@ -44,6 +44,45 @@ class TradingExecutionError(TradingError):
     """An exchange request failed after passing local validation."""
 
 
+# Per-request "bring your own account" credentials. The web/API caller may pass a
+# `creds` mapping (keys below) so a signed-in user trades their OWN venue account;
+# these are used transiently for one request and never persisted. When a key is
+# absent the resolver falls back to the server-side env var, so the shared server
+# account keeps working unchanged.
+_CRED_ENV = {
+    "kalshi_api_key_id": "KALSHI_API_KEY_ID",
+    "kalshi_private_key": "KALSHI_PRIVATE_KEY",
+    "kalshi_base_url": "KALSHI_BASE_URL",
+    "polymarket_private_key": "POLYMARKET_PRIVATE_KEY",
+    "polymarket_api_key": "POLYMARKET_API_KEY",
+    "polymarket_api_secret": "POLYMARKET_API_SECRET",
+    "polymarket_api_passphrase": "POLYMARKET_API_PASSPHRASE",
+    "polymarket_clob_host": "POLYMARKET_CLOB_HOST",
+    "polymarket_chain_id": "POLYMARKET_CHAIN_ID",
+    "polymarket_signature_type": "POLYMARKET_SIGNATURE_TYPE",
+    "polymarket_funder_address": "POLYMARKET_FUNDER_ADDRESS",
+}
+
+Creds = Optional[Mapping[str, Any]]
+
+
+def _cv(creds: Creds, key: str, default: Optional[str] = None) -> Optional[str]:
+    """Resolve a credential: per-request `creds` wins, else the server env var."""
+    if creds is not None:
+        value = creds.get(key)
+        if value not in (None, ""):
+            return str(value)
+    env_name = _CRED_ENV.get(key)
+    if env_name is None:
+        return default
+    return os.environ.get(env_name, default)
+
+
+def _is_byo(creds: Creds) -> bool:
+    """True when the caller supplied at least one own-account credential field."""
+    return bool(creds) and any(str(v or "").strip() for v in creds.values())
+
+
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.environ.get(name)
     if value is None:
@@ -149,56 +188,70 @@ def _secret_present(name: str) -> bool:
     return bool((os.environ.get(name) or "").strip())
 
 
-def _kalshi_private_key_present() -> bool:
-    return _secret_present("KALSHI_PRIVATE_KEY") or _secret_present("KALSHI_PRIVATE_KEY_FILE")
+def _cred_present(creds: Creds, key: str) -> bool:
+    return bool((_cv(creds, key) or "").strip())
 
 
-def _polymarket_configured() -> bool:
+def _kalshi_private_key_present(creds: Creds = None) -> bool:
+    # KALSHI_PRIVATE_KEY_FILE is an env-only deployment option (no BYO equivalent).
+    return _cred_present(creds, "kalshi_private_key") or _secret_present("KALSHI_PRIVATE_KEY_FILE")
+
+
+def _polymarket_configured(creds: Creds = None) -> bool:
     return all(
-        _secret_present(name)
-        for name in (
-            "POLYMARKET_PRIVATE_KEY",
-            "POLYMARKET_API_KEY",
-            "POLYMARKET_API_SECRET",
-            "POLYMARKET_API_PASSPHRASE",
+        _cred_present(creds, key)
+        for key in (
+            "polymarket_private_key",
+            "polymarket_api_key",
+            "polymarket_api_secret",
+            "polymarket_api_passphrase",
         )
     )
 
 
-def account_status() -> Dict[str, Any]:
-    """Return server-side trading readiness without exposing secret values."""
-    kalshi_base = os.environ.get(
-        "KALSHI_BASE_URL", "https://external-api.kalshi.com/trade-api/v2"
+def account_status(creds: Creds = None) -> Dict[str, Any]:
+    """Return trading readiness without exposing secret values.
+
+    When `creds` carries per-request own-account credentials, readiness is computed
+    against those (with server env as fallback); otherwise it reflects the shared
+    server-side account.
+    """
+    byo = _is_byo(creds)
+    kalshi_base = (
+        _cv(creds, "kalshi_base_url", "https://external-api.kalshi.com/trade-api/v2")
     ).rstrip("/")
-    poly_host = os.environ.get("POLYMARKET_CLOB_HOST", "https://clob.polymarket.com").rstrip("/")
-    kalshi_key = _secret_present("KALSHI_API_KEY_ID") or _secret_present("KALSHI_ACCESS_KEY_ID")
-    kalshi_key_ready = kalshi_key and _kalshi_private_key_present()
+    poly_host = (
+        _cv(creds, "polymarket_clob_host", "https://clob.polymarket.com")
+    ).rstrip("/")
+    kalshi_key = _cred_present(creds, "kalshi_api_key_id") or _secret_present("KALSHI_ACCESS_KEY_ID")
+    kalshi_key_ready = kalshi_key and _kalshi_private_key_present(creds)
     poly_sdk = _polymarket_sdk_available()
-    poly_creds = _polymarket_configured()
+    poly_creds = _polymarket_configured(creds)
     return {
         "trading_enabled": _env_bool("FORESEA_ENABLE_TRADING", False),
+        "byo_trading_enabled": _env_bool("FORESEA_ENABLE_BYO_TRADING", False),
         "max_order_notional": _money(_max_order_notional()),
         "allow_market_orders": _env_bool("FORESEA_ALLOW_MARKET_ORDERS", False),
         "confirmation_phrase": CONFIRMATION_PHRASE,
-        "credential_source": "server_environment",
+        "credential_source": "request" if byo else "server_environment",
         "venues": {
             "kalshi": {
                 "configured": kalshi_key_ready,
                 "base_url": kalshi_base,
                 "api_key_id_present": kalshi_key,
-                "private_key_present": _kalshi_private_key_present(),
+                "private_key_present": _kalshi_private_key_present(creds),
             },
             "polymarket": {
                 "configured": poly_creds and poly_sdk,
                 "host": poly_host,
                 "sdk_available": poly_sdk,
-                "private_key_present": _secret_present("POLYMARKET_PRIVATE_KEY"),
+                "private_key_present": _cred_present(creds, "polymarket_private_key"),
                 "api_credentials_present": all(
-                    _secret_present(name)
-                    for name in (
-                        "POLYMARKET_API_KEY",
-                        "POLYMARKET_API_SECRET",
-                        "POLYMARKET_API_PASSPHRASE",
+                    _cred_present(creds, key)
+                    for key in (
+                        "polymarket_api_key",
+                        "polymarket_api_secret",
+                        "polymarket_api_passphrase",
                     )
                 ),
             },
@@ -398,8 +451,9 @@ def _preview_polymarket(
     }
 
 
-def preview_order(req: Mapping[str, Any]) -> Dict[str, Any]:
+def preview_order(req: Mapping[str, Any], creds: Creds = None) -> Dict[str, Any]:
     """Validate and normalize an order without submitting it."""
+    byo = _is_byo(creds)
     platform = _clean_platform(req.get("platform"))
     action = _clean_action(req.get("action"))
     outcome = _clean_outcome(req.get("outcome"))
@@ -409,10 +463,14 @@ def preview_order(req: Mapping[str, Any]) -> Dict[str, Any]:
         if platform == "kalshi"
         else _preview_polymarket(req, action, outcome, order_type)
     )
+    gate_var = "FORESEA_ENABLE_BYO_TRADING" if byo else "FORESEA_ENABLE_TRADING"
+    trading_enabled = _env_bool(gate_var, False)
     warnings = [
-        "Live trading is disabled unless FORESEA_ENABLE_TRADING=true.",
+        f"Live trading is disabled unless {gate_var}=true.",
         f"Live orders require execute=true and confirmation='{CONFIRMATION_PHRASE}'.",
     ]
+    if byo:
+        warnings.append("Order signs with the credentials you supplied; they are never stored by Foresea.")
     if order_type == "market":
         warnings.append("Market/IOC/FOK-style orders require FORESEA_ALLOW_MARKET_ORDERS=true.")
     if platform == "kalshi":
@@ -425,7 +483,7 @@ def preview_order(req: Mapping[str, Any]) -> Dict[str, Any]:
         "would_execute": False,
         "requires_confirmation": True,
         "confirmation_phrase": CONFIRMATION_PHRASE,
-        "trading_enabled": _env_bool("FORESEA_ENABLE_TRADING", False),
+        "trading_enabled": trading_enabled,
         "max_order_notional": normalized["max_order_notional"],
         "estimated_notional": normalized["estimated_notional"],
         "warnings": warnings,
@@ -433,17 +491,18 @@ def preview_order(req: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _require_execution_enabled(normalized: Mapping[str, Any]) -> None:
-    if not _env_bool("FORESEA_ENABLE_TRADING", False):
-        raise TradingDisabledError("Live trading is disabled. Set FORESEA_ENABLE_TRADING=true.")
+def _require_execution_enabled(normalized: Mapping[str, Any], *, byo: bool = False) -> None:
+    gate_var = "FORESEA_ENABLE_BYO_TRADING" if byo else "FORESEA_ENABLE_TRADING"
+    if not _env_bool(gate_var, False):
+        raise TradingDisabledError(f"Live trading is disabled. Set {gate_var}=true.")
     if normalized.get("order_type") == "market" and not _env_bool("FORESEA_ALLOW_MARKET_ORDERS", False):
         raise TradingDisabledError(
             "Market orders are disabled. Set FORESEA_ALLOW_MARKET_ORDERS=true to allow them."
         )
 
 
-def _kalshi_private_key_pem() -> str:
-    pem = os.environ.get("KALSHI_PRIVATE_KEY")
+def _kalshi_private_key_pem(creds: Creds = None) -> str:
+    pem = _cv(creds, "kalshi_private_key")
     if pem:
         return pem.replace("\\n", "\n")
     file_path = os.environ.get("KALSHI_PRIVATE_KEY_FILE")
@@ -453,9 +512,11 @@ def _kalshi_private_key_pem() -> str:
     raise TradingNotConfiguredError("Kalshi private key is not configured.")
 
 
-def _kalshi_auth_headers(method: str, path: str, *, timestamp_ms: Optional[str] = None) -> Dict[str, str]:
+def _kalshi_auth_headers(
+    method: str, path: str, *, creds: Creds = None, timestamp_ms: Optional[str] = None
+) -> Dict[str, str]:
     """Create Kalshi REST auth headers for a path including `/trade-api/v2/...`."""
-    key_id = os.environ.get("KALSHI_API_KEY_ID") or os.environ.get("KALSHI_ACCESS_KEY_ID")
+    key_id = _cv(creds, "kalshi_api_key_id") or os.environ.get("KALSHI_ACCESS_KEY_ID")
     if not key_id:
         raise TradingNotConfiguredError("KALSHI_API_KEY_ID is not configured.")
     try:
@@ -466,7 +527,7 @@ def _kalshi_auth_headers(method: str, path: str, *, timestamp_ms: Optional[str] 
         raise TradingNotConfiguredError("Install cryptography to enable Kalshi signing.") from exc
 
     private_key = serialization.load_pem_private_key(
-        _kalshi_private_key_pem().encode("utf-8"),
+        _kalshi_private_key_pem(creds).encode("utf-8"),
         password=None,
         backend=default_backend(),
     )
@@ -488,19 +549,19 @@ def _kalshi_auth_headers(method: str, path: str, *, timestamp_ms: Optional[str] 
     }
 
 
-def _place_kalshi_order(normalized: Mapping[str, Any]) -> Dict[str, Any]:
-    if not account_status()["venues"]["kalshi"]["configured"]:
+def _place_kalshi_order(normalized: Mapping[str, Any], creds: Creds = None) -> Dict[str, Any]:
+    if not account_status(creds)["venues"]["kalshi"]["configured"]:
         raise TradingNotConfiguredError("Kalshi trading credentials are not configured.")
     import requests
 
-    base_url = os.environ.get(
-        "KALSHI_BASE_URL", "https://external-api.kalshi.com/trade-api/v2"
+    base_url = _cv(
+        creds, "kalshi_base_url", "https://external-api.kalshi.com/trade-api/v2"
     ).rstrip("/")
     endpoint_path = str(normalized["exchange_path"])
     parsed = urlparse(base_url)
     signing_path = f"{parsed.path.rstrip('/')}{endpoint_path}"
     headers = {
-        **_kalshi_auth_headers("POST", signing_path),
+        **_kalshi_auth_headers("POST", signing_path, creds=creds),
         "Content-Type": "application/json",
         "User-Agent": _USER_AGENT,
     }
@@ -519,38 +580,38 @@ def _place_kalshi_order(normalized: Mapping[str, Any]) -> Dict[str, Any]:
     return {"status_code": resp.status_code, "body": body}
 
 
-def _polymarket_client():
+def _polymarket_client(creds: Creds = None):
     if not _polymarket_sdk_available():
         raise TradingNotConfiguredError(
             "py-clob-client-v2 is not installed; install the trading extra to enable Polymarket."
         )
-    if not _polymarket_configured():
+    if not _polymarket_configured(creds):
         raise TradingNotConfiguredError("Polymarket CLOB credentials are not configured.")
     from py_clob_client_v2.client import ClobClient
     from py_clob_client_v2.clob_types import ApiCreds
 
-    host = os.environ.get("POLYMARKET_CLOB_HOST", "https://clob.polymarket.com")
-    chain_id = int(os.environ.get("POLYMARKET_CHAIN_ID", "137"))
-    signature_type_raw = os.environ.get("POLYMARKET_SIGNATURE_TYPE")
+    host = _cv(creds, "polymarket_clob_host", "https://clob.polymarket.com")
+    chain_id = int(_cv(creds, "polymarket_chain_id", "137"))
+    signature_type_raw = _cv(creds, "polymarket_signature_type")
     signature_type = int(signature_type_raw) if signature_type_raw not in (None, "") else None
-    funder = os.environ.get("POLYMARKET_FUNDER_ADDRESS") or None
-    creds = ApiCreds(
-        api_key=os.environ["POLYMARKET_API_KEY"],
-        api_secret=os.environ["POLYMARKET_API_SECRET"],
-        api_passphrase=os.environ["POLYMARKET_API_PASSPHRASE"],
+    funder = _cv(creds, "polymarket_funder_address") or None
+    api_creds = ApiCreds(
+        api_key=_cv(creds, "polymarket_api_key"),
+        api_secret=_cv(creds, "polymarket_api_secret"),
+        api_passphrase=_cv(creds, "polymarket_api_passphrase"),
     )
     return ClobClient(
         host=host,
         chain_id=chain_id,
-        key=os.environ["POLYMARKET_PRIVATE_KEY"],
-        creds=creds,
+        key=_cv(creds, "polymarket_private_key"),
+        creds=api_creds,
         signature_type=signature_type,
         funder=funder,
     )
 
 
-def _place_polymarket_order(normalized: Mapping[str, Any]) -> Dict[str, Any]:
-    client = _polymarket_client()
+def _place_polymarket_order(normalized: Mapping[str, Any], creds: Creds = None) -> Dict[str, Any]:
+    client = _polymarket_client(creds)
     from py_clob_client_v2.clob_types import (
         MarketOrderArgs,
         OrderArgs,
@@ -592,18 +653,21 @@ def _place_polymarket_order(normalized: Mapping[str, Any]) -> Dict[str, Any]:
     return {"body": result}
 
 
-def place_order(req: Mapping[str, Any], *, user_id: str) -> Dict[str, Any]:
+def place_order(req: Mapping[str, Any], *, user_id: str, creds: Creds = None) -> Dict[str, Any]:
     """Submit a live order after preview, server enablement, and human confirmation."""
     if not req.get("execute"):
         raise TradingValidationError("Set execute=true to submit a live order.")
     if str(req.get("confirmation") or "") != CONFIRMATION_PHRASE:
         raise TradingValidationError(f"confirmation must be exactly '{CONFIRMATION_PHRASE}'.")
-    preview = preview_order(req)
+    byo = _is_byo(creds)
+    preview = preview_order(req, creds)
     normalized = preview["normalized_order"]
-    _require_execution_enabled(normalized)
+    _require_execution_enabled(normalized, byo=byo)
     platform = normalized["platform"]
     venue_response = (
-        _place_kalshi_order(normalized) if platform == "kalshi" else _place_polymarket_order(normalized)
+        _place_kalshi_order(normalized, creds)
+        if platform == "kalshi"
+        else _place_polymarket_order(normalized, creds)
     )
     return {
         **preview,

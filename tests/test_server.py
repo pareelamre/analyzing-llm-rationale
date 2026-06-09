@@ -355,6 +355,74 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertIn("Live trading is disabled", response.json()["detail"])
 
+    def test_trading_accounts_check_reports_byo_request_source(self):
+        token = _issue_session("trader-1", "trader@example.com", "Trader", "")
+        response = self.client.post(
+            "/trading/accounts/check",
+            json={"venue_credentials": {
+                "kalshi_api_key_id": "byo-key",
+                "kalshi_private_key": "byo-secret-pem",
+            }},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["credential_source"], "request")
+        self.assertTrue(body["venues"]["kalshi"]["configured"])
+        # Supplied secrets are never echoed back.
+        self.assertNotIn("byo-secret-pem", response.text)
+
+    def test_trading_preview_does_not_echo_supplied_credentials(self):
+        token = _issue_session("trader-1", "trader@example.com", "Trader", "")
+        response = self.client.post(
+            "/trading/preview",
+            json={
+                "platform": "kalshi",
+                "ticker": "KXTEST",
+                "action": "buy",
+                "outcome": "yes",
+                "price": 0.44,
+                "quantity": 2,
+                "venue_credentials": {
+                    "kalshi_api_key_id": "byo-key",
+                    "kalshi_private_key": "byo-secret-pem",
+                },
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("byo-secret-pem", response.text)
+        self.assertNotIn("venue_credentials", response.text)
+
+    def test_favorites_crud_roundtrip(self):
+        token = _issue_session("fav-user", "fav@example.com", "Fav", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        key = "kalshi:KXTEST"
+        # Empty to start.
+        r0 = self.client.get("/favorites", headers=headers)
+        self.assertEqual(r0.status_code, 200)
+        self.assertEqual(r0.json()["favorites"], [])
+        # Add one.
+        r1 = self.client.put(
+            f"/favorites/{key}",
+            json={"key": key, "question": "Will X happen?", "platform": "kalshi",
+                  "ident": "KXTEST", "notify": True},
+            headers=headers,
+        )
+        self.assertEqual(r1.status_code, 200)
+        self.assertTrue(r1.json()["createdAt"])
+        # List shows it.
+        r2 = self.client.get("/favorites", headers=headers)
+        self.assertEqual(len(r2.json()["favorites"]), 1)
+        self.assertEqual(r2.json()["favorites"][0]["key"], key)
+        # Delete it.
+        r3 = self.client.delete(f"/favorites/{key}", headers=headers)
+        self.assertEqual(r3.status_code, 200)
+        self.assertEqual(self.client.get("/favorites", headers=headers).json()["favorites"], [])
+
+    def test_favorites_require_auth(self):
+        self.assertEqual(self.client.get("/favorites").status_code, 401)
+
     def test_agent_analyze_question_only_runs_skill(self):
         response = self.client.post(
             "/agent/analyze",

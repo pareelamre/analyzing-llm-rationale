@@ -174,15 +174,22 @@ Foresea can preview and submit guarded orders for Kalshi and Polymarket:
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /trading/accounts` | Return configured/not-configured venue status without exposing secrets |
+| `GET /trading/accounts` | Return configured/not-configured server-account status without exposing secrets |
+| `POST /trading/accounts/check` | Validate caller-supplied own-account (BYO) credentials without storing them |
 | `POST /trading/preview` | Normalize and validate an order without placing it |
 | `POST /trading/orders` | Submit a live order after explicit confirmation |
 
 Live trading is disabled unless `FORESEA_ENABLE_TRADING=true`. Every live order
 requires a signed-in user session, `execute=true`, and the exact confirmation
 phrase `PLACE REAL ORDER`. Market/IOC/FOK-style orders are separately blocked
-unless `FORESEA_ALLOW_MARKET_ORDERS=true`. Exchange credentials are read only
-from server-side environment variables or Secret Manager mounts.
+unless `FORESEA_ALLOW_MARKET_ORDERS=true`.
+
+Exchange credentials come from one of two sources: the shared server account
+(environment variables / Secret Manager mounts), or **per-request own-account
+credentials** a signed-in user supplies in `venue_credentials` so they trade
+their own Kalshi/Polymarket account. Own-account credentials are used transiently
+to sign a single order, never persisted, logged, or echoed back; that path is
+gated by `FORESEA_ENABLE_BYO_TRADING=true` (independent of `FORESEA_ENABLE_TRADING`).
 
 `/agent/analyze` may return a directional recommendation, but it never places an
 order. Use `/trading/preview` first, review the normalized order, then call
@@ -662,6 +669,63 @@ def _delete_conversation(user_id: str, conversation_id: str) -> None:
     if message_keys:
         client.delete_multi(message_keys)
     client.delete(key)
+
+
+# ── Favourite markets / watchlist (per-user on Datastore) ────────────────────
+
+_FAVORITE_KIND = "FavoriteMarket"
+_FAVORITE_FIELDS = (
+    "key", "question", "platform", "ident", "market_url",
+    "model_probability", "market_probability", "notify", "createdAt", "updatedAt",
+)
+
+
+def _favorite_key(client: Any, user_id: str, key: str) -> Any:
+    return client.key("User", user_id, _FAVORITE_KIND, key)
+
+
+def _favorite_from_entity(entity: Any) -> Dict[str, Any]:
+    fav = {field: entity.get(field) for field in _FAVORITE_FIELDS}
+    fav["key"] = entity.key.name
+    fav["notify"] = bool(fav.get("notify"))
+    return fav
+
+
+def _list_favorites(user_id: str) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        favs = list(_state.setdefault("favorites", {}).get(user_id, {}).values())
+        return sorted(favs, key=lambda f: f.get("updatedAt") or 0, reverse=True)
+    query = client.query(kind=_FAVORITE_KIND, ancestor=client.key("User", user_id))
+    favs = [_favorite_from_entity(entity) for entity in query.fetch(limit=200)]
+    favs.sort(key=lambda f: f.get("updatedAt") or 0, reverse=True)
+    return favs
+
+
+def _put_favorite(user_id: str, favorite: Dict[str, Any]) -> Dict[str, Any]:
+    favorite = {field: favorite.get(field) for field in _FAVORITE_FIELDS}
+    favorite["notify"] = bool(favorite.get("notify"))
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("favorites", {}).setdefault(user_id, {})[favorite["key"]] = favorite
+        return favorite
+    from google.cloud import datastore as _ds
+    key = _favorite_key(client, user_id, favorite["key"])
+    # Only short scalar identity/order fields need indexing; exclude free text.
+    indexed = {"key", "platform", "ident", "notify", "createdAt", "updatedAt"}
+    exclude = tuple(f for f in favorite if f not in indexed)
+    entity = _ds.Entity(key=key, exclude_from_indexes=exclude)
+    entity.update(favorite)
+    client.put(entity)
+    return favorite
+
+
+def _delete_favorite(user_id: str, key: str) -> None:
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("favorites", {}).setdefault(user_id, {}).pop(key, None)
+        return
+    client.delete(_favorite_key(client, user_id, key))
 
 
 # ── RAG knowledge base (per-user vector store on Datastore) ──────────────────
@@ -2267,14 +2331,40 @@ class MarketQuote(BaseModel):
     outcomes: List[MarketOption] = Field(default_factory=list, description="All outcomes with their probabilities.")
 
 
+class VenueCredentials(BaseModel):
+    """Bring-your-own venue credentials supplied per request.
+
+    These let a signed-in user trade their OWN Kalshi/Polymarket account. They are
+    used transiently to sign a single order and are NEVER persisted, logged, or
+    echoed back. When omitted, the server falls back to its shared-account env vars.
+    """
+    kalshi_api_key_id: Optional[str] = Field(None, max_length=200)
+    kalshi_private_key: Optional[str] = Field(None, max_length=8000, description="RSA private key PEM.")
+    kalshi_base_url: Optional[str] = Field(None, max_length=300)
+    polymarket_private_key: Optional[str] = Field(None, max_length=400, description="Wallet private key.")
+    polymarket_api_key: Optional[str] = Field(None, max_length=200)
+    polymarket_api_secret: Optional[str] = Field(None, max_length=400)
+    polymarket_api_passphrase: Optional[str] = Field(None, max_length=200)
+    polymarket_clob_host: Optional[str] = Field(None, max_length=300)
+    polymarket_chain_id: Optional[int] = Field(None, ge=0, le=1_000_000_000)
+    polymarket_signature_type: Optional[int] = Field(None, ge=0, le=10)
+    polymarket_funder_address: Optional[str] = Field(None, max_length=100)
+
+
 class TradingAccountStatus(BaseModel):
-    """Server-side trading readiness without exposing exchange secrets."""
+    """Trading readiness without exposing exchange secrets."""
     trading_enabled: bool
+    byo_trading_enabled: bool = False
     max_order_notional: float
     allow_market_orders: bool
     confirmation_phrase: str
     credential_source: str
     venues: Dict[str, Dict[str, Any]]
+
+
+class TradingAccountCheckRequest(BaseModel):
+    """Validate own-account credentials without persisting them."""
+    venue_credentials: Optional[VenueCredentials] = None
 
 
 class TradeOrderRequest(BaseModel):
@@ -2311,6 +2401,10 @@ class TradeOrderRequest(BaseModel):
     exchange_index: int = Field(0, ge=0, description="Kalshi exchange shard index; currently 0.")
     execute: bool = Field(False, description="Must be true on `/trading/orders` for live execution.")
     confirmation: Optional[str] = Field(None, max_length=80, description="Must equal the server confirmation phrase.")
+    venue_credentials: Optional[VenueCredentials] = Field(
+        None,
+        description="Own-account credentials to sign with; transient, never stored. Falls back to the server account when omitted.",
+    )
 
 
 class TradeOrderPreviewResponse(BaseModel):
@@ -2586,6 +2680,29 @@ class ChatConversation(BaseModel):
 
 class ChatConversationList(BaseModel):
     conversations: List[ChatConversation]
+
+
+class FavoriteMarket(BaseModel):
+    """A market or question a signed-in user has favourited to watch.
+
+    `key` identifies the favourite (`{platform}:{ident}` for a market, or a
+    client-chosen slug for a bare question). `notify` opts the favourite into the
+    periodic email digest (`scripts/favorites_digest.py`).
+    """
+    key: str = Field(..., min_length=1, max_length=160, pattern=r"^[A-Za-z0-9:_\-./]+$")
+    question: str = Field("", max_length=500)
+    platform: Optional[str] = Field(None, max_length=40)
+    ident: Optional[str] = Field(None, max_length=160)
+    market_url: Optional[str] = Field(None, max_length=500)
+    model_probability: Optional[float] = Field(None, ge=0.0, le=1.0)
+    market_probability: Optional[float] = Field(None, ge=0.0, le=1.0)
+    notify: bool = False
+    createdAt: Optional[int] = Field(None, ge=0)
+    updatedAt: Optional[int] = Field(None, ge=0)
+
+
+class FavoriteList(BaseModel):
+    favorites: List[FavoriteMarket]
 
 
 class RagIngestRequest(BaseModel):
@@ -3487,6 +3604,33 @@ async def trading_accounts(request: Request) -> TradingAccountStatus:
 
 
 @app.post(
+    "/trading/accounts/check",
+    tags=["Trading"],
+    summary="Validate own-account (BYO) trading credentials",
+    response_model=TradingAccountStatus,
+)
+async def trading_accounts_check(
+    req: TradingAccountCheckRequest, request: Request
+) -> TradingAccountStatus:
+    """Report readiness for caller-supplied own-account credentials, never stored.
+
+    Lets the UI confirm a connected Kalshi/Polymarket account (e.g. the RSA key
+    parses) before placing an order. Credentials are used transiently and never
+    echoed back — only boolean readiness is returned.
+    """
+    _check_rate_limit(request)
+    _require_session(request)
+    from analyzing_llm_rationale import trading
+
+    # NB: `creds` carries funds-moving secrets — never log it.
+    creds = req.venue_credentials.model_dump(exclude_none=True) if req.venue_credentials else None
+    try:
+        return TradingAccountStatus(**trading.account_status(creds))
+    except Exception as exc:
+        raise _trading_http_exception(exc) from exc
+
+
+@app.post(
     "/trading/preview",
     tags=["Trading"],
     summary="Preview a guarded prediction-market order",
@@ -3499,8 +3643,11 @@ async def trading_preview(req: TradeOrderRequest, request: Request) -> TradeOrde
     from analyzing_llm_rationale import trading
 
     try:
-        payload = req.model_dump(exclude_none=True)
-        return TradeOrderPreviewResponse(**trading.preview_order(payload))
+        # Pull credentials out of the order payload so they never reach the
+        # normalized order / response echo, and never get logged.
+        creds = req.venue_credentials.model_dump(exclude_none=True) if req.venue_credentials else None
+        payload = req.model_dump(exclude_none=True, exclude={"venue_credentials"})
+        return TradeOrderPreviewResponse(**trading.preview_order(payload, creds))
     except Exception as exc:
         raise _trading_http_exception(exc) from exc
 
@@ -3522,8 +3669,11 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
     from analyzing_llm_rationale import trading
 
     try:
-        payload = req.model_dump(exclude_none=True)
-        return TradeOrderResponse(**trading.place_order(payload, user_id=claims["sub"]))
+        creds = req.venue_credentials.model_dump(exclude_none=True) if req.venue_credentials else None
+        payload = req.model_dump(exclude_none=True, exclude={"venue_credentials"})
+        return TradeOrderResponse(
+            **trading.place_order(payload, user_id=claims["sub"], creds=creds)
+        )
     except Exception as exc:
         raise _trading_http_exception(exc) from exc
 
@@ -3729,6 +3879,71 @@ async def delete_chat_conversation(conversation_id: str, request: Request) -> Di
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _delete_conversation, claims["sub"], conversation_id)
     return {"ok": True}
+
+
+@app.get("/favorites", tags=["Auth"], response_model=FavoriteList, summary="List favourited markets")
+async def list_favorites(request: Request) -> FavoriteList:
+    """Return the signed-in user's favourited markets/questions (their watchlist)."""
+    claims = _require_session(request)
+    loop = asyncio.get_running_loop()
+    favs = await loop.run_in_executor(None, _list_favorites, claims["sub"])
+    return FavoriteList(favorites=[FavoriteMarket(**f) for f in favs])
+
+
+@app.put("/favorites/{key:path}", tags=["Auth"], response_model=FavoriteMarket, summary="Add/update a favourite")
+async def save_favorite(key: str, favorite: FavoriteMarket, request: Request) -> FavoriteMarket:
+    """Create or replace one favourite for the signed-in user."""
+    claims = _require_session(request)
+    if favorite.key != key:
+        raise HTTPException(status_code=400, detail="Favourite key path/body mismatch.")
+    now = int(datetime.now(timezone.utc).timestamp() * 1000)
+    payload = favorite.model_dump()
+    payload["updatedAt"] = now
+    payload.setdefault("createdAt", None)
+    if not payload.get("createdAt"):
+        payload["createdAt"] = now
+    loop = asyncio.get_running_loop()
+    saved = await loop.run_in_executor(None, _put_favorite, claims["sub"], payload)
+    return FavoriteMarket(**saved)
+
+
+@app.delete("/favorites/{key:path}", tags=["Auth"], summary="Remove a favourite")
+async def remove_favorite(key: str, request: Request) -> Dict[str, bool]:
+    """Delete one favourite for the signed-in user."""
+    claims = _require_session(request)
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _delete_favorite, claims["sub"], key)
+    return {"ok": True}
+
+
+@app.get("/favorites/prices", tags=["Auth"], summary="Live prices for favourited markets")
+async def favorite_prices(request: Request) -> Dict[str, Any]:
+    """Fetch current market prices for the user's favourited markets (cheap, no LLM)."""
+    claims = _require_session(request)
+    loop = asyncio.get_running_loop()
+    favs = await loop.run_in_executor(None, _list_favorites, claims["sub"])
+    from analyzing_llm_rationale import market_data as _md
+
+    async def _one(fav: Dict[str, Any]) -> tuple[str, float | None]:
+        platform = (fav.get("platform") or "").lower()
+        ident = fav.get("ident") or ""
+        if not ident:
+            return fav["key"], None
+        try:
+            if "poly" in platform:
+                q = await loop.run_in_executor(None, lambda: _md.fetch_polymarket(slug=ident))
+            elif "kalshi" in platform:
+                q = await loop.run_in_executor(None, lambda: _md.fetch_kalshi(ident))
+            else:
+                return fav["key"], None
+            prob = q.get("probability")
+            return fav["key"], float(prob) if prob is not None else None
+        except Exception:
+            return fav["key"], None
+
+    results = await asyncio.gather(*[_one(f) for f in favs if f.get("ident")])
+    prices = {k: p for k, p in results if p is not None}
+    return {"prices": prices, "generated_at": datetime.now(timezone.utc).isoformat()}
 
 
 @app.post("/rag/ingest", tags=["Knowledge"], summary="Add a document to your knowledge base")
