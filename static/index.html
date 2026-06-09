@@ -1818,54 +1818,62 @@
         <p id="kbHint" class="text-gray-400" style="font-size:10px">Sign in to add docs. They're retrieved as evidence in your forecasts.</p>
       </div>
 
-      <!-- Exchange accounts (bring-your-own trading) -->
-      <div class="config-group">
-        <p class="label" style="margin:0 0 2px">Exchange accounts</p>
-        <p class="text-gray-400" style="font-size:10px;margin:0 0 6px;line-height:1.5">
-          Connect your own Kalshi or Polymarket account to place real orders.
-          Keys are stored only in this browser, sent per order to sign, and
-          <strong>never saved on our servers</strong>. Only connect on a device you trust.
-        </p>
-        <details class="model-form" style="margin-top:0">
-          <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
-            Kalshi <span id="kalshiChip" style="font-size:10px;padding:1px 7px;border-radius:999px;background:#eee;color:#777">Not connected</span>
-          </summary>
-          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
-            <input id="vcKalshiKeyId" class="variant-select text-xs" placeholder="API key ID" autocomplete="off" />
-            <textarea id="vcKalshiPriv" class="variant-select text-xs" rows="3" placeholder="RSA private key (PEM)" style="resize:vertical;min-height:54px;font-family:monospace;font-size:11px"></textarea>
-            <input id="vcKalshiBase" class="variant-select text-xs" placeholder="Base URL (optional)" autocomplete="off" />
-            <div class="model-form-actions">
-              <button type="button" class="model-save" onclick="saveVenueCreds('kalshi')">Save &amp; verify</button>
-              <button type="button" class="model-cancel" onclick="disconnectVenue('kalshi')">Disconnect</button>
-            </div>
-          </div>
-        </details>
-        <details class="model-form" style="margin-top:6px">
-          <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
-            Polymarket <span id="polyChip" style="font-size:10px;padding:1px 7px;border-radius:999px;background:#eee;color:#777">Not connected</span>
-          </summary>
-          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
-            <input id="vcPolyPriv" type="password" class="variant-select text-xs" placeholder="Wallet private key" autocomplete="off" />
-            <input id="vcPolyKey" class="variant-select text-xs" placeholder="CLOB API key" autocomplete="off" />
-            <input id="vcPolySecret" type="password" class="variant-select text-xs" placeholder="CLOB API secret" autocomplete="off" />
-            <input id="vcPolyPass" type="password" class="variant-select text-xs" placeholder="CLOB API passphrase" autocomplete="off" />
-            <input id="vcPolyHost" class="variant-select text-xs" placeholder="CLOB host (optional)" autocomplete="off" />
-            <input id="vcPolyFunder" class="variant-select text-xs" placeholder="Funder address (optional)" autocomplete="off" />
-            <div class="model-form-actions">
-              <button type="button" class="model-save" onclick="saveVenueCreds('polymarket')">Save &amp; verify</button>
-              <button type="button" class="model-cancel" onclick="disconnectVenue('polymarket')">Disconnect</button>
-            </div>
-          </div>
-        </details>
-        <div id="venueErr" class="model-form-error" hidden></div>
-        <button type="button" class="model-add-btn" onclick="openTradeModal()">Place an order ↗</button>
-      </div>
-
       <!-- API docs -->
       <div class="pt-2 border-t border-gray-200">
         <a href="/agents" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">Agent integration ↗</a><br />
         <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">API docs ↗</a>
       </div>
+    </div>
+  </details>
+
+  <!-- Exchange accounts (bring-your-own trading) — top-level so it's easy to find -->
+  <details class="config-panel" id="tradingPanel" open>
+    <summary class="config-summary">
+      <svg class="config-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Connect exchange</span>
+      <span id="tradingPanelStatus" class="config-active"></span>
+    </summary>
+    <div class="config-body" onclick="event.stopPropagation()">
+      <p class="text-gray-400" style="font-size:10px;margin:0 0 8px;line-height:1.5">
+        Connect your own Kalshi or Polymarket account to place real orders.
+        Keys are stored only in this browser, sent per order to sign, and
+        <strong>never saved on our servers</strong>. Only connect on a device you trust.
+      </p>
+      <details class="model-form" style="margin-top:0">
+        <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
+          Kalshi <span id="kalshiChip" style="font-size:10px;padding:1px 7px;border-radius:999px;background:#eee;color:#777">Not connected</span>
+        </summary>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+          <input id="vcKalshiKeyId" class="variant-select text-xs" placeholder="API key ID" autocomplete="off" />
+          <textarea id="vcKalshiPriv" class="variant-select text-xs" rows="3" placeholder="RSA private key (PEM)" style="resize:vertical;min-height:54px;font-family:monospace;font-size:11px"></textarea>
+          <input id="vcKalshiBase" class="variant-select text-xs" placeholder="Base URL (optional)" autocomplete="off" />
+          <div class="model-form-actions">
+            <button type="button" class="model-save" onclick="saveVenueCreds('kalshi')">Save &amp; verify</button>
+            <button type="button" class="model-cancel" onclick="disconnectVenue('kalshi')">Disconnect</button>
+          </div>
+        </div>
+      </details>
+      <details class="model-form" style="margin-top:6px">
+        <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
+          Polymarket <span id="polyChip" style="font-size:10px;padding:1px 7px;border-radius:999px;background:#eee;color:#777">Not connected</span>
+        </summary>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+          <input id="vcPolyPriv" type="password" class="variant-select text-xs" placeholder="Wallet private key" autocomplete="off" />
+          <input id="vcPolyKey" class="variant-select text-xs" placeholder="CLOB API key" autocomplete="off" />
+          <input id="vcPolySecret" type="password" class="variant-select text-xs" placeholder="CLOB API secret" autocomplete="off" />
+          <input id="vcPolyPass" type="password" class="variant-select text-xs" placeholder="CLOB API passphrase" autocomplete="off" />
+          <input id="vcPolyHost" class="variant-select text-xs" placeholder="CLOB host (optional)" autocomplete="off" />
+          <input id="vcPolyFunder" class="variant-select text-xs" placeholder="Funder address (optional)" autocomplete="off" />
+          <div class="model-form-actions">
+            <button type="button" class="model-save" onclick="saveVenueCreds('polymarket')">Save &amp; verify</button>
+            <button type="button" class="model-cancel" onclick="disconnectVenue('polymarket')">Disconnect</button>
+          </div>
+        </div>
+      </details>
+      <div id="venueErr" class="model-form-error" hidden></div>
+      <button type="button" class="model-add-btn" onclick="openTradeModal()">Place an order ↗</button>
     </div>
   </details>
 
@@ -1929,6 +1937,7 @@
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openRadar()">Radar</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
+      <button type="button" class="topbar-link" onclick="openTradeModal()" style="font-weight:600;color:var(--ink)">Trade</button>
       <a href="/agents" target="_blank" class="topbar-link">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
@@ -4447,14 +4456,18 @@ function _fillVenueInputs() {
   }
 }
 function renderVenueStatus() {
+  let connected = 0;
   [['kalshi', 'kalshiChip'], ['polymarket', 'polyChip']].forEach(([platform, chipId]) => {
     const chip = document.getElementById(chipId);
-    if (!chip) return;
     const on = _venueConnected(platform);
+    if (on) connected++;
+    if (!chip) return;
     chip.textContent = on ? 'Connected ✓' : 'Not connected';
     chip.style.background = on ? '#dcfce7' : '#eee';
     chip.style.color = on ? '#15803d' : '#777';
   });
+  const summary = document.getElementById('tradingPanelStatus');
+  if (summary) summary.textContent = connected ? `${connected} connected` : '';
 }
 
 async function saveVenueCreds(platform) {
@@ -4515,6 +4528,14 @@ function _initVenueAccounts() {
 // ── Trade modal ──────────────────────────────────────────────────────────────
 function openTradeModal(prefill) {
   if (!currentUser) { openAuthModal('login'); return; }
+  // If no account is connected yet, point the user at the Connect-exchange panel.
+  if (!_venueConnected('kalshi') && !_venueConnected('polymarket')) {
+    openSidebar();
+    const panel = document.getElementById('tradingPanel');
+    if (panel) { panel.open = true; panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    _venueErr('Connect a Kalshi or Polymarket account here first, then Place an order.');
+    return;
+  }
   _trError(''); _trResetPreview();
   if (prefill && prefill.platform) {
     const p = String(prefill.platform).toLowerCase().includes('kalshi') ? 'kalshi' : 'polymarket';
@@ -4571,7 +4592,7 @@ function _validTradeInputs(body) {
   if (!(body.quantity > 0)) { _trError('Enter a quantity.'); return false; }
   if (body.platform === 'kalshi' && !body.ticker) { _trError('Enter a Kalshi ticker.'); return false; }
   if (body.platform === 'polymarket' && !body.token_id && !body.slug) { _trError('Enter a token id or slug.'); return false; }
-  if (!_venueConnected(body.platform)) { _trError(`Connect your ${body.platform} account first (Config → Exchange accounts).`); return false; }
+  if (!_venueConnected(body.platform)) { _trError(`Connect your ${body.platform} account first (sidebar → Connect exchange).`); return false; }
   return true;
 }
 
