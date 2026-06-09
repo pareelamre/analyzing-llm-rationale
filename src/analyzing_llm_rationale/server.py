@@ -3924,7 +3924,7 @@ async def favorite_prices(request: Request) -> Dict[str, Any]:
     favs = await loop.run_in_executor(None, _list_favorites, claims["sub"])
     from analyzing_llm_rationale import market_data as _md
 
-    async def _one(fav: Dict[str, Any]) -> tuple[str, float | None]:
+    async def _one(fav: Dict[str, Any]) -> tuple[str, Optional[Dict[str, Any]]]:
         platform = (fav.get("platform") or "").lower()
         ident = fav.get("ident") or ""
         if not ident:
@@ -3937,13 +3937,60 @@ async def favorite_prices(request: Request) -> Dict[str, Any]:
             else:
                 return fav["key"], None
             prob = q.get("probability")
-            return fav["key"], float(prob) if prob is not None else None
+            if prob is None:
+                return fav["key"], None
+            return fav["key"], {
+                "probability": float(prob),
+                "change_24h": q.get("price_change_24h"),
+            }
         except Exception:
             return fav["key"], None
 
     results = await asyncio.gather(*[_one(f) for f in favs if f.get("ident")])
-    prices = {k: p for k, p in results if p is not None}
-    return {"prices": prices, "generated_at": datetime.now(timezone.utc).isoformat()}
+    quotes = {k: v for k, v in results if v is not None}
+    # `prices` kept for backwards-compat; `quotes` carries price + 24h change.
+    prices = {k: v["probability"] for k, v in quotes.items()}
+    return {"prices": prices, "quotes": quotes,
+            "generated_at": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/market/quote", tags=["Markets"], summary="Quote a single market by platform+ident")
+async def market_quote(
+    request: Request,
+    platform: str = Query(..., max_length=20),
+    ident: str = Query(..., max_length=200),
+) -> Dict[str, Any]:
+    """Fetch one market's current quote (question, price, 24h change, close time)
+    so the watchlist can add a market pasted as a URL. Public + cached, no LLM."""
+    _check_rate_limit(request)
+    plat = platform.strip().lower()
+    cache_key = f"market_quote:{plat}:{ident}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return JSONResponse(cached, headers={"Cache-Control": "public, max-age=30"})
+    from analyzing_llm_rationale import market_data as _md
+
+    loop = asyncio.get_running_loop()
+    try:
+        if "poly" in plat:
+            q = await loop.run_in_executor(None, lambda: _md.fetch_polymarket(slug=ident))
+        elif "kalshi" in plat:
+            q = await loop.run_in_executor(None, lambda: _md.fetch_kalshi(ident))
+        else:
+            raise HTTPException(status_code=422, detail="platform must be 'polymarket' or 'kalshi'.")
+    except _md.MarketDataError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    payload = {
+        "platform": q.get("platform"),
+        "ident": q.get("ident") or ident,
+        "question": q.get("question"),
+        "market_url": q.get("market_url"),
+        "probability": q.get("probability"),
+        "change_24h": q.get("price_change_24h"),
+        "close_time": q.get("close_time"),
+    }
+    _cache_set(cache_key, payload, 30)
+    return JSONResponse(payload, headers={"Cache-Control": "public, max-age=30"})
 
 
 @app.post("/rag/ingest", tags=["Knowledge"], summary="Add a document to your knowledge base")

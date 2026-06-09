@@ -1285,12 +1285,37 @@
     .fav-star { background: transparent; border: 0; cursor: pointer; font-size: 15px; line-height: 1; color: #cbd5e1; padding: 0; transition: color var(--dur-med), transform var(--dur-med); }
     .fav-star:hover { transform: scale(1.18); color: #f59e0b; }
     .fav-star.on { color: #f59e0b; }
-    .wl-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    /* Kite-style watchlist rail */
+    .wl-body { padding-top: 8px; }
+    .wl-search-row { display: flex; gap: 6px; align-items: center; }
+    .wl-search { flex: 1; font-size: 12px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--ink); }
+    .wl-search:focus { outline: none; border-color: var(--ink); }
+    .wl-add-btn { font-size: 11px; font-weight: 600; padding: 6px 10px; border-radius: 8px; border: 0; background: var(--ink); color: #fff; cursor: pointer; }
+    .wl-search-msg { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+    .wl-list { margin-top: 6px; display: flex; flex-direction: column; max-height: 46vh; overflow-y: auto; }
+    .wl-row { display: flex; align-items: center; gap: 8px; padding: 7px 4px; border-bottom: 1px solid var(--border); position: relative; }
     .wl-row:last-child { border-bottom: 0; }
+    .wl-row:hover { background: #fafafa; }
     .wl-meta { flex: 1; min-width: 0; }
-    .wl-q { font-size: 12px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .wl-sub { font-size: 10px; color: var(--text-dim); }
-    .wl-price { font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .wl-q { font-size: 12px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+    .wl-sub { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+    .wl-quote { text-align: right; white-space: nowrap; }
+    .wl-price { font-size: 13px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .wl-chg { font-size: 10px; font-variant-numeric: tabular-nums; }
+    .wl-up { color: #15803d; }
+    .wl-down { color: #dc2626; }
+    .wl-flat { color: var(--text-dim); }
+    @keyframes wl-flash-up { 0% { background: rgba(21,128,61,.16); } 100% { background: transparent; } }
+    @keyframes wl-flash-down { 0% { background: rgba(220,38,38,.16); } 100% { background: transparent; } }
+    .wl-row.flash-up { animation: wl-flash-up .7s ease-out; }
+    .wl-row.flash-down { animation: wl-flash-down .7s ease-out; }
+    .wl-actions { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: none; gap: 4px; background: #fafafa; padding-left: 8px; }
+    .wl-row:hover .wl-actions { display: flex; }
+    .wl-act { font-size: 10px; font-weight: 600; padding: 3px 7px; border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--ink); cursor: pointer; }
+    .wl-act:hover { border-color: var(--ink); }
+    .wl-act.buy { background: #15803d; color: #fff; border-color: #15803d; }
+    .wl-fullpage-link { margin-top: 8px; width: 100%; text-align: center; font-size: 11px; color: var(--text-dim); background: transparent; border: 1px dashed var(--border-2); border-radius: 8px; padding: 6px; cursor: pointer; }
+    .wl-fullpage-link:hover { color: var(--ink); border-color: var(--ink); }
     .model-cancel { flex: 1; background: transparent; color: var(--text-dim); border: 1px solid var(--border-2); border-radius: 999px; padding: 8px; font-size: 12px; cursor: pointer; }
     .model-cancel:hover { color: var(--ink); border-color: var(--ink); }
 
@@ -1565,6 +1590,7 @@
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openRadar()">Radar</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
+      <button type="button" class="topbar-link" onclick="openWatchlistPage()">Watchlist</button>
       <a href="/agents" target="_blank" class="topbar-link nav-collapse">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link nav-collapse">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link nav-collapse">GitHub</a>
@@ -1886,13 +1912,16 @@
       <span>Watchlist</span>
       <span id="watchlistCount" class="config-active"></span>
     </summary>
-    <div class="config-body" onclick="event.stopPropagation()">
-      <div class="flex items-center justify-between mb-1">
-        <p class="text-gray-400" style="font-size:10px;margin:0">Star a market on the Edge board to watch it here.</p>
-        <button type="button" class="model-cancel" style="font-size:10px;padding:2px 8px" onclick="refreshWatchlist()">Refresh</button>
+    <div class="config-body wl-body" onclick="event.stopPropagation()">
+      <div class="wl-search-row">
+        <input id="wlSearch" class="wl-search" placeholder="Search list, or paste a market URL"
+               autocomplete="off" oninput="onWatchSearch()" onkeydown="onWatchSearchKey(event)" />
+        <button type="button" id="wlAddBtn" class="wl-add-btn" title="Add pasted market" hidden onclick="addFromSearch()">Add</button>
       </div>
-      <div id="watchlistList" class="model-list"></div>
-      <p id="watchlistHint" class="text-gray-400" style="font-size:10px;margin-top:4px">Sign in to sync your watchlist and get email updates.</p>
+      <div id="wlSearchMsg" class="wl-search-msg" hidden></div>
+      <div id="watchlistList" class="wl-list"></div>
+      <button type="button" class="wl-fullpage-link" onclick="openWatchlistPage()">Open full watchlist →</button>
+      <p id="watchlistHint" class="text-gray-400" style="font-size:10px;margin-top:4px">Star a market on the Edge board, or paste a Polymarket/Kalshi URL above. Sign in to sync + get email updates.</p>
     </div>
   </details>
 
@@ -1937,6 +1966,7 @@
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openRadar()">Radar</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
+      <button type="button" class="topbar-link" onclick="openWatchlistPage()">Watchlist</button>
       <button type="button" class="topbar-link" onclick="openTradeModal()" style="font-weight:600;color:var(--ink)">Trade</button>
       <a href="/agents" target="_blank" class="topbar-link">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
@@ -2166,6 +2196,20 @@
     <button id="radarCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeRadar()">Close</button>
   </div>
   <div id="radarBody" class="tr-body" data-lenis-prevent></div>
+</div>
+
+<div id="watchOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="watchDialogTitle" aria-hidden="true" tabindex="-1">
+  <div class="tr-head">
+    <div class="flex items-center gap-2">
+      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
+        <span class="logo-dot"></span>
+        <span class="brand text-lg">Foresea</span>
+      </button>
+      <h2 id="watchDialogTitle" class="sr-only">Foresea watchlist</h2>
+    </div>
+    <button id="watchCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeWatchlistPage()">Close</button>
+  </div>
+  <div id="watchBody" class="tr-body" data-lenis-prevent></div>
 </div>
 
 <script>
@@ -3334,6 +3378,8 @@ const _VIEW_URL = {
   'radar-app':     '#radar-app',
   'edge-landing':  '#edge',
   'edge-app':      '#edge-app',
+  'watch-landing': '#watchlist',
+  'watch-app':     '#watchlist-app',
 };
 const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
 
@@ -3653,6 +3699,82 @@ async function loadEdgeBoard() {
     host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Edge board is not available yet.</p></div>';
   }
 }
+
+// ── Watchlist full page ───────────────────────────────────────────────────────
+let _watchPriceTimer = null;
+async function openWatchlistPage({ updateHistory = true } = {}) {
+  const ov = document.getElementById('watchOverlay');
+  if (ov.classList.contains('open')) return;
+  lastFocusedBeforeDialog = document.activeElement;
+  ov.classList.add('open');
+  ov.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  if (updateHistory) setHistoryState(currentView === 'app' ? 'watch-app' : 'watch-landing');
+  if (window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
+  renderWatchlistPage();
+  await _syncFavoritesFromServer();
+  renderWatchlistPage();
+  refreshWatchlist();
+  _watchPriceTimer = setInterval(refreshWatchlist, 25000);
+  setTimeout(() => document.getElementById('watchCloseBtn')?.focus(), 0);
+}
+function closeWatchlistPage({ updateHistory = true } = {}) {
+  clearInterval(_watchPriceTimer);
+  _watchPriceTimer = null;
+  const ov = document.getElementById('watchOverlay');
+  if (!ov.classList.contains('open')) return;
+  if (updateHistory && (history.state?.view === 'watch-app' || history.state?.view === 'watch-landing')) {
+    history.back();
+    return;
+  }
+  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
+  const finish = () => {
+    ov.classList.remove('open');
+    ov.setAttribute('aria-hidden', 'true');
+    ov.style.opacity = '';
+    document.body.style.overflow = inApp ? 'hidden' : 'auto';
+    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
+  };
+  if (window.Motion && !prefersReduced()) {
+    Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
+  } else { finish(); }
+}
+function renderWatchlistPage() {
+  const host = document.getElementById('watchBody');
+  if (!host) return;
+  const favs = _favList();
+  if (!favs.length) {
+    host.innerHTML = `<div class="tr-inner"><h3 class="eb-h" style="margin-top:0">Watchlist</h3>
+      <p class="text-sm text-gray-500">No markets watched yet. Star a market on the Edge board, or paste a Polymarket/Kalshi URL in the sidebar watchlist.</p></div>`;
+    return;
+  }
+  const rows = favs.map(f => {
+    const model = f.model_probability != null ? Math.round(f.model_probability * 100) + '%' : '—';
+    const edge = (f.model_probability != null && f.market_probability != null)
+      ? `<b style="color:${(f.model_probability - f.market_probability) >= 0 ? '#0a7' : '#c33'}">${((f.model_probability - f.market_probability) * 100 >= 0 ? '+' : '')}${Math.round((f.model_probability - f.market_probability) * 100)}</b>`
+      : '—';
+    const link = f.market_url ? `href="${escHtml(f.market_url)}" target="_blank" rel="noopener"` : '';
+    const keyJson = JSON.stringify({ key: f.key }).replace(/'/g, '&#39;');
+    return `<tr class="eb-row" data-key="${escAttr(f.key)}" data-q="${escAttr(f.question || f.key)}">
+      <td style="max-width:340px"><a ${link} style="color:inherit">${escHtml((f.question || f.key).slice(0, 110))}</a></td>
+      <td>${escHtml(f.platform || '')}</td>
+      <td>${model}</td>
+      <td class="wl-price" data-price>—</td>
+      <td data-chg>${_chgHtml(null)}</td>
+      <td>${edge}</td>
+      <td style="white-space:nowrap">
+        <button type="button" class="wl-act buy" onclick='_wlTrade(${keyJson})'>Trade</button>
+        <button type="button" class="wl-act" onclick='_wlAnalyze(${keyJson})'>Analyze</button>
+        <button type="button" class="wl-act" onclick='_wlRemove(${keyJson})'>✕</button>
+      </td></tr>`;
+  }).join('');
+  host.innerHTML = `<div class="tr-inner" id="watchPageBody">
+    <h3 class="eb-h" style="margin-top:0">Watchlist <span style="font-weight:400;color:#999;font-size:.8rem">· ${favs.length} markets · live</span></h3>
+    <div class="md-table-wrap"><table class="eb-table">
+      <thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Market</th><th>Chg</th><th>Edge</th><th>Actions</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>`;
+}
+
 async function loadLandingPanels() {
   try {
     const r = await fetch('/edge-board');
@@ -4039,6 +4161,7 @@ function applyHistoryState(state) {
   closeTrackRecord({ updateHistory: false });
   closeRadar({ updateHistory: false });
   closeEdgeBoard({ updateHistory: false });
+  closeWatchlistPage({ updateHistory: false });
 
   if (view === 'app') {
     launchApp({ updateHistory: false });
@@ -4060,6 +4183,12 @@ function applyHistoryState(state) {
   } else if (view === 'edge-landing') {
     showLanding({ updateHistory: false });
     openEdgeBoard({ updateHistory: false });
+  } else if (view === 'watch-app') {
+    launchApp({ updateHistory: false });
+    openWatchlistPage({ updateHistory: false });
+  } else if (view === 'watch-landing') {
+    showLanding({ updateHistory: false });
+    openWatchlistPage({ updateHistory: false });
   } else {
     showLanding({ updateHistory: false });
   }
@@ -4071,10 +4200,12 @@ document.addEventListener('keydown', event => {
   const track = document.getElementById('trackOverlay');
   const radar = document.getElementById('radarOverlay');
   const edge = document.getElementById('edgeOverlay');
+  const watch = document.getElementById('watchOverlay');
   const sidebar = document.getElementById('sidebar');
   const trackOpen = track.classList.contains('open');
   const radarOpen = radar.classList.contains('open');
   const edgeOpen = edge.classList.contains('open');
+  const watchOpen = watch.classList.contains('open');
   const sidebarOpen = sidebar.classList.contains('open');
 
   if (event.key === 'Escape') {
@@ -4087,6 +4218,9 @@ document.addEventListener('keydown', event => {
     } else if (edgeOpen) {
       event.preventDefault();
       closeEdgeBoard();
+    } else if (watchOpen) {
+      event.preventDefault();
+      closeWatchlistPage();
     } else if (sidebarOpen) {
       event.preventDefault();
       closeSidebar();
@@ -4100,6 +4234,8 @@ document.addEventListener('keydown', event => {
     trapFocus(event, track);
   } else if (edgeOpen) {
     trapFocus(event, edge);
+  } else if (watchOpen) {
+    trapFocus(event, watch);
   } else if (sidebarOpen) {
     trapFocus(event, sidebar);
   }
@@ -4713,54 +4849,186 @@ function _refreshEdgeStars() {
   });
 }
 
+let _wlPrev = {};        // key -> last probability (for tick flash)
+let _wlPollTimer = null;
+
+function _favList() {
+  return Object.values(_loadFavorites()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+// Change in percentage points: prefer the venue's 24h move, else move since added.
+function _wlChange(q, fav) {
+  if (q && q.change_24h != null) return q.change_24h * 100;
+  if (q && fav && fav.market_probability != null) return (q.probability - fav.market_probability) * 100;
+  return null;
+}
+function _chgHtml(chgPts) {
+  if (chgPts == null) return '<span class="wl-chg wl-flat">—</span>';
+  const cls = chgPts > 0.05 ? 'wl-up' : chgPts < -0.05 ? 'wl-down' : 'wl-flat';
+  const arrow = chgPts > 0.05 ? '▲' : chgPts < -0.05 ? '▼' : '·';
+  return `<span class="wl-chg ${cls}">${arrow}${Math.abs(chgPts).toFixed(1)}</span>`;
+}
+
 function renderWatchlist() {
   const host = document.getElementById('watchlistList');
   if (!host) return;
-  const favs = Object.values(_loadFavorites()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const favs = _favList();
   const countEl = document.getElementById('watchlistCount');
   if (countEl) countEl.textContent = favs.length ? String(favs.length) : '';
-  const hint = document.getElementById('watchlistHint');
-  if (hint) hint.hidden = !!currentUser && favs.length > 0;
   if (!favs.length) {
-    host.innerHTML = '<p class="text-gray-400" style="font-size:11px">No markets watched yet.</p>';
+    host.innerHTML = '<p class="text-gray-400" style="font-size:11px;padding:8px 0">No markets watched yet. Paste a URL above or star one on the Edge board.</p>';
     return;
   }
   host.innerHTML = favs.map(f => {
-    const sub = [f.platform, f.market_probability != null ? `crowd ${Math.round(f.market_probability * 100)}%` : '',
-      f.model_probability != null ? `model ${Math.round(f.model_probability * 100)}%` : '']
-      .filter(Boolean).join(' · ');
-    const q = escHtml((f.question || f.key).slice(0, 80));
-    const link = f.market_url ? `href="${escHtml(f.market_url)}" target="_blank" rel="noopener"` : '';
-    return `<div class="wl-row" data-key="${escAttr(f.key)}">
+    const q = escHtml((f.question || f.key).slice(0, 90));
+    const keyJson = JSON.stringify({ key: f.key }).replace(/'/g, '&#39;');
+    return `<div class="wl-row" data-key="${escAttr(f.key)}" data-q="${escAttr(f.question || f.key)}">
       <div class="wl-meta">
-        <div class="wl-q"><a ${link} style="color:inherit;text-decoration:none">${q}</a></div>
-        <div class="wl-sub">${escHtml(sub)}</div>
+        <div class="wl-q">${q}</div>
+        <div class="wl-sub">${escHtml(f.platform || '')}</div>
       </div>
-      <span class="wl-price" data-price></span>
-      <button type="button" class="fav-star on" title="Remove" onclick='toggleFavorite(${JSON.stringify({ key: f.key }).replace(/'/g, "&#39;")}, null); this.closest(".wl-row").remove();'>★</button>
+      <div class="wl-quote">
+        <div class="wl-price" data-price>—</div>
+        <div data-chg>${_chgHtml(null)}</div>
+      </div>
+      <div class="wl-actions">
+        <button type="button" class="wl-act buy" title="Trade" onclick='_wlTrade(${keyJson})'>Trade</button>
+        <button type="button" class="wl-act" title="Analyze" onclick='_wlAnalyze(${keyJson})'>Analyze</button>
+        <button type="button" class="wl-act" title="Remove" onclick='_wlRemove(${keyJson})'>✕</button>
+      </div>
     </div>`;
   }).join('');
+  onWatchSearch();  // re-apply any active filter
+}
+
+// Update price + change cells for one quote within a container (rail or page).
+function _applyQuote(container, key, q, fav, flash) {
+  const rows = container.querySelectorAll(`[data-key="${CSS.escape(key)}"]`);
+  rows.forEach(row => {
+    const priceEl = row.querySelector('[data-price]');
+    const chgEl = row.querySelector('[data-chg]');
+    if (priceEl) priceEl.textContent = Math.round(q.probability * 100) + '¢';
+    if (chgEl) chgEl.innerHTML = _chgHtml(_wlChange(q, fav));
+    if (flash && _wlPrev[key] != null && row.classList) {
+      const d = q.probability - _wlPrev[key];
+      if (Math.abs(d) > 0.0001) {
+        const cls = d > 0 ? 'flash-up' : 'flash-down';
+        row.classList.remove('flash-up', 'flash-down');
+        void row.offsetWidth;  // restart the animation
+        row.classList.add(cls);
+      }
+    }
+  });
+}
+
+async function _fetchQuotes() {
+  if (!currentUser) return null;
+  try {
+    const r = await fetch('/favorites/prices', { headers: authHeaders() });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (_) { return null; }
 }
 
 async function refreshWatchlist() {
-  renderWatchlist();
-  if (!currentUser) return;
+  const host = document.getElementById('watchlistList');
+  if (!host) return;
+  const d = await _fetchQuotes();
+  if (!d) return;
+  const quotes = d.quotes || {};
+  const favsByKey = _loadFavorites();
+  Object.entries(quotes).forEach(([key, q]) => _applyQuote(host, key, q, favsByKey[key], true));
+  // Refresh the full page too if it's open.
+  const page = document.getElementById('watchPageBody');
+  if (page) Object.entries(quotes).forEach(([key, q]) => _applyQuote(page, key, q, favsByKey[key], true));
+  Object.entries(quotes).forEach(([key, q]) => { _wlPrev[key] = q.probability; });
+}
+
+// ── Watchlist search + add-by-URL ─────────────────────────────────────────────
+function _wlSearchMsg(msg) {
+  const el = document.getElementById('wlSearchMsg');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+function _parseMarketUrl(text) {
+  const t = (text || '').trim();
+  let u;
+  try { u = new URL(t); } catch { return null; }
+  const host = u.hostname.toLowerCase();
+  const segs = u.pathname.split('/').filter(Boolean);
+  if (!segs.length) return null;
+  if (host.includes('polymarket')) return { platform: 'polymarket', ident: segs[segs.length - 1] };
+  if (host.includes('kalshi')) return { platform: 'kalshi', ident: segs[segs.length - 1].toUpperCase() };
+  return null;
+}
+function onWatchSearch() {
+  const v = (document.getElementById('wlSearch')?.value || '').trim();
+  const addBtn = document.getElementById('wlAddBtn');
+  if (addBtn) addBtn.hidden = !_parseMarketUrl(v);
+  const q = v.toLowerCase();
+  document.querySelectorAll('#watchlistList .wl-row').forEach(row => {
+    const txt = (row.getAttribute('data-q') || '').toLowerCase();
+    const isUrl = !!_parseMarketUrl(v);
+    row.style.display = (!q || isUrl || txt.includes(q)) ? '' : 'none';
+  });
+}
+function onWatchSearchKey(e) {
+  if (e.key === 'Enter' && _parseMarketUrl(e.target.value)) { e.preventDefault(); addFromSearch(); }
+}
+async function addFromSearch() {
+  const input = document.getElementById('wlSearch');
+  const parsed = _parseMarketUrl(input.value);
+  if (!parsed || !parsed.ident) { _wlSearchMsg('Paste a full Polymarket or Kalshi market URL.'); return; }
+  const key = `${parsed.platform}:${parsed.ident}`;
+  if (_isFav(key)) { _wlSearchMsg('Already in your watchlist.'); return; }
+  _wlSearchMsg('Fetching market…');
   try {
-    const r = await fetch('/favorites/prices', { headers: authHeaders() });
-    if (!r.ok) return;
-    const d = await r.json();
-    const prices = d.prices || {};
-    document.querySelectorAll('#watchlistList .wl-row').forEach(row => {
-      const key = row.getAttribute('data-key');
-      const el = row.querySelector('[data-price]');
-      if (el && prices[key] != null) el.textContent = Math.round(prices[key] * 100) + '¢';
-    });
-  } catch (_) { /* prices are best-effort */ }
+    const r = await fetch(`/market/quote?platform=${encodeURIComponent(parsed.platform)}&ident=${encodeURIComponent(parsed.ident)}`);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { _wlSearchMsg(d.detail || 'Could not find that market.'); return; }
+    await toggleFavorite({
+      key, question: d.question || '', platform: d.platform || parsed.platform,
+      ident: d.ident || parsed.ident, market_url: d.market_url || input.value.trim(),
+      market_probability: d.probability ?? null, model_probability: null,
+    }, null);
+    input.value = ''; _wlSearchMsg(''); document.getElementById('wlAddBtn').hidden = true;
+    renderWatchlist(); refreshWatchlist();
+  } catch (_) { _wlSearchMsg('Could not reach Foresea.'); }
+}
+
+// ── Watchlist row actions ─────────────────────────────────────────────────────
+function _wlTrade(ref) {
+  const f = _loadFavorites()[ref.key];
+  if (f && f.platform && f.ident) openTradeModal({ platform: f.platform, ident: f.ident });
+  else openTradeModal();
+}
+function _wlAnalyze(ref) {
+  const f = _loadFavorites()[ref.key];
+  if (!f || !f.question) return;
+  if (typeof closeWatchlistPage === 'function') closeWatchlistPage({ updateHistory: false });
+  closeSidebar();
+  if (currentView !== 'app') launchApp();
+  startForecast(f.question);
+}
+function _wlRemove(ref) {
+  toggleFavorite({ key: ref.key }, null);
+  renderWatchlist();
+  if (document.getElementById('watchOverlay')?.classList.contains('open')) renderWatchlistPage();
+}
+
+function _wlStartPolling() {
+  _wlStopPolling();
+  refreshWatchlist();
+  _wlPollTimer = setInterval(refreshWatchlist, 25000);
+}
+function _wlStopPolling() {
+  if (_wlPollTimer) { clearInterval(_wlPollTimer); _wlPollTimer = null; }
 }
 
 function _initFavorites() {
   renderWatchlist();
   _syncFavoritesFromServer();
+  _wlStartPolling();
 }
 
 // ── Agent skills manager ──────────────────────────────────────────────────────
