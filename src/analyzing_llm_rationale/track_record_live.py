@@ -151,6 +151,7 @@ async def record_snapshots(
     max_discovery_lead_days: float = 365.0,
     seed_idents: Optional[List[Tuple[str, str]]] = None,
     price_drift_threshold: float = PRICE_DRIFT_THRESHOLD,
+    reforecast_each_tick: bool = False,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
     agent-enrolled ``seed_idents`` and newly-discovered markets, capturing the live
@@ -225,7 +226,7 @@ async def record_snapshots(
         for model in model_list:
             key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{today}")
             existing = client.get(key)
-            if existing is not None:
+            if existing is not None and not reforecast_each_tick:
                 # Skip unless the live price has drifted significantly since the snapshot.
                 # A large move signals new information the original forecast didn't see;
                 # re-forecasting keeps the edge board paired: current model vs current price.
@@ -234,6 +235,9 @@ async def record_snapshots(
                 if abs(current_prob - last_market_prob) <= price_drift_threshold:
                     continue  # price stable — today's snapshot is still good
                 # Fall through: price drifted — re-forecast and overwrite today's snapshot.
+            # reforecast_each_tick=True: always re-run the forecast so the edge board
+            # reflects the model's *current* opinion (matches live /predict), not a
+            # snapshot taken earlier today. Overwrites today's snapshot for this model.
             try:
                 scored = await forecast_fn(quote, evidence_top_k, model)
             except Exception:

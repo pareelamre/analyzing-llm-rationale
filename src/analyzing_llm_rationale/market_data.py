@@ -148,7 +148,10 @@ def resolve_polymarket(slug: str) -> Optional[int]:
     """
     if not slug:
         return None
-    data = _get_json(POLYMARKET_GAMMA_URL, params={"slug": slug})
+    # The Gamma /markets endpoint excludes closed markets by default, so a plain
+    # slug lookup returns nothing once a market resolves — which silently blocked
+    # all resolution. closed=true is required to see a settled market.
+    data = _get_json(POLYMARKET_GAMMA_URL, params={"slug": slug, "closed": "true"})
     if isinstance(data, list):
         market = data[0] if data else None
     elif isinstance(data, dict):

@@ -136,6 +136,23 @@ class TrajectoryTests(unittest.TestCase):
         snaps = [k for k in self.client.store if k[0] == trl.SNAPSHOT_KIND]
         self.assertEqual(len(snaps), 4)
 
+    def test_reforecast_each_tick_overwrites_same_day_snapshot(self):
+        far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        self.assertEqual(self._record(md, "2026-06-03"), 2)  # initial A + B
+        # Same day, model opinion changed; with reforecast_each_tick it re-runs
+        # and overwrites today's snapshot rather than skipping.
+        self.model_probs = {"Will A happen?": 0.55, "Will B happen?": 0.45}
+        with mock.patch.object(trl, "_today", return_value="2026-06-03"):
+            again = asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m",
+                per_venue=3, reforecast_each_tick=True))
+        self.assertEqual(again, 2)  # both re-forecast, not skipped
+        snaps = [e for (k, _i), e in self.client.store.items() if k == trl.SNAPSHOT_KIND]
+        self.assertEqual(len(snaps), 2)  # still one per (market, model, day)
+        a = next(e for e in snaps if e.get("question") == "Will A happen?")
+        self.assertAlmostEqual(a["model_probability"], 0.55)  # refreshed
+
     def test_resolution_scores_all_snapshots_and_buckets_by_horizon(self):
         far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)

@@ -65,6 +65,12 @@ TRACK_RECORD_TOKEN = os.environ.get("TRACK_RECORD_TOKEN") or None
 # today's snapshot. Prevents stale model probability from being paired with a
 # current price on the edge board. Set to 1.0 to disable drift re-forecasting.
 PRICE_DRIFT_THRESHOLD = float(os.environ.get("PRICE_DRIFT_THRESHOLD") or trl.PRICE_DRIFT_THRESHOLD)
+# Re-run the LLM forecast for every tracked-open market on every tick (not just
+# the daily first pass / price-drift), so the edge board always reflects the
+# model's current opinion and matches live /predict. Default on. Each tick then
+# costs one /predict per (open market × model) — same load as today's daily pass.
+REFORECAST_EACH_TICK = (os.environ.get("REFORECAST_EACH_TICK", "1").strip().lower()
+                        in ("1", "true", "yes", "on"))
 
 _PREDICT_TIMEOUT_S = 120
 _PREDICT_RETRIES = 3
@@ -164,7 +170,8 @@ async def main() -> int:
     recorded = await trl.record_snapshots(
         store, market_data, forecast_fn,
         models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE,
-        seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD)
+        seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
+        reforecast_each_tick=REFORECAST_EACH_TICK)
     # Flip enrolled markets out of the pending queue (and let the server prune).
     _mark_enrolled([f"{p}:{i}" for p, i in seeds])
     agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)
