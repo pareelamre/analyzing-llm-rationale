@@ -214,7 +214,8 @@ def fetch_polymarket(slug: Optional[str] = None, market_id: Optional[str] = None
 
 def list_polymarket(limit: int = 5, query: Optional[str] = None,
                     min_close_days: Optional[float] = None,
-                    max_close_days: Optional[float] = None) -> List[Dict[str, Any]]:
+                    max_close_days: Optional[float] = None,
+                    contested_only: bool = True) -> List[Dict[str, Any]]:
     """List liquid, contested binary Polymarket markets (for the edge scan).
 
     Pulls high-volume markets, then keeps binary Yes/No markets priced in the
@@ -245,7 +246,7 @@ def list_polymarket(limit: int = 5, query: Optional[str] = None,
         prob = quote["probability"]
         if prob is None or labels != {"yes", "no"}:
             continue
-        if not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
+        if contested_only and not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
             continue
         if want and want not in (quote["question"] or "").lower():
             continue
@@ -314,7 +315,8 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
 
 def list_kalshi(limit: int = 5, query: Optional[str] = None,
                 min_close_days: Optional[float] = None,
-                max_close_days: Optional[float] = None) -> List[Dict[str, Any]]:
+                max_close_days: Optional[float] = None,
+                contested_only: bool = True) -> List[Dict[str, Any]]:
     """List open, priced Kalshi markets via the ``/events`` endpoint.
 
     The flat ``/markets?status=open`` listing is saturated by auto-generated
@@ -339,7 +341,9 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
                 continue  # skip multi-leg parlay markets
             quote = _kalshi_quote(market)
             prob = quote["probability"]
-            if prob is None or not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
+            if prob is None:
+                continue
+            if contested_only and not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
                 continue
             sub = (market.get("yes_sub_title") or "").strip()
             question = f"{title} — {sub}" if (sub and sub.lower() not in title.lower()) else (title or quote["question"])

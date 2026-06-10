@@ -214,6 +214,18 @@
     .conv-item:hover .conv-delete { opacity: 1; }
     .conv-delete:hover { color: var(--ink); }
 
+    /* Sidebar primary navigation (nav-first, not forms) */
+    .side-nav { display: flex; flex-direction: column; gap: 2px; margin: 8px 0 4px; }
+    .side-nav-link {
+      display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+      border-radius: 12px; padding: 8px 12px; font-size: 13px; font-weight: 500;
+      color: var(--text-dim); background: transparent; border: 0; cursor: pointer;
+      transition: background var(--dur-med), color var(--dur-med);
+    }
+    .side-nav-link:hover { background: #ececef; color: var(--ink); }
+    .side-nav-ico { width: 16px; text-align: center; opacity: .8; font-size: 13px; }
+    .side-nav-ext { margin-left: auto; color: var(--text-mute); font-size: 11px; }
+
     /* Brand wordmark */
     .brand {
       font-weight: 700;
@@ -1316,6 +1328,21 @@
     .wl-act.buy { background: #15803d; color: #fff; border-color: #15803d; }
     .wl-fullpage-link { margin-top: 8px; width: 100%; text-align: center; font-size: 11px; color: var(--text-dim); background: transparent; border: 1px dashed var(--border-2); border-radius: 8px; padding: 6px; cursor: pointer; }
     .wl-fullpage-link:hover { color: var(--ink); border-color: var(--ink); }
+    .wl-foot { display: flex; gap: 6px; margin-top: 8px; }
+    .wl-foot-btn { flex: 1; font-size: 11px; font-weight: 600; padding: 7px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--ink); cursor: pointer; }
+    .wl-foot-btn:hover { border-color: var(--ink); }
+    .wl-foot-btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+    /* Search-and-add browser (watchlist view) */
+    .wlm-search { width: 100%; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; }
+    .wlm-results { display: flex; flex-direction: column; gap: 0; margin-bottom: 18px; }
+    .wlm-row { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-bottom: 1px solid var(--border); }
+    .wlm-row:hover { background: #fafafa; }
+    .wlm-q { flex: 1; min-width: 0; font-size: 13px; color: var(--ink); }
+    .wlm-q .wlm-venue { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+    .wlm-odds { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .wlm-add { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--ink); font-size: 16px; line-height: 1; cursor: pointer; flex-shrink: 0; }
+    .wlm-add:hover { background: #15803d; color: #fff; border-color: #15803d; }
+    .wlm-add.added { background: #dcfce7; color: #15803d; border-color: #bbf7d0; cursor: default; }
     .model-cancel { flex: 1; background: transparent; color: var(--text-dim); border: 1px solid var(--border-2); border-radius: 999px; padding: 8px; font-size: 12px; cursor: pointer; }
     .model-cancel:hover { color: var(--ink); border-color: var(--ink); }
 
@@ -1590,7 +1617,7 @@
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openRadar()">Radar</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
-      <button type="button" class="topbar-link" onclick="openWatchlistPage()">Watchlist</button>
+      <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
       <a href="/agents" target="_blank" class="topbar-link nav-collapse">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link nav-collapse">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link nav-collapse">GitHub</a>
@@ -1706,6 +1733,16 @@
   </div>
 
   <button type="button" class="new-chat-btn text-left" onclick="newConversation()">New market brief</button>
+
+  <!-- Primary navigation -->
+  <nav class="side-nav" aria-label="Sections">
+    <button type="button" class="side-nav-link" onclick="openWatchlist()">
+      <span class="side-nav-ico">☆</span>Watchlist<span class="side-nav-ext">↗</span>
+    </button>
+    <button type="button" class="side-nav-link" onclick="openEdgeBoard()"><span class="side-nav-ico">⚡</span>Edge board</button>
+    <button type="button" class="side-nav-link" onclick="openTrackRecord()"><span class="side-nav-ico">◷</span>Track record</button>
+    <button type="button" class="side-nav-link" onclick="openRadar()"><span class="side-nav-ico">◎</span>Radar</button>
+  </nav>
 
   <!-- Conversation list -->
   <div class="flex-1 scrollable flex flex-col gap-1 min-h-0" data-lenis-prevent>
@@ -1913,15 +1950,12 @@
       <span id="watchlistCount" class="config-active"></span>
     </summary>
     <div class="config-body wl-body" onclick="event.stopPropagation()">
-      <div class="wl-search-row">
-        <input id="wlSearch" class="wl-search" placeholder="Search list, or paste a market URL"
-               autocomplete="off" oninput="onWatchSearch()" onkeydown="onWatchSearchKey(event)" />
-        <button type="button" id="wlAddBtn" class="wl-add-btn" title="Add pasted market" hidden onclick="addFromSearch()">Add</button>
-      </div>
-      <div id="wlSearchMsg" class="wl-search-msg" hidden></div>
       <div id="watchlistList" class="wl-list"></div>
-      <button type="button" class="wl-fullpage-link" onclick="openWatchlistPage()">Open full watchlist →</button>
-      <p id="watchlistHint" class="text-gray-400" style="font-size:10px;margin-top:4px">Star a market on the Edge board, or paste a Polymarket/Kalshi URL above. Sign in to sync + get email updates.</p>
+      <div class="wl-foot">
+        <button type="button" class="wl-foot-btn primary" onclick="openWatchlistPage()">＋ Add markets</button>
+        <button type="button" class="wl-foot-btn" onclick="openWatchlist()">Open ↗</button>
+      </div>
+      <p id="watchlistHint" class="text-gray-400" style="font-size:10px;margin-top:4px">Sign in to sync + get email updates.</p>
     </div>
   </details>
 
@@ -1966,7 +2000,7 @@
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openRadar()">Radar</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
-      <button type="button" class="topbar-link" onclick="openWatchlistPage()">Watchlist</button>
+      <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
       <button type="button" class="topbar-link" onclick="openTradeModal()" style="font-weight:600;color:var(--ink)">Trade</button>
       <a href="/agents" target="_blank" class="topbar-link">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
@@ -3719,6 +3753,7 @@ async function openWatchlistPage({ updateHistory = true } = {}) {
   setTimeout(() => document.getElementById('watchCloseBtn')?.focus(), 0);
 }
 function closeWatchlistPage({ updateHistory = true } = {}) {
+  if (document.body.classList.contains('standalone-watch')) { window.location.href = '/'; return; }
   clearInterval(_watchPriceTimer);
   _watchPriceTimer = null;
   const ov = document.getElementById('watchOverlay');
@@ -3739,13 +3774,31 @@ function closeWatchlistPage({ updateHistory = true } = {}) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
 }
+// Full page = a persistent add-browser shell + a separately-rendered watched
+// table (so adding/removing doesn't reset the search box).
 function renderWatchlistPage() {
   const host = document.getElementById('watchBody');
   if (!host) return;
+  host.innerHTML = `<div class="tr-inner" id="watchPageBody">
+    <h3 class="eb-h" style="margin-top:0">Add markets</h3>
+    <input id="wlmSearch" class="wlm-search" placeholder="Search questions to add — e.g. Fed, election, Bitcoin…"
+           autocomplete="off" oninput="onMarketSearch()" />
+    <div id="wlmResults" class="wlm-results"></div>
+    <h3 class="eb-h">Your watchlist <span id="wlPageCount" style="font-weight:400;color:#999;font-size:.8rem"></span></h3>
+    <div id="watchTableWrap"></div>
+  </div>`;
+  _renderWatchTable();
+  loadAddBrowser('');
+}
+
+function _renderWatchTable() {
+  const wrap = document.getElementById('watchTableWrap');
+  if (!wrap) return;
   const favs = _favList();
+  const count = document.getElementById('wlPageCount');
+  if (count) count.textContent = favs.length ? `· ${favs.length} markets · live` : '';
   if (!favs.length) {
-    host.innerHTML = `<div class="tr-inner"><h3 class="eb-h" style="margin-top:0">Watchlist</h3>
-      <p class="text-sm text-gray-500">No markets watched yet. Star a market on the Edge board, or paste a Polymarket/Kalshi URL in the sidebar watchlist.</p></div>`;
+    wrap.innerHTML = '<p class="text-sm text-gray-500">Nothing watched yet — add markets above, or star one on the Edge board.</p>';
     return;
   }
   const rows = favs.map(f => {
@@ -3768,11 +3821,9 @@ function renderWatchlistPage() {
         <button type="button" class="wl-act" onclick='_wlRemove(${keyJson})'>✕</button>
       </td></tr>`;
   }).join('');
-  host.innerHTML = `<div class="tr-inner" id="watchPageBody">
-    <h3 class="eb-h" style="margin-top:0">Watchlist <span style="font-weight:400;color:#999;font-size:.8rem">· ${favs.length} markets · live</span></h3>
-    <div class="md-table-wrap"><table class="eb-table">
-      <thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Market</th><th>Chg</th><th>Edge</th><th>Actions</th></tr></thead>
-      <tbody>${rows}</tbody></table></div></div>`;
+  wrap.innerHTML = `<div class="md-table-wrap"><table class="eb-table">
+    <thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Market</th><th>Chg</th><th>Edge</th><th>Actions</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
 }
 
 async function loadLandingPanels() {
@@ -4897,7 +4948,6 @@ function renderWatchlist() {
       </div>
     </div>`;
   }).join('');
-  onWatchSearch();  // re-apply any active filter
 }
 
 // Update price + change cells for one quote within a container (rail or page).
@@ -4943,57 +4993,82 @@ async function refreshWatchlist() {
   Object.entries(quotes).forEach(([key, q]) => { _wlPrev[key] = q.probability; });
 }
 
-// ── Watchlist search + add-by-URL ─────────────────────────────────────────────
-function _wlSearchMsg(msg) {
-  const el = document.getElementById('wlSearchMsg');
-  if (!el) return;
-  el.textContent = msg || '';
-  el.hidden = !msg;
+// ── Search-and-add market browser (in the watchlist view) ─────────────────────
+let _wlmSearchTimer = null;
+function onMarketSearch() {
+  clearTimeout(_wlmSearchTimer);
+  _wlmSearchTimer = setTimeout(() => loadAddBrowser(document.getElementById('wlmSearch')?.value || ''), 250);
 }
-function _parseMarketUrl(text) {
-  const t = (text || '').trim();
-  let u;
-  try { u = new URL(t); } catch { return null; }
-  const host = u.hostname.toLowerCase();
-  const segs = u.pathname.split('/').filter(Boolean);
-  if (!segs.length) return null;
-  if (host.includes('polymarket')) return { platform: 'polymarket', ident: segs[segs.length - 1] };
-  if (host.includes('kalshi')) return { platform: 'kalshi', ident: segs[segs.length - 1].toUpperCase() };
-  return null;
-}
-function onWatchSearch() {
-  const v = (document.getElementById('wlSearch')?.value || '').trim();
-  const addBtn = document.getElementById('wlAddBtn');
-  if (addBtn) addBtn.hidden = !_parseMarketUrl(v);
-  const q = v.toLowerCase();
-  document.querySelectorAll('#watchlistList .wl-row').forEach(row => {
-    const txt = (row.getAttribute('data-q') || '').toLowerCase();
-    const isUrl = !!_parseMarketUrl(v);
-    row.style.display = (!q || isUrl || txt.includes(q)) ? '' : 'none';
-  });
-}
-function onWatchSearchKey(e) {
-  if (e.key === 'Enter' && _parseMarketUrl(e.target.value)) { e.preventDefault(); addFromSearch(); }
-}
-async function addFromSearch() {
-  const input = document.getElementById('wlSearch');
-  const parsed = _parseMarketUrl(input.value);
-  if (!parsed || !parsed.ident) { _wlSearchMsg('Paste a full Polymarket or Kalshi market URL.'); return; }
-  const key = `${parsed.platform}:${parsed.ident}`;
-  if (_isFav(key)) { _wlSearchMsg('Already in your watchlist.'); return; }
-  _wlSearchMsg('Fetching market…');
+async function loadAddBrowser(q) {
+  const host = document.getElementById('wlmResults');
+  if (!host) return;
+  host.innerHTML = '<p class="text-gray-400" style="font-size:12px;padding:8px 0">Loading markets…</p>';
   try {
-    const r = await fetch(`/market/quote?platform=${encodeURIComponent(parsed.platform)}&ident=${encodeURIComponent(parsed.ident)}`);
+    const r = await fetch('/markets/search?q=' + encodeURIComponent((q || '').trim()) + '&limit=12');
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { _wlSearchMsg(d.detail || 'Could not find that market.'); return; }
-    await toggleFavorite({
-      key, question: d.question || '', platform: d.platform || parsed.platform,
-      ident: d.ident || parsed.ident, market_url: d.market_url || input.value.trim(),
-      market_probability: d.probability ?? null, model_probability: null,
-    }, null);
-    input.value = ''; _wlSearchMsg(''); document.getElementById('wlAddBtn').hidden = true;
-    renderWatchlist(); refreshWatchlist();
-  } catch (_) { _wlSearchMsg('Could not reach Foresea.'); }
+    _renderMarketResults(d.results || []);
+  } catch (_) {
+    host.innerHTML = '<p class="text-gray-400" style="font-size:12px;padding:8px 0">Could not load markets.</p>';
+  }
+}
+function _renderMarketResults(results) {
+  const host = document.getElementById('wlmResults');
+  if (!host) return;
+  if (!results.length) {
+    host.innerHTML = '<p class="text-gray-400" style="font-size:12px;padding:8px 0">No markets found. Try another keyword.</p>';
+    return;
+  }
+  host.innerHTML = results.map(m => {
+    const key = `${String(m.platform).toLowerCase()}:${m.ident}`;
+    const odds = m.probability != null ? Math.round(m.probability * 100) + '¢' : '—';
+    const added = _isFav(key);
+    const mJson = JSON.stringify(m).replace(/'/g, '&#39;');
+    return `<div class="wlm-row" data-key="${escAttr(key)}">
+      <div class="wlm-q">${escHtml((m.question || m.ident).slice(0, 120))}
+        <div class="wlm-venue">${escHtml(m.platform || '')}</div></div>
+      <div class="wlm-odds">${odds}</div>
+      <button type="button" class="wlm-add ${added ? 'added' : ''}" title="${added ? 'In watchlist' : 'Add to watchlist'}"
+        onclick='addMarket(${mJson}, this)'>${added ? '✓' : '+'}</button>
+    </div>`;
+  }).join('');
+}
+async function addMarket(m, btn) {
+  if (!m || !m.ident) return;
+  const key = `${String(m.platform).toLowerCase()}:${m.ident}`;
+  if (_isFav(key)) return;
+  await toggleFavorite({
+    key, question: m.question || '', platform: m.platform || '', ident: m.ident,
+    market_url: m.market_url || '', market_probability: m.probability ?? null, model_probability: null,
+  }, null);
+  if (btn) { btn.classList.add('added'); btn.textContent = '✓'; btn.title = 'In watchlist'; }
+  _renderWatchTable();   // refresh the watched table without resetting the search
+  refreshWatchlist();
+}
+
+// Open the watchlist in its own window (like a desktop app); fall back to the
+// in-app overlay if the popup is blocked.
+function openWatchlist() {
+  const w = window.open('/watchlist', 'foreseaWatchlist', 'width=540,height=860,menubar=no,toolbar=no');
+  if (!w) openWatchlistPage();
+  else closeSidebar();
+}
+
+// Standalone window served at /watchlist — render only the watchlist, full-screen.
+function _maybeStandaloneWatchlist() {
+  if (location.pathname.replace(/\/+$/, '') !== '/watchlist') return false;
+  document.body.classList.add('standalone-watch');
+  document.getElementById('landingPage')?.classList.add('hidden-view');
+  document.getElementById('appShell')?.classList.add('hidden-view');
+  const ov = document.getElementById('watchOverlay');
+  ov.classList.add('open');
+  ov.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  const btn = document.getElementById('watchCloseBtn');
+  if (btn) { btn.textContent = '← Open Foresea'; btn.onclick = () => { window.location.href = '/'; }; }
+  renderWatchlistPage();
+  _syncFavoritesFromServer().then(() => { renderWatchlistPage(); refreshWatchlist(); });
+  _wlStartPolling();
+  return true;
 }
 
 // ── Watchlist row actions ─────────────────────────────────────────────────────
@@ -5013,7 +5088,10 @@ function _wlAnalyze(ref) {
 function _wlRemove(ref) {
   toggleFavorite({ key: ref.key }, null);
   renderWatchlist();
-  if (document.getElementById('watchOverlay')?.classList.contains('open')) renderWatchlistPage();
+  if (document.getElementById('watchPageBody')) _renderWatchTable();
+  // Reset the add-browser button (✓ → +) if this market is listed there.
+  const addBtn = document.querySelector(`.wlm-row[data-key="${CSS.escape(ref.key)}"] .wlm-add`);
+  if (addBtn) { addBtn.classList.remove('added'); addBtn.textContent = '+'; addBtn.title = 'Add to watchlist'; }
 }
 
 function _wlStartPolling() {
@@ -5754,7 +5832,7 @@ loadLandingPanels();
 const ids = sortedIds();
 if (ids.length) activateConv(ids[0]);
 else newConversation();
-applyHistoryState({ view: _initView });
+if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView });
 
 // ── Smooth scroll + entrance choreography ────────────────────────────────────
 (function initMotion() {

@@ -3993,6 +3993,63 @@ async def market_quote(
     return JSONResponse(payload, headers={"Cache-Control": "public, max-age=30"})
 
 
+@app.get("/markets/search", tags=["Markets"], summary="Search markets to add to a watchlist")
+async def markets_search(
+    request: Request,
+    q: str = Query("", max_length=120),
+    limit: int = Query(12, ge=1, le=30),
+) -> Dict[str, Any]:
+    """Search open Polymarket + Kalshi markets by keyword (empty `q` = trending by
+    volume) so the watchlist can browse-and-add with one click. Public + cached."""
+    _check_rate_limit(request)
+    query = q.strip()
+    cache_key = f"markets_search:{query.lower()}:{limit}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return JSONResponse(cached, headers={"Cache-Control": "public, max-age=60"})
+    from analyzing_llm_rationale import market_data as _md
+
+    loop = asyncio.get_running_loop()
+    per_venue = max(1, limit // 2 + 1)
+
+    def _list(lister) -> List[Dict[str, Any]]:
+        try:
+            return lister(limit=per_venue, query=query or None, contested_only=False)
+        except _md.MarketDataError:
+            return []
+
+    poly, kalshi = await asyncio.gather(
+        loop.run_in_executor(None, lambda: _list(_md.list_polymarket)),
+        loop.run_in_executor(None, lambda: _list(_md.list_kalshi)),
+    )
+    results = []
+    for quote in (*poly, *kalshi):
+        ident = quote.get("ident") or ""
+        if not ident or quote.get("probability") is None:
+            continue
+        results.append({
+            "platform": quote.get("platform"),
+            "ident": ident,
+            "question": quote.get("question"),
+            "market_url": quote.get("market_url"),
+            "probability": quote.get("probability"),
+            "close_time": quote.get("close_time"),
+            "volume": quote.get("volume"),
+        })
+    payload = {"results": results[:limit], "query": query}
+    _cache_set(cache_key, payload, 60)
+    return JSONResponse(payload, headers={"Cache-Control": "public, max-age=60"})
+
+
+@app.get("/watchlist", include_in_schema=False)
+async def watchlist_page() -> FileResponse:
+    """Serve the SPA at a real URL so the watchlist can open in its own window."""
+    return FileResponse(
+        str(_STATIC_DIR / "index.html"),
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @app.post("/rag/ingest", tags=["Knowledge"], summary="Add a document to your knowledge base")
 async def rag_ingest(req: RagIngestRequest, request: Request) -> Dict[str, Any]:
     """Chunk, embed, and store a document (text or URL) in the signed-in user's

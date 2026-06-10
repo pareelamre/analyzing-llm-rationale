@@ -423,6 +423,24 @@ class ServerTests(unittest.TestCase):
     def test_favorites_require_auth(self):
         self.assertEqual(self.client.get("/favorites").status_code, 401)
 
+    def test_markets_search_merges_venues(self):
+        from analyzing_llm_rationale import market_data as md
+        poly = [{"platform": "Polymarket", "ident": "slug-a", "question": "Will A?",
+                 "market_url": "u", "probability": 0.4, "close_time": None, "volume": 9}]
+        kal = [{"platform": "Kalshi", "ident": "KXB", "question": "Will B?",
+                "market_url": "u2", "probability": 0.6, "close_time": None, "volume": 3}]
+        with mock.patch.object(md, "list_polymarket", return_value=poly), \
+             mock.patch.object(md, "list_kalshi", return_value=kal):
+            r = self.client.get("/markets/search", params={"q": "will", "limit": 10})
+        self.assertEqual(r.status_code, 200)
+        qs = {x["question"] for x in r.json()["results"]}
+        self.assertEqual(qs, {"Will A?", "Will B?"})
+
+    def test_watchlist_route_serves_spa(self):
+        r = self.client.get("/watchlist")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/html", r.headers.get("content-type", ""))
+
     def test_agent_analyze_question_only_runs_skill(self):
         response = self.client.post(
             "/agent/analyze",
