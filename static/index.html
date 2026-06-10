@@ -1332,6 +1332,8 @@
     .wl-foot-btn { flex: 1; font-size: 11px; font-weight: 600; padding: 7px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--ink); cursor: pointer; }
     .wl-foot-btn:hover { border-color: var(--ink); }
     .wl-foot-btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .wl-signin-cta { width: 100%; font-size: 12px; font-weight: 600; padding: 9px; margin: 4px 0; border-radius: 9px; border: 1px solid var(--border); background: #fff; color: var(--ink); cursor: pointer; }
+    .wl-signin-cta:hover { border-color: var(--ink); background: #fafafa; }
     /* Search-and-add browser (watchlist view) */
     .wlm-search { width: 100%; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; }
     .wlm-results { display: flex; flex-direction: column; gap: 0; margin-bottom: 18px; }
@@ -1737,7 +1739,7 @@
   <!-- Primary navigation -->
   <nav class="side-nav" aria-label="Sections">
     <button type="button" class="side-nav-link" onclick="openWatchlist()">
-      <span class="side-nav-ico">☆</span>Watchlist<span class="side-nav-ext">↗</span>
+      <span class="side-nav-ico">☆</span>Watchlist
     </button>
     <button type="button" class="side-nav-link" onclick="openEdgeBoard()"><span class="side-nav-ico">⚡</span>Edge board</button>
     <button type="button" class="side-nav-link" onclick="openTrackRecord()"><span class="side-nav-ico">◷</span>Track record</button>
@@ -1952,10 +1954,9 @@
     <div class="config-body wl-body" onclick="event.stopPropagation()">
       <div id="watchlistList" class="wl-list"></div>
       <div class="wl-foot">
-        <button type="button" class="wl-foot-btn primary" onclick="openWatchlistPage()">＋ Add markets</button>
-        <button type="button" class="wl-foot-btn" onclick="openWatchlist()">Open ↗</button>
+        <button type="button" class="wl-foot-btn primary" onclick="openWatchlist()">＋ Browse &amp; add markets</button>
       </div>
-      <p id="watchlistHint" class="text-gray-400" style="font-size:10px;margin-top:4px">Sign in to sync + get email updates.</p>
+      <p id="watchlistHint" class="text-gray-400" style="font-size:10px;margin-top:4px">Sign in to save markets and get email updates.</p>
     </div>
   </details>
 
@@ -3779,9 +3780,18 @@ function closeWatchlistPage({ updateHistory = true } = {}) {
 function renderWatchlistPage() {
   const host = document.getElementById('watchBody');
   if (!host) return;
+  if (!currentUser) {
+    host.innerHTML = `<div class="tr-inner" style="max-width:460px;margin:8vh auto 0;text-align:center">
+      <h3 class="eb-h" style="margin-top:0">Your watchlist</h3>
+      <p class="text-sm text-gray-500" style="margin-bottom:18px">Sign in to browse Polymarket &amp; Kalshi questions, add the ones you care about, and have them follow you across devices — like a stock watchlist.</p>
+      <button type="button" class="hero-action primary" style="justify-content:center" onclick="openAuthModal('login')">Sign in to continue</button>
+    </div>`;
+    return;
+  }
   host.innerHTML = `<div class="tr-inner" id="watchPageBody">
-    <h3 class="eb-h" style="margin-top:0">Add markets</h3>
-    <input id="wlmSearch" class="wlm-search" placeholder="Search questions to add — e.g. Fed, election, Bitcoin…"
+    <h3 class="eb-h" style="margin-top:0">Browse markets</h3>
+    <p class="tr-method" style="margin-top:0">Trending Polymarket &amp; Kalshi questions — tap ＋ to add to your watchlist.</p>
+    <input id="wlmSearch" class="wlm-search" placeholder="Search questions — e.g. Fed, election, Bitcoin…"
            autocomplete="off" oninput="onMarketSearch()" />
     <div id="wlmResults" class="wlm-results"></div>
     <h3 class="eb-h">Your watchlist <span id="wlPageCount" style="font-weight:400;color:#999;font-size:.8rem"></span></h3>
@@ -4852,6 +4862,8 @@ function _saveFavorites(obj) { localStorage.setItem('foresea_favorites', JSON.st
 function _isFav(key) { return Object.prototype.hasOwnProperty.call(_loadFavorites(), key); }
 
 async function toggleFavorite(fav, btn) {
+  // Watchlist requires sign-in so saved markets persist to the account.
+  if (!currentUser) { openAuthModal('login'); return; }
   const store = _loadFavorites();
   const on = !_isFav(fav.key);
   if (on) {
@@ -4888,11 +4900,16 @@ async function _syncFavoritesFromServer() {
     const r = await fetch('/favorites', { headers: authHeaders() });
     if (!r.ok) return;
     const d = await r.json();
-    const store = _loadFavorites();
+    // Server is the source of truth for a signed-in account — replace the local
+    // cache so one account never shows another's saved markets in this browser.
+    const store = {};
     (d.favorites || []).forEach(f => { store[f.key] = f; });
     _saveFavorites(store);
     renderWatchlist();
     _refreshEdgeStars();
+    // If the watchlist view is open (incl. after just signing in), refresh it.
+    if (document.getElementById('watchOverlay')?.classList.contains('open')
+        || document.body.classList.contains('standalone-watch')) renderWatchlistPage();
   } catch (_) { /* offline — local copy stands */ }
 }
 
@@ -4928,11 +4945,16 @@ function _chgHtml(chgPts) {
 function renderWatchlist() {
   const host = document.getElementById('watchlistList');
   if (!host) return;
-  const favs = _favList();
   const countEl = document.getElementById('watchlistCount');
+  if (!currentUser) {
+    if (countEl) countEl.textContent = '';
+    host.innerHTML = '<button type="button" class="wl-signin-cta" onclick="openAuthModal(\'login\')">Sign in to use your watchlist</button>';
+    return;
+  }
+  const favs = _favList();
   if (countEl) countEl.textContent = favs.length ? String(favs.length) : '';
   if (!favs.length) {
-    host.innerHTML = '<p class="text-gray-400" style="font-size:11px;padding:8px 0">No markets watched yet. Paste a URL above or star one on the Edge board.</p>';
+    host.innerHTML = '<p class="text-gray-400" style="font-size:11px;padding:8px 0">No markets saved yet. Tap “Browse &amp; add markets”.</p>';
     return;
   }
   host.innerHTML = favs.map(f => {
@@ -5039,6 +5061,7 @@ function _renderMarketResults(results) {
   }).join('');
 }
 async function addMarket(m, btn) {
+  if (!currentUser) { openAuthModal('login'); return; }
   if (!m || !m.ident) return;
   const key = `${String(m.platform).toLowerCase()}:${m.ident}`;
   if (_isFav(key)) return;
@@ -5051,12 +5074,11 @@ async function addMarket(m, btn) {
   refreshWatchlist();
 }
 
-// Open the watchlist in its own window (like a desktop app); fall back to the
-// in-app overlay if the popup is blocked.
+// Watchlist requires sign-in; opens the in-app view.
 function openWatchlist() {
-  const w = window.open('/watchlist', 'foreseaWatchlist', 'width=540,height=860,menubar=no,toolbar=no');
-  if (!w) openWatchlistPage();
-  else closeSidebar();
+  closeSidebar();
+  if (!currentUser) { openAuthModal('login'); return; }
+  openWatchlistPage();
 }
 
 // Standalone window served at /watchlist — render only the watchlist, full-screen.
@@ -5516,7 +5538,13 @@ function updateAuthUI(user) {
   currentUser = user;
   if (typeof loadKb === 'function') loadKb();  // refresh KB on sign-in/out
   if (typeof _syncFavoritesFromServer === 'function') {
-    if (user) _syncFavoritesFromServer(); else renderWatchlist();
+    if (user) {
+      _syncFavoritesFromServer();
+    } else {
+      _saveFavorites({});  // clear cached favourites on sign-out
+      renderWatchlist();
+      _refreshEdgeStars();
+    }
   }
   const firstName = (user?.name || '').split(' ')[0];
   const email = user?.email || '';
