@@ -83,8 +83,21 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(quote["platform"], "Kalshi")
         self.assertAlmostEqual(quote["probability"], 0.42)
         self.assertEqual(quote["outcome"], "Yes")
-        self.assertEqual(quote["market_url"], "https://kalshi.com/markets/KXTEST")
+        # Web URL is rooted on the (lowercase) series ticker, not the event ticker.
+        self.assertEqual(quote["market_url"], "https://kalshi.com/markets/kxtest")
         self.assertAlmostEqual(quote["outcomes"][1]["probability"], 0.58)
+
+    def test_kalshi_url_uses_series_ticker_not_event_ticker(self):
+        payload = {"market": {
+            "ticker": "KXMEDIARELEASEPRISONBREAK-30JAN01-26JUL01",
+            "event_ticker": "KXMEDIARELEASEPRISONBREAK-30JAN01",
+            "title": "When will Prison Break return?",
+            "last_price_dollars": "0.07",
+        }}
+        sys.modules["requests"] = _fake_requests(payload)
+        quote = fetch_kalshi("KXMEDIARELEASEPRISONBREAK-30JAN01-26JUL01")
+        # Must drop the event's -30JAN01 date suffix and lowercase.
+        self.assertEqual(quote["market_url"], "https://kalshi.com/markets/kxmediareleaseprisonbreak")
 
     def test_kalshi_uses_bid_ask_midpoint_without_last_price(self):
         payload = {"market": {"ticker": "KXT", "title": "t",

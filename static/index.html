@@ -3961,11 +3961,17 @@ function renderEdgeBoard(d) {
   let pnlHtml;
   if (pnl && pnl.flat) {
     const roi = s => s ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets') : '—';
+    const nBet = pnl.flat.n_bets || 0;
+    const nRes = d.n_snapshots_resolved || 0;
+    const edgePts = Math.round((pnl.min_edge || 0) * 100);
+    const note = nRes > nBet
+      ? `<p class="text-xs text-gray-500">Bets ${nBet} of ${nRes} resolved forecasts — only disagreements ≥${edgePts}pp are bet (the rest were model-agrees-with-market).</p>`
+      : '';
     pnlHtml = `<div class="tr-stats">
       <div class="tr-stat"><div class="v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div></div>
       <div class="tr-stat"><div class="v">${roi(pnl.edge_weighted)}</div><div class="k label">Edge-weighted</div></div>
       <div class="tr-stat"><div class="v">${roi(pnl.validated_only)}</div><div class="k label">Validated-only</div></div>
-    </div><p class="text-xs text-gray-400">${escHtml(pnl.disclaimer || '')}</p>`;
+    </div>${note}<p class="text-xs text-gray-400">${escHtml(pnl.disclaimer || '')}</p>`;
   } else {
     pnlHtml = `<p class="text-sm text-gray-500">Hypothetical paper PnL starts once disagreements resolve. No fees/slippage — a signal check, not live trading.</p>`;
   }

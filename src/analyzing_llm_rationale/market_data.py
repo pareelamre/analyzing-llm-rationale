@@ -258,6 +258,22 @@ def list_polymarket(limit: int = 5, query: Optional[str] = None,
     return quotes
 
 
+def _kalshi_series_ticker(market: Dict[str, Any]) -> str:
+    """The series ticker — the root of a Kalshi web market URL.
+
+    Kalshi web pages live at ``/markets/<series_ticker>`` (lowercase), NOT at the
+    raw event ticker (which carries a date suffix and 404s). Prefer the explicit
+    ``series_ticker``; else strip the event ticker's trailing ``-<date>`` segment;
+    else fall back to the market ticker's first segment.
+    """
+    series = (market.get("series_ticker") or "").strip()
+    if not series:
+        event = (market.get("event_ticker") or "").strip()
+        base = event or (market.get("ticker") or "").strip()
+        series = base.rsplit("-", 1)[0] if "-" in base else base
+    return series.lower()
+
+
 def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
     ticker = (market.get("ticker") or "").strip().upper()
     # Kalshi prices are in the *_dollars fields (0..1). Prefer last trade, else
@@ -279,9 +295,8 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "platform": "Kalshi",
         "question": market.get("title") or market.get("yes_sub_title") or market.get("subtitle") or ticker,
-        "market_url": (f"https://kalshi.com/markets/{market.get('event_ticker')}"
-                       if market.get("event_ticker") else
-                       f"https://kalshi.com/markets/{ticker}") if ticker else "",
+        "market_url": (lambda s: f"https://kalshi.com/markets/{s}" if s else "")(
+            _kalshi_series_ticker(market)),
         "ident": ticker,
         "outcome": "Yes",
         "probability": probability,
