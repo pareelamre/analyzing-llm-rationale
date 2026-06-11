@@ -41,7 +41,9 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", srv.handleHealth)
+	mux.HandleFunc("GET /{$}", srv.handleIndex) // exact "/" only
+	mux.HandleFunc("GET /health", srv.handleHealth)
+	mux.HandleFunc("GET /healthz", srv.handleHealth) // alias
 	mux.HandleFunc("GET /markets", srv.handleMarkets)
 
 	addr := ":" + envOr("PORT", "8090")
@@ -107,6 +109,41 @@ func (s *server) handleMarkets(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
+
+// handleIndex serves a small human-friendly landing page at "/", so opening the
+// service URL in a browser shows what it is and links to live examples instead
+// of a bare 404 / raw JSON.
+func (s *server) handleIndex(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(indexHTML))
+}
+
+const indexHTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>marketd · Foresea</title>
+<style>
+  body{font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;max-width:640px;margin:8vh auto;padding:0 20px;color:#1a1a1f}
+  h1{font-size:22px;margin:0 0 4px} .tag{color:#6b7280;margin:0 0 24px}
+  code{background:#f3f4f6;padding:2px 6px;border-radius:6px;font-size:13px}
+  a{color:#2563eb;text-decoration:none} a:hover{text-decoration:underline}
+  ul{padding-left:18px} li{margin:6px 0} .foot{color:#9ca3af;font-size:12px;margin-top:28px}
+</style></head><body>
+<h1>marketd</h1>
+<p class="tag">Go market-data ingestion microservice — part of Foresea's forecasting stack.</p>
+<p>Concurrently retrieves prediction markets from <b>Polymarket</b> and <b>Kalshi</b>,
+normalizes them onto one model, and serves them as JSON. This is an API — the
+endpoints below return JSON.</p>
+<h3>Try it</h3>
+<ul>
+  <li><a href="/markets?limit=10">/markets?limit=10</a> — trending, ranked by volume</li>
+  <li><a href="/markets?category=Crypto&limit=10">/markets?category=Crypto&amp;limit=10</a> — by category</li>
+  <li><a href="/markets?q=election&limit=10">/markets?q=election&amp;limit=10</a> — keyword search</li>
+  <li><a href="/health">/health</a> — liveness</li>
+</ul>
+<p class="foot">Stateless · concurrent (goroutines + context) · per-source fault isolation · TTL-cached.</p>
+</body></html>`
 
 type marketsResponse struct {
 	Markets []Market `json:"markets"`

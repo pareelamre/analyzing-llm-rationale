@@ -25,14 +25,15 @@ the forecasting app.
   (keyword-inferred, matching the Python categorizer).
 - **TTL cache** — generic, concurrency-safe; caches only fully successful
   retrievals so a transient venue outage can't pin a degraded result.
-- **Operability** — structured access logs (`log/slog` JSON), `/healthz`, and
-  graceful shutdown on SIGINT/SIGTERM.
+- **Operability** — structured access logs (`log/slog` JSON), a `/` landing page,
+  `/health`, and graceful shutdown on SIGINT/SIGTERM.
 
 ## API
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/healthz` | Liveness probe |
+| `GET` | `/` | Human-friendly landing page (HTML) |
+| `GET` | `/health` | Liveness probe |
 | `GET` | `/markets?q=&category=&limit=` | Concurrently ingested, normalized markets ranked by volume |
 
 ```jsonc
