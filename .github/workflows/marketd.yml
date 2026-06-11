@@ -1,11 +1,17 @@
 name: marketd (Go)
 
-# Build + vet + test the Go market-data ingestion microservice.
+# Build + vet + test the Go market-data ingestion microservice, then (on main)
+# build its image and deploy it to Cloud Run as a private service.
 on:
   push:
     paths: ["services/marketd/**", ".github/workflows/marketd.yml"]
   pull_request:
     paths: ["services/marketd/**"]
+
+env:
+  GCP_REGION: us-central1
+  GCP_PROJECT_ID: brave-drive-471109-d9
+  SERVICE_NAME: marketd
 
 jobs:
   build:
@@ -22,3 +28,32 @@ jobs:
       - run: go vet ./...
       - run: go build ./...
       - run: go test -race ./...
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build, push, deploy
+        run: |
+          set -euo pipefail
+          IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/docker/${SERVICE_NAME}:sha-$(git rev-parse --short HEAD)"
+          gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+          docker build -t "$IMAGE" services/marketd
+          docker push "$IMAGE"
+          gcloud run deploy "$SERVICE_NAME" \
+            --image "$IMAGE" \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT_ID" \
+            --no-allow-unauthenticated \
+            --port 8090 --memory 256Mi --cpu 1 --max-instances 3 \
+            --quiet
