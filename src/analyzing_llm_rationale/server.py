@@ -4120,6 +4120,64 @@ async def market_forecast(req: MarketForecastRequest, request: Request) -> Dict[
     return {"model_probability": model_p}
 
 
+# marketd — the Go market-data ingestion microservice. When MARKETD_URL is set,
+# /markets/search is served by it (concurrent venue ingestion + normalization in
+# Go); the in-process Python path stays as a fallback.
+_MARKETD_URL = (os.environ.get("MARKETD_URL") or "").rstrip("/")
+
+
+def _marketd_token(audience: str) -> Optional[str]:
+    """Mint a Cloud Run identity token for the authenticated call to marketd."""
+    try:
+        import google.auth.transport.requests as _greq
+        import google.oauth2.id_token as _idt
+        return _idt.fetch_id_token(_greq.Request(), audience)
+    except Exception:
+        return None
+
+
+def _marketd_search_sync(query: str, category: str, limit: int) -> Optional[List[Dict[str, Any]]]:
+    """Fetch normalized markets from marketd. Returns None on any failure so the
+    caller falls back to the in-process Python ingestion."""
+    if not _MARKETD_URL:
+        return None
+    import requests
+
+    headers = {}
+    token = _marketd_token(_MARKETD_URL)
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        resp = requests.get(
+            f"{_MARKETD_URL}/markets",
+            params={"q": query, "category": category, "limit": limit},
+            headers=headers, timeout=10,
+        )
+        if resp.status_code != 200:
+            return None
+        markets = resp.json().get("markets")
+    except Exception:
+        return None
+    if not isinstance(markets, list):
+        return None
+    out: List[Dict[str, Any]] = []
+    for m in markets:
+        ident = m.get("ident") or ""
+        if not ident or m.get("probability") is None:
+            continue
+        out.append({
+            "platform": m.get("platform"),
+            "ident": ident,
+            "question": m.get("question"),
+            "market_url": m.get("market_url"),
+            "probability": m.get("probability"),
+            "close_time": m.get("close_time"),
+            "volume": m.get("volume"),
+            "category": m.get("category"),
+        })
+    return out
+
+
 @app.get("/markets/search", tags=["Markets"], summary="Search markets to add to a watchlist")
 async def markets_search(
     request: Request,
@@ -4137,9 +4195,19 @@ async def markets_search(
     cached = _cache_get(cache_key)
     if cached is not None:
         return JSONResponse(cached, headers={"Cache-Control": "public, max-age=60"})
-    from analyzing_llm_rationale import market_data as _md
 
     loop = asyncio.get_running_loop()
+
+    # Primary path: the marketd Go microservice (concurrent ingestion + normalize).
+    md_results = await loop.run_in_executor(None, _marketd_search_sync, query, cat, limit)
+    if md_results is not None:
+        payload = {"results": md_results[:limit], "query": query, "category": cat, "source": "marketd"}
+        _cache_set(cache_key, payload, 60)
+        return JSONResponse(payload, headers={"Cache-Control": "public, max-age=60"})
+
+    # Fallback: in-process Python ingestion (also used by the tick/radar/agent).
+    from analyzing_llm_rationale import market_data as _md
+
     per_venue = max(1, limit // 2 + 1)
 
     def _list(lister) -> List[Dict[str, Any]]:
@@ -4168,7 +4236,7 @@ async def markets_search(
             "volume": quote.get("volume"),
             "category": quote.get("category"),
         })
-    payload = {"results": results[:limit], "query": query, "category": cat}
+    payload = {"results": results[:limit], "query": query, "category": cat, "source": "python"}
     _cache_set(cache_key, payload, 60)
     return JSONResponse(payload, headers={"Cache-Control": "public, max-age=60"})
 

@@ -71,7 +71,10 @@ def _forecast_item(item: Dict[str, Any]) -> bool:
         "evidence_top_k": 3,
         "market_platform": item.get("platform"),
         "market_url": item.get("market_url"),
+        "market_ident": item.get("ident"),
         "market_outcome": item.get("outcome") or "Yes",
+        # Live odds in context: pass the quote; /predict also auto-fetches fresh
+        # odds from market_platform+ident when this is missing.
         "market_probability": item.get("market_probability"),
     }
     res = _post_predict(payload)
