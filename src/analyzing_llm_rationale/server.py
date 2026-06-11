@@ -2104,11 +2104,17 @@ class PredictRequest(BaseModel):
             "set this to `No` or to a multiple-choice option label when needed."
         ),
     )
+    market_ident: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="Venue market id (Polymarket slug / Kalshi ticker). Lets Foresea fetch live odds when `market_probability` is omitted.",
+    )
     market_probability: Optional[float] = Field(
         None,
         description=(
             "Current market-implied probability for `market_outcome`. Use 0-1, or pass a percentage "
-            "from 0-100 and Foresea will normalize it."
+            "from 0-100 and Foresea will normalize it. When omitted but the market is identifiable "
+            "(`market_url` or `market_platform`+`market_ident`), Foresea fetches the current live odds."
         ),
     )
     openrouter_api_key: Optional[str] = Field(
@@ -3083,6 +3089,30 @@ def _model_key_for_request(req: "PredictRequest") -> str:
     return req.openrouter_model or _state["model_key"]
 
 
+def _fetch_live_odds(
+    platform: Optional[str], ident: Optional[str], market_url: Optional[str]
+) -> Optional[Dict[str, Any]]:
+    """Fetch the current quote for a referenced market (for live-odds context).
+    Resolves a Polymarket slug from the URL when no ident is given."""
+    from analyzing_llm_rationale import market_data as _md
+
+    plat = (platform or "").lower()
+    ident = (ident or "").strip()
+    url = (market_url or "").strip()
+    if not ident and url:
+        tail = url.rstrip("/").split("/")[-1]
+        if "polymarket" in url.lower():
+            plat, ident = "polymarket", tail
+    try:
+        if "poly" in plat and ident:
+            return _md.fetch_polymarket(slug=ident)
+        if "kalshi" in plat and ident:
+            return _md.fetch_kalshi(ident)
+    except Exception:
+        return None
+    return None
+
+
 async def _prepare_predict_messages(
     req: "PredictRequest",
     rag_user_id: Optional[str],
@@ -3091,6 +3121,28 @@ async def _prepare_predict_messages(
     system_prompt = _state["system_prompt"]
 
     record = req.model_dump()
+    # Live odds in context (besides news): when a real market is referenced but no
+    # price was supplied, fetch the current quote so the model sees the crowd's
+    # estimate as one signal. Best-effort and off the critical path on failure.
+    if record.get("market_probability") is None and (
+        record.get("market_url") or (record.get("market_platform") and record.get("market_ident"))
+    ):
+        try:
+            loop = asyncio.get_running_loop()
+            quote = await loop.run_in_executor(
+                None, _fetch_live_odds,
+                record.get("market_platform"), record.get("market_ident"), record.get("market_url"),
+            )
+            if quote and quote.get("probability") is not None:
+                record["market_probability"] = float(quote["probability"])
+                if not record.get("market_platform"):
+                    record["market_platform"] = quote.get("platform")
+                if not record.get("market_url"):
+                    record["market_url"] = quote.get("market_url")
+                if not record.get("market_outcome"):
+                    record["market_outcome"] = quote.get("outcome")
+        except Exception:
+            pass
     evidence_articles = [article.model_dump() for article in req.news_articles]
     evidence_error = None
 
@@ -4039,6 +4091,7 @@ class MarketForecastRequest(BaseModel):
     question: str = Field(..., max_length=600)
     market_probability: Optional[float] = Field(None, ge=0.0, le=1.0)
     market_platform: Optional[str] = Field(None, max_length=40)
+    market_ident: Optional[str] = Field(None, max_length=200)
     market_url: Optional[str] = Field(None, max_length=500)
 
 
@@ -4052,6 +4105,7 @@ async def market_forecast(req: MarketForecastRequest, request: Request) -> Dict[
         question=req.question,
         market_probability=req.market_probability,
         market_platform=req.market_platform,
+        market_ident=req.market_ident,
         market_url=req.market_url,
         market_outcome="Yes",
     )

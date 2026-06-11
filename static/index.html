@@ -5107,12 +5107,13 @@ function _setWatchModel(key, modelProb, marketProb) {
 // show it, and persist it on the favourite so it survives reloads.
 async function _forecastFavorite(key, question, marketProb, platform, marketUrl) {
   if (!question) return;
+  const ident = key.slice(key.indexOf(':') + 1);   // key = "{platform}:{ident}"
   _setWatchModel(key, '…');
   try {
     const r = await fetch('/market/forecast', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ question, market_probability: marketProb, market_platform: platform, market_url: marketUrl }),
+      body: JSON.stringify({ question, market_probability: marketProb, market_platform: platform, market_ident: ident, market_url: marketUrl }),
     });
     const d = await r.json().catch(() => ({}));
     const mp = (r.ok && d.model_probability != null) ? d.model_probability : null;
