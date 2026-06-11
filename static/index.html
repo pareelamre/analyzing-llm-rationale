@@ -1317,6 +1317,12 @@
     .wl-up { color: #15803d; }
     .wl-down { color: #dc2626; }
     .wl-flat { color: var(--text-dim); }
+    .wl-yes { color: #15803d; font-weight: 700; }
+    .wl-no { color: #dc2626; font-weight: 700; }
+    .wl-sep { color: var(--border-2); margin: 0 2px; }
+    .wl-model { color: #4f46e5; font-weight: 600; }
+    .wl-q a { color: inherit; text-decoration: none; }
+    .wl-q a:hover { text-decoration: underline; }
     @keyframes wl-flash-up { 0% { background: rgba(21,128,61,.16); } 100% { background: transparent; } }
     @keyframes wl-flash-down { 0% { background: rgba(220,38,38,.16); } 100% { background: transparent; } }
     .wl-row.flash-up { animation: wl-flash-up .7s ease-out; }
@@ -1341,6 +1347,8 @@
     .wlm-row:hover { background: #fafafa; }
     .wlm-q { flex: 1; min-width: 0; font-size: 13px; color: var(--ink); }
     .wlm-q .wlm-venue { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+    .wlm-q a { color: inherit; text-decoration: none; }
+    .wlm-q a:hover { text-decoration: underline; }
     .wlm-odds { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .wlm-add { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--ink); font-size: 16px; line-height: 1; cursor: pointer; flex-shrink: 0; }
     .wlm-add:hover { background: #15803d; color: #fff; border-color: #15803d; }
@@ -1741,9 +1749,6 @@
     <button type="button" class="side-nav-link" onclick="openWatchlist()">
       <span class="side-nav-ico">☆</span>Watchlist
     </button>
-    <button type="button" class="side-nav-link" onclick="openEdgeBoard()"><span class="side-nav-ico">⚡</span>Edge board</button>
-    <button type="button" class="side-nav-link" onclick="openTrackRecord()"><span class="side-nav-ico">◷</span>Track record</button>
-    <button type="button" class="side-nav-link" onclick="openRadar()"><span class="side-nav-ico">◎</span>Radar</button>
   </nav>
 
   <!-- Conversation list -->
@@ -1892,7 +1897,7 @@
   </details>
 
   <!-- Exchange accounts (bring-your-own trading) — top-level so it's easy to find -->
-  <details class="config-panel" id="tradingPanel" open>
+  <details class="config-panel" id="tradingPanel">
     <summary class="config-summary">
       <svg class="config-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
         <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1998,9 +2003,6 @@
       </button>
     </div>
     <nav class="hidden md:flex items-center gap-4 flex-shrink-0" aria-label="App navigation">
-      <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
-      <button type="button" class="topbar-link" onclick="openRadar()">Radar</button>
-      <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
       <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
       <button type="button" class="topbar-link" onclick="openTradeModal()" style="font-weight:600;color:var(--ink)">Trade</button>
       <a href="/agents" target="_blank" class="topbar-link">Agents</a>
@@ -3812,19 +3814,16 @@ function _renderWatchTable() {
     return;
   }
   const rows = favs.map(f => {
-    const model = f.model_probability != null ? Math.round(f.model_probability * 100) + '%' : '—';
-    const edge = (f.model_probability != null && f.market_probability != null)
-      ? `<b style="color:${(f.model_probability - f.market_probability) >= 0 ? '#0a7' : '#c33'}">${((f.model_probability - f.market_probability) * 100 >= 0 ? '+' : '')}${Math.round((f.model_probability - f.market_probability) * 100)}</b>`
-      : '—';
-    const link = f.market_url ? `href="${escHtml(f.market_url)}" target="_blank" rel="noopener"` : '';
+    // Live cells (Model / Yes-No / Chg / Edge) are filled by _applyQuote on poll;
+    // seed Model with the captured value so there's something before the first tick.
     const keyJson = JSON.stringify({ key: f.key }).replace(/'/g, '&#39;');
     return `<tr class="eb-row" data-key="${escAttr(f.key)}" data-q="${escAttr(f.question || f.key)}">
-      <td style="max-width:340px"><a ${link} style="color:inherit">${escHtml((f.question || f.key).slice(0, 110))}</a></td>
+      <td style="max-width:340px" class="wl-q">${_qLink(f.question || f.key, f.market_url)}</td>
       <td>${escHtml(f.platform || '')}</td>
-      <td>${model}</td>
-      <td class="wl-price" data-price>—</td>
+      <td class="wl-model" data-model>${_modelTxt(f.model_probability)}</td>
+      <td class="wl-price" data-price>${_yesNoHtml(null)}</td>
       <td data-chg>${_chgHtml(null)}</td>
-      <td>${edge}</td>
+      <td data-edge>—</td>
       <td style="white-space:nowrap">
         <button type="button" class="wl-act buy" onclick='_wlTrade(${keyJson})'>Trade</button>
         <button type="button" class="wl-act" onclick='_wlAnalyze(${keyJson})'>Analyze</button>
@@ -3832,7 +3831,7 @@ function _renderWatchTable() {
       </td></tr>`;
   }).join('');
   wrap.innerHTML = `<div class="md-table-wrap"><table class="eb-table">
-    <thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Market</th><th>Chg</th><th>Edge</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Yes / No</th><th>Chg</th><th>Edge</th><th>Actions</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -4941,6 +4940,23 @@ function _chgHtml(chgPts) {
   const arrow = chgPts > 0.05 ? '▲' : chgPts < -0.05 ? '▼' : '·';
   return `<span class="wl-chg ${cls}">${arrow}${Math.abs(chgPts).toFixed(1)}</span>`;
 }
+// Yes/No odds the way prediction markets show them — Yes green, No red.
+function _yesNoHtml(prob) {
+  if (prob == null) return '<span class="wl-flat">—</span>';
+  const y = Math.round(prob * 100);
+  return `<span class="wl-yes">${y}¢</span><span class="wl-sep">/</span><span class="wl-no">${100 - y}¢</span>`;
+}
+function _modelTxt(mp) { return mp == null ? '—' : Math.round(mp * 100) + '%'; }
+function _edgeHtml(mp, kp) {
+  if (mp == null || kp == null) return '—';
+  const e = Math.round((mp - kp) * 100);
+  return `<b style="color:${e >= 0 ? '#0a7' : '#c33'}">${e >= 0 ? '+' : ''}${e}</b>`;
+}
+// A market-page link (venue) wrapping the question text.
+function _qLink(question, url) {
+  const q = escHtml((question || '').slice(0, 110));
+  return url ? `<a href="${escHtml(url)}" target="_blank" rel="noopener">${q}</a>` : q;
+}
 
 function renderWatchlist() {
   const host = document.getElementById('watchlistList');
@@ -4958,15 +4974,14 @@ function renderWatchlist() {
     return;
   }
   host.innerHTML = favs.map(f => {
-    const q = escHtml((f.question || f.key).slice(0, 90));
     const keyJson = JSON.stringify({ key: f.key }).replace(/'/g, '&#39;');
     return `<div class="wl-row" data-key="${escAttr(f.key)}" data-q="${escAttr(f.question || f.key)}">
       <div class="wl-meta">
-        <div class="wl-q">${q}</div>
-        <div class="wl-sub">${escHtml(f.platform || '')}</div>
+        <div class="wl-q">${_qLink(f.question || f.key, f.market_url)}</div>
+        <div class="wl-sub">${escHtml(f.platform || '')} · model <span class="wl-model" data-model>—</span></div>
       </div>
       <div class="wl-quote">
-        <div class="wl-price" data-price>—</div>
+        <div class="wl-price" data-price>${_yesNoHtml(null)}</div>
         <div data-chg>${_chgHtml(null)}</div>
       </div>
       <div class="wl-actions">
@@ -4984,8 +4999,12 @@ function _applyQuote(container, key, q, fav, flash) {
   rows.forEach(row => {
     const priceEl = row.querySelector('[data-price]');
     const chgEl = row.querySelector('[data-chg]');
-    if (priceEl) priceEl.textContent = Math.round(q.probability * 100) + '¢';
+    if (priceEl) priceEl.innerHTML = _yesNoHtml(q.probability);
     if (chgEl) chgEl.innerHTML = _chgHtml(_wlChange(q, fav));
+    const modelEl = row.querySelector('[data-model]');
+    if (modelEl && q.model != null) modelEl.textContent = _modelTxt(q.model);
+    const edgeEl = row.querySelector('[data-edge]');
+    if (edgeEl) edgeEl.innerHTML = (q.model != null) ? _edgeHtml(q.model, q.probability) : '—';
     if (flash && _wlPrev[key] != null && row.classList) {
       const d = q.probability - _wlPrev[key];
       if (Math.abs(d) > 0.0001) {
@@ -5048,13 +5067,12 @@ function _renderMarketResults(results) {
   }
   host.innerHTML = results.map(m => {
     const key = `${String(m.platform).toLowerCase()}:${m.ident}`;
-    const odds = m.probability != null ? Math.round(m.probability * 100) + '¢' : '—';
     const added = _isFav(key);
     const mJson = JSON.stringify(m).replace(/'/g, '&#39;');
     return `<div class="wlm-row" data-key="${escAttr(key)}">
-      <div class="wlm-q">${escHtml((m.question || m.ident).slice(0, 120))}
+      <div class="wlm-q">${_qLink(m.question || m.ident, m.market_url)}
         <div class="wlm-venue">${escHtml(m.platform || '')}</div></div>
-      <div class="wlm-odds">${odds}</div>
+      <div class="wlm-odds">${_yesNoHtml(m.probability)}</div>
       <button type="button" class="wlm-add ${added ? 'added' : ''}" title="${added ? 'In watchlist' : 'Add to watchlist'}"
         onclick='addMarket(${mJson}, this)'>${added ? '✓' : '+'}</button>
     </div>`;

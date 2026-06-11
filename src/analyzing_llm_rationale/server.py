@@ -3904,7 +3904,36 @@ async def save_favorite(key: str, favorite: FavoriteMarket, request: Request) ->
         payload["createdAt"] = now
     loop = asyncio.get_running_loop()
     saved = await loop.run_in_executor(None, _put_favorite, claims["sub"], payload)
+    # Enrol the market into the forecasting loop so the tick keeps a fresh model
+    # forecast for it — that's what powers the live model/edge in the watchlist.
+    await _enroll_market(saved.get("platform"), saved.get("ident"),
+                         saved.get("market_url"), saved.get("question") or "", "favorite")
     return FavoriteMarket(**saved)
+
+
+def _norm_url(url: Optional[str]) -> str:
+    """Normalise a market URL for joining favourites to forecasts (all surfaces
+    build URLs with the same _polymarket_quote/_kalshi_quote helpers)."""
+    return (url or "").strip().rstrip("/").lower()
+
+
+def _forecast_by_url() -> Dict[str, float]:
+    """Latest model forecast per market URL, sourced from the edge board + radar
+    (both already forecast hourly and served from the committed artifacts)."""
+    out: Dict[str, float] = {}
+    radar = _read_radar() or {}
+    for item in radar.get("items", []):
+        url = _norm_url(item.get("market_url"))
+        mp = item.get("foresea_probability")
+        if url and mp is not None:
+            out[url] = float(mp)
+    live = _read_live_track_record() or {}
+    for item in live.get("edge_board", []):  # edge board wins over radar
+        url = _norm_url(item.get("market_url"))
+        mp = item.get("model_probability")
+        if url and mp is not None:
+            out[url] = float(mp)
+    return out
 
 
 @app.delete("/favorites/{key:path}", tags=["Auth"], summary="Remove a favourite")
@@ -3948,7 +3977,14 @@ async def favorite_prices(request: Request) -> Dict[str, Any]:
 
     results = await asyncio.gather(*[_one(f) for f in favs if f.get("ident")])
     quotes = {k: v for k, v in results if v is not None}
-    # `prices` kept for backwards-compat; `quotes` carries price + 24h change.
+    # Attach the latest model forecast (edge board + radar) by market URL.
+    fcast = await loop.run_in_executor(None, _forecast_by_url)
+    favs_by_key = {f["key"]: f for f in favs}
+    for key, v in quotes.items():
+        model = fcast.get(_norm_url((favs_by_key.get(key) or {}).get("market_url")))
+        if model is not None:
+            v["model"] = model
+    # `prices` kept for backwards-compat; `quotes` carries price + 24h change + model.
     prices = {k: v["probability"] for k, v in quotes.items()}
     return {"prices": prices, "quotes": quotes,
             "generated_at": datetime.now(timezone.utc).isoformat()}
