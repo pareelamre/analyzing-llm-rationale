@@ -50,6 +50,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=sha-
 
+      - uses: docker/setup-buildx-action@v3
+
       - uses: docker/build-push-action@v5
         with:
           context: .
@@ -57,6 +59,12 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # build-push-action defaults to attaching provenance/SBOM attestations,
+          # whose extra manifest entries are the common cause of "unknown blob"
+          # failures when pushing a large image to GHCR (and to two registries at
+          # once). Disable them — Cloud Run just needs the image.
+          provenance: false
+          sbom: false
 
       - name: Capture GAR image tag
         id: gar_tag
