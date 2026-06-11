@@ -4070,13 +4070,16 @@ async def market_forecast(req: MarketForecastRequest, request: Request) -> Dict[
 async def markets_search(
     request: Request,
     q: str = Query("", max_length=120),
-    limit: int = Query(12, ge=1, le=30),
+    category: str = Query("", max_length=40),
+    limit: int = Query(24, ge=1, le=40),
 ) -> Dict[str, Any]:
-    """Search open Polymarket + Kalshi markets by keyword (empty `q` = trending by
-    volume) so the watchlist can browse-and-add with one click. Public + cached."""
+    """Search open Polymarket + Kalshi markets by keyword and/or category (empty
+    `q`+`category` = trending by volume) so the watchlist can browse-and-add with
+    one click. Public + cached."""
     _check_rate_limit(request)
     query = q.strip()
-    cache_key = f"markets_search:{query.lower()}:{limit}"
+    cat = category.strip()
+    cache_key = f"markets_search:{query.lower()}:{cat.lower()}:{limit}"
     cached = _cache_get(cache_key)
     if cached is not None:
         return JSONResponse(cached, headers={"Cache-Control": "public, max-age=60"})
@@ -4087,7 +4090,8 @@ async def markets_search(
 
     def _list(lister) -> List[Dict[str, Any]]:
         try:
-            return lister(limit=per_venue, query=query or None, contested_only=False)
+            return lister(limit=per_venue, query=query or None, contested_only=False,
+                          category=cat or None)
         except _md.MarketDataError:
             return []
 
@@ -4108,8 +4112,9 @@ async def markets_search(
             "probability": quote.get("probability"),
             "close_time": quote.get("close_time"),
             "volume": quote.get("volume"),
+            "category": quote.get("category"),
         })
-    payload = {"results": results[:limit], "query": query}
+    payload = {"results": results[:limit], "query": query, "category": cat}
     _cache_set(cache_key, payload, 60)
     return JSONResponse(payload, headers={"Cache-Control": "public, max-age=60"})
 

@@ -212,22 +212,58 @@ def fetch_polymarket(slug: Optional[str] = None, market_id: Optional[str] = None
     return _polymarket_quote(market)
 
 
+_CATEGORY_KEYWORDS = {
+    "Politics": ["election", "president", "senate", "congress", "trump", "biden",
+                 "vote", "governor", "parliament", "prime minister", "government",
+                 "shutdown", "poll", "democrat", "republican", "mayor", "cabinet"],
+    "Crypto": ["bitcoin", "btc", "ethereum", " eth ", "crypto", "solana",
+               "dogecoin", "token", "blockchain", "coinbase", "stablecoin"],
+    "Sports": ["nfl", "nba", "mlb", "nhl", "soccer", "football", "basketball",
+               "world cup", "super bowl", "premier league", "champion", "playoff",
+               "tournament", " vs ", "ufc", "formula 1", " f1 ", "golf", "tennis",
+               "olympic", "world series"],
+    "Economics": ["fed", "interest rate", "inflation", "gdp", "jobs report",
+                  "recession", "cpi", "unemployment", "economy", "jobless", "rate cut"],
+    "Entertainment": ["movie", "film", "oscar", "album", "song", "box office",
+                      "grammy", "emmy", "netflix", "celebrity", "tv show", "season",
+                      "rotten tomatoes", "spotify", "billboard"],
+    "Tech": ["openai", "tesla", "apple", "google", "nvidia", "chip", "gpt",
+             "spacex", "artificial intelligence", "iphone", "software", "startup"],
+    "World": ["ukraine", "russia", "china", "israel", "gaza", "war", "nuclear",
+              "climate", "nato", "united nations", "summit", "ceasefire"],
+}
+
+
+def _market_category(question: Optional[str], raw: Optional[str] = None) -> str:
+    """Normalise a market into a browse category. Uses keyword heuristics on the
+    question (works for Polymarket, whose listing has no category), then falls
+    back to the venue's own category (Kalshi provides one)."""
+    q = (question or "").lower()
+    for category, keywords in _CATEGORY_KEYWORDS.items():
+        if any(k in q for k in keywords):
+            return category
+    return str(raw) if raw else "Other"
+
+
 def list_polymarket(limit: int = 5, query: Optional[str] = None,
                     min_close_days: Optional[float] = None,
                     max_close_days: Optional[float] = None,
-                    contested_only: bool = True) -> List[Dict[str, Any]]:
+                    contested_only: bool = True,
+                    category: Optional[str] = None) -> List[Dict[str, Any]]:
     """List liquid, contested binary Polymarket markets (for the edge scan).
 
     Pulls high-volume markets, then keeps binary Yes/No markets priced in the
     mid-range so the scan focuses on genuinely contested questions. When
     ``query`` is given, only markets whose question contains that keyword are
-    kept. ``min_close_days``/``max_close_days`` optionally restrict to a
+    kept. ``category`` filters by the market's category (substring, case-
+    insensitive). ``min_close_days``/``max_close_days`` optionally restrict to a
     resolution-horizon window (used by the live track record).
     """
-    limit = max(1, min(int(limit), 20))
+    limit = max(1, min(int(limit), 30))
     want = (query or "").strip().lower()
-    # Search deeper when filtering by keyword/horizon, since matches may not be top-volume.
-    deeper = bool(want or min_close_days is not None or max_close_days is not None)
+    cat = (category or "").strip().lower()
+    # Search deeper when filtering, since matches may not be top-volume.
+    deeper = bool(want or cat or min_close_days is not None or max_close_days is not None)
     candidate_cap = min(500, limit * (60 if deeper else 10))
     data = _get_json(
         POLYMARKET_GAMMA_URL,
@@ -249,6 +285,9 @@ def list_polymarket(limit: int = 5, query: Optional[str] = None,
         if contested_only and not (_SCAN_MIN_PRICE <= prob <= _SCAN_MAX_PRICE):
             continue
         if want and want not in (quote["question"] or "").lower():
+            continue
+        quote["category"] = _market_category(quote["question"], quote.get("category"))
+        if cat and cat not in quote["category"].lower():
             continue
         if not _within_close_window(quote.get("close_time"), min_close_days, max_close_days):
             continue
@@ -331,7 +370,8 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
 def list_kalshi(limit: int = 5, query: Optional[str] = None,
                 min_close_days: Optional[float] = None,
                 max_close_days: Optional[float] = None,
-                contested_only: bool = True) -> List[Dict[str, Any]]:
+                contested_only: bool = True,
+                category: Optional[str] = None) -> List[Dict[str, Any]]:
     """List open, priced Kalshi markets via the ``/events`` endpoint.
 
     The flat ``/markets?status=open`` listing is saturated by auto-generated
@@ -341,8 +381,9 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
     keyword; ``min_close_days``/``max_close_days`` restrict the resolution
     horizon. Results are sorted soonest-resolving first.
     """
-    limit = max(1, min(int(limit), 20))
+    limit = max(1, min(int(limit), 30))
     want = (query or "").strip().lower()
+    cat = (category or "").strip().lower()
     data = _get_json(KALSHI_EVENTS_URL, params={
         "status": "open", "with_nested_markets": "true", "limit": 200,
     })
@@ -350,7 +391,7 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
     quotes: List[Dict[str, Any]] = []
     for event in events:
         title = event.get("title") or ""
-        category = event.get("category")
+        event_category = event.get("category")
         for market in event.get("markets", []) or []:
             if market.get("mve_collection_ticker"):
                 continue  # skip multi-leg parlay markets
@@ -363,8 +404,10 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
             sub = (market.get("yes_sub_title") or "").strip()
             question = f"{title} — {sub}" if (sub and sub.lower() not in title.lower()) else (title or quote["question"])
             quote["question"] = question
-            quote["category"] = category
+            quote["category"] = _market_category(question, event_category)
             if want and want not in question.lower():
+                continue
+            if cat and cat not in quote["category"].lower():
                 continue
             if not _within_close_window(quote.get("close_time"), min_close_days, max_close_days):
                 continue

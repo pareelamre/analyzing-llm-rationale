@@ -1342,7 +1342,11 @@
     .wl-signin-cta:hover { border-color: var(--ink); background: #fafafa; }
     /* Search-and-add browser (watchlist view) */
     .wlm-search { width: 100%; font-size: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; }
-    .wlm-results { display: flex; flex-direction: column; gap: 0; margin-bottom: 18px; }
+    .wlm-cats { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+    .wlm-cat { font-size: 12px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--text-dim); cursor: pointer; transition: all var(--dur-med); }
+    .wlm-cat:hover { border-color: var(--ink); color: var(--ink); }
+    .wlm-cat.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .wlm-results { display: flex; flex-direction: column; gap: 0; margin-bottom: 18px; max-height: 50vh; overflow-y: auto; }
     .wlm-row { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-bottom: 1px solid var(--border); }
     .wlm-row:hover { background: #fafafa; }
     .wlm-q { flex: 1; min-width: 0; font-size: 13px; color: var(--ink); }
@@ -1947,23 +1951,6 @@
     </div>
   </details>
 
-  <!-- Watchlist: favourited markets + live prices -->
-  <details class="config-panel" id="watchlistDetails">
-    <summary class="config-summary">
-      <svg class="config-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
-        <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>Watchlist</span>
-      <span id="watchlistCount" class="config-active"></span>
-    </summary>
-    <div class="config-body wl-body" onclick="event.stopPropagation()">
-      <div id="watchlistList" class="wl-list"></div>
-      <div class="wl-foot">
-        <button type="button" class="wl-foot-btn primary" onclick="openWatchlist()">＋ Browse &amp; add markets</button>
-      </div>
-      <p id="watchlistHint" class="text-gray-400" style="font-size:10px;margin-top:4px">Sign in to save markets and get email updates.</p>
-    </div>
-  </details>
 
   <div class="account-panel">
     <p class="label mb-2">Account</p>
@@ -3790,17 +3777,22 @@ function renderWatchlistPage() {
     </div>`;
     return;
   }
+  const cats = ['', 'Politics', 'Sports', 'Crypto', 'Economics', 'Entertainment', 'Tech', 'World'];
+  const catTabs = cats.map(c =>
+    `<button type="button" class="wlm-cat ${c === _wlmCat ? 'active' : ''}" data-cat="${c}" onclick="selectCategory('${c}')">${c || 'All'}</button>`
+  ).join('');
   host.innerHTML = `<div class="tr-inner" id="watchPageBody">
     <h3 class="eb-h" style="margin-top:0">Browse markets</h3>
-    <p class="tr-method" style="margin-top:0">Trending Polymarket &amp; Kalshi questions — tap ＋ to add to your watchlist.</p>
+    <p class="tr-method" style="margin-top:0">Polymarket &amp; Kalshi questions — pick a category or search, then tap ＋ to add.</p>
     <input id="wlmSearch" class="wlm-search" placeholder="Search questions — e.g. Fed, election, Bitcoin…"
            autocomplete="off" oninput="onMarketSearch()" />
+    <div class="wlm-cats">${catTabs}</div>
     <div id="wlmResults" class="wlm-results"></div>
     <h3 class="eb-h">Your watchlist <span id="wlPageCount" style="font-weight:400;color:#999;font-size:.8rem"></span></h3>
     <div id="watchTableWrap"></div>
   </div>`;
   _renderWatchTable();
-  loadAddBrowser('');
+  loadAddBrowser();
 }
 
 function _renderWatchTable() {
@@ -5027,31 +5019,39 @@ async function _fetchQuotes() {
 }
 
 async function refreshWatchlist() {
-  const host = document.getElementById('watchlistList');
-  if (!host) return;
   const d = await _fetchQuotes();
   if (!d) return;
   const quotes = d.quotes || {};
   const favsByKey = _loadFavorites();
-  Object.entries(quotes).forEach(([key, q]) => _applyQuote(host, key, q, favsByKey[key], true));
-  // Refresh the full page too if it's open.
-  const page = document.getElementById('watchPageBody');
-  if (page) Object.entries(quotes).forEach(([key, q]) => _applyQuote(page, key, q, favsByKey[key], true));
+  const host = document.getElementById('watchlistList');           // sidebar rail (optional)
+  const page = document.getElementById('watchPageBody');           // full page (when open)
+  [host, page].forEach(scope => {
+    if (scope) Object.entries(quotes).forEach(([key, q]) => _applyQuote(scope, key, q, favsByKey[key], true));
+  });
   Object.entries(quotes).forEach(([key, q]) => { _wlPrev[key] = q.probability; });
 }
 
 // ── Search-and-add market browser (in the watchlist view) ─────────────────────
 let _wlmSearchTimer = null;
+let _wlmCat = '';   // selected category panel ('' = All)
+function selectCategory(cat) {
+  _wlmCat = cat || '';
+  document.querySelectorAll('.wlm-cat').forEach(b => b.classList.toggle('active', (b.dataset.cat || '') === _wlmCat));
+  loadAddBrowser();
+}
 function onMarketSearch() {
   clearTimeout(_wlmSearchTimer);
-  _wlmSearchTimer = setTimeout(() => loadAddBrowser(document.getElementById('wlmSearch')?.value || ''), 250);
+  _wlmSearchTimer = setTimeout(() => loadAddBrowser(), 250);
 }
-async function loadAddBrowser(q) {
+async function loadAddBrowser() {
   const host = document.getElementById('wlmResults');
   if (!host) return;
+  const q = (document.getElementById('wlmSearch')?.value || '').trim();
   host.innerHTML = '<p class="text-gray-400" style="font-size:12px;padding:8px 0">Loading markets…</p>';
   try {
-    const r = await fetch('/markets/search?q=' + encodeURIComponent((q || '').trim()) + '&limit=12');
+    const url = '/markets/search?limit=24&q=' + encodeURIComponent(q)
+      + '&category=' + encodeURIComponent(_wlmCat);
+    const r = await fetch(url);
     const d = await r.json().catch(() => ({}));
     _renderMarketResults(d.results || []);
   } catch (_) {
