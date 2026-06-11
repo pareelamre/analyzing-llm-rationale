@@ -2862,9 +2862,11 @@ def _typing_instruction(
         instr += "\nUse `confidence` only for binary forecasts; for multiple_choice, use option probabilities."
     instr += (
         "\nBefore writing the JSON, internally use this forecasting checklist: "
-        "rephrase the resolution target, consider arguments for and against, "
-        "weigh the most important drivers, check relevant base rates, and adjust "
-        "for overconfidence. Do not reveal the checklist; only return the requested JSON."
+        "restate the resolution target INCLUDING its deadline/threshold and forecast "
+        "only whether that exact outcome resolves by its close date (not whether the "
+        "event ever happens); consider arguments for and against, weigh the most "
+        "important drivers, check relevant base rates, and adjust for overconfidence. "
+        "Do not reveal the checklist; only return the requested JSON."
     )
     return instr
 
