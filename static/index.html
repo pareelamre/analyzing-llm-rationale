@@ -1075,8 +1075,35 @@
     .account-sync {
       font-size: 11px;
       color: var(--text-dim);
-      margin-top: 8px;
     }
+    /* Account control + popover menu (Prism-style) */
+    .acct { position: relative; margin-top: 6px; }
+    .acct-btn {
+      display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+      padding: 8px; border-radius: 14px; border: 1px solid var(--border);
+      background: #fff; cursor: pointer; transition: background var(--dur-med), border-color var(--dur-med);
+    }
+    .acct-btn:hover { background: #f7f7f8; border-color: var(--border-2); }
+    .acct-btn .account-meta { flex: 1; }
+    .acct-chevron { color: var(--text-mute); transition: transform var(--dur-med); flex-shrink: 0; }
+    .acct-btn.open .acct-chevron { transform: rotate(180deg); }
+    .acct-menu {
+      position: absolute; left: 0; right: 0; bottom: calc(100% + 8px);
+      background: #fff; border: 1px solid var(--border); border-radius: 16px;
+      box-shadow: 0 12px 44px rgba(15,15,16,.16);
+      padding: 10px; max-height: 72vh; overflow-y: auto; z-index: 40;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .acct-section { padding: 4px 2px 8px; }
+    .acct-menu-foot {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 4px 2px; margin-top: 4px; border-top: 1px solid var(--border);
+    }
+    .acct-signout {
+      font-size: 12px; font-weight: 500; color: #dc2626; background: transparent;
+      border: 0; cursor: pointer; padding: 4px 6px; border-radius: 8px;
+    }
+    .acct-signout:hover { background: #fef2f2; }
 
     /* ── ChatGPT-style app surface ─────────────────────────────────────── */
     .grain { display: none; }
@@ -1761,6 +1788,11 @@
     <div id="convList"></div>
   </div>
 
+  <!-- Account: one control at the bottom; clicking it opens a menu with
+       Config / Connect exchange / Advanced + account actions (Prism-style). -->
+  <div class="acct" id="acctWrap">
+  <div id="acctMenu" class="acct-menu" hidden onclick="event.stopPropagation()">
+
   <details class="advanced-panel">
     <summary role="button" aria-label="Show advanced forecast settings">Advanced</summary>
     <div>
@@ -1952,23 +1984,24 @@
   </details>
 
 
-  <div class="account-panel">
-    <p class="label mb-2">Account</p>
-    <div id="sidebarSignedOut" hidden>
+    <div id="sidebarSignedOut" class="acct-section" hidden>
       <button type="button" class="btn-signin sidebar-signin" onclick="openAuthModal('login')">Sign in</button>
       <p class="sidebar-signin-hint">Create an account to sync your market briefs across devices.</p>
     </div>
-    <div id="sidebarUserChip" hidden>
-      <div class="account-row">
-        <img id="sidebarUserAvatar" src="" class="user-avatar" alt="" />
-        <div class="account-meta">
-          <span id="sidebarUserName" class="user-name"></span>
-          <span id="sidebarUserEmail" class="account-email"></span>
-        </div>
-        <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
-      </div>
-      <div id="sidebarSyncStatus" class="account-sync">Saved to your account</div>
+    <div id="acctSignedIn" class="acct-menu-foot" hidden>
+      <span id="sidebarSyncStatus" class="account-sync">Saved to your account</span>
+      <button type="button" class="acct-signout" onclick="signOut()">Sign out</button>
     </div>
+  </div><!-- /acctMenu -->
+
+  <button type="button" id="sidebarUserChip" class="acct-btn" onclick="toggleAcctMenu(event)" aria-haspopup="true">
+    <img id="sidebarUserAvatar" class="user-avatar" src="" alt="" />
+    <span class="account-meta">
+      <span id="sidebarUserName" class="user-name">Account</span>
+      <span id="sidebarUserEmail" class="account-email"></span>
+    </span>
+    <svg class="acct-chevron" width="12" height="12" viewBox="0 0 10 10" fill="none"><path d="M2 6.5 5 3.5 8 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
   </div>
 
 </aside>
@@ -1995,13 +2028,6 @@
       <a href="/agents" target="_blank" class="topbar-link">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link">API docs</a>
       <a href="https://github.com/pareelamre/analyzing-llm-rationale" target="_blank" class="topbar-link">GitHub</a>
-      <!-- Auth -->
-      <button type="button" id="appSignInBtn" class="btn-signin" hidden onclick="openAuthModal('login')">Sign in</button>
-      <div id="appUserChip" class="user-chip" hidden>
-        <img id="appUserAvatar" src="" class="user-avatar" alt="" />
-        <span id="appUserName" class="user-name"></span>
-        <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
-      </div>
     </nav>
 
     <div class="hidden sm:flex items-center gap-1.5 flex-shrink-0 border border-gray-200 rounded-full px-2 py-1">
@@ -5592,6 +5618,29 @@ function _setAuthEl(id, show, data) {
   });
 }
 
+// ── Account menu (Prism-style popover) ───────────────────────────────────────
+function toggleAcctMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('acctMenu');
+  const btn = document.getElementById('sidebarUserChip');
+  if (!menu) return;
+  const open = menu.hidden;
+  menu.hidden = !open;
+  if (btn) btn.classList.toggle('open', open);
+}
+function _closeAcctMenu() {
+  const menu = document.getElementById('acctMenu');
+  if (menu && !menu.hidden) {
+    menu.hidden = true;
+    document.getElementById('sidebarUserChip')?.classList.remove('open');
+  }
+}
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('acctWrap');
+  if (wrap && !wrap.contains(e.target)) _closeAcctMenu();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') _closeAcctMenu(); });
+
 function updateAuthUI(user) {
   currentUser = user;
   if (typeof loadKb === 'function') loadKb();  // refresh KB on sign-in/out
@@ -5608,30 +5657,23 @@ function updateAuthUI(user) {
   const email = user?.email || '';
   const pic = user?.picture || (user ? _setAvatarFallback(user?.name, email) : '');
 
+  // Sidebar = the single account control. The button is always visible and opens
+  // the menu (Config / Connect exchange / Advanced + sign in/out).
+  _setAuthEl('sidebarUserChip', true, {
+    sidebarUserAvatar: pic || _setAvatarFallback('Account', email || 'guest'),
+    sidebarUserName: firstName || 'Account',
+    sidebarUserEmail: user ? email : 'Not signed in',
+  });
   if (user) {
-    _setAuthEl('landingSignInBtn', false);
-    _setAuthEl('appSignInBtn', false);
     _setAuthEl('sidebarSignedOut', false);
-    _setAuthEl('landingUserChip', true, {
-      landingUserAvatar: pic,
-      landingUserName: firstName,
-    });
-    _setAuthEl('appUserChip', true, {
-      appUserAvatar: pic,
-      appUserName: firstName,
-    });
-    _setAuthEl('sidebarUserChip', true, {
-      sidebarUserAvatar: pic,
-      sidebarUserName: firstName,
-      sidebarUserEmail: email,
-    });
+    _setAuthEl('acctSignedIn', true);
+    _setAuthEl('landingSignInBtn', false);
+    _setAuthEl('landingUserChip', true, { landingUserAvatar: pic, landingUserName: firstName });
   } else {
-    _setAuthEl('landingUserChip', false);
-    _setAuthEl('appUserChip', false);
-    _setAuthEl('sidebarUserChip', false);
-    _setAuthEl('landingSignInBtn', true);
-    _setAuthEl('appSignInBtn', true);
     _setAuthEl('sidebarSignedOut', true);
+    _setAuthEl('acctSignedIn', false);
+    _setAuthEl('landingUserChip', false);
+    _setAuthEl('landingSignInBtn', true);
   }
 }
 
