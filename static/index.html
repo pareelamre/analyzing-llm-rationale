@@ -5090,6 +5090,45 @@ async function addMarket(m, btn) {
   if (btn) { btn.classList.add('added'); btn.textContent = '✓'; btn.title = 'In watchlist'; }
   _renderWatchTable();   // refresh the watched table without resetting the search
   refreshWatchlist();
+  _forecastFavorite(key, m.question || '', m.probability ?? null, m.platform || '', m.market_url || '');
+}
+
+// Update the model + edge cells for one market across the rail and the page.
+function _setWatchModel(key, modelProb, marketProb) {
+  document.querySelectorAll(`[data-key="${CSS.escape(key)}"]`).forEach(row => {
+    const mEl = row.querySelector('[data-model]');
+    if (mEl) mEl.textContent = modelProb === '…' ? '…' : _modelTxt(modelProb);
+    const eEl = row.querySelector('[data-edge]');
+    if (eEl) eEl.innerHTML = (typeof modelProb === 'number' && marketProb != null) ? _edgeHtml(modelProb, marketProb) : '—';
+  });
+}
+
+// Forecast a just-added market immediately (don't wait for the hourly tick),
+// show it, and persist it on the favourite so it survives reloads.
+async function _forecastFavorite(key, question, marketProb, platform, marketUrl) {
+  if (!question) return;
+  _setWatchModel(key, '…');
+  try {
+    const r = await fetch('/market/forecast', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ question, market_probability: marketProb, market_platform: platform, market_url: marketUrl }),
+    });
+    const d = await r.json().catch(() => ({}));
+    const mp = (r.ok && d.model_probability != null) ? d.model_probability : null;
+    _setWatchModel(key, mp, marketProb);
+    if (mp != null) {
+      const store = _loadFavorites();
+      if (store[key]) {
+        store[key].model_probability = mp;
+        _saveFavorites(store);
+        fetch('/favorites/' + encodeURIComponent(key), {
+          method: 'PUT', headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(store[key]),
+        }).catch(() => {});
+      }
+    }
+  } catch (_) { _setWatchModel(key, null); }
 }
 
 // Watchlist requires sign-in; opens the in-app view.

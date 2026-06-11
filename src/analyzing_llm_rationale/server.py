@@ -3981,7 +3981,12 @@ async def favorite_prices(request: Request) -> Dict[str, Any]:
     fcast = await loop.run_in_executor(None, _forecast_by_url)
     favs_by_key = {f["key"]: f for f in favs}
     for key, v in quotes.items():
-        model = fcast.get(_norm_url((favs_by_key.get(key) or {}).get("market_url")))
+        fav = favs_by_key.get(key) or {}
+        # Prefer the freshest tick forecast (edge board / radar); fall back to the
+        # add-time forecast stored on the favourite so it persists across reloads.
+        model = fcast.get(_norm_url(fav.get("market_url")))
+        if model is None:
+            model = fav.get("model_probability")
         if model is not None:
             v["model"] = model
     # `prices` kept for backwards-compat; `quotes` carries price + 24h change + model.
@@ -4027,6 +4032,38 @@ async def market_quote(
     }
     _cache_set(cache_key, payload, 30)
     return JSONResponse(payload, headers={"Cache-Control": "public, max-age=30"})
+
+
+class MarketForecastRequest(BaseModel):
+    """Forecast one market immediately (e.g. just-watchlisted)."""
+    question: str = Field(..., max_length=600)
+    market_probability: Optional[float] = Field(None, ge=0.0, le=1.0)
+    market_platform: Optional[str] = Field(None, max_length=40)
+    market_url: Optional[str] = Field(None, max_length=500)
+
+
+@app.post("/market/forecast", tags=["Markets"], summary="Forecast one market now")
+async def market_forecast(req: MarketForecastRequest, request: Request) -> Dict[str, Any]:
+    """Run the model on a single market right now and return its probability, so a
+    freshly-watchlisted market shows a forecast without waiting for the next tick.
+    Sign-in gated (the watchlist is). Reuses the `/predict` pipeline."""
+    _require_session(request)
+    pr = PredictRequest(
+        question=req.question,
+        market_probability=req.market_probability,
+        market_platform=req.market_platform,
+        market_url=req.market_url,
+        market_outcome="Yes",
+    )
+    resp = await predict(pr, request)
+    analysis = getattr(resp, "market_analysis", None)
+    model_p = analysis.model_probability if analysis else None
+    if model_p is None:
+        # No market price to anchor the analysis — derive from the binary forecast.
+        if getattr(resp, "question_type", None) == "binary" and resp.confidence is not None:
+            ans = (resp.predicted_answer or "").strip().lower()
+            model_p = resp.confidence if ans == "yes" else (1.0 - resp.confidence)
+    return {"model_probability": model_p}
 
 
 @app.get("/markets/search", tags=["Markets"], summary="Search markets to add to a watchlist")
