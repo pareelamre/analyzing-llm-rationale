@@ -153,6 +153,15 @@ class TrajectoryTests(unittest.TestCase):
         a = next(e for e in snaps if e.get("question") == "Will A happen?")
         self.assertAlmostEqual(a["model_probability"], 0.55)  # refreshed
 
+    def test_drop_stale_open_removes_orphaned_readings(self):
+        rows = [
+            {"ident": "fresh", "snapshot_date": "2026-06-11", "model_probability": 0.10},
+            {"ident": "recent", "snapshot_date": "2026-06-10", "model_probability": 0.30},
+            {"ident": "stale", "snapshot_date": "2026-06-07", "model_probability": 0.68},
+        ]
+        kept = {r["ident"] for r in trl._drop_stale_open(rows)}
+        self.assertEqual(kept, {"fresh", "recent"})  # 06-07 is >2 days older than newest
+
     def test_resolution_scores_all_snapshots_and_buckets_by_horizon(self):
         far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)

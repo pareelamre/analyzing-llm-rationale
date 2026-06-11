@@ -71,6 +71,30 @@ def _today() -> str:
     return _now().strftime("%Y-%m-%d")
 
 
+OPEN_SNAPSHOT_MAX_AGE_DAYS = 2
+
+
+def _drop_stale_open(rows: List[Dict[str, Any]],
+                     max_age_days: int = OPEN_SNAPSHOT_MAX_AGE_DAYS) -> List[Dict[str, Any]]:
+    """Keep only open snapshots (re)forecast within ``max_age_days`` of the most
+    recent open snapshot. Orphaned readings — e.g. left behind when a venue
+    changes a market's ident/ticker — go stale and must not surface as the current
+    forecast. Self-relative (to the newest snapshot) so it's clock-independent."""
+    import datetime as _dt
+
+    def _date(r: Dict[str, Any]) -> Optional["_dt.date"]:
+        try:
+            return _dt.date.fromisoformat(str(r.get("snapshot_date"))[:10])
+        except Exception:
+            return None
+
+    dates = [d for d in (_date(r) for r in rows) if d is not None]
+    if not dates:
+        return rows
+    cutoff = max(dates) - _dt.timedelta(days=max_age_days)
+    return [r for r in rows if (_date(r) is not None and _date(r) >= cutoff)]
+
+
 def ident_from_url(platform: str, url: str) -> str:
     url = (url or "").rstrip("/")
     if "/market/" in url:
@@ -807,6 +831,9 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             resolved.append(dict(e))
         else:
             open_rows.append(dict(e))
+    # Drop stale open snapshots (not re-forecast recently) so orphaned readings
+    # from an old ident don't surface on the edge board as live disagreements.
+    open_rows = _drop_stale_open(open_rows)
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_rows}
 
     # Latest live price per market (for the Edge Board's current disagreement).

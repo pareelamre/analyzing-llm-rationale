@@ -255,8 +255,25 @@ def _latest_snapshots(store_path: Path) -> Dict[str, Dict[str, Any]]:
     except Exception:
         return {}
     snapshots = raw.get("ForecastSnapshot") or {}
+    # Only trust snapshots (re)forecast within 2 days of the newest snapshot, so
+    # stale readings left behind by a venue ident change don't surface as the live
+    # forecast. Self-relative to the newest snapshot (clock-independent).
+    import datetime as _dt
+
+    def _snap_date(snap: Dict[str, Any]) -> Optional["_dt.date"]:
+        try:
+            return _dt.date.fromisoformat(str(snap.get("snapshot_date"))[:10])
+        except Exception:
+            return None
+
+    _all_dates = [d for d in (_snap_date(s) for s in snapshots.values()) if d is not None]
+    _cutoff = (max(_all_dates) - _dt.timedelta(days=2)) if _all_dates else None
     latest: Dict[str, Dict[str, Any]] = {}
     for snap in snapshots.values():
+        if _cutoff is not None:
+            sd = _snap_date(snap)
+            if sd is None or sd < _cutoff:
+                continue
         ident = str(snap.get("ident") or "").strip()
         url = str(snap.get("market_url") or "").rstrip("/")
         keys = [k for k in [ident, url, url.split("/")[-1] if url else ""] if k]
