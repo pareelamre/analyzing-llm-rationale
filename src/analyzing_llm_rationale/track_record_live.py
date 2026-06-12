@@ -407,6 +407,15 @@ _EDGE_BUCKETS = [
 # Minimum disagreement to count a snapshot as a real "edge" for lead/lag + board.
 _EDGE_MIN = 0.05
 
+# Market-volume (USD) buckets for the niche-vs-liquid skill breakdown. The edge
+# thesis: thin/niche markets have the least-informed crowd, so that's where the
+# model should beat it; deep markets are efficient.
+_LIQUIDITY_BUCKETS = [
+    ("niche (<$1k)", 0.0, 1_000.0),
+    ("small ($1k–25k)", 1_000.0, 25_000.0),
+    ("liquid (>$25k)", 25_000.0, float("inf")),
+]
+
 
 def _edge(row: Dict[str, Any]) -> float:
     """Absolute model-vs-market disagreement for a snapshot."""
@@ -917,19 +926,34 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
 
     by_edge = by_edge_early  # already computed above for the board stat
 
-    # Domain-level calibration: Foresea's accuracy profile by question category.
-    # Requires resolved data; returns empty list until markets settle.
+    # Category-level skill-vs-market: which categories Foresea actually beats the
+    # market in. Significance-gated (skill_significant) so a category is only
+    # claimed as an edge when its lower CI bound clears 0 — never on a couple of
+    # lucky resolutions. Empty / not-yet-significant until enough markets settle.
     by_domain: List[Dict[str, Any]] = []
     domain_rows: Dict[str, List[Dict[str, Any]]] = {}
     for r in resolved_primary:
         d = r.get("domain") or "other"
         domain_rows.setdefault(d, []).append(r)
-    for domain, rows in sorted(domain_rows.items()):
+    for domain, rows in domain_rows.items():
         stats = _bucket_stats(rows)
         if stats:
             stats["domain"] = domain
+            stats.update(_skill_ci(rows))
             by_domain.append(stats)
-    by_domain.sort(key=lambda x: x.get("n", 0), reverse=True)
+    by_domain.sort(key=lambda x: (x.get("skill_significant", False), x.get("skill_vs_market") or 0), reverse=True)
+
+    # Liquidity-level skill: the "edge lives in thin/niche markets" thesis — the
+    # crowd is smallest and least informed where volume is low, so that's where
+    # the model should beat it. Bucketed by market volume (USD) at forecast time.
+    by_liquidity: List[Dict[str, Any]] = []
+    for label, lo, hi in _LIQUIDITY_BUCKETS:
+        rows = [r for r in resolved_primary if lo <= float(r.get("market_volume") or 0.0) < hi]
+        stats = _bucket_stats(rows)
+        if stats:
+            stats["liquidity"] = label
+            stats.update(_skill_ci(rows))
+            by_liquidity.append(stats)
 
     # Open-market entity index: unique entities across all open snapshots
     # (primary model only), sorted by frequency — seeds the knowledge graph.
@@ -952,6 +976,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "by_horizon": by_horizon,
         "by_edge": by_edge,
         "by_domain": by_domain,
+        "by_liquidity": by_liquidity,
         "lead_lag": lead_lag(by_market),
         "paper_pnl": paper_pnl(resolved_primary, by_edge),
         "edge_board": edge_board_result,

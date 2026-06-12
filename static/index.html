@@ -3765,7 +3765,7 @@ async function openWatchlistPage({ updateHistory = true } = {}) {
   await _syncFavoritesFromServer();
   renderWatchlistPage();
   refreshWatchlist();
-  _watchPriceTimer = setInterval(refreshWatchlist, 25000);
+  _watchPriceTimer = setInterval(refreshWatchlist, 8000);
   setTimeout(() => document.getElementById('watchCloseBtn')?.focus(), 0);
 }
 function closeWatchlistPage({ updateHistory = true } = {}) {
@@ -5209,7 +5209,7 @@ function _wlRemove(ref) {
 function _wlStartPolling() {
   _wlStopPolling();
   refreshWatchlist();
-  _wlPollTimer = setInterval(refreshWatchlist, 25000);
+  _wlPollTimer = setInterval(refreshWatchlist, 8000);
 }
 function _wlStopPolling() {
   if (_wlPollTimer) { clearInterval(_wlPollTimer); _wlPollTimer = null; }

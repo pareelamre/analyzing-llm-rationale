@@ -4012,6 +4012,12 @@ async def favorite_prices(request: Request) -> Dict[str, Any]:
         ident = fav.get("ident") or ""
         if not ident:
             return fav["key"], None
+        # Short per-market cache so near-real-time polling (every few seconds,
+        # across all users) hits each venue at most ~once per cache window.
+        qkey = f"favquote:{platform}:{ident}"
+        cached = _cache_get(qkey)
+        if cached is not None:
+            return fav["key"], cached
         try:
             if "poly" in platform:
                 q = await loop.run_in_executor(None, lambda: _md.fetch_polymarket(slug=ident))
@@ -4022,10 +4028,9 @@ async def favorite_prices(request: Request) -> Dict[str, Any]:
             prob = q.get("probability")
             if prob is None:
                 return fav["key"], None
-            return fav["key"], {
-                "probability": float(prob),
-                "change_24h": q.get("price_change_24h"),
-            }
+            v = {"probability": float(prob), "change_24h": q.get("price_change_24h")}
+            _cache_set(qkey, v, 6)
+            return fav["key"], v
         except Exception:
             return fav["key"], None
 
