@@ -1,15 +1,15 @@
 {
   "by_domain": [
     {
-      "accuracy": 1.0,
+      "accuracy": 0.6,
       "domain": "other",
-      "market_brier": 0.0465,
-      "model_brier": 0.0451,
-      "n": 2,
-      "skill_ci_high": 0.0045,
-      "skill_ci_low": -0.0016,
+      "market_brier": 0.1774,
+      "model_brier": 0.1793,
+      "n": 5,
+      "skill_ci_high": 0.0017,
+      "skill_ci_low": -0.0056,
       "skill_significant": false,
-      "skill_vs_market": 0.0015
+      "skill_vs_market": -0.002
     },
     {
       "accuracy": 1.0,
@@ -36,66 +36,84 @@
       "skill_vs_market": -0.021
     },
     {
-      "accuracy": 1.0,
+      "accuracy": 0.6667,
       "edge_bucket": "0-5pp",
-      "market_brier": 0.0326,
-      "model_brier": 0.0334,
-      "n": 3,
-      "skill_ci_high": 0.004,
-      "skill_ci_low": -0.0056,
+      "market_brier": 0.1486,
+      "model_brier": 0.1511,
+      "n": 6,
+      "skill_ci_high": 0.0007,
+      "skill_ci_low": -0.0057,
       "skill_significant": false,
-      "skill_vs_market": -0.0008
+      "skill_vs_market": -0.0025
     }
   ],
   "by_horizon": [
     {
-      "accuracy": 1.0,
+      "accuracy": 0.6667,
       "horizon": "1-3d",
-      "market_brier": 0.0031,
-      "model_brier": 0.0163,
-      "n": 2,
-      "skill_vs_market": -0.0131
+      "market_brier": 0.1365,
+      "model_brier": 0.1474,
+      "n": 3,
+      "skill_vs_market": -0.0109
     },
     {
-      "accuracy": 1.0,
+      "accuracy": 0.75,
       "horizon": "<1d",
-      "market_brier": 0.0465,
-      "model_brier": 0.0451,
-      "n": 2,
-      "skill_vs_market": 0.0015
+      "market_brier": 0.1209,
+      "model_brier": 0.1218,
+      "n": 4,
+      "skill_vs_market": -0.0009
     }
   ],
   "by_liquidity": [
     {
-      "accuracy": 1.0,
+      "accuracy": 0.7143,
       "liquidity": "liquid (>$25k)",
-      "market_brier": 0.0248,
-      "model_brier": 0.0307,
-      "n": 4,
-      "skill_ci_high": 0.0046,
-      "skill_ci_low": -0.0163,
+      "market_brier": 0.1276,
+      "model_brier": 0.1327,
+      "n": 7,
+      "skill_ci_high": 0.0007,
+      "skill_ci_low": -0.011,
       "skill_significant": false,
-      "skill_vs_market": -0.0058
+      "skill_vs_market": -0.0052
     }
   ],
   "calibration_model": {
     "applied": false,
     "min_required": 30,
-    "n_resolved": 4,
+    "n_resolved": 7,
     "reason": "insufficient_data"
   },
   "edge_board": [
     {
-      "abs_edge": 0.62,
+      "abs_edge": 0.561,
+      "domain": "sports",
+      "edge": -0.561,
+      "edge_bucket": "20pp+",
+      "entry_price": 0.189,
+      "horizon": "14-30d",
+      "lead_days": 18.6,
+      "market_probability": 0.811,
+      "market_url": "https://polymarket.com/market/will-the-new-york-knicks-win-the-2026-nba-finals",
+      "model_probability": 0.25,
+      "payout_odds": 4.3,
+      "platform": "Polymarket",
+      "question": "Will the New York Knicks win the 2026 NBA Finals?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": null
+    },
+    {
+      "abs_edge": 0.5,
       "domain": "other",
-      "edge": -0.62,
+      "edge": -0.5,
       "edge_bucket": "20pp+",
       "entry_price": 0.0,
       "horizon": "14-30d",
-      "lead_days": 17.8,
+      "lead_days": 17.6,
       "market_probability": 1.0,
       "market_url": "https://polymarket.com/market/will-trump-restart-project-freedom-by-june-30",
-      "model_probability": 0.38,
+      "model_probability": 0.5,
       "payout_odds": 1999.0,
       "platform": "Polymarket",
       "question": "Will Trump restart Project Freedom by June 30?",
@@ -104,62 +122,67 @@
       "track_record": null
     },
     {
-      "abs_edge": 0.555,
-      "domain": "geopolitics",
-      "edge": -0.555,
-      "edge_bucket": "20pp+",
-      "entry_price": 0.245,
-      "horizon": "30d+",
-      "lead_days": 201.8,
-      "market_probability": 0.755,
-      "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-december-31-2026-961-587-341-574-555-817",
-      "model_probability": 0.2,
-      "payout_odds": 3.1,
-      "platform": "Polymarket",
-      "question": "US x Iran permanent peace deal by December 31, 2026?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": null
-    },
-    {
-      "abs_edge": 0.285,
+      "abs_edge": 0.125,
       "domain": "other",
-      "edge": -0.285,
-      "edge_bucket": "20pp+",
+      "edge": -0.125,
+      "edge_bucket": "10-20pp",
       "entry_price": 0.535,
       "horizon": "30d+",
-      "lead_days": 203.0,
+      "lead_days": 202.8,
       "market_probability": 0.465,
       "market_url": "https://polymarket.com/market/will-an-artwork-sell-for-150-million-by-december-31",
-      "model_probability": 0.18,
+      "model_probability": 0.34,
       "payout_odds": 0.9,
       "platform": "Polymarket",
       "question": "Will an artwork sell for $150 million by December 31?",
       "side": "NO",
       "stance": "model_below_market",
+      "track_record": {
+        "n": 1,
+        "skill_ci_low": null,
+        "skill_significant": false,
+        "skill_vs_market": -0.021
+      }
+    },
+    {
+      "abs_edge": 0.057,
+      "domain": "geopolitics",
+      "edge": -0.057,
+      "edge_bucket": "5-10pp",
+      "entry_price": 0.863,
+      "horizon": "1-3d",
+      "lead_days": 2.6,
+      "market_probability": 0.137,
+      "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-june-15-2026-734-856-129",
+      "model_probability": 0.08,
+      "payout_odds": 0.2,
+      "platform": "Polymarket",
+      "question": "US x Iran permanent peace deal by June 15, 2026?",
+      "side": "NO",
+      "stance": "model_below_market",
       "track_record": null
     },
     {
-      "abs_edge": 0.045,
+      "abs_edge": 0.035,
       "domain": "geopolitics",
-      "edge": 0.045,
+      "edge": -0.035,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.055,
-      "horizon": "1-3d",
-      "lead_days": 2.8,
-      "market_probability": 0.055,
-      "market_url": "https://polymarket.com/market/israel-closes-its-airspace-by-june-15-687-594-783-732-455-613-653",
-      "model_probability": 0.1,
-      "payout_odds": 17.2,
+      "entry_price": 0.255,
+      "horizon": "30d+",
+      "lead_days": 201.6,
+      "market_probability": 0.745,
+      "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-december-31-2026-961-587-341-574-555-817",
+      "model_probability": 0.71,
+      "payout_odds": 2.9,
       "platform": "Polymarket",
-      "question": "Israel closes its airspace by June 15?",
-      "side": "YES",
-      "stance": "model_above_market",
+      "question": "US x Iran permanent peace deal by December 31, 2026?",
+      "side": "NO",
+      "stance": "model_below_market",
       "track_record": {
-        "n": 3,
-        "skill_ci_low": -0.0056,
+        "n": 6,
+        "skill_ci_low": -0.0057,
         "skill_significant": false,
-        "skill_vs_market": -0.0008
+        "skill_vs_market": -0.0025
       }
     },
     {
@@ -169,57 +192,80 @@
       "edge_bucket": "0-5pp",
       "entry_price": 0.086,
       "horizon": "30d+",
-      "lead_days": 37.8,
+      "lead_days": 37.6,
       "market_probability": 0.086,
       "market_url": "https://polymarket.com/market/will-brazil-win-the-2026-fifa-world-cup-183",
       "model_probability": 0.12,
-      "payout_odds": 10.6,
+      "payout_odds": 10.7,
       "platform": "Polymarket",
       "question": "Will Brazil win the 2026 FIFA World Cup?",
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 3,
-        "skill_ci_low": -0.0056,
+        "n": 6,
+        "skill_ci_low": -0.0057,
         "skill_significant": false,
-        "skill_vs_market": -0.0008
+        "skill_vs_market": -0.0025
       }
     },
     {
-      "abs_edge": 0.02,
-      "domain": "sports",
-      "edge": -0.02,
+      "abs_edge": 0.032,
+      "domain": "geopolitics",
+      "edge": 0.032,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.2,
-      "horizon": "14-30d",
-      "lead_days": 18.8,
-      "market_probability": 0.8,
-      "market_url": "https://polymarket.com/market/will-the-new-york-knicks-win-the-2026-nba-finals",
-      "model_probability": 0.78,
-      "payout_odds": 4.0,
+      "entry_price": 0.009,
+      "horizon": "<1d",
+      "lead_days": 0.8,
+      "market_probability": 0.009,
+      "market_url": "https://polymarket.com/market/trump-announces-us-x-iran-ceasefire-over-by-june-12-20260607232556274",
+      "model_probability": 0.04,
+      "payout_odds": 116.6,
       "platform": "Polymarket",
-      "question": "Will the New York Knicks win the 2026 NBA Finals?",
-      "side": "NO",
-      "stance": "model_below_market",
+      "question": "Trump announces US x Iran ceasefire over by June 12?",
+      "side": "YES",
+      "stance": "model_above_market",
       "track_record": {
-        "n": 3,
-        "skill_ci_low": -0.0056,
+        "n": 6,
+        "skill_ci_low": -0.0057,
         "skill_significant": false,
-        "skill_vs_market": -0.0008
+        "skill_vs_market": -0.0025
+      }
+    },
+    {
+      "abs_edge": 0.025,
+      "domain": "geopolitics",
+      "edge": 0.025,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.125,
+      "horizon": "14-30d",
+      "lead_days": 17.6,
+      "market_probability": 0.125,
+      "market_url": "https://polymarket.com/market/israel-closes-its-airspace-by-june-30-324-253-464-332-827-713-671-846",
+      "model_probability": 0.15,
+      "payout_odds": 7.0,
+      "platform": "Polymarket",
+      "question": "Israel closes its airspace by June 30?",
+      "side": "YES",
+      "stance": "model_above_market",
+      "track_record": {
+        "n": 6,
+        "skill_ci_low": -0.0057,
+        "skill_significant": false,
+        "skill_vs_market": -0.0025
       }
     }
   ],
-  "generated_at": "2026-06-12T05:26:12.662742+00:00",
+  "generated_at": "2026-06-12T09:42:03.219546+00:00",
   "knowledge_graph": {
     "domain_distribution": {
       "elections": 3,
       "entertainment": 6,
       "geopolitics": 22,
-      "other": 12,
+      "other": 9,
       "sports": 31,
       "technology": 3
     },
-    "n_tagged": 77,
+    "n_tagged": 74,
     "top_entities": [
       {
         "count": 21,
@@ -287,10 +333,6 @@
       },
       {
         "count": 3,
-        "entity": "Korea Republic"
-      },
-      {
-        "count": 3,
         "entity": "Argentina"
       },
       {
@@ -340,6 +382,10 @@
       {
         "count": 3,
         "entity": "Colorado Governor Republican"
+      },
+      {
+        "count": 3,
+        "entity": "Victor Marx"
       }
     ]
   },
@@ -354,11 +400,11 @@
   "model": "gpt-oss-120b",
   "models_comparison": [
     {
-      "accuracy": 1.0,
+      "accuracy": 0.7143,
       "model": "gemma-4-31b-it",
-      "model_brier": 0.0307,
-      "n_markets_resolved": 2,
-      "n_snapshots_resolved": 4,
+      "model_brier": 0.1327,
+      "n_markets_resolved": 3,
+      "n_snapshots_resolved": 7,
       "paper_pnl": {
         "disclaimer": "Hypothetical/paper: no fees, slippage, or liquidity. Upper-bound signal check, not live PnL.",
         "edge_weighted": {
@@ -386,14 +432,14 @@
       },
       "paper_roi": -1.0,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.0058
+      "skill_vs_market": -0.0052
     },
     {
-      "accuracy": 1.0,
+      "accuracy": 0.7143,
       "model": "gpt-oss-120b",
-      "model_brier": 0.0307,
-      "n_markets_resolved": 2,
-      "n_snapshots_resolved": 4,
+      "model_brier": 0.1327,
+      "n_markets_resolved": 3,
+      "n_snapshots_resolved": 7,
       "paper_pnl": {
         "disclaimer": "Hypothetical/paper: no fees, slippage, or liquidity. Upper-bound signal check, not live PnL.",
         "edge_weighted": {
@@ -421,14 +467,14 @@
       },
       "paper_roi": -1.0,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.0058
+      "skill_vs_market": -0.0052
     },
     {
-      "accuracy": 1.0,
+      "accuracy": 0.7143,
       "model": "kimi-k2.6",
-      "model_brier": 0.0307,
-      "n_markets_resolved": 2,
-      "n_snapshots_resolved": 4,
+      "model_brier": 0.1327,
+      "n_markets_resolved": 3,
+      "n_snapshots_resolved": 7,
       "paper_pnl": {
         "disclaimer": "Hypothetical/paper: no fees, slippage, or liquidity. Upper-bound signal check, not live PnL.",
         "edge_weighted": {
@@ -456,19 +502,19 @@
       },
       "paper_roi": -1.0,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.0058
+      "skill_vs_market": -0.0052
     }
   ],
-  "n_markets_open": 6,
-  "n_markets_resolved": 2,
-  "n_markets_tracked": 32,
-  "n_snapshots_resolved": 4,
+  "n_markets_open": 8,
+  "n_markets_resolved": 3,
+  "n_markets_tracked": 31,
+  "n_snapshots_resolved": 7,
   "overall": {
-    "accuracy": 1.0,
-    "market_brier": 0.0248,
-    "model_brier": 0.0307,
-    "n": 4,
-    "skill_vs_market": -0.0058
+    "accuracy": 0.7143,
+    "market_brier": 0.1276,
+    "model_brier": 0.1327,
+    "n": 7,
+    "skill_vs_market": -0.0052
   },
   "paper_pnl": {
     "disclaimer": "Hypothetical/paper: no fees, slippage, or liquidity. Upper-bound signal check, not live PnL.",
@@ -498,6 +544,86 @@
   "source": "live",
   "temperature": 0.0,
   "trajectories": [
+    {
+      "market_url": "https://polymarket.com/market/fifwc-kr-cze-2026-06-11-kr",
+      "outcome": 1,
+      "platform": "Polymarket",
+      "points": [
+        {
+          "date": "2026-06-10",
+          "lead_days": 1.1,
+          "market": 0.365,
+          "model": 0.36
+        },
+        {
+          "date": "2026-06-11",
+          "lead_days": 0.1,
+          "market": 0.375,
+          "model": 0.37
+        },
+        {
+          "date": "2026-06-12",
+          "lead_days": -0.1,
+          "market": 1.0,
+          "model": 0.99
+        }
+      ],
+      "price_points": [
+        {
+          "market": 0.365,
+          "ts": "2026-06-10T18:09:58.766880+00:00"
+        },
+        {
+          "market": 0.365,
+          "ts": "2026-06-10T20:44:54.232215+00:00"
+        },
+        {
+          "market": 0.365,
+          "ts": "2026-06-10T22:56:49.079235+00:00"
+        },
+        {
+          "market": 0.365,
+          "ts": "2026-06-11T01:38:46.759146+00:00"
+        },
+        {
+          "market": 0.355,
+          "ts": "2026-06-11T07:05:04.496609+00:00"
+        },
+        {
+          "market": 0.365,
+          "ts": "2026-06-11T11:47:55.340761+00:00"
+        },
+        {
+          "market": 0.355,
+          "ts": "2026-06-11T13:29:48.234028+00:00"
+        },
+        {
+          "market": 0.365,
+          "ts": "2026-06-11T15:30:16.214115+00:00"
+        },
+        {
+          "market": 0.365,
+          "ts": "2026-06-11T16:20:45.217112+00:00"
+        },
+        {
+          "market": 0.365,
+          "ts": "2026-06-11T19:45:19.771780+00:00"
+        },
+        {
+          "market": 0.375,
+          "ts": "2026-06-11T22:15:29.156635+00:00"
+        },
+        {
+          "market": 0.375,
+          "ts": "2026-06-11T23:55:00.583825+00:00"
+        },
+        {
+          "market": 1.0,
+          "ts": "2026-06-12T05:02:09.881672+00:00"
+        }
+      ],
+      "question": "Will Korea Republic win on 2026-06-11?"
+    },
     {
       "market_url": "https://polymarket.com/market/fifwc-mex-rsa-2026-06-11-mex",
       "outcome": 1,
