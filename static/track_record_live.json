@@ -2,19 +2,25 @@
   "by_domain": [
     {
       "accuracy": 1.0,
-      "domain": "crypto",
-      "market_brier": 0.0031,
-      "model_brier": 0.0163,
-      "n": 2,
-      "skill_vs_market": -0.0131
-    },
-    {
-      "accuracy": 1.0,
       "domain": "other",
       "market_brier": 0.0465,
       "model_brier": 0.0451,
       "n": 2,
+      "skill_ci_high": 0.0045,
+      "skill_ci_low": -0.0016,
+      "skill_significant": false,
       "skill_vs_market": 0.0015
+    },
+    {
+      "accuracy": 1.0,
+      "domain": "crypto",
+      "market_brier": 0.0031,
+      "model_brier": 0.0163,
+      "n": 2,
+      "skill_ci_high": 0.0022,
+      "skill_ci_low": -0.0285,
+      "skill_significant": false,
+      "skill_vs_market": -0.0131
     }
   ],
   "by_edge": [
@@ -59,6 +65,19 @@
       "skill_vs_market": 0.0015
     }
   ],
+  "by_liquidity": [
+    {
+      "accuracy": 1.0,
+      "liquidity": "liquid (>$25k)",
+      "market_brier": 0.0248,
+      "model_brier": 0.0307,
+      "n": 4,
+      "skill_ci_high": 0.0046,
+      "skill_ci_low": -0.0163,
+      "skill_significant": false,
+      "skill_vs_market": -0.0058
+    }
+  ],
   "calibration_model": {
     "applied": false,
     "min_required": 30,
@@ -67,34 +86,52 @@
   },
   "edge_board": [
     {
-      "abs_edge": 0.653,
-      "domain": "sports",
-      "edge": -0.653,
+      "abs_edge": 0.62,
+      "domain": "other",
+      "edge": -0.62,
       "edge_bucket": "20pp+",
-      "entry_price": 0.197,
+      "entry_price": 0.0,
       "horizon": "14-30d",
-      "lead_days": 19.0,
-      "market_probability": 0.803,
-      "market_url": "https://polymarket.com/market/will-the-new-york-knicks-win-the-2026-nba-finals",
-      "model_probability": 0.15,
-      "payout_odds": 4.1,
+      "lead_days": 17.8,
+      "market_probability": 1.0,
+      "market_url": "https://polymarket.com/market/will-trump-restart-project-freedom-by-june-30",
+      "model_probability": 0.38,
+      "payout_odds": 1999.0,
       "platform": "Polymarket",
-      "question": "Will the New York Knicks win the 2026 NBA Finals?",
+      "question": "Will Trump restart Project Freedom by June 30?",
       "side": "NO",
       "stance": "model_below_market",
       "track_record": null
     },
     {
-      "abs_edge": 0.315,
+      "abs_edge": 0.555,
+      "domain": "geopolitics",
+      "edge": -0.555,
+      "edge_bucket": "20pp+",
+      "entry_price": 0.245,
+      "horizon": "30d+",
+      "lead_days": 201.8,
+      "market_probability": 0.755,
+      "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-december-31-2026-961-587-341-574-555-817",
+      "model_probability": 0.2,
+      "payout_odds": 3.1,
+      "platform": "Polymarket",
+      "question": "US x Iran permanent peace deal by December 31, 2026?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": null
+    },
+    {
+      "abs_edge": 0.285,
       "domain": "other",
-      "edge": -0.315,
+      "edge": -0.285,
       "edge_bucket": "20pp+",
       "entry_price": 0.535,
       "horizon": "30d+",
-      "lead_days": 203.2,
+      "lead_days": 203.0,
       "market_probability": 0.465,
       "market_url": "https://polymarket.com/market/will-an-artwork-sell-for-150-million-by-december-31",
-      "model_probability": 0.15,
+      "model_probability": 0.18,
       "payout_odds": 0.9,
       "platform": "Polymarket",
       "question": "Will an artwork sell for $150 million by December 31?",
@@ -103,76 +140,86 @@
       "track_record": null
     },
     {
-      "abs_edge": 0.16,
+      "abs_edge": 0.045,
       "domain": "geopolitics",
-      "edge": -0.16,
-      "edge_bucket": "10-20pp",
-      "entry_price": 0.24,
-      "horizon": "30d+",
-      "lead_days": 202.0,
-      "market_probability": 0.76,
-      "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-december-31-2026-961-587-341-574-555-817",
-      "model_probability": 0.6,
-      "payout_odds": 3.2,
+      "edge": 0.045,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.055,
+      "horizon": "1-3d",
+      "lead_days": 2.8,
+      "market_probability": 0.055,
+      "market_url": "https://polymarket.com/market/israel-closes-its-airspace-by-june-15-687-594-783-732-455-613-653",
+      "model_probability": 0.1,
+      "payout_odds": 17.2,
       "platform": "Polymarket",
-      "question": "US x Iran permanent peace deal by December 31, 2026?",
-      "side": "NO",
-      "stance": "model_below_market",
+      "question": "Israel closes its airspace by June 15?",
+      "side": "YES",
+      "stance": "model_above_market",
       "track_record": {
-        "n": 1,
-        "skill_ci_low": null,
+        "n": 3,
+        "skill_ci_low": -0.0056,
         "skill_significant": false,
-        "skill_vs_market": -0.021
+        "skill_vs_market": -0.0008
       }
     },
     {
-      "abs_edge": 0.087,
-      "domain": "geopolitics",
-      "edge": 0.087,
-      "edge_bucket": "5-10pp",
-      "entry_price": 0.013,
-      "horizon": "1-3d",
-      "lead_days": 1.1,
-      "market_probability": 0.013,
-      "market_url": "https://polymarket.com/market/trump-announces-us-x-iran-ceasefire-over-by-june-12-20260607232556274",
-      "model_probability": 0.1,
-      "payout_odds": 75.9,
-      "platform": "Polymarket",
-      "question": "Trump announces US x Iran ceasefire over by June 12?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": null
-    },
-    {
-      "abs_edge": 0.064,
+      "abs_edge": 0.034,
       "domain": "sports",
-      "edge": 0.064,
-      "edge_bucket": "5-10pp",
+      "edge": 0.034,
+      "edge_bucket": "0-5pp",
       "entry_price": 0.086,
       "horizon": "30d+",
-      "lead_days": 38.0,
+      "lead_days": 37.8,
       "market_probability": 0.086,
       "market_url": "https://polymarket.com/market/will-brazil-win-the-2026-fifa-world-cup-183",
-      "model_probability": 0.15,
+      "model_probability": 0.12,
       "payout_odds": 10.6,
       "platform": "Polymarket",
       "question": "Will Brazil win the 2026 FIFA World Cup?",
       "side": "YES",
       "stance": "model_above_market",
-      "track_record": null
+      "track_record": {
+        "n": 3,
+        "skill_ci_low": -0.0056,
+        "skill_significant": false,
+        "skill_vs_market": -0.0008
+      }
+    },
+    {
+      "abs_edge": 0.02,
+      "domain": "sports",
+      "edge": -0.02,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.2,
+      "horizon": "14-30d",
+      "lead_days": 18.8,
+      "market_probability": 0.8,
+      "market_url": "https://polymarket.com/market/will-the-new-york-knicks-win-the-2026-nba-finals",
+      "model_probability": 0.78,
+      "payout_odds": 4.0,
+      "platform": "Polymarket",
+      "question": "Will the New York Knicks win the 2026 NBA Finals?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 3,
+        "skill_ci_low": -0.0056,
+        "skill_significant": false,
+        "skill_vs_market": -0.0008
+      }
     }
   ],
-  "generated_at": "2026-06-12T00:23:46.793493+00:00",
+  "generated_at": "2026-06-12T05:26:12.662742+00:00",
   "knowledge_graph": {
     "domain_distribution": {
       "elections": 3,
       "entertainment": 6,
-      "geopolitics": 21,
-      "other": 10,
-      "sports": 32,
+      "geopolitics": 22,
+      "other": 12,
+      "sports": 31,
       "technology": 3
     },
-    "n_tagged": 75,
+    "n_tagged": 77,
     "top_entities": [
       {
         "count": 21,
@@ -183,16 +230,20 @@
         "entity": "World Cup"
       },
       {
-        "count": 8,
+        "count": 9,
         "entity": "Iran"
       },
       {
-        "count": 8,
+        "count": 9,
         "entity": "US"
       },
       {
         "count": 6,
         "entity": "Israel"
+      },
+      {
+        "count": 6,
+        "entity": "Trump"
       },
       {
         "count": 6,
@@ -203,12 +254,8 @@
         "entity": "NBA"
       },
       {
-        "count": 5,
-        "entity": "NFL"
-      },
-      {
         "count": 4,
-        "entity": "Trump"
+        "entity": "NFL"
       },
       {
         "count": 3,
@@ -237,6 +284,10 @@
       {
         "count": 3,
         "entity": "Volodymyr Zelenskyy"
+      },
+      {
+        "count": 3,
+        "entity": "Korea Republic"
       },
       {
         "count": 3,
@@ -284,15 +335,11 @@
       },
       {
         "count": 3,
+        "entity": "Project Freedom"
+      },
+      {
+        "count": 3,
         "entity": "Colorado Governor Republican"
-      },
-      {
-        "count": 3,
-        "entity": "Victor Marx"
-      },
-      {
-        "count": 3,
-        "entity": "Cologne Major"
       }
     ]
   },
@@ -412,7 +459,7 @@
       "skill_vs_market": -0.0058
     }
   ],
-  "n_markets_open": 5,
+  "n_markets_open": 6,
   "n_markets_resolved": 2,
   "n_markets_tracked": 32,
   "n_snapshots_resolved": 4,
