@@ -4004,14 +4004,15 @@ function renderEdgeBoard(d) {
       : _build(s && s.n_bets);
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
-    const note = `<p class="text-xs text-gray-500">Every resolved forecast is bet — ${nBet} of ${nRes} resolved markets priced and staked.</p>`;
-    pnlHtml = `<div class="tr-stats">
-      <div class="tr-stat"><div class="v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div></div>
-      <div class="tr-stat"><div class="v">${roi(pnl.edge_weighted)}</div><div class="k label">Edge-weighted</div></div>
-      <div class="tr-stat"><div class="v">${roi(pnl.validated_only)}</div><div class="k label">Validated-only</div></div>
-    </div>${note}<p class="text-xs text-gray-400">${escHtml(pnl.disclaimer || '')}</p>`;
+    const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
+    const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. Three ways to size each bet (${nBet} of ${nRes} resolved markets bet):</p>`;
+    pnlHtml = intro + `<div class="tr-stats">
+      <div class="tr-stat" title="Equal stake on every call. Pure hit-rate at the odds paid — a winning favourite pays little, any loss costs the full stake."><div class="v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
+      <div class="tr-stat" title="Stake scales with how far the model sits from the market price — big where it disagrees with the crowd, almost nothing where it agrees."><div class="v">${roi(pnl.edge_weighted)}</div><div class="k label">Edge-weighted</div>${_sub('stake the gap vs market')}</div>
+      <div class="tr-stat" title="Flat stake, but only on calls in disagreement buckets whose resolved skill is already statistically significant. Builds as more markets resolve."><div class="v">${roi(pnl.validated_only)}</div><div class="k label">Validated-only</div>${_sub('only proven-edge calls')}</div>
+    </div><p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(pnl.disclaimer || '')}</p>`;
   } else {
-    pnlHtml = `<p class="text-sm text-gray-500">Hypothetical paper PnL starts once disagreements resolve. No fees/slippage — a signal check, not live trading.</p>`;
+    pnlHtml = `<p class="text-sm text-gray-500">Hypothetical paper PnL — following the model's calls — starts once markets resolve. No fees/slippage; a signal check, not live trading.</p>`;
   }
   // Lead-time calibration is the primary axis the live rows link to: resolved
   // skill grouped by how early the forecast was made. Ordered earliest → latest.
@@ -4033,7 +4034,7 @@ function renderEdgeBoard(d) {
     <p class="tr-method">Live model-vs-market gaps, ranked. Calibration, lead/lag and paper PnL come from resolved forecasts only — hypothetical, no fees or slippage. ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${stats}
     <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
-    <h4 class="eb-h">Hypothetical paper PnL · betting the edge</h4>${pnlHtml}
+    <h4 class="eb-h">Hypothetical paper PnL · following the model's calls</h4>${pnlHtml}
     <h4 class="eb-h">Does an early call pay? · skill by how early the forecast was made</h4>${calibHtml}
     <h4 class="eb-h">Live forecasts · ranked by disagreement, linked to skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;
