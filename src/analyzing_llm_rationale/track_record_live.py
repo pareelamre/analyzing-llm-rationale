@@ -25,6 +25,7 @@ Store kinds:
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
@@ -409,6 +410,26 @@ _EDGE_BUCKETS = [
 # board/lead-lag/PnL stratify by lead time rather than filtering by |model − market|.
 _EDGE_MIN = 0.0
 
+# Trading costs deducted per paper bet so ROI is net-of-fees (the "real" ROI).
+# Kalshi charges a price-dependent taker fee ≈ coeff·contracts·p·(1−p); since a
+# stake of `s` buys s/p contracts, that simplifies to coeff·s·(1−p). Polymarket
+# charges no trading fee. _EXTRA_FEE_RATE adds a flat per-stake cost on every
+# venue (a slippage/spread assumption). All env-overridable; defaults are
+# venue-accurate (Polymarket fee-free, no slippage) so ROI stays truthful.
+_FEE_COEFF = {
+    "kalshi": float(os.environ.get("KALSHI_FEE_COEFF", "0.07")),
+    "polymarket": float(os.environ.get("POLYMARKET_FEE_COEFF", "0.0")),
+}
+_DEFAULT_FEE_COEFF = float(os.environ.get("DEFAULT_FEE_COEFF", "0.0"))
+_EXTRA_FEE_RATE = float(os.environ.get("PAPER_EXTRA_FEE_RATE", "0.0"))
+
+
+def _bet_fee(platform: Any, stake: float, p_side: float) -> float:
+    """Trading cost for one paper bet: venue taker fee (price-dependent) plus a
+    flat slippage assumption, both as a fraction of stake."""
+    coeff = _FEE_COEFF.get(str(platform or "").lower(), _DEFAULT_FEE_COEFF)
+    return coeff * stake * (1.0 - p_side) + _EXTRA_FEE_RATE * stake
+
 # Market-volume (USD) buckets for the niche-vs-liquid skill breakdown. The edge
 # thesis: thin/niche markets have the least-informed crowd, so that's where the
 # model should beat it; deep markets are efficient.
@@ -527,15 +548,17 @@ def paper_pnl(resolved: List[Dict[str, Any]],
     and validated-only (flat, but only in disagreement buckets whose resolved
     track record is statistically significant).
 
-    **Paper only** — no fees, slippage, liquidity, or correlation across
-    snapshots of the same market. It's an upper-bound signal check, the evidence
-    that would justify ever enabling the guarded live executor in ``trading.py``,
-    not a live PnL.
+    Returns are **net of venue trading fees** (``_bet_fee``: Kalshi's
+    price-dependent taker fee; Polymarket fee-free), so ``roi`` is the real,
+    cost-adjusted return. **Paper only** otherwise — excludes slippage/liquidity
+    (unless ``PAPER_EXTRA_FEE_RATE`` is set) and correlation across snapshots of
+    the same market. A signal check, the evidence that would justify ever
+    enabling the guarded live executor in ``trading.py``, not a live PnL.
     """
     sig_buckets = {b["edge_bucket"] for b in (edge_calib or []) if b.get("skill_significant")}
 
     def _run(sizing, *, validated: bool = False) -> Optional[Dict[str, Any]]:
-        staked = pnl = wins = 0.0
+        staked = pnl = wins = fees = 0.0
         n = 0
         cum = 0.0
         curve: List[float] = []
@@ -556,9 +579,12 @@ def paper_pnl(resolved: List[Dict[str, Any]],
                 continue
             win = (int(r["outcome"]) == 1) == side_yes
             stake = sizing(edge)
-            profit = stake * ((1.0 - p_side) / p_side if win else -1.0)
+            fee = _bet_fee(r.get("platform"), stake, p_side)
+            # Net of trading fees so ROI is the real, cost-adjusted return.
+            profit = stake * ((1.0 - p_side) / p_side if win else -1.0) - fee
             staked += stake
             pnl += profit
+            fees += fee
             wins += 1 if win else 0
             n += 1
             cum += profit
@@ -568,6 +594,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         return {
             "n_bets": n,
             "total_staked": round(staked, 4),
+            "fees": round(fees, 4),
             "pnl": round(pnl, 4),
             "roi": round(pnl / staked, 4) if staked else None,
             "win_rate": round(wins / n, 4),
@@ -579,7 +606,9 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         return None
     return {
         "min_edge": min_edge,
-        "disclaimer": "Hypothetical/paper: no fees, slippage, or liquidity. Upper-bound signal check, not live PnL.",
+        "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; "
+                      "Polymarket fee-free). Excludes slippage/liquidity unless configured. "
+                      "Signal check, not live PnL.",
         "flat": flat,
         "edge_weighted": _run(lambda e: min(e, stake_cap)),
         "validated_only": _run(lambda e: 1.0, validated=True),

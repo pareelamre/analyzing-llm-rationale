@@ -426,6 +426,19 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertIsNotNone(pnl["validated_only"])                 # 20pp+ bucket is significant
         self.assertEqual(pnl["validated_only"]["n_bets"], 10)
 
+    def test_paper_pnl_is_net_of_kalshi_fees(self):
+        # Same winning bet on Kalshi (price-based fee) vs Polymarket (fee-free):
+        # Kalshi ROI must be lower, and the fee must be reported and positive.
+        kalshi = [dict(self._res(0.8, 0.5, 1), platform="Kalshi") for _ in range(10)]
+        poly = [dict(self._res(0.8, 0.5, 1), platform="Polymarket") for _ in range(10)]
+        pk = trl.paper_pnl(kalshi, [])
+        pp = trl.paper_pnl(poly, [])
+        self.assertGreater(pk["flat"]["fees"], 0)            # Kalshi charged a fee
+        self.assertEqual(pp["flat"]["fees"], 0)              # Polymarket fee-free
+        self.assertLess(pk["flat"]["roi"], pp["flat"]["roi"])  # fees drag real ROI down
+        # Fee ≈ 0.07 * stake * (1 - p_side) = 0.07 * 1 * 0.5 = 0.035 per bet.
+        self.assertAlmostEqual(pk["flat"]["fees"], 10 * 0.035, places=4)
+
     def test_paper_pnl_bets_the_models_own_side_not_against_it(self):
         # Model says 60% YES (its call is YES) while the market is higher at 75%.
         # The bet must follow the model's call (YES) — so a YES outcome WINS,
