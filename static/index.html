@@ -3926,10 +3926,15 @@ function _renderBoardPage(board, page) {
   const pages = Math.ceil(board.length / _EB_PAGE_SIZE);
   const slice = board.slice(page * _EB_PAGE_SIZE, (page + 1) * _EB_PAGE_SIZE);
   const rows = slice.map(e => {
-    const tr = e.track_record;
+    // Primary link is the lead-time (how-early) track record; fall back to the
+    // edge-size bucket record only if no lead-time record exists.
+    const tr = e.lead_track_record || e.track_record;
     const badge = !tr ? '—' : (tr.skill_significant
       ? `<span class="eb-badge eb-sig">proven (n=${tr.n})</span>`
       : `<span class="eb-badge">unproven (n=${tr.n ?? 0})</span>`);
+    const lead = (e.lead_days != null)
+      ? (e.lead_days >= 1 ? Math.round(e.lead_days) + 'd' : '<1d') + ' ahead'
+      : (e.lead_bucket || '—');
     const url = e.market_url ? `href="${escHtml(e.market_url)}" target="_blank" rel="noopener"` : '';
     const trade = e.side
       ? `Buy ${e.side} @ ${Math.round((e.entry_price || 0) * 100)}¢` +
@@ -3947,9 +3952,9 @@ function _renderBoardPage(board, page) {
       `<td class="eb-live-market">${pct(e.market_probability)}%</td>` +
       `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td>` +
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
-      `<td>${e.edge_bucket}</td><td>${badge}</td></tr>`;
+      `<td style="white-space:nowrap">${lead}</td><td>${badge}</td></tr>`;
   }).join('');
-  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Model</th><th>Crowd</th><th>Edge</th><th>Trade</th><th>Bucket</th><th>Track record</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Model</th><th>Crowd</th><th>Edge</th><th>Trade</th><th>Lead</th><th>Skill at this lead</th></tr></thead><tbody>${rows}</tbody></table>`;
   let pagination = '';
   if (pages > 1) {
     const prev = page > 0
@@ -3964,12 +3969,17 @@ function _renderBoardPage(board, page) {
 }
 
 function renderEdgeBoard(d) {
-  const board = d.edge_board || [], byEdge = d.by_edge || [], comp = d.models_comparison || [];
+  const board = d.edge_board || [], comp = d.models_comparison || [];
   _ebBoardData = board;
   _ebPage = 0;
   const pnl = d.paper_pnl, ll = d.lead_lag;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
-  const conv = ll && ll.market_converged_to_model_pct != null ? pct(ll.market_converged_to_model_pct) + '%' : '—';
+  // Never surface a degenerate metric (a 0% / −100% read off a handful of points).
+  // Below EB_MIN_N samples a metric reads "building n=…" instead of a misleading zero.
+  const EB_MIN_N = 5;
+  const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
+  const conv = (ll && ll.n_markets >= EB_MIN_N && ll.market_converged_to_model_pct != null)
+    ? pct(ll.market_converged_to_model_pct) + '%' : _build(ll && ll.n_markets);
   const stats = `
     <div class="tr-stats">
       <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div>${d.n_markets_tracked ? `<div class="k" style="font-size:11px;color:var(--text-dim)">tracking ${d.n_markets_tracked}</div>` : ''}</div>
@@ -3979,21 +3989,22 @@ function renderEdgeBoard(d) {
   let compHtml;
   if (comp.length) {
     compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Paper ROI</th><th>Validated</th></tr></thead><tbody>` +
-      comp.map(m => `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
-        `<td>${m.accuracy == null ? '—' : pct(m.accuracy) + '%'}</td><td>${_sg(m.skill_vs_market)}</td>` +
-        `<td>${_roiPct(m.paper_roi)}</td><td>${_roiPct(m.paper_roi_validated)}</td></tr>`).join('') + `</tbody></table>`;
+      comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
+        return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
+        `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
+        `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td>` +
+        `<td>${enough ? _roiPct(m.paper_roi) : '·'}</td><td>${enough ? _roiPct(m.paper_roi_validated) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
   } else {
     compHtml = `<p class="text-sm text-gray-500">Model comparison (gpt-oss-120b vs Gemma vs Kimi) fills in as forecasts resolve.</p>`;
   }
   let pnlHtml;
   if (pnl && pnl.flat) {
-    const roi = s => s ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets') : '—';
+    // Every resolved forecast is bet (no minimum edge), so n_bets tracks resolutions.
+    const roi = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets')
+      : _build(s && s.n_bets);
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
-    const edgePts = Math.round((pnl.min_edge || 0) * 100);
-    const note = nRes > nBet
-      ? `<p class="text-xs text-gray-500">Bets ${nBet} of ${nRes} resolved forecasts — only disagreements ≥${edgePts}pp are bet (the rest were model-agrees-with-market).</p>`
-      : '';
+    const note = `<p class="text-xs text-gray-500">Every resolved forecast is bet — ${nBet} of ${nRes} resolved markets priced and staked.</p>`;
     pnlHtml = `<div class="tr-stats">
       <div class="tr-stat"><div class="v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div></div>
       <div class="tr-stat"><div class="v">${roi(pnl.edge_weighted)}</div><div class="k label">Edge-weighted</div></div>
@@ -4002,14 +4013,18 @@ function renderEdgeBoard(d) {
   } else {
     pnlHtml = `<p class="text-sm text-gray-500">Hypothetical paper PnL starts once disagreements resolve. No fees/slippage — a signal check, not live trading.</p>`;
   }
+  // Lead-time calibration is the primary axis the live rows link to: resolved
+  // skill grouped by how early the forecast was made. Ordered earliest → latest.
+  const byHorizon = d.by_horizon || [];
+  const _hOrder = { '30d+': 0, '14-30d': 1, '7-14d': 2, '3-7d': 3, '1-3d': 4, '<1d': 5 };
   let calibHtml;
-  if (byEdge.length) {
-    calibHtml = byEdge.map(b => {
+  if (byHorizon.length) {
+    calibHtml = byHorizon.slice().sort((a, b) => (_hOrder[a.horizon] ?? 9) - (_hOrder[b.horizon] ?? 9)).map(b => {
       const sig = b.skill_significant ? '<span class="eb-badge eb-sig">proven edge</span>' : '<span class="eb-badge">not yet proven</span>';
-      return `<div class="eb-calib-row eb-row"><span style="width:90px;font-weight:600">${b.edge_bucket}</span><span style="flex:1">skill ${_sg(b.skill_vs_market)} (n=${b.n})</span>${sig}</div>`;
+      return `<div class="eb-calib-row eb-row"><span style="width:90px;font-weight:600">${b.horizon} ahead</span><span style="flex:1">skill ${_sg(b.skill_vs_market)} (n=${b.n})</span>${sig}</div>`;
     }).join('');
   } else {
-    calibHtml = `<p class="text-sm text-gray-500">Edge calibration — whether bigger disagreements actually pay — builds as markets resolve.</p>`;
+    calibHtml = `<p class="text-sm text-gray-500">Lead-time calibration — whether forecasts made this early actually pay — builds as markets resolve.</p>`;
   }
   const boardHtml = `<div id="eb-board-section">${_renderBoardPage(board, 0)}</div>`;
   return `<div class="tr-inner">
@@ -4019,8 +4034,8 @@ function renderEdgeBoard(d) {
     ${stats}
     <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
     <h4 class="eb-h">Hypothetical paper PnL · betting the edge</h4>${pnlHtml}
-    <h4 class="eb-h">Does disagreement pay? · edge calibration</h4>${calibHtml}
-    <h4 class="eb-h">Live disagreements <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
+    <h4 class="eb-h">Does an early call pay? · skill by how early the forecast was made</h4>${calibHtml}
+    <h4 class="eb-h">Live forecasts · ranked by disagreement, linked to skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;
 }
 let radarLoaded = false;

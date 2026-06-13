@@ -426,9 +426,30 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertIsNotNone(pnl["validated_only"])                 # 20pp+ bucket is significant
         self.assertEqual(pnl["validated_only"]["n_bets"], 10)
 
-    def test_paper_pnl_none_when_no_qualifying_disagreement(self):
-        resolved = [self._res(0.52, 0.5, 1) for _ in range(5)]      # 2pp < min_edge
-        self.assertIsNone(trl.paper_pnl(resolved, []))
+    def test_paper_pnl_bets_every_forecast_without_min_edge(self):
+        # No minimum edge: even a 2pp disagreement is bet (the organizing axis is
+        # lead time, not edge size). None only when there are no resolved forecasts.
+        resolved = [self._res(0.52, 0.5, 1) for _ in range(5)]      # 2pp edge
+        pnl = trl.paper_pnl(resolved, [])
+        self.assertIsNotNone(pnl)
+        self.assertEqual(pnl["flat"]["n_bets"], 5)
+        self.assertEqual(pnl["min_edge"], 0.0)
+        self.assertIsNone(trl.paper_pnl([], []))                    # nothing resolved
+
+    def test_edge_board_links_to_lead_time_track_record(self):
+        now = datetime.now(timezone.utc)
+        # Open market closing ~40 days out → "30d+" horizon bucket.
+        open_rows = [{"platform": "Polymarket", "ident": "A", "model_probability": 0.8,
+                      "market_probability": 0.5, "snapshot_ts": now, "question": "Q1",
+                      "market_url": "u1", "close_time": (now + timedelta(days=40)).isoformat()}]
+        horizon_calib = [{"horizon": "30d+", "n": 12, "skill_vs_market": 0.04,
+                          "skill_ci_low": 0.01, "skill_significant": True}]
+        board = trl.build_edge_board(open_rows, {"A": 0.5}, [], horizon_calib)
+        ltr = board[0]["lead_track_record"]
+        self.assertEqual(board[0]["lead_bucket"], "30d+")
+        self.assertEqual(ltr["horizon"], "30d+")
+        self.assertTrue(ltr["skill_significant"])
+        self.assertEqual(ltr["n"], 12)
 
     def test_paper_pnl_validated_only_skips_unproven_buckets(self):
         # Coin-flip disagreements -> bucket not significant -> validated_only empty.

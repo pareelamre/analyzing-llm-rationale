@@ -404,8 +404,10 @@ _EDGE_BUCKETS = [
     ("0-5pp", 0.0, 0.05),
 ]
 
-# Minimum disagreement to count a snapshot as a real "edge" for lead/lag + board.
-_EDGE_MIN = 0.05
+# No minimum disagreement gate: the organizing axis is *how early* the forecast was
+# made (lead time / horizon), not edge size — so every forecast counts, and the
+# board/lead-lag/PnL stratify by lead time rather than filtering by |model − market|.
+_EDGE_MIN = 0.0
 
 # Market-volume (USD) buckets for the niche-vs-liquid skill breakdown. The edge
 # thesis: thin/niche markets have the least-informed crowd, so that's where the
@@ -608,15 +610,21 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
 def build_edge_board(open_rows: List[Dict[str, Any]],
                      latest_price: Dict[str, float],
                      edge_calib: List[Dict[str, Any]],
+                     horizon_calib: Optional[List[Dict[str, Any]]] = None,
                      *,
-                     min_abs_edge: float = 0.02,
+                     min_abs_edge: float = 0.0,
                      max_per_close_window: int = 10,
                      limit: int = 50) -> List[Dict[str, Any]]:
-    """Current open markets ranked by live model-vs-market disagreement, each
-    annotated with its disagreement bucket's resolved track record — so a gap is
-    shown *with* the earned credibility of gaps that size (``skill_significant``),
-    not as a raw claim."""
+    """Current open markets, each annotated with the resolved track record of
+    forecasts made at a similar *lead time* (``lead_track_record`` from
+    ``horizon_calib``) — interlinking the live board with the by-horizon
+    calibration so a disagreement is shown *with* the earned credibility of
+    forecasts made this early. ``min_abs_edge`` defaults to 0: every open forecast
+    is shown regardless of edge size, since the organizing axis is how early the
+    forecast was made, not the gap. The edge-size bucket's record is kept too
+    (``track_record``) for continuity."""
     by_edge = {b["edge_bucket"]: b for b in (edge_calib or [])}
+    by_horizon = {b["horizon"]: b for b in (horizon_calib or [])}
     latest: Dict[Tuple[str, str], Dict[str, Any]] = {}
     for r in open_rows:
         key = (r.get("platform"), r.get("ident"))
@@ -642,6 +650,10 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             continue
         label = _edge_label(abs(signed))
         tr = by_edge.get(label)
+        # Primary link: resolved skill of forecasts made at a similar lead time —
+        # how early this call is, tied to our track record at that earliness.
+        lead_label = _horizon_label(current_lead)
+        lead_tr = by_horizon.get(lead_label)
         # The directional trade: buy the model's side at that side's price. Buying
         # YES is the same position as fading NO (binary markets are symmetric); the
         # payout is asymmetric, though — a $1 winner returns (1 − price)/price.
@@ -665,6 +677,7 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "entry_price": round(entry, 3) if entry is not None else None,
             "payout_odds": payout_odds,
             "edge_bucket": label,
+            "lead_bucket": lead_label,
             "close_time": r.get("close_time"),
             "track_record": {
                 "n": tr.get("n"),
@@ -672,6 +685,13 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
                 "skill_ci_low": tr.get("skill_ci_low"),
                 "skill_significant": tr.get("skill_significant"),
             } if tr else None,
+            "lead_track_record": {
+                "horizon": lead_label,
+                "n": lead_tr.get("n"),
+                "skill_vs_market": lead_tr.get("skill_vs_market"),
+                "skill_ci_low": lead_tr.get("skill_ci_low"),
+                "skill_significant": lead_tr.get("skill_significant"),
+            } if lead_tr else None,
         })
     board.sort(key=lambda x: x["abs_edge"], reverse=True)
 
@@ -862,9 +882,19 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_primary}
     n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_primary})
 
+    # Lead-time (how-early) calibration: resolved skill bucketed by forecast
+    # horizon, with significance — the axis the edge board links against.
+    by_horizon = []
+    for label, _lo, _hi in _HORIZONS:
+        stats = _bucket_stats([r for r in resolved_primary if r.get("horizon") == label])
+        if stats:
+            stats["horizon"] = label
+            stats.update(_skill_ci([r for r in resolved_primary if r.get("horizon") == label]))
+            by_horizon.append(stats)
+
     # Compute edge board early so the stat can reflect its actual length.
     by_edge_early = edge_calibration([r for r in resolved if (r.get("model") or model) == model])
-    edge_board_result = build_edge_board(open_primary, latest_price, by_edge_early)
+    edge_board_result = build_edge_board(open_primary, latest_price, by_edge_early, by_horizon)
 
     payload: Dict[str, Any] = {
         "source": "live",
@@ -886,12 +916,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     }
 
     overall = _bucket_stats(resolved_primary)
-    by_horizon = []
-    for label, _lo, _hi in _HORIZONS:
-        stats = _bucket_stats([r for r in resolved_primary if r.get("horizon") == label])
-        if stats:
-            stats["horizon"] = label
-            by_horizon.append(stats)
+    # by_horizon computed above (with significance) so the edge board can link to it.
 
     # Trajectory samples: a few resolved markets with their snapshot series.
     by_market: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
