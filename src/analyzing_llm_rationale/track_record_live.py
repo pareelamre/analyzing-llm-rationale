@@ -513,14 +513,19 @@ def lead_lag(by_market: Dict[Tuple[str, str], List[Dict[str, Any]]],
 def paper_pnl(resolved: List[Dict[str, Any]],
               edge_calib: Optional[List[Dict[str, Any]]] = None,
               *, min_edge: float = _EDGE_MIN, stake_cap: float = 0.25) -> Optional[Dict[str, Any]]:
-    """Hypothetical paper PnL of an edge-driven strategy over resolved snapshots.
+    """Hypothetical paper PnL of *following the model's own call* over resolved
+    snapshots — the edge is how far ahead of time the model calls the right shot.
 
-    For each resolved snapshot where the model disagreed with the price by
-    ≥ ``min_edge``, place a hypothetical bet on the model's side at the market
-    price; at resolution a winning $1 of exposure returns ``(1 − p)/p``, a loser
-    returns −1. Three sizings are reported: flat (pure signal), edge-weighted
-    (bet the disagreement), and validated-only (flat, but only in edge buckets
-    whose resolved track record is statistically significant).
+    For each resolved snapshot, place a hypothetical bet on the model's own
+    predicted side (its >50% answer — the same side ``accuracy`` scores, never
+    against the model) at that day's market price; at resolution a winning $1 of
+    exposure returns ``(1 − p)/p``, a loser returns −1. Because every daily
+    snapshot is a bet, a model that locks the correct answer early wins on more
+    days — and usually at better (less-settled) prices — so calling right *early*
+    is rewarded. ``win_rate`` therefore equals the model's accuracy. Three
+    sizings: flat (pure signal), edge-weighted (stake the model-vs-market gap),
+    and validated-only (flat, but only in disagreement buckets whose resolved
+    track record is statistically significant).
 
     **Paper only** — no fees, slippage, liquidity, or correlation across
     snapshots of the same market. It's an upper-bound signal check, the evidence
@@ -541,7 +546,11 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             if validated and _edge_label(edge) not in sig_buckets:
                 continue
             model_p, market_p = float(r["model_probability"]), float(r["market_probability"])
-            side_yes = model_p > market_p
+            # Bet the model's OWN call (the accuracy side), not the model-vs-market
+            # lean — never stake against the model's answer. win_rate == accuracy.
+            if model_p == 0.5:
+                continue  # no directional conviction to follow
+            side_yes = model_p > 0.5
             p_side = market_p if side_yes else (1.0 - market_p)
             if not (0.0 < p_side < 1.0):
                 continue

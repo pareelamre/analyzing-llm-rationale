@@ -426,6 +426,18 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertIsNotNone(pnl["validated_only"])                 # 20pp+ bucket is significant
         self.assertEqual(pnl["validated_only"]["n_bets"], 10)
 
+    def test_paper_pnl_bets_the_models_own_side_not_against_it(self):
+        # Model says 60% YES (its call is YES) while the market is higher at 75%.
+        # The bet must follow the model's call (YES) — so a YES outcome WINS,
+        # never staking against the model. win_rate must equal accuracy (1.0).
+        resolved = [self._res(0.6, 0.75, 1) for _ in range(8)]
+        pnl = trl.paper_pnl(resolved, [])
+        self.assertEqual(pnl["flat"]["win_rate"], 1.0)               # model's YES call was right
+        self.assertGreater(pnl["flat"]["pnl"], 0)                    # bought YES @ 0.75, paid off
+        # Sanity: win_rate tracks accuracy (model_correct) on the same set.
+        acc = sum(r["model_correct"] for r in resolved) / len(resolved)
+        self.assertEqual(pnl["flat"]["win_rate"], acc)
+
     def test_paper_pnl_bets_every_forecast_without_min_edge(self):
         # No minimum edge: even a 2pp disagreement is bet (the organizing axis is
         # lead time, not edge size). None only when there are no resolved forecasts.
