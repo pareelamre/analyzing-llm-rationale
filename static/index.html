@@ -3673,6 +3673,7 @@ async function loadTrackRecord() {
 }
 let edgeLoaded = false;
 let _edgePriceTimer = null;
+let _ebEquityTimer = null;
 
 async function refreshEdgePrices() {
   try {
@@ -3702,6 +3703,28 @@ async function refreshEdgePrices() {
   } catch (_) {}
 }
 
+async function refreshEquityCurve() {
+  const el = document.getElementById('eb-equity-svg');
+  if (!el) return;
+  try {
+    const r = await fetch('/edge-board');
+    if (!r.ok) return;
+    const d = await _readJson(r);
+    const pnl = d.paper_pnl;
+    if (!pnl) return;
+    const _normCurve = s => s?.equity_curve?.length && s.total_staked
+      ? s.equity_curve.map(v => v / s.total_staked) : null;
+    const curves = [
+      _normCurve(pnl.flat)           ? { points: _normCurve(pnl.flat),           color: '#60a5fa', label: 'Flat stake' }     : null,
+      _normCurve(pnl.edge_weighted)  ? { points: _normCurve(pnl.edge_weighted),  color: '#a78bfa', label: 'Edge-weighted' }  : null,
+      _normCurve(pnl.validated_only) ? { points: _normCurve(pnl.validated_only), color: '#34d399', label: 'Validated-only' } : null,
+    ].filter(Boolean);
+    el.innerHTML = curves.length ? _equitySvg(curves) : '';
+    const ts = document.getElementById('eb-pnl-ts');
+    if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
+  } catch (_) {}
+}
+
 async function openEdgeBoard({ updateHistory = true } = {}) {
   const ov = document.getElementById('edgeOverlay');
   if (ov.classList.contains('open')) return;
@@ -3716,11 +3739,14 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   if (!edgeLoaded) { edgeLoaded = true; await loadEdgeBoard(); }
   refreshEdgePrices();
   _edgePriceTimer = setInterval(refreshEdgePrices, 60000);
+  _ebEquityTimer = setInterval(refreshEquityCurve, 5 * 60 * 1000);
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
 function closeEdgeBoard({ updateHistory = true } = {}) {
   clearInterval(_edgePriceTimer);
   _edgePriceTimer = null;
+  clearInterval(_ebEquityTimer);
+  _ebEquityTimer = null;
   const ov = document.getElementById('edgeOverlay');
   if (!ov.classList.contains('open')) return;
   if (updateHistory && (history.state?.view === 'edge-app' || history.state?.view === 'edge-landing')) {
@@ -4059,7 +4085,7 @@ function renderEdgeBoard(d) {
       _normCurve(pnl.edge_weighted) ? { points: _normCurve(pnl.edge_weighted), color: '#a78bfa', label: 'Edge-weighted' }     : null,
       _normCurve(pnl.validated_only)? { points: _normCurve(pnl.validated_only),color: '#34d399', label: 'Validated-only' }    : null,
     ].filter(Boolean);
-    const svgChart = curves.length ? _equitySvg(curves) : '';
+    const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves) : ''}</div>`;
     // Per-sizing explainer: what each number means and what the gap between them signals.
     const _pnlExplainer = () => {
       const fl = pnl.flat, ew = pnl.edge_weighted, vo = pnl.validated_only;
@@ -4156,7 +4182,7 @@ function renderEdgeBoard(d) {
     <p class="tr-method">Live model-vs-market gaps, ranked. Calibration, lead/lag and paper PnL come from resolved forecasts only — hypothetical, no fees or slippage. ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${stats}
     <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
-    <h4 class="eb-h">Hypothetical paper PnL · following the model's calls</h4>${pnlHtml}
+    <h4 class="eb-h">Hypothetical paper PnL · following the model's calls <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${pnlHtml}
     <h4 class="eb-h">Does an early call pay? · skill by how early the forecast was made</h4>${calibHtml}
     <h4 class="eb-h">Live forecasts · ranked by disagreement, linked to skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;
