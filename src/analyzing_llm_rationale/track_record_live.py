@@ -1019,8 +1019,6 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             } for p in price_points],
         })
 
-    by_edge = by_edge_early  # already computed above for the board stat
-
     # Category-level skill-vs-market: which categories Foresea actually beats the
     # market in. Significance-gated (skill_significant) so a category is only
     # claimed as an edge when its lower CI bound clears 0 — never on a couple of
