@@ -23,6 +23,17 @@
       "skill_vs_market": -0.0131
     },
     {
+      "accuracy": 0.9048,
+      "domain": "sports",
+      "market_brier": 0.091,
+      "model_brier": 0.1673,
+      "n": 21,
+      "skill_ci_high": 0.0222,
+      "skill_ci_low": -0.1747,
+      "skill_significant": false,
+      "skill_vs_market": -0.0763
+    },
+    {
       "accuracy": 0.7,
       "domain": "other",
       "market_brier": 0.0888,
@@ -36,15 +47,15 @@
   ],
   "by_edge": [
     {
-      "accuracy": 0.5,
+      "accuracy": 0.4,
       "edge_bucket": "20pp+",
-      "market_brier": 0.0,
-      "model_brier": 0.4862,
-      "n": 2,
-      "skill_ci_high": -0.0232,
-      "skill_ci_low": -0.9493,
+      "market_brier": 0.0145,
+      "model_brier": 0.551,
+      "n": 5,
+      "skill_ci_high": -0.2903,
+      "skill_ci_low": -0.7827,
       "skill_significant": false,
-      "skill_vs_market": -0.4862
+      "skill_vs_market": -0.5365
     },
     {
       "accuracy": 1.0,
@@ -60,37 +71,37 @@
     {
       "accuracy": 1.0,
       "edge_bucket": "5-10pp",
-      "market_brier": 0.0002,
-      "model_brier": 0.01,
-      "n": 1,
-      "skill_ci_high": null,
-      "skill_ci_low": null,
+      "market_brier": 0.099,
+      "model_brier": 0.0792,
+      "n": 4,
+      "skill_ci_high": 0.0629,
+      "skill_ci_low": -0.0233,
       "skill_significant": false,
-      "skill_vs_market": -0.0098
+      "skill_vs_market": 0.0198
     },
     {
-      "accuracy": 0.8333,
+      "accuracy": 0.9259,
       "edge_bucket": "0-5pp",
-      "market_brier": 0.0771,
-      "model_brier": 0.0788,
-      "n": 12,
-      "skill_ci_high": 0.0,
-      "skill_ci_low": -0.0034,
+      "market_brier": 0.0877,
+      "model_brier": 0.0877,
+      "n": 27,
+      "skill_ci_high": 0.0047,
+      "skill_ci_low": -0.0048,
       "skill_significant": false,
-      "skill_vs_market": -0.0017
+      "skill_vs_market": -0.0001
     }
   ],
   "by_horizon": [
     {
-      "accuracy": 0.8,
+      "accuracy": 0.8846,
       "horizon": "14-30d",
-      "market_brier": 0.0002,
-      "model_brier": 0.1949,
-      "n": 5,
-      "skill_ci_high": 0.0808,
-      "skill_ci_low": -0.4701,
+      "market_brier": 0.0735,
+      "model_brier": 0.1726,
+      "n": 26,
+      "skill_ci_high": -0.0045,
+      "skill_ci_low": -0.1936,
       "skill_significant": false,
-      "skill_vs_market": -0.1946
+      "skill_vs_market": -0.099
     },
     {
       "accuracy": 0.8,
@@ -117,64 +128,150 @@
   ],
   "by_liquidity": [
     {
-      "accuracy": 0.8125,
-      "liquidity": "liquid (>$25k)",
-      "market_brier": 0.0579,
-      "model_brier": 0.1219,
-      "n": 16,
-      "skill_ci_high": 0.0272,
-      "skill_ci_low": -0.1552,
+      "accuracy": 1.0,
+      "liquidity": "niche (<$1k)",
+      "market_brier": 0.2167,
+      "model_brier": 0.1849,
+      "n": 1,
+      "skill_ci_high": null,
+      "skill_ci_low": null,
       "skill_significant": false,
-      "skill_vs_market": -0.064
+      "skill_vs_market": 0.0318
+    },
+    {
+      "accuracy": 0.8611,
+      "liquidity": "liquid (>$25k)",
+      "market_brier": 0.0728,
+      "model_brier": 0.1466,
+      "n": 36,
+      "skill_ci_high": -0.0046,
+      "skill_ci_low": -0.143,
+      "skill_significant": false,
+      "skill_vs_market": -0.0738
     }
   ],
   "calibration_model": {
-    "applied": false,
-    "min_required": 30,
-    "n_resolved": 16,
-    "reason": "insufficient_data"
+    "applied": true,
+    "breakpoints": [
+      [
+        0.01,
+        0.0
+      ],
+      [
+        0.02,
+        0.0
+      ],
+      [
+        0.1,
+        0.1364
+      ],
+      [
+        0.15,
+        0.2727
+      ],
+      [
+        0.19,
+        0.2727
+      ],
+      [
+        0.2,
+        0.2727
+      ],
+      [
+        0.22,
+        0.2727
+      ],
+      [
+        0.25,
+        0.2727
+      ],
+      [
+        0.29,
+        0.2727
+      ],
+      [
+        0.36,
+        0.6667
+      ],
+      [
+        0.37,
+        0.6667
+      ],
+      [
+        0.38,
+        0.6667
+      ],
+      [
+        0.5,
+        1.0
+      ],
+      [
+        0.55,
+        1.0
+      ],
+      [
+        0.57,
+        1.0
+      ],
+      [
+        0.58,
+        1.0
+      ],
+      [
+        0.6,
+        1.0
+      ],
+      [
+        0.62,
+        1.0
+      ],
+      [
+        0.7,
+        1.0
+      ],
+      [
+        0.75,
+        1.0
+      ],
+      [
+        0.78,
+        1.0
+      ],
+      [
+        0.85,
+        1.0
+      ],
+      [
+        0.9,
+        1.0
+      ],
+      [
+        0.96,
+        1.0
+      ],
+      [
+        0.99,
+        1.0
+      ]
+    ],
+    "calibrated_brier_cv": 0.125,
+    "calibrated_skill_vs_market": -0.0483,
+    "method": "isotonic",
+    "n_resolved": 37,
+    "raw_brier": 0.1477,
+    "raw_ece": 0.2292,
+    "raw_skill_vs_market": -0.071
   },
   "edge_board": [
     {
-      "abs_edge": 0.9,
-      "domain": "sports",
-      "edge": -0.9,
-      "edge_bucket": "20pp+",
-      "entry_price": 0.0,
-      "horizon": "14-30d",
-      "lead_bucket": "14-30d",
-      "lead_days": 16.7,
-      "lead_track_record": {
-        "horizon": "14-30d",
-        "n": 5,
-        "skill_ci_low": -0.4701,
-        "skill_significant": false,
-        "skill_vs_market": -0.1946
-      },
-      "market_probability": 1.0,
-      "market_url": "https://polymarket.com/market/will-the-new-york-knicks-win-the-2026-nba-finals",
-      "model_probability": 0.1,
-      "payout_odds": 1999.0,
-      "platform": "Polymarket",
-      "question": "Will the New York Knicks win the 2026 NBA Finals?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 2,
-        "skill_ci_low": -0.9493,
-        "skill_significant": false,
-        "skill_vs_market": -0.4862
-      }
-    },
-    {
-      "abs_edge": 0.204,
+      "abs_edge": 0.578,
       "domain": "geopolitics",
-      "edge": -0.204,
+      "edge": 0.578,
       "edge_bucket": "20pp+",
-      "entry_price": 0.766,
+      "entry_price": 0.242,
       "horizon": "<1d",
       "lead_bucket": "<1d",
-      "lead_days": 0.7,
+      "lead_days": 0.6,
       "lead_track_record": {
         "horizon": "<1d",
         "n": 6,
@@ -182,262 +279,119 @@
         "skill_significant": false,
         "skill_vs_market": -0.0007
       },
-      "market_probability": 0.234,
+      "market_probability": 0.242,
       "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-june-15-2026-734-856-129",
-      "model_probability": 0.03,
-      "payout_odds": 0.3,
+      "model_probability": 0.82,
+      "payout_odds": 3.1,
       "platform": "Polymarket",
       "question": "US x Iran permanent peace deal by June 15, 2026?",
-      "side": "NO",
-      "stance": "model_below_market",
+      "side": "YES",
+      "stance": "model_above_market",
       "track_record": {
-        "n": 2,
-        "skill_ci_low": -0.9493,
+        "n": 5,
+        "skill_ci_low": -0.7827,
         "skill_significant": false,
-        "skill_vs_market": -0.4862
+        "skill_vs_market": -0.5365
       }
     },
     {
-      "abs_edge": 0.17,
+      "abs_edge": 0.058,
       "domain": "geopolitics",
-      "edge": -0.17,
-      "edge_bucket": "10-20pp",
-      "entry_price": 0.18,
+      "edge": 0.058,
+      "edge_bucket": "5-10pp",
+      "entry_price": 0.061,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 199.7,
+      "lead_days": 199.6,
       "lead_track_record": null,
-      "market_probability": 0.82,
-      "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-december-31-2026-961-587-341-574-555-817",
-      "model_probability": 0.65,
-      "payout_odds": 4.6,
+      "market_probability": 0.061,
+      "market_url": "https://polymarket.com/market/will-china-invade-taiwan-before-2027",
+      "model_probability": 0.12,
+      "payout_odds": 15.3,
       "platform": "Polymarket",
-      "question": "US x Iran permanent peace deal by December 31, 2026?",
-      "side": "NO",
-      "stance": "model_below_market",
+      "question": "Will China invade Taiwan by end of 2026?",
+      "side": "YES",
+      "stance": "model_above_market",
       "track_record": {
-        "n": 1,
-        "skill_ci_low": null,
+        "n": 4,
+        "skill_ci_low": -0.0233,
         "skill_significant": false,
-        "skill_vs_market": -0.021
+        "skill_vs_market": 0.0198
       }
     },
     {
-      "abs_edge": 0.15,
+      "abs_edge": 0.03,
       "domain": "other",
-      "edge": -0.15,
-      "edge_bucket": "10-20pp",
-      "entry_price": 0.6,
+      "edge": -0.03,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.59,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 200.9,
+      "lead_days": 200.8,
       "lead_track_record": null,
-      "market_probability": 0.4,
+      "market_probability": 0.41,
       "market_url": "https://polymarket.com/market/will-an-artwork-sell-for-150-million-by-december-31",
-      "model_probability": 0.25,
+      "model_probability": 0.38,
       "payout_odds": 0.7,
       "platform": "Polymarket",
       "question": "Will an artwork sell for $150 million by December 31?",
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 1,
-        "skill_ci_low": null,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.021
+        "skill_vs_market": -0.0001
       }
     },
     {
-      "abs_edge": 0.045,
+      "abs_edge": 0.026,
       "domain": "sports",
-      "edge": 0.045,
+      "edge": -0.026,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.074,
+      "entry_price": 0.834,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 35.7,
+      "lead_days": 35.6,
       "lead_track_record": null,
-      "market_probability": 0.074,
-      "market_url": "https://polymarket.com/market/will-brazil-win-the-2026-fifa-world-cup-183",
-      "model_probability": 0.12,
-      "payout_odds": 12.4,
-      "platform": "Polymarket",
-      "question": "Will Brazil win the 2026 FIFA World Cup?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
-        "skill_significant": false,
-        "skill_vs_market": -0.0017
-      }
-    },
-    {
-      "abs_edge": 0.03,
-      "domain": "sports",
-      "edge": 0.03,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.12,
-      "horizon": "30d+",
-      "lead_bucket": "30d+",
-      "lead_days": 35.7,
-      "lead_track_record": null,
-      "market_probability": 0.12,
-      "market_url": "https://polymarket.com/market/will-portugal-win-the-2026-fifa-world-cup-912",
-      "model_probability": 0.15,
-      "payout_odds": 7.3,
-      "platform": "Polymarket",
-      "question": "Will Portugal win the 2026 FIFA World Cup?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
-        "skill_significant": false,
-        "skill_vs_market": -0.0017
-      }
-    },
-    {
-      "abs_edge": 0.02,
-      "domain": "elections",
-      "edge": -0.02,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.32,
-      "horizon": "14-30d",
-      "lead_bucket": "14-30d",
-      "lead_days": 15.7,
-      "lead_track_record": {
-        "horizon": "14-30d",
-        "n": 5,
-        "skill_ci_low": -0.4701,
-        "skill_significant": false,
-        "skill_vs_market": -0.1946
-      },
-      "market_probability": 0.68,
-      "market_url": "https://polymarket.com/market/will-victor-marx-win-the-2026-colorado-governor-republican-primary-election",
-      "model_probability": 0.66,
-      "payout_odds": 2.1,
-      "platform": "Polymarket",
-      "question": "Will Victor Marx win the 2026 Colorado Governor Republican primary election?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
-        "skill_significant": false,
-        "skill_vs_market": -0.0017
-      }
-    },
-    {
-      "abs_edge": 0.015,
-      "domain": "sports",
-      "edge": -0.015,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.835,
-      "horizon": "30d+",
-      "lead_bucket": "30d+",
-      "lead_days": 35.7,
-      "lead_track_record": null,
-      "market_probability": 0.166,
+      "market_probability": 0.167,
       "market_url": "https://polymarket.com/market/will-spain-win-the-2026-fifa-world-cup-963",
-      "model_probability": 0.15,
+      "model_probability": 0.14,
       "payout_odds": 0.2,
       "platform": "Polymarket",
       "question": "Will Spain win the 2026 FIFA World Cup?",
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.0001
       }
     },
     {
-      "abs_edge": 0.015,
-      "domain": "other",
-      "edge": -0.015,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.605,
-      "horizon": "3-7d",
-      "lead_bucket": "3-7d",
-      "lead_days": 6.7,
-      "lead_track_record": null,
-      "market_probability": 0.395,
-      "market_url": "https://polymarket.com/market/will-vitality-win-iem-cologne-major-2026",
-      "model_probability": 0.38,
-      "payout_odds": 0.7,
-      "platform": "Polymarket",
-      "question": "Will Vitality win IEM Cologne Major 2026?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
-        "skill_significant": false,
-        "skill_vs_market": -0.0017
-      }
-    },
-    {
-      "abs_edge": 0.01,
+      "abs_edge": 0.025,
       "domain": "sports",
-      "edge": 0.01,
+      "edge": 0.025,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.001,
-      "horizon": "14-30d",
-      "lead_bucket": "14-30d",
-      "lead_days": 16.7,
-      "lead_track_record": {
-        "horizon": "14-30d",
-        "n": 5,
-        "skill_ci_low": -0.4701,
-        "skill_significant": false,
-        "skill_vs_market": -0.1946
-      },
-      "market_probability": 0.001,
-      "market_url": "https://polymarket.com/market/will-the-san-antonio-spurs-win-the-2026-nba-finals",
-      "model_probability": 0.01,
-      "payout_odds": 1999.0,
+      "entry_price": 0.074,
+      "horizon": "30d+",
+      "lead_bucket": "30d+",
+      "lead_days": 35.6,
+      "lead_track_record": null,
+      "market_probability": 0.074,
+      "market_url": "https://polymarket.com/market/will-brazil-win-the-2026-fifa-world-cup-183",
+      "model_probability": 0.1,
+      "payout_odds": 12.4,
       "platform": "Polymarket",
-      "question": "Will the San Antonio Spurs win the 2026 NBA Finals?",
+      "question": "Will Brazil win the 2026 FIFA World Cup?",
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
-      }
-    },
-    {
-      "abs_edge": 0.009,
-      "domain": "geopolitics",
-      "edge": -0.009,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.891,
-      "horizon": "14-30d",
-      "lead_bucket": "14-30d",
-      "lead_days": 15.7,
-      "lead_track_record": {
-        "horizon": "14-30d",
-        "n": 5,
-        "skill_ci_low": -0.4701,
-        "skill_significant": false,
-        "skill_vs_market": -0.1946
-      },
-      "market_probability": 0.109,
-      "market_url": "https://polymarket.com/market/israel-x-iran-permanent-peace-deal-by-june-30-2026-262",
-      "model_probability": 0.1,
-      "payout_odds": 0.1,
-      "platform": "Polymarket",
-      "question": "Israel x Iran permanent peace deal by June 30, 2026?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
-        "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.0001
       }
     },
     {
@@ -448,7 +402,7 @@
       "entry_price": 0.051,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 35.7,
+      "lead_days": 35.6,
       "lead_track_record": null,
       "market_probability": 0.051,
       "market_url": "https://polymarket.com/market/will-germany-win-the-2026-fifa-world-cup-467",
@@ -459,46 +413,52 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.0001
       }
     },
     {
-      "abs_edge": 0.007,
+      "abs_edge": 0.006,
       "domain": "geopolitics",
-      "edge": 0.007,
+      "edge": -0.006,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.062,
-      "horizon": "30d+",
-      "lead_bucket": "30d+",
-      "lead_days": 199.7,
-      "lead_track_record": null,
-      "market_probability": 0.062,
-      "market_url": "https://polymarket.com/market/will-china-invade-taiwan-before-2027",
-      "model_probability": 0.07,
-      "payout_odds": 15.0,
-      "platform": "Polymarket",
-      "question": "Will China invade Taiwan by end of 2026?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+      "entry_price": 0.884,
+      "horizon": "14-30d",
+      "lead_bucket": "14-30d",
+      "lead_days": 15.6,
+      "lead_track_record": {
+        "horizon": "14-30d",
+        "n": 26,
+        "skill_ci_low": -0.1936,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.099
+      },
+      "market_probability": 0.116,
+      "market_url": "https://polymarket.com/market/israel-x-iran-permanent-peace-deal-by-june-30-2026-262",
+      "model_probability": 0.11,
+      "payout_odds": 0.1,
+      "platform": "Polymarket",
+      "question": "Israel x Iran permanent peace deal by June 30, 2026?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 27,
+        "skill_ci_low": -0.0048,
+        "skill_significant": false,
+        "skill_vs_market": -0.0001
       }
     },
     {
       "abs_edge": 0.005,
       "domain": "other",
-      "edge": -0.005,
+      "edge": 0.005,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.705,
+      "entry_price": 0.295,
       "horizon": "<1d",
       "lead_bucket": "<1d",
-      "lead_days": 0.7,
+      "lead_days": 0.5,
       "lead_track_record": {
         "horizon": "<1d",
         "n": 6,
@@ -508,17 +468,17 @@
       },
       "market_probability": 0.295,
       "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
-      "model_probability": 0.29,
-      "payout_odds": 0.4,
+      "model_probability": 0.3,
+      "payout_odds": 2.4,
       "platform": "Polymarket",
       "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
-      "side": "NO",
-      "stance": "model_below_market",
+      "side": "YES",
+      "stance": "model_above_market",
       "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.0001
       }
     },
     {
@@ -529,13 +489,13 @@
       "entry_price": 0.065,
       "horizon": "14-30d",
       "lead_bucket": "14-30d",
-      "lead_days": 15.7,
+      "lead_days": 15.6,
       "lead_track_record": {
         "horizon": "14-30d",
-        "n": 5,
-        "skill_ci_low": -0.4701,
+        "n": 26,
+        "skill_ci_low": -0.1936,
         "skill_significant": false,
-        "skill_vs_market": -0.1946
+        "skill_vs_market": -0.099
       },
       "market_probability": 0.065,
       "market_url": "https://polymarket.com/market/israel-closes-its-airspace-by-june-30-324-253-464-332-827-713-671-846",
@@ -546,10 +506,10 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.0001
       }
     },
     {
@@ -557,30 +517,80 @@
       "domain": "geopolitics",
       "edge": -0.005,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.335,
+      "entry_price": 0.365,
       "horizon": "14-30d",
       "lead_bucket": "14-30d",
-      "lead_days": 15.7,
+      "lead_days": 15.6,
       "lead_track_record": {
         "horizon": "14-30d",
-        "n": 5,
-        "skill_ci_low": -0.4701,
+        "n": 26,
+        "skill_ci_low": -0.1936,
         "skill_significant": false,
-        "skill_vs_market": -0.1946
+        "skill_vs_market": -0.099
       },
-      "market_probability": 0.665,
+      "market_probability": 0.635,
       "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
-      "model_probability": 0.66,
-      "payout_odds": 2.0,
+      "model_probability": 0.63,
+      "payout_odds": 1.7,
       "platform": "Polymarket",
       "question": "US-Iran nuclear deal by June 30?",
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.0001
+      }
+    },
+    {
+      "abs_edge": 0.005,
+      "domain": "geopolitics",
+      "edge": 0.005,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.825,
+      "horizon": "30d+",
+      "lead_bucket": "30d+",
+      "lead_days": 199.6,
+      "lead_track_record": null,
+      "market_probability": 0.825,
+      "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-december-31-2026-961-587-341-574-555-817",
+      "model_probability": 0.83,
+      "payout_odds": 0.2,
+      "platform": "Polymarket",
+      "question": "US x Iran permanent peace deal by December 31, 2026?",
+      "side": "YES",
+      "stance": "model_above_market",
+      "track_record": {
+        "n": 27,
+        "skill_ci_low": -0.0048,
+        "skill_significant": false,
+        "skill_vs_market": -0.0001
+      }
+    },
+    {
+      "abs_edge": 0.005,
+      "domain": "other",
+      "edge": -0.005,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.605,
+      "horizon": "3-7d",
+      "lead_bucket": "3-7d",
+      "lead_days": 6.6,
+      "lead_track_record": null,
+      "market_probability": 0.395,
+      "market_url": "https://polymarket.com/market/will-vitality-win-iem-cologne-major-2026",
+      "model_probability": 0.39,
+      "payout_odds": 0.7,
+      "platform": "Polymarket",
+      "question": "Will Vitality win IEM Cologne Major 2026?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 27,
+        "skill_ci_low": -0.0048,
+        "skill_significant": false,
+        "skill_vs_market": -0.0001
       }
     },
     {
@@ -588,10 +598,10 @@
       "domain": "geopolitics",
       "edge": 0.003,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.018,
+      "entry_price": 0.007,
       "horizon": "<1d",
       "lead_bucket": "<1d",
-      "lead_days": 0.7,
+      "lead_days": 0.6,
       "lead_track_record": {
         "horizon": "<1d",
         "n": 6,
@@ -599,19 +609,19 @@
         "skill_significant": false,
         "skill_vs_market": -0.0007
       },
-      "market_probability": 0.018,
+      "market_probability": 0.007,
       "market_url": "https://polymarket.com/market/israel-closes-its-airspace-by-june-15-687-594-783-732-455-613-653",
-      "model_probability": 0.02,
-      "payout_odds": 56.1,
+      "model_probability": 0.01,
+      "payout_odds": 141.9,
       "platform": "Polymarket",
       "question": "Israel closes its airspace by June 15?",
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.0001
       }
     },
     {
@@ -622,7 +632,7 @@
       "entry_price": 0.097,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 35.7,
+      "lead_days": 35.6,
       "lead_track_record": null,
       "market_probability": 0.097,
       "market_url": "https://polymarket.com/market/will-england-win-the-2026-fifa-world-cup-937",
@@ -633,10 +643,60 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.0001
+      }
+    },
+    {
+      "abs_edge": 0.003,
+      "domain": "sports",
+      "edge": -0.003,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.837,
+      "horizon": "30d+",
+      "lead_bucket": "30d+",
+      "lead_days": 35.6,
+      "lead_track_record": null,
+      "market_probability": 0.164,
+      "market_url": "https://polymarket.com/market/will-france-win-the-2026-fifa-world-cup-924",
+      "model_probability": 0.16,
+      "payout_odds": 0.2,
+      "platform": "Polymarket",
+      "question": "Will France win the 2026 FIFA World Cup?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 27,
+        "skill_ci_low": -0.0048,
+        "skill_significant": false,
+        "skill_vs_market": -0.0001
+      }
+    },
+    {
+      "abs_edge": 0.003,
+      "domain": "sports",
+      "edge": 0.003,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.117,
+      "horizon": "30d+",
+      "lead_bucket": "30d+",
+      "lead_days": 35.6,
+      "lead_track_record": null,
+      "market_probability": 0.117,
+      "market_url": "https://polymarket.com/market/will-portugal-win-the-2026-fifa-world-cup-912",
+      "model_probability": 0.12,
+      "payout_odds": 7.6,
+      "platform": "Polymarket",
+      "question": "Will Portugal win the 2026 FIFA World Cup?",
+      "side": "YES",
+      "stance": "model_above_market",
+      "track_record": {
+        "n": 27,
+        "skill_ci_low": -0.0048,
+        "skill_significant": false,
+        "skill_vs_market": -0.0001
       }
     },
     {
@@ -647,7 +707,7 @@
       "entry_price": 0.079,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 35.7,
+      "lead_days": 35.6,
       "lead_track_record": null,
       "market_probability": 0.079,
       "market_url": "https://polymarket.com/market/will-argentina-win-the-2026-fifa-world-cup-245",
@@ -658,74 +718,80 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.0001
       }
     },
     {
-      "abs_edge": 0.0,
+      "abs_edge": 0.001,
       "domain": "sports",
-      "edge": -0.0,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.84,
-      "horizon": "30d+",
-      "lead_bucket": "30d+",
-      "lead_days": 35.7,
-      "lead_track_record": null,
-      "market_probability": 0.161,
-      "market_url": "https://polymarket.com/market/will-france-win-the-2026-fifa-world-cup-924",
-      "model_probability": 0.16,
-      "payout_odds": 0.2,
-      "platform": "Polymarket",
-      "question": "Will France win the 2026 FIFA World Cup?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
-        "skill_significant": false,
-        "skill_vs_market": -0.0017
-      }
-    },
-    {
-      "abs_edge": 0.0,
-      "domain": "sports",
-      "edge": 0.0,
+      "edge": 0.001,
       "edge_bucket": "0-5pp",
       "entry_price": 0.05,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 35.7,
+      "lead_days": 35.6,
       "lead_track_record": null,
       "market_probability": 0.05,
       "market_url": "https://polymarket.com/market/will-netherlands-win-the-2026-fifa-world-cup-739",
       "model_probability": 0.05,
-      "payout_odds": 19.0,
+      "payout_odds": 19.2,
       "platform": "Polymarket",
       "question": "Will Netherlands win the 2026 FIFA World Cup?",
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 12,
-        "skill_ci_low": -0.0034,
+        "n": 27,
+        "skill_ci_low": -0.0048,
         "skill_significant": false,
-        "skill_vs_market": -0.0017
+        "skill_vs_market": -0.0001
+      }
+    },
+    {
+      "abs_edge": 0.0,
+      "domain": "elections",
+      "edge": 0.0,
+      "edge_bucket": "0-5pp",
+      "entry_price": null,
+      "horizon": "14-30d",
+      "lead_bucket": "14-30d",
+      "lead_days": 15.6,
+      "lead_track_record": {
+        "horizon": "14-30d",
+        "n": 26,
+        "skill_ci_low": -0.1936,
+        "skill_significant": false,
+        "skill_vs_market": -0.099
+      },
+      "market_probability": 0.67,
+      "market_url": "https://polymarket.com/market/will-victor-marx-win-the-2026-colorado-governor-republican-primary-election",
+      "model_probability": 0.67,
+      "payout_odds": null,
+      "platform": "Polymarket",
+      "question": "Will Victor Marx win the 2026 Colorado Governor Republican primary election?",
+      "side": null,
+      "stance": "agree",
+      "track_record": {
+        "n": 27,
+        "skill_ci_low": -0.0048,
+        "skill_significant": false,
+        "skill_vs_market": -0.0001
       }
     }
   ],
-  "generated_at": "2026-06-14T06:23:08.858956+00:00",
+  "generated_at": "2026-06-14T10:18:00.044909+00:00",
   "knowledge_graph": {
     "domain_distribution": {
       "elections": 3,
       "entertainment": 6,
       "geopolitics": 24,
-      "other": 8,
-      "sports": 33,
+      "other": 9,
+      "sports": 27,
       "technology": 3
     },
-    "n_tagged": 77,
+    "n_tagged": 72,
     "top_entities": [
       {
         "count": 24,
@@ -746,14 +812,6 @@
       {
         "count": 9,
         "entity": "US"
-      },
-      {
-        "count": 6,
-        "entity": "Finals"
-      },
-      {
-        "count": 6,
-        "entity": "NBA"
       },
       {
         "count": 3,
@@ -829,14 +887,6 @@
       },
       {
         "count": 3,
-        "entity": "New York Knicks"
-      },
-      {
-        "count": 3,
-        "entity": "San Antonio Spurs"
-      },
-      {
-        "count": 3,
         "entity": "Colorado Governor Republican"
       },
       {
@@ -846,90 +896,41 @@
       {
         "count": 3,
         "entity": "Cologne Major"
+      },
+      {
+        "count": 3,
+        "entity": "Vitality"
+      },
+      {
+        "count": 2,
+        "entity": "Ivoire"
+      },
+      {
+        "count": 1,
+        "entity": "Donald Trump"
+      },
+      {
+        "count": 1,
+        "entity": "Hormuz"
       }
     ]
   },
   "lead_lag": {
-    "avg_convergence_fraction": -0.3873,
-    "market_converged_to_model_pct": 0.2,
+    "avg_convergence_fraction": -0.1338,
+    "market_converged_to_model_pct": 0.2857,
     "min_edge": 0.0,
-    "model_right_pct": 0.2,
-    "n_markets": 5
+    "model_right_pct": 0.2857,
+    "n_markets": 7
   },
   "methodology": "Forecast trajectories on live Polymarket/Kalshi markets: a fresh point-in-time forecast each day (latest price + latest news, no look-ahead) until the market resolves, then every snapshot is scored. Skill vs market = market Brier \u2212 model Brier, reported by forecast horizon; long-horizon skill is the meaningful signal.",
   "model": "gpt-oss-120b",
   "models_comparison": [
     {
-      "accuracy": 0.8125,
-      "model": "gemma-4-31b-it",
-      "model_brier": 0.1219,
-      "n_markets_resolved": 5,
-      "n_snapshots_resolved": 16,
-      "paper_pnl": {
-        "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
-        "edge_weighted": {
-          "equity_curve": [
-            0.0023,
-            0.0068,
-            0.009,
-            0.009,
-            0.004,
-            -0.001,
-            -0.001,
-            0.0014,
-            0.0026,
-            0.0026,
-            0.0026,
-            0.0029,
-            0.0029,
-            -0.2471,
-            -0.2471
-          ],
-          "fees": 0.0,
-          "n_bets": 15,
-          "pnl": -0.2471,
-          "roi": -0.4298,
-          "total_staked": 0.575,
-          "win_rate": 0.8
-        },
-        "flat": {
-          "equity_curve": [
-            0.0735,
-            0.1141,
-            0.553,
-            0.5535,
-            -0.4465,
-            -1.4465,
-            -1.446,
-            -1.228,
-            -1.2148,
-            -1.2103,
-            -1.2098,
-            -1.1752,
-            -1.1747,
-            -2.1747,
-            -2.1742
-          ],
-          "fees": 0.0,
-          "n_bets": 15,
-          "pnl": -2.1742,
-          "roi": -0.1449,
-          "total_staked": 15.0,
-          "win_rate": 0.8
-        },
-        "min_edge": 0.0,
-        "validated_only": null
-      },
-      "paper_roi": -0.1449,
-      "paper_roi_validated": null,
-      "skill_vs_market": -0.064
-    },
-    {
-      "accuracy": 0.8125,
+      "accuracy": 0.8649,
       "model": "gpt-oss-120b",
-      "model_brier": 0.1219,
-      "n_markets_resolved": 5,
-      "n_snapshots_resolved": 16,
+      "model_brier": 0.1477,
+      "n_markets_resolved": 7,
+      "n_snapshots_resolved": 37,
       "paper_pnl": {
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
         "edge_weighted": {
@@ -948,14 +949,34 @@
             0.0029,
             0.0029,
             -0.2471,
-            -0.2471
+            -0.2471,
+            -0.2162,
+            -0.1603,
+            -0.1361,
+            -0.112,
+            -0.1116,
+            -0.1115,
+            -0.0859,
+            -0.0856,
+            -0.3356,
+            -0.3218,
+            -0.5718,
+            -0.5669,
+            -0.5576,
+            -0.549,
+            -0.4951,
+            -0.4936,
+            -0.4931,
+            -0.4833,
+            -0.4823,
+            -0.4823
           ],
           "fees": 0.0,
-          "n_bets": 15,
-          "pnl": -0.2471,
-          "roi": -0.4298,
-          "total_staked": 0.575,
-          "win_rate": 0.8
+          "n_bets": 35,
+          "pnl": -0.4823,
+          "roi": -0.3086,
+          "total_staked": 1.563,
+          "win_rate": 0.8571
         },
         "flat": {
           "equity_curve": [
@@ -973,28 +994,48 @@
             -1.1752,
             -1.1747,
             -2.1747,
-            -2.1742
+            -2.1742,
+            -1.3032,
+            -0.4358,
+            0.4744,
+            1.3846,
+            1.6642,
+            1.9471,
+            2.5548,
+            3.169,
+            2.169,
+            2.4059,
+            1.4059,
+            1.6566,
+            1.933,
+            2.2142,
+            2.8232,
+            3.4296,
+            3.6765,
+            3.9134,
+            4.1411,
+            4.1416
           ],
           "fees": 0.0,
-          "n_bets": 15,
-          "pnl": -2.1742,
-          "roi": -0.1449,
-          "total_staked": 15.0,
-          "win_rate": 0.8
+          "n_bets": 35,
+          "pnl": 4.1416,
+          "roi": 0.1183,
+          "total_staked": 35.0,
+          "win_rate": 0.8571
         },
         "min_edge": 0.0,
         "validated_only": null
       },
-      "paper_roi": -0.1449,
+      "paper_roi": 0.1183,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.064
+      "skill_vs_market": -0.071
     },
     {
-      "accuracy": 0.8125,
-      "model": "kimi-k2.6",
-      "model_brier": 0.1219,
-      "n_markets_resolved": 5,
-      "n_snapshots_resolved": 16,
+      "accuracy": 0.8529,
+      "model": "gemma-4-31b-it",
+      "model_brier": 0.1446,
+      "n_markets_resolved": 7,
+      "n_snapshots_resolved": 34,
       "paper_pnl": {
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
         "edge_weighted": {
@@ -1013,14 +1054,31 @@
             0.0029,
             0.0029,
             -0.2471,
-            -0.2471
+            -0.2471,
+            -0.223,
+            -0.2226,
+            -0.2224,
+            -0.1969,
+            -0.1966,
+            -0.4466,
+            -0.4328,
+            -0.6828,
+            -0.6779,
+            -0.6686,
+            -0.66,
+            -0.6061,
+            -0.6046,
+            -0.6041,
+            -0.5943,
+            -0.5933,
+            -0.5933
           ],
           "fees": 0.0,
-          "n_bets": 15,
-          "pnl": -0.2471,
-          "roi": -0.4298,
-          "total_staked": 0.575,
-          "win_rate": 0.8
+          "n_bets": 32,
+          "pnl": -0.5933,
+          "roi": -0.413,
+          "total_staked": 1.4365,
+          "win_rate": 0.8438
         },
         "flat": {
           "equity_curve": [
@@ -1038,33 +1096,149 @@
             -1.1752,
             -1.1747,
             -2.1747,
-            -2.1742
+            -2.1742,
+            -1.2639,
+            -0.9843,
+            -0.7015,
+            -0.0937,
+            0.5205,
+            -0.4795,
+            -0.2427,
+            -1.2427,
+            -0.9919,
+            -0.7156,
+            -0.4344,
+            0.1747,
+            0.7811,
+            1.028,
+            1.2648,
+            1.4926,
+            1.4931
           ],
           "fees": 0.0,
-          "n_bets": 15,
-          "pnl": -2.1742,
-          "roi": -0.1449,
-          "total_staked": 15.0,
-          "win_rate": 0.8
+          "n_bets": 32,
+          "pnl": 1.4931,
+          "roi": 0.0467,
+          "total_staked": 32.0,
+          "win_rate": 0.8438
         },
         "min_edge": 0.0,
         "validated_only": null
       },
-      "paper_roi": -0.1449,
+      "paper_roi": 0.0467,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.064
+      "skill_vs_market": -0.0805
+    },
+    {
+      "accuracy": 0.8529,
+      "model": "kimi-k2.6",
+      "model_brier": 0.1446,
+      "n_markets_resolved": 7,
+      "n_snapshots_resolved": 34,
+      "paper_pnl": {
+        "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
+        "edge_weighted": {
+          "equity_curve": [
+            0.0023,
+            0.0068,
+            0.009,
+            0.009,
+            0.004,
+            -0.001,
+            -0.001,
+            0.0014,
+            0.0026,
+            0.0026,
+            0.0026,
+            0.0029,
+            0.0029,
+            -0.2471,
+            -0.2471,
+            -0.223,
+            -0.2226,
+            -0.2224,
+            -0.1969,
+            -0.1966,
+            -0.4466,
+            -0.4328,
+            -0.6828,
+            -0.6779,
+            -0.6686,
+            -0.66,
+            -0.6061,
+            -0.6046,
+            -0.6041,
+            -0.5943,
+            -0.5933,
+            -0.5933
+          ],
+          "fees": 0.0,
+          "n_bets": 32,
+          "pnl": -0.5933,
+          "roi": -0.413,
+          "total_staked": 1.4365,
+          "win_rate": 0.8438
+        },
+        "flat": {
+          "equity_curve": [
+            0.0735,
+            0.1141,
+            0.553,
+            0.5535,
+            -0.4465,
+            -1.4465,
+            -1.446,
+            -1.228,
+            -1.2148,
+            -1.2103,
+            -1.2098,
+            -1.1752,
+            -1.1747,
+            -2.1747,
+            -2.1742,
+            -1.2639,
+            -0.9843,
+            -0.7015,
+            -0.0937,
+            0.5205,
+            -0.4795,
+            -0.2427,
+            -1.2427,
+            -0.9919,
+            -0.7156,
+            -0.4344,
+            0.1747,
+            0.7811,
+            1.028,
+            1.2648,
+            1.4926,
+            1.4931
+          ],
+          "fees": 0.0,
+          "n_bets": 32,
+          "pnl": 1.4931,
+          "roi": 0.0467,
+          "total_staked": 32.0,
+          "win_rate": 0.8438
+        },
+        "min_edge": 0.0,
+        "validated_only": null
+      },
+      "paper_roi": 0.0467,
+      "paper_roi_validated": null,
+      "skill_vs_market": -0.0805
     }
   ],
-  "n_markets_open": 21,
-  "n_markets_resolved": 5,
-  "n_markets_tracked": 26,
-  "n_snapshots_resolved": 16,
+  "n_markets_open": 19,
+  "n_markets_resolved": 7,
+  "n_markets_tracked": 25,
+  "n_snapshots_resolved": 37,
   "overall": {
-    "accuracy": 0.8125,
-    "market_brier": 0.0579,
-    "model_brier": 0.1219,
-    "n": 16,
-    "skill_vs_market": -0.064
+    "accuracy": 0.8649,
+    "market_brier": 0.0767,
+    "model_brier": 0.1477,
+    "n": 37,
+    "skill_vs_market": -0.071
   },
   "paper_pnl": {
     "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
@@ -1084,14 +1258,34 @@
         0.0029,
         0.0029,
         -0.2471,
-        -0.2471
+        -0.2471,
+        -0.2162,
+        -0.1603,
+        -0.1361,
+        -0.112,
+        -0.1116,
+        -0.1115,
+        -0.0859,
+        -0.0856,
+        -0.3356,
+        -0.3218,
+        -0.5718,
+        -0.5669,
+        -0.5576,
+        -0.549,
+        -0.4951,
+        -0.4936,
+        -0.4931,
+        -0.4833,
+        -0.4823,
+        -0.4823
       ],
       "fees": 0.0,
-      "n_bets": 15,
-      "pnl": -0.2471,
-      "roi": -0.4298,
-      "total_staked": 0.575,
-      "win_rate": 0.8
+      "n_bets": 35,
+      "pnl": -0.4823,
+      "roi": -0.3086,
+      "total_staked": 1.563,
+      "win_rate": 0.8571
     },
     "flat": {
       "equity_curve": [
@@ -1109,14 +1303,34 @@
         -1.1752,
         -1.1747,
         -2.1747,
-        -2.1742
+        -2.1742,
+        -1.3032,
+        -0.4358,
+        0.4744,
+        1.3846,
+        1.6642,
+        1.9471,
+        2.5548,
+        3.169,
+        2.169,
+        2.4059,
+        1.4059,
+        1.6566,
+        1.933,
+        2.2142,
+        2.8232,
+        3.4296,
+        3.6765,
+        3.9134,
+        4.1411,
+        4.1416
       ],
       "fees": 0.0,
-      "n_bets": 15,
-      "pnl": -2.1742,
-      "roi": -0.1449,
-      "total_staked": 15.0,
-      "win_rate": 0.8
+      "n_bets": 35,
+      "pnl": 4.1416,
+      "roi": 0.1183,
+      "total_staked": 35.0,
+      "win_rate": 0.8571
     },
     "min_edge": 0.0,
     "validated_only": null
@@ -1124,6 +1338,716 @@
   "source": "live",
   "temperature": 0.0,
   "trajectories": [
+    {
+      "market_url": "https://polymarket.com/market/will-the-san-antonio-spurs-win-the-2026-nba-finals",
+      "outcome": 0,
+      "platform": "Polymarket",
+      "points": [
+        {
+          "date": "2026-06-06",
+          "lead_days": 24.8,
+          "market": 0.201,
+          "model": 0.22
+        },
+        {
+          "date": "2026-06-07",
+          "lead_days": 23.8,
+          "market": 0.216,
+          "model": 0.25
+        },
+        {
+          "date": "2026-06-08",
+          "lead_days": 23.0,
+          "market": 0.22,
+          "model": 0.25
+        },
+        {
+          "date": "2026-06-09",
+          "lead_days": 21.0,
+          "market": 0.379,
+          "model": 0.29
+        },
+        {
+          "date": "2026-06-10",
+          "lead_days": 20.0,
+          "market": 0.378,
+          "model": 0.38
+        },
+        {
+          "date": "2026-06-11",
+          "lead_days": 19.0,
+          "market": 0.198,
+          "model": 0.2
+        },
+        {
+          "date": "2026-06-12",
+          "lead_days": 18.0,
+          "market": 0.192,
+          "model": 0.15
+        },
+        {
+          "date": "2026-06-13",
+          "lead_days": 17.1,
+          "market": 0.185,
+          "model": 0.19
+        },
+        {
+          "date": "2026-06-14",
+          "lead_days": 16.7,
+          "market": 0.001,
+          "model": 0.01
+        }
+      ],
+      "price_points": [
+        {
+          "market": 0.205,
+          "ts": "2026-06-06T08:02:30.413064+00:00"
+        },
+        {
+          "market": 0.204,
+          "ts": "2026-06-06T10:21:21.656145+00:00"
+        },
+        {
+          "market": 0.22,
+          "ts": "2026-06-06T12:17:47.246098+00:00"
+        },
+        {
+          "market": 0.209,
+          "ts": "2026-06-06T14:53:12.580808+00:00"
+        },
+        {
+          "market": 0.207,
+          "ts": "2026-06-06T16:18:43.145258+00:00"
+        },
+        {
+          "market": 0.213,
+          "ts": "2026-06-06T22:15:57.612689+00:00"
+        },
+        {
+          "market": 0.213,
+          "ts": "2026-06-06T23:18:31.706743+00:00"
+        },
+        {
+          "market": 0.216,
+          "ts": "2026-06-07T04:55:35.203909+00:00"
+        },
+        {
+          "market": 0.215,
+          "ts": "2026-06-07T08:30:23.186739+00:00"
+        },
+        {
+          "market": 0.216,
+          "ts": "2026-06-07T11:16:18.264009+00:00"
+        },
+        {
+          "market": 0.216,
+          "ts": "2026-06-07T12:51:45.011549+00:00"
+        },
+        {
+          "market": 0.217,
+          "ts": "2026-06-07T15:00:48.373314+00:00"
+        },
+        {
+          "market": 0.217,
+          "ts": "2026-06-07T16:22:58.378474+00:00"
+        },
+        {
+          "market": 0.22,
+          "ts": "2026-06-08T00:21:36.850515+00:00"
+        },
+        {
+          "market": 0.217,
+          "ts": "2026-06-08T01:20:24.312153+00:00"
+        },
+        {
+          "market": 0.223,
+          "ts": "2026-06-08T06:07:03.219466+00:00"
+        },
+        {
+          "market": 0.223,
+          "ts": "2026-06-08T11:20:46.968205+00:00"
+        },
+        {
+          "market": 0.224,
+          "ts": "2026-06-08T16:22:28.271059+00:00"
+        },
+        {
+          "market": 0.219,
+          "ts": "2026-06-08T19:35:38.406708+00:00"
+        },
+        {
+          "market": 0.216,
+          "ts": "2026-06-08T22:00:50.358721+00:00"
+        },
+        {
+          "market": 0.213,
+          "ts": "2026-06-08T23:36:27.016612+00:00"
+        },
+        {
+          "market": 0.372,
+          "ts": "2026-06-09T04:34:02.161346+00:00"
+        },
+        {
+          "market": 0.38,
+          "ts": "2026-06-09T08:41:13.967492+00:00"
+        },
+        {
+          "market": 0.379,
+          "ts": "2026-06-09T12:15:40.408728+00:00"
+        },
+        {
+          "market": 0.369,
+          "ts": "2026-06-09T13:50:21.507761+00:00"
+        },
+        {
+          "market": 0.373,
+          "ts": "2026-06-09T15:28:26.138749+00:00"
+        },
+        {
+          "market": 0.378,
+          "ts": "2026-06-09T18:21:03.004127+00:00"
+        },
+        {
+          "market": 0.378,
+          "ts": "2026-06-09T21:10:41.794139+00:00"
+        },
+        {
+          "market": 0.379,
+          "ts": "2026-06-09T22:49:15.761797+00:00"
+        },
+        {
+          "market": 0.378,
+          "ts": "2026-06-10T01:31:13.647102+00:00"
+        },
+        {
+          "market": 0.377,
+          "ts": "2026-06-10T06:42:33.356190+00:00"
+        },
+        {
+          "market": 0.377,
+          "ts": "2026-06-10T11:03:49.786322+00:00"
+        },
+        {
+          "market": 0.376,
+          "ts": "2026-06-10T14:29:27.435301+00:00"
+        },
+        {
+          "market": 0.376,
+          "ts": "2026-06-10T18:09:58.766880+00:00"
+        },
+        {
+          "market": 0.376,
+          "ts": "2026-06-10T20:44:54.232215+00:00"
+        },
+        {
+          "market": 0.378,
+          "ts": "2026-06-10T22:56:49.079235+00:00"
+        },
+        {
+          "market": 0.549,
+          "ts": "2026-06-11T01:38:46.759146+00:00"
+        },
+        {
+          "market": 0.186,
+          "ts": "2026-06-11T07:05:04.496609+00:00"
+        },
+        {
+          "market": 0.186,
+          "ts": "2026-06-11T11:47:55.340761+00:00"
+        },
+        {
+          "market": 0.185,
+          "ts": "2026-06-11T13:29:48.234028+00:00"
+        },
+        {
+          "market": 0.193,
+          "ts": "2026-06-11T15:30:16.214115+00:00"
+        },
+        {
+          "market": 0.197,
+          "ts": "2026-06-11T16:20:45.217112+00:00"
+        },
+        {
+          "market": 0.202,
+          "ts": "2026-06-11T19:45:19.771780+00:00"
+        },
+        {
+          "market": 0.213,
+          "ts": "2026-06-11T22:15:29.156635+00:00"
+        },
+        {
+          "market": 0.198,
+          "ts": "2026-06-11T23:55:00.583825+00:00"
+        },
+        {
+          "market": 0.201,
+          "ts": "2026-06-12T05:02:09.881672+00:00"
+        },
+        {
+          "market": 0.189,
+          "ts": "2026-06-12T09:11:54.409330+00:00"
+        },
+        {
+          "market": 0.19,
+          "ts": "2026-06-12T12:30:32.716730+00:00"
+        },
+        {
+          "market": 0.191,
+          "ts": "2026-06-12T16:28:01.256451+00:00"
+        },
+        {
+          "market": 0.195,
+          "ts": "2026-06-12T19:21:53.026906+00:00"
+        },
+        {
+          "market": 0.191,
+          "ts": "2026-06-12T22:00:47.747336+00:00"
+        },
+        {
+          "market": 0.192,
+          "ts": "2026-06-12T23:48:48.823977+00:00"
+        },
+        {
+          "market": 0.194,
+          "ts": "2026-06-13T04:50:37.414597+00:00"
+        },
+        {
+          "market": 0.185,
+          "ts": "2026-06-13T08:31:29.099295+00:00"
+        },
+        {
+          "market": 0.189,
+          "ts": "2026-06-13T11:24:34.316835+00:00"
+        },
+        {
+          "market": 0.197,
+          "ts": "2026-06-13T14:24:55.157160+00:00"
+        },
+        {
+          "market": 0.197,
+          "ts": "2026-06-13T16:45:45.648298+00:00"
+        },
+        {
+          "market": 0.191,
+          "ts": "2026-06-13T18:43:32.710042+00:00"
+        },
+        {
+          "market": 0.186,
+          "ts": "2026-06-13T20:40:23.653511+00:00"
+        },
+        {
+          "market": 0.185,
+          "ts": "2026-06-13T22:19:06.159744+00:00"
+        },
+        {
+          "market": 0.189,
+          "ts": "2026-06-14T00:20:22.911093+00:00"
+        },
+        {
+          "market": 0.001,
+          "ts": "2026-06-14T06:05:03.747826+00:00"
+        }
+      ],
+      "question": "Will the San Antonio Spurs win the 2026 NBA Finals?"
+    },
+    {
+      "market_url": "https://polymarket.com/market/will-the-new-york-knicks-win-the-2026-nba-finals",
+      "outcome": 1,
+      "platform": "Polymarket",
+      "points": [
+        {
+          "date": "2026-06-04",
+          "lead_days": 26.6,
+          "market": 0.534,
+          "model": 0.57
+        },
+        {
+          "date": "2026-06-05",
+          "lead_days": 26.0,
+          "market": 0.535,
+          "model": 0.6
+        },
+        {
+          "date": "2026-06-06",
+          "lead_days": 25.0,
+          "market": 0.523,
+          "model": 0.55
+        },
+        {
+          "date": "2026-06-06",
+          "lead_days": 24.9,
+          "market": 0.523,
+          "model": 0.55
+        },
+        {
+          "date": "2026-06-07",
+          "lead_days": 23.8,
+          "market": 0.781,
+          "model": 0.78
+        },
+        {
+          "date": "2026-06-08",
+          "lead_days": 23.0,
+          "market": 0.779,
+          "model": 0.78
+        },
+        {
+          "date": "2026-06-09",
+          "lead_days": 21.0,
+          "market": 0.622,
+          "model": 0.58
+        },
+        {
+          "date": "2026-06-10",
+          "lead_days": 20.0,
+          "market": 0.62,
+          "model": 0.62
+        },
+        {
+          "date": "2026-06-11",
+          "lead_days": 19.0,
+          "market": 0.803,
+          "model": 0.15
+        },
+        {
+          "date": "2026-06-12",
+          "lead_days": 18.0,
+          "market": 0.808,
+          "model": 0.75
+        },
+        {
+          "date": "2026-06-13",
+          "lead_days": 17.1,
+          "market": 0.817,
+          "model": 0.5
+        },
+        {
+          "date": "2026-06-14",
+          "lead_days": 16.7,
+          "market": 1.0,
+          "model": 0.1
+        }
+      ],
+      "price_points": [
+        {
+          "market": 0.534,
+          "ts": "2026-06-04T15:42:07.566651+00:00"
+        },
+        {
+          "market": 0.535,
+          "ts": "2026-06-04T18:29:25.009049+00:00"
+        },
+        {
+          "market": 0.535,
+          "ts": "2026-06-04T21:03:53.152986+00:00"
+        },
+        {
+          "market": 0.535,
+          "ts": "2026-06-04T22:44:28.560744+00:00"
+        },
+        {
+          "market": 0.535,
+          "ts": "2026-06-05T00:20:21.124691+00:00"
+        },
+        {
+          "market": 0.533,
+          "ts": "2026-06-05T05:48:20.134033+00:00"
+        },
+        {
+          "market": 0.537,
+          "ts": "2026-06-05T10:16:24.125948+00:00"
+        },
+        {
+          "market": 0.537,
+          "ts": "2026-06-05T11:06:24.136935+00:00"
+        },
+        {
+          "market": 0.533,
+          "ts": "2026-06-05T12:57:47.136909+00:00"
+        },
+        {
+          "market": 0.526,
+          "ts": "2026-06-05T13:27:20.940202+00:00"
+        },
+        {
+          "market": 0.522,
+          "ts": "2026-06-05T16:39:50.336001+00:00"
+        },
+        {
+          "market": 0.525,
+          "ts": "2026-06-05T19:07:36.056313+00:00"
+        },
+        {
+          "market": 0.524,
+          "ts": "2026-06-05T20:55:52.092300+00:00"
+        },
+        {
+          "market": 0.523,
+          "ts": "2026-06-05T22:35:12.130041+00:00"
+        },
+        {
+          "market": 0.523,
+          "ts": "2026-06-06T00:19:25.694865+00:00"
+        },
+        {
+          "market": 0.523,
+          "ts": "2026-06-06T01:55:27.494345+00:00"
+        },
+        {
+          "market": 0.8,
+          "ts": "2026-06-06T05:04:59.723522+00:00"
+        },
+        {
+          "market": 0.8,
+          "ts": "2026-06-06T08:02:30.413064+00:00"
+        },
+        {
+          "market": 0.79,
+          "ts": "2026-06-06T10:21:21.656145+00:00"
+        },
+        {
+          "market": 0.779,
+          "ts": "2026-06-06T12:17:47.246098+00:00"
+        },
+        {
+          "market": 0.79,
+          "ts": "2026-06-06T14:53:12.580808+00:00"
+        },
+        {
+          "market": 0.794,
+          "ts": "2026-06-06T16:18:43.145258+00:00"
+        },
+        {
+          "market": 0.785,
+          "ts": "2026-06-06T22:15:57.612689+00:00"
+        },
+        {
+          "market": 0.776,
+          "ts": "2026-06-06T23:18:31.706743+00:00"
+        },
+        {
+          "market": 0.781,
+          "ts": "2026-06-07T04:55:35.203909+00:00"
+        },
+        {
+          "market": 0.788,
+          "ts": "2026-06-07T08:30:23.186739+00:00"
+        },
+        {
+          "market": 0.785,
+          "ts": "2026-06-07T11:16:18.264009+00:00"
+        },
+        {
+          "market": 0.782,
+          "ts": "2026-06-07T12:51:45.011549+00:00"
+        },
+        {
+          "market": 0.783,
+          "ts": "2026-06-07T15:00:48.373314+00:00"
+        },
+        {
+          "market": 0.782,
+          "ts": "2026-06-07T16:22:58.378474+00:00"
+        },
+        {
+          "market": 0.779,
+          "ts": "2026-06-08T00:21:36.850515+00:00"
+        },
+        {
+          "market": 0.78,
+          "ts": "2026-06-08T01:20:24.312153+00:00"
+        },
+        {
+          "market": 0.775,
+          "ts": "2026-06-08T06:07:03.219466+00:00"
+        },
+        {
+          "market": 0.775,
+          "ts": "2026-06-08T11:20:46.968205+00:00"
+        },
+        {
+          "market": 0.779,
+          "ts": "2026-06-08T16:22:28.271059+00:00"
+        },
+        {
+          "market": 0.78,
+          "ts": "2026-06-08T19:35:38.406708+00:00"
+        },
+        {
+          "market": 0.791,
+          "ts": "2026-06-08T22:00:50.358721+00:00"
+        },
+        {
+          "market": 0.786,
+          "ts": "2026-06-08T23:36:27.016612+00:00"
+        },
+        {
+          "market": 0.631,
+          "ts": "2026-06-09T04:34:02.161346+00:00"
+        },
+        {
+          "market": 0.626,
+          "ts": "2026-06-09T08:41:13.967492+00:00"
+        },
+        {
+          "market": 0.624,
+          "ts": "2026-06-09T12:15:40.408728+00:00"
+        },
+        {
+          "market": 0.63,
+          "ts": "2026-06-09T13:50:21.507761+00:00"
+        },
+        {
+          "market": 0.625,
+          "ts": "2026-06-09T15:28:26.138749+00:00"
+        },
+        {
+          "market": 0.619,
+          "ts": "2026-06-09T18:21:03.004127+00:00"
+        },
+        {
+          "market": 0.625,
+          "ts": "2026-06-09T21:10:41.794139+00:00"
+        },
+        {
+          "market": 0.622,
+          "ts": "2026-06-09T22:49:15.761797+00:00"
+        },
+        {
+          "market": 0.623,
+          "ts": "2026-06-10T01:31:13.647102+00:00"
+        },
+        {
+          "market": 0.625,
+          "ts": "2026-06-10T06:42:33.356190+00:00"
+        },
+        {
+          "market": 0.625,
+          "ts": "2026-06-10T11:03:49.786322+00:00"
+        },
+        {
+          "market": 0.625,
+          "ts": "2026-06-10T14:29:27.435301+00:00"
+        },
+        {
+          "market": 0.625,
+          "ts": "2026-06-10T18:09:58.766880+00:00"
+        },
+        {
+          "market": 0.623,
+          "ts": "2026-06-10T20:44:54.232215+00:00"
+        },
+        {
+          "market": 0.62,
+          "ts": "2026-06-10T22:56:49.079235+00:00"
+        },
+        {
+          "market": 0.435,
+          "ts": "2026-06-11T01:38:46.759146+00:00"
+        },
+        {
+          "market": 0.816,
+          "ts": "2026-06-11T07:05:04.496609+00:00"
+        },
+        {
+          "market": 0.818,
+          "ts": "2026-06-11T11:47:55.340761+00:00"
+        },
+        {
+          "market": 0.818,
+          "ts": "2026-06-11T13:29:48.234028+00:00"
+        },
+        {
+          "market": 0.811,
+          "ts": "2026-06-11T15:30:16.214115+00:00"
+        },
+        {
+          "market": 0.807,
+          "ts": "2026-06-11T16:20:45.217112+00:00"
+        },
+        {
+          "market": 0.792,
+          "ts": "2026-06-11T19:45:19.771780+00:00"
+        },
+        {
+          "market": 0.787,
+          "ts": "2026-06-11T22:15:29.156635+00:00"
+        },
+        {
+          "market": 0.803,
+          "ts": "2026-06-11T23:55:00.583825+00:00"
+        },
+        {
+          "market": 0.8,
+          "ts": "2026-06-12T05:02:09.881672+00:00"
+        },
+        {
+          "market": 0.811,
+          "ts": "2026-06-12T09:11:54.409330+00:00"
+        },
+        {
+          "market": 0.812,
+          "ts": "2026-06-12T12:30:32.716730+00:00"
+        },
+        {
+          "market": 0.809,
+          "ts": "2026-06-12T16:28:01.256451+00:00"
+        },
+        {
+          "market": 0.805,
+          "ts": "2026-06-12T19:21:53.026906+00:00"
+        },
+        {
+          "market": 0.814,
+          "ts": "2026-06-12T22:00:47.747336+00:00"
+        },
+        {
+          "market": 0.808,
+          "ts": "2026-06-12T23:48:48.823977+00:00"
+        },
+        {
+          "market": 0.808,
+          "ts": "2026-06-13T04:50:37.414597+00:00"
+        },
+        {
+          "market": 0.817,
+          "ts": "2026-06-13T08:31:29.099295+00:00"
+        },
+        {
+          "market": 0.811,
+          "ts": "2026-06-13T11:24:34.316835+00:00"
+        },
+        {
+          "market": 0.806,
+          "ts": "2026-06-13T14:24:55.157160+00:00"
+        },
+        {
+          "market": 0.807,
+          "ts": "2026-06-13T16:45:45.648298+00:00"
+        },
+        {
+          "market": 0.816,
+          "ts": "2026-06-13T18:43:32.710042+00:00"
+        },
+        {
+          "market": 0.815,
+          "ts": "2026-06-13T20:40:23.653511+00:00"
+        },
+        {
+          "market": 0.817,
+          "ts": "2026-06-13T22:19:06.159744+00:00"
+        },
+        {
+          "market": 0.814,
+          "ts": "2026-06-14T00:20:22.911093+00:00"
+        },
+        {
+          "market": 1.0,
+          "ts": "2026-06-14T06:05:03.747826+00:00"
+        }
+      ],
+      "question": "Will the New York Knicks win the 2026 NBA Finals?"
+    },
     {
       "market_url": "https://polymarket.com/market/will-trump-restart-project-freedom-by-june-30",
       "outcome": 1,
