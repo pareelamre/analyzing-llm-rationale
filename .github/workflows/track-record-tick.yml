@@ -14,7 +14,10 @@ name: Track record tick
 
 on:
   schedule:
-    - cron: "17 * * * *"   # hourly at :17 (cheap price points; LLM forecast still daily per market)
+    # Every 15 min: price points for all markets (cheap); LLM re-forecast only
+    # when the crowd price has drifted ≥ PRICE_DRIFT_THRESHOLD since last snapshot.
+    # First tick of each UTC day forecasts all markets (no today-snapshot yet).
+    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -27,7 +30,7 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 50   # re-forecasts every tracked-open market each tick (REFORECAST_EACH_TICK)
+    timeout-minutes: 50   # first tick of each UTC day re-forecasts all markets (up to ~84 LLM calls)
     steps:
       - uses: actions/checkout@v4
 
@@ -42,6 +45,11 @@ jobs:
         env:
           FORESEA_BASE_URL: https://foresea.ink
           PER_VENUE: "3"
+          # Drift-triggered re-forecast: price-only most ticks; LLM re-forecast
+          # when the crowd has moved ≥ 3pp since the last snapshot, so the edge
+          # board reflects current model opinion whenever the market moves.
+          REFORECAST_EACH_TICK: "0"
+          PRICE_DRIFT_THRESHOLD: "0.03"
           PREDICT_API_KEY: ${{ secrets.PREDICT_API_KEY }}
           # Pulls agent-enrolled markets from the evolution-loop bridge (no-op until set).
           TRACK_RECORD_TOKEN: ${{ secrets.TRACK_RECORD_TOKEN }}

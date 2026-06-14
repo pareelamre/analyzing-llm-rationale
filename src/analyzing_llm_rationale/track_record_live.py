@@ -627,6 +627,14 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
     for mlabel, rows in by_model.items():
         ov = _bucket_stats(rows) or {}
         pp = paper_pnl(rows, edge_calibration(rows))
+        model_by_horizon = []
+        for label, _lo, _hi in _HORIZONS:
+            h_rows = [r for r in rows if r.get("horizon") == label]
+            stats = _bucket_stats(h_rows)
+            if stats:
+                stats["horizon"] = label
+                stats.update(_skill_ci(h_rows))
+                model_by_horizon.append(stats)
         out.append({
             "model": mlabel,
             "n_snapshots_resolved": len(rows),
@@ -637,6 +645,7 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
             "paper_roi": ((pp or {}).get("flat") or {}).get("roi"),
             "paper_roi_validated": ((pp or {}).get("validated_only") or {}).get("roi"),
             "paper_pnl": pp,
+            "by_horizon": model_by_horizon,
         })
     out.sort(key=lambda m: (m["paper_roi_validated"] if m["paper_roi_validated"] is not None else -9.0,
                             m["paper_roi"] if m["paper_roi"] is not None else -9.0,

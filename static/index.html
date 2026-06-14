@@ -3921,6 +3921,42 @@ function _ebGoPage(n) {
   if (sec) sec.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
 }
 
+function _equitySvg(curves, W = 460, H = 110) {
+  // curves = [{points: float[], color: string, label: string}, ...]
+  // points = cumulative PnL after each bet (absolute $ given unit stakes)
+  const allPts = curves.flatMap(c => c.points);
+  if (!allPts.length) return '';
+  const n = Math.max(...curves.map(c => c.points.length));
+  const lo = Math.min(0, ...allPts);
+  const hi = Math.max(0, ...allPts);
+  const range = hi - lo || 1;
+  const padL = 36, padR = 8, padT = 8, padB = 20;
+  const cW = W - padL - padR, cH = H - padT - padB;
+  const toX = i => padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
+  const toY = v => padT + cH - ((v - lo) / range) * cH;
+  const zeroY = toY(0).toFixed(1);
+  // Y-axis labels (top and bottom of range, plus zero)
+  const yLabels = [...new Set([lo, 0, hi])].filter(v => v !== 0 || (lo < 0 && hi > 0));
+  const yAxisHtml = yLabels.map(v =>
+    `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${v >= 0 ? '+' : ''}${v.toFixed(1)}</text>`
+  ).join('');
+  // Zero baseline
+  const baseline = `<line x1="${padL}" y1="${zeroY}" x2="${padL + cW}" y2="${zeroY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>`;
+  // Curve paths
+  const paths = curves.map(c => {
+    if (!c.points.length) return '';
+    const pts = c.points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+    return `<polyline points="${pts}" fill="none" stroke="${c.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }).join('');
+  // Legend
+  const legend = curves.map((c, i) =>
+    `<circle cx="${padL + i * 110 + 7}" cy="${H - 6}" r="3.5" fill="${c.color}"/><text x="${padL + i * 110 + 15}" y="${H - 2}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`
+  ).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:${H}px;display:block;margin-top:14px;overflow:visible" aria-label="Equity curve">
+    ${yAxisHtml}${baseline}${paths}${legend}
+  </svg>`;
+}
+
 function _renderBoardPage(board, page) {
   if (!board.length) return '<p class="text-sm text-gray-500">No open markets tracked yet.</p>';
   const pages = Math.ceil(board.length / _EB_PAGE_SIZE);
@@ -4006,11 +4042,17 @@ function renderEdgeBoard(d) {
     const nRes = d.n_snapshots_resolved || 0;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. Three ways to size each bet (${nBet} of ${nRes} resolved markets bet):</p>`;
+    const curves = [
+      pnl.flat?.equity_curve?.length      ? { points: pnl.flat.equity_curve,            color: '#60a5fa', label: 'Flat stake' }        : null,
+      pnl.edge_weighted?.equity_curve?.length ? { points: pnl.edge_weighted.equity_curve, color: '#a78bfa', label: 'Edge-weighted' }   : null,
+      pnl.validated_only?.equity_curve?.length ? { points: pnl.validated_only.equity_curve, color: '#34d399', label: 'Validated-only' } : null,
+    ].filter(Boolean);
+    const svgChart = curves.length ? _equitySvg(curves) : '';
     pnlHtml = intro + `<div class="tr-stats">
       <div class="tr-stat" title="Equal stake on every call. Pure hit-rate at the odds paid — a winning favourite pays little, any loss costs the full stake."><div class="v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
       <div class="tr-stat" title="Stake scales with how far the model sits from the market price — big where it disagrees with the crowd, almost nothing where it agrees."><div class="v">${roi(pnl.edge_weighted)}</div><div class="k label">Edge-weighted</div>${_sub('stake the gap vs market')}</div>
       <div class="tr-stat" title="Flat stake, but only on calls in disagreement buckets whose resolved skill is already statistically significant. Builds as more markets resolve."><div class="v">${roi(pnl.validated_only)}</div><div class="k label">Validated-only</div>${_sub('only proven-edge calls')}</div>
-    </div><p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(pnl.disclaimer || '')}</p>`;
+    </div>${svgChart}<p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(pnl.disclaimer || '')}</p>`;
   } else {
     pnlHtml = `<p class="text-sm text-gray-500">Hypothetical paper PnL — following the model's calls — starts once markets resolve. No fees/slippage; a signal check, not live trading.</p>`;
   }
@@ -4022,7 +4064,8 @@ function renderEdgeBoard(d) {
   if (byHorizon.length) {
     calibHtml = byHorizon.slice().sort((a, b) => (_hOrder[a.horizon] ?? 9) - (_hOrder[b.horizon] ?? 9)).map(b => {
       const sig = b.skill_significant ? '<span class="eb-badge eb-sig">proven edge</span>' : '<span class="eb-badge">not yet proven</span>';
-      return `<div class="eb-calib-row eb-row"><span style="width:90px;font-weight:600">${b.horizon} ahead</span><span style="flex:1">skill ${_sg(b.skill_vs_market)} (n=${b.n})</span>${sig}</div>`;
+      const accStr = b.accuracy != null ? `<span style="color:var(--text-dim);margin-right:10px">acc ${pct(b.accuracy)}%</span>` : '';
+      return `<div class="eb-calib-row eb-row"><span style="width:90px;font-weight:600">${b.horizon} ahead</span>${accStr}<span style="flex:1">skill ${_sg(b.skill_vs_market)} (n=${b.n})</span>${sig}</div>`;
     }).join('');
   } else {
     calibHtml = `<p class="text-sm text-gray-500">Lead-time calibration — whether forecasts made this early actually pay — builds as markets resolve.</p>`;
