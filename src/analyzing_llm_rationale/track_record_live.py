@@ -570,35 +570,75 @@ def paper_pnl(resolved: List[Dict[str, Any]],
     """
     sig_buckets = {b["edge_bucket"] for b in (edge_calib or []) if b.get("skill_significant")}
 
+    def _ts(v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return v
+        if isinstance(v, dict):
+            return v.get("__dt__")
+        return v.isoformat() if hasattr(v, "isoformat") else str(v)
+
+    # Collect all eligible bets once; encode both sizings per record so the log
+    # is self-contained and future analysis doesn't need to re-run the loop.
+    all_bets: List[Dict[str, Any]] = []
+    for r in sorted(resolved, key=lambda x: x.get("resolved_ts") or _now()):
+        edge = _edge(r)
+        if edge < min_edge:
+            continue
+        model_p, market_p = float(r["model_probability"]), float(r["market_probability"])
+        if model_p == 0.5:
+            continue
+        side_yes = model_p > 0.5
+        p_side = market_p if side_yes else (1.0 - market_p)
+        if not (0.0 < p_side < 1.0):
+            continue
+        win = (int(r["outcome"]) == 1) == side_yes
+        s_edge = min(edge, stake_cap)
+        fee_flat = _bet_fee(r.get("platform"), 1.0, p_side)
+        fee_edge = _bet_fee(r.get("platform"), s_edge, p_side)
+        payout = (1.0 - p_side) / p_side
+        all_bets.append({
+            "question": (r.get("question") or r.get("ident") or "")[:120],
+            "platform": r.get("platform"),
+            "ident": r.get("ident"),
+            "market_url": r.get("market_url"),
+            "snapshot_ts": _ts(r.get("snapshot_ts")),
+            "model": r.get("model"),
+            "domain": r.get("domain"),
+            "model_probability": round(model_p, 4),
+            "market_probability": round(market_p, 4),
+            "edge": round(edge, 4),
+            "side": "YES" if side_yes else "NO",
+            "win": win,
+            "outcome": int(r["outcome"]),
+            "stake_flat": 1.0,
+            "stake_edge": round(s_edge, 4),
+            "in_validated": _edge_label(edge) in sig_buckets,
+            "profit_flat": round(1.0 * (payout if win else -1.0) - fee_flat, 4),
+            "profit_edge": round(s_edge * (payout if win else -1.0) - fee_edge, 4),
+            "fee_flat": round(fee_flat, 4),
+            "fee_edge": round(fee_edge, 4),
+            "resolved_ts": _ts(r.get("resolved_ts")),
+        })
+
     def _run(sizing, *, validated: bool = False) -> Optional[Dict[str, Any]]:
         staked = pnl = wins = fees = 0.0
         n = 0
         cum = 0.0
         curve: List[float] = []
-        for r in sorted(resolved, key=lambda x: x.get("resolved_ts") or _now()):
-            edge = _edge(r)
-            if edge < min_edge:
+        for b in all_bets:
+            if validated and not b["in_validated"]:
                 continue
-            if validated and _edge_label(edge) not in sig_buckets:
-                continue
-            model_p, market_p = float(r["model_probability"]), float(r["market_probability"])
-            # Bet the model's OWN call (the accuracy side), not the model-vs-market
-            # lean — never stake against the model's answer. win_rate == accuracy.
-            if model_p == 0.5:
-                continue  # no directional conviction to follow
-            side_yes = model_p > 0.5
-            p_side = market_p if side_yes else (1.0 - market_p)
-            if not (0.0 < p_side < 1.0):
-                continue
-            win = (int(r["outcome"]) == 1) == side_yes
-            stake = sizing(edge)
-            fee = _bet_fee(r.get("platform"), stake, p_side)
-            # Net of trading fees so ROI is the real, cost-adjusted return.
-            profit = stake * ((1.0 - p_side) / p_side if win else -1.0) - fee
+            stake = sizing(b["edge"])
+            fee = _bet_fee(b["platform"], stake, b["market_probability"] if b["side"] == "YES" else (1.0 - b["market_probability"]))
+            p_side = b["market_probability"] if b["side"] == "YES" else (1.0 - b["market_probability"])
+            payout = (1.0 - p_side) / p_side
+            profit = stake * (payout if b["win"] else -1.0) - fee
             staked += stake
             pnl += profit
             fees += fee
-            wins += 1 if win else 0
+            wins += 1 if b["win"] else 0
             n += 1
             cum += profit
             curve.append(round(cum, 4))
@@ -625,6 +665,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         "flat": flat,
         "edge_weighted": _run(lambda e: min(e, stake_cap)),
         "validated_only": _run(lambda e: 1.0, validated=True),
+        "bets": all_bets,
     }
 
 
