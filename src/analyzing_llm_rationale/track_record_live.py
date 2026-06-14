@@ -171,7 +171,7 @@ async def record_snapshots(
     models: Optional[List[str]] = None,
     default_model: str = "gpt-oss-120b",
     per_venue: int = 3,
-    evidence_top_k: int = 3,
+    evidence_top_k: int = 5,
     min_discovery_lead_days: float = 2.0,
     max_discovery_lead_days: float = 365.0,
     seed_idents: Optional[List[Tuple[str, str]]] = None,
@@ -238,6 +238,12 @@ async def record_snapshots(
         lead = _lead_time_days(q.get("close_time"))
         if lead is not None and not (min_discovery_lead_days <= lead <= max_discovery_lead_days):
             continue  # outside the useful resolution window
+        # Sports markets: the crowd has real-time game information the model
+        # cannot match. Skip discovery — agent-enrolled sports questions are
+        # still tracked if someone explicitly asks Foresea about them.
+        tags = tag_question(q.get("question") or "", q.get("category"))
+        if tags.get("domain") == "sports":
+            continue
         targets.append(q)
         known.add((q.get("platform"), ident))
 
@@ -268,6 +274,13 @@ async def record_snapshots(
             except Exception:
                 scored = None
             if not scored or scored.get("model_probability") is None:
+                continue
+            # Without evidence the model has no informational edge over the
+            # current market price and can produce extreme calls for no reason
+            # (observed: 15% vs 80% market on Knicks, 15% vs 100% on Project
+            # Freedom — both with evidence_count=0, both wrong). Skip the write;
+            # the previous snapshot stays as the current view for this market.
+            if (scored.get("evidence_count") or 0) == 0 and existing is not None:
                 continue
             mkt_prob = scored.get("market_probability")
             mkt_prob = mkt_prob if mkt_prob is not None else market_prob
@@ -929,6 +942,12 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_primary}
     n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_primary})
 
+    # Skill metrics (paper PnL, by_edge, calibration) are computed on non-sports
+    # snapshots only. Sports markets are crowd-efficient in real time — the model
+    # has no informational edge — so including them dilutes the signal and inflates
+    # loss metrics from no-evidence crashes during live games.
+    resolved_skill = [r for r in resolved_primary if (r.get("domain") or "") != "sports"]
+
     # Lead-time (how-early) calibration: resolved skill bucketed by forecast
     # horizon, with significance — the axis the edge board links against.
     by_horizon = []
@@ -940,7 +959,11 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             by_horizon.append(stats)
 
     # Compute edge board early so the stat can reflect its actual length.
-    by_edge_early = edge_calibration([r for r in resolved if (r.get("model") or model) == model])
+    # Use non-sports resolved snapshots for the skill calibration so sports
+    # crashes don't pollute the edge bucket significance shown on live rows.
+    _res_skill_early = [r for r in resolved
+                        if (r.get("model") or model) == model and (r.get("domain") or "") != "sports"]
+    by_edge_early = edge_calibration(_res_skill_early)
     edge_board_result = build_edge_board(open_primary, latest_price, by_edge_early, by_horizon)
 
     payload: Dict[str, Any] = {
@@ -1043,19 +1066,25 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "n_tagged": sum(1 for r in open_primary if r.get("domain")),
     }
 
+    by_edge_skill = edge_calibration(resolved_skill)
+    by_market_skill: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    for r in resolved_skill:
+        by_market_skill.setdefault((r.get("platform"), r.get("ident")), []).append(r)
+
     payload.update({
         "overall": overall,
         "by_horizon": by_horizon,
-        "by_edge": by_edge,
+        "by_edge": by_edge_skill,
         "by_domain": by_domain,
         "by_liquidity": by_liquidity,
-        "lead_lag": lead_lag(by_market),
-        "paper_pnl": paper_pnl(resolved_primary, by_edge),
+        "lead_lag": lead_lag(by_market_skill),
+        "paper_pnl": paper_pnl(resolved_skill, by_edge_skill),
         "edge_board": edge_board_result,
         "models_comparison": build_models_comparison(resolved, default_model=model),
         "trajectories": trajectories,
-        "calibration_model": _calibration_report(resolved_primary),
+        "calibration_model": _calibration_report(resolved_skill),
         "knowledge_graph": kg_summary,
+        "n_snapshots_skill": len(resolved_skill),
     })
 
     entity = _ds.Entity(client.key(AGG_KIND, AGG_ID), exclude_from_indexes=("payload",))
