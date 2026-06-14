@@ -3929,22 +3929,24 @@ function _ebGoPage(n) {
 
 function _equitySvg(curves, W = 460, H = 110) {
   // curves = [{points: float[], color: string, label: string}, ...]
-  // points = cumulative PnL after each bet (absolute $ given unit stakes)
+  // points = cumulative ROI after each bet (normalised by total_staked so the
+  // final value exactly matches the displayed ROI %, and all three curves share
+  // a common % scale regardless of their stake sizes).
   const allPts = curves.flatMap(c => c.points);
   if (!allPts.length) return '';
   const n = Math.max(...curves.map(c => c.points.length));
   const lo = Math.min(0, ...allPts);
   const hi = Math.max(0, ...allPts);
   const range = hi - lo || 1;
-  const padL = 36, padR = 8, padT = 8, padB = 20;
+  const padL = 42, padR = 8, padT = 8, padB = 20;
   const cW = W - padL - padR, cH = H - padT - padB;
   const toX = i => padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
   const toY = v => padT + cH - ((v - lo) / range) * cH;
   const zeroY = toY(0).toFixed(1);
-  // Y-axis labels (top and bottom of range, plus zero)
+  // Y-axis labels as % (top, bottom, and zero when it falls in range)
   const yLabels = [...new Set([lo, 0, hi])].filter(v => v !== 0 || (lo < 0 && hi > 0));
   const yAxisHtml = yLabels.map(v =>
-    `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${v >= 0 ? '+' : ''}${v.toFixed(1)}</text>`
+    `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${v >= 0 ? '+' : ''}${Math.round(v * 100)}%</text>`
   ).join('');
   // Zero baseline
   const baseline = `<line x1="${padL}" y1="${zeroY}" x2="${padL + cW}" y2="${zeroY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>`;
@@ -4048,10 +4050,14 @@ function renderEdgeBoard(d) {
     const nRes = d.n_snapshots_resolved || 0;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. Three ways to size each bet (${nBet} of ${nRes} resolved markets bet):</p>`;
+    // Normalise each curve by its total_staked so all three are on a common
+    // % ROI scale and the final point of each curve equals the displayed ROI.
+    const _normCurve = s => s?.equity_curve?.length && s.total_staked
+      ? s.equity_curve.map(v => v / s.total_staked) : null;
     const curves = [
-      pnl.flat?.equity_curve?.length      ? { points: pnl.flat.equity_curve,            color: '#60a5fa', label: 'Flat stake' }        : null,
-      pnl.edge_weighted?.equity_curve?.length ? { points: pnl.edge_weighted.equity_curve, color: '#a78bfa', label: 'Edge-weighted' }   : null,
-      pnl.validated_only?.equity_curve?.length ? { points: pnl.validated_only.equity_curve, color: '#34d399', label: 'Validated-only' } : null,
+      _normCurve(pnl.flat)          ? { points: _normCurve(pnl.flat),          color: '#60a5fa', label: 'Flat stake' }        : null,
+      _normCurve(pnl.edge_weighted) ? { points: _normCurve(pnl.edge_weighted), color: '#a78bfa', label: 'Edge-weighted' }     : null,
+      _normCurve(pnl.validated_only)? { points: _normCurve(pnl.validated_only),color: '#34d399', label: 'Validated-only' }    : null,
     ].filter(Boolean);
     const svgChart = curves.length ? _equitySvg(curves) : '';
     // Per-sizing explainer: what each number means and what the gap between them signals.
