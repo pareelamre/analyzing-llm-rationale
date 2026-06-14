@@ -269,19 +269,32 @@ async def record_snapshots(
             # reforecast_each_tick=True: always re-run the forecast so the edge board
             # reflects the model's *current* opinion (matches live /predict), not a
             # snapshot taken earlier today. Overwrites today's snapshot for this model.
-            try:
-                scored = await forecast_fn(quote, evidence_top_k, model)
-            except Exception:
-                scored = None
-            if not scored or scored.get("model_probability") is None:
-                continue
-            # Without evidence the model has no informational edge over the
-            # current market price and can produce extreme calls for no reason
-            # (observed: 15% vs 80% market on Knicks, 15% vs 100% on Project
-            # Freedom — both with evidence_count=0, both wrong). Skip the write;
-            # the previous snapshot stays as the current view for this market.
-            if (scored.get("evidence_count") or 0) == 0 and existing is not None:
-                continue
+            # crowd-follow: record the current market price as the "model"
+            # prediction — no LLM call. Lets us paper-trade a pure crowd-following
+            # strategy alongside LLM models for comparison (especially useful for
+            # sports markets where the crowd has real-time information the model lacks).
+            if model == "crowd-follow":
+                if market_prob is None:
+                    continue
+                scored = {
+                    "model_probability": float(market_prob),
+                    "market_probability": float(market_prob),
+                    "evidence_count": 0,
+                }
+            else:
+                try:
+                    scored = await forecast_fn(quote, evidence_top_k, model)
+                except Exception:
+                    scored = None
+                if not scored or scored.get("model_probability") is None:
+                    continue
+                # Without evidence the model has no informational edge over the
+                # current market price and can produce extreme calls for no reason
+                # (observed: 15% vs 80% market on Knicks, 15% vs 100% on Project
+                # Freedom — both with evidence_count=0, both wrong). Skip the write;
+                # the previous snapshot stays as the current view for this market.
+                if (scored.get("evidence_count") or 0) == 0 and existing is not None:
+                    continue
             mkt_prob = scored.get("market_probability")
             mkt_prob = mkt_prob if mkt_prob is not None else market_prob
             tags = tag_question(quote.get("question") or "", quote.get("category"))
