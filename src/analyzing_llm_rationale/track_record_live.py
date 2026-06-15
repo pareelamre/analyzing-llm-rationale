@@ -238,11 +238,11 @@ async def record_snapshots(
         lead = _lead_time_days(q.get("close_time"))
         if lead is not None and not (min_discovery_lead_days <= lead <= max_discovery_lead_days):
             continue  # outside the useful resolution window
-        # Sports markets: the crowd has real-time game information the model
-        # cannot match. Skip discovery — agent-enrolled sports questions are
-        # still tracked if someone explicitly asks Foresea about them.
         tags = tag_question(q.get("question") or "", q.get("category"))
-        if tags.get("domain") == "sports":
+        # Sports markets: LLM has no real-time edge, but track them for the
+        # crowd-follow benchmark. Discovered only when crowd-follow is in the
+        # model list; LLM models are skipped for sports in the snapshot loop below.
+        if tags.get("domain") == "sports" and "crowd-follow" not in model_list:
             continue
         targets.append(q)
         known.add((q.get("platform"), ident))
@@ -254,7 +254,12 @@ async def record_snapshots(
             continue
         market_prob = quote.get("probability")
         lead = _lead_time_days(quote.get("close_time"))
+        quote_tags = tag_question(quote.get("question") or "", quote.get("category"))
+        is_sports = quote_tags.get("domain") == "sports"
         for model in model_list:
+            # LLM models have no real-time edge on sports — only crowd-follow runs there.
+            if is_sports and model != "crowd-follow":
+                continue
             key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{today}")
             existing = client.get(key)
             if existing is not None and not reforecast_each_tick:
