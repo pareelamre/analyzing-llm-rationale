@@ -70,11 +70,6 @@ _TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "120"))
 # Shared secret gating the evolution-loop bridge endpoints (pending-markets /
 # mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
 _TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
-_RADAR_URL = os.environ.get(
-    "RADAR_URL",
-    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/static/radar.json",
-)
-_RADAR_TTL = int(os.environ.get("RADAR_TTL", "900"))
 _state: Dict[str, Any] = {}
 _PUBLIC_MCP = None
 _PUBLIC_MCP_APP = None
@@ -985,37 +980,6 @@ def _auto_selected_model() -> Optional[str]:
         return None
 
 
-def _read_radar() -> Optional[Dict[str, Any]]:
-    """Return the committed Radar artifact, or None.
-
-    Radar is built by GitHub Actions and committed to ``static/radar.json``.
-    Cloud Run only serves the committed JSON (raw GitHub first, bundled file
-    second) so venue scraping and batch forecasts never run on visitor requests.
-    """
-    import requests
-
-    cache_key = _cache_key("radar_artifact")
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
-    payload: Optional[Dict[str, Any]] = None
-    try:
-        resp = requests.get(_RADAR_URL, timeout=6)
-        if resp.status_code == 200:
-            payload = resp.json()
-    except Exception:
-        logger.warning("radar artifact fetch failed; trying bundled copy", exc_info=True)
-    if payload is None:
-        bundled = _STATIC_DIR / "radar.json"
-        if bundled.exists():
-            try:
-                payload = json.loads(bundled.read_text())
-            except Exception:
-                logger.warning("bundled radar artifact unreadable", exc_info=True)
-    if payload is not None:
-        _cache_set(cache_key, payload, _RADAR_TTL)
-    return payload
-
 
 # ── Rate limiter ──────────────────────────────────────────────────────────────
 class _RateLimiter:
@@ -1462,12 +1426,10 @@ def _mcp_server_manifest() -> Dict[str, Any]:
                 "foresea_scan_markets",
                 "foresea_track_record",
                 "foresea_edge_board",
-                "foresea_radar",
                 "foresea_pr_agent",
             ],
             "ink.foresea/resources": [
                 "foresea://track-record",
-                "foresea://radar",
                 "foresea://pr-agent",
                 "foresea://openapi.json",
             ],
@@ -1497,13 +1459,11 @@ def _agent_manifest() -> Dict[str, Any]:
                 "foresea_analyze_market",
                 "foresea_scan_markets",
                 "foresea_edge_board",
-                "foresea_radar",
                 "foresea_track_record",
                 "foresea_pr_agent",
             ],
             "resources": [
                 "foresea://track-record",
-                "foresea://radar",
                 "foresea://pr-agent",
                 "foresea://openapi.json",
             ],
@@ -1518,15 +1478,21 @@ def _agent_manifest() -> Dict[str, Any]:
             },
             "structured_forecast": {"method": "POST", "path": "/predict"},
             "market_analysis": {"method": "POST", "path": "/agent/analyze"},
+            "streaming_market_analysis": {
+                "method": "POST",
+                "path": "/agent/analyze/stream",
+                "content_type": "text/event-stream",
+                "events": ["meta", "delta", "done", "error"],
+            },
             "market_scan": {"method": "GET", "path": "/agent/scan"},
-            "radar": {"method": "GET", "path": "/radar"},
             "track_record": {"method": "GET", "path": "/track-record"},
             "pr_agent": {"method": "GET", "path": "/pr-agent"},
         },
         "recommended_workflow": [
             "Read llms.txt or this manifest for discovery.",
-            "Use radar or agent_scan to find candidate markets.",
+            "Use agent_scan to find candidate markets.",
             "Use predict or predict_stream for probabilities and rationale.",
+            "Use agent/analyze/stream when a UI should show live market-analysis tokens.",
             "Compare against track_record before trusting new domains.",
             "Preserve evidence links in downstream responses.",
             "Use pr_agent for concise agent-to-agent introductions when users approve outreach.",
@@ -1549,8 +1515,9 @@ def _ai_plugin_manifest() -> Dict[str, Any]:
         "description_for_model": (
             "Use Foresea to answer forecasting and prediction-market questions. "
             "Call /predict for structured probability forecasts, /predict/stream "
-            "for streaming conversational output, /agent/scan for live market scans, "
-            "/radar for unusual market moves, and /track-record for calibration evidence."
+            "for streaming conversational output, /agent/analyze or /agent/analyze/stream "
+            "for live market analysis, /agent/scan for live market scans, and "
+            "/track-record for calibration evidence."
         ),
         "auth": {"type": "none"},
         "api": {
@@ -1624,12 +1591,12 @@ async def llms_txt():
 
 ## Use the API
 - [Agent integration guide]({_CANONICAL}/agents): practical entry point for AI
-  agents, with MCP, OpenAPI, streaming, radar, and track-record examples.
+  agents, with MCP, OpenAPI, streaming, market-scan, and track-record examples.
 - [Agent manifest]({_CANONICAL}/.well-known/agent.json): machine-readable
   endpoints, recommended workflow, and resource list.
 - [Remote MCP server]({_MCP_ENDPOINT}): Streamable HTTP MCP endpoint for agents.
   Tools: `foresea_forecast`, `foresea_analyze_market`, `foresea_scan_markets`,
-  `foresea_radar`, `foresea_track_record`, `foresea_pr_agent`. Discovery manifest:
+  `foresea_track_record`, `foresea_pr_agent`. Discovery manifest:
   `{_CANONICAL}/.well-known/mcp/server.json`.
 - [Forecast](\
 {_CANONICAL}/docs): `POST {_CANONICAL}/predict` with `{{"question": "..."}}` returns a
@@ -1641,10 +1608,10 @@ async def llms_txt():
 - [Agent analysis]({_CANONICAL}/docs): `POST {_CANONICAL}/agent/analyze` runs an
   end-to-end analysis of a live market (fetch price, gather evidence, forecast,
   compute edge) and returns one structured report.
+- [Streaming agent analysis]({_CANONICAL}/docs): `POST {_CANONICAL}/agent/analyze/stream`
+  streams the forecast thesis as SSE and finishes with the same structured report.
 - [Edge scan]({_CANONICAL}/docs): `GET {_CANONICAL}/agent/scan?platform=polymarket`
   surfaces mispriced live markets (also `kalshi`, or `all`).
-- [Radar]({_CANONICAL}/radar): daily niche-market radar from Reddit, Polymarket,
-  Kalshi, and Foresea's committed live snapshots.
 - [PR agent]({_CANONICAL}/pr-agent): concise agent-to-agent outreach packet for
   opt-in introductions. It does not send unsolicited messages.
 - [OpenAPI spec]({_CANONICAL}/openapi.json): full machine-readable API description.
@@ -1666,7 +1633,6 @@ async def sitemap_xml():
             (f"{_CANONICAL}/agents", "weekly", "0.9"),
             (f"{_CANONICAL}/pr-agent", "weekly", "0.8"),
             (f"{_CANONICAL}/track-record", "daily", "0.8"),
-            (f"{_CANONICAL}/radar", "daily", "0.8"),
             (f"{_CANONICAL}/docs", "weekly", "0.6")]
     items = "".join(
         f"<url><loc>{loc}</loc><changefreq>{cf}</changefreq><priority>{pr}</priority></url>"
@@ -1914,28 +1880,6 @@ async def mark_enrolled(req: MarkEnrolledRequest, request: Request = None) -> Di
 
     marked, pruned = await asyncio.get_running_loop().run_in_executor(None, _apply)
     return {"marked": marked, "pruned": pruned}
-
-
-@app.get("/radar", tags=["Markets"], summary="Foresea Radar: niche prediction-market opportunities")
-async def radar(limit: int = 10, include_reddit: bool = True):
-    """Daily niche-market radar from Reddit, Polymarket, Kalshi, and Foresea's
-    committed live snapshots.
-
-    The endpoint serves the committed ``static/radar.json`` artifact built by
-    GitHub Actions. The Action may run fresh `/predict` forecasts before
-    committing; Cloud Run never does Radar scraping or batch forecasting on page
-    load.
-    """
-    limit = max(1, min(int(limit), 25))
-    payload = await asyncio.get_running_loop().run_in_executor(None, _read_radar)
-    if payload is None:
-        raise HTTPException(status_code=404, detail="Radar artifact not generated yet.")
-    payload = dict(payload)
-    items = list(payload.get("items") or [])
-    payload["items"] = items[:limit]
-    if not include_reddit:
-        payload["reddit_discussions"] = []
-    return JSONResponse(payload, headers={"Cache-Control": f"public, max-age={_RADAR_TTL}"})
 
 
 # ── Request / response models ─────────────────────────────────────────────────
@@ -3959,17 +3903,10 @@ def _norm_url(url: Optional[str]) -> str:
 
 
 def _forecast_by_url() -> Dict[str, float]:
-    """Latest model forecast per market URL, sourced from the edge board + radar
-    (both already forecast hourly and served from the committed artifacts)."""
+    """Latest model forecast per market URL from the committed live track record."""
     out: Dict[str, float] = {}
-    radar = _read_radar() or {}
-    for item in radar.get("items", []):
-        url = _norm_url(item.get("market_url"))
-        mp = item.get("foresea_probability")
-        if url and mp is not None:
-            out[url] = float(mp)
     live = _read_live_track_record() or {}
-    for item in live.get("edge_board", []):  # edge board wins over radar
+    for item in live.get("edge_board", []):
         url = _norm_url(item.get("market_url"))
         mp = item.get("model_probability")
         if url and mp is not None:
@@ -4023,12 +3960,12 @@ async def favorite_prices(request: Request) -> Dict[str, Any]:
 
     results = await asyncio.gather(*[_one(f) for f in favs if f.get("ident")])
     quotes = {k: v for k, v in results if v is not None}
-    # Attach the latest model forecast (edge board + radar) by market URL.
+    # Attach the latest model forecast by market URL.
     fcast = await loop.run_in_executor(None, _forecast_by_url)
     favs_by_key = {f["key"]: f for f in favs}
     for key, v in quotes.items():
         fav = favs_by_key.get(key) or {}
-        # Prefer the freshest tick forecast (edge board / radar); fall back to the
+        # Prefer the freshest tick forecast; fall back to the
         # add-time forecast stored on the favourite so it persists across reloads.
         model = fcast.get(_norm_url(fav.get("market_url")))
         if model is None:
@@ -4089,13 +4026,8 @@ class MarketForecastRequest(BaseModel):
     market_url: Optional[str] = Field(None, max_length=500)
 
 
-@app.post("/market/forecast", tags=["Markets"], summary="Forecast one market now")
-async def market_forecast(req: MarketForecastRequest, request: Request) -> Dict[str, Any]:
-    """Run the model on a single market right now and return its probability, so a
-    freshly-watchlisted market shows a forecast without waiting for the next tick.
-    Sign-in gated (the watchlist is). Reuses the `/predict` pipeline."""
-    _require_session(request)
-    pr = PredictRequest(
+def _market_forecast_predict_request(req: MarketForecastRequest) -> PredictRequest:
+    return PredictRequest(
         question=req.question,
         market_probability=req.market_probability,
         market_platform=req.market_platform,
@@ -4103,15 +4035,84 @@ async def market_forecast(req: MarketForecastRequest, request: Request) -> Dict[
         market_url=req.market_url,
         market_outcome="Yes",
     )
-    resp = await predict(pr, request)
-    analysis = getattr(resp, "market_analysis", None)
-    model_p = analysis.model_probability if analysis else None
-    if model_p is None:
-        # No market price to anchor the analysis — derive from the binary forecast.
-        if getattr(resp, "question_type", None) == "binary" and resp.confidence is not None:
-            ans = (resp.predicted_answer or "").strip().lower()
-            model_p = resp.confidence if ans == "yes" else (1.0 - resp.confidence)
+
+
+def _market_forecast_payload(resp: PredictResponse) -> Dict[str, Any]:
+    model_p = _model_probability_from_prediction(resp)
     return {"model_probability": model_p}
+
+
+@app.post("/market/forecast", tags=["Markets"], summary="Forecast one market now")
+async def market_forecast(req: MarketForecastRequest, request: Request) -> Dict[str, Any]:
+    """Run the model on a single market right now and return its probability, so a
+    freshly-watchlisted market shows a forecast without waiting for the next tick.
+    Sign-in gated (the watchlist is). Reuses the `/predict` pipeline."""
+    _require_session(request)
+    pr = _market_forecast_predict_request(req)
+    resp = await predict(pr, request)
+    return _market_forecast_payload(resp)
+
+
+@app.post("/market/forecast/stream", tags=["Markets"], summary="Stream one market forecast now")
+async def market_forecast_stream(req: MarketForecastRequest, request: Request) -> StreamingResponse:
+    """Stream the underlying LLM forecast for a newly-watchlisted market."""
+    _require_session(request)
+    _check_rate_limit(request)
+    _check_api_key(request)
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+
+    async def events():
+        pr = _market_forecast_predict_request(req)
+        try:
+            messages, evidence_articles, evidence_error = await _prepare_predict_messages(
+                pr, _optional_user_id(request)
+            )
+            provider, temperature, max_tokens = _select_predict_provider(pr)
+        except HTTPException as exc:
+            yield _sse_event("error", {"status_code": exc.status_code, "detail": exc.detail})
+            return
+        except Exception:
+            logger.exception("market forecast stream setup failed")
+            yield _sse_event("error", {
+                "status_code": 500,
+                "detail": "The streaming market forecast could not be prepared.",
+            })
+            return
+
+        yield _sse_event("meta", {"status": "streaming"})
+        chunks: List[str] = []
+        try:
+            async for chunk in _provider_stream_chat(provider, messages, temperature, max_tokens):
+                if await request.is_disconnected():
+                    return
+                chunks.append(chunk)
+                yield _sse_event("delta", {"text": chunk})
+        except Exception as exc:
+            http_exc = _provider_http_error(exc)
+            yield _sse_event("error", {
+                "status_code": http_exc.status_code,
+                "detail": http_exc.detail,
+            })
+            return
+        text = "".join(chunks).strip()
+        parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
+                                             "rationale", "options", "p10", "p50", "p90", "unit"))
+        resp = _build_typed_response(pr, parsed, text, evidence_articles, evidence_error)
+        await _finalize_predict_response(pr, resp, _optional_user_id(request))
+        yield _sse_event("done", {
+            "response": resp.model_dump(mode="json"),
+            **_market_forecast_payload(resp),
+        })
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # marketd — the Go market-data ingestion microservice. When MARKETD_URL is set,
@@ -4199,7 +4200,7 @@ async def markets_search(
         _cache_set(cache_key, payload, 60)
         return JSONResponse(payload, headers={"Cache-Control": "public, max-age=60"})
 
-    # Fallback: in-process Python ingestion (also used by the tick/radar/agent).
+    # Fallback: in-process Python ingestion (also used by the tick and agent paths).
     from analyzing_llm_rationale import market_data as _md
 
     per_venue = max(1, limit // 2 + 1)
@@ -4452,6 +4453,17 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     else:
         response = _build_typed_response(req, parsed, content, evidence_articles, evidence_error)
 
+    await _finalize_predict_response(req, response, rag_user_id, predict_cache_key)
+    return response
+
+
+async def _finalize_predict_response(
+    req: PredictRequest,
+    response: PredictResponse,
+    rag_user_id: Optional[str],
+    predict_cache_key: Optional[str] = None,
+) -> None:
+    """Apply best-effort side effects shared by blocking and streaming forecasts."""
     if predict_cache_key is not None:
         _cache_set(predict_cache_key, response.model_dump(), _PREDICT_CACHE_TTL)
 
@@ -4483,7 +4495,6 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
             }])
         except Exception:
             pass
-    return response
 
 
 def _sse_event(event: str, data: Dict[str, Any]) -> str:
@@ -4570,6 +4581,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
         parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
                                              "rationale", "options", "p10", "p50", "p90", "unit"))
         response = _build_typed_response(req, parsed, text, evidence_articles, evidence_error)
+        await _finalize_predict_response(req, response, rag_user_id)
         yield _sse_event("done", {"response": response.model_dump(mode="json")})
 
     return StreamingResponse(
@@ -4726,6 +4738,19 @@ def _agent_recommendation(edge: Optional[float], outcome: str) -> tuple[str, str
     return "buy_no", f"Model is {pts} pts below the market on {out}; {out} looks overpriced."
 
 
+def _model_probability_from_prediction(resp: PredictResponse) -> Optional[float]:
+    analysis = getattr(resp, "market_analysis", None)
+    if analysis is not None and analysis.model_probability is not None:
+        return analysis.model_probability
+    if getattr(resp, "question_type", None) == "binary" and resp.confidence is not None:
+        ans = (resp.predicted_answer or "").strip().lower()
+        if ans == "yes":
+            return resp.confidence
+        if ans == "no":
+            return 1.0 - resp.confidence
+    return resp.confidence
+
+
 async def _run_agent_skill(skill: AgentSkill, context: str, provider, temperature, max_tokens) -> AgentSkillResult:
     messages = [
         {"role": "system", "content": _AGENT_SKILL_SYSTEM},
@@ -4739,24 +4764,10 @@ async def _run_agent_skill(skill: AgentSkill, context: str, provider, temperatur
         return AgentSkillResult(name=skill.name, output="(this analysis step is temporarily unavailable)")
 
 
-@app.post("/agent/analyze", tags=["Agents"], summary="Run the analysis agent on a live question", response_model=AgentReport)
-async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> AgentReport:
-    """Orchestrate an end-to-end analysis of a live market question.
-
-    Pipeline: resolve the market (fetch a live Polymarket/Kalshi price when an
-    identifier is given) → gather evidence and forecast → compute the model-vs-market
-    edge → run any custom **skills** → recommend. Returns one structured report.
-    """
-    if request is not None:
-        _check_rate_limit(request)
-        _check_api_key(request)
-    if not _state:
-        raise HTTPException(status_code=503, detail="Server not initialised")
-
+async def _resolve_agent_question(
+    req: AgentAnalyzeRequest,
+) -> tuple[str, Optional[MarketQuote], Optional[str], List[str]]:
     pipeline: List[str] = []
-
-    # 1. Resolve the market (live price). Explicit identifiers win; otherwise try
-    #    to pull a Polymarket/Kalshi URL out of the question text.
     quote: Optional[MarketQuote] = None
     venue = (req.platform or "").strip().lower()
     slug, market_id, ticker = req.slug, req.market_id, req.ticker
@@ -4776,18 +4787,16 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
                 quote = await _fetch_market_quote("kalshi", ticker=ticker)
         except HTTPException:
             if not from_url:
-                raise  # explicit identifier that didn't resolve -> surface the error
+                raise
         if quote is not None:
             pipeline.append("resolve_market")
 
-    # Prefer the market's real question when the user only pasted a link.
     question = (req.question or "").strip()
     if quote is not None and (not question or _parse_market_url(question)):
         question = quote.question or question
     if not question:
         raise HTTPException(status_code=422, detail="Provide a question, or a platform plus market identifier.")
 
-    # Optional: self-calibration grounding from the live track record.
     grounding_note = None
     if req.ground_in_record:
         agg = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
@@ -4795,19 +4804,22 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         if grounding_note:
             pipeline.append("ground_in_record")
 
-    # Optional: ReAct tool-using loop instead of the fixed pipeline below.
-    if req.tool_loop:
-        return await _agent_tool_loop(req, request, question, quote, grounding_note)
+    return question, quote, grounding_note, pipeline
 
-    # Feed the calibration note to the forecast as a prior (via history, so it
-    # doesn't suppress live evidence retrieval the way news_articles would).
+
+def _agent_prediction_request(
+    req: AgentAnalyzeRequest,
+    question: str,
+    quote: Optional[MarketQuote],
+    grounding_note: Optional[str],
+) -> PredictRequest:
     history = list(req.history)
     if grounding_note:
-        history = history + [{"role": "user",
-                              "content": f"[Self-calibration context — apply as a prior, not a hard rule]\n{grounding_note}"}]
-
-    # 2. Evidence + forecast + edge — reuse the /predict pipeline.
-    pred_req = PredictRequest(
+        history = history + [{
+            "role": "user",
+            "content": f"[Self-calibration context — apply as a prior, not a hard rule]\n{grounding_note}",
+        }]
+    return PredictRequest(
         question=question,
         attach_evidence=True,
         evidence_top_k=req.evidence_top_k,
@@ -4821,55 +4833,73 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         openrouter_model=req.openrouter_model,
         provider_base_url=req.provider_base_url,
     )
-    result = await predict(pred_req, kb_user_id=_optional_user_id(request))
-    pipeline.extend(["gather_evidence", "forecast"])
 
+
+async def _run_agent_skills(
+    req: AgentAnalyzeRequest,
+    question: str,
+    pred_req: PredictRequest,
+    result: PredictResponse,
+) -> tuple[List[AgentSkillResult], bool]:
+    skills_to_run: List[AgentSkill] = []
+    if req.builtin_skills:
+        skills_to_run.extend(AgentSkill(**s) for s in agent_capabilities.builtin_skills())
+    skills_to_run.extend(req.skills)
+    if not skills_to_run:
+        return [], False
+
+    provider, temperature, max_tokens = _select_provider(
+        req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
+        getattr(req, "ollama_base_url", None),
+    )
+    sources_txt = "\n".join(
+        f"- {s.source}: {s.title}" for s in result.evidence_sources[:8]
+    ) or "(no evidence retrieved)"
+    context = (
+        f"Question: {question}\n"
+        f"Forecast: {result.predicted_answer} "
+        f"(confidence {result.confidence if result.confidence is not None else 'n/a'})\n"
+        f"Market-implied probability: {pred_req.market_probability}\n"
+        f"Thesis: {result.model_rationale or result.rationale or ''}\n"
+        f"Evidence:\n{sources_txt}"
+    )
+    skill_results = await asyncio.gather(
+        *(_run_agent_skill(s, context, provider, temperature, max_tokens) for s in skills_to_run)
+    )
+    return list(skill_results), True
+
+
+async def _agent_report_from_prediction(
+    req: AgentAnalyzeRequest,
+    question: str,
+    quote: Optional[MarketQuote],
+    grounding_note: Optional[str],
+    pipeline: List[str],
+    pred_req: PredictRequest,
+    result: PredictResponse,
+) -> AgentReport:
+    pipeline = list(pipeline) + ["gather_evidence", "forecast"]
     analysis = result.market_analysis
     edge = analysis.edge if analysis else None
-    model_probability = analysis.model_probability if analysis else result.confidence
+    model_probability = analysis.model_probability if analysis else _model_probability_from_prediction(result)
     stance = analysis.stance if analysis else None
     outcome = (quote.outcome if quote else None) or "Yes"
     recommendation, detail = _agent_recommendation(edge, outcome)
     if analysis is not None:
         pipeline.append("price_edge")
 
-    # 3. Skills — the built-in forecasting toolkit (optional) plus the caller's
-    #    own custom steps, all run over the forecast context.
-    skills_to_run: List[AgentSkill] = []
-    if req.builtin_skills:
-        skills_to_run.extend(AgentSkill(**s) for s in agent_capabilities.builtin_skills())
-    skills_to_run.extend(req.skills)
-    skill_results: List[AgentSkillResult] = []
-    if skills_to_run:
-        provider, temperature, max_tokens = _select_provider(
-            req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
-            getattr(req, "ollama_base_url", None),
-        )
-        sources_txt = "\n".join(
-            f"- {s.source}: {s.title}" for s in result.evidence_sources[:8]
-        ) or "(no evidence retrieved)"
-        context = (
-            f"Question: {question}\n"
-            f"Forecast: {result.predicted_answer} "
-            f"(confidence {result.confidence if result.confidence is not None else 'n/a'})\n"
-            f"Market-implied probability: {pred_req.market_probability}\n"
-            f"Thesis: {result.model_rationale or result.rationale or ''}\n"
-            f"Evidence:\n{sources_txt}"
-        )
-        skill_results = await asyncio.gather(
-            *(_run_agent_skill(s, context, provider, temperature, max_tokens) for s in skills_to_run)
-        )
+    skill_results, ran_skills = await _run_agent_skills(req, question, pred_req, result)
+    if ran_skills:
         pipeline.append("skills")
-
     pipeline.append("recommend")
 
-    return AgentReport(
+    report = AgentReport(
         question=question,
         pipeline=pipeline,
         platform=(quote.platform if quote else req.platform),
         market_url=(quote.market_url if quote else None),
         outcome=outcome,
-        market_probability=(analysis.market_probability if analysis else None),
+        market_probability=(analysis.market_probability if analysis else pred_req.market_probability),
         model_probability=model_probability,
         edge=edge,
         stance=stance,
@@ -4881,6 +4911,139 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         evidence_sources=result.evidence_sources,
         skills=list(skill_results),
         grounding=grounding_note,
+    )
+    if report.market_url and report.model_probability is not None:
+        from analyzing_llm_rationale import track_record_live as _trl
+        _ident = _trl.ident_from_url(report.platform or "", report.market_url)
+        await _enroll_market(report.platform, _ident, report.market_url, question, "agent_analyze")
+    return report
+
+
+@app.post("/agent/analyze", tags=["Agents"], summary="Run the analysis agent on a live question", response_model=AgentReport)
+async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> AgentReport:
+    """Orchestrate an end-to-end analysis of a live market question.
+
+    Pipeline: resolve the market (fetch a live Polymarket/Kalshi price when an
+    identifier is given) → gather evidence and forecast → compute the model-vs-market
+    edge → run any custom **skills** → recommend. Returns one structured report.
+    """
+    if request is not None:
+        _check_rate_limit(request)
+        _check_api_key(request)
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+
+    question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+
+    # Optional: ReAct tool-using loop instead of the fixed pipeline below.
+    if req.tool_loop:
+        return await _agent_tool_loop(req, request, question, quote, grounding_note)
+
+    # 2. Evidence + forecast + edge — reuse the /predict pipeline.
+    pred_req = _agent_prediction_request(req, question, quote, grounding_note)
+    result = await predict(pred_req, kb_user_id=_optional_user_id(request))
+    return await _agent_report_from_prediction(
+        req, question, quote, grounding_note, pipeline, pred_req, result
+    )
+
+
+@app.post(
+    "/agent/analyze/stream",
+    tags=["Agents"],
+    summary="Stream the analysis agent on a live question",
+    response_description="Server-sent events with forecast deltas and a final AgentReport payload.",
+)
+async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> StreamingResponse:
+    """Stream the agent's LLM forecast thesis while preserving the final report shape.
+
+    The fixed pipeline streams the underlying forecast generation as `delta` events,
+    then emits the same structured `AgentReport` as `/agent/analyze` in `done`.
+    Tool-loop mode remains available through the blocking endpoint because its model
+    turns are interleaved with tool calls rather than one continuous answer.
+    """
+    _check_rate_limit(request)
+    _check_api_key(request)
+    if not _state:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+    if req.tool_loop:
+        raise HTTPException(status_code=400, detail="Streaming is not supported for tool_loop agent mode.")
+
+    async def events():
+        yield _sse_event("meta", {"status": "resolving"})
+        try:
+            question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+            yield _sse_event("meta", {
+                "status": "forecasting",
+                "question": question,
+                "pipeline": pipeline,
+            })
+            pred_req = _agent_prediction_request(req, question, quote, grounding_note)
+            rag_user_id = _optional_user_id(request)
+            messages, evidence_articles, evidence_error = await _prepare_predict_messages(
+                pred_req, rag_user_id
+            )
+            provider, temperature, max_tokens = _select_predict_provider(pred_req)
+        except HTTPException as exc:
+            yield _sse_event("error", {"status_code": exc.status_code, "detail": exc.detail})
+            return
+        except Exception:
+            logger.exception("agent stream setup failed")
+            yield _sse_event("error", {
+                "status_code": 500,
+                "detail": "The streaming agent request could not be prepared.",
+            })
+            return
+
+        yield _sse_event("meta", {
+            "status": "streaming",
+            "pipeline": pipeline + ["gather_evidence", "forecast"],
+            "evidence_sources": [s.model_dump(mode="json") for s in _evidence_sources(evidence_articles)],
+            "evidence_articles": [a.model_dump(mode="json") for a in _news_articles(evidence_articles)],
+            "evidence_error": evidence_error,
+        })
+
+        chunks: List[str] = []
+        try:
+            async for chunk in _provider_stream_chat(provider, messages, temperature, max_tokens):
+                if await request.is_disconnected():
+                    return
+                chunks.append(chunk)
+                yield _sse_event("delta", {"text": chunk, "phase": "forecast"})
+        except Exception as exc:
+            http_exc = _provider_http_error(exc)
+            yield _sse_event("error", {
+                "status_code": http_exc.status_code,
+                "detail": http_exc.detail,
+            })
+            return
+
+        text = "".join(chunks).strip()
+        parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
+                                             "rationale", "options", "p10", "p50", "p90", "unit"))
+        result = _build_typed_response(pred_req, parsed, text, evidence_articles, evidence_error)
+        await _finalize_predict_response(pred_req, result, _optional_user_id(request))
+
+        yield _sse_event("meta", {"status": "skills"})
+        try:
+            report = await _agent_report_from_prediction(
+                req, question, quote, grounding_note, pipeline, pred_req, result
+            )
+        except Exception:
+            logger.exception("agent stream finalisation failed")
+            yield _sse_event("error", {
+                "status_code": 500,
+                "detail": "The streaming agent report could not be finalized.",
+            })
+            return
+        yield _sse_event("done", {"report": report.model_dump(mode="json")})
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
