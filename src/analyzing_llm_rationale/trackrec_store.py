@@ -142,9 +142,13 @@ _SNAPSHOT_COLS: Dict[str, str] = {
     "platform": "TEXT", "ident": "TEXT", "model": "TEXT",
     "snapshot_date": "TEXT", "snapshot_ts": "TEXT",
     "question": "TEXT", "market_url": "TEXT",
+    "description": "TEXT", "resolution_criteria": "TEXT",
+    "publish_time": "TEXT",
     "model_probability": "DOUBLE", "market_probability": "DOUBLE",
+    "market_bid": "DOUBLE", "market_ask": "DOUBLE",
     "close_time": "TEXT", "lead_time_days": "DOUBLE", "horizon": "TEXT",
-    "category": "TEXT", "domain": "TEXT", "market_volume": "DOUBLE",
+    "category": "TEXT", "domain": "TEXT",
+    "market_volume": "DOUBLE", "market_liquidity": "DOUBLE",
     "evidence_count": "INTEGER", "entities": "TEXT",
     "resolved": "BOOLEAN", "outcome": "INTEGER", "resolved_ts": "TEXT",
     "model_brier": "DOUBLE", "market_brier": "DOUBLE", "model_correct": "BOOLEAN",
@@ -246,6 +250,16 @@ class DuckDBStore:
             self._con.execute(
                 f"CREATE TABLE IF NOT EXISTS {table} ({col_defs}, PRIMARY KEY (key))"
             )
+            # Add any columns that exist in the schema but not in the table (migration).
+            existing = {
+                row[0] for row in
+                self._con.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            for col, dtype in cols.items():
+                if col not in existing:
+                    self._con.execute(
+                        f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {dtype}"
+                    )
 
     # -- Datastore-compatible surface --
 

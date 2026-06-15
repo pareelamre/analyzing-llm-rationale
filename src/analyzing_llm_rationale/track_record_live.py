@@ -308,22 +308,29 @@ async def record_snapshots(
         mkt_prob = mkt_prob if mkt_prob is not None else market_prob
         tags = tag_question(quote.get("question") or "", quote.get("category"))
         entity = _ds.Entity(key, exclude_from_indexes=(
-            "question", "market_url", "close_time", "category", "entities"))
+            "question", "market_url", "close_time", "category", "entities",
+            "description", "resolution_criteria"))
         entity.update(
             platform=quote.get("platform"),
             ident=ident,
             model=model,
             question=quote.get("question"),
             market_url=quote.get("market_url"),
+            description=quote.get("description"),
+            resolution_criteria=quote.get("resolution_criteria"),
+            publish_time=quote.get("created_time"),
             snapshot_ts=_now(),
             snapshot_date=today,
             model_probability=float(scored["model_probability"]),
             market_probability=float(mkt_prob),
+            market_bid=quote.get("yes_bid"),
+            market_ask=quote.get("yes_ask"),
             close_time=quote.get("close_time"),
             lead_time_days=lead,
             horizon=_horizon_label(lead),
             category=quote.get("category"),
             market_volume=quote.get("volume"),
+            market_liquidity=quote.get("liquidity"),
             evidence_count=scored.get("evidence_count"),
             resolved=False,
             outcome=None,
@@ -367,7 +374,15 @@ async def record_snapshots(
                 recorded += 1
             else:
                 # Capture loop variables for the async closure.
-                quote_with_history = {**quote, "price_history": _get_price_history(client, ident)}
+                # Enrich with stored context fields (description/resolution_criteria) if
+                # not already in the live quote — avoids re-fetching on re-forecasts.
+                stored_ctx: Dict[str, Any] = {}
+                if existing is not None:
+                    for _f in ("description", "resolution_criteria", "publish_time"):
+                        if not quote.get(_f) and existing.get(_f):
+                            stored_ctx[_f] = existing[_f]
+                quote_with_history = {**quote, **stored_ctx,
+                                      "price_history": _get_price_history(client, ident)}
                 llm_tasks.append((key, quote, ident, model, lead, market_prob, existing,
                                   quote_with_history))
 
