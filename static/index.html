@@ -3963,16 +3963,20 @@ function _equitySvg(curves, W = 460, H = 110) {
   ).join('');
   // Zero baseline
   const baseline = `<line x1="${padL}" y1="${zeroY}" x2="${padL + cW}" y2="${zeroY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>`;
-  // Curve paths
+  // Curve paths — dash=true renders as a dashed line (crowd baseline)
   const paths = curves.map(c => {
     if (!c.points.length) return '';
     const pts = c.points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
-    return `<polyline points="${pts}" fill="none" stroke="${c.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const dashAttr = c.dash ? ' stroke-dasharray="5,3" stroke-width="1.4" opacity="0.75"' : ' stroke-width="1.8"';
+    return `<polyline points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>`;
   }).join('');
-  // Legend
-  const legend = curves.map((c, i) =>
-    `<circle cx="${padL + i * 110 + 7}" cy="${H - 6}" r="3.5" fill="${c.color}"/><text x="${padL + i * 110 + 15}" y="${H - 2}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`
-  ).join('');
+  // Legend — dashed swatch for crowd baseline
+  const legend = curves.map((c, i) => {
+    const swatch = c.dash
+      ? `<line x1="${padL + i * 110}" y1="${H - 6}" x2="${padL + i * 110 + 14}" y2="${H - 6}" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="4,2" opacity="0.8"/>`
+      : `<circle cx="${padL + i * 110 + 7}" cy="${H - 6}" r="3.5" fill="${c.color}"/>`;
+    return swatch + `<text x="${padL + i * 110 + 17}" y="${H - 2}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
+  }).join('');
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:${H}px;display:block;margin-top:14px;overflow:visible" aria-label="Equity curve">
     ${yAxisHtml}${baseline}${paths}${legend}
   </svg>`;
@@ -4067,10 +4071,15 @@ function renderEdgeBoard(d) {
     // % ROI scale and the final point of each curve equals the displayed ROI.
     const _normCurve = s => s?.equity_curve?.length && s.total_staked
       ? s.equity_curve.map(v => v / s.total_staked) : null;
+    // crowd_baseline: normalise by its own total_staked so it's on the same ROI scale
+    const _normBaseline = s => s?.equity_curve?.length && s.total_staked
+      ? s.equity_curve.map(v => v / s.total_staked) : null;
     const curves = [
       _normCurve(pnl.flat)          ? { points: _normCurve(pnl.flat),          color: '#60a5fa', label: 'Flat stake' }        : null,
       _normCurve(pnl.edge_weighted) ? { points: _normCurve(pnl.edge_weighted), color: '#a78bfa', label: 'Edge-weighted' }     : null,
       _normCurve(pnl.validated_only)? { points: _normCurve(pnl.validated_only),color: '#34d399', label: 'Validated-only' }    : null,
+      _normBaseline(pnl.crowd_baseline)
+        ? { points: _normBaseline(pnl.crowd_baseline), color: '#94a3b8', label: 'Crowd baseline', dash: true } : null,
     ].filter(Boolean);
     const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves) : ''}</div>`;
     // Per-sizing explainer: what each number means and what the gap between them signals.

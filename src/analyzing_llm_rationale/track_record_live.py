@@ -702,6 +702,51 @@ def paper_pnl(resolved: List[Dict[str, Any]],
     }
 
 
+def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Equity curve for a crowd-follow strategy: always bet the market's own
+    direction (model_p = market_p), flat $1 stake, no edge threshold.
+
+    By definition the crowd-follow model has zero edge vs the market, so it
+    never passes the standard paper_pnl min_edge filter.  This separate
+    computation shows what pure crowd-following earns on the same resolved
+    market set — the zero-edge baseline the LLM models are judged against."""
+    if not resolved:
+        return None
+    cum = 0.0
+    curve: List[float] = []
+    staked = pnl = wins = 0.0
+    n = 0
+    for r in sorted(resolved, key=lambda x: x.get("resolved_ts") or _now()):
+        market_p = float(r.get("market_probability") or 0.5)
+        if market_p == 0.5:
+            continue
+        side_yes = market_p > 0.5
+        p_side = market_p if side_yes else (1.0 - market_p)
+        if not (0.0 < p_side < 1.0):
+            continue
+        outcome = int(r.get("outcome") or 0)
+        win = (outcome == 1) == side_yes
+        payout = (1.0 - p_side) / p_side
+        fee = _bet_fee(r.get("platform"), 1.0, p_side)
+        profit = 1.0 * (payout if win else -1.0) - fee
+        staked += 1.0
+        pnl += profit
+        wins += 1 if win else 0
+        n += 1
+        cum += profit
+        curve.append(round(cum, 4))
+    if not n:
+        return None
+    return {
+        "n_bets": n,
+        "total_staked": round(staked, 4),
+        "pnl": round(pnl, 4),
+        "roi": round(pnl / staked, 4) if staked else None,
+        "win_rate": round(wins / n, 4),
+        "equity_curve": curve[-60:],
+    }
+
+
 def build_models_comparison(resolved: List[Dict[str, Any]], *,
                             default_model: str) -> List[Dict[str, Any]]:
     """Per-model leaderboard over resolved snapshots: accuracy, skill-vs-market,
@@ -1155,7 +1200,8 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "by_domain": by_domain,
         "by_liquidity": by_liquidity,
         "lead_lag": lead_lag(by_market_skill),
-        "paper_pnl": paper_pnl(resolved_skill, by_edge_skill),
+        "paper_pnl": {**(paper_pnl(resolved_skill, by_edge_skill) or {}),
+                      "crowd_baseline": crowd_baseline_equity(resolved_skill)},
         "edge_board": edge_board_result,
         "models_comparison": build_models_comparison(resolved, default_model=model),
         "trajectories": trajectories,
