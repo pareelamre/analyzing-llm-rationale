@@ -93,7 +93,7 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertIn("Question: Will event X happen?", prompt)
         self.assertIn("Current Time: 2026-06-05T12:00:00Z", prompt)
-        self.assertIn("Evidence Summaries:", prompt)
+        self.assertIn("Evidence (newest first):", prompt)
         self.assertIn('"summary_llm": "LLM summary"', prompt)
         self.assertNotIn("Full article text", prompt)
         self.assertNotIn("[question]", prompt)
@@ -251,7 +251,7 @@ class PipelineTests(unittest.TestCase):
 
             self.assertEqual(len(provider.calls), 2)
             self.assertIn('"text": "Full article text"', provider.calls[0][1]["content"])
-            self.assertIn("Evidence Summaries:", provider.calls[1][1]["content"])
+            self.assertIn("Evidence (newest first):", provider.calls[1][1]["content"])
             self.assertIn('"summary_llm": "LLM summary"', provider.calls[1][1]["content"])
             self.assertNotIn("Full article text", provider.calls[1][1]["content"])
             results = load_json(output_path)
@@ -314,7 +314,7 @@ class PipelineTests(unittest.TestCase):
                 provider,
             )
 
-            self.assertIn("Evidence Summaries:", provider.calls[0][1]["content"])
+            self.assertIn("Evidence (newest first):", provider.calls[0][1]["content"])
             self.assertIn('"summary_llm": "LLM summary"', provider.calls[0][1]["content"])
             self.assertNotIn("Full article text", provider.calls[0][1]["content"])
             results = load_json(output_path)
