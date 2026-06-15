@@ -3746,7 +3746,7 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   if (!edgeLoaded) { edgeLoaded = true; await loadEdgeBoard(); }
   refreshEdgePrices();
   _edgePriceTimer = setInterval(refreshEdgePrices, 60000);
-  _ebEquityTimer = setInterval(refreshEquityCurve, 5 * 60 * 1000);
+  _ebEquityTimer = setInterval(refreshEquityCurve, 2 * 60 * 1000);
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
 function closeEdgeBoard({ updateHistory = true } = {}) {

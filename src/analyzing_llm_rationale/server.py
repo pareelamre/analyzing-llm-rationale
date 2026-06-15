@@ -66,7 +66,7 @@ _TRACK_RECORD_LIVE_URL = os.environ.get(
     "TRACK_RECORD_LIVE_URL",
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/static/track_record_live.json",
 )
-_TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "600"))
+_TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "120"))
 # Shared secret gating the evolution-loop bridge endpoints (pending-markets /
 # mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
 _TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
