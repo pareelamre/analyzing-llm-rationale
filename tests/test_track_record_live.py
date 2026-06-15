@@ -476,6 +476,15 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertTrue(ltr["skill_significant"])
         self.assertEqual(ltr["n"], 12)
 
+    def test_edge_board_accepts_datetime_close_time(self):
+        now = datetime.now(timezone.utc)
+        open_rows = [{"platform": "Polymarket", "ident": "A", "model_probability": 0.8,
+                      "market_probability": 0.5, "snapshot_ts": now, "question": "Q1",
+                      "market_url": "u1", "close_time": now + timedelta(days=40)}]
+        board = trl.build_edge_board(open_rows, {"A": 0.5}, [])
+        self.assertEqual(len(board), 1)
+        self.assertEqual(board[0]["question"], "Q1")
+
     def test_paper_pnl_validated_only_skips_unproven_buckets(self):
         # Coin-flip disagreements -> bucket not significant -> validated_only empty.
         resolved = ([self._res(0.8, 0.5, 1)] * 5) + ([self._res(0.8, 0.5, 0)] * 5)

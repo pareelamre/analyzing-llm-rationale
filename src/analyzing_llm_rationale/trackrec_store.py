@@ -309,8 +309,6 @@ class DuckDBStore:
     # -- helpers --
 
     def _row_to_entity(self, kind: str, col_names: List[str], row: tuple) -> Entity:
-        info = _KIND_TABLE.get(kind)
-        cols = info[1] if info else {}
         key_val = None
         ent = Entity(None)
         for col, val in zip(col_names, row):

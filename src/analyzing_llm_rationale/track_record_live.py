@@ -815,13 +815,13 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
     seen_windows: Dict[Tuple[str, str], int] = {}
     deduped: List[Dict[str, Any]] = []
     for item in board:
-        close_t = item.get("close_time") or ""
-        try:
-            close_dt = datetime.fromisoformat(close_t.replace("Z", "+00:00"))
+        close_t = item.get("close_time")
+        close_dt = _parse_dt(close_t)
+        if close_dt is not None:
             # Bucket by platform + ISO year-week (Mon-Sun window)
             window = (item["platform"] or "", close_dt.strftime("%G-W%V"))
-        except Exception:
-            window = (item["platform"] or "", close_t[:7])
+        else:
+            window = (item["platform"] or "", str(close_t or "")[:7])
         count = seen_windows.get(window, 0)
         if count < max_per_close_window:
             seen_windows[window] = count + 1
