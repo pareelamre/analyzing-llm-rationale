@@ -128,6 +128,7 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "probability": probability,
         "outcomes": options,
         "close_time": market.get("endDate") or market.get("endDateIso"),
+        "created_time": market.get("startDate") or market.get("createdAt"),
         "description": (market.get("description") or "").strip() or None,
         "volume": _to_float(market.get("volume24hr") or market.get("volume")),
         "liquidity": _to_float(market.get("liquidity") or market.get("liquidityNum")),
@@ -136,6 +137,8 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
             or market.get("priceChange24hr")
             or market.get("priceChange24h")
         ),
+        "yes_bid": _to_float(market.get("bestBid")),
+        "yes_ask": _to_float(market.get("bestAsk")),
         "category": market.get("category"),
     }
 
@@ -345,6 +348,7 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
             {"label": "No", "probability": no_probability},
         ],
         "close_time": market.get("close_time"),
+        "created_time": market.get("created_time") or market.get("open_time"),
         "volume": _to_float(market.get("volume_24h_fp") or market.get("volume")),
         "liquidity": _to_float(market.get("open_interest") or market.get("liquidity")),
         "price_change_24h": _to_float(

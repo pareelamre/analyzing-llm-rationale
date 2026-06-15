@@ -171,6 +171,7 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         "market_outcome": quote.get("outcome"),
         "market_probability": quote.get("probability"),
         "resolve_time": quote.get("close_time"),
+        "publish_time": quote.get("created_time"),
         "categories": categories,
         "market_volume": quote.get("volume"),
         "market_liquidity": quote.get("liquidity"),
