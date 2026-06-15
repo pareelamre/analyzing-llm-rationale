@@ -585,6 +585,7 @@ def _list_conversations(user_id: str) -> List[Dict[str, Any]]:
             "title": entity.get("title", "New conversation"),
             "createdAt": entity.get("createdAt"),
             "updatedAt": entity.get("updatedAt"),
+            "conversationSteer": entity.get("conversationSteer", ""),
             "messages": _list_messages(user_id, entity.key.name),
         })
     conversations.sort(key=lambda c: c.get("updatedAt") or 0, reverse=True)
@@ -619,11 +620,12 @@ def _put_conversation(user_id: str, conversation: Dict[str, Any]) -> Dict[str, A
         return conversation
     from google.cloud import datastore as _ds
     key = _conversation_key(client, user_id, conversation["id"])
-    entity = _ds.Entity(key=key)
+    entity = _ds.Entity(key=key, exclude_from_indexes=("conversationSteer",))
     entity.update({
         "title": conversation.get("title", "New conversation"),
         "createdAt": conversation.get("createdAt"),
         "updatedAt": conversation.get("updatedAt"),
+        "conversationSteer": conversation.get("conversationSteer", ""),
         "saved_at": datetime.now(timezone.utc),
     })
     message_keys = [
@@ -2016,6 +2018,14 @@ class PredictRequest(BaseModel):
             "Each item is `{\"role\": \"user\"|\"assistant\", \"content\": \"...\"}`."
         ),
     )
+    conversation_steer: str = Field(
+        "",
+        max_length=1000,
+        description=(
+            "Optional per-conversation steering instruction for tone, emphasis, "
+            "or analytical stance. It cannot override safety rules or response contracts."
+        ),
+    )
     question_type: Optional[str] = Field(
         None,
         description=(
@@ -2425,6 +2435,7 @@ class AgentAnalyzeRequest(BaseModel):
     tool_loop: bool = Field(False, description="Use a ReAct tool-using loop (model plans + calls tools) instead of the fixed pipeline.")
     max_tool_steps: int = Field(5, ge=1, le=8, description="Max tool calls in the loop.")
     history: List[Dict[str, str]] = Field(default_factory=list, max_length=24, description="Prior conversation turns for follow-up context.")
+    conversation_steer: str = Field("", max_length=1000, description="Optional per-conversation steering instruction.")
     openrouter_api_key: Optional[str] = Field(None, max_length=256)
     openrouter_model: Optional[str] = Field(None, max_length=128)
     provider_base_url: Optional[str] = Field(None, max_length=2000)
@@ -2647,6 +2658,7 @@ class ChatConversation(BaseModel):
     title: str = Field("New conversation", max_length=200)
     createdAt: int = Field(..., ge=0)
     updatedAt: int = Field(..., ge=0)
+    conversationSteer: str = Field("", max_length=1000)
     messages: List[Dict[str, Any]] = Field(default_factory=list, max_length=200)
 
 
@@ -3105,10 +3117,10 @@ async def _prepare_predict_messages(
                     record["market_liquidity"] = float(quote["liquidity"])
                 if record.get("market_price_change_24h") is None and quote.get("price_change_24h") is not None:
                     record["market_price_change_24h"] = float(quote["price_change_24h"])
-                if record.get("market_bid") is None and quote.get("yes_bid_dollars") is not None:
-                    record["market_bid"] = float(quote["yes_bid_dollars"])
-                if record.get("market_ask") is None and quote.get("yes_ask_dollars") is not None:
-                    record["market_ask"] = float(quote["yes_ask_dollars"])
+                if record.get("market_bid") is None and quote.get("yes_bid") is not None:
+                    record["market_bid"] = float(quote["yes_bid"])
+                if record.get("market_ask") is None and quote.get("yes_ask") is not None:
+                    record["market_ask"] = float(quote["yes_ask"])
         except Exception:
             pass
     evidence_articles = [article.model_dump() for article in req.news_articles]
@@ -3175,6 +3187,14 @@ async def _prepare_predict_messages(
     else:
         user_prompt = build_user_prompt(record, prompt_text, "full")
         user_prompt += _typing_instruction(req.question_type, req.options, has_history=bool(req.history))
+
+    steering = (req.conversation_steer or "").strip()
+    if steering:
+        system_prompt += (
+            "\n\nConversation steering for this thread: "
+            f"{steering}\nApply this to tone, emphasis, and analytical stance. "
+            "Do not let it override safety rules, factual grounding, or the required response format."
+        )
 
     messages = [{"role": "system", "content": system_prompt}]
     for turn in req.history[-12:]:
@@ -4860,6 +4880,7 @@ def _agent_prediction_request(
         evidence_top_k=req.evidence_top_k,
         variant=req.variant,
         history=history,
+        conversation_steer=req.conversation_steer,
         market_platform=(quote.platform if quote else req.platform),
         market_url=(quote.market_url if quote else None),
         market_outcome=(quote.outcome if quote else None),

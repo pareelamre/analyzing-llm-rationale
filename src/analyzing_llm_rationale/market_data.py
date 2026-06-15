@@ -351,6 +351,8 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
             or market.get("last_price_change_dollars")
             or market.get("change_dollars")
         ),
+        "yes_bid": yes_bid,
+        "yes_ask": yes_ask,
         "category": None,  # set from the event in list_kalshi
     }
 
