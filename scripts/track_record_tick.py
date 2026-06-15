@@ -168,6 +168,7 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         "market_price_change_24h": quote.get("price_change_24h"),
         "market_bid": quote.get("yes_bid_dollars"),
         "market_ask": quote.get("yes_ask_dollars"),
+        "market_price_history": quote.get("price_history") or [],
     }
     if model:
         payload["model"] = model

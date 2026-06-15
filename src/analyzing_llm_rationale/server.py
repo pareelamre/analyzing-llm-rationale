@@ -2074,6 +2074,15 @@ class PredictRequest(BaseModel):
     market_ask: Optional[float] = Field(
         None, description="Current best ask (YES) in probability units (0..1). Kalshi only."
     )
+    market_price_history: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description=(
+            "Recent price points for this market, newest first. "
+            "Each entry: {ts: ISO timestamp, probability: float 0..1}. "
+            "Up to 8 entries. Shown to the model as a price-trajectory context so it can "
+            "detect rapid moves (spikes/crashes) that the current price alone would hide."
+        ),
+    )
     openrouter_api_key: Optional[str] = Field(
         None,
         max_length=256,

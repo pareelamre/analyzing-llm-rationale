@@ -135,6 +135,21 @@ def brier(prob: float, outcome: int) -> float:
     return (float(prob) - float(outcome)) ** 2
 
 
+def _get_price_history(client, ident: str, limit: int = 8) -> List[Dict[str, Any]]:
+    """Return recent price points for a market (newest first), fail-open to []."""
+    try:
+        if hasattr(client, "_con"):  # DuckDBStore
+            rows = client._con.execute(
+                "SELECT ts, market_probability FROM market_price_point "
+                "WHERE ident = ? ORDER BY ts DESC LIMIT ?",
+                [ident, limit],
+            ).fetchall()
+            return [{"ts": r[0], "probability": r[1]} for r in rows]
+    except Exception:
+        pass
+    return []
+
+
 def _fetch_current_quote(market_data, platform: str, ident: str) -> Optional[Dict[str, Any]]:
     """Re-fetch a tracked market's *current* quote so we capture the live price."""
     try:
@@ -284,7 +299,11 @@ async def record_snapshots(
                 }
             else:
                 try:
-                    scored = await forecast_fn(quote, evidence_top_k, model)
+                    quote_with_history = {
+                        **quote,
+                        "price_history": _get_price_history(client, ident),
+                    }
+                    scored = await forecast_fn(quote_with_history, evidence_top_k, model)
                 except Exception:
                     scored = None
                 if not scored or scored.get("model_probability") is None:

@@ -240,6 +240,8 @@ def extract_summary_items(
             for field in ARTICLE_FIELDS:
                 item[field] = article.get(field)
         summary_items.append(item)
+    # Newest first so the model reads the most recent evidence first.
+    summary_items.sort(key=lambda a: a.get("publish_date") or "", reverse=True)
     return summary_items
 
 
@@ -277,6 +279,7 @@ def build_user_prompt(
     market_price_change_24h = record.get("market_price_change_24h")
     market_bid = record.get("market_bid")
     market_ask = record.get("market_ask")
+    market_price_history: list = list(record.get("market_price_history") or [])
 
     prompt_suffix = user_prompt_template.replace("[question]", "").strip()
     parts = [f"Question: {question}"]
@@ -321,15 +324,24 @@ def build_user_prompt(
             parts.append(f"24h Volume: ${market_volume:,.0f}")
         if market_liquidity is not None:
             parts.append(f"Open Interest / Liquidity: ${market_liquidity:,.0f}")
+        if market_price_history:
+            parts.append("Market Price History (UTC, newest first):")
+            for pt in market_price_history[:8]:
+                ts_raw = str(pt.get("ts") or "")
+                ts = ts_raw.replace("T", " ").replace("+00:00", "").replace("Z", "")[:16]
+                prob = pt.get("probability")
+                if prob is not None:
+                    parts.append(f"  {ts}  →  {round(float(prob) * 100, 1)}%")
 
     if article_detail == "summary":
-        parts.append("Evidence Summaries:")
+        parts.append("Evidence (newest first):")
     else:
-        parts.append("Evidence Summaries (full article fields):")
+        parts.append("Evidence (newest first, full fields):")
     summary_items = extract_summary_items(record, article_detail=article_detail, cutoff_ts=cutoff_ts)
     if summary_items:
         for index, item in enumerate(summary_items, start=1):
-            parts.append(f"Article {index}: {json.dumps(item, ensure_ascii=False)}")
+            date_label = f" [{item.get('publish_date', '')}]" if item.get("publish_date") else ""
+            parts.append(f"Article {index}{date_label}: {json.dumps(item, ensure_ascii=False)}")
     else:
         parts.append("(none)")
 
