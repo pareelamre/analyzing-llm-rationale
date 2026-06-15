@@ -53,7 +53,7 @@ MODEL = os.environ.get("TRACK_MODEL", "gpt-oss-120b")
 # first is the primary (the public track record); the rest are graded alongside.
 # Each must be in the server's /predict allowlist.
 TRACK_MODELS = [m.strip() for m in os.environ.get(
-    "TRACK_MODELS", "gpt-oss-120b,crowd-follow").split(",") if m.strip()]
+    "TRACK_MODELS", "gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,crowd-follow").split(",") if m.strip()]
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 TEMPERATURE = float(os.environ.get("TRACK_TEMPERATURE", "0.0") or 0.0)
 PER_VENUE = max(1, min(int(os.environ.get("PER_VENUE", "3") or 3), 5))
@@ -71,13 +71,26 @@ PRICE_DRIFT_THRESHOLD = float(os.environ.get("PRICE_DRIFT_THRESHOLD") or trl.PRI
 # costs one /predict per (open market × model) — same load as today's daily pass.
 REFORECAST_EACH_TICK = (os.environ.get("REFORECAST_EACH_TICK", "1").strip().lower()
                         in ("1", "true", "yes", "on"))
+# Minimum seconds between successive LLM /predict calls to avoid SCADS AI 429s.
+# crowd-follow calls are skipped (no LLM). 2s pacing keeps 4 models × 21 markets
+# = ~84 calls within ~10 min on the daily first pass, well under rate limits.
+_PREDICT_INTER_CALL_SLEEP_S = float(os.environ.get("PREDICT_INTER_CALL_SLEEP_S", "2"))
 
 _PREDICT_TIMEOUT_S = 120
 _PREDICT_RETRIES = 3
+_last_predict_ts: float = 0.0
 
 
 def _post_predict(payload: dict) -> dict | None:
-    """POST /predict with a few retries on transient (5xx) failures."""
+    """POST /predict with rate-limit pacing + retries on transient (5xx) failures."""
+    global _last_predict_ts
+    # Pace calls to avoid SCADS AI 429s. crowd-follow sends no model field so
+    # the server handles it cheaply; rate-limit pacing still applies because the
+    # server itself must respond.
+    elapsed = time.time() - _last_predict_ts
+    if elapsed < _PREDICT_INTER_CALL_SLEEP_S:
+        time.sleep(_PREDICT_INTER_CALL_SLEEP_S - elapsed)
+
     body = json.dumps(payload).encode()
     headers = {"Content-Type": "application/json"}
     if PREDICT_API_KEY:
@@ -87,15 +100,21 @@ def _post_predict(payload: dict) -> dict | None:
         req = urllib.request.Request(f"{BASE_URL}/predict", data=body, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=_PREDICT_TIMEOUT_S) as resp:
-                return json.loads(resp.read())
+                result = json.loads(resp.read())
+                _last_predict_ts = time.time()
+                return result
         except urllib.error.HTTPError as exc:
             last_err = f"HTTP {exc.code}"
-            if exc.code < 500:  # client error — retrying won't help
+            if exc.code == 429:
+                # Hard rate-limit hit — back off longer before retry.
+                time.sleep(30 * (attempt + 1))
+            elif exc.code < 500:
                 break
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last_err = str(exc)
         if attempt < _PREDICT_RETRIES - 1:
             time.sleep(2 ** attempt)
+    _last_predict_ts = time.time()
     print(f"  predict failed: {last_err}", file=sys.stderr)
     return None
 

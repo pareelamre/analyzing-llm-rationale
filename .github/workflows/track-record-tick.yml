@@ -30,7 +30,7 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 20   # daily first pass: 21 markets × 1 model ≈ 21 LLM calls
+    timeout-minutes: 50   # daily first pass: up to 4 models × N markets LLM calls
     steps:
       - uses: actions/checkout@v4
 
@@ -45,9 +45,7 @@ jobs:
         env:
           FORESEA_BASE_URL: https://foresea.ink
           PER_VENUE: "3"
-          # Single model: gpt-oss-120b + crowd-follow (no LLM call). Removed
-          # kimi-k2.6 and gemma-4-31b-it to keep the tick under SCADS AI rate limits.
-          TRACK_MODELS: "gpt-oss-120b,crowd-follow"
+          TRACK_MODELS: "gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,crowd-follow"
           # Drift-triggered re-forecast: price-only most ticks; LLM re-forecast
           # only when the crowd has moved ≥ 10pp since the last snapshot. 3pp was
           # too noisy — triggered near-full re-forecast sets on almost every tick.
