@@ -577,68 +577,6 @@
       font-size: 12px;
       line-height: 1.45;
     }
-    .homepage-radar {
-      width: 100%;
-      max-width: 760px;
-      margin-top: 14px;
-      text-align: left;
-      overflow: hidden;
-      box-shadow: 0 18px 56px rgba(15,15,16,.05);
-    }
-    .homepage-radar .panel-bar button {
-      border: 0;
-      background: none;
-      color: var(--ink);
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-    .homepage-radar-list {
-      display: grid;
-      gap: 1px;
-      background: var(--border);
-    }
-    .homepage-radar-item {
-      background: #fff;
-      display: grid;
-      grid-template-columns: minmax(0, 1.1fr) .52fr .52fr .62fr;
-      gap: 12px;
-      align-items: center;
-      padding: 13px 14px;
-      font-size: 12px;
-    }
-    .homepage-radar-q {
-      min-width: 0;
-      color: var(--ink);
-      font-weight: 600;
-      line-height: 1.35;
-    }
-    .homepage-radar-k {
-      display: block;
-      color: var(--text-dim);
-      font-size: 10px;
-      letter-spacing: .12em;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-    .homepage-radar-v {
-      color: var(--ink);
-      font-weight: 700;
-      white-space: nowrap;
-    }
-    .homepage-radar-tag {
-      display: inline-flex;
-      width: fit-content;
-      border-radius: 999px;
-      padding: 4px 8px;
-      background: var(--paper);
-      color: var(--text-dim);
-      font-weight: 600;
-      white-space: nowrap;
-    }
-    .homepage-radar-tag.hot { background: var(--signal-bg); color: var(--signal); }
     .market-empty {
       display: grid;
       grid-template-columns: minmax(0, 1.02fr) minmax(320px, .98fr);
@@ -799,11 +737,6 @@
       .market-table { grid-template-columns: 1fr 1fr; }
       .market-table > div:nth-child(4n) { border-right: 1px solid var(--border); }
       .market-table > div:nth-child(2n) { border-right: 0; }
-      .homepage-radar-item {
-        grid-template-columns: 1fr 1fr;
-        align-items: start;
-      }
-      .homepage-radar-q { grid-column: 1 / -1; }
       .market-stack,
       .market-lens-grid { grid-template-columns: 1fr; }
       .intel-row { grid-template-columns: 1fr; gap: 4px; }
@@ -921,38 +854,6 @@
     .eb-page-btn:hover:not(:disabled) { background: var(--paper); color: var(--text); }
     .eb-page-btn:disabled { opacity: .38; cursor: default; }
     .eb-page-info { font-size: 12px; color: var(--text-dim); min-width: 60px; text-align: center; }
-    .radar-grid { display: grid; gap: 12px; margin-top: 20px; }
-    .radar-card {
-      border: 1px solid var(--border);
-      background: #fff;
-      padding: 16px;
-      border-radius: 8px;
-    }
-    .radar-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-    .radar-question { color: var(--ink); font-weight: 600; line-height: 1.35; }
-    .radar-scores {
-      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px;
-      background: var(--border); border: 1px solid var(--border); margin-top: 13px;
-    }
-    .radar-score { background: #fff; padding: 10px; min-width: 0; }
-    .radar-score .k { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .12em; }
-    .radar-score .v { margin-top: 4px; color: var(--ink); font-weight: 700; font-size: 17px; white-space: nowrap; }
-    .radar-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-    .radar-tag { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--paper); color: var(--text-dim); }
-    .radar-tag.hot { background: var(--signal-bg); color: var(--signal); }
-    .radar-links { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; font-size: 12px; }
-    .radar-link { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
-    .radar-analyze {
-      border: 1px solid var(--ink); background: var(--ink); color: #fff;
-      border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 600;
-      white-space: nowrap;
-    }
-    .radar-side-list { display: grid; gap: 8px; margin-top: 12px; }
-    .radar-side-item { padding: 10px 0; border-top: 1px solid var(--border); font-size: 13px; line-height: 1.4; }
-    @media (max-width: 760px) {
-      .radar-card-head { flex-direction: column; }
-      .radar-scores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
     .tr-log { display: flex; flex-direction: column; }
     .tr-log-row {
       display: grid; grid-template-columns: 18px 1fr auto; gap: 13px;
@@ -1662,7 +1563,6 @@
     </button>
     <div class="landing-data-links">
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
-      <button type="button" class="topbar-link" onclick="openRadar()">Radar</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
       <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
       <a href="/agents" target="_blank" class="topbar-link nav-collapse">Agents</a>
@@ -1741,17 +1641,6 @@
             <div class="market-stack-item">
               <strong>Price the gap</strong>
               <span>Compare Foresea probability with the quote when a market price is supplied.</span>
-            </div>
-          </div>
-        </div>
-        <div class="product-panel homepage-radar" aria-label="Foresea Radar preview">
-          <div class="panel-bar">
-            <span>Radar</span>
-            <button type="button" onclick="openRadar()">Open Radar</button>
-          </div>
-          <div class="homepage-radar-list" id="landingRadarList">
-            <div class="homepage-radar-item">
-              <div class="homepage-radar-q" style="color:var(--text-dim)">Loading…</div>
             </div>
           </div>
         </div>
@@ -2238,20 +2127,6 @@
     <button id="edgeCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeEdgeBoard()">Close</button>
   </div>
   <div id="edgeBody" class="tr-body" data-lenis-prevent></div>
-</div>
-
-<div id="radarOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="radarDialogTitle" aria-hidden="true" tabindex="-1">
-  <div class="tr-head">
-    <div class="flex items-center gap-2">
-      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
-        <span class="logo-dot"></span>
-        <span class="brand text-lg">Foresea</span>
-      </button>
-      <h2 id="radarDialogTitle" class="sr-only">Foresea radar</h2>
-    </div>
-    <button id="radarCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeRadar()">Close</button>
-  </div>
-  <div id="radarBody" class="tr-body" data-lenis-prevent></div>
 </div>
 
 <div id="watchOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="watchDialogTitle" aria-hidden="true" tabindex="-1">
@@ -2995,6 +2870,96 @@ async function streamPredict(body, variant, convId, typingEl) {
   return { ok: false, fallback: true };
 }
 
+async function streamAgentAnalyze(agentBody, variant, convId, typingEl) {
+  const resp = await fetch('/agent/analyze/stream', {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(agentBody),
+  });
+  if (!resp.ok || !resp.body) return { ok: false, fallback: true };
+
+  const messagesEl = document.getElementById('messages');
+  let typingRemoved = false;
+  let bubble = null;
+  let contentEl = null;
+  let text = '';
+  const removeTyping = () => {
+    if (!typingRemoved) {
+      typingEl.remove();
+      typingRemoved = true;
+    }
+  };
+  const setProgress = label => {
+    const lbl = typingEl.querySelector('#typingLabel') || typingEl.querySelector('.agent-progress-title');
+    if (lbl && label) lbl.textContent = label;
+  };
+  const ensureBubble = () => {
+    if (bubble) return;
+    removeTyping();
+    bubble = document.createElement('div');
+    bubble.className = 'max-w-2xl mx-auto w-full';
+    bubble.innerHTML = `
+      <div class="msg-ai p-4 sm:p-5">
+        <div class="chat-md text-[15px] text-gray-700 leading-relaxed"></div>
+      </div>`;
+    contentEl = bubble.querySelector('.chat-md');
+    messagesEl.appendChild(bubble);
+    animateIn(bubble);
+    scrollBottom();
+  };
+  const finish = report => {
+    const data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
+    appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    const finalNode = makeAIBubble(data, variant);
+    if (bubble) bubble.replaceWith(finalNode);
+    else {
+      removeTyping();
+      messagesEl.appendChild(finalNode);
+    }
+    animateIn(finalNode);
+    enhanceCard(finalNode);
+    scrollBottom();
+  };
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || '';
+    for (const block of blocks) {
+      if (!block.trim()) continue;
+      const { event, data } = _parseSseBlock(block);
+      if (event === 'meta') {
+        if (data.status === 'resolving') setProgress('Resolving the market');
+        else if (data.status === 'forecasting') setProgress('Gathering evidence');
+        else if (data.status === 'streaming') setProgress('Forecasting');
+        else if (data.status === 'skills') setProgress('Running your skills');
+      } else if (event === 'delta') {
+        ensureBubble();
+        text += data.text || '';
+        contentEl.innerHTML = renderMarkdown(_chatText(text));
+        scrollBottom();
+      } else if (event === 'done') {
+        finish(data.report);
+        return { ok: true };
+      } else if (event === 'error') {
+        removeTyping();
+        return { ok: false, fallback: false, detail: data.detail || 'Agent streaming error' };
+      }
+    }
+  }
+  if (text) {
+    const data = { question_type: 'chat', rationale: text, model_key: 'agent' };
+    appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    return { ok: true };
+  }
+  return { ok: false, fallback: true };
+}
+
 async function sendQuestion() {
   const input = document.getElementById('questionInput');
   const question = input.value.trim();
@@ -3093,6 +3058,13 @@ async function sendQuestion() {
           agentBody.openrouter_api_key = activeModel.apiKey;
         }
         if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
+      }
+      const streamed = await streamAgentAnalyze(agentBody, variant, activeId, typingEl);
+      if (streamed.ok) return;
+      if (!streamed.fallback) {
+        typingEl.remove();
+        addError(streamed.detail || 'Agent streaming error');
+        return;
       }
       const resp = await fetch('/agent/analyze', {
         method: 'POST',
@@ -3448,8 +3420,6 @@ const _VIEW_URL = {
   'app':           '#ask',
   'track-landing': '#track',
   'track-app':     '#track-app',
-  'radar-landing': '#radar',
-  'radar-app':     '#radar-app',
   'edge-landing':  '#edge',
   'edge-app':      '#edge-app',
   'watch-landing': '#watchlist',
@@ -3467,7 +3437,6 @@ function setHistoryState(view, mode = 'push') {
 function showLanding({ updateHistory = true } = {}) {
   closeSidebar();
   closeTrackRecord({ updateHistory: false });
-  closeRadar({ updateHistory: false });
   document.getElementById('appShell').classList.add('hidden-view');
   document.getElementById('landingPage').classList.remove('hidden-view');
   document.body.style.overflow = 'auto';
@@ -3555,7 +3524,8 @@ async function _streamLandingQuestion(question) {
           contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>';
         } else if (event === 'done') {
           _landingLastData = data.response;
-          contentEl.innerHTML = renderMarkdown(_chatText(JSON.stringify(data.response || {})) || data.response?.rationale || text);
+          const finalText = data.response?.rationale || data.response?.model_rationale || text || 'No response.';
+          contentEl.innerHTML = renderMarkdown(_chatText(finalText));
           actionsEl.style.display = 'flex';
           btn.disabled = false;
           return;
@@ -3747,6 +3717,19 @@ async function refreshEquityCurve() {
     el.innerHTML = curves.length ? _equitySvg(curves) : '';
     const ts = document.getElementById('eb-pnl-ts');
     if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
+    // Patch model probabilities from fresh board data (tick commits new forecasts every 15 min)
+    const freshBoard = d.edge_board || [];
+    if (freshBoard.length) {
+      _ebBoardData = freshBoard;
+      const byIdent = Object.fromEntries(freshBoard.map(e => [e.ident || e.market_url || '', e]));
+      document.querySelectorAll('#edgeBody .eb-row[data-ident]').forEach(row => {
+        const entry = byIdent[row.dataset.ident];
+        if (!entry || entry.model_probability == null) return;
+        row.dataset.modelP = entry.model_probability;
+        const mdlEl = row.querySelector('.eb-live-model');
+        if (mdlEl) mdlEl.textContent = pct(entry.model_probability) + '%';
+      });
+    }
   } catch (_) {}
 }
 
@@ -3917,7 +3900,6 @@ async function loadLandingPanels() {
     const d = await _readJson(r);
     const board = (d.edge_board || []).filter(e => e.market_url);
     _renderLandingMarketTable(board.slice(0, 2));
-    _renderLandingRadar(board.slice(2, 5));
   } catch (_) { /* leave placeholders */ }
 }
 
@@ -3943,26 +3925,6 @@ function _renderLandingMarketTable(items) {
       `<div><span class="market-gap ${dir}">${escHtml(label)}</span></div>`;
   }
   el.innerHTML = html;
-}
-
-function _renderLandingRadar(items) {
-  const el = document.getElementById('landingRadarList');
-  if (!el) return;
-  if (!items.length) { el.innerHTML = '<div class="homepage-radar-item"><div class="homepage-radar-q" style="color:var(--text-dim)">No radar signals yet.</div></div>'; return; }
-  el.innerHTML = items.map(e => {
-    const mkt = Math.round((e.market_probability || 0) * 100);
-    const mdl = Math.round((e.model_probability || 0) * 100);
-    const diff = mdl - mkt;
-    const hot = Math.abs(diff) >= 10;
-    const tag = e.domain || e.edge_bucket || '';
-    const q = (e.question || '').slice(0, 80);
-    return `<div class="homepage-radar-item">
-      <div class="homepage-radar-q"><a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${escHtml(q)}</a></div>
-      <div><span class="homepage-radar-k">Crowd</span><span class="homepage-radar-v">${mkt}%</span></div>
-      <div><span class="homepage-radar-k">Foresea</span><span class="homepage-radar-v">${mdl}%</span></div>
-      ${tag ? `<span class="homepage-radar-tag${hot ? ' hot' : ''}">${escHtml(tag)}</span>` : ''}
-    </div>`;
-  }).join('');
 }
 
 function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
@@ -4043,7 +4005,7 @@ function _renderBoardPage(board, page) {
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
       `<td style="max-width:260px"><a ${url} style="color:inherit">${escHtml((e.question || '').slice(0, 90))}</a></td>` +
-      `<td>${escHtml(e.platform || '')}</td><td>${pct(e.model_probability)}%</td>` +
+      `<td>${escHtml(e.platform || '')}</td><td class="eb-live-model">${pct(e.model_probability)}%</td>` +
       `<td class="eb-live-market">${pct(e.market_probability)}%</td>` +
       `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td>` +
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
@@ -4212,60 +4174,6 @@ function renderEdgeBoard(d) {
     <h4 class="eb-h">Live forecasts · ranked by disagreement, linked to skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;
 }
-let radarLoaded = false;
-let lastRadarData = null;
-async function openRadar({ updateHistory = true } = {}) {
-  const ov = document.getElementById('radarOverlay');
-  if (ov.classList.contains('open')) return;
-  lastFocusedBeforeDialog = document.activeElement;
-  ov.classList.add('open');
-  ov.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
-  if (updateHistory) setHistoryState(currentView === 'app' ? 'radar-app' : 'radar-landing');
-  if (window.Motion && !prefersReduced()) {
-    Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
-  }
-  if (!radarLoaded) { radarLoaded = true; await loadRadar(); }
-  setTimeout(() => document.getElementById('radarCloseBtn')?.focus(), 0);
-}
-function closeRadar({ updateHistory = true } = {}) {
-  const ov = document.getElementById('radarOverlay');
-  if (!ov.classList.contains('open')) return;
-  if (updateHistory && (history.state?.view === 'radar-app' || history.state?.view === 'radar-landing')) {
-    history.back();
-    return;
-  }
-  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
-  const finish = () => {
-    ov.classList.remove('open');
-    ov.setAttribute('aria-hidden', 'true');
-    ov.style.opacity = '';
-    document.body.style.overflow = inApp ? 'hidden' : 'auto';
-    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
-  };
-  if (window.Motion && !prefersReduced()) {
-    Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
-  } else { finish(); }
-}
-async function loadRadar() {
-  const host = document.getElementById('radarBody');
-  host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading radar…</p></div>';
-  try {
-    const r = await fetch('/radar?limit=10');
-    if (!r.ok) throw new Error('unavailable');
-    lastRadarData = await _readJson(r);
-    host.innerHTML = renderRadar(lastRadarData);
-    if (window.Motion && !prefersReduced()) {
-      host.querySelectorAll('.radar-card').forEach(el => { el.style.opacity = '0'; });
-      Motion.inView('#radarBody .radar-card', (entry) => {
-        Motion.animate(entry.target, { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
-          { duration: 0.35, easing: EASE });
-      }, { amount: 0.1 });
-    }
-  } catch (e) {
-    host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Radar is not available yet.</p></div>';
-  }
-}
 function _fmtDate(value) {
   if (!value) return '—';
   try { return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
@@ -4277,80 +4185,6 @@ function _fmtVolume(value) {
   if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M';
   if (n >= 1000) return '$' + Math.round(n / 1000) + 'K';
   return '$' + Math.round(n);
-}
-function _radarEdge(item) {
-  if (item.edge == null) return '—';
-  const n = Math.round(Number(item.edge) * 100);
-  return (n > 0 ? '+' : '') + n + ' pp';
-}
-function _radarHotTag(tag) {
-  return ['tracked live', 'news catalyst', 'near-term', 'reddit-discussed'].includes(tag) ? ' hot' : '';
-}
-function renderRadar(d) {
-  const items = d.items || [];
-  const tracked = (d.tracked_live || []).length;
-  const reddit = d.reddit_discussions || [];
-  const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
-  const cards = items.map((item, i) => {
-    const tags = (item.tags || []).map(t => `<span class="radar-tag${_radarHotTag(t)}">${escHtml(t)}</span>`).join('');
-    const links = (item.evidence_links || []).map(l =>
-      `<a class="radar-link" href="${escAttr(l.url)}" target="_blank" rel="noopener">${escHtml(l.label)}</a>`
-    ).join('');
-    const mkt = item.market_probability == null ? null : Number(item.market_probability);
-    const foresea = item.foresea_probability == null ? null : Number(item.foresea_probability);
-    const ask = item.market_url
-      ? `Market at ${fmtPct01(mkt)}: ${item.question} ${item.market_url}`
-      : item.question;
-    return `<article class="radar-card">
-      <div class="radar-card-head">
-        <div>
-          <p class="label mb-2">${escHtml(item.platform || item.reddit_subreddit || 'Discussion')} · credibility ${item.credibility_score ?? '—'}</p>
-          <h3 class="radar-question">${escHtml(item.question || 'Untitled market')}</h3>
-        </div>
-        <button type="button" class="radar-analyze" onclick="radarAnalyze(${i})" data-q="${escAttr(ask)}">Analyze</button>
-      </div>
-      <div class="radar-scores">
-        <div class="radar-score"><div class="k">Crowd</div><div class="v">${fmtPct01(mkt)}</div></div>
-        <div class="radar-score"><div class="k">Foresea</div><div class="v">${fmtPct01(foresea)}</div></div>
-        <div class="radar-score"><div class="k">Edge</div><div class="v">${escHtml(_radarEdge(item))}</div></div>
-        <div class="radar-score"><div class="k">Resolve</div><div class="v">${escHtml(_fmtDate(item.close_time))}</div></div>
-      </div>
-      <div class="radar-tags">${tags}</div>
-      <div class="radar-links">
-        <span class="text-gray-500">Volume ${escHtml(_fmtVolume(item.volume || item.liquidity))}</span>
-        ${links}
-        ${item.tracked_live ? '<span class="text-gray-500">tracked live</span>' : '<span class="text-gray-500">not tracked yet</span>'}
-      </div>
-    </article>`;
-  }).join('');
-  const redditHtml = reddit.length
-    ? reddit.map(r => `<div class="radar-side-item"><a class="radar-link" href="${escAttr(r.url || '#')}" target="_blank" rel="noopener">${escHtml(r.title)}</a><div class="tr-meta">r/${escHtml(r.subreddit || '')}${r.topic ? ' · ' + escHtml(r.topic) : ''}</div></div>`).join('')
-    : '<p class="text-sm text-gray-500">No Reddit discussions found in this refresh.</p>';
-  return `<div class="tr-inner">
-    <p class="label">Foresea Radar</p>
-    <h2 class="display tr-hero-title">Niche markets worth checking before the crowd.</h2>
-    <p class="tr-method">${escHtml(d.methodology || '')} ${gen ? 'Updated ' + gen + '.' : ''}</p>
-    <div class="tr-stats">
-      <div class="tr-stat"><div class="v">${items.length}</div><div class="k label">Radar items</div></div>
-      <div class="tr-stat"><div class="v">${tracked}</div><div class="k label">Tracked live</div></div>
-      <div class="tr-stat"><div class="v">${reddit.length}</div><div class="k label">Reddit signals</div></div>
-      <div class="tr-stat"><div class="v">${items[0]?.credibility_score ?? '—'}</div><div class="k label">Top credibility</div></div>
-    </div>
-    <p class="tr-section-title label">Top 10 unusual market moves and discussions</p>
-    <div class="radar-grid">${cards || '<p class="text-sm text-gray-500">No radar items found.</p>'}</div>
-    <p class="tr-section-title label">Reddit-discussed markets</p>
-    <div class="radar-side-list">${redditHtml}</div>
-  </div>`;
-}
-function radarAnalyze(index) {
-  const item = lastRadarData?.items?.[index];
-  if (!item) return;
-  const mkt = item.market_probability == null ? null : Number(item.market_probability);
-  const question = item.market_url
-    ? `Market at ${fmtPct01(mkt)}: ${item.question} ${item.market_url}`
-    : item.question;
-  closeRadar({ updateHistory: false });
-  startForecast(question);
 }
 function renderTrackRecord(d) {
   const stats = `
@@ -4432,7 +4266,6 @@ function applyHistoryState(state) {
 
   // Close all overlays first — avoids every case having to enumerate which to close
   closeTrackRecord({ updateHistory: false });
-  closeRadar({ updateHistory: false });
   closeEdgeBoard({ updateHistory: false });
   closeWatchlistPage({ updateHistory: false });
 
@@ -4441,18 +4274,12 @@ function applyHistoryState(state) {
   } else if (view === 'track-app') {
     launchApp({ updateHistory: false });
     openTrackRecord({ updateHistory: false });
-  } else if (view === 'radar-app') {
-    launchApp({ updateHistory: false });
-    openRadar({ updateHistory: false });
   } else if (view === 'edge-app') {
     launchApp({ updateHistory: false });
     openEdgeBoard({ updateHistory: false });
   } else if (view === 'track-landing') {
     showLanding({ updateHistory: false });
     openTrackRecord({ updateHistory: false });
-  } else if (view === 'radar-landing') {
-    showLanding({ updateHistory: false });
-    openRadar({ updateHistory: false });
   } else if (view === 'edge-landing') {
     showLanding({ updateHistory: false });
     openEdgeBoard({ updateHistory: false });
@@ -4471,21 +4298,16 @@ window.addEventListener('popstate', event => applyHistoryState(event.state));
 window.addEventListener('resize', syncSidebarA11y);
 document.addEventListener('keydown', event => {
   const track = document.getElementById('trackOverlay');
-  const radar = document.getElementById('radarOverlay');
   const edge = document.getElementById('edgeOverlay');
   const watch = document.getElementById('watchOverlay');
   const sidebar = document.getElementById('sidebar');
   const trackOpen = track.classList.contains('open');
-  const radarOpen = radar.classList.contains('open');
   const edgeOpen = edge.classList.contains('open');
   const watchOpen = watch.classList.contains('open');
   const sidebarOpen = sidebar.classList.contains('open');
 
   if (event.key === 'Escape') {
-    if (radarOpen) {
-      event.preventDefault();
-      closeRadar();
-    } else if (trackOpen) {
+    if (trackOpen) {
       event.preventDefault();
       closeTrackRecord();
     } else if (edgeOpen) {
@@ -4501,9 +4323,7 @@ document.addEventListener('keydown', event => {
     return;
   }
 
-  if (radarOpen) {
-    trapFocus(event, radar);
-  } else if (trackOpen) {
+  if (trackOpen) {
     trapFocus(event, track);
   } else if (edgeOpen) {
     trapFocus(event, edge);
@@ -5324,14 +5144,40 @@ async function _forecastFavorite(key, question, marketProb, platform, marketUrl)
   if (!question) return;
   const ident = key.slice(key.indexOf(':') + 1);   // key = "{platform}:{ident}"
   _setWatchModel(key, '…');
+  const payload = { question, market_probability: marketProb, market_platform: platform, market_ident: ident, market_url: marketUrl };
   try {
-    const r = await fetch('/market/forecast', {
+    let mp = null;
+    const sr = await fetch('/market/forecast/stream', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ question, market_probability: marketProb, market_platform: platform, market_ident: ident, market_url: marketUrl }),
+      body: JSON.stringify(payload),
     });
-    const d = await r.json().catch(() => ({}));
-    const mp = (r.ok && d.model_probability != null) ? d.model_probability : null;
+    if (sr.ok && sr.body) {
+      const reader = sr.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split(/\r?\n\r?\n/);
+        buffer = blocks.pop() || '';
+        for (const block of blocks) {
+          if (!block.trim()) continue;
+          const { event, data } = _parseSseBlock(block);
+          if (event === 'done') mp = data.model_probability ?? data.response?.market_analysis?.model_probability ?? null;
+          if (event === 'error') throw new Error(data.detail || 'streaming forecast failed');
+        }
+      }
+    } else {
+      const r = await fetch('/market/forecast', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json().catch(() => ({}));
+      mp = (r.ok && d.model_probability != null) ? d.model_probability : null;
+    }
     _setWatchModel(key, mp, marketProb);
     if (mp != null) {
       const store = _loadFavorites();
