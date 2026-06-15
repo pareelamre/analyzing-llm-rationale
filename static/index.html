@@ -2963,7 +2963,11 @@ async function streamPredict(body, variant, convId, typingEl) {
     for (const block of blocks) {
       if (!block.trim()) continue;
       const { event, data } = _parseSseBlock(block);
-      if (event === 'delta') {
+      if (event === 'meta' && data.status === 'streaming') {
+        // Evidence fetched — model is about to start generating
+        const lbl = typingEl.querySelector('#typingLabel');
+        if (lbl) lbl.textContent = 'Forecasting…';
+      } else if (event === 'delta') {
         ensureBubble();
         text += data.text || '';
         contentEl.innerHTML = renderMarkdown(_chatText(text));
@@ -3141,10 +3145,24 @@ function scrollBottom() {
 function addTyping() {
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
-  div.innerHTML = `<div class="msg-ai inline-flex items-center px-5 py-4">
-    <div class="typing"><span></span><span></span><span></span></div></div>`;
+  div.innerHTML = `<div class="msg-ai inline-flex items-center gap-3 px-5 py-4">
+    <div class="typing"><span></span><span></span><span></span></div>
+    <span id="typingLabel" style="font-size:13px;color:var(--text-dim)">Gathering evidence…</span>
+  </div>`;
   document.getElementById('messages').appendChild(div);
   scrollBottom();
+  // Advance the label through phases so the user knows something is happening
+  const label = div.querySelector('#typingLabel');
+  const phases = ['Gathering evidence…', 'Forecasting…', 'Almost there…'];
+  let phase = 0;
+  const timer = setInterval(() => {
+    phase++;
+    if (phase < phases.length && label) label.textContent = phases[phase];
+    else clearInterval(timer);
+  }, 6000);
+  div._clearTypingTimer = () => clearInterval(timer);
+  const origRemove = div.remove.bind(div);
+  div.remove = () => { clearInterval(timer); origRemove(); };
   return div;
 }
 
