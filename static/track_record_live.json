@@ -1,13 +1,13 @@
 {
   "by_domain": [
     {
-      "accuracy": 1.0,
+      "accuracy": 0.8889,
       "domain": "geopolitics",
-      "market_brier": 0.0141,
-      "model_brier": 0.0093,
-      "n": 5,
-      "skill_ci_high": 0.0214,
-      "skill_ci_low": -0.0119,
+      "market_brier": 0.0786,
+      "model_brier": 0.0738,
+      "n": 9,
+      "skill_ci_high": 0.0516,
+      "skill_ci_low": -0.0421,
       "skill_significant": false,
       "skill_vs_market": 0.0047
     },
@@ -34,28 +34,28 @@
       "skill_vs_market": -0.0763
     },
     {
-      "accuracy": 0.6364,
+      "accuracy": 0.5,
       "domain": "other",
-      "market_brier": 0.0881,
-      "model_brier": 0.2182,
-      "n": 11,
-      "skill_ci_high": 0.0146,
-      "skill_ci_low": -0.2747,
+      "market_brier": 0.1909,
+      "model_brier": 0.293,
+      "n": 14,
+      "skill_ci_high": 0.0143,
+      "skill_ci_low": -0.2185,
       "skill_significant": false,
-      "skill_vs_market": -0.1301
+      "skill_vs_market": -0.1021
     }
   ],
   "by_edge": [
     {
-      "accuracy": 0.3333,
+      "accuracy": 0.5,
       "edge_bucket": "20pp+",
-      "market_brier": 0.0256,
-      "model_brier": 0.5473,
-      "n": 6,
-      "skill_ci_high": -0.3186,
-      "skill_ci_low": -0.7248,
+      "market_brier": 0.0432,
+      "model_brier": 0.4305,
+      "n": 8,
+      "skill_ci_high": -0.1537,
+      "skill_ci_low": -0.6208,
       "skill_significant": false,
-      "skill_vs_market": -0.5217
+      "skill_vs_market": -0.3873
     },
     {
       "accuracy": 1.0,
@@ -80,50 +80,50 @@
       "skill_vs_market": 0.0198
     },
     {
-      "accuracy": 0.9259,
+      "accuracy": 0.8125,
       "edge_bucket": "0-5pp",
-      "market_brier": 0.0877,
-      "model_brier": 0.0877,
-      "n": 27,
-      "skill_ci_high": 0.0047,
-      "skill_ci_low": -0.0048,
+      "market_brier": 0.1411,
+      "model_brier": 0.1415,
+      "n": 32,
+      "skill_ci_high": 0.0048,
+      "skill_ci_low": -0.0056,
       "skill_significant": false,
-      "skill_vs_market": -0.0001
+      "skill_vs_market": -0.0004
     }
   ],
   "by_horizon": [
     {
-      "accuracy": 0.8571,
+      "accuracy": 0.8438,
       "horizon": "14-30d",
-      "market_brier": 0.0726,
-      "model_brier": 0.1792,
-      "n": 28,
-      "skill_ci_high": -0.015,
-      "skill_ci_low": -0.1982,
+      "market_brier": 0.0834,
+      "model_brier": 0.1761,
+      "n": 32,
+      "skill_ci_high": -0.0108,
+      "skill_ci_low": -0.1746,
       "skill_significant": false,
-      "skill_vs_market": -0.1066
+      "skill_vs_market": -0.0927
     },
     {
-      "accuracy": 0.8,
+      "accuracy": 0.6667,
       "horizon": "1-3d",
-      "market_brier": 0.0883,
-      "model_brier": 0.0976,
-      "n": 5,
-      "skill_ci_high": -0.0033,
-      "skill_ci_low": -0.0153,
+      "market_brier": 0.1612,
+      "model_brier": 0.1702,
+      "n": 6,
+      "skill_ci_high": -0.004,
+      "skill_ci_low": -0.0139,
       "skill_significant": false,
-      "skill_vs_market": -0.0093
+      "skill_vs_market": -0.009
     },
     {
-      "accuracy": 0.8333,
+      "accuracy": 0.625,
       "horizon": "<1d",
-      "market_brier": 0.0806,
-      "model_brier": 0.0813,
-      "n": 6,
-      "skill_ci_high": 0.0018,
-      "skill_ci_low": -0.0031,
+      "market_brier": 0.2077,
+      "model_brier": 0.2071,
+      "n": 8,
+      "skill_ci_high": 0.0142,
+      "skill_ci_low": -0.0131,
       "skill_significant": false,
-      "skill_vs_market": -0.0007
+      "skill_vs_market": 0.0006
     }
   ],
   "by_liquidity": [
@@ -139,15 +139,15 @@
       "skill_vs_market": 0.0318
     },
     {
-      "accuracy": 0.8421,
+      "accuracy": 0.7778,
       "liquidity": "liquid (>$25k)",
-      "market_brier": 0.0721,
-      "model_brier": 0.1528,
-      "n": 38,
-      "skill_ci_high": -0.0122,
-      "skill_ci_low": -0.1493,
+      "market_brier": 0.1129,
+      "model_brier": 0.1806,
+      "n": 45,
+      "skill_ci_high": -0.0085,
+      "skill_ci_low": -0.1269,
       "skill_significant": false,
-      "skill_vs_market": -0.0807
+      "skill_vs_market": -0.0677
     }
   ],
   "calibration_model": {
@@ -163,47 +163,59 @@
       ],
       [
         0.1,
-        0.15
+        0.1818
       ],
       [
         0.15,
-        0.3
+        0.3636
       ],
       [
         0.19,
-        0.3
+        0.3636
       ],
       [
         0.2,
-        0.3
+        0.3636
       ],
       [
         0.22,
-        0.3
+        0.3636
       ],
       [
         0.25,
-        0.3
+        0.3636
+      ],
+      [
+        0.27,
+        0.7143
       ],
       [
         0.2727,
-        0.5
+        0.7143
+      ],
+      [
+        0.2727,
+        0.7143
       ],
       [
         0.29,
-        0.5
+        0.7143
       ],
       [
         0.36,
-        0.6667
+        0.7143
       ],
       [
         0.37,
-        0.6667
+        0.7143
       ],
       [
         0.38,
-        0.6667
+        0.7143
+      ],
+      [
+        0.44,
+        1.0
       ],
       [
         0.5,
@@ -262,100 +274,69 @@
         1.0
       ]
     ],
-    "calibrated_brier_cv": 0.1454,
-    "calibrated_skill_vs_market": -0.0696,
+    "calibrated_brier_cv": 0.1402,
+    "calibrated_skill_vs_market": -0.025,
     "method": "isotonic",
-    "n_resolved": 39,
-    "raw_brier": 0.1536,
-    "raw_ece": 0.1988,
-    "raw_skill_vs_market": -0.0778
+    "n_resolved": 46,
+    "raw_brier": 0.1807,
+    "raw_ece": 0.2344,
+    "raw_skill_vs_market": -0.0655
   },
   "edge_board": [
     {
-      "abs_edge": 0.837,
+      "abs_edge": 0.845,
       "domain": "geopolitics",
-      "edge": 0.837,
+      "edge": 0.845,
       "edge_bucket": "20pp+",
-      "entry_price": 0.013,
+      "entry_price": 0.005,
       "horizon": "<1d",
       "lead_bucket": "<1d",
-      "lead_days": -0.1,
+      "lead_days": -0.5,
       "lead_track_record": {
         "horizon": "<1d",
-        "n": 6,
-        "skill_ci_low": -0.0031,
+        "n": 8,
+        "skill_ci_low": -0.0131,
         "skill_significant": false,
-        "skill_vs_market": -0.0007
+        "skill_vs_market": 0.0006
       },
-      "market_probability": 0.013,
+      "market_probability": 0.005,
       "market_url": "https://polymarket.com/market/israel-closes-its-airspace-by-june-15-687-594-783-732-455-613-653",
       "model_probability": 0.85,
-      "payout_odds": 73.1,
+      "payout_odds": 199.0,
       "platform": "Polymarket",
       "question": "Israel closes its airspace by June 15?",
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 6,
-        "skill_ci_low": -0.7248,
+        "n": 8,
+        "skill_ci_low": -0.6208,
         "skill_significant": false,
-        "skill_vs_market": -0.5217
+        "skill_vs_market": -0.3873
       }
     },
     {
-      "abs_edge": 0.812,
+      "abs_edge": 0.826,
       "domain": "geopolitics",
-      "edge": -0.812,
+      "edge": -0.826,
       "edge_bucket": "20pp+",
-      "entry_price": 0.038,
+      "entry_price": 0.024,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 198.9,
+      "lead_days": 198.5,
       "lead_track_record": null,
-      "market_probability": 0.962,
+      "market_probability": 0.976,
       "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-december-31-2026-961-587-341-574-555-817",
       "model_probability": 0.15,
-      "payout_odds": 25.3,
+      "payout_odds": 39.8,
       "platform": "Polymarket",
       "question": "US x Iran permanent peace deal by December 31, 2026?",
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 6,
-        "skill_ci_low": -0.7248,
+        "n": 8,
+        "skill_ci_low": -0.6208,
         "skill_significant": false,
-        "skill_vs_market": -0.5217
-      }
-    },
-    {
-      "abs_edge": 0.21,
-      "domain": "geopolitics",
-      "edge": -0.21,
-      "edge_bucket": "20pp+",
-      "entry_price": 0.19,
-      "horizon": "14-30d",
-      "lead_bucket": "14-30d",
-      "lead_days": 14.9,
-      "lead_track_record": {
-        "horizon": "14-30d",
-        "n": 28,
-        "skill_ci_low": -0.1982,
-        "skill_significant": false,
-        "skill_vs_market": -0.1066
-      },
-      "market_probability": 0.81,
-      "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
-      "model_probability": 0.6,
-      "payout_odds": 4.3,
-      "platform": "Polymarket",
-      "question": "US-Iran nuclear deal by June 30?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 6,
-        "skill_ci_low": -0.7248,
-        "skill_significant": false,
-        "skill_vs_market": -0.5217
+        "skill_vs_market": -0.3873
       }
     },
     {
@@ -366,7 +347,7 @@
       "entry_price": 0.59,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 200.2,
+      "lead_days": 199.7,
       "lead_track_record": null,
       "market_probability": 0.41,
       "market_url": "https://polymarket.com/market/will-an-artwork-sell-for-150-million-by-december-31",
@@ -391,7 +372,7 @@
       "entry_price": 0.161,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 34.9,
+      "lead_days": 34.5,
       "lead_track_record": null,
       "market_probability": 0.161,
       "market_url": "https://polymarket.com/market/will-france-win-the-2026-fifa-world-cup-924",
@@ -409,16 +390,16 @@
       }
     },
     {
-      "abs_edge": 0.111,
+      "abs_edge": 0.11,
       "domain": "sports",
-      "edge": 0.111,
+      "edge": 0.11,
       "edge_bucket": "10-20pp",
-      "entry_price": 0.162,
+      "entry_price": 0.163,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 34.9,
+      "lead_days": 34.5,
       "lead_track_record": null,
-      "market_probability": 0.162,
+      "market_probability": 0.163,
       "market_url": "https://polymarket.com/market/will-spain-win-the-2026-fifa-world-cup-963",
       "model_probability": 0.273,
       "payout_odds": 5.2,
@@ -434,50 +415,19 @@
       }
     },
     {
-      "abs_edge": 0.071,
-      "domain": "geopolitics",
-      "edge": 0.071,
-      "edge_bucket": "5-10pp",
-      "entry_price": 0.065,
-      "horizon": "14-30d",
-      "lead_bucket": "14-30d",
-      "lead_days": 14.9,
-      "lead_track_record": {
-        "horizon": "14-30d",
-        "n": 28,
-        "skill_ci_low": -0.1982,
-        "skill_significant": false,
-        "skill_vs_market": -0.1066
-      },
-      "market_probability": 0.065,
-      "market_url": "https://polymarket.com/market/israel-closes-its-airspace-by-june-30-324-253-464-332-827-713-671-846",
-      "model_probability": 0.136,
-      "payout_odds": 14.4,
-      "platform": "Polymarket",
-      "question": "Israel closes its airspace by June 30?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": {
-        "n": 4,
-        "skill_ci_low": -0.0233,
-        "skill_significant": false,
-        "skill_vs_market": 0.0198
-      }
-    },
-    {
-      "abs_edge": 0.053,
+      "abs_edge": 0.056,
       "domain": "sports",
-      "edge": 0.053,
+      "edge": 0.056,
       "edge_bucket": "5-10pp",
-      "entry_price": 0.111,
+      "entry_price": 0.107,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 34.9,
+      "lead_days": 34.5,
       "lead_track_record": null,
-      "market_probability": 0.111,
+      "market_probability": 0.107,
       "market_url": "https://polymarket.com/market/will-portugal-win-the-2026-fifa-world-cup-912",
       "model_probability": 0.164,
-      "payout_odds": 8.0,
+      "payout_odds": 8.3,
       "platform": "Polymarket",
       "question": "Will Portugal win the 2026 FIFA World Cup?",
       "side": "YES",
@@ -490,65 +440,34 @@
       }
     },
     {
-      "abs_edge": 0.051,
+      "abs_edge": 0.042,
       "domain": "geopolitics",
-      "edge": 0.051,
-      "edge_bucket": "5-10pp",
-      "entry_price": 0.849,
-      "horizon": "<1d",
-      "lead_bucket": "<1d",
-      "lead_days": -0.1,
+      "edge": 0.042,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.147,
+      "horizon": "14-30d",
+      "lead_bucket": "14-30d",
+      "lead_days": 14.5,
       "lead_track_record": {
-        "horizon": "<1d",
-        "n": 6,
-        "skill_ci_low": -0.0031,
+        "horizon": "14-30d",
+        "n": 32,
+        "skill_ci_low": -0.1746,
         "skill_significant": false,
-        "skill_vs_market": -0.0007
+        "skill_vs_market": -0.0927
       },
-      "market_probability": 0.849,
-      "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-june-15-2026-734-856-129",
-      "model_probability": 0.9,
-      "payout_odds": 0.2,
+      "market_probability": 0.147,
+      "market_url": "https://polymarket.com/market/israel-x-iran-permanent-peace-deal-by-june-30-2026-262",
+      "model_probability": 0.19,
+      "payout_odds": 5.8,
       "platform": "Polymarket",
-      "question": "US x Iran permanent peace deal by June 15, 2026?",
+      "question": "Israel x Iran permanent peace deal by June 30, 2026?",
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 4,
-        "skill_ci_low": -0.0233,
+        "n": 32,
+        "skill_ci_low": -0.0056,
         "skill_significant": false,
-        "skill_vs_market": 0.0198
-      }
-    },
-    {
-      "abs_edge": 0.048,
-      "domain": "geopolitics",
-      "edge": -0.048,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.762,
-      "horizon": "14-30d",
-      "lead_bucket": "14-30d",
-      "lead_days": 14.9,
-      "lead_track_record": {
-        "horizon": "14-30d",
-        "n": 28,
-        "skill_ci_low": -0.1982,
-        "skill_significant": false,
-        "skill_vs_market": -0.1066
-      },
-      "market_probability": 0.238,
-      "market_url": "https://polymarket.com/market/israel-x-iran-permanent-peace-deal-by-june-30-2026-262",
-      "model_probability": 0.19,
-      "payout_odds": 0.3,
-      "platform": "Polymarket",
-      "question": "Israel x Iran permanent peace deal by June 30, 2026?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 27,
-        "skill_ci_low": -0.0048,
-        "skill_significant": false,
-        "skill_vs_market": -0.0001
+        "skill_vs_market": -0.0004
       }
     },
     {
@@ -559,7 +478,7 @@
       "entry_price": 0.097,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 34.9,
+      "lead_days": 34.5,
       "lead_track_record": null,
       "market_probability": 0.097,
       "market_url": "https://polymarket.com/market/will-england-win-the-2026-fifa-world-cup-937",
@@ -570,66 +489,91 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 27,
-        "skill_ci_low": -0.0048,
+        "n": 32,
+        "skill_ci_low": -0.0056,
         "skill_significant": false,
-        "skill_vs_market": -0.0001
+        "skill_vs_market": -0.0004
+      }
+    },
+    {
+      "abs_edge": 0.035,
+      "domain": "elections",
+      "edge": -0.035,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.305,
+      "horizon": "14-30d",
+      "lead_bucket": "14-30d",
+      "lead_days": 14.5,
+      "lead_track_record": {
+        "horizon": "14-30d",
+        "n": 32,
+        "skill_ci_low": -0.1746,
+        "skill_significant": false,
+        "skill_vs_market": -0.0927
+      },
+      "market_probability": 0.695,
+      "market_url": "https://polymarket.com/market/will-victor-marx-win-the-2026-colorado-governor-republican-primary-election",
+      "model_probability": 0.66,
+      "payout_odds": 2.3,
+      "platform": "Polymarket",
+      "question": "Will Victor Marx win the 2026 Colorado Governor Republican primary election?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 32,
+        "skill_ci_low": -0.0056,
+        "skill_significant": false,
+        "skill_vs_market": -0.0004
       }
     },
     {
       "abs_edge": 0.025,
       "domain": "other",
-      "edge": 0.025,
+      "edge": -0.025,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.175,
-      "horizon": "<1d",
-      "lead_bucket": "<1d",
-      "lead_days": -0.1,
-      "lead_track_record": {
-        "horizon": "<1d",
-        "n": 6,
-        "skill_ci_low": -0.0031,
-        "skill_significant": false,
-        "skill_vs_market": -0.0007
-      },
-      "market_probability": 0.175,
-      "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
-      "model_probability": 0.2,
-      "payout_odds": 4.7,
+      "entry_price": 0.595,
+      "horizon": "3-7d",
+      "lead_bucket": "3-7d",
+      "lead_days": 5.5,
+      "lead_track_record": null,
+      "market_probability": 0.405,
+      "market_url": "https://polymarket.com/market/will-vitality-win-iem-cologne-major-2026",
+      "model_probability": 0.38,
+      "payout_odds": 0.7,
       "platform": "Polymarket",
-      "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
-      "side": "YES",
-      "stance": "model_above_market",
+      "question": "Will Vitality win IEM Cologne Major 2026?",
+      "side": "NO",
+      "stance": "model_below_market",
       "track_record": {
-        "n": 27,
-        "skill_ci_low": -0.0048,
+        "n": 32,
+        "skill_ci_low": -0.0056,
         "skill_significant": false,
-        "skill_vs_market": -0.0001
+        "skill_vs_market": -0.0004
       }
     },
     {
-      "abs_edge": 0.025,
+      "abs_edge": 0.024,
       "domain": "sports",
-      "edge": 0.025,
+      "edge": 0.024,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.06,
+      "entry_price": 0.061,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 34.9,
+      "lead_days": 34.5,
       "lead_track_record": null,
-      "market_probability": 0.06,
+      "market_probability": 0.061,
       "market_url": "https://polymarket.com/market/will-germany-win-the-2026-fifa-world-cup-467",
       "model_probability": 0.085,
-      "payout_odds": 15.5,
+      "payout_odds": 15.3,
       "platform": "Polymarket",
       "question": "Will Germany win the 2026 FIFA World Cup?",
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 27,
-        "skill_ci_low": -0.0048,
+        "n": 32,
+        "skill_ci_low": -0.0056,
         "skill_significant": false,
-        "skill_vs_market": -0.0001
+        "skill_vs_market": -0.0004
       }
     },
     {
@@ -640,7 +584,7 @@
       "entry_price": 0.081,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 34.9,
+      "lead_days": 34.5,
       "lead_track_record": null,
       "market_probability": 0.081,
       "market_url": "https://polymarket.com/market/will-argentina-win-the-2026-fifa-world-cup-245",
@@ -651,91 +595,97 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 27,
-        "skill_ci_low": -0.0048,
+        "n": 32,
+        "skill_ci_low": -0.0056,
         "skill_significant": false,
-        "skill_vs_market": -0.0001
+        "skill_vs_market": -0.0004
       }
     },
     {
-      "abs_edge": 0.018,
+      "abs_edge": 0.019,
       "domain": "sports",
-      "edge": 0.018,
+      "edge": 0.019,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.068,
+      "entry_price": 0.067,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 34.9,
+      "lead_days": 34.5,
       "lead_track_record": null,
-      "market_probability": 0.068,
+      "market_probability": 0.067,
       "market_url": "https://polymarket.com/market/will-brazil-win-the-2026-fifa-world-cup-183",
       "model_probability": 0.085,
-      "payout_odds": 13.8,
+      "payout_odds": 14.0,
       "platform": "Polymarket",
       "question": "Will Brazil win the 2026 FIFA World Cup?",
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 27,
-        "skill_ci_low": -0.0048,
+        "n": 32,
+        "skill_ci_low": -0.0056,
         "skill_significant": false,
-        "skill_vs_market": -0.0001
+        "skill_vs_market": -0.0004
       }
     },
     {
-      "abs_edge": 0.015,
-      "domain": "other",
-      "edge": -0.015,
+      "abs_edge": 0.016,
+      "domain": "geopolitics",
+      "edge": 0.016,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.605,
-      "horizon": "3-7d",
-      "lead_bucket": "3-7d",
-      "lead_days": 5.9,
-      "lead_track_record": null,
-      "market_probability": 0.395,
-      "market_url": "https://polymarket.com/market/will-vitality-win-iem-cologne-major-2026",
-      "model_probability": 0.38,
-      "payout_odds": 0.7,
-      "platform": "Polymarket",
-      "question": "Will Vitality win IEM Cologne Major 2026?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 27,
-        "skill_ci_low": -0.0048,
+      "entry_price": 0.884,
+      "horizon": "<1d",
+      "lead_bucket": "<1d",
+      "lead_days": -0.5,
+      "lead_track_record": {
+        "horizon": "<1d",
+        "n": 8,
+        "skill_ci_low": -0.0131,
         "skill_significant": false,
-        "skill_vs_market": -0.0001
+        "skill_vs_market": 0.0006
+      },
+      "market_probability": 0.884,
+      "market_url": "https://polymarket.com/market/us-x-iran-permanent-peace-deal-by-june-15-2026-734-856-129",
+      "model_probability": 0.9,
+      "payout_odds": 0.1,
+      "platform": "Polymarket",
+      "question": "US x Iran permanent peace deal by June 15, 2026?",
+      "side": "YES",
+      "stance": "model_above_market",
+      "track_record": {
+        "n": 32,
+        "skill_ci_low": -0.0056,
+        "skill_significant": false,
+        "skill_vs_market": -0.0004
       }
     },
     {
       "abs_edge": 0.005,
-      "domain": "elections",
-      "edge": -0.005,
+      "domain": "geopolitics",
+      "edge": 0.005,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.335,
+      "entry_price": 0.045,
       "horizon": "14-30d",
       "lead_bucket": "14-30d",
-      "lead_days": 14.9,
+      "lead_days": 14.5,
       "lead_track_record": {
         "horizon": "14-30d",
-        "n": 28,
-        "skill_ci_low": -0.1982,
+        "n": 32,
+        "skill_ci_low": -0.1746,
         "skill_significant": false,
-        "skill_vs_market": -0.1066
+        "skill_vs_market": -0.0927
       },
-      "market_probability": 0.665,
-      "market_url": "https://polymarket.com/market/will-victor-marx-win-the-2026-colorado-governor-republican-primary-election",
-      "model_probability": 0.66,
-      "payout_odds": 2.0,
+      "market_probability": 0.045,
+      "market_url": "https://polymarket.com/market/israel-closes-its-airspace-by-june-30-324-253-464-332-827-713-671-846",
+      "model_probability": 0.05,
+      "payout_odds": 21.2,
       "platform": "Polymarket",
-      "question": "Will Victor Marx win the 2026 Colorado Governor Republican primary election?",
-      "side": "NO",
-      "stance": "model_below_market",
+      "question": "Israel closes its airspace by June 30?",
+      "side": "YES",
+      "stance": "model_above_market",
       "track_record": {
-        "n": 27,
-        "skill_ci_low": -0.0048,
+        "n": 32,
+        "skill_ci_low": -0.0056,
         "skill_significant": false,
-        "skill_vs_market": -0.0001
+        "skill_vs_market": -0.0004
       }
     },
     {
@@ -746,7 +696,7 @@
       "entry_price": 0.939,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 198.9,
+      "lead_days": 198.5,
       "lead_track_record": null,
       "market_probability": 0.061,
       "market_url": "https://polymarket.com/market/will-china-invade-taiwan-before-2027",
@@ -757,10 +707,10 @@
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 27,
-        "skill_ci_low": -0.0048,
+        "n": 32,
+        "skill_ci_low": -0.0056,
         "skill_significant": false,
-        "skill_vs_market": -0.0001
+        "skill_vs_market": -0.0004
       }
     },
     {
@@ -771,7 +721,7 @@
       "entry_price": 0.051,
       "horizon": "30d+",
       "lead_bucket": "30d+",
-      "lead_days": 34.9,
+      "lead_days": 34.5,
       "lead_track_record": null,
       "market_probability": 0.051,
       "market_url": "https://polymarket.com/market/will-netherlands-win-the-2026-fifa-world-cup-739",
@@ -782,24 +732,24 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 27,
-        "skill_ci_low": -0.0048,
+        "n": 32,
+        "skill_ci_low": -0.0056,
         "skill_significant": false,
-        "skill_vs_market": -0.0001
+        "skill_vs_market": -0.0004
       }
     }
   ],
-  "generated_at": "2026-06-15T01:13:16.314341+00:00",
+  "generated_at": "2026-06-15T12:36:17.060271+00:00",
   "knowledge_graph": {
     "domain_distribution": {
       "elections": 3,
       "entertainment": 6,
-      "geopolitics": 23,
-      "other": 9,
+      "geopolitics": 21,
+      "other": 7,
       "sports": 18,
       "technology": 3
     },
-    "n_tagged": 62,
+    "n_tagged": 58,
     "top_entities": [
       {
         "count": 16,
@@ -810,16 +760,16 @@
         "entity": "World Cup"
       },
       {
-        "count": 12,
-        "entity": "Iran"
+        "count": 9,
+        "entity": "Israel"
       },
       {
         "count": 9,
-        "entity": "US"
+        "entity": "Iran"
       },
       {
-        "count": 8,
-        "entity": "Israel"
+        "count": 6,
+        "entity": "US"
       },
       {
         "count": 3,
@@ -844,10 +794,6 @@
       {
         "count": 3,
         "entity": "Volodymyr Zelenskyy"
-      },
-      {
-        "count": 3,
-        "entity": "Ivoire"
       },
       {
         "count": 3,
@@ -912,60 +858,68 @@
       {
         "count": 2,
         "entity": "Spain"
+      },
+      {
+        "count": 1,
+        "entity": "Hormuz"
+      },
+      {
+        "count": 1,
+        "entity": "Strait"
       }
     ]
   },
   "lead_lag": {
-    "avg_convergence_fraction": -0.1041,
-    "market_converged_to_model_pct": 0.2222,
+    "avg_convergence_fraction": 0.0058,
+    "market_converged_to_model_pct": 0.2727,
     "min_edge": 0.0,
-    "model_right_pct": 0.3333,
-    "n_markets": 9
+    "model_right_pct": 0.2727,
+    "n_markets": 11
   },
   "methodology": "Forecast trajectories on live Polymarket/Kalshi markets: a fresh point-in-time forecast each day (latest price + latest news, no look-ahead) until the market resolves, then every snapshot is scored. Skill vs market = market Brier \u2212 model Brier, reported by forecast horizon; long-horizon skill is the meaningful signal.",
   "model": "gpt-oss-120b",
   "models_comparison": [
     {
-      "accuracy": 0.8462,
+      "accuracy": 0.7826,
       "by_horizon": [
         {
-          "accuracy": 0.8571,
+          "accuracy": 0.8438,
           "horizon": "14-30d",
-          "market_brier": 0.0726,
-          "model_brier": 0.1792,
-          "n": 28,
-          "skill_ci_high": -0.015,
-          "skill_ci_low": -0.1982,
+          "market_brier": 0.0834,
+          "model_brier": 0.1761,
+          "n": 32,
+          "skill_ci_high": -0.0108,
+          "skill_ci_low": -0.1746,
           "skill_significant": false,
-          "skill_vs_market": -0.1066
+          "skill_vs_market": -0.0927
         },
         {
-          "accuracy": 0.8,
+          "accuracy": 0.6667,
           "horizon": "1-3d",
-          "market_brier": 0.0883,
-          "model_brier": 0.0976,
-          "n": 5,
-          "skill_ci_high": -0.0033,
-          "skill_ci_low": -0.0153,
+          "market_brier": 0.1612,
+          "model_brier": 0.1702,
+          "n": 6,
+          "skill_ci_high": -0.004,
+          "skill_ci_low": -0.0139,
           "skill_significant": false,
-          "skill_vs_market": -0.0093
+          "skill_vs_market": -0.009
         },
         {
-          "accuracy": 0.8333,
+          "accuracy": 0.625,
           "horizon": "<1d",
-          "market_brier": 0.0806,
-          "model_brier": 0.0813,
-          "n": 6,
-          "skill_ci_high": 0.0018,
-          "skill_ci_low": -0.0031,
+          "market_brier": 0.2077,
+          "model_brier": 0.2071,
+          "n": 8,
+          "skill_ci_high": 0.0142,
+          "skill_ci_low": -0.0131,
           "skill_significant": false,
-          "skill_vs_market": -0.0007
+          "skill_vs_market": 0.0006
         }
       ],
       "model": "gpt-oss-120b",
-      "model_brier": 0.1536,
-      "n_markets_resolved": 9,
-      "n_snapshots_resolved": 39,
+      "model_brier": 0.1807,
+      "n_markets_resolved": 11,
+      "n_snapshots_resolved": 46,
       "paper_pnl": {
         "bets": [
           {
@@ -1818,6 +1772,167 @@
             "stake_edge": 0.25,
             "stake_flat": 1.0,
             "win": false
+          },
+          {
+            "domain": "other",
+            "edge": 0.005,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-civ-ecu-2026-06-14-civ",
+            "in_validated": false,
+            "market_probability": 0.275,
+            "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+            "model": "gpt-oss-120b",
+            "model_probability": 0.27,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.005,
+            "profit_flat": -1.0,
+            "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+            "resolved_ts": "2026-06-15T12:33:00.408652+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-13T22:41:24.401017+00:00",
+            "stake_edge": 0.005,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "other",
+            "edge": 0.0223,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-civ-ecu-2026-06-14-civ",
+            "in_validated": false,
+            "market_probability": 0.295,
+            "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+            "model": "gpt-oss-120b",
+            "model_probability": 0.2727,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.0223,
+            "profit_flat": -1.0,
+            "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+            "resolved_ts": "2026-06-15T12:33:00.416299+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-14T20:46:26.929906+00:00",
+            "stake_edge": 0.0223,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "other",
+            "edge": 0.025,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-civ-ecu-2026-06-14-civ",
+            "in_validated": false,
+            "market_probability": 0.175,
+            "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+            "model": "gpt-oss-120b",
+            "model_probability": 0.2,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.025,
+            "profit_flat": -1.0,
+            "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+            "resolved_ts": "2026-06-15T12:33:00.423109+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-15T01:01:00.359743+00:00",
+            "stake_edge": 0.025,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.005,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.445,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "gpt-oss-120b",
+            "model_probability": 0.44,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.005,
+            "profit_flat": -1.0,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.486422+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-12T23:57:23.246894+00:00",
+            "stake_edge": 0.005,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.01,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.63,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "gpt-oss-120b",
+            "model_probability": 0.62,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0059,
+            "profit_flat": 0.5873,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.493887+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-13T22:26:56.441404+00:00",
+            "stake_edge": 0.01,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.395,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.605,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "gpt-oss-120b",
+            "model_probability": 1.0,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.1632,
+            "profit_flat": 0.6529,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.500537+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-14T20:50:17.209054+00:00",
+            "stake_edge": 0.25,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.21,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.81,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "gpt-oss-120b",
+            "model_probability": 0.6,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0493,
+            "profit_flat": 0.2346,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.507429+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-15T01:11:58.100293+00:00",
+            "stake_edge": 0.21,
+            "stake_flat": 1.0,
+            "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
@@ -1859,14 +1974,21 @@
             -0.4823,
             -0.4823,
             -0.435,
-            -0.685
+            -0.685,
+            -0.69,
+            -0.7123,
+            -0.7373,
+            -0.7423,
+            -0.7365,
+            -0.5732,
+            -0.524
           ],
           "fees": 0.0,
-          "n_bets": 37,
-          "pnl": -0.685,
-          "roi": -0.3412,
-          "total_staked": 2.008,
-          "win_rate": 0.8378
+          "n_bets": 44,
+          "pnl": -0.524,
+          "roi": -0.2067,
+          "total_staked": 2.5353,
+          "win_rate": 0.7727
         },
         "flat": {
           "equity_curve": [
@@ -1906,63 +2028,70 @@
             4.1411,
             4.1416,
             4.3839,
-            3.3839
+            3.3839,
+            2.3839,
+            1.3839,
+            0.3839,
+            -0.6161,
+            -0.0288,
+            0.624,
+            0.8586
           ],
           "fees": 0.0,
-          "n_bets": 37,
-          "pnl": 3.3839,
-          "roi": 0.0915,
-          "total_staked": 37.0,
-          "win_rate": 0.8378
+          "n_bets": 44,
+          "pnl": 0.8586,
+          "roi": 0.0195,
+          "total_staked": 44.0,
+          "win_rate": 0.7727
         },
         "min_edge": 0.0,
         "validated_only": null
       },
-      "paper_roi": 0.0915,
+      "paper_roi": 0.0195,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.0778
+      "skill_vs_market": -0.0655
     },
     {
-      "accuracy": 0.8333,
+      "accuracy": 0.7674,
       "by_horizon": [
         {
-          "accuracy": 0.84,
+          "accuracy": 0.8276,
           "horizon": "14-30d",
-          "market_brier": 0.0549,
-          "model_brier": 0.1788,
-          "n": 25,
-          "skill_ci_high": -0.0233,
-          "skill_ci_low": -0.2245,
+          "market_brier": 0.0693,
+          "model_brier": 0.1754,
+          "n": 29,
+          "skill_ci_high": -0.0171,
+          "skill_ci_low": -0.1952,
           "skill_significant": false,
-          "skill_vs_market": -0.1239
+          "skill_vs_market": -0.1061
         },
         {
-          "accuracy": 0.8,
+          "accuracy": 0.6667,
           "horizon": "1-3d",
-          "market_brier": 0.0883,
-          "model_brier": 0.0976,
-          "n": 5,
-          "skill_ci_high": -0.0033,
-          "skill_ci_low": -0.0153,
+          "market_brier": 0.1612,
+          "model_brier": 0.1702,
+          "n": 6,
+          "skill_ci_high": -0.004,
+          "skill_ci_low": -0.0139,
           "skill_significant": false,
-          "skill_vs_market": -0.0093
+          "skill_vs_market": -0.009
         },
         {
-          "accuracy": 0.8333,
+          "accuracy": 0.625,
           "horizon": "<1d",
-          "market_brier": 0.0806,
-          "model_brier": 0.0813,
-          "n": 6,
-          "skill_ci_high": 0.0018,
-          "skill_ci_low": -0.0031,
+          "market_brier": 0.2077,
+          "model_brier": 0.2071,
+          "n": 8,
+          "skill_ci_high": 0.0142,
+          "skill_ci_low": -0.0131,
           "skill_significant": false,
-          "skill_vs_market": -0.0007
+          "skill_vs_market": 0.0006
         }
       ],
       "model": "gemma-4-31b-it",
-      "model_brier": 0.1512,
-      "n_markets_resolved": 9,
-      "n_snapshots_resolved": 36,
+      "model_brier": 0.1806,
+      "n_markets_resolved": 11,
+      "n_snapshots_resolved": 43,
       "paper_pnl": {
         "bets": [
           {
@@ -2746,6 +2875,167 @@
             "stake_edge": 0.25,
             "stake_flat": 1.0,
             "win": false
+          },
+          {
+            "domain": "other",
+            "edge": 0.005,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-civ-ecu-2026-06-14-civ",
+            "in_validated": false,
+            "market_probability": 0.275,
+            "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+            "model": "gemma-4-31b-it",
+            "model_probability": 0.27,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.005,
+            "profit_flat": -1.0,
+            "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+            "resolved_ts": "2026-06-15T12:33:00.382288+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-13T22:41:24.535111+00:00",
+            "stake_edge": 0.005,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "other",
+            "edge": 0.0223,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-civ-ecu-2026-06-14-civ",
+            "in_validated": false,
+            "market_probability": 0.295,
+            "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+            "model": "gemma-4-31b-it",
+            "model_probability": 0.2727,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.0223,
+            "profit_flat": -1.0,
+            "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+            "resolved_ts": "2026-06-15T12:33:00.393304+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-14T20:46:27.080192+00:00",
+            "stake_edge": 0.0223,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "other",
+            "edge": 0.025,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-civ-ecu-2026-06-14-civ",
+            "in_validated": false,
+            "market_probability": 0.175,
+            "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+            "model": "gemma-4-31b-it",
+            "model_probability": 0.2,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.025,
+            "profit_flat": -1.0,
+            "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+            "resolved_ts": "2026-06-15T12:33:00.400978+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-15T01:01:00.492255+00:00",
+            "stake_edge": 0.025,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.005,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.445,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "gemma-4-31b-it",
+            "model_probability": 0.44,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.005,
+            "profit_flat": -1.0,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.458904+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-12T23:57:23.401287+00:00",
+            "stake_edge": 0.005,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.01,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.63,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "gemma-4-31b-it",
+            "model_probability": 0.62,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0059,
+            "profit_flat": 0.5873,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.465606+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-13T22:26:56.580434+00:00",
+            "stake_edge": 0.01,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.395,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.605,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "gemma-4-31b-it",
+            "model_probability": 1.0,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.1632,
+            "profit_flat": 0.6529,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.472711+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-14T20:50:17.349359+00:00",
+            "stake_edge": 0.25,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.21,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.81,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "gemma-4-31b-it",
+            "model_probability": 0.6,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0493,
+            "profit_flat": 0.2346,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.479485+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-15T01:11:58.233336+00:00",
+            "stake_edge": 0.21,
+            "stake_flat": 1.0,
+            "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
@@ -2784,14 +3074,21 @@
             -0.5933,
             -0.5933,
             -0.546,
-            -0.796
+            -0.796,
+            -0.801,
+            -0.8233,
+            -0.8483,
+            -0.8533,
+            -0.8475,
+            -0.6842,
+            -0.635
           ],
           "fees": 0.0,
-          "n_bets": 34,
-          "pnl": -0.796,
-          "roi": -0.4231,
-          "total_staked": 1.8815,
-          "win_rate": 0.8235
+          "n_bets": 41,
+          "pnl": -0.635,
+          "roi": -0.2636,
+          "total_staked": 2.4088,
+          "win_rate": 0.7561
         },
         "flat": {
           "equity_curve": [
@@ -2828,63 +3125,70 @@
             1.4926,
             1.4931,
             1.7353,
-            0.7353
+            0.7353,
+            -0.2647,
+            -1.2647,
+            -2.2647,
+            -3.2647,
+            -2.6774,
+            -2.0245,
+            -1.7899
           ],
           "fees": 0.0,
-          "n_bets": 34,
-          "pnl": 0.7353,
-          "roi": 0.0216,
-          "total_staked": 34.0,
-          "win_rate": 0.8235
+          "n_bets": 41,
+          "pnl": -1.7899,
+          "roi": -0.0437,
+          "total_staked": 41.0,
+          "win_rate": 0.7561
         },
         "min_edge": 0.0,
         "validated_only": null
       },
-      "paper_roi": 0.0216,
+      "paper_roi": -0.0437,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.0874
+      "skill_vs_market": -0.0727
     },
     {
-      "accuracy": 0.8333,
+      "accuracy": 0.7674,
       "by_horizon": [
         {
-          "accuracy": 0.84,
+          "accuracy": 0.8276,
           "horizon": "14-30d",
-          "market_brier": 0.0549,
-          "model_brier": 0.1788,
-          "n": 25,
-          "skill_ci_high": -0.0233,
-          "skill_ci_low": -0.2245,
+          "market_brier": 0.0693,
+          "model_brier": 0.1754,
+          "n": 29,
+          "skill_ci_high": -0.0171,
+          "skill_ci_low": -0.1952,
           "skill_significant": false,
-          "skill_vs_market": -0.1239
+          "skill_vs_market": -0.1061
         },
         {
-          "accuracy": 0.8,
+          "accuracy": 0.6667,
           "horizon": "1-3d",
-          "market_brier": 0.0883,
-          "model_brier": 0.0976,
-          "n": 5,
-          "skill_ci_high": -0.0033,
-          "skill_ci_low": -0.0153,
+          "market_brier": 0.1612,
+          "model_brier": 0.1702,
+          "n": 6,
+          "skill_ci_high": -0.004,
+          "skill_ci_low": -0.0139,
           "skill_significant": false,
-          "skill_vs_market": -0.0093
+          "skill_vs_market": -0.009
         },
         {
-          "accuracy": 0.8333,
+          "accuracy": 0.625,
           "horizon": "<1d",
-          "market_brier": 0.0806,
-          "model_brier": 0.0813,
-          "n": 6,
-          "skill_ci_high": 0.0018,
-          "skill_ci_low": -0.0031,
+          "market_brier": 0.2077,
+          "model_brier": 0.2071,
+          "n": 8,
+          "skill_ci_high": 0.0142,
+          "skill_ci_low": -0.0131,
           "skill_significant": false,
-          "skill_vs_market": -0.0007
+          "skill_vs_market": 0.0006
         }
       ],
       "model": "kimi-k2.6",
-      "model_brier": 0.1512,
-      "n_markets_resolved": 9,
-      "n_snapshots_resolved": 36,
+      "model_brier": 0.1806,
+      "n_markets_resolved": 11,
+      "n_snapshots_resolved": 43,
       "paper_pnl": {
         "bets": [
           {
@@ -3668,6 +3972,167 @@
             "stake_edge": 0.25,
             "stake_flat": 1.0,
             "win": false
+          },
+          {
+            "domain": "other",
+            "edge": 0.005,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-civ-ecu-2026-06-14-civ",
+            "in_validated": false,
+            "market_probability": 0.275,
+            "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+            "model": "kimi-k2.6",
+            "model_probability": 0.27,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.005,
+            "profit_flat": -1.0,
+            "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+            "resolved_ts": "2026-06-15T12:33:00.430477+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-13T22:41:24.668903+00:00",
+            "stake_edge": 0.005,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "other",
+            "edge": 0.0223,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-civ-ecu-2026-06-14-civ",
+            "in_validated": false,
+            "market_probability": 0.295,
+            "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+            "model": "kimi-k2.6",
+            "model_probability": 0.2727,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.0223,
+            "profit_flat": -1.0,
+            "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+            "resolved_ts": "2026-06-15T12:33:00.437887+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-14T20:46:27.226400+00:00",
+            "stake_edge": 0.0223,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "other",
+            "edge": 0.025,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-civ-ecu-2026-06-14-civ",
+            "in_validated": false,
+            "market_probability": 0.175,
+            "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+            "model": "kimi-k2.6",
+            "model_probability": 0.2,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.025,
+            "profit_flat": -1.0,
+            "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+            "resolved_ts": "2026-06-15T12:33:00.444604+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-15T01:01:00.620573+00:00",
+            "stake_edge": 0.025,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.005,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.445,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "kimi-k2.6",
+            "model_probability": 0.44,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.005,
+            "profit_flat": -1.0,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.514494+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-12T23:57:23.549635+00:00",
+            "stake_edge": 0.005,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.01,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.63,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "kimi-k2.6",
+            "model_probability": 0.62,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0059,
+            "profit_flat": 0.5873,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.521639+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-13T22:26:56.729405+00:00",
+            "stake_edge": 0.01,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.395,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.605,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "kimi-k2.6",
+            "model_probability": 1.0,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.1632,
+            "profit_flat": 0.6529,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.528384+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-14T20:50:17.493565+00:00",
+            "stake_edge": 0.25,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.21,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.81,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "kimi-k2.6",
+            "model_probability": 0.6,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0493,
+            "profit_flat": 0.2346,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.535236+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-15T01:11:58.365339+00:00",
+            "stake_edge": 0.21,
+            "stake_flat": 1.0,
+            "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
@@ -3706,14 +4171,21 @@
             -0.5933,
             -0.5933,
             -0.546,
-            -0.796
+            -0.796,
+            -0.801,
+            -0.8233,
+            -0.8483,
+            -0.8533,
+            -0.8475,
+            -0.6842,
+            -0.635
           ],
           "fees": 0.0,
-          "n_bets": 34,
-          "pnl": -0.796,
-          "roi": -0.4231,
-          "total_staked": 1.8815,
-          "win_rate": 0.8235
+          "n_bets": 41,
+          "pnl": -0.635,
+          "roi": -0.2636,
+          "total_staked": 2.4088,
+          "win_rate": 0.7561
         },
         "flat": {
           "equity_curve": [
@@ -3750,34 +4222,152 @@
             1.4926,
             1.4931,
             1.7353,
-            0.7353
+            0.7353,
+            -0.2647,
+            -1.2647,
+            -2.2647,
+            -3.2647,
+            -2.6774,
+            -2.0245,
+            -1.7899
           ],
           "fees": 0.0,
-          "n_bets": 34,
-          "pnl": 0.7353,
-          "roi": 0.0216,
-          "total_staked": 34.0,
-          "win_rate": 0.8235
+          "n_bets": 41,
+          "pnl": -1.7899,
+          "roi": -0.0437,
+          "total_staked": 41.0,
+          "win_rate": 0.7561
         },
         "min_edge": 0.0,
         "validated_only": null
       },
-      "paper_roi": 0.0216,
+      "paper_roi": -0.0437,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.0874
+      "skill_vs_market": -0.0727
+    },
+    {
+      "accuracy": 0.5,
+      "by_horizon": [
+        {
+          "accuracy": 1.0,
+          "horizon": "14-30d",
+          "market_brier": 0.0361,
+          "model_brier": 0.0361,
+          "n": 1,
+          "skill_ci_high": null,
+          "skill_ci_low": null,
+          "skill_significant": false,
+          "skill_vs_market": 0.0
+        },
+        {
+          "accuracy": 0.0,
+          "horizon": "<1d",
+          "market_brier": 0.6806,
+          "model_brier": 0.6806,
+          "n": 1,
+          "skill_ci_high": null,
+          "skill_ci_low": null,
+          "skill_significant": false,
+          "skill_vs_market": 0.0
+        }
+      ],
+      "model": "crowd-follow",
+      "model_brier": 0.3584,
+      "n_markets_resolved": 2,
+      "n_snapshots_resolved": 2,
+      "paper_pnl": {
+        "bets": [
+          {
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-civ-ecu-2026-06-14-civ",
+            "in_validated": false,
+            "market_probability": 0.175,
+            "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+            "model": "crowd-follow",
+            "model_probability": 0.175,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": -0.0,
+            "profit_flat": -1.0,
+            "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+            "resolved_ts": "2026-06-15T12:33:00.368404+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-15T01:01:00.665637+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": false
+          },
+          {
+            "domain": "geopolitics",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "us-iran-nuclear-deal-by-june-30",
+            "in_validated": false,
+            "market_probability": 0.81,
+            "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+            "model": "crowd-follow",
+            "model_probability": 0.81,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.2346,
+            "question": "US-Iran nuclear deal by June 30?",
+            "resolved_ts": "2026-06-15T12:33:00.451375+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-15T01:11:58.410244+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          }
+        ],
+        "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
+        "edge_weighted": {
+          "equity_curve": [
+            0.0,
+            0.0
+          ],
+          "fees": 0.0,
+          "n_bets": 2,
+          "pnl": 0.0,
+          "roi": null,
+          "total_staked": 0.0,
+          "win_rate": 0.5
+        },
+        "flat": {
+          "equity_curve": [
+            -1.0,
+            -0.7654
+          ],
+          "fees": 0.0,
+          "n_bets": 2,
+          "pnl": -0.7654,
+          "roi": -0.3827,
+          "total_staked": 2.0,
+          "win_rate": 0.5
+        },
+        "min_edge": 0.0,
+        "validated_only": null
+      },
+      "paper_roi": -0.3827,
+      "paper_roi_validated": null,
+      "skill_vs_market": 0.0
     }
   ],
-  "n_markets_open": 19,
-  "n_markets_resolved": 9,
-  "n_markets_tracked": 24,
-  "n_snapshots_resolved": 39,
-  "n_snapshots_skill": 39,
+  "n_markets_open": 17,
+  "n_markets_resolved": 11,
+  "n_markets_tracked": 23,
+  "n_snapshots_resolved": 46,
+  "n_snapshots_skill": 46,
   "overall": {
-    "accuracy": 0.8462,
-    "market_brier": 0.0758,
-    "model_brier": 0.1536,
-    "n": 39,
-    "skill_vs_market": -0.0778
+    "accuracy": 0.7826,
+    "market_brier": 0.1152,
+    "model_brier": 0.1807,
+    "n": 46,
+    "skill_vs_market": -0.0655
   },
   "paper_pnl": {
     "bets": [
@@ -4631,6 +5221,167 @@
         "stake_edge": 0.25,
         "stake_flat": 1.0,
         "win": false
+      },
+      {
+        "domain": "other",
+        "edge": 0.005,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "fifwc-civ-ecu-2026-06-14-civ",
+        "in_validated": false,
+        "market_probability": 0.275,
+        "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+        "model": "gpt-oss-120b",
+        "model_probability": 0.27,
+        "outcome": 1,
+        "platform": "Polymarket",
+        "profit_edge": -0.005,
+        "profit_flat": -1.0,
+        "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+        "resolved_ts": "2026-06-15T12:33:00.408652+00:00",
+        "side": "NO",
+        "snapshot_ts": "2026-06-13T22:41:24.401017+00:00",
+        "stake_edge": 0.005,
+        "stake_flat": 1.0,
+        "win": false
+      },
+      {
+        "domain": "other",
+        "edge": 0.0223,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "fifwc-civ-ecu-2026-06-14-civ",
+        "in_validated": false,
+        "market_probability": 0.295,
+        "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+        "model": "gpt-oss-120b",
+        "model_probability": 0.2727,
+        "outcome": 1,
+        "platform": "Polymarket",
+        "profit_edge": -0.0223,
+        "profit_flat": -1.0,
+        "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+        "resolved_ts": "2026-06-15T12:33:00.416299+00:00",
+        "side": "NO",
+        "snapshot_ts": "2026-06-14T20:46:26.929906+00:00",
+        "stake_edge": 0.0223,
+        "stake_flat": 1.0,
+        "win": false
+      },
+      {
+        "domain": "other",
+        "edge": 0.025,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "fifwc-civ-ecu-2026-06-14-civ",
+        "in_validated": false,
+        "market_probability": 0.175,
+        "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+        "model": "gpt-oss-120b",
+        "model_probability": 0.2,
+        "outcome": 1,
+        "platform": "Polymarket",
+        "profit_edge": -0.025,
+        "profit_flat": -1.0,
+        "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?",
+        "resolved_ts": "2026-06-15T12:33:00.423109+00:00",
+        "side": "NO",
+        "snapshot_ts": "2026-06-15T01:01:00.359743+00:00",
+        "stake_edge": 0.025,
+        "stake_flat": 1.0,
+        "win": false
+      },
+      {
+        "domain": "geopolitics",
+        "edge": 0.005,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "us-iran-nuclear-deal-by-june-30",
+        "in_validated": false,
+        "market_probability": 0.445,
+        "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+        "model": "gpt-oss-120b",
+        "model_probability": 0.44,
+        "outcome": 1,
+        "platform": "Polymarket",
+        "profit_edge": -0.005,
+        "profit_flat": -1.0,
+        "question": "US-Iran nuclear deal by June 30?",
+        "resolved_ts": "2026-06-15T12:33:00.486422+00:00",
+        "side": "NO",
+        "snapshot_ts": "2026-06-12T23:57:23.246894+00:00",
+        "stake_edge": 0.005,
+        "stake_flat": 1.0,
+        "win": false
+      },
+      {
+        "domain": "geopolitics",
+        "edge": 0.01,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "us-iran-nuclear-deal-by-june-30",
+        "in_validated": false,
+        "market_probability": 0.63,
+        "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+        "model": "gpt-oss-120b",
+        "model_probability": 0.62,
+        "outcome": 1,
+        "platform": "Polymarket",
+        "profit_edge": 0.0059,
+        "profit_flat": 0.5873,
+        "question": "US-Iran nuclear deal by June 30?",
+        "resolved_ts": "2026-06-15T12:33:00.493887+00:00",
+        "side": "YES",
+        "snapshot_ts": "2026-06-13T22:26:56.441404+00:00",
+        "stake_edge": 0.01,
+        "stake_flat": 1.0,
+        "win": true
+      },
+      {
+        "domain": "geopolitics",
+        "edge": 0.395,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "us-iran-nuclear-deal-by-june-30",
+        "in_validated": false,
+        "market_probability": 0.605,
+        "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+        "model": "gpt-oss-120b",
+        "model_probability": 1.0,
+        "outcome": 1,
+        "platform": "Polymarket",
+        "profit_edge": 0.1632,
+        "profit_flat": 0.6529,
+        "question": "US-Iran nuclear deal by June 30?",
+        "resolved_ts": "2026-06-15T12:33:00.500537+00:00",
+        "side": "YES",
+        "snapshot_ts": "2026-06-14T20:50:17.209054+00:00",
+        "stake_edge": 0.25,
+        "stake_flat": 1.0,
+        "win": true
+      },
+      {
+        "domain": "geopolitics",
+        "edge": 0.21,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "us-iran-nuclear-deal-by-june-30",
+        "in_validated": false,
+        "market_probability": 0.81,
+        "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+        "model": "gpt-oss-120b",
+        "model_probability": 0.6,
+        "outcome": 1,
+        "platform": "Polymarket",
+        "profit_edge": 0.0493,
+        "profit_flat": 0.2346,
+        "question": "US-Iran nuclear deal by June 30?",
+        "resolved_ts": "2026-06-15T12:33:00.507429+00:00",
+        "side": "YES",
+        "snapshot_ts": "2026-06-15T01:11:58.100293+00:00",
+        "stake_edge": 0.21,
+        "stake_flat": 1.0,
+        "win": true
       }
     ],
     "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
@@ -4672,14 +5423,21 @@
         -0.4823,
         -0.4823,
         -0.435,
-        -0.685
+        -0.685,
+        -0.69,
+        -0.7123,
+        -0.7373,
+        -0.7423,
+        -0.7365,
+        -0.5732,
+        -0.524
       ],
       "fees": 0.0,
-      "n_bets": 37,
-      "pnl": -0.685,
-      "roi": -0.3412,
-      "total_staked": 2.008,
-      "win_rate": 0.8378
+      "n_bets": 44,
+      "pnl": -0.524,
+      "roi": -0.2067,
+      "total_staked": 2.5353,
+      "win_rate": 0.7727
     },
     "flat": {
       "equity_curve": [
@@ -4719,14 +5477,21 @@
         4.1411,
         4.1416,
         4.3839,
-        3.3839
+        3.3839,
+        2.3839,
+        1.3839,
+        0.3839,
+        -0.6161,
+        -0.0288,
+        0.624,
+        0.8586
       ],
       "fees": 0.0,
-      "n_bets": 37,
-      "pnl": 3.3839,
-      "roi": 0.0915,
-      "total_staked": 37.0,
-      "win_rate": 0.8378
+      "n_bets": 44,
+      "pnl": 0.8586,
+      "roi": 0.0195,
+      "total_staked": 44.0,
+      "win_rate": 0.7727
     },
     "min_edge": 0.0,
     "validated_only": null
@@ -4734,6 +5499,192 @@
   "source": "live",
   "temperature": 0.0,
   "trajectories": [
+    {
+      "market_url": "https://polymarket.com/market/us-iran-nuclear-deal-by-june-30",
+      "outcome": 1,
+      "platform": "Polymarket",
+      "points": [
+        {
+          "date": "2026-06-12",
+          "lead_days": 17.0,
+          "market": 0.445,
+          "model": 0.44
+        },
+        {
+          "date": "2026-06-13",
+          "lead_days": 16.1,
+          "market": 0.63,
+          "model": 0.62
+        },
+        {
+          "date": "2026-06-14",
+          "lead_days": 15.1,
+          "market": 0.605,
+          "model": 1.0
+        },
+        {
+          "date": "2026-06-15",
+          "lead_days": 15.0,
+          "market": 0.81,
+          "model": 0.6
+        }
+      ],
+      "price_points": [
+        {
+          "market": 0.5,
+          "ts": "2026-06-12T19:21:53.026906+00:00"
+        },
+        {
+          "market": 0.415,
+          "ts": "2026-06-12T22:00:47.747336+00:00"
+        },
+        {
+          "market": 0.445,
+          "ts": "2026-06-12T23:48:48.823977+00:00"
+        },
+        {
+          "market": 0.445,
+          "ts": "2026-06-13T04:50:37.414597+00:00"
+        },
+        {
+          "market": 0.475,
+          "ts": "2026-06-13T08:31:29.099295+00:00"
+        },
+        {
+          "market": 0.525,
+          "ts": "2026-06-13T11:24:34.316835+00:00"
+        },
+        {
+          "market": 0.545,
+          "ts": "2026-06-13T14:24:55.157160+00:00"
+        },
+        {
+          "market": 0.6,
+          "ts": "2026-06-13T16:45:45.648298+00:00"
+        },
+        {
+          "market": 0.655,
+          "ts": "2026-06-13T18:43:32.710042+00:00"
+        },
+        {
+          "market": 0.625,
+          "ts": "2026-06-13T20:40:23.653511+00:00"
+        },
+        {
+          "market": 0.63,
+          "ts": "2026-06-13T22:19:06.159744+00:00"
+        },
+        {
+          "market": 0.615,
+          "ts": "2026-06-14T00:20:22.911093+00:00"
+        },
+        {
+          "market": 0.665,
+          "ts": "2026-06-14T06:05:03.747826+00:00"
+        },
+        {
+          "market": 0.635,
+          "ts": "2026-06-14T09:55:57.993292+00:00"
+        },
+        {
+          "market": 0.595,
+          "ts": "2026-06-14T12:14:49.766673+00:00"
+        },
+        {
+          "market": 0.495,
+          "ts": "2026-06-14T14:29:27.067944+00:00"
+        },
+        {
+          "market": 0.575,
+          "ts": "2026-06-14T16:46:26.051904+00:00"
+        },
+        {
+          "market": 0.565,
+          "ts": "2026-06-14T18:44:22.779386+00:00"
+        },
+        {
+          "market": 0.605,
+          "ts": "2026-06-14T20:40:52.109711+00:00"
+        },
+        {
+          "market": 0.765,
+          "ts": "2026-06-14T23:38:11.256305+00:00"
+        },
+        {
+          "market": 0.81,
+          "ts": "2026-06-15T00:56:44.866221+00:00"
+        }
+      ],
+      "question": "US-Iran nuclear deal by June 30?"
+    },
+    {
+      "market_url": "https://polymarket.com/market/fifwc-civ-ecu-2026-06-14-civ",
+      "outcome": 1,
+      "platform": "Polymarket",
+      "points": [
+        {
+          "date": "2026-06-13",
+          "lead_days": 1.0,
+          "market": 0.275,
+          "model": 0.27
+        },
+        {
+          "date": "2026-06-14",
+          "lead_days": 0.1,
+          "market": 0.295,
+          "model": 0.273
+        },
+        {
+          "date": "2026-06-15",
+          "lead_days": -0.1,
+          "market": 0.175,
+          "model": 0.2
+        }
+      ],
+      "price_points": [
+        {
+          "market": 0.275,
+          "ts": "2026-06-14T00:20:22.911093+00:00"
+        },
+        {
+          "market": 0.295,
+          "ts": "2026-06-14T06:05:03.747826+00:00"
+        },
+        {
+          "market": 0.295,
+          "ts": "2026-06-14T09:55:57.993292+00:00"
+        },
+        {
+          "market": 0.295,
+          "ts": "2026-06-14T12:14:49.766673+00:00"
+        },
+        {
+          "market": 0.295,
+          "ts": "2026-06-14T14:29:27.067944+00:00"
+        },
+        {
+          "market": 0.295,
+          "ts": "2026-06-14T16:46:26.051904+00:00"
+        },
+        {
+          "market": 0.295,
+          "ts": "2026-06-14T18:44:22.779386+00:00"
+        },
+        {
+          "market": 0.295,
+          "ts": "2026-06-14T20:40:52.109711+00:00"
+        },
+        {
+          "market": 0.315,
+          "ts": "2026-06-14T23:38:11.256305+00:00"
+        },
+        {
+          "market": 0.175,
+          "ts": "2026-06-15T00:56:44.866221+00:00"
+        }
+      ],
+      "question": "Will C\u00f4te d'Ivoire win on 2026-06-14?"
+    },
     {
       "market_url": "https://polymarket.com/market/will-donald-trump-announce-that-the-united-states-blockade-of-the-strait-of-hormuz-has-been-lifted-by-june-30-2026-159-962-959",
       "outcome": 1,
@@ -5773,148 +6724,6 @@
         }
       ],
       "question": "Trump announces US x Iran ceasefire over by June 12?"
-    },
-    {
-      "market_url": "https://polymarket.com/market/fifwc-kr-cze-2026-06-11-kr",
-      "outcome": 1,
-      "platform": "Polymarket",
-      "points": [
-        {
-          "date": "2026-06-10",
-          "lead_days": 1.1,
-          "market": 0.365,
-          "model": 0.36
-        },
-        {
-          "date": "2026-06-11",
-          "lead_days": 0.1,
-          "market": 0.375,
-          "model": 0.37
-        },
-        {
-          "date": "2026-06-12",
-          "lead_days": -0.1,
-          "market": 1.0,
-          "model": 0.99
-        }
-      ],
-      "price_points": [
-        {
-          "market": 0.365,
-          "ts": "2026-06-10T18:09:58.766880+00:00"
-        },
-        {
-          "market": 0.365,
-          "ts": "2026-06-10T20:44:54.232215+00:00"
-        },
-        {
-          "market": 0.365,
-          "ts": "2026-06-10T22:56:49.079235+00:00"
-        },
-        {
-          "market": 0.365,
-          "ts": "2026-06-11T01:38:46.759146+00:00"
-        },
-        {
-          "market": 0.355,
-          "ts": "2026-06-11T07:05:04.496609+00:00"
-        },
-        {
-          "market": 0.365,
-          "ts": "2026-06-11T11:47:55.340761+00:00"
-        },
-        {
-          "market": 0.355,
-          "ts": "2026-06-11T13:29:48.234028+00:00"
-        },
-        {
-          "market": 0.365,
-          "ts": "2026-06-11T15:30:16.214115+00:00"
-        },
-        {
-          "market": 0.365,
-          "ts": "2026-06-11T16:20:45.217112+00:00"
-        },
-        {
-          "market": 0.365,
-          "ts": "2026-06-11T19:45:19.771780+00:00"
-        },
-        {
-          "market": 0.375,
-          "ts": "2026-06-11T22:15:29.156635+00:00"
-        },
-        {
-          "market": 0.375,
-          "ts": "2026-06-11T23:55:00.583825+00:00"
-        },
-        {
-          "market": 1.0,
-          "ts": "2026-06-12T05:02:09.881672+00:00"
-        }
-      ],
-      "question": "Will Korea Republic win on 2026-06-11?"
-    },
-    {
-      "market_url": "https://polymarket.com/market/fifwc-mex-rsa-2026-06-11-mex",
-      "outcome": 1,
-      "platform": "Polymarket",
-      "points": [
-        {
-          "date": "2026-06-10",
-          "lead_days": 0.8,
-          "market": 0.695,
-          "model": 0.7
-        },
-        {
-          "date": "2026-06-11",
-          "lead_days": -0.1,
-          "market": 1.0,
-          "model": 0.99
-        }
-      ],
-      "price_points": [
-        {
-          "market": 0.695,
-          "ts": "2026-06-10T20:44:54.232215+00:00"
-        },
-        {
-          "market": 0.695,
-          "ts": "2026-06-10T22:56:49.079235+00:00"
-        },
-        {
-          "market": 0.685,
-          "ts": "2026-06-11T01:38:46.759146+00:00"
-        },
-        {
-          "market": 0.685,
-          "ts": "2026-06-11T07:05:04.496609+00:00"
-        },
-        {
-          "market": 0.685,
-          "ts": "2026-06-11T11:47:55.340761+00:00"
-        },
-        {
-          "market": 0.695,
-          "ts": "2026-06-11T13:29:48.234028+00:00"
-        },
-        {
-          "market": 0.695,
-          "ts": "2026-06-11T15:30:16.214115+00:00"
-        },
-        {
-          "market": 0.695,
-          "ts": "2026-06-11T16:20:45.217112+00:00"
-        },
-        {
-          "market": 0.865,
-          "ts": "2026-06-11T19:45:19.771780+00:00"
-        },
-        {
-          "market": 1.0,
-          "ts": "2026-06-11T22:15:29.156635+00:00"
-        }
-      ],
-      "question": "Will Mexico win on 2026-06-11?"
     }
   ],
   "variant": "variant0_neutral_baseline"
