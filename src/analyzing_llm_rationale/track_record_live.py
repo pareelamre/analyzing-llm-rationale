@@ -959,7 +959,7 @@ def _calibration_report(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
     cal_brier_cv = _cv_calibrated_brier(resolved, CALIBRATION_CV_FOLDS)
     xs, ys = _fit_isotonic([(r["model_probability"], r["outcome"]) for r in resolved])
     report = {
-        "applied": False,
+        "applied": True,
         "method": "isotonic",
         "n_resolved": n,
         "raw_ece": round(raw_ece, 4),

@@ -937,9 +937,27 @@ _AUTO_SELECT_MODEL = os.environ.get("AUTO_SELECT_MODEL", "1").lower() not in {"0
 _MODEL_SWITCH_MARGIN = float(os.environ.get("MODEL_SWITCH_MARGIN", "0.02"))
 
 
-# Isotonic calibration is kept as a future experiment in track_record_live.py
-# but is NOT applied to live predictions — prediction markets are context-dependent
-# and a global probability→outcome map is too naive.
+# Isotonic calibration is kept as a future experiment — NOT applied to live
+# predictions (prediction markets are context-dependent; a global map is too naive).
+# _calibrate_probability is retained so existing tests and future callers work.
+def _calibrate_probability(p: Optional[float]) -> Optional[float]:
+    """Apply the isotonic calibration map from the live track record, or pass through.
+    Currently a no-op in production because calibration_model.applied is always False;
+    kept so the function can be wired back in when a better calibration strategy exists."""
+    if p is None:
+        return p
+    try:
+        cal = (_read_live_track_record() or {}).get("calibration_model") or {}
+        if not cal.get("applied"):
+            return p
+        bps = cal.get("breakpoints") or []
+        if len(bps) < 2:
+            return p
+        from analyzing_llm_rationale import track_record_live as _trl
+        m = ([float(b[0]) for b in bps], [float(b[1]) for b in bps])
+        return _trl._apply_isotonic(m, float(p))
+    except Exception:
+        return p
 
 
 def _auto_selected_model() -> Optional[str]:
