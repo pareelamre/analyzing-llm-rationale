@@ -32,6 +32,7 @@ import asyncio
 import json
 import os
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -71,25 +72,31 @@ PRICE_DRIFT_THRESHOLD = float(os.environ.get("PRICE_DRIFT_THRESHOLD") or trl.PRI
 # costs one /predict per (open market × model) — same load as today's daily pass.
 REFORECAST_EACH_TICK = (os.environ.get("REFORECAST_EACH_TICK", "1").strip().lower()
                         in ("1", "true", "yes", "on"))
-# Minimum seconds between successive LLM /predict calls to avoid SCADS AI 429s.
-# crowd-follow calls are skipped (no LLM). 2s pacing keeps 4 models × 21 markets
-# = ~84 calls within ~10 min on the daily first pass, well under rate limits.
-_PREDICT_INTER_CALL_SLEEP_S = float(os.environ.get("PREDICT_INTER_CALL_SLEEP_S", "2"))
-
+# How many LLM /predict calls may be in-flight simultaneously.
+# crowd-follow is instant (no LLM) and doesn't consume a slot.
+PREDICT_CONCURRENCY = int(os.environ.get("PREDICT_CONCURRENCY", "4"))
+# Minimum wall-clock gap between any two calls dispatched to the executor.
+# With PREDICT_CONCURRENCY=4 and 1s spacing the peak outbound rate is 4 req/s,
+# comfortably under SCADS AI limits. Raise PREDICT_CONCURRENCY to go faster;
+# lower PREDICT_MIN_INTERVAL_S if the server proves tolerant.
+_PREDICT_MIN_INTERVAL_S = float(os.environ.get("PREDICT_MIN_INTERVAL_S", "1.0"))
 _PREDICT_TIMEOUT_S = 120
 _PREDICT_RETRIES = 3
+_predict_rate_lock = threading.Lock()
 _last_predict_ts: float = 0.0
 
 
 def _post_predict(payload: dict) -> dict | None:
-    """POST /predict with rate-limit pacing + retries on transient (5xx) failures."""
+    """POST /predict with thread-safe rate-limit pacing + retries.
+
+    Multiple executor threads may call this concurrently; the lock guarantees
+    the minimum inter-call interval is enforced globally across all threads."""
     global _last_predict_ts
-    # Pace calls to avoid SCADS AI 429s. crowd-follow sends no model field so
-    # the server handles it cheaply; rate-limit pacing still applies because the
-    # server itself must respond.
-    elapsed = time.time() - _last_predict_ts
-    if elapsed < _PREDICT_INTER_CALL_SLEEP_S:
-        time.sleep(_PREDICT_INTER_CALL_SLEEP_S - elapsed)
+    with _predict_rate_lock:
+        elapsed = time.time() - _last_predict_ts
+        if elapsed < _PREDICT_MIN_INTERVAL_S:
+            time.sleep(_PREDICT_MIN_INTERVAL_S - elapsed)
+        _last_predict_ts = time.time()
 
     body = json.dumps(payload).encode()
     headers = {"Content-Type": "application/json"}
@@ -100,9 +107,7 @@ def _post_predict(payload: dict) -> dict | None:
         req = urllib.request.Request(f"{BASE_URL}/predict", data=body, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=_PREDICT_TIMEOUT_S) as resp:
-                result = json.loads(resp.read())
-                _last_predict_ts = time.time()
-                return result
+                return json.loads(resp.read())
         except urllib.error.HTTPError as exc:
             last_err = f"HTTP {exc.code}"
             if exc.code == 429:
@@ -114,7 +119,6 @@ def _post_predict(payload: dict) -> dict | None:
             last_err = str(exc)
         if attempt < _PREDICT_RETRIES - 1:
             time.sleep(2 ** attempt)
-    _last_predict_ts = time.time()
     print(f"  predict failed: {last_err}", file=sys.stderr)
     return None
 
@@ -196,7 +200,8 @@ async def main() -> int:
         store, market_data, forecast_fn,
         models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE,
         seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
-        reforecast_each_tick=REFORECAST_EACH_TICK)
+        reforecast_each_tick=REFORECAST_EACH_TICK,
+        concurrency=PREDICT_CONCURRENCY)
     # Flip enrolled markets out of the pending queue (and let the server prune).
     _mark_enrolled([f"{p}:{i}" for p, i in seeds])
     agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)

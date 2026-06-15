@@ -25,12 +25,37 @@ Store kinds:
 """
 from __future__ import annotations
 
+import json as _json
 import os
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from analyzing_llm_rationale import trackrec_store as _ds
 from analyzing_llm_rationale.entity_tagger import tag_question
+
+
+# ── DuckDB SQL helpers ────────────────────────────────────────────────────────
+
+def _sql_con(client):
+    """Return the raw DuckDB connection if the store is DuckDBStore, else None."""
+    return getattr(client, "_con", None)
+
+
+def _sql_rows(con, sql: str, params: Optional[list] = None) -> List[Dict[str, Any]]:
+    """Execute SQL and return list of dicts.  Coerces the JSON-stored ``entities``
+    field back to a Python list so callers see the same shape as the ORM path."""
+    result = con.execute(sql, params or [])
+    cols = [d[0] for d in result.description]
+    rows = []
+    for r in result.fetchall():
+        row = dict(zip(cols, r))
+        if isinstance(row.get("entities"), str):
+            try:
+                row["entities"] = _json.loads(row["entities"])
+            except (ValueError, TypeError):
+                row["entities"] = []
+        rows.append(row)
+    return rows
 
 SNAPSHOT_KIND = "ForecastSnapshot"
 PRICE_KIND = "MarketPricePoint"
@@ -164,6 +189,24 @@ def _fetch_current_quote(market_data, platform: str, ident: str) -> Optional[Dic
 
 def _open_idents(client) -> Dict[Tuple[str, str], Dict[str, Any]]:
     """Distinct (platform, ident) of markets we're tracking that haven't resolved."""
+    con = _sql_con(client)
+    if con is not None:
+        rows = con.execute("""
+            SELECT platform, ident,
+                   MAX(question)   AS question,
+                   MAX(market_url) AS market_url
+            FROM forecast_snapshot
+            WHERE resolved = false
+            GROUP BY platform, ident
+        """).fetchall()
+        return {
+            (r[0] or "", r[1] or ""): {
+                "platform": r[0], "ident": r[1],
+                "question": r[2], "market_url": r[3],
+            }
+            for r in rows if r[1]
+        }
+    # ORM fallback (FileStore / Datastore)
     query = client.query(kind=SNAPSHOT_KIND)
     query.add_filter("resolved", "=", False)
     seen: Dict[Tuple[str, str], Dict[str, Any]] = {}
@@ -188,6 +231,7 @@ async def record_snapshots(
     seed_idents: Optional[List[Tuple[str, str]]] = None,
     price_drift_threshold: float = PRICE_DRIFT_THRESHOLD,
     reforecast_each_tick: bool = False,
+    concurrency: int = 4,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
     agent-enrolled ``seed_idents`` and newly-discovered markets, capturing the live
@@ -258,93 +302,99 @@ async def record_snapshots(
         targets.append(q)
         known.add((q.get("platform"), ident))
 
+    import asyncio as _asyncio
+
+    def _write_snapshot(key, quote, ident, model, scored, lead, market_prob, existing, today):
+        mkt_prob = scored.get("market_probability")
+        mkt_prob = mkt_prob if mkt_prob is not None else market_prob
+        tags = tag_question(quote.get("question") or "", quote.get("category"))
+        entity = _ds.Entity(key, exclude_from_indexes=(
+            "question", "market_url", "close_time", "category", "entities"))
+        entity.update(
+            platform=quote.get("platform"),
+            ident=ident,
+            model=model,
+            question=quote.get("question"),
+            market_url=quote.get("market_url"),
+            snapshot_ts=_now(),
+            snapshot_date=today,
+            model_probability=float(scored["model_probability"]),
+            market_probability=float(mkt_prob),
+            close_time=quote.get("close_time"),
+            lead_time_days=lead,
+            horizon=_horizon_label(lead),
+            category=quote.get("category"),
+            market_volume=quote.get("volume"),
+            evidence_count=scored.get("evidence_count"),
+            resolved=False,
+            outcome=None,
+            drift_reforecast=existing is not None,
+            domain=tags["domain"],
+            entities=tags["entities"],
+        )
+        client.put(entity)
+
+    # Phase 1: instant crowd-follow writes + collect LLM tasks.
     recorded = 0
+    llm_tasks: List[Any] = []  # list of coroutines
+
     for quote in targets:
         ident = ident_from_url(quote.get("platform", ""), quote.get("market_url", ""))
         if not ident:
             continue
         market_prob = quote.get("probability")
         lead = _lead_time_days(quote.get("close_time"))
-        quote_tags = tag_question(quote.get("question") or "", quote.get("category"))
-        is_sports = quote_tags.get("domain") == "sports"
+        is_sports = tag_question(quote.get("question") or "", quote.get("category")).get("domain") == "sports"
+
         for model in model_list:
-            # LLM models have no real-time edge on sports — only crowd-follow runs there.
             if is_sports and model != "crowd-follow":
                 continue
             key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{today}")
             existing = client.get(key)
             if existing is not None and not reforecast_each_tick:
-                # Skip unless the live price has drifted significantly since the snapshot.
-                # A large move signals new information the original forecast didn't see;
-                # re-forecasting keeps the edge board paired: current model vs current price.
                 last_market_prob = float(existing.get("market_probability") or 0.0)
                 current_prob = float(market_prob) if market_prob is not None else last_market_prob
                 if abs(current_prob - last_market_prob) <= price_drift_threshold:
-                    continue  # price stable — today's snapshot is still good
-                # Fall through: price drifted — re-forecast and overwrite today's snapshot.
-            # reforecast_each_tick=True: always re-run the forecast so the edge board
-            # reflects the model's *current* opinion (matches live /predict), not a
-            # snapshot taken earlier today. Overwrites today's snapshot for this model.
-            # crowd-follow: record the current market price as the "model"
-            # prediction — no LLM call. Lets us paper-trade a pure crowd-following
-            # strategy alongside LLM models for comparison (especially useful for
-            # sports markets where the crowd has real-time information the model lacks).
+                    continue
+
             if model == "crowd-follow":
                 if market_prob is None:
                     continue
-                scored = {
-                    "model_probability": float(market_prob),
-                    "market_probability": float(market_prob),
-                    "evidence_count": 0,
-                }
+                _write_snapshot(key, quote, ident, model,
+                                {"model_probability": float(market_prob),
+                                 "market_probability": float(market_prob),
+                                 "evidence_count": 0},
+                                lead, market_prob, existing, today)
+                recorded += 1
             else:
-                try:
-                    quote_with_history = {
-                        **quote,
-                        "price_history": _get_price_history(client, ident),
-                    }
-                    scored = await forecast_fn(quote_with_history, evidence_top_k, model)
-                except Exception:
-                    scored = None
-                if not scored or scored.get("model_probability") is None:
-                    continue
-                # Without evidence the model has no informational edge over the
-                # current market price and can produce extreme calls for no reason
-                # (observed: 15% vs 80% market on Knicks, 15% vs 100% on Project
-                # Freedom — both with evidence_count=0, both wrong). Skip the write;
-                # the previous snapshot stays as the current view for this market.
-                if (scored.get("evidence_count") or 0) == 0 and existing is not None:
-                    continue
-            mkt_prob = scored.get("market_probability")
-            mkt_prob = mkt_prob if mkt_prob is not None else market_prob
-            tags = tag_question(quote.get("question") or "", quote.get("category"))
-            entity = _ds.Entity(key, exclude_from_indexes=("question", "market_url", "close_time", "category", "entities"))
-            entity.update(
-                platform=quote.get("platform"),
-                ident=ident,
-                model=model,
-                question=quote.get("question"),
-                market_url=quote.get("market_url"),
-                snapshot_ts=_now(),
-                snapshot_date=today,
-                model_probability=float(scored["model_probability"]),
-                market_probability=float(mkt_prob),
-                close_time=quote.get("close_time"),
-                lead_time_days=lead,
-                horizon=_horizon_label(lead),
-                # Training features captured at forecast time (cheap now, lost if not stored).
-                category=quote.get("category"),
-                market_volume=quote.get("volume"),
-                evidence_count=scored.get("evidence_count"),
-                resolved=False,
-                outcome=None,
-                drift_reforecast=existing is not None,
-                # Knowledge-graph seed fields.
-                domain=tags["domain"],
-                entities=tags["entities"],
-            )
-            client.put(entity)
-            recorded += 1
+                # Capture loop variables for the async closure.
+                quote_with_history = {**quote, "price_history": _get_price_history(client, ident)}
+                llm_tasks.append((key, quote, ident, model, lead, market_prob, existing,
+                                  quote_with_history))
+
+    # Phase 2: run all LLM forecasts in parallel, bounded by the semaphore.
+    sem = _asyncio.Semaphore(concurrency)
+
+    async def _run_one(key, quote, ident, model, lead, market_prob, existing, qwh):
+        async with sem:
+            try:
+                scored = await forecast_fn(qwh, evidence_top_k, model)
+            except Exception:
+                return False
+        if not scored or scored.get("model_probability") is None:
+            return False
+        # Without evidence the model has no informational edge — skip the write
+        # so the previous snapshot stays as the current view for this market.
+        if (scored.get("evidence_count") or 0) == 0 and existing is not None:
+            return False
+        _write_snapshot(key, quote, ident, model, scored, lead, market_prob, existing, today)
+        return True
+
+    results = await _asyncio.gather(
+        *[_run_one(*t) for t in llm_tasks],
+        return_exceptions=True,
+    )
+    recorded += sum(1 for r in results if r is True)
     return recorded
 
 
@@ -1041,27 +1091,51 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
               trajectory_samples: int = 8) -> Dict[str, Any]:
     """Recompute the public aggregate (overall + by-horizon) and persist it."""
 
-    resolved: List[Dict[str, Any]] = []
-    open_rows: List[Dict[str, Any]] = []
-    for e in client.query(kind=SNAPSHOT_KIND).fetch():
-        if e.get("resolved") and e.get("outcome") is not None:
-            resolved.append(dict(e))
-        else:
-            open_rows.append(dict(e))
+    con = _sql_con(client)
+    if con is not None:
+        # DuckDB fast path: two targeted queries instead of a full scan + Python split.
+        resolved = _sql_rows(con, """
+            SELECT * FROM forecast_snapshot
+            WHERE resolved = true AND outcome IS NOT NULL
+            ORDER BY resolved_ts
+        """)
+        open_rows = _sql_rows(con, """
+            SELECT * FROM forecast_snapshot
+            WHERE resolved = false
+            ORDER BY snapshot_ts DESC
+        """)
+        # Latest price per ident: arg_max picks the market_probability at max(ts).
+        latest_price: Dict[str, float] = {
+            r[0]: float(r[1])
+            for r in con.execute("""
+                SELECT ident, arg_max(market_probability, ts)
+                FROM market_price_point
+                GROUP BY ident
+            """).fetchall()
+            if r[0] and r[1] is not None
+        }
+    else:
+        # ORM fallback (FileStore / Datastore)
+        resolved = []
+        open_rows = []
+        for e in client.query(kind=SNAPSHOT_KIND).fetch():
+            if e.get("resolved") and e.get("outcome") is not None:
+                resolved.append(dict(e))
+            else:
+                open_rows.append(dict(e))
+        latest_price = {}
+        _latest_price_ts: Dict[str, Any] = {}
+        for p in client.query(kind=PRICE_KIND).fetch():
+            ident = p.get("ident")
+            ts = p.get("ts") or _now()
+            if ident not in _latest_price_ts or ts > _latest_price_ts[ident]:
+                _latest_price_ts[ident] = ts
+                latest_price[ident] = float(p.get("market_probability") or 0.0)
+
     # Drop stale open snapshots (not re-forecast recently) so orphaned readings
     # from an old ident don't surface on the edge board as live disagreements.
     open_rows = _drop_stale_open(open_rows)
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_rows}
-
-    # Latest live price per market (for the Edge Board's current disagreement).
-    latest_price: Dict[str, float] = {}
-    _latest_price_ts: Dict[str, Any] = {}
-    for p in client.query(kind=PRICE_KIND).fetch():
-        ident = p.get("ident")
-        ts = p.get("ts") or _now()
-        if ident not in _latest_price_ts or ts > _latest_price_ts[ident]:
-            _latest_price_ts[ident] = ts
-            latest_price[ident] = float(p.get("market_probability") or 0.0)
 
     # The public sections describe the primary model; the comparison spans all.
     # Snapshots predating the multi-model split have no `model` field → primary.
@@ -1123,9 +1197,18 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         snaps_sorted = sorted(snaps, key=lambda x: x.get("snapshot_ts") or _now())
         first = snaps_sorted[0]
         # Dense hourly price line for this market (the cheap high-frequency half).
-        price_q = client.query(kind=PRICE_KIND)
-        price_q.add_filter("ident", "=", first.get("ident"))
-        price_points = sorted(price_q.fetch(), key=lambda p: p.get("ts") or _now())
+        _ident = first.get("ident")
+        if con is not None:
+            _pp = con.execute(
+                "SELECT ts, market_probability FROM market_price_point"
+                " WHERE ident = ? ORDER BY ts",
+                [_ident],
+            ).fetchall()
+            price_points = [{"ts": r[0], "market_probability": r[1]} for r in _pp]
+        else:
+            price_q = client.query(kind=PRICE_KIND)
+            price_q.add_filter("ident", "=", _ident)
+            price_points = sorted(price_q.fetch(), key=lambda p: p.get("ts") or _now())
         trajectories.append({
             "question": first.get("question"),
             "platform": first.get("platform"),
