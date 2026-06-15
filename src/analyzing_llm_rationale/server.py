@@ -2059,6 +2059,21 @@ class PredictRequest(BaseModel):
             "(`market_url` or `market_platform`+`market_ident`), Foresea fetches the current live odds."
         ),
     )
+    market_volume: Optional[float] = Field(
+        None, description="24-hour trading volume in USD. Populated automatically from live odds when the market is identifiable."
+    )
+    market_liquidity: Optional[float] = Field(
+        None, description="Total open interest / liquidity in USD. Populated automatically from live odds."
+    )
+    market_price_change_24h: Optional[float] = Field(
+        None, description="Price change in the last 24 hours (in probability points, -1..1). Populated automatically from live odds."
+    )
+    market_bid: Optional[float] = Field(
+        None, description="Current best bid (YES) in probability units (0..1). Kalshi only; Polymarket uses the mid price."
+    )
+    market_ask: Optional[float] = Field(
+        None, description="Current best ask (YES) in probability units (0..1). Kalshi only."
+    )
     openrouter_api_key: Optional[str] = Field(
         None,
         max_length=256,
@@ -3074,6 +3089,17 @@ async def _prepare_predict_messages(
                     record["market_url"] = quote.get("market_url")
                 if not record.get("market_outcome"):
                     record["market_outcome"] = quote.get("outcome")
+                # Market microstructure signals — populate only when not already supplied.
+                if record.get("market_volume") is None and quote.get("volume") is not None:
+                    record["market_volume"] = float(quote["volume"])
+                if record.get("market_liquidity") is None and quote.get("liquidity") is not None:
+                    record["market_liquidity"] = float(quote["liquidity"])
+                if record.get("market_price_change_24h") is None and quote.get("price_change_24h") is not None:
+                    record["market_price_change_24h"] = float(quote["price_change_24h"])
+                if record.get("market_bid") is None and quote.get("yes_bid_dollars") is not None:
+                    record["market_bid"] = float(quote["yes_bid_dollars"])
+                if record.get("market_ask") is None and quote.get("yes_ask_dollars") is not None:
+                    record["market_ask"] = float(quote["yes_ask_dollars"])
         except Exception:
             pass
     evidence_articles = [article.model_dump() for article in req.news_articles]

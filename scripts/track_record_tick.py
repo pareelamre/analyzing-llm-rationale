@@ -163,6 +163,11 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         "market_url": quote.get("market_url"),
         "market_outcome": quote.get("outcome"),
         "market_probability": quote.get("probability"),
+        "market_volume": quote.get("volume"),
+        "market_liquidity": quote.get("liquidity"),
+        "market_price_change_24h": quote.get("price_change_24h"),
+        "market_bid": quote.get("yes_bid_dollars"),
+        "market_ask": quote.get("yes_ask_dollars"),
     }
     if model:
         payload["model"] = model

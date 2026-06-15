@@ -8,7 +8,7 @@ import re
 import time
 import traceback
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
@@ -97,6 +97,8 @@ class RunConfig:
     shard_count: int = 1
     shard_index: int = 0
     progress_every: int = 0
+    forecast_lead_days: Optional[int] = None
+    cutoff_reference: str = "none"
 
 
 @dataclass
@@ -137,11 +139,97 @@ def log_error(error_log_path: Path, event: Dict[str, object]) -> None:
         handle.write("\n")
 
 
-def extract_summary_items(record: Dict[str, object], article_detail: str) -> List[Dict[str, object]]:
+def parse_iso_datetime(value: object) -> Optional[datetime]:
+    """Parse an ISO-8601 (or date-only) string to a UTC-aware datetime, else None."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", text)
+        if not match:
+            return None
+        parsed = datetime(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def event_window_end(record: Dict[str, object]) -> Optional[datetime]:
+    """When the answer becomes knowable: the earlier of the named-year event close
+    (Dec-31 of the latest plausible year in the question) and the formal resolve time.
+
+    Taking the min handles both directions: questions whose event window closes before
+    formal resolution (the Falcon-9 lag — resolve_time trails the event) and questions
+    that resolve early (named year is a horizon further out than actual resolution)."""
+    resolve = parse_iso_datetime(record.get("resolve_time"))
+    question = str(record.get("question") or "")
+    years = [int(y) for y in re.findall(r"20\d{2}", question)]
+    years = [y for y in years if 2000 <= y <= 2100]
+    if years:
+        year_end = datetime(max(years), 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+        return min(year_end, resolve) if resolve is not None else year_end
+    return resolve
+
+
+def forecast_cutoff(
+    record: Dict[str, object],
+    lead_days: int,
+    reference: str,
+) -> Optional[datetime]:
+    """The forecast time tau = reference - lead_days. Evidence published after tau is
+    excluded so the task is genuinely ex-ante. ``reference`` is ``event_end`` (knowable
+    time, recommended) or ``resolve_time`` (formal resolution). Returns None for
+    ``reference == "none"`` or when no reference time can be derived (no filtering)."""
+    if reference == "none":
+        return None
+    if reference == "event_end":
+        ref = event_window_end(record)
+    elif reference == "resolve_time":
+        ref = parse_iso_datetime(record.get("resolve_time"))
+    else:
+        raise ValueError(f"unknown cutoff reference: {reference!r}")
+    if ref is None:
+        return None
+    return ref - timedelta(days=max(0, int(lead_days)))
+
+
+def cutoff_provenance(record: Dict[str, object], cutoff_ts: Optional[datetime]) -> Dict[str, object]:
+    """Per-record accounting of how the forecast cutoff filtered evidence, for later
+    stratified analysis. ``n_kept == n_total`` when ``cutoff_ts`` is None."""
+    articles = [a for a in (record.get("news_articles") or []) if isinstance(a, dict)]
+    n_total = len(articles)
+    if cutoff_ts is None:
+        return {"cutoff_ts": None, "n_articles_total": n_total, "n_articles_kept": n_total}
+    kept = sum(
+        1
+        for a in articles
+        if (pd := parse_iso_datetime(a.get("publish_date"))) is not None and pd <= cutoff_ts
+    )
+    return {
+        "cutoff_ts": cutoff_ts.isoformat().replace("+00:00", "Z"),
+        "n_articles_total": n_total,
+        "n_articles_kept": kept,
+    }
+
+
+def extract_summary_items(
+    record: Dict[str, object],
+    article_detail: str,
+    cutoff_ts: Optional[datetime] = None,
+) -> List[Dict[str, object]]:
     summary_items: List[Dict[str, object]] = []
     for article in record.get("news_articles") or []:
         if not isinstance(article, dict):
             continue
+        if cutoff_ts is not None:
+            published = parse_iso_datetime(article.get("publish_date"))
+            # Strict cutoff: drop undated articles and anything published after tau.
+            if published is None or published > cutoff_ts:
+                continue
         item = {}
         if article_detail == "summary":
             for field in SUMMARY_ARTICLE_FIELDS:
@@ -159,6 +247,7 @@ def build_user_prompt(
     record: Dict[str, object],
     user_prompt_template: str,
     article_detail: str,
+    cutoff_ts: Optional[datetime] = None,
 ) -> str:
     question = str(record.get("question") or "").strip()
     description = str(record.get("description") or "").strip()
@@ -167,12 +256,27 @@ def build_user_prompt(
     created_time = record.get("created_time")
     publish_time = record.get("publish_time")
     resolve_time = record.get("resolve_time")
-    current_time = record.get("current_time") or record.get("current_timestamp") or current_utc_timestamp()
+    cutoff_mode = cutoff_ts is not None
+    if cutoff_mode:
+        # Ex-ante framing: the forecast is made at tau; do not leak the resolution
+        # horizon (Resolve Time / Days Open) or a post-cutoff "now".
+        current_time = cutoff_ts.isoformat().replace("+00:00", "Z")
+    else:
+        current_time = (
+            record.get("current_time")
+            or record.get("current_timestamp")
+            or current_utc_timestamp()
+        )
     days_open = record.get("days_open")
     market_platform = str(record.get("market_platform") or "").strip()
     market_url = str(record.get("market_url") or "").strip()
     market_outcome = str(record.get("market_outcome") or "").strip()
     market_probability = record.get("market_probability")
+    market_volume = record.get("market_volume")
+    market_liquidity = record.get("market_liquidity")
+    market_price_change_24h = record.get("market_price_change_24h")
+    market_bid = record.get("market_bid")
+    market_ask = record.get("market_ask")
 
     prompt_suffix = user_prompt_template.replace("[question]", "").strip()
     parts = [f"Question: {question}"]
@@ -187,11 +291,15 @@ def build_user_prompt(
         parts.append(f"Created Time: {created_time}")
     if publish_time:
         parts.append(f"Publish Time: {publish_time}")
-    if resolve_time:
-        parts.append(f"Resolve Time: {resolve_time}")
-    if days_open is not None:
-        parts.append(f"Days Open: {days_open}")
-    if any((market_platform, market_url, market_outcome, market_probability is not None)):
+    if not cutoff_mode:
+        if resolve_time:
+            parts.append(f"Resolve Time: {resolve_time}")
+        if days_open is not None:
+            parts.append(f"Days Open: {days_open}")
+    has_market = any((market_platform, market_url, market_outcome, market_probability is not None))
+    has_micro = any(v is not None for v in (market_volume, market_liquidity,
+                                             market_price_change_24h, market_bid, market_ask))
+    if has_market or has_micro:
         parts.append("Prediction Market Context:")
         if market_platform:
             parts.append(f"Market Platform: {market_platform}")
@@ -201,12 +309,24 @@ def build_user_prompt(
             parts.append(f"Market Outcome: {market_outcome}")
         if market_probability is not None:
             parts.append(f"Market-Implied Probability: {market_probability}")
+        if market_bid is not None and market_ask is not None:
+            spread_pp = round((market_ask - market_bid) * 100, 1)
+            parts.append(f"Bid/Ask: {market_bid:.2f} / {market_ask:.2f} (spread {spread_pp}pp)")
+        elif market_bid is not None:
+            parts.append(f"Best Bid: {market_bid:.2f}")
+        if market_price_change_24h is not None:
+            sign = "+" if market_price_change_24h >= 0 else ""
+            parts.append(f"24h Price Change: {sign}{round(market_price_change_24h * 100, 1)}pp")
+        if market_volume is not None:
+            parts.append(f"24h Volume: ${market_volume:,.0f}")
+        if market_liquidity is not None:
+            parts.append(f"Open Interest / Liquidity: ${market_liquidity:,.0f}")
 
     if article_detail == "summary":
         parts.append("Evidence Summaries:")
     else:
         parts.append("Evidence Summaries (full article fields):")
-    summary_items = extract_summary_items(record, article_detail=article_detail)
+    summary_items = extract_summary_items(record, article_detail=article_detail, cutoff_ts=cutoff_ts)
     if summary_items:
         for index, item in enumerate(summary_items, start=1):
             parts.append(f"Article {index}: {json.dumps(item, ensure_ascii=False)}")
@@ -560,6 +680,8 @@ def build_run_metadata(
         "retry_base_sleep_s": config.retry_base_sleep_s,
         "reprocess_null_only": config.reprocess_null_only,
         "drop_article_text": config.drop_article_text,
+        "cutoff_reference": config.cutoff_reference,
+        "forecast_lead_days": config.forecast_lead_days,
         "input_path": str(config.input_path),
         "output_path": str(config.output_path),
         "error_log_path": str(config.error_log_path),
@@ -630,6 +752,11 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
             break
 
         article_detail = "summary" if config.drop_article_text else "full"
+        cutoff_ts = (
+            forecast_cutoff(record, config.forecast_lead_days, config.cutoff_reference)
+            if config.cutoff_reference != "none" and config.forecast_lead_days is not None
+            else None
+        )
         content = None
         last_exception: Optional[Exception] = None
 
@@ -643,6 +770,7 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
                 record,
                 user_prompt_template=user_prompt_template,
                 article_detail=article_detail,
+                cutoff_ts=cutoff_ts,
             )
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -776,6 +904,13 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
 
         if should_write_result:
             result_row = {"id": record_id, **parsed_result}
+            if config.cutoff_reference != "none":
+                prov = cutoff_provenance(record, cutoff_ts)
+                result_row["forecast_cutoff"] = {
+                    "reference": config.cutoff_reference,
+                    "lead_days": config.forecast_lead_days,
+                    **prov,
+                }
             results_by_id[record_id] = result_row
             ordered_results = merge_result_row_locked(config.output_path, records, result_row)
             results_by_id = {
