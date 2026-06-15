@@ -42,9 +42,9 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import market_data  # noqa: E402
 from analyzing_llm_rationale import track_record_live as trl  # noqa: E402
-from analyzing_llm_rationale.trackrec_store import FileStore  # noqa: E402
+from analyzing_llm_rationale.trackrec_store import DuckDBStore  # noqa: E402
 
-STORE_PATH = Path(os.environ.get("TRACK_STORE_PATH") or ROOT / "data" / "track_record_store.json")
+STORE_PATH = Path(os.environ.get("TRACK_STORE_PATH") or ROOT / "data" / "track_record_store.duckdb")
 PUBLIC_PATH = Path(os.environ.get("TRACK_PUBLIC_PATH") or ROOT / "static" / "track_record_live.json")
 
 BASE_URL = os.environ.get("FORESEA_BASE_URL", "https://foresea.ink").rstrip("/")
@@ -181,7 +181,7 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
 
 
 async def main() -> int:
-    store = FileStore(STORE_PATH)
+    store = DuckDBStore(STORE_PATH)
 
     seeds = _get_pending_markets()  # agent-enrolled markets from the evolution-loop bridge
     newly_resolved = trl.resolve_open_snapshots(store, market_data)
