@@ -22,7 +22,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import duckdb
@@ -937,31 +937,9 @@ _AUTO_SELECT_MODEL = os.environ.get("AUTO_SELECT_MODEL", "1").lower() not in {"0
 _MODEL_SWITCH_MARGIN = float(os.environ.get("MODEL_SWITCH_MARGIN", "0.02"))
 
 
-def _calibration_map() -> Optional[Tuple[List[float], List[float]]]:
-    """Live isotonic calibration breakpoints (xs, ys) — only when the track record
-    has enough resolved data AND the raw forecasts are meaningfully miscalibrated
-    (`calibration_model.applied`). Else None (no adjustment). Cached read."""
-    try:
-        cal = (_read_live_track_record() or {}).get("calibration_model") or {}
-        if not cal.get("applied"):
-            return None
-        bps = cal.get("breakpoints") or []
-        if len(bps) < 2:
-            return None
-        return ([float(b[0]) for b in bps], [float(b[1]) for b in bps])
-    except Exception:
-        return None
-
-
-def _calibrate_probability(p: Optional[float]) -> Optional[float]:
-    """Recalibrate a P(yes) using the live isotonic map, or pass it through."""
-    if p is None:
-        return None
-    m = _calibration_map()
-    if m is None:
-        return p
-    from analyzing_llm_rationale import track_record_live as _trl
-    return _trl._apply_isotonic(m, float(p))
+# Isotonic calibration is kept as a future experiment in track_record_live.py
+# but is NOT applied to live predictions — prediction markets are context-dependent
+# and a global probability→outcome map is too naive.
 
 
 def _auto_selected_model() -> Optional[str]:
@@ -2956,15 +2934,6 @@ def _build_market_analysis(
             ),
         )
 
-    # Evolution-loop feedback: recalibrate the probability using the live track
-    # record's isotonic map when (and only when) it's warranted. Keep the raw value
-    # for transparency and drive the edge off the calibrated estimate.
-    raw_model_probability = model_probability
-    calibrated = _calibrate_probability(model_probability)
-    applied_calibration = calibrated is not None and abs(calibrated - raw_model_probability) > 1e-9
-    if applied_calibration:
-        model_probability = calibrated
-
     edge = model_probability - req.market_probability
     if abs(edge) < 0.03:
         stance = "in_line"
@@ -2982,15 +2951,13 @@ def _build_market_analysis(
             f"below the market on {outcome}."
         )
 
-    if applied_calibration:
-        summary += " (recalibrated from the live track record)."
     return MarketAnalysis(
         platform=req.market_platform,
         market_url=req.market_url,
         outcome=outcome,
         market_probability=req.market_probability,
         model_probability=model_probability,
-        model_probability_raw=round(raw_model_probability, 4) if applied_calibration else None,
+        model_probability_raw=None,
         edge=edge,
         stance=stance,
         summary=summary,

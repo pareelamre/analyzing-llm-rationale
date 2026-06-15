@@ -41,16 +41,12 @@ AGG_ID = "global"
 # "market_probability", "evidence_count", ...} | None
 ForecastFn = Callable[[Dict[str, Any], int, Optional[str]], Awaitable[Optional[Dict[str, Any]]]]
 
-# Calibration only kicks in once there's enough resolved data AND the raw
-# forecasts are actually miscalibrated — otherwise it's a no-op (see aggregate).
-MIN_CALIBRATION_SAMPLES = 30
-
 # Re-forecast a market mid-day when the live price has moved more than this many
 # probability points since the snapshot was taken. Keeps the edge board accurate
 # after large price swings without re-forecasting every stable market every hour.
 PRICE_DRIFT_THRESHOLD = 0.05
-CALIBRATION_ECE_THRESHOLD = 0.05
-CALIBRATION_CV_FOLDS = 5
+
+
 
 # Horizon buckets (days-to-resolution at the moment the forecast was made).
 # Ordered long → short; the long buckets carry the credible skill signal.
@@ -857,6 +853,16 @@ def _ece(rows: List[Dict[str, Any]], bins: int = 10) -> Optional[float]:
     return total / n
 
 
+# ── Isotonic calibration (future experiment) ──────────────────────────────────
+# Kept for reference but NOT applied to live predictions — prediction markets
+# work on context and a global probability→outcome map is too naive.
+# To re-enable: wire _calibration_map/_calibrate_probability back into server.py.
+
+MIN_CALIBRATION_SAMPLES = 30
+CALIBRATION_ECE_THRESHOLD = 0.05
+CALIBRATION_CV_FOLDS = 5
+
+
 def _pav(ys: List[float], ws: List[float]) -> List[float]:
     """Pool-adjacent-violators → non-decreasing fit (per input point)."""
     vals: List[float] = []
@@ -937,9 +943,8 @@ def _cv_calibrated_brier(rows: List[Dict[str, Any]], folds: int) -> Optional[flo
 
 
 def _calibration_report(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Fit + evaluate a calibration map — but ONLY when it's actually warranted
-    (enough resolved data AND the raw forecasts are meaningfully miscalibrated).
-    Otherwise it's a transparent no-op. Reports calibrated-vs-raw skill."""
+    """Fit + evaluate a calibration map. Reports calibrated-vs-raw skill for
+    monitoring purposes; result is stored in the aggregate but NOT applied."""
     n = len(resolved)
     if n < MIN_CALIBRATION_SAMPLES:
         return {"applied": False, "reason": "insufficient_data",
@@ -954,7 +959,7 @@ def _calibration_report(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
     cal_brier_cv = _cv_calibrated_brier(resolved, CALIBRATION_CV_FOLDS)
     xs, ys = _fit_isotonic([(r["model_probability"], r["outcome"]) for r in resolved])
     report = {
-        "applied": True,
+        "applied": False,
         "method": "isotonic",
         "n_resolved": n,
         "raw_ece": round(raw_ece, 4),

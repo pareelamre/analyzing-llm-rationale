@@ -87,16 +87,9 @@ class ServerTests(unittest.TestCase):
             "max_tokens": 256,
             "model_key": "test-model",
         })
-        # Prevent the live calibration map from being applied so the FakeProvider's
-        # raw confidence is returned as-is — calibration is covered by its own tests.
-        self._cal_patch = mock.patch(
-            "analyzing_llm_rationale.server._calibration_map", return_value=None
-        )
-        self._cal_patch.start()
         self.client = TestClient(app)
 
     def tearDown(self):
-        self._cal_patch.stop()
         _state.clear()
         _local_cache.clear()
         if _ANALYTICS_DB.exists():
