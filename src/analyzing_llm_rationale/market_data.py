@@ -128,6 +128,7 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "probability": probability,
         "outcomes": options,
         "close_time": market.get("endDate") or market.get("endDateIso"),
+        "description": (market.get("description") or "").strip() or None,
         "volume": _to_float(market.get("volume24hr") or market.get("volume")),
         "liquidity": _to_float(market.get("liquidity") or market.get("liquidityNum")),
         "price_change_24h": _to_float(
@@ -353,6 +354,10 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         ),
         "yes_bid": yes_bid,
         "yes_ask": yes_ask,
+        "resolution_criteria": " ".join(filter(None, [
+            (market.get("rules_primary") or "").strip(),
+            (market.get("rules_secondary") or "").strip(),
+        ])) or None,
         "category": None,  # set from the event in list_kalshi
     }
 

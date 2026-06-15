@@ -162,6 +162,8 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
     categories = [quote["category"]] if quote.get("category") else []
     payload = {
         "question": quote["question"],
+        "description": quote.get("description") or "",
+        "resolution_criteria": quote.get("resolution_criteria") or "",
         "attach_evidence": True,
         "evidence_top_k": evidence_top_k,
         "market_platform": quote.get("platform"),
