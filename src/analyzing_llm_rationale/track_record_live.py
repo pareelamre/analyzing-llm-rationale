@@ -1006,11 +1006,9 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_primary}
     n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_primary})
 
-    # Skill metrics (paper PnL, by_edge, calibration) are computed on non-sports
-    # snapshots only. Sports markets are crowd-efficient in real time — the model
-    # has no informational edge — so including them dilutes the signal and inflates
-    # loss metrics from no-evidence crashes during live games.
-    resolved_skill = [r for r in resolved_primary if (r.get("domain") or "") != "sports"]
+    # Skill metrics use all resolved primary snapshots — sports included.
+    # The crowd-follow model benchmarks against LLM on sports specifically.
+    resolved_skill = resolved_primary
 
     # Lead-time (how-early) calibration: resolved skill bucketed by forecast
     # horizon, with significance — the axis the edge board links against.
@@ -1024,9 +1022,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
 
     # Compute edge board early so the stat can reflect its actual length.
     # Use non-sports resolved snapshots for the skill calibration so sports
-    # crashes don't pollute the edge bucket significance shown on live rows.
-    _res_skill_early = [r for r in resolved
-                        if (r.get("model") or model) == model and (r.get("domain") or "") != "sports"]
+    _res_skill_early = [r for r in resolved if (r.get("model") or model) == model]
     by_edge_early = edge_calibration(_res_skill_early)
     edge_board_result = build_edge_board(open_primary, latest_price, by_edge_early, by_horizon)
 
