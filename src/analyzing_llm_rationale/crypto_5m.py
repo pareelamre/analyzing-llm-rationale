@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sqlite3
 import time
 from datetime import datetime, timezone
@@ -30,6 +31,10 @@ DEFAULT_BENCHMARK_LOG_PATH = Path("data/crypto_5m_benchmark_runs.jsonl")
 DEFAULT_SIGNAL_LOG_PATH = Path("data/crypto_5m_signal_log.jsonl")
 DEFAULT_SIGNAL_DB_PATH = Path("data/crypto_5m_signals.sqlite")
 DEFAULT_EQUITY_FALLBACK_PATH = Path("static/crypto_5m_equity_payload.json")
+DEFAULT_EQUITY_REMOTE_URL = (
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/crypto_5m_equity_payload.json"
+)
 _ALLOWED_QUOTES = ("USDT", "USDC", "FDUSD", "USD")
 _FEATURE_NAMES = (
     "momentum_3m_z",
@@ -2769,6 +2774,41 @@ def _crypto_replay_side(
     return None
 
 
+def _load_crypto_5m_equity_fallback(db_path: Path) -> Optional[Dict[str, Any]]:
+    remote_url = os.environ.get("CRYPTO_5M_EQUITY_URL", DEFAULT_EQUITY_REMOTE_URL).strip()
+    if remote_url:
+        try:
+            import requests
+
+            resp = requests.get(remote_url, headers=_HEADERS, timeout=5)
+            if resp.status_code == 200:
+                payload = resp.json()
+                if isinstance(payload, dict):
+                    out = dict(payload)
+                    out["fallback"] = True
+                    out["fallback_source"] = remote_url
+                    out["db_path"] = str(db_path)
+                    return out
+        except Exception:
+            pass
+    if DEFAULT_EQUITY_FALLBACK_PATH.exists():
+        try:
+            payload = json.loads(DEFAULT_EQUITY_FALLBACK_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = None
+        if isinstance(payload, dict):
+            out = dict(payload)
+            out["fallback"] = True
+            out["fallback_source"] = str(DEFAULT_EQUITY_FALLBACK_PATH)
+            out["db_path"] = str(db_path)
+            out["note"] = (
+                str(out.get("note") or "")
+                + " Static deployment snapshot; live collector DB was not present in this container."
+            ).strip()
+            return out
+    return None
+
+
 def crypto_5m_candidate_equity(
     *,
     db_path: Optional[Path] = None,
@@ -2782,19 +2822,9 @@ def crypto_5m_candidate_equity(
         and record.get("status") == "resolved"
         and record.get("actual_outcome") in {"up", "down"}
     ]
-    if not records and db_path is None and DEFAULT_EQUITY_FALLBACK_PATH.exists():
-        try:
-            fallback = json.loads(DEFAULT_EQUITY_FALLBACK_PATH.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            fallback = None
-        if isinstance(fallback, dict):
-            fallback = dict(fallback)
-            fallback["fallback"] = True
-            fallback["db_path"] = str(path)
-            fallback["note"] = (
-                str(fallback.get("note") or "")
-                + " Static deployment snapshot; live collector DB was not present in this container."
-            ).strip()
+    if not records and db_path is None:
+        fallback = _load_crypto_5m_equity_fallback(path)
+        if fallback is not None:
             return fallback
     cutoff_ms = None
     if since_hours is not None:
