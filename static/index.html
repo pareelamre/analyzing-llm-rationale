@@ -3873,11 +3873,24 @@ async function refreshEdgePrices() {
     const r = await fetch('/live-prices');
     if (!r.ok) return;
     const data = await r.json();
-    const prices = data.prices || {};
+    const quotes = data.quotes || {};
+    // Merge live quote fields into _ebBoardData so _ebAskQuestion picks them up.
+    if (_ebBoardData) {
+      _ebBoardData.forEach(entry => {
+        const q = quotes[entry.ident || entry.market_url || ''];
+        if (!q) return;
+        entry.market_probability = q.probability;
+        if (q.yes_bid  != null) entry.market_bid    = q.yes_bid;
+        if (q.yes_ask  != null) entry.market_ask    = q.yes_ask;
+        if (q.volume   != null) entry.market_volume  = q.volume;
+        if (q.liquidity != null) entry.market_liquidity = q.liquidity;
+      });
+    }
     document.querySelectorAll('#edgeBody .eb-row[data-ident]').forEach(row => {
       const ident = row.dataset.ident;
-      if (!(ident in prices)) return;
-      const marketP = prices[ident];
+      const q = quotes[ident];
+      if (!q) return;
+      const marketP = q.probability;
       const modelP = parseFloat(row.dataset.modelP || '0');
       const edge = modelP - marketP;
       const side = edge > 0.001 ? 'YES' : edge < -0.001 ? 'NO' : null;
@@ -3985,12 +3998,16 @@ function _ebAskQuestion(ident) {
   if (!entry) return;
   const ctx = {};
   if (entry.market_probability != null) ctx.market_probability = entry.market_probability;
-  if (entry.market_url)   ctx.market_url = entry.market_url;
-  if (entry.platform)     ctx.market_platform = entry.platform;
-  if (entry.resolve_time) ctx.resolve_time = entry.resolve_time;
-  if (entry.description)  ctx.description = entry.description;
-  if (entry.resolution_criteria) ctx.resolution_criteria = entry.resolution_criteria;
-  if (entry.categories?.length)  ctx.categories = entry.categories;
+  if (entry.market_url)                 ctx.market_url = entry.market_url;
+  if (entry.platform)                   ctx.market_platform = entry.platform;
+  if (entry.market_bid != null)         ctx.market_bid = entry.market_bid;
+  if (entry.market_ask != null)         ctx.market_ask = entry.market_ask;
+  if (entry.market_volume != null)      ctx.market_volume = entry.market_volume;
+  if (entry.market_liquidity != null)   ctx.market_liquidity = entry.market_liquidity;
+  if (entry.resolve_time)               ctx.resolve_time = entry.resolve_time;
+  if (entry.description)                ctx.description = entry.description;
+  if (entry.resolution_criteria)        ctx.resolution_criteria = entry.resolution_criteria;
+  if (entry.categories?.length)         ctx.categories = entry.categories;
   closeEdgeBoard({ updateHistory: false });
   startForecast(entry.question || '', ctx);
 }

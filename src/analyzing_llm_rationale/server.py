@@ -1774,7 +1774,7 @@ async def live_prices():
 
     from analyzing_llm_rationale import market_data as _md
 
-    async def _fetch_one(item: dict) -> tuple[str, float | None]:
+    async def _fetch_one(item: dict) -> tuple[str, dict | None]:
         ident = item.get("ident") or ""
         platform = (item.get("platform") or "").lower()
         loop = asyncio.get_running_loop()
@@ -1786,14 +1786,27 @@ async def live_prices():
             else:
                 return ident, None
             prob = q.get("probability")
-            return ident, float(prob) if prob is not None else None
+            if prob is None:
+                return ident, None
+            quote: dict = {"probability": float(prob)}
+            if q.get("yes_bid") is not None:
+                quote["yes_bid"] = float(q["yes_bid"])
+            if q.get("yes_ask") is not None:
+                quote["yes_ask"] = float(q["yes_ask"])
+            if q.get("volume") is not None:
+                quote["volume"] = float(q["volume"])
+            if q.get("liquidity") is not None:
+                quote["liquidity"] = float(q["liquidity"])
+            return ident, quote
         except Exception:
             return ident, None
 
     tasks = [_fetch_one(item) for item in board if item.get("ident")]
     results = await asyncio.gather(*tasks)
-    prices = {ident: p for ident, p in results if p is not None}
-    payload = {"prices": prices, "generated_at": datetime.now(timezone.utc).isoformat()}
+    quotes = {ident: q for ident, q in results if q is not None}
+    # Legacy `prices` key kept for any external consumers expecting {ident: probability}.
+    prices = {ident: q["probability"] for ident, q in quotes.items()}
+    payload = {"prices": prices, "quotes": quotes, "generated_at": datetime.now(timezone.utc).isoformat()}
     _cache_set(cache_key, payload, 30)
     return JSONResponse(payload, headers={"Cache-Control": "public, max-age=30"})
 
