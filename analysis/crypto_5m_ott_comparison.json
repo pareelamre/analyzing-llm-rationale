@@ -1,0 +1,244 @@
+{
+  "aggregate": {
+    "current_selector": {
+      "avg_pnl_per_trade": 0.074334,
+      "description": "BTC inverse edge >=4pp; ETH fade |5m momentum| >=0.15%; SOL hold",
+      "hit_rate": 0.5745,
+      "pnl_per_contract": 23.9356,
+      "trade_rate": 0.1491,
+      "trades": 322
+    },
+    "ott_fade_after_reversal": {
+      "avg_pnl_per_trade": 0.0998,
+      "description": "Fade the new OTT direction only on reversal rows",
+      "hit_rate": 0.6,
+      "pnl_per_contract": 0.499,
+      "trade_rate": 0.0023,
+      "trades": 5
+    },
+    "ott_follow": {
+      "avg_pnl_per_trade": -0.011774,
+      "description": "Follow current OTT trend each row",
+      "hit_rate": 0.4884,
+      "pnl_per_contract": -25.432,
+      "trade_rate": 1.0,
+      "trades": 2160
+    },
+    "selector_ott_filter": {
+      "avg_pnl_per_trade": 0.107162,
+      "description": "Current selector only when its side agrees with OTT trend",
+      "hit_rate": 0.6073,
+      "pnl_per_contract": 17.4674,
+      "trade_rate": 0.0755,
+      "trades": 163
+    }
+  },
+  "best": {
+    "avg_pnl_per_trade": 0.074334,
+    "description": "BTC inverse edge >=4pp; ETH fade |5m momentum| >=0.15%; SOL hold",
+    "hit_rate": 0.5745,
+    "pnl_per_contract": 23.9356,
+    "strategy": "current_selector",
+    "trade_rate": 0.1491,
+    "trades": 322
+  },
+  "by_symbol": {
+    "BTCUSDT": {
+      "ott_reversals": 1,
+      "rows": 720,
+      "strategies": {
+        "current_selector": {
+          "avg_pnl_per_trade": 0.211664,
+          "description": "BTC inverse edge >=4pp; ETH fade |5m momentum| >=0.15%; SOL hold",
+          "hit_rate": 0.7119,
+          "max_drawdown": -3.5022,
+          "pnl_per_contract": 12.4882,
+          "trade_rate": 0.0819,
+          "trades": 59
+        },
+        "ott_fade_after_reversal": {
+          "avg_pnl_per_trade": -0.5002,
+          "description": "Fade the new OTT direction only on reversal rows",
+          "hit_rate": 0.0,
+          "max_drawdown": -0.5002,
+          "pnl_per_contract": -0.5002,
+          "trade_rate": 0.0014,
+          "trades": 1
+        },
+        "ott_follow": {
+          "avg_pnl_per_trade": -0.0127,
+          "description": "Follow current OTT trend each row",
+          "hit_rate": 0.4875,
+          "max_drawdown": -18.0396,
+          "pnl_per_contract": -9.144,
+          "trade_rate": 1.0,
+          "trades": 720
+        },
+        "selector_ott_filter": {
+          "avg_pnl_per_trade": 0.257376,
+          "description": "Current selector only when its side agrees with OTT trend",
+          "hit_rate": 0.7576,
+          "max_drawdown": -1.5006,
+          "pnl_per_contract": 8.4934,
+          "trade_rate": 0.0458,
+          "trades": 33
+        }
+      }
+    },
+    "ETHUSDT": {
+      "ott_reversals": 2,
+      "rows": 720,
+      "strategies": {
+        "current_selector": {
+          "avg_pnl_per_trade": 0.043526,
+          "description": "BTC inverse edge >=4pp; ETH fade |5m momentum| >=0.15%; SOL hold",
+          "hit_rate": 0.5437,
+          "max_drawdown": -7.5086,
+          "pnl_per_contract": 11.4474,
+          "trade_rate": 0.3653,
+          "trades": 263
+        },
+        "ott_fade_after_reversal": {
+          "avg_pnl_per_trade": -0.0002,
+          "description": "Fade the new OTT direction only on reversal rows",
+          "hit_rate": 0.5,
+          "max_drawdown": -0.5002,
+          "pnl_per_contract": -0.0004,
+          "trade_rate": 0.0028,
+          "trades": 2
+        },
+        "ott_follow": {
+          "avg_pnl_per_trade": 0.008133,
+          "description": "Follow current OTT trend each row",
+          "hit_rate": 0.5083,
+          "max_drawdown": -22.0604,
+          "pnl_per_contract": 5.856,
+          "trade_rate": 1.0,
+          "trades": 720
+        },
+        "selector_ott_filter": {
+          "avg_pnl_per_trade": 0.069031,
+          "description": "Current selector only when its side agrees with OTT trend",
+          "hit_rate": 0.5692,
+          "max_drawdown": -3.5018,
+          "pnl_per_contract": 8.974,
+          "trade_rate": 0.1806,
+          "trades": 130
+        }
+      }
+    },
+    "SOLUSDT": {
+      "ott_reversals": 2,
+      "rows": 720,
+      "strategies": {
+        "current_selector": {
+          "avg_pnl_per_trade": null,
+          "description": "BTC inverse edge >=4pp; ETH fade |5m momentum| >=0.15%; SOL hold",
+          "hit_rate": null,
+          "max_drawdown": 0.0,
+          "pnl_per_contract": 0.0,
+          "trade_rate": 0.0,
+          "trades": 0
+        },
+        "ott_fade_after_reversal": {
+          "avg_pnl_per_trade": 0.4998,
+          "description": "Fade the new OTT direction only on reversal rows",
+          "hit_rate": 1.0,
+          "max_drawdown": 0.0,
+          "pnl_per_contract": 0.9996,
+          "trade_rate": 0.0028,
+          "trades": 2
+        },
+        "ott_follow": {
+          "avg_pnl_per_trade": -0.030756,
+          "description": "Follow current OTT trend each row",
+          "hit_rate": 0.4694,
+          "max_drawdown": -32.5986,
+          "pnl_per_contract": -22.144,
+          "trade_rate": 1.0,
+          "trades": 720
+        },
+        "selector_ott_filter": {
+          "avg_pnl_per_trade": null,
+          "description": "Current selector only when its side agrees with OTT trend",
+          "hit_rate": null,
+          "max_drawdown": 0.0,
+          "pnl_per_contract": 0.0,
+          "trade_rate": 0.0,
+          "trades": 0
+        }
+      }
+    }
+  },
+  "failures": [],
+  "fee_bps": 2.0,
+  "generated_at": "2026-06-16T23:08:14.921693+00:00",
+  "history_days": 2.0,
+  "horizon_minutes": 5,
+  "lookback_minutes": 60,
+  "market_probability_up": 0.5,
+  "max_candles": 3500,
+  "max_rows": 720,
+  "ml_mode": "adaptive",
+  "note": "Research comparison on 1-minute candles. Contract PnL assumes the configured market_probability_up and fee_bps; no spread or slippage.",
+  "ott": {
+    "length": 2,
+    "percent": 1.4
+  },
+  "ranked": [
+    {
+      "avg_pnl_per_trade": 0.074334,
+      "description": "BTC inverse edge >=4pp; ETH fade |5m momentum| >=0.15%; SOL hold",
+      "hit_rate": 0.5745,
+      "pnl_per_contract": 23.9356,
+      "strategy": "current_selector",
+      "trade_rate": 0.1491,
+      "trades": 322
+    },
+    {
+      "avg_pnl_per_trade": 0.107162,
+      "description": "Current selector only when its side agrees with OTT trend",
+      "hit_rate": 0.6073,
+      "pnl_per_contract": 17.4674,
+      "strategy": "selector_ott_filter",
+      "trade_rate": 0.0755,
+      "trades": 163
+    },
+    {
+      "avg_pnl_per_trade": 0.0998,
+      "description": "Fade the new OTT direction only on reversal rows",
+      "hit_rate": 0.6,
+      "pnl_per_contract": 0.499,
+      "strategy": "ott_fade_after_reversal",
+      "trade_rate": 0.0023,
+      "trades": 5
+    },
+    {
+      "avg_pnl_per_trade": -0.011774,
+      "description": "Follow current OTT trend each row",
+      "hit_rate": 0.4884,
+      "pnl_per_contract": -25.432,
+      "strategy": "ott_follow",
+      "trade_rate": 1.0,
+      "trades": 2160
+    }
+  ],
+  "step_minutes": 1,
+  "strategies": {
+    "current_selector": "BTC inverse edge >=4pp; ETH fade |5m momentum| >=0.15%; SOL hold",
+    "ott_fade_after_reversal": "Fade the new OTT direction only on reversal rows",
+    "ott_follow": "Follow current OTT trend each row",
+    "selector_ott_filter": "Current selector only when its side agrees with OTT trend"
+  },
+  "symbols_evaluated": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT"
+  ],
+  "symbols_requested": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT"
+  ],
+  "training_window": 120
+}

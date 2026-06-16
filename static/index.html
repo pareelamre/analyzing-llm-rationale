@@ -3865,6 +3865,7 @@ async function loadTrackRecord() {
 let edgeLoaded = false;
 let _edgePriceTimer = null;
 let _ebEquityTimer = null;
+let _crypto5mTimer = null;
 let _lastEquityCurves = null;
 let _pendingMarketCtx = null;
 
@@ -3953,6 +3954,83 @@ async function refreshEquityCurve() {
   } catch (_) {}
 }
 
+function _crypto5mSvg(curves, W = 520, H = 150) {
+  const visible = (curves || []).filter(c => c.points && c.points.length);
+  if (!visible.length) return '';
+  const allPts = visible.flatMap(c => c.points);
+  const n = Math.max(...visible.map(c => c.points.length));
+  const lo = Math.min(0, ...allPts);
+  const hi = Math.max(0, ...allPts);
+  const range = hi - lo || 1;
+  const padL = 46, padR = 10, padT = 10, padB = 30;
+  const cW = W - padL - padR, cH = H - padT - padB;
+  const toX = i => padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
+  const toY = v => padT + cH - ((v - lo) / range) * cH;
+  const zeroY = toY(0).toFixed(1);
+  const yVals = [...new Set([lo, 0, hi])].filter(v => v !== 0 || (lo < 0 && hi > 0));
+  const yLabels = yVals.map(v =>
+    `<text x="${padL - 5}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${v >= 0 ? '+' : ''}${v.toFixed(1)}</text>`
+  ).join('');
+  const paths = visible.map(c => {
+    const pts = c.points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+    return `<polyline points="${pts}" fill="none" stroke="${escAttr(c.color || '#60a5fa')}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }).join('');
+  const legend = visible.slice(0, 4).map((c, i) => {
+    const x = padL + (i % 2) * 210, y = H - 17 + Math.floor(i / 2) * 12;
+    return `<circle cx="${x + 5}" cy="${y - 3}" r="3.5" fill="${escAttr(c.color || '#60a5fa')}"/>` +
+      `<text x="${x + 14}" y="${y}" font-size="9.5" fill="${escAttr(c.color || '#60a5fa')}">${escHtml(c.label || c.key || '')}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:${H}px;display:block;margin-top:10px;overflow:visible" aria-label="5-minute crypto paper equity curves">
+    ${yLabels}<line x1="${padL}" y1="${zeroY}" x2="${padL + cW}" y2="${zeroY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>${paths}${legend}
+  </svg>`;
+}
+
+function _crypto5mSummaryCard(curve) {
+  const pnl = Number(curve.pnl_per_contract || 0);
+  const cls = pnl >= 0 ? 'color:#0a7' : 'color:#c33';
+  return `<div class="tr-stat">
+    <div class="v" style="${cls}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</div>
+    <div class="k label">${escHtml(curve.label || curve.key || '')}</div>
+    <div class="k" style="font-size:11px;color:var(--text-dim)">${curve.trades || 0} trades · ${curve.hit_rate == null ? '—' : pct(curve.hit_rate) + '%'} hit</div>
+  </div>`;
+}
+
+async function loadCrypto5mEquity() {
+  const host = document.getElementById('crypto5mEquity');
+  if (!host) return;
+  try {
+    const r = await fetch('/crypto-5m/equity?hours=72');
+    if (!r.ok) throw new Error('unavailable');
+    const d = await _readJson(r);
+    const curves = (d.curves || []).filter(c => c.trades > 0);
+    if (!curves.length) {
+      host.innerHTML = '<p class="text-sm text-gray-500">Collecting 5-minute crypto rows. Curves appear once candidate strategies have resolved trades.</p>';
+      return;
+    }
+    const cards = curves.slice(0, 4).map(_crypto5mSummaryCard).join('');
+    const chartCurves = curves.slice(0, 4).map(c => ({
+      key: c.key,
+      label: c.label,
+      color: c.color,
+      points: c.points || [],
+    }));
+    const gen = d.generated_at ? new Date(d.generated_at).toLocaleTimeString() : '';
+    const rec = d.recommendation || {};
+    const recPnl = Number(rec.pnl_per_contract || 0);
+    host.innerHTML = `<div class="tr-stat" style="margin-bottom:12px">
+        <div class="v" style="font-size:18px;color:${recPnl >= 0 ? '#0a7' : '#c33'}">${recPnl >= 0 ? '+' : ''}${recPnl.toFixed(2)}</div>
+        <div class="k label">Current paper policy</div>
+        <div class="k" style="font-size:12px;color:var(--text-dim)">${escHtml(rec.policy || 'Collecting strategy evidence.')}</div>
+      </div>
+      <p class="tr-method" style="margin-top:0">Live-collected 5-minute BTC/ETH/SOL paper rows, replayed against a small set of commodity-specific strategy candidates over the last ${Math.round(d.since_hours || 72)} hours. Paper only; no slippage.</p>
+      <div class="tr-stats">${cards}</div>
+      ${_crypto5mSvg(chartCurves)}
+      <p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(d.note || '')}${gen ? ' · updated ' + gen : ''}</p>`;
+  } catch (_) {
+    host.innerHTML = '<p class="text-sm text-gray-500">5-minute crypto strategy chart is not available yet.</p>';
+  }
+}
+
 async function openEdgeBoard({ updateHistory = true } = {}) {
   const ov = document.getElementById('edgeOverlay');
   if (ov.classList.contains('open')) return;
@@ -3966,8 +4044,10 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   }
   if (!edgeLoaded) { edgeLoaded = true; await loadEdgeBoard(); }
   refreshEdgePrices();
+  loadCrypto5mEquity();
   _edgePriceTimer = setInterval(refreshEdgePrices, 60000);
   _ebEquityTimer = setInterval(refreshEquityCurve, 2 * 60 * 1000);
+  _crypto5mTimer = setInterval(loadCrypto5mEquity, 2 * 60 * 1000);
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
 function closeEdgeBoard({ updateHistory = true } = {}) {
@@ -3975,6 +4055,8 @@ function closeEdgeBoard({ updateHistory = true } = {}) {
   _edgePriceTimer = null;
   clearInterval(_ebEquityTimer);
   _ebEquityTimer = null;
+  clearInterval(_crypto5mTimer);
+  _crypto5mTimer = null;
   const ov = document.getElementById('edgeOverlay');
   if (!ov.classList.contains('open')) return;
   if (updateHistory && (history.state?.view === 'edge-app' || history.state?.view === 'edge-landing')) {
@@ -4021,6 +4103,7 @@ async function loadEdgeBoard() {
     host.innerHTML = renderEdgeBoard(await _readJson(r));
     const eqDiv = document.getElementById('eb-equity-svg');
     if (eqDiv) _attachEquityHover(eqDiv);
+    loadCrypto5mEquity();
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#edgeBody .tr-stat',
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
@@ -4503,6 +4586,7 @@ function renderEdgeBoard(d) {
     ${stats}
     <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
     <h4 class="eb-h">Hypothetical paper PnL · following the model's calls <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${pnlHtml}
+    <h4 class="eb-h">5-minute crypto strategy lab · BTC / ETH / SOL</h4><div id="crypto5mEquity"><p class="text-sm text-gray-500">Loading 5-minute crypto strategy curves…</p></div>
     <h4 class="eb-h">Does an early call pay? · skill by how early the forecast was made</h4>${calibHtml}
     <h4 class="eb-h">Live forecasts · ranked by disagreement, linked to skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;

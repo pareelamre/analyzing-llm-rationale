@@ -7,6 +7,7 @@ COPY src/ src/
 COPY configs/ configs/
 COPY prompts/ prompts/
 COPY static/ static/
+COPY analysis/crypto_5m_equity_payload.json analysis/crypto_5m_equity_payload.json
 
 RUN pip install --no-cache-dir -e ".[serve,tracking,pipeline,trading]"
 
@@ -30,6 +31,7 @@ COPY src/ src/
 COPY configs/ configs/
 COPY prompts/ prompts/
 COPY static/ static/
+COPY analysis/crypto_5m_equity_payload.json analysis/crypto_5m_equity_payload.json
 
 # Install CPU-only torch first so pip doesn't pull CUDA wheels when resolving the package deps
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \

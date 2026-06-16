@@ -14,8 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from analyzing_llm_rationale import server as server_module  # noqa: E402
 from analyzing_llm_rationale.server import (  # noqa: E402
-    _ANALYTICS_DB,
     _cache_get,
     _cache_set,
     _issue_session,
@@ -34,6 +34,7 @@ class FakeProvider:
             "confidence": 0.7,
             "rationale": "Evidence supports a yes forecast.",
         }
+        self.stream_response = "Streaming answer."
 
     def chat_completion(self, messages, temperature, max_tokens):
         self.calls.append(messages)
@@ -41,8 +42,9 @@ class FakeProvider:
 
     def stream_chat_completion(self, messages, temperature, max_tokens):
         self.calls.append(messages)
-        yield "Streaming "
-        yield "answer."
+        mid = max(1, len(self.stream_response) // 2)
+        yield self.stream_response[:mid]
+        yield self.stream_response[mid:]
 
 
 class FakeEvidencePipeline:
@@ -68,6 +70,12 @@ class ServerTests(unittest.TestCase):
     def setUp(self):
         self.provider = FakeProvider()
         self.evidence_pipeline = FakeEvidencePipeline()
+        self.analytics_db = Path(tempfile.gettempdir()) / "foresea_test_analytics.duckdb"
+        server_module._ANALYTICS_DB = self.analytics_db
+        if self.analytics_db.exists():
+            self.analytics_db.unlink()
+        self._datastore_patch = mock.patch.object(server_module, "_get_datastore", return_value=None)
+        self._datastore_patch.start()
         _local_cache.clear()
         _rate_limiter._log.clear()  # isolate tests from cross-test rate-limit accumulation
         _state.clear()
@@ -90,10 +98,11 @@ class ServerTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def tearDown(self):
+        self._datastore_patch.stop()
         _state.clear()
         _local_cache.clear()
-        if _ANALYTICS_DB.exists():
-            _ANALYTICS_DB.unlink()
+        if self.analytics_db.exists():
+            self.analytics_db.unlink()
 
     def test_predict_fetches_and_returns_evidence(self):
         response = self.client.post(
@@ -143,6 +152,43 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Streaming ", body)
         self.assertIn("event: done", body)
         self.assertIn("Streaming answer.", body)
+
+    def test_agent_analyze_stream_returns_sse_report(self):
+        self.provider.stream_response = json.dumps(self.provider.response)
+        response = self.client.post(
+            "/agent/analyze/stream",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "evidence_top_k": 2,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"].split(";")[0], "text/event-stream")
+        body = response.text
+        self.assertIn("event: delta", body)
+        self.assertIn("Evidence supports a yes forecast.", body)
+        self.assertIn("event: done", body)
+        self.assertIn('"report"', body)
+        self.assertIn('"model_probability": 0.7', body)
+
+    def test_market_forecast_stream_returns_model_probability(self):
+        token = _issue_session("stream-user", "user@example.com", "Stream User", "")
+        self.provider.stream_response = json.dumps(self.provider.response)
+        response = self.client.post(
+            "/market/forecast/stream",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "market_probability": 0.4,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.text
+        self.assertIn("event: delta", body)
+        self.assertIn("event: done", body)
+        self.assertIn('"model_probability": 0.7', body)
 
     def test_predict_uses_supplied_articles_without_fetching(self):
         response = self.client.post(
@@ -742,6 +788,27 @@ class ServerTests(unittest.TestCase):
             r = self.client.get("/edge-board")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["edge_board"], [])
+
+    def test_crypto_5m_equity_endpoint_returns_candidate_curves(self):
+        import analyzing_llm_rationale.server as srv
+        payload = {
+            "generated_at": "2026-06-17T00:00:00+00:00",
+            "since_hours": 72,
+            "resolved_rows": 10,
+            "curves": [{
+                "key": "btc_inverse_edge_004",
+                "label": "BTC inverse edge >=4pp",
+                "points": [0.5, 1.0],
+                "trades": 2,
+                "hit_rate": 1.0,
+                "pnl_per_contract": 1.0,
+            }],
+        }
+        with mock.patch.object(srv.crypto_5m, "crypto_5m_candidate_equity", return_value=payload) as fn:
+            r = self.client.get("/crypto-5m/equity?hours=48")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["curves"][0]["key"], "btc_inverse_edge_004")
+        fn.assert_called_once_with(since_hours=48.0)
 
     def test_news_articles_tolerates_invalid_fields(self):
         from analyzing_llm_rationale.server import _news_articles

@@ -39,7 +39,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from analyzing_llm_rationale import agent_capabilities, pr_agent, rag, venue_mcp
+from analyzing_llm_rationale import agent_capabilities, crypto_5m, pr_agent, rag, venue_mcp
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
     build_user_prompt,
@@ -1809,6 +1809,16 @@ async def live_prices():
     payload = {"prices": prices, "quotes": quotes, "generated_at": datetime.now(timezone.utc).isoformat()}
     _cache_set(cache_key, payload, 30)
     return JSONResponse(payload, headers={"Cache-Control": "public, max-age=30"})
+
+
+@app.get("/crypto-5m/equity", tags=["System"], summary="5-minute crypto strategy paper equity curves")
+async def crypto_5m_equity(hours: float = Query(72.0, ge=1.0, le=168.0)):
+    """Paper equity curves for live-collected BTC/ETH/SOL 5-minute strategy candidates."""
+    result = await asyncio.get_running_loop().run_in_executor(
+        None,
+        lambda: crypto_5m.crypto_5m_candidate_equity(since_hours=hours),
+    )
+    return JSONResponse(result, headers={"Cache-Control": "public, max-age=60"})
 
 
 def _require_track_token(request: Optional[Request]) -> None:
