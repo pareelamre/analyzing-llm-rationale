@@ -854,6 +854,10 @@
     .eb-page-btn:hover:not(:disabled) { background: var(--paper); color: var(--text); }
     .eb-page-btn:disabled { opacity: .38; cursor: default; }
     .eb-page-info { font-size: 12px; color: var(--text-dim); min-width: 60px; text-align: center; }
+    .eb-q-btn { background: none; border: none; color: inherit; cursor: pointer; text-align: left; padding: 0; font: inherit; line-height: inherit; }
+    .eb-q-btn:hover { text-decoration: underline; }
+    .eb-ext-link { color: #888; font-size: 10px; margin-left: 5px; text-decoration: none; opacity: .7; }
+    .eb-ext-link:hover { opacity: 1; }
     .tr-log { display: flex; flex-direction: column; }
     .tr-log-row {
       display: grid; grid-template-columns: 18px 1fr auto; gap: 13px;
@@ -3179,11 +3183,28 @@ async function sendQuestion(options = {}) {
     const conversationSteer = getConversationSteer();
     const body = { question, variant, history, chat_mode: isChatMode() };
     if (conversationSteer) body.conversation_steer = conversationSteer;
-    const marketProbability = extractMarketProbability(question);
-    if (marketProbability != null) {
-      body.market_probability = marketProbability;
-      const platform = detectMarketPlatform(question);
-      if (platform) body.market_platform = platform;
+    const mCtx = _pendingMarketCtx;
+    _pendingMarketCtx = null;
+    if (mCtx) {
+      if (mCtx.market_probability != null) body.market_probability = mCtx.market_probability;
+      if (mCtx.market_url)                 body.market_url = mCtx.market_url;
+      if (mCtx.market_platform)            body.market_platform = mCtx.market_platform;
+      if (mCtx.market_bid != null)         body.market_bid = mCtx.market_bid;
+      if (mCtx.market_ask != null)         body.market_ask = mCtx.market_ask;
+      if (mCtx.market_volume != null)      body.market_volume = mCtx.market_volume;
+      if (mCtx.market_liquidity != null)   body.market_liquidity = mCtx.market_liquidity;
+      if (mCtx.resolve_time)               body.resolve_time = mCtx.resolve_time;
+      if (mCtx.description)                body.description = mCtx.description;
+      if (mCtx.resolution_criteria)        body.resolution_criteria = mCtx.resolution_criteria;
+      if (mCtx.categories?.length)         body.categories = mCtx.categories;
+    }
+    if (mCtx?.market_probability == null) {
+      const marketProbability = extractMarketProbability(question);
+      if (marketProbability != null) {
+        body.market_probability = marketProbability;
+        const platform = detectMarketPlatform(question);
+        if (platform) body.market_platform = platform;
+      }
     }
     if (_attachments.length) body.news_articles = [..._attachments];
     if (activeModel) {
@@ -3211,7 +3232,19 @@ async function sendQuestion(options = {}) {
         builtin_skills: true,    // base-rate / scenario / red-team / key-drivers toolkit
         ground_in_record: true,  // condition on the model's own live calibration
       };
-      if (marketProbability != null) agentBody.market_probability = marketProbability;
+      if (mCtx) {
+        if (mCtx.market_probability != null) agentBody.market_probability = mCtx.market_probability;
+        if (mCtx.market_url)                 agentBody.market_url = mCtx.market_url;
+        if (mCtx.market_platform)            agentBody.market_platform = mCtx.market_platform;
+        if (mCtx.market_bid != null)         agentBody.market_bid = mCtx.market_bid;
+        if (mCtx.market_ask != null)         agentBody.market_ask = mCtx.market_ask;
+        if (mCtx.market_volume != null)      agentBody.market_volume = mCtx.market_volume;
+        if (mCtx.market_liquidity != null)   agentBody.market_liquidity = mCtx.market_liquidity;
+        if (mCtx.resolve_time)               agentBody.resolve_time = mCtx.resolve_time;
+        if (mCtx.description)                agentBody.description = mCtx.description;
+        if (mCtx.resolution_criteria)        agentBody.resolution_criteria = mCtx.resolution_criteria;
+        if (mCtx.categories?.length)         agentBody.categories = mCtx.categories;
+      } else if (marketProbability != null) agentBody.market_probability = marketProbability;
       if (activeModel) {
         agentBody.openrouter_model = activeModel.model;
         if (activeModel.provider === 'ollama') {
@@ -3737,7 +3770,8 @@ function _landingReset() {
   input.focus();
 }
 
-function startForecast(question) {
+function startForecast(question, ctx = null) {
+  _pendingMarketCtx = ctx || null;
   launchApp();
   if (!activeId || (getConv(activeId)?.messages || []).length > 0) {
     newConversation();
@@ -3832,6 +3866,7 @@ let edgeLoaded = false;
 let _edgePriceTimer = null;
 let _ebEquityTimer = null;
 let _lastEquityCurves = null;
+let _pendingMarketCtx = null;
 
 async function refreshEdgePrices() {
   try {
@@ -3945,6 +3980,21 @@ function closeEdgeBoard({ updateHistory = true } = {}) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
 }
+function _ebAskQuestion(ident) {
+  const entry = (_ebBoardData || []).find(e => (e.ident || e.market_url || '') === ident);
+  if (!entry) return;
+  const ctx = {};
+  if (entry.market_probability != null) ctx.market_probability = entry.market_probability;
+  if (entry.market_url)   ctx.market_url = entry.market_url;
+  if (entry.platform)     ctx.market_platform = entry.platform;
+  if (entry.resolve_time) ctx.resolve_time = entry.resolve_time;
+  if (entry.description)  ctx.description = entry.description;
+  if (entry.resolution_criteria) ctx.resolution_criteria = entry.resolution_criteria;
+  if (entry.categories?.length)  ctx.categories = entry.categories;
+  closeEdgeBoard({ updateHistory: false });
+  startForecast(entry.question || '', ctx);
+}
+
 async function loadEdgeBoard() {
   const host = document.getElementById('edgeBody');
   host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading edge board…</p></div>';
@@ -4250,7 +4300,10 @@ function _renderBoardPage(board, page) {
     const lead = (e.lead_days != null)
       ? (e.lead_days >= 1 ? Math.round(e.lead_days) + 'd' : '<1d') + ' ahead'
       : (e.lead_bucket || '—');
-    const url = e.market_url ? `href="${escHtml(e.market_url)}" target="_blank" rel="noopener"` : '';
+    const extLink = e.market_url
+      ? `<a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" class="eb-ext-link" title="Open on ${escHtml(e.platform||'market')}">↗</a>`
+      : '';
+    const qIdent = escAttr(e.ident || e.market_url || '');
     const trade = e.side
       ? `Buy ${e.side} @ ${Math.round((e.entry_price || 0) * 100)}¢` +
         (e.payout_odds ? ` <span style="color:#999">≈${e.payout_odds}:1</span>` : '')
@@ -4262,7 +4315,7 @@ function _renderBoardPage(board, page) {
       : '';
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
-      `<td style="max-width:260px"><a ${url} style="color:inherit">${escHtml((e.question || '').slice(0, 90))}</a></td>` +
+      `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}</td>` +
       `<td>${escHtml(e.platform || '')}</td><td class="eb-live-model">${pct(e.model_probability)}%</td>` +
       `<td class="eb-live-market">${pct(e.market_probability)}%</td>` +
       `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td>` +
@@ -5493,7 +5546,11 @@ function _wlAnalyze(ref) {
   if (typeof closeWatchlistPage === 'function') closeWatchlistPage({ updateHistory: false });
   closeSidebar();
   if (currentView !== 'app') launchApp();
-  startForecast(f.question);
+  const ctx = {};
+  if (f.market_probability != null) ctx.market_probability = f.market_probability;
+  if (f.market_url)  ctx.market_url = f.market_url;
+  if (f.platform)    ctx.market_platform = f.platform;
+  startForecast(f.question, Object.keys(ctx).length ? ctx : null);
 }
 function _wlRemove(ref) {
   toggleFavorite({ key: ref.key }, null);
