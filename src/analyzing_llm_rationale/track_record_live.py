@@ -825,15 +825,35 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
 
 
 def build_models_comparison(resolved: List[Dict[str, Any]], *,
-                            default_model: str) -> List[Dict[str, Any]]:
+                            default_model: str,
+                            crowd_baseline: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Per-model leaderboard over resolved snapshots: accuracy, skill-vs-market,
     and hypothetical paper-trading ROI (flat + validated-only) — so gpt-oss-120b,
-    Gemma, and Kimi are graded on the same markets. Ranked best-paper-edge first."""
+    Gemma, and Kimi are graded on the same markets. Ranked best-paper-edge first.
+
+    crowd_baseline: pre-computed result of crowd_baseline_equity(resolved_skill).
+    When supplied, the crowd-follow row uses this data instead of its own snapshots
+    so its numbers match the equity curve's crowd baseline line exactly."""
     by_model: Dict[str, List[Dict[str, Any]]] = {}
     for r in resolved:
         by_model.setdefault(r.get("model") or default_model, []).append(r)
     out: List[Dict[str, Any]] = []
     for mlabel, rows in by_model.items():
+        if mlabel == "crowd-follow" and crowd_baseline is not None:
+            cb = crowd_baseline
+            out.append({
+                "model": mlabel,
+                "n_snapshots_resolved": cb.get("n_bets"),
+                "n_markets_resolved": cb.get("n_bets"),
+                "accuracy": cb.get("win_rate"),
+                "model_brier": None,
+                "skill_vs_market": 0.0,
+                "paper_roi": cb.get("roi"),
+                "paper_roi_validated": None,
+                "paper_pnl": {"flat": cb},
+                "by_horizon": [],
+            })
+            continue
         ov = _bucket_stats(rows) or {}
         pp = paper_pnl(rows, edge_calibration(rows))
         model_by_horizon = []
@@ -1311,9 +1331,9 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "by_liquidity": by_liquidity,
         "lead_lag": lead_lag(by_market_skill),
         "paper_pnl": {**(paper_pnl(resolved_skill, by_edge_skill) or {}),
-                      "crowd_baseline": crowd_baseline_equity(resolved_skill)},
+                      "crowd_baseline": (_crowd_base := crowd_baseline_equity(resolved_skill))},
         "edge_board": edge_board_result,
-        "models_comparison": build_models_comparison(resolved, default_model=model),
+        "models_comparison": build_models_comparison(resolved, default_model=model, crowd_baseline=_crowd_base),
         "trajectories": trajectories,
         "calibration_model": _calibration_report(resolved_skill),
         "knowledge_graph": kg_summary,
