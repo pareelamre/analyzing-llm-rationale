@@ -29,7 +29,7 @@ _ONE_MINUTE_MS = 60_000
 DEFAULT_BENCHMARK_LOG_PATH = Path("data/crypto_5m_benchmark_runs.jsonl")
 DEFAULT_SIGNAL_LOG_PATH = Path("data/crypto_5m_signal_log.jsonl")
 DEFAULT_SIGNAL_DB_PATH = Path("data/crypto_5m_signals.sqlite")
-DEFAULT_EQUITY_FALLBACK_PATH = Path("analysis/crypto_5m_equity_payload.json")
+DEFAULT_EQUITY_FALLBACK_PATH = Path("static/crypto_5m_equity_payload.json")
 _ALLOWED_QUOTES = ("USDT", "USDC", "FDUSD", "USD")
 _FEATURE_NAMES = (
     "momentum_3m_z",
