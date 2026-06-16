@@ -121,6 +121,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("--reprocess-nulls", action="store_true")
     run_parser.add_argument("--drop-article-text", action="store_true")
+    run_parser.add_argument(
+        "--forecast-lead-days",
+        type=int,
+        default=None,
+        help="Forecast-time cutoff: exclude evidence published after (reference - this many days). "
+        "Requires --cutoff-reference != none. Output is tagged results/<model>/<temp>/lead_<NN>d/.",
+    )
+    run_parser.add_argument(
+        "--cutoff-reference",
+        choices=["event_end", "resolve_time", "none"],
+        default="none",
+        help="Reference time for the forecast cutoff. 'event_end' (recommended) = earlier of "
+        "named-year close and resolve_time; 'resolve_time' = formal resolution; 'none' = no cutoff "
+        "(oracle-evidence upper bound, current behaviour).",
+    )
     run_parser.add_argument("--model-label", default=None)
     run_parser.add_argument("--local-model-name", default=None)
     run_parser.add_argument("--router-model-name", default=None)
@@ -401,7 +416,13 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
 
     user_prompt_path = args.user_prompt_path or (root / variant.prompt_path)
     temperature_tag = args.temperature_tag or temperature_to_tag(args.temperature)
+    cutoff_reference = getattr(args, "cutoff_reference", "none")
+    forecast_lead_days = getattr(args, "forecast_lead_days", None)
+    if cutoff_reference != "none" and forecast_lead_days is None:
+        raise SystemExit("--cutoff-reference requires --forecast-lead-days")
     output_dir = root / "results" / args.model_label / temperature_tag
+    if cutoff_reference != "none":
+        output_dir = output_dir / f"lead_{int(forecast_lead_days)}d"
     output_path = args.output_path or (output_dir / f"results_{variant.name}.json")
     error_log_path = args.error_log_path or (output_dir / f"errors_{variant.name}.jsonl")
     run_metadata_path = getattr(args, "run_metadata_path", None) or (
@@ -442,6 +463,8 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
         shard_count=shard_count,
         shard_index=shard_index,
         progress_every=progress_every,
+        forecast_lead_days=forecast_lead_days,
+        cutoff_reference=cutoff_reference,
     )
 
 

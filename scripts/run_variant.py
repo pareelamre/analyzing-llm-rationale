@@ -50,6 +50,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-fields", default=os.environ.get("OUTPUT_FIELDS"))
     parser.add_argument("--reprocess-nulls", action="store_true", default=os.environ.get("REPROCESS_NULLS", "0") == "1")
     parser.add_argument("--drop-article-text", action="store_true", default=os.environ.get("DROP_ARTICLE_TEXT", "0") == "1")
+    parser.add_argument(
+        "--cutoff-reference",
+        default=os.environ.get("CUTOFF_REFERENCE", "none"),
+        choices=["event_end", "resolve_time", "none"],
+    )
+    parser.add_argument(
+        "--forecast-lead-days",
+        type=int,
+        default=(int(os.environ["FORECAST_LEAD_DAYS"]) if os.environ.get("FORECAST_LEAD_DAYS") else None),
+    )
     return parser
 
 
@@ -87,6 +97,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     append_optional(cli_args, "--variants-config", args.variants_config)
     append_optional(cli_args, "--models-config", args.models_config)
     append_optional(cli_args, "--output-fields", args.output_fields)
+    if args.cutoff_reference and args.cutoff_reference != "none":
+        append_optional(cli_args, "--cutoff-reference", args.cutoff_reference)
+        append_optional(cli_args, "--forecast-lead-days", args.forecast_lead_days)
 
     if args.reprocess_nulls:
         cli_args.append("--reprocess-nulls")

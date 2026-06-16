@@ -25,7 +25,12 @@ from analyzing_llm_rationale.config import (  # noqa: E402
 from analyzing_llm_rationale.pipeline import (  # noqa: E402
     RunConfig,
     build_user_prompt,
+    cutoff_provenance,
+    event_window_end,
+    extract_summary_items,
+    forecast_cutoff,
     load_json,
+    parse_iso_datetime,
     parse_model_response,
     process_batch,
     recover_missing_fields,
@@ -97,6 +102,66 @@ class PipelineTests(unittest.TestCase):
         self.assertIn('"summary_llm": "LLM summary"', prompt)
         self.assertNotIn("Full article text", prompt)
         self.assertNotIn("[question]", prompt)
+
+    def cutoff_record(self):
+        return {
+            "id": 7,
+            "question": "Will the world population grow every year from 2016 to 2025?",
+            "resolve_time": "2026-01-01T00:00:00Z",
+            "news_articles": [
+                {"title": "early", "publish_date": "2025-03-01", "summary": "early"},
+                {"title": "late", "publish_date": "2025-12-15", "summary": "late"},
+                {"title": "post", "publish_date": "2025-12-30", "summary": "post"},
+                {"title": "undated", "summary": "no date"},
+            ],
+        }
+
+    def test_event_window_end_uses_named_year_when_earlier_than_resolve(self):
+        # Question names 2025; resolve_time is 2026-01-01. Event end = earlier = Dec-31-2025.
+        end = event_window_end(self.cutoff_record())
+        self.assertEqual(end.year, 2025)
+        self.assertEqual((end.month, end.day), (12, 31))
+
+    def test_event_window_end_falls_back_to_resolve_without_year(self):
+        rec = {"question": "Will it rain tomorrow?", "resolve_time": "2025-06-01T00:00:00Z"}
+        self.assertEqual(event_window_end(rec), parse_iso_datetime("2025-06-01T00:00:00Z"))
+
+    def test_forecast_cutoff_subtracts_lead_days(self):
+        tau = forecast_cutoff(self.cutoff_record(), lead_days=30, reference="event_end")
+        # Dec-31-2025 minus 30 days = Dec-01-2025.
+        self.assertEqual((tau.year, tau.month, tau.day), (2025, 12, 1))
+        self.assertIsNone(forecast_cutoff(self.cutoff_record(), 30, "none"))
+
+    def test_extract_summary_items_filters_by_cutoff(self):
+        rec = self.cutoff_record()
+        tau = parse_iso_datetime("2025-12-20T00:00:00Z")
+        # No cutoff: all four articles (including undated) are kept.
+        self.assertEqual(len(extract_summary_items(rec, "summary")), 4)
+        # Cutoff: keep only dated articles published on/before tau (early + late).
+        kept = extract_summary_items(rec, "summary", cutoff_ts=tau)
+        titles = {item.get("title") for item in kept}
+        self.assertEqual(titles, {"early", "late"})
+
+    def test_build_user_prompt_cutoff_strips_horizon_and_filters(self):
+        rec = self.cutoff_record()
+        rec["days_open"] = 100
+        tau = parse_iso_datetime("2025-12-20T00:00:00Z")
+        prompt = build_user_prompt(
+            rec, user_prompt_template="[question]\nReturn JSON.", article_detail="summary", cutoff_ts=tau
+        )
+        self.assertIn("Current Time: 2025-12-20T00:00:00Z", prompt)
+        self.assertNotIn("Resolve Time", prompt)
+        self.assertNotIn("Days Open", prompt)
+        self.assertIn('"title": "late"', prompt)
+        self.assertNotIn('"title": "post"', prompt)
+
+    def test_cutoff_provenance_counts(self):
+        rec = self.cutoff_record()
+        tau = parse_iso_datetime("2025-12-20T00:00:00Z")
+        prov = cutoff_provenance(rec, tau)
+        self.assertEqual(prov["n_articles_total"], 4)
+        self.assertEqual(prov["n_articles_kept"], 2)
+        self.assertEqual(cutoff_provenance(rec, None)["n_articles_kept"], 4)
 
     def test_build_user_prompt_includes_prediction_market_context(self):
         record = self.sample_record()

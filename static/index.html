@@ -3987,13 +3987,22 @@ function _crypto5mSvg(curves, W = 520, H = 150) {
   </svg>`;
 }
 
+const _CRYPTO5M_DESCRIPTIONS = {
+  selector_btc_inverse_eth_fade: 'Current policy — fades BTC model edge ≥4pp and ETH 5-min momentum ≥0.15%; each asset traded only when its own rule fires.',
+  selector_ott_filter:           'OTT-gated policy — same as above but only trades when the selected side agrees with the OTT trend, cutting counter-trend setups.',
+  btc_inverse_edge_004:          'BTC only — bets opposite the model when its edge exceeds 4pp, exploiting systematic overconfidence in BTC direction calls.',
+  eth_fade_mom_0015:             'ETH only — fades 5-minute momentum moves above 0.15%, betting on mean-reversion after small intraday spikes.',
+};
+
 function _crypto5mSummaryCard(curve) {
   const pnl = Number(curve.pnl_per_contract || 0);
   const cls = pnl >= 0 ? 'color:#0a7' : 'color:#c33';
+  const desc = _CRYPTO5M_DESCRIPTIONS[curve.key] || '';
   return `<div class="tr-stat">
     <div class="v" style="${cls}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</div>
     <div class="k label">${escHtml(curve.label || curve.key || '')}</div>
     <div class="k" style="font-size:11px;color:var(--text-dim)">${curve.trades || 0} trades · ${curve.hit_rate == null ? '—' : pct(curve.hit_rate) + '%'} hit</div>
+    ${desc ? `<div class="k" style="font-size:10.5px;color:var(--text-dim);margin-top:3px;line-height:1.4;max-width:180px">${escHtml(desc)}</div>` : ''}
   </div>`;
 }
 

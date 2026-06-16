@@ -163,6 +163,11 @@ build_run_args() {
   if [[ "${DROP_ARTICLE_TEXT:-0}" == "1" ]]; then
     args_ref+=(--drop-article-text)
   fi
+
+  # Ex-ante forecast-time cutoff sweep (results land in results/<model>/<temp>/lead_<NN>d/).
+  if [[ -n "${CUTOFF_REFERENCE:-}" && "${CUTOFF_REFERENCE}" != "none" ]]; then
+    args_ref+=(--cutoff-reference "${CUTOFF_REFERENCE}" --forecast-lead-days "${FORECAST_LEAD_DAYS}")
+  fi
 }
 
 build_verify_args() {

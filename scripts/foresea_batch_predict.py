@@ -54,13 +54,19 @@ def predict(
         "news_articles": news_articles,
         "chat_mode": False,
     }
-    backoff = 2.0
+    backoff = 3.0
     for attempt in range(MAX_RETRIES):
         try:
             r = requests.post(url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT)
             if r.status_code == 429:
-                retry_after = int(r.headers.get("Retry-After", backoff))
+                retry_after = float(r.headers.get("Retry-After", backoff))
                 time.sleep(retry_after + 1)
+                backoff = min(backoff * 2, 60)
+                continue
+            if r.status_code in (500, 502, 503, 504):
+                if attempt == MAX_RETRIES - 1:
+                    return {"_error": f"HTTP {r.status_code}"}
+                time.sleep(backoff)
                 backoff = min(backoff * 2, 60)
                 continue
             r.raise_for_status()
@@ -70,8 +76,10 @@ def predict(
                 return {"_error": "timeout"}
             time.sleep(backoff)
             backoff = min(backoff * 2, 60)
+        except requests.exceptions.HTTPError as e:
+            return {"_error": str(e)[:120]}
         except Exception as e:
-            return {"_error": str(e)}
+            return {"_error": str(e)[:120]}
     return {"_error": "max retries exceeded"}
 
 
@@ -87,8 +95,6 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--checkpoint-every", type=int, default=CHECKPOINT_EVERY)
     ap.add_argument("--source", default=None, help="kalshi|polymarket|manifold|metaculus")
-    ap.add_argument("--rate-limit", type=float, default=RATE_LIMIT_PER_MIN,
-                    help="Max requests per minute (default %(default)s)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -122,11 +128,8 @@ def main() -> None:
     if args.dry_run:
         avg_s = 20  # typical /predict latency
         est = len(needs) * avg_s / args.workers / 60
-        print(f"Estimated runtime: ~{est:.0f} min @ {args.workers} workers / {args.rate_limit}/min")
+        print(f"Estimated runtime: ~{est:.0f} min @ {args.workers} workers")
         return
-
-    global _bucket
-    _bucket = _TokenBucket(args.rate_limit)
 
     _lock = threading.Lock()
     results: Dict[str, Dict] = dict(existing)

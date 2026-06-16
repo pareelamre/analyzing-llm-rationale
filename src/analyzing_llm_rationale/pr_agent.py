@@ -83,7 +83,6 @@ def build_pr_agent_packet(*, audience: str | None = None, canonical: str = "http
             "llms_txt": f"{base}/llms.txt",
             "track_record": f"{base}/track-record",
             "edge_board": f"{base}/edge-board",
-            "radar": f"{base}/radar",
         },
         "mcp": {
             "transport": "streamable-http",
@@ -94,7 +93,6 @@ def build_pr_agent_packet(*, audience: str | None = None, canonical: str = "http
                 "foresea_analyze_market",
                 "foresea_scan_markets",
                 "foresea_edge_board",
-                "foresea_radar",
                 "foresea_track_record",
                 "foresea_pr_agent",
             ],

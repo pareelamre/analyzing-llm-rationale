@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Agent integration guide for Foresea: MCP, OpenAPI, streaming forecasts, radar, track record, and market scans." />
+  <meta name="description" content="Agent integration guide for Foresea: MCP, OpenAPI, streaming forecasts, track record, and market scans." />
   <link rel="canonical" href="https://foresea.ink/agents" />
   <link rel="alternate" type="text/plain" href="https://foresea.ink/llms.txt" title="Foresea llms.txt" />
   <link rel="alternate" type="application/json" href="https://foresea.ink/.well-known/agent.json" title="Foresea agent manifest" />
@@ -100,7 +100,7 @@
   <main>
     <h1>Agent integration surface for prediction-market intelligence</h1>
     <p class="lead">
-      Foresea exposes forecasting, market-edge analysis, radar, and track-record data through
+      Foresea exposes forecasting, market-edge analysis, and track-record data through
       public agent-readable endpoints. Use MCP for tool-calling agents, OpenAPI for HTTP agents,
       and server-sent events when an agent wants live conversational output.
     </p>
@@ -114,7 +114,7 @@
     <h2>Recommended Agent Workflow</h2>
     <ol>
       <li>Read <code>/llms.txt</code> or <code>/.well-known/agent.json</code> for tool discovery.</li>
-      <li>Use <code>/radar</code> or <code>/agent/scan</code> to find candidate markets.</li>
+      <li>Use <code>/agent/scan</code> to find candidate markets.</li>
       <li>Use <code>/predict</code> for structured probabilities or <code>/predict/stream</code> for live prose.</li>
       <li>Compare against <code>/track-record</code> before trusting the model on a new domain.</li>
       <li>Use evidence links returned by the API when presenting a forecast to a user.</li>
@@ -134,7 +134,7 @@
 }</code></pre>
     <p class="small">
       Primary tools include <code>foresea_forecast</code>, <code>foresea_analyze_market</code>,
-      <code>foresea_scan_markets</code>, <code>foresea_radar</code>, and <code>foresea_track_record</code>.
+      <code>foresea_scan_markets</code>, <code>foresea_edge_board</code>, and <code>foresea_track_record</code>.
     </p>
 
     <h3 style="margin-top:1.4em">Recommended system prompt</h3>
@@ -174,7 +174,6 @@ a calibrated track record.</code></pre>
     <div class="endpoint">
       <h3>Scan or monitor markets</h3>
       <ul>
-        <li><code>GET /radar</code> - daily unusual-market radar.</li>
         <li><code>GET /agent/scan?platform=all&amp;query=crypto</code> - live market scan.</li>
         <li><code>GET /track-record</code> - public accuracy and calibration record.</li>
       </ul>
