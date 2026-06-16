@@ -333,6 +333,56 @@ def build_user_prompt(
                 if prob is not None:
                     parts.append(f"  {ts}  →  {round(float(prob) * 100, 1)}%")
 
+        # Compute trajectory and market signal strength from available signals.
+        # Newest-first history → history[0] is current, history[-1] is oldest.
+        _hist_probs = [
+            float(pt["probability"]) for pt in market_price_history[:8]
+            if pt.get("probability") is not None
+        ]
+        _hist_move = (_hist_probs[0] - _hist_probs[-1]) if len(_hist_probs) >= 2 else None
+        _move_24h = market_price_change_24h  # signed, probability units
+        # Dominant move: use 24h change if available, else history window.
+        _dominant_move = _move_24h if _move_24h is not None else _hist_move
+        _high_volume = market_volume is not None and market_volume > 5_000
+        _liquid = (market_bid is not None and market_ask is not None
+                   and (market_ask - market_bid) < 0.06)
+        _fast_move = _dominant_move is not None and abs(_dominant_move) >= 0.05
+
+        if _hist_move is not None and abs(_hist_move) >= 0.03:
+            direction = "rising" if _hist_move > 0 else "falling"
+            parts.append(
+                f"Price Trajectory: {direction} "
+                f"({_hist_probs[-1] * 100:.0f}% → {_hist_probs[0] * 100:.0f}% "
+                f"over last {len(_hist_probs)} ticks)"
+            )
+
+        # Market signal note: tells the model how much to weight market vs evidence.
+        if _fast_move or (_high_volume and _liquid):
+            if _fast_move and _high_volume and _liquid:
+                signal_note = (
+                    "Market Signal: HIGH — large rapid move with strong volume and tight "
+                    "spread. The crowd is actively repricing based on new information. "
+                    "Weight the current market probability heavily; evidence articles may "
+                    "lag behind."
+                )
+            elif _fast_move:
+                signal_note = (
+                    "Market Signal: MOVING — significant price shift detected. "
+                    "The market may be incorporating breaking information not yet in "
+                    "evidence. Consider anchoring closer to the current market price."
+                )
+            else:
+                signal_note = (
+                    "Market Signal: LIQUID — high volume and tight spread indicate "
+                    "a well-informed crowd. Market price is a strong prior."
+                )
+            parts.append(signal_note)
+        elif market_liquidity is not None and market_liquidity < 500:
+            parts.append(
+                "Market Signal: THIN — low liquidity; crowd price may be noisy. "
+                "Weight evidence more heavily than the market probability."
+            )
+
     if article_detail == "summary":
         parts.append("Evidence (newest first):")
     else:
