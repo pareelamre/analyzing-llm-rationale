@@ -1086,6 +1086,48 @@
       line-height: 1.55;
       max-width: min(70%, 680px);
     }
+    .prompt-wrap {
+      align-items: flex-end;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: min(70%, 680px);
+    }
+    .prompt-wrap .msg-user {
+      max-width: 100%;
+    }
+    .prompt-actions {
+      align-items: center;
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity .15s ease;
+    }
+    .prompt-wrap:hover .prompt-actions,
+    .prompt-wrap:focus-within .prompt-actions {
+      opacity: 1;
+    }
+    @media (hover: none) {
+      .prompt-actions { opacity: 1; }
+    }
+    .prompt-action {
+      align-items: center;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      color: #666;
+      display: inline-flex;
+      font-size: 13px;
+      height: 26px;
+      justify-content: center;
+      line-height: 1;
+      width: 26px;
+    }
+    .prompt-action:hover {
+      background: #f4f4f4;
+      border-color: #e5e5e5;
+      color: #111;
+    }
     .msg-ai {
       background: transparent;
       border: 0;
@@ -1704,6 +1746,19 @@
         <option value="variant8_temporal_anchors">Temporal Anchors</option>
       </select>
       <p id="variantDesc" class="text-xs text-gray-500 mt-2 px-1"></p>
+      <div class="mt-3">
+        <p class="label px-1 mb-2">Conversation steering</p>
+        <textarea
+          id="conversationSteerInput"
+          class="variant-select text-xs"
+          rows="3"
+          maxlength="1000"
+          placeholder="e.g. Be terse, challenge the market consensus, prioritize base rates"
+          style="resize:vertical;min-height:58px"
+          oninput="updateConversationSteer(this.value)"
+        ></textarea>
+        <p id="conversationSteerStatus" class="text-xs text-gray-500 mt-2 px-1"></p>
+      </div>
     </div>
   </details>
 
@@ -1958,7 +2013,7 @@
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
           </svg>
         </button>
-        <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="sendQuestion()" title="Send" aria-label="Send">
+        <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="handleSendButton()" title="Send" aria-label="Send">
           ↑
         </button>
       </div>
@@ -2171,6 +2226,7 @@ let activeId = null;
 let currentView = 'landing';
 let lastFocusedBeforeDialog = null;
 let isApplyingHistory = false;
+let activeRequest = null;
 
 // ── Persistence ──────────────────────────────────────────────────────────────
 function loadStore() {
@@ -2333,7 +2389,7 @@ function closeSidebar() {
 function newConversation() {
   closeSidebar();
   const id = 'conv_' + Date.now();
-  upsertConv(id, { id, title: 'New market brief', createdAt: Date.now(), updatedAt: Date.now(), messages: [] });
+  upsertConv(id, { id, title: 'New market brief', createdAt: Date.now(), updatedAt: Date.now(), conversationSteer: '', messages: [] });
   activateConv(id);
 }
 
@@ -2343,6 +2399,29 @@ function activateConv(id) {
   renderSidebar();
   renderMessages();
   document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New market brief';
+  renderConversationSteer();
+}
+
+function getConversationSteer() {
+  return (getConv(activeId)?.conversationSteer || '').trim();
+}
+
+function renderConversationSteer() {
+  const input = document.getElementById('conversationSteerInput');
+  const status = document.getElementById('conversationSteerStatus');
+  const steer = getConv(activeId)?.conversationSteer || '';
+  if (input && input.value !== steer) input.value = steer;
+  if (status) status.textContent = steer.trim() ? 'Applied to future replies in this brief.' : '';
+}
+
+function updateConversationSteer(value) {
+  const conv = getConv(activeId);
+  if (!conv) return;
+  conv.conversationSteer = String(value || '').slice(0, 1000);
+  conv.updatedAt = Date.now();
+  saveStore();
+  queueConversationSync(activeId);
+  renderConversationSteer();
 }
 
 function deleteConv(id, e) {
@@ -2374,6 +2453,7 @@ function appendMessage(convId, msg) {
   saveStore();
   queueConversationSync(convId);
   renderSidebar();
+  return msg;
 }
 
 // ── Sidebar rendering ────────────────────────────────────────────────────────
@@ -2453,7 +2533,7 @@ function renderMessages() {
   let i = 0;
   for (const msg of conv.messages) {
     const node = msg.role === 'user'
-      ? makeUserBubble(msg.content)
+      ? makeUserBubble(msg.content, msg)
       : makeAIBubble(msg.data, msg.variant);
     el.appendChild(node);
     animateIn(node, Math.min(i, 8) * 0.04);
@@ -2463,11 +2543,79 @@ function renderMessages() {
   scrollBottom();
 }
 
-function makeUserBubble(text) {
+function makeUserBubble(text, msg = {}) {
   const div = document.createElement('div');
   div.className = 'flex justify-end';
-  div.innerHTML = `<div class="msg-user text-sm leading-relaxed">${escHtml(text)}</div>`;
+  const id = msg.id || '';
+  const isActive = activeRequest?.userMessageId === id;
+  div.innerHTML = `
+    <div class="prompt-wrap" data-message-id="${escAttr(id)}">
+      <div class="msg-user text-sm leading-relaxed">${escHtml(text)}</div>
+      <div class="prompt-actions" aria-label="Prompt actions">
+        <button class="prompt-action" type="button" onclick="editPrompt('${escAttr(id)}')" title="Edit prompt" aria-label="Edit prompt">✎</button>
+        <button class="prompt-action" type="button" onclick="copyPrompt('${escAttr(id)}')" title="Copy prompt" aria-label="Copy prompt">⧉</button>
+        ${isActive ? '<button class="prompt-action" type="button" onclick="stopGeneration()" title="Stop response" aria-label="Stop response">■</button>' : ''}
+        <button class="prompt-action" type="button" onclick="resendPrompt('${escAttr(id)}')" title="Resend prompt" aria-label="Resend prompt">↻</button>
+      </div>
+    </div>`;
   return div;
+}
+
+function findUserMessage(messageId) {
+  const conv = getConv(activeId);
+  return conv?.messages?.find(m => m.id === messageId && m.role === 'user') || null;
+}
+
+function editPrompt(messageId) {
+  const msg = findUserMessage(messageId);
+  if (!msg) return;
+  const input = document.getElementById('questionInput');
+  input.value = msg.content || '';
+  autoResize(input);
+  input.focus();
+}
+
+async function copyPrompt(messageId) {
+  const msg = findUserMessage(messageId);
+  if (!msg) return;
+  const text = msg.content || '';
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
+}
+
+function resendPrompt(messageId) {
+  const msg = findUserMessage(messageId);
+  if (!msg || activeRequest) return;
+  sendQuestion({ question: msg.content || '' });
+}
+
+function setSendingState(isSending) {
+  const btn = document.getElementById('sendBtn');
+  if (!btn) return;
+  btn.disabled = false;
+  btn.textContent = isSending ? '■' : '↑';
+  btn.title = isSending ? 'Stop' : 'Send';
+  btn.setAttribute('aria-label', isSending ? 'Stop response' : 'Send');
+}
+
+function stopGeneration() {
+  if (!activeRequest) return;
+  activeRequest.controller.abort();
+}
+
+function handleSendButton() {
+  if (activeRequest) stopGeneration();
+  else sendQuestion();
 }
 
 function clamp01(value) {
@@ -2774,11 +2922,12 @@ function _parseSseBlock(block) {
   return { event, data };
 }
 
-async function streamPredict(body, variant, convId, typingEl) {
+async function streamPredict(body, variant, convId, typingEl, signal) {
   const resp = await fetch('/predict/stream', {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
+    signal,
   });
   if (!resp.ok || !resp.body) return { ok: false, fallback: true };
 
@@ -2870,11 +3019,12 @@ async function streamPredict(body, variant, convId, typingEl) {
   return { ok: false, fallback: true };
 }
 
-async function streamAgentAnalyze(agentBody, variant, convId, typingEl) {
+async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) {
   const resp = await fetch('/agent/analyze/stream', {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(agentBody),
+    signal,
   });
   if (!resp.ok || !resp.body) return { ok: false, fallback: true };
 
@@ -2960,16 +3110,16 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl) {
   return { ok: false, fallback: true };
 }
 
-async function sendQuestion() {
+async function sendQuestion(options = {}) {
   const input = document.getElementById('questionInput');
-  const question = input.value.trim();
-  if (!question || !activeId) return;
+  const question = String(options.question ?? input.value).trim();
+  if (!question || !activeId || activeRequest) return;
 
   const variant = document.getElementById('variantSelect').value;
-  const btn = document.getElementById('sendBtn');
-  btn.disabled = true;
-  input.value = '';
-  input.style.height = 'auto';
+  if (!options.question) {
+    input.value = '';
+    input.style.height = 'auto';
+  }
 
   // Multi-turn memory: send the most recent prior turns as context
   const priorMessages = getConv(activeId)?.messages || [];
@@ -2989,17 +3139,26 @@ async function sendQuestion() {
   const emptyState = document.getElementById('emptyState');
   if (emptyState) emptyState.remove();
 
-  appendMessage(activeId, { role: 'user', content: question });
-  const userNode = makeUserBubble(question);
+  const useScan = _agentEnabled() && _isDiscoveryRequest(question);
+  let request = null;
+  if (!useScan) {
+    request = { controller: new AbortController(), convId: activeId, userMessageId: null };
+    activeRequest = request;
+    setSendingState(true);
+  }
+
+  const userMsg = appendMessage(activeId, { role: 'user', content: question });
+  if (request) request.userMessageId = userMsg.id;
+  const userNode = makeUserBubble(question, userMsg);
   document.getElementById('messages').appendChild(userNode);
   animateIn(userNode);
 
   // Agent mode: a "find me an edge" style request isn't a single market to
   // price — run an edge scan (honouring any venue + topic named in the text)
   // instead of forcing a forecast on the literal phrase.
-  if (_agentEnabled() && _isDiscoveryRequest(question)) {
+  if (useScan) {
     const intent = _parseScanIntent(question);
-    btn.disabled = false; input.focus();
+    input.focus();
     runScan(intent.platform, intent.query, question);
     return;
   }
@@ -3017,7 +3176,9 @@ async function sendQuestion() {
 
   try {
     const activeModel = getActiveModelConfig();
+    const conversationSteer = getConversationSteer();
     const body = { question, variant, history, chat_mode: isChatMode() };
+    if (conversationSteer) body.conversation_steer = conversationSteer;
     const marketProbability = extractMarketProbability(question);
     if (marketProbability != null) {
       body.market_probability = marketProbability;
@@ -3045,6 +3206,7 @@ async function sendQuestion() {
         question,
         evidence_top_k: 5,
         history,  // full thread context — only a new brief resets it
+        conversation_steer: conversationSteer,
         skills: _loadSkills().map(s => ({ name: s.name, instruction: s.instruction })),
         builtin_skills: true,    // base-rate / scenario / red-team / key-drivers toolkit
         ground_in_record: true,  // condition on the model's own live calibration
@@ -3059,7 +3221,7 @@ async function sendQuestion() {
         }
         if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
       }
-      const streamed = await streamAgentAnalyze(agentBody, variant, activeId, typingEl);
+      const streamed = await streamAgentAnalyze(agentBody, variant, activeId, typingEl, request.controller.signal);
       if (streamed.ok) return;
       if (!streamed.fallback) {
         typingEl.remove();
@@ -3070,13 +3232,14 @@ async function sendQuestion() {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(agentBody),
+        signal: request.controller.signal,
       });
       const report = await _readJson(resp);
       typingEl.remove();
       if (!resp.ok) { addError(report.detail || 'Agent error'); return; }
       data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
     } else {
-      const streamed = await streamPredict(body, variant, activeId, typingEl);
+      const streamed = await streamPredict(body, variant, activeId, typingEl, request.controller.signal);
       if (streamed.ok) return;
       if (!streamed.fallback) {
         typingEl.remove();
@@ -3088,6 +3251,7 @@ async function sendQuestion() {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(body),
+        signal: request.controller.signal,
       });
       data = await _readJson(resp);
       typingEl.remove();
@@ -3102,9 +3266,14 @@ async function sendQuestion() {
     scrollBottom();
   } catch (err) {
     typingEl.remove();
+    if (err?.name === 'AbortError') return;
     addError('Network error: ' + err.message);
   } finally {
-    btn.disabled = false;
+    if (activeRequest === request) {
+      activeRequest = null;
+      setSendingState(false);
+      renderMessages();
+    }
     input.focus();
   }
 }
@@ -3662,6 +3831,7 @@ async function loadTrackRecord() {
 let edgeLoaded = false;
 let _edgePriceTimer = null;
 let _ebEquityTimer = null;
+let _lastEquityCurves = null;
 
 async function refreshEdgePrices() {
   try {
@@ -3710,11 +3880,13 @@ async function refreshEquityCurve() {
     const _normCurve = s => s?.equity_curve?.length && s.total_staked
       ? s.equity_curve.map(v => v / s.total_staked) : null;
     const curves = [
-      _normCurve(pnl.flat)           ? { points: _normCurve(pnl.flat),           color: '#60a5fa', label: 'Flat stake' }     : null,
-      _normCurve(pnl.edge_weighted)  ? { points: _normCurve(pnl.edge_weighted),  color: '#a78bfa', label: 'Edge-weighted' }  : null,
-      _normCurve(pnl.validated_only) ? { points: _normCurve(pnl.validated_only), color: '#34d399', label: 'Validated-only' } : null,
+      _normCurve(pnl.flat)            ? { points: _normCurve(pnl.flat),            color: '#60a5fa', label: 'Flat stake' }                : null,
+      _normCurve(pnl.edge_weighted)   ? { points: _normCurve(pnl.edge_weighted),   color: '#a78bfa', label: 'Edge-weighted' }             : null,
+      _normCurve(pnl.validated_only)  ? { points: _normCurve(pnl.validated_only),  color: '#34d399', label: 'Validated-only' }            : null,
+      _normCurve(pnl.crowd_baseline)  ? { points: _normCurve(pnl.crowd_baseline),  color: '#94a3b8', label: 'Crowd baseline', dash: true } : null,
     ].filter(Boolean);
     el.innerHTML = curves.length ? _equitySvg(curves) : '';
+    if (curves.length) _attachEquityHover(el);
     const ts = document.getElementById('eb-pnl-ts');
     if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
     // Patch model probabilities from fresh board data (tick commits new forecasts every 15 min)
@@ -3780,6 +3952,8 @@ async function loadEdgeBoard() {
     const r = await fetch('/edge-board');
     if (!r.ok) throw new Error('unavailable');
     host.innerHTML = renderEdgeBoard(await _readJson(r));
+    const eqDiv = document.getElementById('eb-equity-svg');
+    if (eqDiv) _attachEquityHover(eqDiv);
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#edgeBody .tr-stat',
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
@@ -3977,9 +4151,89 @@ function _equitySvg(curves, W = 460, H = 110) {
       : `<circle cx="${padL + i * 110 + 7}" cy="${H - 6}" r="3.5" fill="${c.color}"/>`;
     return swatch + `<text x="${padL + i * 110 + 17}" y="${H - 2}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
   }).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:${H}px;display:block;margin-top:14px;overflow:visible" aria-label="Equity curve">
+  _lastEquityCurves = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1 };
+  return `<svg class="eq-svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:${H}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
     ${yAxisHtml}${baseline}${paths}${legend}
   </svg>`;
+}
+
+function _attachEquityHover(container) {
+  const svg = container.querySelector('.eq-svg');
+  if (!svg || !_lastEquityCurves) return;
+  const eq = _lastEquityCurves;
+
+  let tip = container.querySelector('.eq-tip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.className = 'eq-tip';
+    tip.style.cssText = 'position:absolute;pointer-events:none;display:none;background:#1e293b;border:1px solid #334155;border-radius:5px;padding:5px 8px;font-size:11px;color:#e2e8f0;white-space:nowrap;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+    container.style.position = 'relative';
+    container.appendChild(tip);
+  }
+
+  let xhair = svg.querySelector('.eq-xhair');
+  if (!xhair) {
+    xhair = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    xhair.setAttribute('class', 'eq-xhair');
+    xhair.setAttribute('stroke', '#666');
+    xhair.setAttribute('stroke-width', '0.8');
+    xhair.setAttribute('stroke-dasharray', '2,2');
+    xhair.setAttribute('y1', eq.padT);
+    xhair.setAttribute('y2', eq.padT + eq.cH);
+    xhair.style.display = 'none';
+    svg.appendChild(xhair);
+  }
+
+  const dots = eq.curves.map((c, ci) => {
+    let dot = svg.querySelector(`.eq-dot-${ci}`);
+    if (!dot) {
+      dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('class', `eq-dot-${ci}`);
+      dot.setAttribute('r', '3');
+      dot.setAttribute('fill', c.color);
+      dot.style.display = 'none';
+      svg.appendChild(dot);
+    }
+    return dot;
+  });
+
+  function hide() {
+    tip.style.display = 'none';
+    xhair.style.display = 'none';
+    dots.forEach(d => { d.style.display = 'none'; });
+  }
+
+  function onMove(e) {
+    const rect = svg.getBoundingClientRect();
+    const svgX = (e.clientX - rect.left) * (eq.W / rect.width);
+    if (svgX < eq.padL || svgX > eq.padL + eq.cW) { hide(); return; }
+    const idx = Math.max(0, Math.min(eq.n - 1, Math.round((svgX - eq.padL) / eq.cW * (eq.n - 1))));
+    const x = eq.padL + (eq.n > 1 ? (idx / (eq.n - 1)) * eq.cW : eq.cW / 2);
+    xhair.setAttribute('x1', x.toFixed(1)); xhair.setAttribute('x2', x.toFixed(1));
+    xhair.style.display = '';
+    const lines = eq.curves.map((c, ci) => {
+      const v = c.points[Math.min(idx, c.points.length - 1)];
+      if (v == null) { dots[ci].style.display = 'none'; return null; }
+      const y = eq.padT + eq.cH - ((v - eq.lo) / eq.range) * eq.cH;
+      dots[ci].setAttribute('cx', x.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
+      dots[ci].style.display = '';
+      return `<span style="color:${c.color}">${c.label}: ${v >= 0 ? '+' : ''}${Math.round(v * 100)}%</span>`;
+    }).filter(Boolean);
+    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">Bet ${idx + 1} / ${eq.n}</div>` + lines.join('<br>');
+    tip.style.display = 'block';
+    const cr = container.getBoundingClientRect();
+    let lft = e.clientX - cr.left + 14, top = e.clientY - cr.top - 24;
+    if (lft + 150 > container.offsetWidth) lft -= 164;
+    tip.style.left = Math.max(0, lft) + 'px';
+    tip.style.top = Math.max(0, top) + 'px';
+  }
+
+  svg.removeEventListener('mousemove', svg._eqMove);
+  svg.removeEventListener('mouseleave', svg._eqLeave);
+  svg._eqMove = onMove;
+  svg._eqLeave = hide;
+  svg.addEventListener('mousemove', onMove);
+  svg.addEventListener('mouseleave', hide);
 }
 
 function _renderBoardPage(board, page) {
@@ -5548,8 +5802,8 @@ async function runScan(platform, query, customLabel) {
     || `Scan ${venue}${topic ? ` for "${topic}"` : ''} for mispriced markets`;
   const emptyState = document.getElementById('emptyState');
   if (emptyState) emptyState.remove();
-  appendMessage(activeId, { role: 'user', content: label });
-  const userNode = makeUserBubble(label);
+  const userMsg = appendMessage(activeId, { role: 'user', content: label });
+  const userNode = makeUserBubble(label, userMsg);
   document.getElementById('messages').appendChild(userNode);
   animateIn(userNode);
   const typingEl = addAgentProgress([
