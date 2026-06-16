@@ -292,14 +292,31 @@ async def record_snapshots(
         lead = _lead_time_days(q.get("close_time"))
         if lead is not None and not (min_discovery_lead_days <= lead <= max_discovery_lead_days):
             continue  # outside the useful resolution window
-        tags = tag_question(q.get("question") or "", q.get("category"))
-        # Sports markets: LLM has no real-time edge, but track them for the
-        # crowd-follow benchmark. Discovered only when crowd-follow is in the
-        # model list; LLM models are skipped for sports in the snapshot loop below.
-        if tags.get("domain") == "sports" and "crowd-follow" not in model_list:
-            continue
         targets.append(q)
         known.add((q.get("platform"), ident))
+
+    # 2b) Short-dated discovery: all models, no lead-time floor. Captures intraday
+    #     and same-day markets that the standard discovery window skips.
+    if "crowd-follow" in model_list:
+        intraday: List[Dict[str, Any]] = []
+        for lister in (market_data.list_polymarket, market_data.list_kalshi):
+            try:
+                intraday.extend(lister(
+                    limit=per_venue * 2,
+                    min_close_days=0,
+                    max_close_days=min_discovery_lead_days,
+                )[:per_venue * 2])
+            except market_data.MarketDataError:
+                continue
+        for q in intraday:
+            ident = ident_from_url(q.get("platform", ""), q.get("market_url", ""))
+            if (q.get("platform"), ident) in known or q.get("probability") is None:
+                continue
+            lead = _lead_time_days(q.get("close_time"))
+            if lead is None or lead < 0:
+                continue  # already past close
+            targets.append(q)
+            known.add((q.get("platform"), ident))
 
     import asyncio as _asyncio
 
@@ -350,11 +367,7 @@ async def record_snapshots(
             continue
         market_prob = quote.get("probability")
         lead = _lead_time_days(quote.get("close_time"))
-        is_sports = tag_question(quote.get("question") or "", quote.get("category")).get("domain") == "sports"
-
         for model in model_list:
-            if is_sports and model != "crowd-follow":
-                continue
             key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{today}")
             existing = client.get(key)
             if existing is not None and not reforecast_each_tick:
