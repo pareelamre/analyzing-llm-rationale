@@ -20,6 +20,7 @@ from analyzing_llm_rationale.server import (  # noqa: E402
     _cache_set,
     _issue_session,
     _local_cache,
+    _predict_rate_limiter,
     _rate_limiter,
     _state,
     app,
@@ -77,7 +78,8 @@ class ServerTests(unittest.TestCase):
         self._datastore_patch = mock.patch.object(server_module, "_get_datastore", return_value=None)
         self._datastore_patch.start()
         _local_cache.clear()
-        _rate_limiter._log.clear()  # isolate tests from cross-test rate-limit accumulation
+        _rate_limiter._log.clear()
+        _predict_rate_limiter._log.clear()
         _state.clear()
         _state.update({
             "provider": self.provider,
