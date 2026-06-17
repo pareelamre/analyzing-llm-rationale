@@ -4698,15 +4698,21 @@ function renderEdgeBoard(d) {
     // % ROI scale and the final point of each curve equals the displayed ROI.
     const _normCurve = s => s?.equity_curve?.length && s.total_staked
       ? s.equity_curve.map(v => v / s.total_staked) : null;
-    // crowd_baseline: normalise by its own total_staked so it's on the same ROI scale
-    const _normBaseline = s => s?.equity_curve?.length && s.total_staked
-      ? s.equity_curve.map(v => v / s.total_staked) : null;
+    const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+    const _mk = (s, color, label, dash) => {
+      const points = _normCurve(s);
+      if (!points) return null;
+      const times = _times(s);
+      const curve = { points, color, label };
+      if (dash) curve.dash = true;
+      if (times.length === points.length) curve.times = times;
+      return curve;
+    };
     const curves = [
-      _normCurve(pnl.flat)          ? { points: _normCurve(pnl.flat),          color: '#60a5fa', label: 'Flat stake' }        : null,
-      _normCurve(pnl.edge_weighted) ? { points: _normCurve(pnl.edge_weighted), color: '#a78bfa', label: 'Edge-weighted' }     : null,
-      _normCurve(pnl.validated_only)? { points: _normCurve(pnl.validated_only),color: '#34d399', label: 'Validated-only' }    : null,
-      _normBaseline(pnl.crowd_baseline)
-        ? { points: _normBaseline(pnl.crowd_baseline), color: '#94a3b8', label: 'Crowd baseline', dash: true } : null,
+      _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
+      _mk(pnl.edge_weighted,  '#a78bfa', 'Edge-weighted'),
+      _mk(pnl.validated_only, '#34d399', 'Validated-only'),
+      _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
     const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves) : ''}</div>`;
     // Per-sizing explainer: what each number means and what the gap between them signals.
