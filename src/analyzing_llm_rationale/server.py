@@ -1816,11 +1816,16 @@ async def live_prices():
 
 
 @app.get("/crypto-5m/equity", tags=["System"], summary="5-minute crypto strategy paper equity curves")
-async def crypto_5m_equity(hours: float = Query(72.0, ge=1.0, le=168.0)):
-    """Paper equity curves for live-collected BTC/ETH/SOL 5-minute strategy candidates."""
+async def crypto_5m_equity(hours: float = Query(72.0, ge=0.0, le=26280.0)):
+    """Paper equity curves for live-collected BTC/ETH/SOL 5-minute strategy candidates.
+
+    ``hours`` caps the replay window (up to ~3 years); ``hours=0`` returns the
+    full since-inception history so long-term durability is visible.
+    """
+    since_hours = None if hours <= 0 else hours
     result = await asyncio.get_running_loop().run_in_executor(
         None,
-        lambda: crypto_5m.crypto_5m_candidate_equity(since_hours=hours),
+        lambda: crypto_5m.crypto_5m_candidate_equity(since_hours=since_hours),
     )
     return JSONResponse(result, headers={"Cache-Control": "public, max-age=30"})
 

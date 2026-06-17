@@ -82,6 +82,11 @@ def main() -> int:
                         help="Summarize resolved paper-signal accuracy and PnL.")
     parser.add_argument("--paper-loop", action="store_true",
                         help="Continuously resolve expired signals and record new paper signals.")
+    parser.add_argument("--backfill", action="store_true",
+                        help="Reconstruct a long paper track record by replaying the live signal "
+                             "logic over historical klines (--days) into the signal DB.")
+    parser.add_argument("--step-minutes-backfill", type=int, default=None,
+                        help="Spacing (minutes) between backfilled bars; defaults to the horizon.")
     parser.add_argument("--signal-log", type=Path, default=None,
                         help="JSONL path for --paper-signal and --resolve-signal-log.")
     parser.add_argument("--signal-db", type=Path, default=None,
@@ -113,7 +118,7 @@ def main() -> int:
     args = parser.parse_args()
 
     klines = None
-    if args.days is not None and not args.benchmark:
+    if args.days is not None and not args.benchmark and not args.backfill:
         klines = crypto_5m.fetch_klines_history(
             args.symbol,
             days=args.days,
@@ -137,6 +142,27 @@ def main() -> int:
             momentum_threshold=args.momentum_threshold,
             db_path=args.signal_db,
             dry_run=args.dry_run,
+        )
+    elif args.backfill:
+        backfill_days = args.days if args.days is not None else 30.0
+        # Ensure we fetch enough 1-minute candles to cover the requested window
+        # (~1440/day) even if --max-candles was left at its small default.
+        needed_candles = int(backfill_days * 1440) + 240
+        result = crypto_5m.backfill_crypto_5m_signals(
+            args.symbols or [args.symbol],
+            days=backfill_days,
+            horizon_minutes=args.horizon_minutes,
+            lookback_minutes=args.lookback_minutes,
+            market_probability=args.market_probability,
+            fee_bps=args.fee_bps,
+            ml_mode=args.ml_mode,
+            training_window=args.training_window,
+            strategy_mode=args.strategy_mode,
+            momentum_threshold=args.momentum_threshold,
+            step_minutes=args.step_minutes_backfill,
+            max_candles=max(args.max_candles, needed_candles),
+            path=args.signal_log,
+            db_path=args.signal_db,
         )
     elif args.paper_signal:
         result = crypto_5m.record_crypto_5m_signal(

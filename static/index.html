@@ -4009,10 +4009,17 @@ function _crypto5mSummaryCard(curve) {
   const pnl = Number(curve.pnl_per_contract || 0);
   const cls = pnl >= 0 ? 'color:#0a7' : 'color:#c33';
   const desc = _CRYPTO5M_DESCRIPTIONS[curve.key] || '';
+  const perDay = curve.pnl_per_day == null ? null : Number(curve.pnl_per_day);
+  const dd = curve.max_drawdown == null ? null : Number(curve.max_drawdown);
+  const longTerm = [
+    perDay == null ? null : `${perDay >= 0 ? '+' : ''}${perDay.toFixed(2)}/day`,
+    dd == null ? null : `${dd.toFixed(2)} max drawdown`,
+  ].filter(Boolean).join(' · ');
   return `<div class="tr-stat">
     <div class="v" style="${cls}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</div>
     <div class="k label">${escHtml(_crypto5mLabel(curve))}</div>
     <div class="k" style="font-size:11px;color:var(--text-dim)">${curve.trades || 0} trades · ${curve.hit_rate == null ? '—' : pct(curve.hit_rate) + '%'} hit</div>
+    ${longTerm ? `<div class="k" style="font-size:11px;color:var(--text-dim)">${escHtml(longTerm)}</div>` : ''}
     ${desc ? `<div class="k" style="font-size:10.5px;color:var(--text-dim);margin-top:3px;line-height:1.4;max-width:180px">${escHtml(desc)}</div>` : ''}
   </div>`;
 }
@@ -4021,7 +4028,7 @@ async function loadCrypto5mEquity() {
   const host = document.getElementById('crypto5mEquity');
   if (!host) return;
   try {
-    const r = await fetch('/crypto-5m/equity?hours=72');
+    const r = await fetch('/crypto-5m/equity?hours=0');
     if (!r.ok) throw new Error('unavailable');
     const d = await _readJson(r);
     if (d.generated_at && d.generated_at === _crypto5mLastGen) return;
@@ -4046,7 +4053,11 @@ async function loadCrypto5mEquity() {
         <div class="k label">Current paper policy</div>
         <div class="k" style="font-size:12px;color:var(--text-dim)">${escHtml(rec.candidate === 'selector_btc_inverse_eth_fade' ? _CRYPTO5M_POLICY_TEXT : (rec.policy || 'Collecting strategy evidence.'))}</div>
       </div>
-      <p class="tr-method" style="margin-top:0">Live-collected 5-minute BTC/ETH/SOL paper rows, replayed against a small set of commodity-specific strategy candidates over the last ${Math.round(d.since_hours || 72)} hours. Paper only; no slippage.</p>
+      <p class="tr-method" style="margin-top:0">${(() => {
+          const days = d.coverage && d.coverage.days ? Number(d.coverage.days) : null;
+          const span = days != null ? (days >= 1 ? `${days.toFixed(days >= 10 ? 0 : 1)} days` : `${Math.round(days * 24)} hours`) : 'the full collected window';
+          return `Historical BTC/ETH/SOL 5-minute paper rows (Binance backfill + live collection), replayed against a small set of asset-specific strategy candidates across ${span} of history — long enough to judge whether the edge holds up over time. Paper only; no slippage.`;
+        })()}</p>
       <div class="tr-stats">${cards}</div>
       <div id="crypto5mSvgWrap">${_crypto5mSvg(chartCurves)}</div>
       <p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(d.note || '')}${gen ? ' · updated ' + gen : ''}</p>`;

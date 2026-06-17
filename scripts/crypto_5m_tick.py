@@ -37,6 +37,9 @@ def main() -> int:
     parser.add_argument("--signal-log", type=Path, default=crypto_5m.DEFAULT_SIGNAL_LOG_PATH)
     parser.add_argument("--signal-db", type=Path, default=crypto_5m.DEFAULT_SIGNAL_DB_PATH)
     parser.add_argument("--equity-out", type=Path, default=crypto_5m.DEFAULT_EQUITY_FALLBACK_PATH)
+    parser.add_argument("--seed", type=Path, default=Path("data/crypto_5m_backfill_seed.jsonl.gz"),
+                        help="Compact historical-backfill seed imported into the signal DB so the "
+                             "equity curve keeps its long-term history (the live log is pruned).")
     parser.add_argument("--keep-days", type=float, default=7.0)
     parser.add_argument("--hours", type=float, default=72.0)
     parser.add_argument("--market-probability", type=float, default=0.50)
@@ -78,6 +81,12 @@ def main() -> int:
             errors.append({"symbol": symbol, "error": str(exc)})
 
     prune = _prune_signal_log(args.signal_log, keep_days=args.keep_days)
+    # Seed the long-term backfill first (immutable, committed), then layer the
+    # live log on top. The DB is rebuilt every run, so without the seed the curve
+    # would only ever span the pruned live window.
+    seed = None
+    if args.seed and args.seed.exists():
+        seed = crypto_5m.import_crypto_5m_signal_log_to_db(path=args.seed, db_path=args.signal_db)
     crypto_5m.import_crypto_5m_signal_log_to_db(path=args.signal_log, db_path=args.signal_db)
     equity = crypto_5m.crypto_5m_candidate_equity(db_path=args.signal_db, since_hours=args.hours)
     args.equity_out.write_text(json.dumps(equity, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -86,6 +95,7 @@ def main() -> int:
         "resolved": resolved,
         "signals": len(signals),
         "errors": errors,
+        "seed": seed,
         "prune": prune,
         "equity_out": str(args.equity_out),
         "curves": [

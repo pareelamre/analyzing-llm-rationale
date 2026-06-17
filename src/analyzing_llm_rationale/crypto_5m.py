@@ -12,6 +12,7 @@ as ``target_price``. If omitted, the current price is used, which answers
 """
 from __future__ import annotations
 
+import bisect
 import json
 import math
 import os
@@ -2147,8 +2148,13 @@ def append_crypto_5m_benchmark_log(
 def _jsonl_records(path: Path) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
+    if str(path).endswith(".gz"):
+        import gzip
+        text = gzip.decompress(path.read_bytes()).decode("utf-8")
+    else:
+        text = path.read_text(encoding="utf-8")
     records: List[Dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         if not line.strip():
             continue
         try:
@@ -2844,9 +2850,9 @@ def crypto_5m_candidate_equity(
         if fallback is not None:
             return fallback
     cutoff_ms = None
-    if since_hours is not None:
+    if since_hours is not None and float(since_hours) > 0:
         latest = max((int(record.get("start_time_ms") or 0) for record in records), default=0)
-        cutoff_ms = latest - int(max(0.0, float(since_hours)) * 60 * 60 * 1000)
+        cutoff_ms = latest - int(float(since_hours) * 60 * 60 * 1000)
         records = [record for record in records if int(record.get("start_time_ms") or 0) >= cutoff_ms]
     records.sort(key=lambda record: (int(record.get("start_time_ms") or 0), str(record.get("symbol") or "")))
     ott_trend_by_id = _record_ott_trend_sides(records)
@@ -2871,6 +2877,8 @@ def crypto_5m_candidate_equity(
         trades = 0
         by_symbol: Dict[str, Dict[str, Any]] = {}
         last_trade_at = None
+        first_trade_at = None
+        first_trade_ms = None
         for record in records:
             side = _crypto_replay_side(record, key, ott_trend_by_id=ott_trend_by_id)
             pnl = _contract_pnl(
@@ -2888,6 +2896,9 @@ def crypto_5m_candidate_equity(
             running += float(pnl)
             equity.append(round(running, 6))
             last_trade_at = record.get("resolved_at") or record.get("logged_at")
+            if first_trade_at is None:
+                first_trade_at = record.get("logged_at") or record.get("resolved_at")
+                first_trade_ms = int(record.get("start_time_ms") or 0) or None
             sym = by_symbol.setdefault(symbol, {"trades": 0, "wins": 0, "pnl_per_contract": 0.0})
             sym["trades"] += 1
             sym["wins"] += 1 if side == record.get("actual_outcome") else 0
@@ -2898,6 +2909,21 @@ def crypto_5m_candidate_equity(
             summary["hit_rate"] = round(summary["wins"] / summary["trades"], 4) if summary["trades"] else None
             summary["pnl_per_contract"] = round(summary["pnl_per_contract"], 6)
             summary.pop("wins", None)
+        # Max drawdown of the cumulative-PnL curve (peak-to-trough), and a
+        # per-day return so the long-term durability of the strategy is legible.
+        peak = 0.0
+        max_drawdown = 0.0
+        for value in equity:
+            peak = max(peak, value)
+            max_drawdown = max(max_drawdown, peak - value)
+        last_ms = None
+        for record in reversed(records):
+            if _crypto_replay_side(record, key, ott_trend_by_id=ott_trend_by_id) in {"up", "down"}:
+                last_ms = int(record.get("start_time_ms") or 0) or None
+                break
+        span_days = None
+        if first_trade_ms and last_ms and last_ms > first_trade_ms:
+            span_days = round((last_ms - first_trade_ms) / (24 * 60 * 60 * 1000), 2)
         curves.append({
             "key": key,
             "label": label,
@@ -2907,16 +2933,30 @@ def crypto_5m_candidate_equity(
             "hit_rate": round(wins / trades, 4),
             "pnl_per_contract": round(running, 6),
             "avg_pnl_per_trade": round(running / trades, 6),
+            "max_drawdown": round(max_drawdown, 6),
+            "span_days": span_days,
+            "pnl_per_day": round(running / span_days, 6) if span_days else None,
+            "first_trade_at": first_trade_at,
             "last_trade_at": last_trade_at,
             "by_symbol": dict(sorted(by_symbol.items())),
         })
     recommended = next((curve for curve in curves if curve["key"] == "selector_btc_inverse_eth_fade"), None)
+    earliest_ms = min((int(r.get("start_time_ms") or 0) for r in records), default=0) or None
+    latest_ms = max((int(r.get("start_time_ms") or 0) for r in records), default=0) or None
+    coverage_days = None
+    if earliest_ms and latest_ms and latest_ms > earliest_ms:
+        coverage_days = round((latest_ms - earliest_ms) / (24 * 60 * 60 * 1000), 2)
     return {
         "db_path": str(path),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "since_hours": since_hours,
         "cutoff_start_time_ms": cutoff_ms,
         "resolved_rows": len(records),
+        "coverage": {
+            "first_row_time_ms": earliest_ms,
+            "last_row_time_ms": latest_ms,
+            "days": coverage_days,
+        },
         "curves": curves,
         "recommendation": {
             "policy": "Main paper strategy: trade against very strong BTC model calls, fade sharp ETH 5-minute moves, and skip SOL until its rule is stable.",
@@ -3162,6 +3202,131 @@ def record_crypto_5m_signal(
     return {"path": str(log_path), "db": db_result, "record": record}
 
 
+DEFAULT_BACKFILL_LOG_PATH = Path("data/crypto_5m_backfill_log.jsonl")
+
+
+def backfill_crypto_5m_signals(
+    symbols: Optional[List[str]] = None,
+    *,
+    days: float = 30.0,
+    horizon_minutes: int = 5,
+    lookback_minutes: int = 60,
+    market_probability: Optional[float] = 0.50,
+    fee_bps: float = 2.0,
+    ml_mode: str = "adaptive",
+    training_window: int = 120,
+    strategy_mode: str = "per_asset_regime_selector",
+    momentum_threshold: float = 0.0025,
+    step_minutes: Optional[int] = None,
+    max_candles: int = 50_000,
+    end_time_ms: Optional[int] = None,
+    path: Optional[Path] = None,
+    db_path: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Reconstruct a long paper track record by replaying the live signal logic
+    over historical Binance klines.
+
+    For each historical 5-minute bar we hand the *same* trailing window the live
+    collector would have fetched to :func:`record_crypto_5m_signal`, so the
+    backfilled rows are schema-identical to live ones and land in the same signal
+    DB. Outcomes are then resolved from the known future candles. This lets the
+    equity curve show months of behaviour instead of only the live-collected
+    window, so a strategy's long-term character is visible.
+    """
+    symbols = symbols or ["BTC", "ETH", "SOL"]
+    horizon = max(1, min(int(horizon_minutes or 5), 15))
+    lookback = max(30, min(int(lookback_minutes or 60), 1000))
+    mode = (ml_mode or "fixed").strip().lower()
+    train_window = max(40, min(int(training_window or 120), 900))
+    step = max(1, int(step_minutes or horizon))
+    # The live collector fetches this many trailing 1-minute candles per tick;
+    # replay each historical bar with the same window so features/training match.
+    window = lookback if mode == "fixed" else min(1000, max(lookback, lookback + horizon + train_window + 1))
+    log_path = path or DEFAULT_BACKFILL_LOG_PATH
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    # Start each backfill run from a clean log so re-runs are idempotent (the DB
+    # upsert is keyed by signal id, so re-importing the same bars is harmless).
+    _write_jsonl(log_path, [])
+
+    per_symbol: Dict[str, Any] = {}
+    total_recorded = 0
+    klines_by_symbol: Dict[str, List[Any]] = {}
+    for symbol in symbols:
+        symbol_norm = normalize_symbol(symbol)
+        raw = fetch_klines_history(
+            symbol_norm, days=days, end_time_ms=end_time_ms, max_candles=max_candles
+        )
+        klines_by_symbol[symbol_norm] = raw
+        if len(raw) < window + horizon + 1:
+            per_symbol[symbol_norm] = {"candles": len(raw), "recorded": 0, "skipped": "insufficient history"}
+            continue
+        recorded = 0
+        # Need `window` candles of context and `horizon` future candles to resolve.
+        first = window - 1
+        last = len(raw) - horizon - 1
+        for i in range(first, last + 1, step):
+            chunk = raw[i - window + 1: i + 1]
+            try:
+                record_crypto_5m_signal(
+                    symbol_norm,
+                    horizon_minutes=horizon,
+                    lookback_minutes=lookback,
+                    market_probability=market_probability,
+                    fee_bps=fee_bps,
+                    ml_mode=mode,
+                    training_window=train_window,
+                    strategy_mode=strategy_mode,
+                    momentum_threshold=momentum_threshold,
+                    path=log_path,
+                    db_path=None,  # resolve step does the single DB upsert
+                    klines=chunk,
+                )
+                recorded += 1
+            except CryptoModelError:
+                continue
+        per_symbol[symbol_norm] = {"candles": len(raw), "recorded": recorded}
+        total_recorded += recorded
+
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    resolved = resolve_crypto_5m_signal_log(
+        path=log_path,
+        db_path=db_path,
+        now_ms=now_ms,
+        klines_by_symbol=klines_by_symbol,
+    )
+    return {
+        "path": str(log_path),
+        "days": days,
+        "symbols": per_symbol,
+        "recorded": total_recorded,
+        "resolved": resolved,
+    }
+
+
+def _kline_close_time_ms(row: Any) -> Optional[int]:
+    """Close time of a raw Binance kline row, matching `_parse_timed_candles`."""
+    if not isinstance(row, (list, tuple)) or len(row) < 6:
+        return None
+    if len(row) > 6:
+        close_time = _to_float(row[6])
+        if close_time is not None:
+            return int(close_time)
+    open_time = _to_float(row[0])
+    return int(open_time) + _ONE_MINUTE_MS - 1 if open_time is not None else None
+
+
+def _index_klines_by_close_time(rows: Optional[List[Any]]) -> tuple[List[int], List[Any]]:
+    """Sort raw klines by close time so a settlement candle can be found with a
+    bisect instead of an O(N) scan + full re-parse per resolution."""
+    indexed = []
+    for row in rows or []:
+        close_ms = _kline_close_time_ms(row)
+        if close_ms is not None:
+            indexed.append((close_ms, row))
+    indexed.sort(key=lambda item: item[0])
+    return [ct for ct, _ in indexed], [row for _, row in indexed]
+
+
 def resolve_crypto_5m_signal_log(
     *,
     path: Optional[Path] = None,
@@ -3173,6 +3338,25 @@ def resolve_crypto_5m_signal_log(
     log_path = path or DEFAULT_SIGNAL_LOG_PATH
     records = _jsonl_records(log_path)
     by_symbol = klines_by_symbol or {}
+    # Index each symbol's candles by close time once, so resolving a record is a
+    # bisect + tiny re-parse rather than an O(N) scan over every candle. This
+    # turns large backfills (tens of thousands of rows) from O(rows×candles) into
+    # roughly O(rows·log candles).
+    index_cache: Dict[str, tuple] = {}
+
+    def _settlement_window(symbol: str, expiry_ms: int) -> Optional[List[Any]]:
+        if symbol not in index_cache:
+            rows = by_symbol.get(symbol) or by_symbol.get(symbol.replace("USDT", ""))
+            index_cache[symbol] = _index_klines_by_close_time(rows) if rows else ([], [])
+        times, sorted_rows = index_cache[symbol]
+        if not times:
+            return None
+        idx = bisect.bisect_right(times, expiry_ms) - 1
+        if idx < 0:
+            return []
+        # A small slice (not just one row) tolerates any close-time edge cases.
+        return sorted_rows[max(0, idx - 2): idx + 1]
+
     resolved_now = 0
     open_count = 0
     already_resolved = 0
@@ -3192,7 +3376,7 @@ def resolve_crypto_5m_signal_log(
                 correct += 1 if record.get("prediction_correct") else 0
             continue
         symbol = str(record.get("symbol") or "")
-        klines = by_symbol.get(symbol) or by_symbol.get(symbol.replace("USDT", ""))
+        klines = _settlement_window(symbol, int(record["expiry_time_ms"]))
         resolution = resolve_crypto_5m_outcome(
             symbol,
             target_price=float(record["target_price"]),

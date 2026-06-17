@@ -567,6 +567,84 @@ class Crypto5mTests(unittest.TestCase):
             self.assertEqual(record["strategy"]["side"], "up")
             self.assertEqual(record["strategy"]["strategy_mode"], "follow_5m_momentum")
 
+    def test_backfill_seeds_resolved_history_into_signal_db(self):
+        # A long synthetic 1-minute series stands in for fetched Binance history,
+        # so the backfill is exercised without any network access.
+        series = _klines_from_prices([100 + math.sin(i / 9.0) * 4 + i * 0.01 for i in range(600)])
+        orig = crypto_5m.fetch_klines_history
+        crypto_5m.fetch_klines_history = lambda symbol, **_: series
+        try:
+            with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+                log_path = Path(tmp) / "backfill.jsonl"
+                db_path = Path(tmp) / "signals.sqlite"
+                result = crypto_5m.backfill_crypto_5m_signals(
+                    ["BTC"],
+                    days=1,
+                    lookback_minutes=60,
+                    training_window=120,
+                    ml_mode="adaptive",
+                    step_minutes=5,
+                    path=log_path,
+                    db_path=db_path,
+                )
+
+                self.assertGreater(result["recorded"], 0)
+                self.assertEqual(result["recorded"], result["resolved"]["records"])
+                self.assertEqual(result["resolved"]["open"], 0)
+
+                equity = crypto_5m.crypto_5m_candidate_equity(db_path=db_path, since_hours=0)
+                self.assertEqual(equity["resolved_rows"], result["recorded"])
+                self.assertIsNotNone(equity["coverage"]["days"])
+                for curve in equity["curves"]:
+                    self.assertIn("max_drawdown", curve)
+                    self.assertIn("pnl_per_day", curve)
+        finally:
+            crypto_5m.fetch_klines_history = orig
+
+    def test_candidate_equity_all_time_window_keeps_every_row(self):
+        history = _klines_from_prices([100 + i * 0.05 for i in range(80)])
+        future = _klines_from_prices([100 + i * 0.05 for i in range(90)])
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+            path = Path(tmp) / "signals.jsonl"
+            db_path = Path(tmp) / "signals.sqlite"
+            opened = crypto_5m.record_crypto_5m_signal(
+                "BTC", market_probability=0.45, fee_bps=2, edge_threshold=0.0,
+                klines=history, path=path, db_path=db_path,
+            )
+            crypto_5m.resolve_crypto_5m_signal_log(
+                path=path, db_path=db_path,
+                now_ms=opened["record"]["expiry_time_ms"] + 1,
+                klines_by_symbol={"BTCUSDT": future},
+            )
+            full = crypto_5m.crypto_5m_candidate_equity(db_path=db_path, since_hours=0)
+            self.assertEqual(full["since_hours"], 0)
+            self.assertIsNone(full["cutoff_start_time_ms"])
+
+    def test_gzipped_seed_imports_into_signal_db(self):
+        # The committed backfill seed is gzipped; the tick imports it straight
+        # into the signal DB, so the equity curve keeps its long-term history.
+        import gzip
+        history = _klines_from_prices([100 + i * 0.05 for i in range(80)])
+        future = _klines_from_prices([100 + i * 0.05 for i in range(90)])
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+            log = Path(tmp) / "signals.jsonl"
+            db = Path(tmp) / "signals.sqlite"
+            opened = crypto_5m.record_crypto_5m_signal(
+                "BTC", market_probability=0.45, fee_bps=2, edge_threshold=0.0,
+                klines=history, path=log,
+            )
+            crypto_5m.resolve_crypto_5m_signal_log(
+                path=log, now_ms=opened["record"]["expiry_time_ms"] + 1,
+                klines_by_symbol={"BTCUSDT": future},
+            )
+            seed = Path(tmp) / "seed.jsonl.gz"
+            seed.write_bytes(gzip.compress(log.read_bytes()))
+
+            result = crypto_5m.import_crypto_5m_signal_log_to_db(path=seed, db_path=db)
+            self.assertGreater(result["records"], 0)
+            equity = crypto_5m.crypto_5m_candidate_equity(db_path=db, since_hours=0)
+            self.assertEqual(equity["resolved_rows"], result["records"])
+
     def test_per_asset_regime_selector_uses_inverse_edge_for_btc(self):
         forecast = {
             "symbol": "BTCUSDT",
