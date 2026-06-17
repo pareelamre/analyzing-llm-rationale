@@ -3994,6 +3994,16 @@ const _CRYPTO5M_DESCRIPTIONS = {
   btc_inverse_edge_004:          'BTC only. When the model is very confident about BTC moving one way, this strategy takes the other side.',
   eth_fade_mom_0015:             'ETH only. When ETH moves quickly over 5 minutes, this strategy bets on a small pullback instead of chasing the move.',
 };
+const _CRYPTO5M_LABELS = {
+  selector_btc_inverse_eth_fade: 'Recommended: BTC inverse + ETH pullback',
+  selector_ott_filter:           'Trend-filtered selector',
+  btc_inverse_edge_004:          'BTC: trade against strong model calls',
+  eth_fade_mom_0015:             'ETH: fade sharp 5-minute moves',
+};
+const _CRYPTO5M_POLICY_TEXT = 'Main paper strategy: for BTC it trades against very strong model calls; for ETH it bets on a small pullback after sharp 5-minute moves; SOL is skipped for now.';
+function _crypto5mLabel(curve) {
+  return _CRYPTO5M_LABELS[curve?.key] || curve?.label || curve?.key || '';
+}
 
 function _crypto5mSummaryCard(curve) {
   const pnl = Number(curve.pnl_per_contract || 0);
@@ -4001,7 +4011,7 @@ function _crypto5mSummaryCard(curve) {
   const desc = _CRYPTO5M_DESCRIPTIONS[curve.key] || '';
   return `<div class="tr-stat">
     <div class="v" style="${cls}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</div>
-    <div class="k label">${escHtml(curve.label || curve.key || '')}</div>
+    <div class="k label">${escHtml(_crypto5mLabel(curve))}</div>
     <div class="k" style="font-size:11px;color:var(--text-dim)">${curve.trades || 0} trades · ${curve.hit_rate == null ? '—' : pct(curve.hit_rate) + '%'} hit</div>
     ${desc ? `<div class="k" style="font-size:10.5px;color:var(--text-dim);margin-top:3px;line-height:1.4;max-width:180px">${escHtml(desc)}</div>` : ''}
   </div>`;
@@ -4024,7 +4034,7 @@ async function loadCrypto5mEquity() {
     const cards = curves.slice(0, 4).map(_crypto5mSummaryCard).join('');
     const chartCurves = curves.slice(0, 4).map(c => ({
       key: c.key,
-      label: c.label,
+      label: _crypto5mLabel(c),
       color: c.color,
       points: c.points || [],
     }));
@@ -4034,7 +4044,7 @@ async function loadCrypto5mEquity() {
     host.innerHTML = `<div class="tr-stat" style="margin-bottom:12px">
         <div class="v" style="font-size:18px;color:${recPnl >= 0 ? '#0a7' : '#c33'}">${recPnl >= 0 ? '+' : ''}${recPnl.toFixed(2)}</div>
         <div class="k label">Current paper policy</div>
-        <div class="k" style="font-size:12px;color:var(--text-dim)">${escHtml(rec.policy || 'Collecting strategy evidence.')}</div>
+        <div class="k" style="font-size:12px;color:var(--text-dim)">${escHtml(rec.candidate === 'selector_btc_inverse_eth_fade' ? _CRYPTO5M_POLICY_TEXT : (rec.policy || 'Collecting strategy evidence.'))}</div>
       </div>
       <p class="tr-method" style="margin-top:0">Live-collected 5-minute BTC/ETH/SOL paper rows, replayed against a small set of commodity-specific strategy candidates over the last ${Math.round(d.since_hours || 72)} hours. Paper only; no slippage.</p>
       <div class="tr-stats">${cards}</div>
