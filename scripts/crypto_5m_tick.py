@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from analyzing_llm_rationale import crypto_5m  # noqa: E402
+from analyzing_llm_rationale import crypto_5m, crypto_kalshi  # noqa: E402
 
 
 def _csv_symbols(value: str) -> list[str]:
@@ -50,6 +50,13 @@ def main() -> int:
     parser.add_argument("--training-window", type=int, default=120)
     parser.add_argument("--strategy-mode", default="per_asset_regime_selector")
     parser.add_argument("--momentum-threshold", type=float, default=0.0025)
+    parser.add_argument("--kalshi-log", type=Path, default=crypto_kalshi.DEFAULT_KALSHI_EDGE_LOG_PATH,
+                        help="JSONL log of real Kalshi BTC model-vs-market paper trades.")
+    parser.add_argument("--kalshi-out", type=Path, default=crypto_kalshi.DEFAULT_KALSHI_EDGE_PAYLOAD_PATH,
+                        help="Public payload for the real-instrument calibration + equity curve.")
+    parser.add_argument("--kalshi-edge-threshold", type=float, default=0.02,
+                        help="Min net edge (after spread+fee) to take a Kalshi paper trade.")
+    parser.add_argument("--no-kalshi", action="store_true", help="Skip the Kalshi real-instrument step.")
     args = parser.parse_args()
 
     args.signal_log.parent.mkdir(parents=True, exist_ok=True)
@@ -91,11 +98,30 @@ def main() -> int:
     equity = crypto_5m.crypto_5m_candidate_equity(db_path=args.signal_db, since_hours=args.hours)
     args.equity_out.write_text(json.dumps(equity, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
+    # Real-instrument leg: snapshot/resolve actual Kalshi BTC markets so the public
+    # chart shows a model-vs-market calibration + paper equity on a tradeable
+    # contract, not the synthetic 50c toy. Best-effort; never fails the tick.
+    kalshi = None
+    if not args.no_kalshi:
+        try:
+            args.kalshi_log.parent.mkdir(parents=True, exist_ok=True)
+            args.kalshi_out.parent.mkdir(parents=True, exist_ok=True)
+            snap = crypto_kalshi.snapshot_kalshi_btc_markets(
+                path=args.kalshi_log, edge_threshold=args.kalshi_edge_threshold)
+            kres = crypto_kalshi.resolve_kalshi_btc_log(path=args.kalshi_log)
+            kpayload = crypto_kalshi.kalshi_btc_equity(path=args.kalshi_log)
+            args.kalshi_out.write_text(json.dumps(kpayload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            kalshi = {"snapshot": snap, "resolve": kres,
+                      "n_resolved": kpayload["n_resolved"], "n_open": kpayload["n_open"]}
+        except Exception as exc:  # noqa: BLE001 — never let the real-instrument leg break the tick
+            kalshi = {"error": str(exc)}
+
     print(json.dumps({
         "resolved": resolved,
         "signals": len(signals),
         "errors": errors,
         "seed": seed,
+        "kalshi": kalshi,
         "prune": prune,
         "equity_out": str(args.equity_out),
         "curves": [

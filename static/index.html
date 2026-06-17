@@ -4069,44 +4069,48 @@ async function loadCrypto5mEquity() {
   const host = document.getElementById('crypto5mEquity');
   if (!host) return;
   try {
-    const r = await fetch('/crypto-5m/equity?hours=0');
+    const r = await fetch('/crypto-5m/kalshi-edge');
     if (!r.ok) throw new Error('unavailable');
     const d = await _readJson(r);
     if (d.generated_at && d.generated_at === _crypto5mLastGen) return;
     _crypto5mLastGen = d.generated_at || null;
-    const curves = (d.curves || []).filter(c => c.trades > 0);
-    if (!curves.length) {
-      host.innerHTML = '<p class="text-sm text-gray-500">Collecting 5-minute crypto rows. Curves appear once candidate strategies have resolved trades.</p>';
+    const cal = d.calibration || {};
+    const pt = d.paper_trades || {};
+    const nRes = d.n_resolved || 0, nOpen = d.n_open || 0;
+    const method = `<p class="tr-method" style="margin-top:0">Real Kalshi <strong>BTC ≥ strike at close</strong> markets (KXBTCD). Each tick prices the model's probability against the live bid/ask and takes a paper trade only when the edge clears the spread + Kalshi fee, then scores it on the venue's own settlement. This replaces the earlier synthetic 50¢ curves, which assumed an instrument that doesn't trade.</p>`;
+    if (nRes < 5) {
+      host.innerHTML = method +
+        `<div class="tr-stat" style="margin-top:10px"><div class="v" style="font-size:16px">Building calibration</div>` +
+        `<div class="k" style="font-size:12px;color:var(--text-dim)">${nOpen} open paper trades · ${nRes} settled. Calibration and the equity curve appear once enough markets resolve (BTC markets settle hourly/daily).</div></div>`;
       return;
     }
-    const cards = curves.slice(0, 4).map(_crypto5mSummaryCard).join('');
-    const chartCurves = curves.slice(0, 4).map(c => ({
-      key: c.key,
-      label: _crypto5mLabel(c),
-      color: c.color,
-      points: c.points || [],
-      times: c.times || [],
-    }));
+    // Calibration + paper-trade summary cards.
+    const _stat = (v, k, color) => `<div class="tr-stat"><div class="v" ${color ? `style="${color}"` : ''}>${v}</div><div class="k label">${k}</div></div>`;
+    const roi = pt.roi == null ? '—' : (pt.roi >= 0 ? '+' : '') + (pt.roi * 100).toFixed(1) + '%';
+    const cards = [
+      _stat(cal.brier == null ? '—' : cal.brier.toFixed(3), 'Brier (model_p)'),
+      _stat(cal.directional_accuracy == null ? '—' : (cal.directional_accuracy * 100).toFixed(0) + '%', 'Directional acc'),
+      _stat(roi, 'Paper ROI (net)', pt.roi >= 0 ? 'color:#0a7' : 'color:#c33'),
+      _stat((pt.n_trades || 0) + ' / ' + nRes, 'Trades / settled'),
+    ].join('');
+    // Reliability table: does model_p match the empirical settle rate?
+    const rel = (cal.reliability || []).map(b =>
+      `<tr><td style="padding:2px 8px">${b.range}</td><td style="padding:2px 8px;text-align:right">${(b.mean_model_p * 100).toFixed(0)}%</td><td style="padding:2px 8px;text-align:right">${(b.empirical_rate * 100).toFixed(0)}%</td><td style="padding:2px 8px;text-align:right;color:var(--text-dim)">${b.n}</td></tr>`).join('');
+    const relTable = rel ? `<table style="font-size:11px;margin-top:8px;border-collapse:collapse"><thead><tr style="color:var(--text-dim)"><th style="padding:2px 8px;text-align:left">model_p</th><th style="padding:2px 8px;text-align:right">predicted</th><th style="padding:2px 8px;text-align:right">actual</th><th style="padding:2px 8px;text-align:right">n</th></tr></thead><tbody>${rel}</tbody></table>` : '';
+    const chartCurves = (pt.equity_curve && pt.equity_curve.length) ? [{
+      key: 'kalshi_btc', label: 'Kalshi BTC paper P&L (net)', color: '#34d399',
+      points: pt.equity_curve, times: pt.equity_curve_ts || [],
+    }] : [];
     const gen = d.generated_at ? new Date(d.generated_at).toLocaleTimeString() : '';
-    const rec = d.recommendation || {};
-    const recPnl = Number(rec.pnl_per_contract || 0);
-    host.innerHTML = `<div class="tr-stat" style="margin-bottom:12px">
-        <div class="v" style="font-size:18px;color:${recPnl >= 0 ? '#0a7' : '#c33'}">${recPnl >= 0 ? '+' : ''}${recPnl.toFixed(2)}</div>
-        <div class="k label">Current paper policy</div>
-        <div class="k" style="font-size:12px;color:var(--text-dim)">${escHtml(rec.candidate === 'selector_btc_inverse_eth_fade' ? _CRYPTO5M_POLICY_TEXT : (rec.policy || 'Collecting strategy evidence.'))}</div>
-      </div>
-      <p class="tr-method" style="margin-top:0">${(() => {
-          const days = d.coverage && d.coverage.days ? Number(d.coverage.days) : null;
-          const span = days != null ? (days >= 1 ? `${days.toFixed(days >= 10 ? 0 : 1)} days` : `${Math.round(days * 24)} hours`) : 'the full collected window';
-          return `Historical BTC/ETH/SOL 5-minute paper rows (Binance backfill + live collection), replayed against a small set of asset-specific strategy candidates across ${span} of history — long enough to judge whether the edge holds up over time. Paper only; no slippage.`;
-        })()}</p>
-      <div class="tr-stats">${cards}</div>
-      <div id="crypto5mSvgWrap">${_crypto5mSvg(chartCurves)}</div>
-      <p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(d.note || '')}${gen ? ' · updated ' + gen : ''}</p>`;
+    host.innerHTML = method +
+      `<div class="tr-stats" style="margin-top:10px">${cards}</div>` +
+      (chartCurves.length ? `<div id="crypto5mSvgWrap">${_crypto5mSvg(chartCurves)}</div>` : '') +
+      `<p class="text-xs text-gray-400" style="margin-top:6px">Reliability — is the model calibrated? (predicted vs actual settle rate)</p>${relTable}` +
+      `<p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(d.note || '')}${gen ? ' · updated ' + gen : ''}</p>`;
     const wrap = document.getElementById('crypto5mSvgWrap');
     if (wrap) _attachCrypto5mHover(wrap);
   } catch (_) {
-    host.innerHTML = '<p class="text-sm text-gray-500">5-minute crypto strategy chart is not available yet.</p>';
+    host.innerHTML = '<p class="text-sm text-gray-500">Real Kalshi BTC calibration is not available yet.</p>';
   }
 }
 
@@ -4812,7 +4816,7 @@ function renderEdgeBoard(d) {
     ${stats}
     <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
     <h4 class="eb-h">Hypothetical paper PnL · following the model's calls <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${pnlHtml}
-    <h4 class="eb-h">5-minute crypto strategy lab · BTC / ETH / SOL</h4><div id="crypto5mEquity"><p class="text-sm text-gray-500">Loading 5-minute crypto strategy curves…</p></div>
+    <h4 class="eb-h">Crypto model calibration · real Kalshi BTC markets</h4><div id="crypto5mEquity"><p class="text-sm text-gray-500">Loading real Kalshi BTC calibration…</p></div>
     <h4 class="eb-h">Does an early call pay? · skill by how early the forecast was made</h4>${calibHtml}
     <h4 class="eb-h">Live forecasts · ranked by disagreement, linked to skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;

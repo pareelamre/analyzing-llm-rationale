@@ -39,7 +39,14 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from analyzing_llm_rationale import agent_capabilities, crypto_5m, pr_agent, rag, venue_mcp
+from analyzing_llm_rationale import (
+    agent_capabilities,
+    crypto_5m,
+    crypto_kalshi,
+    pr_agent,
+    rag,
+    venue_mcp,
+)
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
     build_user_prompt,
@@ -1828,6 +1835,42 @@ async def crypto_5m_equity(hours: float = Query(72.0, ge=0.0, le=26280.0)):
         lambda: crypto_5m.crypto_5m_candidate_equity(since_hours=since_hours),
     )
     return JSONResponse(result, headers={"Cache-Control": "public, max-age=30"})
+
+
+@app.get("/crypto-5m/kalshi-edge", tags=["System"],
+         summary="Real Kalshi BTC model-vs-market calibration + paper equity")
+async def crypto_5m_kalshi_edge():
+    """Real-instrument view: model probability vs live Kalshi BTC bid/ask, scored
+    on the venue's own settlement. Served from the tick-committed payload (raw
+    GitHub copy → bundled fallback) so it refreshes without a redeploy."""
+    def _load() -> Dict[str, Any]:
+        import requests
+        cache_key = _cache_key("kalshi_btc_edge")
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
+        payload: Optional[Dict[str, Any]] = None
+        try:
+            resp = requests.get(crypto_kalshi.DEFAULT_KALSHI_EDGE_REMOTE_URL, timeout=6)
+            if resp.status_code == 200:
+                payload = resp.json()
+        except Exception:
+            logger.warning("kalshi edge fetch failed; trying bundled copy", exc_info=True)
+        if payload is None:
+            bundled = _STATIC_DIR / "crypto_kalshi_edge_payload.json"
+            if bundled.exists():
+                try:
+                    payload = json.loads(bundled.read_text())
+                except Exception:
+                    payload = None
+        if payload is None:
+            payload = {"n_resolved": 0, "n_open": 0,
+                       "calibration": {"n": 0}, "paper_trades": {"n_trades": 0},
+                       "note": "Collecting real Kalshi BTC markets."}
+        _cache_set(cache_key, payload, 120)
+        return payload
+    result = await asyncio.get_running_loop().run_in_executor(None, _load)
+    return JSONResponse(result, headers={"Cache-Control": "public, max-age=60"})
 
 
 def _require_track_token(request: Optional[Request]) -> None:

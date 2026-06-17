@@ -47,7 +47,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/crypto_5m_signal_log.jsonl static/crypto_5m_equity_payload.json
+          git add data/crypto_5m_signal_log.jsonl static/crypto_5m_equity_payload.json \
+                  data/crypto_kalshi_edge_log.jsonl static/crypto_kalshi_edge_payload.json
           if git diff --cached --quiet; then
             echo "No crypto 5m changes to commit."
             exit 0
