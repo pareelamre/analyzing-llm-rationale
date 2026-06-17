@@ -2111,6 +2111,27 @@ class PredictRequest(BaseModel):
     market_ask: Optional[float] = Field(
         None, description="Current best ask (YES) in probability units (0..1). Kalshi only."
     )
+    market_last_trade_price: Optional[float] = Field(
+        None, description="Last actual trade price (0..1). More reliable than resting bid/ask in thin markets. Populated automatically."
+    )
+    market_price_change_7d: Optional[float] = Field(
+        None, description="7-day price change in probability points (-1..1). Reveals slow drift that 24h misses. Populated automatically."
+    )
+    market_resolution_source: Optional[str] = Field(
+        None, description="Who resolves the market (e.g. UMA oracle, Kalshi team). Affects how much to trust the market price."
+    )
+    market_no_sub_title: Optional[str] = Field(
+        None, description="What the NO outcome represents (Kalshi). Useful when the question wording is ambiguous."
+    )
+    market_expected_expiration_time: Optional[str] = Field(
+        None, description="When the venue expects to settle (Kalshi). May differ from trading close date."
+    )
+    market_floor_strike: Optional[Any] = Field(
+        None, description="Lower bound of resolution range for scalar Kalshi markets."
+    )
+    market_cap_strike: Optional[Any] = Field(
+        None, description="Upper bound of resolution range for scalar Kalshi markets."
+    )
     market_price_history: Optional[List[Dict[str, Any]]] = Field(
         None,
         description=(
@@ -3161,6 +3182,14 @@ async def _prepare_predict_messages(
                     record["market_bid"] = float(quote["yes_bid"])
                 if record.get("market_ask") is None and quote.get("yes_ask") is not None:
                     record["market_ask"] = float(quote["yes_ask"])
+                if record.get("market_last_trade_price") is None and quote.get("last_trade_price") is not None:
+                    record["market_last_trade_price"] = float(quote["last_trade_price"])
+                if record.get("market_price_change_7d") is None and quote.get("price_change_7d") is not None:
+                    record["market_price_change_7d"] = float(quote["price_change_7d"])
+                for fld in ("resolution_source", "no_sub_title", "expected_expiration_time",
+                            "floor_strike", "cap_strike"):
+                    if record.get(f"market_{fld}") is None and quote.get(fld) is not None:
+                        record[f"market_{fld}"] = quote[fld]
         except Exception:
             pass
     evidence_articles = [article.model_dump() for article in req.news_articles]

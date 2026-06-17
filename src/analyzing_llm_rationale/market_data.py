@@ -139,6 +139,9 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         ),
         "yes_bid": _to_float(market.get("bestBid")),
         "yes_ask": _to_float(market.get("bestAsk")),
+        "last_trade_price": _to_float(market.get("lastTradePrice") or market.get("last_trade_price")),
+        "price_change_7d": _to_float(market.get("oneWeekPriceChange") or market.get("weekPriceChange")),
+        "resolution_source": (market.get("resolverUrl") or market.get("resolutionSource") or "").strip() or None,
         "category": market.get("category"),
     }
 
@@ -358,10 +361,17 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         ),
         "yes_bid": yes_bid,
         "yes_ask": yes_ask,
+        "last_trade_price": last if last is not None else None,
+        "price_change_7d": None,  # not in Kalshi API
+        "resolution_source": "Kalshi",
         "resolution_criteria": " ".join(filter(None, [
             (market.get("rules_primary") or "").strip(),
             (market.get("rules_secondary") or "").strip(),
         ])) or None,
+        "no_sub_title": (market.get("no_sub_title") or "").strip() or None,
+        "expected_expiration_time": market.get("expected_expiration_time"),
+        "floor_strike": market.get("floor_strike"),
+        "cap_strike": market.get("cap_strike"),
         "category": None,  # set from the event in list_kalshi
     }
 

@@ -277,8 +277,15 @@ def build_user_prompt(
     market_volume = record.get("market_volume")
     market_liquidity = record.get("market_liquidity")
     market_price_change_24h = record.get("market_price_change_24h")
+    market_price_change_7d = record.get("market_price_change_7d")
     market_bid = record.get("market_bid")
     market_ask = record.get("market_ask")
+    market_last_trade_price = record.get("market_last_trade_price")
+    market_resolution_source = record.get("market_resolution_source")
+    market_no_sub_title = record.get("market_no_sub_title")
+    market_expected_expiration = record.get("market_expected_expiration_time")
+    market_floor_strike = record.get("market_floor_strike")
+    market_cap_strike = record.get("market_cap_strike")
     market_price_history: list = list(record.get("market_price_history") or [])
 
     prompt_suffix = user_prompt_template.replace("[question]", "").strip()
@@ -317,13 +324,27 @@ def build_user_prompt(
             parts.append(f"Bid/Ask: {market_bid:.2f} / {market_ask:.2f} (spread {spread_pp}pp)")
         elif market_bid is not None:
             parts.append(f"Best Bid: {market_bid:.2f}")
+        if market_last_trade_price is not None:
+            parts.append(f"Last Trade Price: {market_last_trade_price:.3f}")
         if market_price_change_24h is not None:
             sign = "+" if market_price_change_24h >= 0 else ""
             parts.append(f"24h Price Change: {sign}{round(market_price_change_24h * 100, 1)}pp")
+        if market_price_change_7d is not None:
+            sign = "+" if market_price_change_7d >= 0 else ""
+            parts.append(f"7d Price Change: {sign}{round(market_price_change_7d * 100, 1)}pp")
         if market_volume is not None:
             parts.append(f"24h Volume: ${market_volume:,.0f}")
         if market_liquidity is not None:
             parts.append(f"Open Interest / Liquidity: ${market_liquidity:,.0f}")
+        if market_no_sub_title:
+            parts.append(f"NO Outcome: {market_no_sub_title}")
+        if market_floor_strike is not None or market_cap_strike is not None:
+            rng = f"{market_floor_strike} – {market_cap_strike}"
+            parts.append(f"Resolution Range: {rng}")
+        if market_expected_expiration:
+            parts.append(f"Expected Settlement: {market_expected_expiration}")
+        if market_resolution_source:
+            parts.append(f"Resolution Source: {market_resolution_source}")
         if market_price_history:
             parts.append("Market Price History (UTC, newest first):")
             for pt in market_price_history[:8]:
