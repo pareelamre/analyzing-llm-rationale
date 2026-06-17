@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sqlite3
 import sys
 import tempfile
@@ -644,6 +645,33 @@ class Crypto5mTests(unittest.TestCase):
             self.assertGreater(result["records"], 0)
             equity = crypto_5m.crypto_5m_candidate_equity(db_path=db, since_hours=0)
             self.assertEqual(equity["resolved_rows"], result["records"])
+
+    def test_remote_equity_fallback_bypasses_raw_github_cache(self):
+        calls = []
+
+        def fake_get(url, headers=None, timeout=None):
+            calls.append((url, headers, timeout))
+            return FakeResponse({"generated_at": "fresh", "curves": []})
+
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+        original = os.environ.get("CRYPTO_5M_EQUITY_URL")
+        os.environ["CRYPTO_5M_EQUITY_URL"] = "https://example.test/equity.json?ref=main"
+        original_time = crypto_5m.time.time
+        crypto_5m.time.time = lambda: 1234.567
+        try:
+            payload = crypto_5m._load_crypto_5m_equity_fallback(Path("missing.sqlite"))
+        finally:
+            crypto_5m.time.time = original_time
+            if original is None:
+                os.environ.pop("CRYPTO_5M_EQUITY_URL", None)
+            else:
+                os.environ["CRYPTO_5M_EQUITY_URL"] = original
+
+        self.assertEqual(payload["generated_at"], "fresh")
+        self.assertEqual(payload["fallback_source"], "https://example.test/equity.json?ref=main")
+        self.assertEqual(calls[0][0], "https://example.test/equity.json?ref=main&_ts=1234567")
+        self.assertEqual(calls[0][1]["Cache-Control"], "no-cache")
+        self.assertEqual(calls[0][1]["Pragma"], "no-cache")
 
     def test_per_asset_regime_selector_uses_inverse_edge_for_btc(self):
         forecast = {

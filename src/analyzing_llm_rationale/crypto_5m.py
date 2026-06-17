@@ -48,6 +48,11 @@ _FEATURE_NAMES = (
 )
 
 
+def _cache_busted_url(url: str) -> str:
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}_ts={int(time.time() * 1000)}"
+
+
 class CryptoModelError(RuntimeError):
     """Raised when live crypto data cannot be fetched or modelled."""
 
@@ -2788,7 +2793,12 @@ def _load_crypto_5m_equity_fallback(db_path: Path) -> Optional[Dict[str, Any]]:
         try:
             import requests
 
-            resp = requests.get(remote_url, headers=_HEADERS, timeout=5)
+            headers = {
+                **_HEADERS,
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            }
+            resp = requests.get(_cache_busted_url(remote_url), headers=headers, timeout=5)
             if resp.status_code == 200:
                 payload = resp.json()
                 if isinstance(payload, dict):
