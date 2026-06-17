@@ -1822,7 +1822,7 @@ async def crypto_5m_equity(hours: float = Query(72.0, ge=1.0, le=168.0)):
         None,
         lambda: crypto_5m.crypto_5m_candidate_equity(since_hours=hours),
     )
-    return JSONResponse(result, headers={"Cache-Control": "public, max-age=60"})
+    return JSONResponse(result, headers={"Cache-Control": "public, max-age=30"})
 
 
 def _require_track_token(request: Optional[Request]) -> None:

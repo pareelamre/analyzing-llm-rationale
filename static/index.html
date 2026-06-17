@@ -3866,6 +3866,7 @@ let edgeLoaded = false;
 let _edgePriceTimer = null;
 let _ebEquityTimer = null;
 let _crypto5mTimer = null;
+let _crypto5mLastGen = null;
 let _lastEquityCurves = null;
 let _lastCrypto5mCurves = null;
 let _pendingMarketCtx = null;
@@ -4013,6 +4014,8 @@ async function loadCrypto5mEquity() {
     const r = await fetch('/crypto-5m/equity?hours=72');
     if (!r.ok) throw new Error('unavailable');
     const d = await _readJson(r);
+    if (d.generated_at && d.generated_at === _crypto5mLastGen) return;
+    _crypto5mLastGen = d.generated_at || null;
     const curves = (d.curves || []).filter(c => c.trades > 0);
     if (!curves.length) {
       host.innerHTML = '<p class="text-sm text-gray-500">Collecting 5-minute crypto rows. Curves appear once candidate strategies have resolved trades.</p>';
@@ -4060,7 +4063,7 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   loadCrypto5mEquity();
   _edgePriceTimer = setInterval(refreshEdgePrices, 60000);
   _ebEquityTimer = setInterval(refreshEquityCurve, 2 * 60 * 1000);
-  _crypto5mTimer = setInterval(loadCrypto5mEquity, 2 * 60 * 1000);
+  _crypto5mTimer = setInterval(loadCrypto5mEquity, 30 * 1000);
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
 function closeEdgeBoard({ updateHistory = true } = {}) {
