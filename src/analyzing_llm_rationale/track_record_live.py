@@ -744,6 +744,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         n = 0
         cum = 0.0
         curve: List[float] = []
+        curve_ts: List[Any] = []
         for b in all_bets:
             if validated and not b["in_validated"]:
                 continue
@@ -759,6 +760,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             n += 1
             cum += profit
             curve.append(round(cum, 4))
+            curve_ts.append(b["resolved_ts"])
         if not n:
             return None
         return {
@@ -769,6 +771,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "roi": round(pnl / staked, 4) if staked else None,
             "win_rate": round(wins / n, 4),
             "equity_curve": curve[-60:],
+            "equity_curve_ts": curve_ts[-60:],
         }
 
     flat = _run(lambda e: 1.0)
@@ -798,6 +801,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         return None
     cum = 0.0
     curve: List[float] = []
+    curve_ts: List[Any] = []
     staked = pnl = wins = 0.0
     n = 0
     for r in sorted(resolved, key=lambda x: x.get("resolved_ts") or _now()):
@@ -819,6 +823,12 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         n += 1
         cum += profit
         curve.append(round(cum, 4))
+        ts = r.get("resolved_ts")
+        if isinstance(ts, dict):
+            ts = ts.get("__dt__")
+        elif hasattr(ts, "isoformat"):
+            ts = ts.isoformat()
+        curve_ts.append(ts)
     if not n:
         return None
     return {
@@ -828,6 +838,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         "roi": round(pnl / staked, 4) if staked else None,
         "win_rate": round(wins / n, 4),
         "equity_curve": curve[-60:],
+        "equity_curve_ts": curve_ts[-60:],
     }
 
 

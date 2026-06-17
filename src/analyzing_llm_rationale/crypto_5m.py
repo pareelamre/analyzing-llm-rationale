@@ -2873,6 +2873,7 @@ def crypto_5m_candidate_equity(
     for key, label in candidates:
         running = 0.0
         equity: List[float] = []
+        times: List[int] = []
         wins = 0
         trades = 0
         by_symbol: Dict[str, Dict[str, Any]] = {}
@@ -2895,6 +2896,7 @@ def crypto_5m_candidate_equity(
                 wins += 1
             running += float(pnl)
             equity.append(round(running, 6))
+            times.append(int(record.get("start_time_ms") or 0))
             last_trade_at = record.get("resolved_at") or record.get("logged_at")
             if first_trade_at is None:
                 first_trade_at = record.get("logged_at") or record.get("resolved_at")
@@ -2929,6 +2931,7 @@ def crypto_5m_candidate_equity(
             "label": label,
             "color": colors[key],
             "points": equity,
+            "times": times,
             "trades": trades,
             "hit_rate": round(wins / trades, 4),
             "pnl_per_contract": round(running, 6),

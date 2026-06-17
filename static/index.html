@@ -3930,11 +3930,21 @@ async function refreshEquityCurve() {
     _upd('eb-pnl-val-v',   _roiVal(pnl.validated_only));
     const _normCurve = s => s?.equity_curve?.length && s.total_staked
       ? s.equity_curve.map(v => v / s.total_staked) : null;
+    const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+    const _mk = (s, color, label, dash) => {
+      const points = _normCurve(s);
+      if (!points) return null;
+      const times = _times(s);
+      const curve = { points, color, label };
+      if (dash) curve.dash = true;
+      if (times.length === points.length) curve.times = times;
+      return curve;
+    };
     const curves = [
-      _normCurve(pnl.flat)            ? { points: _normCurve(pnl.flat),            color: '#60a5fa', label: 'Flat stake' }                : null,
-      _normCurve(pnl.edge_weighted)   ? { points: _normCurve(pnl.edge_weighted),   color: '#a78bfa', label: 'Edge-weighted' }             : null,
-      _normCurve(pnl.validated_only)  ? { points: _normCurve(pnl.validated_only),  color: '#34d399', label: 'Validated-only' }            : null,
-      _normCurve(pnl.crowd_baseline)  ? { points: _normCurve(pnl.crowd_baseline),  color: '#94a3b8', label: 'Crowd baseline', dash: true } : null,
+      _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
+      _mk(pnl.edge_weighted,  '#a78bfa', 'Edge-weighted'),
+      _mk(pnl.validated_only, '#34d399', 'Validated-only'),
+      _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
     el.innerHTML = curves.length ? _equitySvg(curves) : '';
     if (curves.length) _attachEquityHover(el);
@@ -3956,9 +3966,20 @@ async function refreshEquityCurve() {
   } catch (_) {}
 }
 
+function _fmtEquityDate(ms, withTime) {
+  const d = new Date(ms);
+  if (isNaN(d)) return '';
+  const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (!withTime) return date;
+  return date + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
 function _crypto5mSvg(curves, W = 520, H = 150) {
+  // Each curve carries a parallel `times` array (epoch ms) so the x-axis is a
+  // real timeline; fall back to trade index only if timestamps are absent.
   const visible = (curves || []).filter(c => c.points && c.points.length);
   if (!visible.length) return '';
+  const hasTimes = visible.every(c => Array.isArray(c.times) && c.times.length === c.points.length);
   const allPts = visible.flatMap(c => c.points);
   const n = Math.max(...visible.map(c => c.points.length));
   const lo = Math.min(0, ...allPts);
@@ -3966,25 +3987,45 @@ function _crypto5mSvg(curves, W = 520, H = 150) {
   const range = hi - lo || 1;
   const padL = 46, padR = 10, padT = 10, padB = 30;
   const cW = W - padL - padR, cH = H - padT - padB;
-  const toX = i => padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
+  let tMin = 0, tMax = 1;
+  if (hasTimes) {
+    const allT = visible.flatMap(c => c.times);
+    tMin = Math.min(...allT); tMax = Math.max(...allT);
+    if (tMax <= tMin) tMax = tMin + 1;
+  }
+  const tSpan = tMax - tMin;
+  const toX = (i, t) => hasTimes
+    ? padL + ((t - tMin) / tSpan) * cW
+    : padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
   const toY = v => padT + cH - ((v - lo) / range) * cH;
   const zeroY = toY(0).toFixed(1);
   const yVals = [...new Set([lo, 0, hi])].filter(v => v !== 0 || (lo < 0 && hi > 0));
   const yLabels = yVals.map(v =>
     `<text x="${padL - 5}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${v >= 0 ? '+' : ''}${v.toFixed(1)}</text>`
   ).join('');
+  let xLabels = '';
+  if (hasTimes) {
+    const withTime = tSpan < 2 * 86400000;
+    const ticks = 4;
+    for (let k = 0; k <= ticks; k++) {
+      const t = tMin + (tSpan * k / ticks);
+      const x = padL + (cW * k / ticks);
+      const anchor = k === 0 ? 'start' : (k === ticks ? 'end' : 'middle');
+      xLabels += `<text x="${x.toFixed(1)}" y="${H - 18}" font-size="8.5" text-anchor="${anchor}" fill="#888">${escHtml(_fmtEquityDate(t, withTime))}</text>`;
+    }
+  }
   const paths = visible.map(c => {
-    const pts = c.points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+    const pts = c.points.map((v, i) => `${toX(i, c.times && c.times[i]).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
     return `<polyline points="${pts}" fill="none" stroke="${escAttr(c.color || '#60a5fa')}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
   }).join('');
   const legend = visible.slice(0, 4).map((c, i) => {
-    const x = padL + (i % 2) * 210, y = H - 17 + Math.floor(i / 2) * 12;
+    const x = padL + (i % 2) * 210, y = H - 5 + Math.floor(i / 2) * 12;
     return `<circle cx="${x + 5}" cy="${y - 3}" r="3.5" fill="${escAttr(c.color || '#60a5fa')}"/>` +
       `<text x="${x + 14}" y="${y}" font-size="9.5" fill="${escAttr(c.color || '#60a5fa')}">${escHtml(c.label || c.key || '')}</text>`;
   }).join('');
-  _lastCrypto5mCurves = { curves: visible, W, H, padL, padT, cW, cH, n, lo, hi, range };
-  return `<svg class="crypto5m-svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:${H}px;display:block;margin-top:10px;overflow:visible;cursor:crosshair" aria-label="5-minute crypto paper equity curves">
-    ${yLabels}<line x1="${padL}" y1="${zeroY}" x2="${padL + cW}" y2="${zeroY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>${paths}${legend}
+  _lastCrypto5mCurves = { curves: visible, W, H, padL, padT, cW, cH, n, lo, hi, range, hasTimes, tMin, tMax, tSpan };
+  return `<svg class="crypto5m-svg" viewBox="0 0 ${W} ${H + (legend ? 14 : 0)}" style="width:100%;max-width:${W}px;height:${H + (legend ? 14 : 0)}px;display:block;margin-top:10px;overflow:visible;cursor:crosshair" aria-label="5-minute crypto paper equity curves">
+    ${yLabels}${xLabels}<line x1="${padL}" y1="${zeroY}" x2="${padL + cW}" y2="${zeroY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>${paths}${legend}
   </svg>`;
 }
 
@@ -4044,6 +4085,7 @@ async function loadCrypto5mEquity() {
       label: _crypto5mLabel(c),
       color: c.color,
       points: c.points || [],
+      times: c.times || [],
     }));
     const gen = d.generated_at ? new Date(d.generated_at).toLocaleTimeString() : '';
     const rec = d.recommendation || {};
@@ -4308,13 +4350,24 @@ function _equitySvg(curves, W = 460, H = 110) {
   // a common % scale regardless of their stake sizes).
   const allPts = curves.flatMap(c => c.points);
   if (!allPts.length) return '';
+  // Use a real time x-axis when every curve carries a matching `times` array.
+  const hasTimes = curves.every(c => Array.isArray(c.times) && c.times.length === c.points.length);
   const n = Math.max(...curves.map(c => c.points.length));
   const lo = Math.min(0, ...allPts);
   const hi = Math.max(0, ...allPts);
   const range = hi - lo || 1;
-  const padL = 42, padR = 8, padT = 8, padB = 20;
+  const padL = 42, padR = 8, padT = 8, padB = hasTimes ? 32 : 20;
   const cW = W - padL - padR, cH = H - padT - padB;
-  const toX = i => padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
+  let tMin = 0, tMax = 1;
+  if (hasTimes) {
+    const allT = curves.flatMap(c => c.times);
+    tMin = Math.min(...allT); tMax = Math.max(...allT);
+    if (tMax <= tMin) tMax = tMin + 1;
+  }
+  const tSpan = tMax - tMin;
+  const toX = (i, t) => hasTimes
+    ? padL + ((t - tMin) / tSpan) * cW
+    : padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
   const toY = v => padT + cH - ((v - lo) / range) * cH;
   const zeroY = toY(0).toFixed(1);
   // Y-axis labels as % (top, bottom, and zero when it falls in range)
@@ -4322,25 +4375,36 @@ function _equitySvg(curves, W = 460, H = 110) {
   const yAxisHtml = yLabels.map(v =>
     `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${v >= 0 ? '+' : ''}${Math.round(v * 100)}%</text>`
   ).join('');
+  let xAxisHtml = '';
+  if (hasTimes) {
+    const withTime = tSpan < 2 * 86400000, ticks = 4;
+    for (let k = 0; k <= ticks; k++) {
+      const t = tMin + (tSpan * k / ticks), x = padL + (cW * k / ticks);
+      const anchor = k === 0 ? 'start' : (k === ticks ? 'end' : 'middle');
+      xAxisHtml += `<text x="${x.toFixed(1)}" y="${(padT + cH + 12).toFixed(1)}" font-size="8.5" text-anchor="${anchor}" fill="#888">${escHtml(_fmtEquityDate(t, withTime))}</text>`;
+    }
+  }
   // Zero baseline
   const baseline = `<line x1="${padL}" y1="${zeroY}" x2="${padL + cW}" y2="${zeroY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>`;
   // Curve paths — dash=true renders as a dashed line (crowd baseline)
   const paths = curves.map(c => {
     if (!c.points.length) return '';
-    const pts = c.points.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+    const pts = c.points.map((v, i) => `${toX(i, c.times && c.times[i]).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
     const dashAttr = c.dash ? ' stroke-dasharray="5,3" stroke-width="1.4" opacity="0.75"' : ' stroke-width="1.8"';
     return `<polyline points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>`;
   }).join('');
   // Legend — dashed swatch for crowd baseline
+  const legendY = hasTimes ? H + 8 : H - 6;
   const legend = curves.map((c, i) => {
     const swatch = c.dash
-      ? `<line x1="${padL + i * 110}" y1="${H - 6}" x2="${padL + i * 110 + 14}" y2="${H - 6}" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="4,2" opacity="0.8"/>`
-      : `<circle cx="${padL + i * 110 + 7}" cy="${H - 6}" r="3.5" fill="${c.color}"/>`;
-    return swatch + `<text x="${padL + i * 110 + 17}" y="${H - 2}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
+      ? `<line x1="${padL + i * 110}" y1="${legendY}" x2="${padL + i * 110 + 14}" y2="${legendY}" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="4,2" opacity="0.8"/>`
+      : `<circle cx="${padL + i * 110 + 7}" cy="${legendY}" r="3.5" fill="${c.color}"/>`;
+    return swatch + `<text x="${padL + i * 110 + 17}" y="${legendY + 4}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
   }).join('');
-  _lastEquityCurves = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1 };
-  return `<svg class="eq-svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:${H}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
-    ${yAxisHtml}${baseline}${paths}${legend}
+  const svgH = H + (hasTimes ? 14 : 0);
+  _lastEquityCurves = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan };
+  return `<svg class="eq-svg" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
+    ${yAxisHtml}${xAxisHtml}${baseline}${paths}${legend}
   </svg>`;
 }
 
@@ -4394,19 +4458,38 @@ function _attachEquityHover(container) {
     const rect = svg.getBoundingClientRect();
     const svgX = (e.clientX - rect.left) * (eq.W / rect.width);
     if (svgX < eq.padL || svgX > eq.padL + eq.cW) { hide(); return; }
-    const idx = Math.max(0, Math.min(eq.n - 1, Math.round((svgX - eq.padL) / eq.cW * (eq.n - 1))));
-    const x = eq.padL + (eq.n > 1 ? (idx / (eq.n - 1)) * eq.cW : eq.cW / 2);
+    const frac = (svgX - eq.padL) / eq.cW;
+    const x = svgX;
     xhair.setAttribute('x1', x.toFixed(1)); xhair.setAttribute('x2', x.toFixed(1));
     xhair.style.display = '';
+    let header;
+    if (eq.hasTimes) {
+      header = _fmtEquityDate(eq.tMin + frac * eq.tSpan, eq.tSpan < 2 * 86400000);
+    } else {
+      const idx = Math.max(0, Math.min(eq.n - 1, Math.round(frac * (eq.n - 1))));
+      header = `Bet ${idx + 1} / ${eq.n}`;
+    }
     const lines = eq.curves.map((c, ci) => {
-      const v = c.points[Math.min(idx, c.points.length - 1)];
+      let idx;
+      if (eq.hasTimes && c.times && c.times.length) {
+        const t = eq.tMin + frac * eq.tSpan;
+        idx = 0; let best = Infinity;
+        for (let j = 0; j < c.times.length; j++) {
+          const dd = Math.abs(c.times[j] - t);
+          if (dd < best) { best = dd; idx = j; }
+        }
+      } else {
+        idx = Math.max(0, Math.min(c.points.length - 1, Math.round(frac * (eq.n - 1))));
+      }
+      const v = c.points[idx];
       if (v == null) { dots[ci].style.display = 'none'; return null; }
+      const dotX = eq.hasTimes && c.times ? eq.padL + ((c.times[idx] - eq.tMin) / eq.tSpan) * eq.cW : x;
       const y = eq.padT + eq.cH - ((v - eq.lo) / eq.range) * eq.cH;
-      dots[ci].setAttribute('cx', x.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
+      dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
       dots[ci].style.display = '';
       return `<span style="color:${c.color}">${c.label}: ${v >= 0 ? '+' : ''}${Math.round(v * 100)}%</span>`;
     }).filter(Boolean);
-    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">Bet ${idx + 1} / ${eq.n}</div>` + lines.join('<br>');
+    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>` + lines.join('<br>');
     tip.style.display = 'block';
     const cr = container.getBoundingClientRect();
     let lft = e.clientX - cr.left + 14, top = e.clientY - cr.top - 24;
@@ -4473,20 +4556,40 @@ function _attachCrypto5mHover(container) {
     const rect = svg.getBoundingClientRect();
     const svgX = (e.clientX - rect.left) * (eq.W / rect.width);
     if (svgX < eq.padL || svgX > eq.padL + eq.cW) { hide(); return; }
-    const idx = Math.max(0, Math.min(eq.n - 1, Math.round((svgX - eq.padL) / eq.cW * (eq.n - 1))));
-    const x = eq.padL + (eq.n > 1 ? (idx / (eq.n - 1)) * eq.cW : eq.cW / 2);
+    const frac = (svgX - eq.padL) / eq.cW;
+    const x = svgX;
     xhair.setAttribute('x1', x.toFixed(1)); xhair.setAttribute('x2', x.toFixed(1));
     xhair.style.display = '';
+    let header;
+    if (eq.hasTimes) {
+      const t = eq.tMin + frac * eq.tSpan;
+      header = _fmtEquityDate(t, eq.tSpan < 2 * 86400000);
+    } else {
+      const idx = Math.max(0, Math.min(eq.n - 1, Math.round(frac * (eq.n - 1))));
+      header = `Trade ${idx + 1} / ${eq.n}`;
+    }
     const lines = eq.curves.map((c, ci) => {
-      const v = c.points[Math.min(idx, c.points.length - 1)];
+      let idx;
+      if (eq.hasTimes && c.times && c.times.length) {
+        const t = eq.tMin + frac * eq.tSpan;
+        idx = 0; let best = Infinity;
+        for (let j = 0; j < c.times.length; j++) {
+          const dd = Math.abs(c.times[j] - t);
+          if (dd < best) { best = dd; idx = j; }
+        }
+      } else {
+        idx = Math.max(0, Math.min(c.points.length - 1, Math.round(frac * (eq.n - 1))));
+      }
+      const v = c.points[idx];
       if (v == null) { dots[ci].style.display = 'none'; return null; }
+      const dotX = eq.hasTimes && c.times ? eq.padL + ((c.times[idx] - eq.tMin) / eq.tSpan) * eq.cW : x;
       const y = eq.padT + eq.cH - ((v - eq.lo) / eq.range) * eq.cH;
-      dots[ci].setAttribute('cx', x.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
+      dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
       dots[ci].style.display = '';
       const sign = v >= 0 ? '+' : '';
       return `<span style="color:${c.color || '#60a5fa'}">${escHtml(c.label || c.key || '')}: ${sign}${v.toFixed(2)}</span>`;
     }).filter(Boolean);
-    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">Trade ${idx + 1} / ${eq.n}</div>` + lines.join('<br>');
+    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>` + lines.join('<br>');
     tip.style.display = 'block';
     const cr = container.getBoundingClientRect();
     let lft = e.clientX - cr.left + 14, top = e.clientY - cr.top - 24;
