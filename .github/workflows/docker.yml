@@ -96,7 +96,7 @@ jobs:
             --port 8000 \
             --timeout 300 \
             --memory 512Mi \
-            --max-instances 1 \
+            --max-instances 20 \
             --concurrency 4 \
             --update-secrets SCADS_AI_API_KEY=SCADS_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,SESSION_SECRET=SESSION_SECRET:latest \
             --update-env-vars MODEL_DEVICE=cpu,CUSTOM_DOMAIN=foresea.ink,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2 \

@@ -213,8 +213,11 @@ best matches the information you have available:
 
 ## Rate limiting
 
-**`RATE_LIMIT_PER_MIN` requests per minute per IP address (default 200).** Exceeding this returns `429 Too Many Requests`
+**`RATE_LIMIT_PER_MIN` requests per minute per IP address (default 60).** Exceeding this returns `429 Too Many Requests`
 with a `Retry-After: 60` header.
+
+**`PREDICT_RATE_LIMIT_PER_MIN` LLM calls per minute per IP (default 10).** Applies to `/predict` and `/agent/analyze`
+on top of the global limit — these endpoints are expensive so they get a tighter per-IP cap.
 
 ---
 
@@ -1028,7 +1031,8 @@ class _RateLimiter:
         return True
 
 
-_rate_limiter = _RateLimiter(calls=int(os.environ.get("RATE_LIMIT_PER_MIN", "200")), period=60)
+_rate_limiter = _RateLimiter(calls=int(os.environ.get("RATE_LIMIT_PER_MIN", "60")), period=60)
+_predict_rate_limiter = _RateLimiter(calls=int(os.environ.get("PREDICT_RATE_LIMIT_PER_MIN", "10")), period=60)
 
 
 @asynccontextmanager
@@ -2750,6 +2754,19 @@ def _check_rate_limit(request: Request) -> None:
         )
 
 
+def _check_predict_rate_limit(request: Request) -> None:
+    """Tighter per-IP limit for expensive LLM endpoints (/predict, /agent/analyze)."""
+    if _REQUIRED_API_KEY and request.headers.get("X-API-Key", "") == _REQUIRED_API_KEY:
+        return
+    ip = request.client.host if request.client else "unknown"
+    if not _predict_rate_limiter.is_allowed(ip):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many forecast requests — limit is {_predict_rate_limiter._calls} per minute per IP.",
+            headers={"Retry-After": "60"},
+        )
+
+
 def _clean_text(value: Any) -> Any:
     if not isinstance(value, str):
         return value
@@ -4456,6 +4473,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     """
     if request is not None:
         _check_rate_limit(request)
+        _check_predict_rate_limit(request)
         _check_api_key(request)
 
     if not _state:
@@ -4709,6 +4727,7 @@ async def vertex_predict(req: VertexPredictRequest, request: Request = None) -> 
     """
     if request is not None:
         _check_rate_limit(request)
+        _check_predict_rate_limit(request)
         _check_api_key(request)
     predictions = []
     for instance in req.instances:
@@ -5008,6 +5027,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
     """
     if request is not None:
         _check_rate_limit(request)
+        _check_predict_rate_limit(request)
         _check_api_key(request)
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
@@ -5297,6 +5317,7 @@ async def agent_scan(
     """
     if request is not None:
         _check_rate_limit(request)
+        _check_predict_rate_limit(request)
         _check_api_key(request)
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
