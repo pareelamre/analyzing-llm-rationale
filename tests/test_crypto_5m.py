@@ -667,7 +667,7 @@ class Crypto5mTests(unittest.TestCase):
             self.assertEqual(len(curve["points"]), 24)
             self.assertGreater(curve["pnl_per_contract"], 0)
             self.assertEqual(result["recommendation"]["candidate"], "selector_btc_inverse_eth_fade")
-            self.assertIn("BTC inverse", result["recommendation"]["policy"])
+            self.assertIn("strong BTC model calls", result["recommendation"]["policy"])
 
     def test_ott_filtered_selector_requires_trend_agreement(self):
         record = {

@@ -3989,10 +3989,10 @@ function _crypto5mSvg(curves, W = 520, H = 150) {
 }
 
 const _CRYPTO5M_DESCRIPTIONS = {
-  selector_btc_inverse_eth_fade: 'Current policy — fades BTC model edge ≥4pp and ETH 5-min momentum ≥0.15%; each asset traded only when its own rule fires.',
-  selector_ott_filter:           'OTT-gated policy — same as above but only trades when the selected side agrees with the OTT trend, cutting counter-trend setups.',
-  btc_inverse_edge_004:          'BTC only — bets opposite the model when its edge exceeds 4pp, exploiting systematic overconfidence in BTC direction calls.',
-  eth_fade_mom_0015:             'ETH only — fades 5-minute momentum moves above 0.15%, betting on mean-reversion after small intraday spikes.',
+  selector_btc_inverse_eth_fade: 'Main paper strategy. For BTC, it trades against very strong model calls. For ETH, it trades against sharp 5-minute moves. It skips SOL for now.',
+  selector_ott_filter:           'Trend-filtered version of the main strategy. It only takes a BTC or ETH trade when the short-term trend points the same way as the trade.',
+  btc_inverse_edge_004:          'BTC only. When the model is very confident about BTC moving one way, this strategy takes the other side.',
+  eth_fade_mom_0015:             'ETH only. When ETH moves quickly over 5 minutes, this strategy bets on a small pullback instead of chasing the move.',
 };
 
 function _crypto5mSummaryCard(curve) {

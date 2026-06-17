@@ -2853,7 +2853,7 @@ def crypto_5m_candidate_equity(
 
     candidates = [
         ("selector_btc_inverse_eth_fade", "Recommended: BTC inverse + ETH fade"),
-        ("selector_ott_filter", "OTT-filtered selector"),
+        ("selector_ott_filter", "Trend-filtered selector"),
         ("btc_inverse_edge_004", "BTC inverse edge >=4pp"),
         ("eth_fade_mom_0015", "ETH fade |5m mom| >=0.15%"),
     ]
@@ -2919,7 +2919,7 @@ def crypto_5m_candidate_equity(
         "resolved_rows": len(records),
         "curves": curves,
         "recommendation": {
-            "policy": "BTC inverse edge >=4pp; ETH fade 5-minute momentum >=0.15%; SOL research-only until stable.",
+            "policy": "Main paper strategy: trade against very strong BTC model calls, fade sharp ETH 5-minute moves, and skip SOL until its rule is stable.",
             "candidate": "selector_btc_inverse_eth_fade",
             "trades": recommended.get("trades") if recommended else 0,
             "hit_rate": recommended.get("hit_rate") if recommended else None,
