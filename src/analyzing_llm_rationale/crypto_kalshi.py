@@ -176,24 +176,30 @@ def _kalshi_candlestick_quote(series: str, ticker: str, at_ts: int) -> Optional[
     """Historical (yes_bid, yes_ask) at or just before ``at_ts`` (unix seconds)."""
     base = market_data.KALSHI_API_URL.rsplit("/markets", 1)[0]
     url = f"{base}/series/{series}/markets/{ticker}/candlesticks"
+    # Minute candles: these markets only trade in their final ~hour, so hourly
+    # candles are empty/aggregated. Take the last *traded* minute at or before
+    # the decision time (volume > 0), within a 90-minute lookback window.
     try:
         data = market_data._get_json(url, params={
-            "start_ts": at_ts - 3600, "end_ts": at_ts, "period_interval": 60,
+            "start_ts": at_ts - 5400, "end_ts": at_ts, "period_interval": 1,
         })
     except Exception:
         return None
     candles = data.get("candlesticks") if isinstance(data, dict) else None
     if not candles:
         return None
-    prior = [c for c in candles if int(c.get("end_period_ts") or 0) <= at_ts] or candles
-    c = prior[-1]
+    liquid = [c for c in candles
+              if int(c.get("end_period_ts") or 0) <= at_ts and float(c.get("volume_fp") or 0) > 0]
+    if not liquid:
+        return None
+    c = liquid[-1]
     bid = (c.get("yes_bid") or {}).get("close_dollars")
     ask = (c.get("yes_ask") or {}).get("close_dollars")
     try:
         bid, ask = float(bid), float(ask)
     except (TypeError, ValueError):
         return None
-    if not (0.0 < bid <= ask <= 1.0):
+    if not (0.0 <= bid <= ask <= 1.0) or ask <= bid:
         return None
     return bid, ask
 
@@ -336,7 +342,11 @@ def backfill_kalshi_btc(
             "model_brier": round((model_p - outcome) ** 2, 6),
             "is_trade": False,
         }
-        quote = None if skip_quotes else _kalshi_candlestick_quote(series, s["ticker"], decision_ms // 1000)
+        # Only fetch a quote for near-the-money strikes (the rest never trade), so
+        # the candlestick calls stay bounded.
+        quote = None
+        if not skip_quotes and 0.05 <= model_p <= 0.95:
+            quote = _kalshi_candlestick_quote(series, s["ticker"], decision_ms // 1000)
         if quote:
             quoted += 1
             bid, ask = quote
