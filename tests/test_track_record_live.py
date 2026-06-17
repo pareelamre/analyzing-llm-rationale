@@ -212,6 +212,37 @@ class TrajectoryTests(unittest.TestCase):
         self.assertIn("market_probability", pts[0])
         self.assertNotIn("model_probability", pts[0])
 
+    def test_kalshi_uses_market_ticker_not_series_url(self):
+        far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        md._kalshi.update({
+            "market_url": "https://kalshi.com/markets/kxnflretire",
+            "ident": "KXNFLRETIRE-MSTAFFORD9-2627",
+        })
+
+        def fetch_kalshi(ticker):
+            if ticker != "KXNFLRETIRE-MSTAFFORD9-2627":
+                raise md.MarketDataError(f"wrong ticker: {ticker}")
+            return dict(md._kalshi)
+
+        md.fetch_kalshi = fetch_kalshi
+        self._record(md, "2026-06-03")
+        snaps = [e for (k, _i), e in self.client.store.items() if k == trl.SNAPSHOT_KIND]
+        kalshi_snap = next(e for e in snaps if e.get("platform") == "Kalshi")
+        self.assertEqual(kalshi_snap.get("ident"), "KXNFLRETIRE-MSTAFFORD9-2627")
+
+        with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 4, 9, tzinfo=timezone.utc)):
+            self.assertEqual(trl.record_price_points(self.client, md), 2)
+        pts = [e for (k, _i), e in self.client.store.items() if k == trl.PRICE_KIND]
+        self.assertTrue(any(
+            p.get("platform") == "Kalshi"
+            and p.get("ident") == "KXNFLRETIRE-MSTAFFORD9-2627"
+            for p in pts
+        ))
+
+        agg = trl.aggregate(self.client, model="m", variant="v", temperature=0.0)
+        self.assertTrue(any(e.get("platform") == "Kalshi" for e in agg["edge_board"]))
+
     def test_trajectory_includes_price_points(self):
         far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)

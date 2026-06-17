@@ -125,6 +125,14 @@ def ident_from_url(platform: str, url: str) -> str:
     return url or f"{(platform or '').lower()}:unknown"
 
 
+def _quote_ident(quote: Dict[str, Any]) -> str:
+    platform = quote.get("platform", "")
+    ident = str(quote.get("ident") or "").strip()
+    if ident and "kalshi" in platform.lower():
+        return ident
+    return ident_from_url(platform, quote.get("market_url", "")) or ident
+
+
 def _parse_dt(value: Any) -> Optional[datetime]:
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
@@ -257,15 +265,14 @@ async def record_snapshots(
     # 1.5) Agent-enrolled seeds (explicit agent forecasts via the evolution-loop
     #      bridge). Added before discovery so user-driven markets are included,
     #      and tracked even if short-dated — an agent explicitly asked.
-    seen = {(q.get("platform"), ident_from_url(q.get("platform", ""), q.get("market_url", "")))
-            for q in targets}
+    seen = {(q.get("platform"), _quote_ident(q)) for q in targets}
     for plat, ident in (seed_idents or []):
         if not ident:
             continue
         quote = _fetch_current_quote(market_data, plat or "", ident or "")
         if not quote or quote.get("probability") is None:
             continue
-        key = (quote.get("platform"), ident_from_url(quote.get("platform", ""), quote.get("market_url", "")))
+        key = (quote.get("platform"), _quote_ident(quote))
         if key in seen:
             continue
         targets.append(quote)
@@ -284,9 +291,9 @@ async def record_snapshots(
             )[:per_venue])
         except market_data.MarketDataError:
             continue
-    known = {(q.get("platform"), ident_from_url(q.get("platform", ""), q.get("market_url", ""))) for q in targets}
+    known = {(q.get("platform"), _quote_ident(q)) for q in targets}
     for q in discovered:
-        ident = ident_from_url(q.get("platform", ""), q.get("market_url", ""))
+        ident = _quote_ident(q)
         if (q.get("platform"), ident) in known or q.get("probability") is None:
             continue
         lead = _lead_time_days(q.get("close_time"))
@@ -309,7 +316,7 @@ async def record_snapshots(
             except market_data.MarketDataError:
                 continue
         for q in intraday:
-            ident = ident_from_url(q.get("platform", ""), q.get("market_url", ""))
+            ident = _quote_ident(q)
             if (q.get("platform"), ident) in known or q.get("probability") is None:
                 continue
             lead = _lead_time_days(q.get("close_time"))
@@ -362,7 +369,7 @@ async def record_snapshots(
     llm_tasks: List[Any] = []  # list of coroutines
 
     for quote in targets:
-        ident = ident_from_url(quote.get("platform", ""), quote.get("market_url", ""))
+        ident = _quote_ident(quote)
         if not ident:
             continue
         market_prob = quote.get("probability")
