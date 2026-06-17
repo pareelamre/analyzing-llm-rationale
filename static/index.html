@@ -4076,23 +4076,31 @@ async function loadCrypto5mEquity() {
     _crypto5mLastGen = d.generated_at || null;
     const cal = d.calibration || {};
     const pt = d.paper_trades || {};
-    const nRes = d.n_resolved || 0, nOpen = d.n_open || 0;
-    const method = `<p class="tr-method" style="margin-top:0">Real Kalshi <strong>BTC ≥ strike at close</strong> markets (KXBTCD). Each tick prices the model's probability against the live bid/ask and takes a paper trade only when the edge clears the spread + Kalshi fee, then scores it on the venue's own settlement. This replaces the earlier synthetic 50¢ curves, which assumed an instrument that doesn't trade.</p>`;
-    if (nRes < 5) {
+    const nOpen = d.n_open || 0;
+    const conN = cal.contested_n || 0;
+    const cBrier = cal.contested_brier;
+    const baseline = cal.coinflip_baseline || 0.25;
+    const basis = d.basis;
+    const method = `<p class="tr-method" style="margin-top:0">Real Kalshi <strong>BTC ≥ strike at close</strong> markets (KXBTCD). Model probability (lognormal from BTC spot + realized vol) is scored against the venue's own settlement over already-settled markets${basis != null ? `, after correcting the Binance→Kalshi index basis (${basis >= 0 ? '+' : ''}$${Math.round(basis)})` : ''}. This replaces the earlier synthetic 50¢ curves, which assumed an instrument that doesn't trade.</p>`;
+    if (conN < 30) {
       host.innerHTML = method +
         `<div class="tr-stat" style="margin-top:10px"><div class="v" style="font-size:16px">Building calibration</div>` +
-        `<div class="k" style="font-size:12px;color:var(--text-dim)">${nOpen} open paper trades · ${nRes} settled. Calibration and the equity curve appear once enough markets resolve (BTC markets settle hourly/daily).</div></div>`;
+        `<div class="k" style="font-size:12px;color:var(--text-dim)">${conN} contested markets scored so far. The reliability read needs ~30+ near-the-money settlements.</div></div>`;
       return;
     }
-    // Calibration + paper-trade summary cards.
+    // Headline: is the model better than a coinflip on contested markets?
+    const skill = cBrier != null && cBrier < baseline;
     const _stat = (v, k, color) => `<div class="tr-stat"><div class="v" ${color ? `style="${color}"` : ''}>${v}</div><div class="k label">${k}</div></div>`;
     const roi = pt.roi == null ? '—' : (pt.roi >= 0 ? '+' : '') + (pt.roi * 100).toFixed(1) + '%';
     const cards = [
-      _stat(cal.brier == null ? '—' : cal.brier.toFixed(3), 'Brier (model_p)'),
-      _stat(cal.directional_accuracy == null ? '—' : (cal.directional_accuracy * 100).toFixed(0) + '%', 'Directional acc'),
-      _stat(roi, 'Paper ROI (net)', pt.roi >= 0 ? 'color:#0a7' : 'color:#c33'),
-      _stat((pt.n_trades || 0) + ' / ' + nRes, 'Trades / settled'),
+      _stat(cBrier == null ? '—' : cBrier.toFixed(3), 'Brier (contested)', skill ? 'color:#0a7' : 'color:#c33'),
+      _stat(baseline.toFixed(2), 'Coinflip baseline'),
+      _stat(conN, 'Contested settled'),
+      _stat(cal.directional_accuracy == null ? '—' : (cal.directional_accuracy * 100).toFixed(0) + '%', 'Directional acc (all)'),
     ].join('');
+    const verdict = `<p class="text-xs" style="margin-top:8px;color:${skill ? '#0a7' : '#c33'}">${skill
+      ? `Contested Brier ${cBrier.toFixed(3)} beats the ${baseline.toFixed(2)} coinflip — the model carries real skill on near-the-money markets. (Calibration ≠ a tradeable edge: thin liquidity until expiry means the live paper-trade ROI below is still accruing.)`
+      : `Contested Brier ${cBrier == null ? '—' : cBrier.toFixed(3)} is no better than the ${baseline.toFixed(2)} coinflip — no demonstrated skill yet.`}</p>`;
     // Reliability table: does model_p match the empirical settle rate?
     const rel = (cal.reliability || []).map(b =>
       `<tr><td style="padding:2px 8px">${b.range}</td><td style="padding:2px 8px;text-align:right">${(b.mean_model_p * 100).toFixed(0)}%</td><td style="padding:2px 8px;text-align:right">${(b.empirical_rate * 100).toFixed(0)}%</td><td style="padding:2px 8px;text-align:right;color:var(--text-dim)">${b.n}</td></tr>`).join('');
@@ -4102,10 +4110,14 @@ async function loadCrypto5mEquity() {
       points: pt.equity_curve, times: pt.equity_curve_ts || [],
     }] : [];
     const gen = d.generated_at ? new Date(d.generated_at).toLocaleTimeString() : '';
+    const ptLine = (pt.n_trades || 0) > 0
+      ? `<p class="text-xs text-gray-400" style="margin-top:8px">Live paper P&amp;L (net of spread + fee): ${roi} over ${pt.n_trades} trades · ${nOpen} open.</p>`
+      : `<p class="text-xs text-gray-400" style="margin-top:8px">${nOpen} live paper trades open; net ROI accrues as they settle.</p>`;
     host.innerHTML = method +
-      `<div class="tr-stats" style="margin-top:10px">${cards}</div>` +
+      `<div class="tr-stats" style="margin-top:10px">${cards}</div>` + verdict +
       (chartCurves.length ? `<div id="crypto5mSvgWrap">${_crypto5mSvg(chartCurves)}</div>` : '') +
-      `<p class="text-xs text-gray-400" style="margin-top:6px">Reliability — is the model calibrated? (predicted vs actual settle rate)</p>${relTable}` +
+      `<p class="text-xs text-gray-400" style="margin-top:6px">Reliability — does model_p match the actual settle rate?</p>${relTable}` +
+      ptLine +
       `<p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(d.note || '')}${gen ? ' · updated ' + gen : ''}</p>`;
     const wrap = document.getElementById('crypto5mSvgWrap');
     if (wrap) _attachCrypto5mHover(wrap);

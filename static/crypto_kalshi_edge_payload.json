@@ -1,14 +1,49 @@
 {
+  "basis": -64.02,
   "calibration": {
-    "brier": null,
-    "directional_accuracy": null,
-    "n": 0,
-    "reliability": []
+    "brier": 0.0066,
+    "coinflip_baseline": 0.25,
+    "contested_brier": 0.1703,
+    "contested_n": 186,
+    "directional_accuracy": 0.9913,
+    "n": 6000,
+    "reliability": [
+      {
+        "empirical_rate": 0.0013,
+        "mean_model_p": 0.0033,
+        "n": 3023,
+        "range": "0.0-0.2"
+      },
+      {
+        "empirical_rate": 0.2222,
+        "mean_model_p": 0.3006,
+        "n": 54,
+        "range": "0.2-0.4"
+      },
+      {
+        "empirical_rate": 0.4359,
+        "mean_model_p": 0.498,
+        "n": 39,
+        "range": "0.4-0.6"
+      },
+      {
+        "empirical_rate": 0.8113,
+        "mean_model_p": 0.6967,
+        "n": 53,
+        "range": "0.6-0.8"
+      },
+      {
+        "empirical_rate": 0.9968,
+        "mean_model_p": 0.9964,
+        "n": 2831,
+        "range": "0.8-1.0"
+      }
+    ]
   },
-  "generated_at": "2026-06-17T18:18:39.815646+00:00",
+  "generated_at": "2026-06-17T19:52:58.952023+00:00",
   "instrument": "Kalshi KXBTCD (BTC >= strike at close)",
-  "n_open": 30,
-  "n_resolved": 0,
+  "n_open": 19,
+  "n_resolved": 6000,
   "note": "Real-instrument paper trades: model probability vs live Kalshi bid/ask, scored on the venue's own settlement. Net of spread + Kalshi fee; no slippage.",
   "paper_trades": {
     "coverage_days": null,

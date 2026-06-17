@@ -56,6 +56,8 @@ def main() -> int:
                         help="Public payload for the real-instrument calibration + equity curve.")
     parser.add_argument("--kalshi-edge-threshold", type=float, default=0.02,
                         help="Min net edge (after spread+fee) to take a Kalshi paper trade.")
+    parser.add_argument("--kalshi-backfill-markets", type=int, default=6000,
+                        help="How many recent settled KXBTCD markets to score for calibration each tick.")
     parser.add_argument("--no-kalshi", action="store_true", help="Skip the Kalshi real-instrument step.")
     args = parser.parse_args()
 
@@ -106,13 +108,33 @@ def main() -> int:
         try:
             args.kalshi_log.parent.mkdir(parents=True, exist_ok=True)
             args.kalshi_out.parent.mkdir(parents=True, exist_ok=True)
+            # Historic backfill (ephemeral log, regenerated from the API each tick):
+            # estimates the Binance↔Kalshi index basis and scores already-settled
+            # markets, so calibration is real immediately. Then the forward snapshot
+            # (small committed log) reuses that basis for the eventual live ROI.
+            import tempfile
+            bf_log = Path(tempfile.gettempdir()) / "crypto_kalshi_backfill.jsonl"
+            bf = crypto_kalshi.backfill_kalshi_btc(
+                path=bf_log, max_markets=args.kalshi_backfill_markets, skip_quotes=True)
+            basis = float(bf.get("basis_applied") or 0.0)
+            cal = crypto_kalshi.kalshi_btc_equity(path=bf_log)
             snap = crypto_kalshi.snapshot_kalshi_btc_markets(
-                path=args.kalshi_log, edge_threshold=args.kalshi_edge_threshold)
+                path=args.kalshi_log, edge_threshold=args.kalshi_edge_threshold, basis=basis)
             kres = crypto_kalshi.resolve_kalshi_btc_log(path=args.kalshi_log)
-            kpayload = crypto_kalshi.kalshi_btc_equity(path=args.kalshi_log)
+            fwd = crypto_kalshi.kalshi_btc_equity(path=args.kalshi_log)
+            kpayload = {
+                "generated_at": cal["generated_at"],
+                "instrument": cal["instrument"],
+                "basis": basis,
+                "n_resolved": cal["n_resolved"],   # historic calibration sample
+                "n_open": fwd["n_open"],            # forward open paper trades
+                "calibration": cal["calibration"],
+                "paper_trades": fwd["paper_trades"],
+                "note": cal["note"],
+            }
             args.kalshi_out.write_text(json.dumps(kpayload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-            kalshi = {"snapshot": snap, "resolve": kres,
-                      "n_resolved": kpayload["n_resolved"], "n_open": kpayload["n_open"]}
+            kalshi = {"backfill": bf, "snapshot": snap, "resolve": kres,
+                      "n_resolved": cal["n_resolved"], "n_open": fwd["n_open"]}
         except Exception as exc:  # noqa: BLE001 — never let the real-instrument leg break the tick
             kalshi = {"error": str(exc)}
 

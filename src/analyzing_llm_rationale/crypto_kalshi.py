@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 from datetime import datetime, timezone
 from pathlib import Path
-from statistics import pstdev
+from statistics import median, pstdev
 from typing import Any, Dict, List, Optional
 
 from analyzing_llm_rationale import crypto_5m, market_data
@@ -92,6 +92,7 @@ def snapshot_kalshi_btc_markets(
     min_mid: float = 0.10,
     max_mid: float = 0.90,
     edge_threshold: float = 0.02,
+    basis: float = 0.0,
     path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Record one paper entry per *newly seen* KXBTCD market (model vs live quote).
@@ -127,7 +128,7 @@ def snapshot_kalshi_btc_markets(
             t_min = _minutes_to_close(q.get("close_time"))
             if not t_min or t_min <= 0:
                 continue
-            model_p = model_prob_above(spot, float(strike), sigma_min, t_min)
+            model_p = model_prob_above(spot + basis, float(strike), sigma_min, t_min)
             if model_p is None:
                 continue
             edge_yes = model_p - ask - kalshi_fee(ask)
@@ -168,6 +169,211 @@ def snapshot_kalshi_btc_markets(
         "seen_total": len(seen),
         "new_records": len(new_records),
         "new_trades": sum(1 for r in new_records if r["is_trade"]),
+    }
+
+
+def _kalshi_candlestick_quote(series: str, ticker: str, at_ts: int) -> Optional[tuple[float, float]]:
+    """Historical (yes_bid, yes_ask) at or just before ``at_ts`` (unix seconds)."""
+    base = market_data.KALSHI_API_URL.rsplit("/markets", 1)[0]
+    url = f"{base}/series/{series}/markets/{ticker}/candlesticks"
+    try:
+        data = market_data._get_json(url, params={
+            "start_ts": at_ts - 3600, "end_ts": at_ts, "period_interval": 60,
+        })
+    except Exception:
+        return None
+    candles = data.get("candlesticks") if isinstance(data, dict) else None
+    if not candles:
+        return None
+    prior = [c for c in candles if int(c.get("end_period_ts") or 0) <= at_ts] or candles
+    c = prior[-1]
+    bid = (c.get("yes_bid") or {}).get("close_dollars")
+    ask = (c.get("yes_ask") or {}).get("close_dollars")
+    try:
+        bid, ask = float(bid), float(ask)
+    except (TypeError, ValueError):
+        return None
+    if not (0.0 < bid <= ask <= 1.0):
+        return None
+    return bid, ask
+
+
+class _SpotIndex:
+    """BTC 1-minute spot history indexed for spot/vol lookups at a past instant."""
+
+    def __init__(self, raw: List[Any]):
+        pts = []
+        for row in raw:
+            try:
+                pts.append((int(row[0]), float(row[4])))
+            except (TypeError, ValueError, IndexError):
+                continue
+        pts.sort()
+        self.ms = [p[0] for p in pts]
+        self.close = [p[1] for p in pts]
+
+    def _idx(self, ms: int) -> int:
+        import bisect
+        return bisect.bisect_right(self.ms, ms) - 1
+
+    def spot_at(self, ms: int) -> Optional[float]:
+        i = self._idx(ms)
+        return self.close[i] if i >= 0 else None
+
+    def sigma_at(self, ms: int, window_min: int) -> Optional[float]:
+        hi = self._idx(ms)
+        if hi < 30:
+            return None
+        lo = max(1, hi - window_min)
+        window = self.close[lo - 1: hi + 1]
+        return realized_sigma_per_min(window)
+
+
+def backfill_kalshi_btc(
+    *,
+    series: str = "KXBTCD",
+    symbol: str = "BTC",
+    max_markets: int = 300,
+    decision_lead_min: int = 60,
+    vol_window_min: int = 240,
+    min_mid: float = 0.10,
+    max_mid: float = 0.90,
+    edge_threshold: float = 0.02,
+    basis: Optional[float] = None,
+    vol_mult: float = 1.0,
+    skip_quotes: bool = False,
+    path: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Reconstruct calibration + paper trades from *already-settled* Kalshi BTC
+    markets, instead of waiting for live ones to resolve.
+
+    Calibration (model_p vs the venue's real result) needs only the strike, close
+    time and Binance spot history — computed for every settled market. Paper
+    trades additionally need the historical entry quote, pulled from the market's
+    candlesticks at ``decision_lead_min`` before close.
+    """
+    log_path = path or DEFAULT_KALSHI_EDGE_LOG_PATH
+    # 1. Page through settled markets.
+    settled: List[Dict[str, Any]] = []
+    cursor = None
+    while len(settled) < max_markets:
+        params = {"series_ticker": series, "status": "settled", "limit": 200}
+        if cursor:
+            params["cursor"] = cursor
+        data = market_data._get_json(market_data.KALSHI_API_URL, params=params)
+        mks = data.get("markets", []) if isinstance(data, dict) else []
+        for x in mks:
+            strike, result, ct = x.get("floor_strike"), x.get("result"), x.get("close_time")
+            if strike is None or result not in ("yes", "no") or not ct:
+                continue
+            try:
+                close_dt = datetime.fromisoformat(str(ct).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            settled.append({"ticker": x.get("ticker"), "strike": float(strike),
+                            "result": 1 if result == "yes" else 0,
+                            "close_ms": int(close_dt.timestamp() * 1000)})
+            if len(settled) >= max_markets:
+                break
+        cursor = data.get("cursor")
+        if not cursor or not mks:
+            break
+    if not settled:
+        return {"error": "no settled markets returned"}
+
+    # 2. One BTC spot-history fetch covering the whole window.
+    min_decision = min(s["close_ms"] for s in settled) - (decision_lead_min + vol_window_min) * 60_000
+    max_close = max(s["close_ms"] for s in settled)
+    days = (max_close - min_decision) / 86_400_000 + 0.5
+    raw = crypto_5m.fetch_klines_history(crypto_5m.normalize_symbol(symbol), days=days, max_candles=50_000)
+    index = _SpotIndex(raw)
+    spot_floor_ms = index.ms[0] if index.ms else max_close
+
+    # Estimate the Binance↔Kalshi settlement-index basis from the settled strike
+    # ladders themselves (no Kalshi index API needed): per event, the true
+    # settlement sits between the highest YES strike and the lowest NO strike, so
+    # (that midpoint − Binance spot at close) is the basis. The model uses Binance
+    # spot, which runs above Kalshi's index, biasing P(BTC ≥ strike) upward.
+    if basis is None:
+        by_event: Dict[int, List[Dict[str, Any]]] = {}
+        for s in settled:
+            by_event.setdefault(s["close_ms"], []).append(s)
+        basis_samples = []
+        for close_ms, group in by_event.items():
+            yes = [g["strike"] for g in group if g["result"] == 1]
+            no = [g["strike"] for g in group if g["result"] == 0]
+            close_spot = index.spot_at(close_ms)
+            if yes and no and close_spot:
+                basis_samples.append((max(yes) + min(no)) / 2.0 - close_spot)
+        basis = round(median(basis_samples), 2) if basis_samples else 0.0
+
+    # 3. Build a resolved record per market (calibration always; trade when quoted).
+    records: List[Dict[str, Any]] = []
+    n_trades = quoted = 0
+    for s in settled:
+        decision_ms = s["close_ms"] - decision_lead_min * 60_000
+        if decision_ms < spot_floor_ms:
+            continue  # outside our spot-history window
+        spot = index.spot_at(decision_ms)
+        sigma = index.sigma_at(decision_ms, vol_window_min)
+        if not spot or not sigma:
+            continue
+        # Apply the estimated index basis to spot and the vol multiplier to sigma.
+        model_p = model_prob_above(spot + basis, s["strike"], sigma * max(0.01, vol_mult), decision_lead_min)
+        if model_p is None:
+            continue
+        outcome = s["result"]
+        rec = {
+            "type": "kalshi_btc_edge", "status": "resolved", "source": "backfill",
+            "logged_at": _iso(), "resolved_at": _iso(),
+            "ticker": s["ticker"], "strike": s["strike"],
+            "close_time": datetime.fromtimestamp(s["close_ms"] / 1000, timezone.utc).isoformat(),
+            "minutes_to_close": decision_lead_min,
+            "snapshot_spot": round(spot, 2), "sigma_per_min": round(sigma, 6),
+            "model_p": round(model_p, 4),
+            "outcome": outcome,
+            "model_correct": (model_p >= 0.5) == (outcome == 1),
+            "model_brier": round((model_p - outcome) ** 2, 6),
+            "is_trade": False,
+        }
+        quote = None if skip_quotes else _kalshi_candlestick_quote(series, s["ticker"], decision_ms // 1000)
+        if quote:
+            quoted += 1
+            bid, ask = quote
+            mid = (bid + ask) / 2.0
+            if min_mid <= mid <= max_mid:
+                edge_yes = model_p - ask - kalshi_fee(ask)
+                edge_no = (1.0 - model_p) - (1.0 - bid) - kalshi_fee(1.0 - bid)
+                if edge_yes >= edge_no:
+                    side, entry, net_edge = "YES", ask, edge_yes
+                else:
+                    side, entry, net_edge = "NO", 1.0 - bid, edge_no
+                rec.update({
+                    "market_bid": bid, "market_ask": ask, "market_mid": round(mid, 4),
+                    "side": side, "entry_price": round(entry, 4), "fee": kalshi_fee(entry),
+                    "net_edge": round(net_edge, 4), "is_trade": net_edge > edge_threshold,
+                })
+                if rec["is_trade"]:
+                    won = (outcome == 1) if side == "YES" else (outcome == 0)
+                    rec["won"] = won
+                    rec["pnl_per_contract"] = round((1.0 - entry if won else -entry) - kalshi_fee(entry), 4)
+                    n_trades += 1
+        records.append(rec)
+
+    if records:
+        existing = [r for r in crypto_5m._jsonl_records(log_path)
+                    if r.get("type") == "kalshi_btc_edge" and r.get("ticker") not in {x["ticker"] for x in settled}]
+        crypto_5m._write_jsonl(log_path, existing + records)
+    return {
+        "path": str(log_path),
+        "settled_scanned": len(settled),
+        "backfilled": len(records),
+        "quoted": quoted,
+        "trades": n_trades,
+        "decision_lead_min": decision_lead_min,
+        "spot_history_days": round(days, 1),
+        "basis_applied": basis,
+        "vol_mult": vol_mult,
     }
 
 
@@ -262,6 +468,8 @@ def kalshi_btc_equity(
 
     briers = [float(r["model_brier"]) for r in resolved if r.get("model_brier") is not None]
     correct = [1 for r in resolved if r.get("model_correct")]
+    contested = [r for r in resolved if 0.15 <= float(r.get("model_p") or 0.0) <= 0.85]
+    cbriers = [float(r["model_brier"]) for r in contested if r.get("model_brier") is not None]
     coverage_days = None
     if times:
         coverage_days = round((times[-1] - times[0]) / (24 * 3600 * 1000), 2) if len(times) > 1 else 0.0
@@ -280,6 +488,12 @@ def kalshi_btc_equity(
             "n": len(resolved),
             "brier": round(sum(briers) / len(briers), 4) if briers else None,
             "directional_accuracy": round(len(correct) / len(resolved), 4) if resolved else None,
+            # Trivial deep ITM/OTM strikes (model_p ~0/1) flatter overall Brier;
+            # the contested band is where calibration actually matters. A perfectly
+            # calibrated coinflip scores ~0.25 there, so contested_brier < 0.25 = skill.
+            "contested_n": len(contested),
+            "contested_brier": round(sum(cbriers) / len(cbriers), 4) if cbriers else None,
+            "coinflip_baseline": 0.25,
             "reliability": _reliability_buckets(resolved),
         },
         "paper_trades": {
