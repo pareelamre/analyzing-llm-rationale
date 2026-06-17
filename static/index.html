@@ -4065,6 +4065,31 @@ function _crypto5mSummaryCard(curve) {
   </div>`;
 }
 
+function _calibrationSvg(rel, W = 300, H = 220) {
+  // Reliability diagram: x = predicted model_p, y = actual settle rate. Points on
+  // the dashed diagonal are perfectly calibrated; marker size scales with n.
+  if (!rel || !rel.length) return '';
+  const padL = 34, padR = 12, padT = 10, padB = 30;
+  const cW = W - padL - padR, cH = H - padT - padB;
+  const X = p => padL + p * cW;
+  const Y = p => padT + cH - p * cH;
+  const ticks = [0, 0.5, 1];
+  const box = `<rect x="${padL}" y="${padT}" width="${cW}" height="${cH}" fill="none" stroke="#333" stroke-width="0.6"/>`;
+  const diag = `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(1)}" y2="${Y(1)}" stroke="#888" stroke-width="1" stroke-dasharray="4,3"/>`;
+  const xlab = ticks.map(t => `<text x="${X(t).toFixed(1)}" y="${H - 14}" font-size="9" text-anchor="middle" fill="#888">${t}</text>`).join('');
+  const ylab = ticks.map(t => `<text x="${padL - 5}" y="${(Y(t) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${t}</text>`).join('');
+  const sorted = rel.slice().sort((a, b) => a.mean_model_p - b.mean_model_p);
+  const line = `<polyline points="${sorted.map(b => `${X(b.mean_model_p).toFixed(1)},${Y(b.empirical_rate).toFixed(1)}`).join(' ')}" fill="none" stroke="#34d399" stroke-width="1.6" stroke-linejoin="round"/>`;
+  const maxN = Math.max(...rel.map(b => b.n || 1));
+  const dots = sorted.map(b => {
+    const r = (2.5 + 4 * Math.sqrt((b.n || 1) / maxN)).toFixed(1);
+    return `<circle cx="${X(b.mean_model_p).toFixed(1)}" cy="${Y(b.empirical_rate).toFixed(1)}" r="${r}" fill="#34d399" fill-opacity="0.75" stroke="#0a7" stroke-width="0.6"><title>predicted ${(b.mean_model_p * 100).toFixed(0)}% · actual ${(b.empirical_rate * 100).toFixed(0)}% · n=${b.n}</title></circle>`;
+  }).join('');
+  const xtitle = `<text x="${(padL + cW / 2).toFixed(1)}" y="${H - 1}" font-size="9" text-anchor="middle" fill="#aaa">predicted (model_p)</text>`;
+  const ytitle = `<text x="9" y="${(padT + cH / 2).toFixed(1)}" font-size="9" text-anchor="middle" fill="#aaa" transform="rotate(-90 9 ${(padT + cH / 2).toFixed(1)})">actual settle rate</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:${H}px;display:block;margin:10px auto 0" aria-label="Calibration reliability diagram">${box}${diag}${line}${dots}${xlab}${ylab}${xtitle}${ytitle}</svg>`;
+}
+
 async function loadCrypto5mEquity() {
   const host = document.getElementById('crypto5mEquity');
   if (!host) return;
@@ -4113,10 +4138,13 @@ async function loadCrypto5mEquity() {
     const ptLine = (pt.n_trades || 0) > 0
       ? `<p class="text-xs text-gray-400" style="margin-top:8px">Live paper P&amp;L (net of spread + fee): ${roi} over ${pt.n_trades} trades · ${nOpen} open.</p>`
       : `<p class="text-xs text-gray-400" style="margin-top:8px">${nOpen} live paper trades open; net ROI accrues as they settle.</p>`;
+    const calChart = _calibrationSvg(cal.reliability || []);
     host.innerHTML = method +
       `<div class="tr-stats" style="margin-top:10px">${cards}</div>` + verdict +
-      (chartCurves.length ? `<div id="crypto5mSvgWrap">${_crypto5mSvg(chartCurves)}</div>` : '') +
-      `<p class="text-xs text-gray-400" style="margin-top:6px">Reliability — does model_p match the actual settle rate?</p>${relTable}` +
+      `<p class="text-xs text-gray-400" style="margin-top:8px">Calibration curve — points on the dashed diagonal are perfectly calibrated (marker size = n)</p>` +
+      calChart +
+      (chartCurves.length ? `<p class="text-xs text-gray-400" style="margin-top:8px">Live paper P&amp;L (net)</p><div id="crypto5mSvgWrap">${_crypto5mSvg(chartCurves)}</div>` : '') +
+      `<p class="text-xs text-gray-400" style="margin-top:6px">Predicted vs actual settle rate, by model_p band</p>${relTable}` +
       ptLine +
       `<p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(d.note || '')}${gen ? ' · updated ' + gen : ''}</p>`;
     const wrap = document.getElementById('crypto5mSvgWrap');
