@@ -22,9 +22,12 @@ dist/
 build/
 .codex/
 
-# Tests and scripts (not needed at runtime)
+# Tests and scripts (not needed at runtime) — except the crypto collector,
+# which the Cloud Run job runs from inside the image. Use dir/* + negation so
+# the single file can be re-included (a bare `scripts/` would block it).
 tests/
-scripts/
+scripts/*
+!scripts/crypto_5m_tick.py
 
 # Data files (mount as volumes at runtime)
 *.jsonl
