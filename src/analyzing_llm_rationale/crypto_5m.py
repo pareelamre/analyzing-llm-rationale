@@ -2781,23 +2781,8 @@ def _crypto_replay_side(
 
 
 def _load_crypto_5m_equity_fallback(db_path: Path) -> Optional[Dict[str, Any]]:
-    # Live source: a GCS-bucket file written by the Cloud Run collector job and
-    # read here through the same bucket gcsfuse-mounted into the server. This is
-    # the freshest path (updated every ~5 min, no redeploy), so check it first.
-    mounted = os.environ.get("CRYPTO_5M_EQUITY_FILE", "").strip()
-    if mounted:
-        mounted_path = Path(mounted)
-        if mounted_path.exists():
-            try:
-                payload = json.loads(mounted_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                payload = None
-            if isinstance(payload, dict):
-                out = dict(payload)
-                out["fallback"] = True
-                out["fallback_source"] = str(mounted_path)
-                out["db_path"] = str(db_path)
-                return out
+    # Freshest committed source first: the GitHub tick regenerates + commits the
+    # equity payload every ~15 min, so the raw-GitHub copy is the current one.
     remote_url = os.environ.get("CRYPTO_5M_EQUITY_URL", DEFAULT_EQUITY_REMOTE_URL).strip()
     if remote_url:
         try:
@@ -2814,6 +2799,7 @@ def _load_crypto_5m_equity_fallback(db_path: Path) -> Optional[Dict[str, Any]]:
                     return out
         except Exception:
             pass
+    # Bundled snapshot baked into the image at deploy time.
     if DEFAULT_EQUITY_FALLBACK_PATH.exists():
         try:
             payload = json.loads(DEFAULT_EQUITY_FALLBACK_PATH.read_text(encoding="utf-8"))
@@ -2829,6 +2815,23 @@ def _load_crypto_5m_equity_fallback(db_path: Path) -> Optional[Dict[str, Any]]:
                 + " Static deployment snapshot; live collector DB was not present in this container."
             ).strip()
             return out
+    # Last resort: a gcsfuse-mounted bucket file. This was the freshest path while
+    # the Cloud Run collector job was alive; that job has been removed, so the file
+    # is only used if both committed sources above are unavailable.
+    mounted = os.environ.get("CRYPTO_5M_EQUITY_FILE", "").strip()
+    if mounted:
+        mounted_path = Path(mounted)
+        if mounted_path.exists():
+            try:
+                payload = json.loads(mounted_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                payload = None
+            if isinstance(payload, dict):
+                out = dict(payload)
+                out["fallback"] = True
+                out["fallback_source"] = str(mounted_path)
+                out["db_path"] = str(db_path)
+                return out
     return None
 
 
