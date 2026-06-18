@@ -3934,6 +3934,7 @@ async function refreshEquityCurve() {
     _upd('eb-pnl-fade-v',  _roiVal(pnl.fade_extreme));
     _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
     _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
+    _upd('eb-pnl-yes-v',   _roiVal(pnl.yes_only));
     const _normCurve = s => s?.equity_curve?.length && s.total_staked
       ? s.equity_curve.map(v => v / s.total_staked) : null;
     const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
@@ -3949,6 +3950,7 @@ async function refreshEquityCurve() {
     const curves = [
       _mk(pnl.smart,          '#10b981', '★ Smart'),
       _mk(pnl.half_kelly,     '#06b6d4', 'Half-Kelly'),
+      _mk(pnl.yes_only,       '#fbbf24', 'YES-Only'),
       _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
       _mk(pnl.edge_weighted,  '#a78bfa', 'Edge-weighted'),
       _mk(pnl.validated_only, '#34d399', 'Validated-only'),
@@ -4764,6 +4766,7 @@ function renderEdgeBoard(d) {
     const curves = [
       _mk(pnl.smart,          '#10b981', '★ Smart'),
       _mk(pnl.half_kelly,     '#06b6d4', 'Half-Kelly'),
+      _mk(pnl.yes_only,       '#fbbf24', 'YES-Only'),
       _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
       _mk(pnl.edge_weighted,  '#a78bfa', 'Edge-weighted'),
       _mk(pnl.validated_only, '#34d399', 'Validated-only'),
@@ -4774,7 +4777,7 @@ function renderEdgeBoard(d) {
     const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves) : ''}</div>`;
     // Per-sizing explainer: what each number means and what the gap between them signals.
     const _pnlExplainer = () => {
-      const fl = pnl.flat, ew = pnl.edge_weighted, vo = pnl.validated_only, mid = pnl.mid_price_only, fade = pnl.fade_extreme, kelly = pnl.half_kelly, smart = pnl.smart;
+      const fl = pnl.flat, ew = pnl.edge_weighted, vo = pnl.validated_only, mid = pnl.mid_price_only, fade = pnl.fade_extreme, kelly = pnl.half_kelly, smart = pnl.smart, yes = pnl.yes_only;
       const hasFlat = fl && fl.n_bets >= EB_MIN_N;
       const hasEw   = ew && ew.n_bets >= EB_MIN_N;
       const hasVo   = vo && vo.n_bets >= EB_MIN_N;
@@ -4782,6 +4785,7 @@ function renderEdgeBoard(d) {
       const hasFade = fade && fade.n_bets >= EB_MIN_N;
       const hasKelly = kelly && kelly.n_bets >= EB_MIN_N;
       const hasSmart = smart && smart.n_bets >= EB_MIN_N;
+      const hasYes   = yes && yes.n_bets >= EB_MIN_N;
       const rows = [];
 
       if (hasFlat) {
@@ -4867,7 +4871,7 @@ function renderEdgeBoard(d) {
         rows.push(`<div class="pnl-exp-row">
           <span class="pnl-exp-dot" style="background:#06b6d4"></span>
           <div><strong>Half-Kelly ${_roiPct(kelly.roi)}</strong> — stake sized by the Kelly criterion (halved for safety), ${kelly.n_bets} bets.
-          Kelly sizes each bet as a fraction of bankroll proportional to the model's estimated edge divided by the payout odds.
+          Kelly sizes each bet as a fraction of bankroll proportional to the model's walk-forward calibrated edge divided by the payout odds.
           This naturally bets small on heavy favourites (tiny payouts) and larger where the model sees value at fair odds.
           Total staked: $${kelly.total_staked.toFixed(1)} across ${kelly.n_bets} bets. Win rate was ${pct(kelly.win_rate)}%.</div>
         </div>`);
@@ -4878,11 +4882,23 @@ function renderEdgeBoard(d) {
         const verb = smart.roi >= 0 ? 'profitable' : 'loss-making';
         rows.push(`<div class="pnl-exp-row">
           <span class="pnl-exp-dot" style="background:#10b981"></span>
-          <div><strong>★ Smart ${_roiPct(smart.roi)}</strong> — data-driven composite: Half-Kelly sizing + filters, ${smart.n_bets} qualifying bets.
+          <div><strong>★ Smart ${_roiPct(smart.roi)}</strong> — data-driven composite: Walk-forward calibrated Half-Kelly sizing + filters, ${smart.n_bets} qualifying bets.
           Combines three evidence-based filters: (1) only 20¢–80¢ entries (avoids heavy-favourite trap and longshots), (2) caps geopolitics to low-edge bets (model can't forecast geopolitics), (3) rejects edge &gt; 40% (overconfidence/hallucination).
-          Sizing uses Half-Kelly to bet proportional to estimated edge.
+          Sizing uses calibrated Half-Kelly to bet proportional to estimated edge.
           A ${sign} result here shows whether the model is ${verb} <em>after removing its known failure modes</em>.
           Win rate was ${pct(smart.win_rate)}%.</div>
+        </div>`);
+      }
+
+      if (hasYes) {
+        const sign = yes.roi >= 0 ? 'positive' : 'negative';
+        const verb = yes.roi >= 0 ? 'profitable' : 'loss-making';
+        rows.push(`<div class="pnl-exp-row">
+          <span class="pnl-exp-dot" style="background:#fbbf24"></span>
+          <div><strong>YES-Only Flat ${_roiPct(yes.roi)}</strong> — flat $1 stake, but only betting when the model predicts YES (buys YES contracts), ${yes.n_bets} bets.
+          On YES calls, the model has historically had an exceptional hit rate (95%).
+          A ${sign} result here shows the model's performance when forecasting *change* rather than status-quo.
+          Win rate was ${pct(yes.win_rate)}%.</div>
         </div>`);
       }
 
@@ -4891,8 +4907,9 @@ function renderEdgeBoard(d) {
     };
 
     pnlHtml = intro + `<div class="tr-stats">
-      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05)" title="★ Recommended · Half-Kelly sizing + data-driven filters: 20¢-80¢ entries only, geo domain capped, edge < 40%."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">★ Smart</div>${_sub('Kelly + filters')}</div>
-      <div class="tr-stat" title="Half-Kelly criterion sizing. Bet size proportional to estimated edge / odds. Naturally sizes down on heavy favourites."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
+      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05)" title="★ Recommended · Calibrated Half-Kelly sizing + data-driven filters: 20¢-80¢ entries only, geo domain capped, edge < 40%."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">★ Smart</div>${_sub('Kelly + filters')}</div>
+      <div class="tr-stat" title="Calibrated Half-Kelly criterion sizing. Bet size proportional to estimated edge / odds. Naturally sizes down on heavy favourites."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
+      <div class="tr-stat" title="Flat stake, but only when predicting YES. Highly accurate historically when forecasting change."><div class="v" id="eb-pnl-yes-v">${roi(pnl.yes_only)}</div><div class="k label">YES-Only Flat</div>${_sub('only YES calls')}</div>
       <div class="tr-stat" title="Equal stake on every call. Pure hit-rate at the odds paid — a winning favourite pays little, any loss costs the full stake."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
       <div class="tr-stat" title="Stake scales with how far the model sits from the market price — big where it disagrees with the crowd, almost nothing where it agrees."><div class="v" id="eb-pnl-edge-v">${roi(pnl.edge_weighted)}</div><div class="k label">Edge-weighted</div>${_sub('stake the gap vs market')}</div>
       <div class="tr-stat" title="Flat stake, but only when entry price is between 30¢ and 70¢ to avoid asymmetric payout risks."><div class="v" id="eb-pnl-mid-v">${roi(pnl.mid_price_only)}</div><div class="k label">Mid-price only</div>${_sub('30¢ to 70¢ entries')}</div>

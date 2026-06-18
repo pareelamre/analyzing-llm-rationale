@@ -739,6 +739,21 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "resolved_ts": _ts(r.get("resolved_ts")),
         })
 
+    # Walk-forward calibration: for each bet, calculate a calibrated model_probability
+    # based only on bets resolved prior to this one.
+    history = []
+    for b in all_bets:
+        raw_model_p = b["model_probability"]
+        if len(history) >= 30:
+            # Fit isotonic regression on prior resolved outcomes
+            pairs = [(float(x["model_probability"]), int(x["outcome"])) for x in history]
+            bp = _fit_isotonic(pairs)
+            cal_p = _apply_isotonic(bp, raw_model_p)
+        else:
+            cal_p = raw_model_p
+        b["calibrated_model_probability"] = round(cal_p, 4)
+        history.append(b)
+
     def _run(sizing, *, validated: bool = False, filter_fn=None, fade: bool = False) -> Optional[Dict[str, Any]]:
         """Run a paper-PnL simulation over all resolved bets.
 
@@ -837,13 +852,13 @@ def paper_pnl(resolved: List[Dict[str, Any]],
     # ── Kelly sizing ─────────────────────────────────────────
     def _half_kelly(b):
         """Half-Kelly criterion: f* = 0.5 * (p*b - q) / b
-        where p = model's estimated probability of winning,
+        where p = model's walk-forward calibrated probability of winning,
               b = payout odds (decimal, e.g. 1.5 means you get $1.50 on $1),
               q = 1 - p.
         Capped at $1 to keep comparable to flat-stake.
         """
         mkt_p = b["market_probability"]
-        model_p = b["model_probability"]
+        model_p = b["calibrated_model_probability"]
         side = b["side"]
         # Probability of the bet winning according to the *model*
         if side == "YES":
@@ -875,6 +890,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         "fade_extreme": _run(lambda b: 1.0, filter_fn=lambda b: b["edge"] >= 0.15, fade=True),
         "half_kelly": _run(_half_kelly),
         "smart": _run(_half_kelly, filter_fn=_smart_filter),
+        "yes_only": _run(lambda b: 1.0, filter_fn=lambda b: b["side"] == "YES"),
         "bets": all_bets,
     }
 
