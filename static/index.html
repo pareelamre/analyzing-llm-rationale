@@ -3935,8 +3935,7 @@ async function refreshEquityCurve() {
     _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
     _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
     _upd('eb-pnl-yes-v',   _roiVal(pnl.yes_only));
-    const _normCurve = s => s?.equity_curve?.length && s.total_staked
-      ? s.equity_curve.map(v => v / s.total_staked) : null;
+    const _normCurve = s => s?.equity_curve?.length ? s.equity_curve : null;
     const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
     const _mk = (s, color, label, dash) => {
       const points = _normCurve(s);
@@ -4425,11 +4424,13 @@ function _equitySvg(curves, W = 460, H = 110) {
     : padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
   const toY = v => padT + cH - ((v - lo) / range) * cH;
   const zeroY = toY(0).toFixed(1);
-  // Y-axis labels as % (top, bottom, and zero when it falls in range)
+  // Y-axis labels as PnL (top, bottom, and zero when it falls in range)
   const yLabels = [...new Set([lo, 0, hi])].filter(v => v !== 0 || (lo < 0 && hi > 0));
-  const yAxisHtml = yLabels.map(v =>
-    `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${v >= 0 ? '+' : ''}${Math.round(v * 100)}%</text>`
-  ).join('');
+  const yAxisHtml = yLabels.map(v => {
+    const absVal = Math.abs(v).toFixed(1);
+    const labelStr = v === 0 ? '$0' : (v > 0 ? '+$' : '-$') + absVal;
+    return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${labelStr}</text>`;
+  }).join('');
   let xAxisHtml = '';
   if (hasTimes) {
     const withTime = tSpan < 2 * 86400000, ticks = 4;
@@ -4542,7 +4543,7 @@ function _attachEquityHover(container) {
       const y = eq.padT + eq.cH - ((v - eq.lo) / eq.range) * eq.cH;
       dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
       dots[ci].style.display = '';
-      return `<span style="color:${c.color}">${c.label}: ${v >= 0 ? '+' : ''}${Math.round(v * 100)}%</span>`;
+      return `<span style="color:${c.color}">${c.label}: ${v >= 0 ? '+$' : '-$'}${Math.abs(v).toFixed(2)}</span>`;
     }).filter(Boolean);
     tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>` + lines.join('<br>');
     tip.style.display = 'block';
@@ -4749,10 +4750,7 @@ function renderEdgeBoard(d) {
     const nRes = d.n_snapshots_resolved || 0;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. Three ways to size each bet (${nBet} of ${nRes} resolved markets bet):</p>`;
-    // Normalise each curve by its total_staked so all three are on a common
-    // % ROI scale and the final point of each curve equals the displayed ROI.
-    const _normCurve = s => s?.equity_curve?.length && s.total_staked
-      ? s.equity_curve.map(v => v / s.total_staked) : null;
+    const _normCurve = s => s?.equity_curve?.length ? s.equity_curve : null;
     const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
     const _mk = (s, color, label, dash) => {
       const points = _normCurve(s);
