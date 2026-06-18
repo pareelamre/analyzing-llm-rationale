@@ -739,7 +739,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "resolved_ts": _ts(r.get("resolved_ts")),
         })
 
-    def _run(sizing, *, validated: bool = False) -> Optional[Dict[str, Any]]:
+    def _run(sizing, *, validated: bool = False, filter_fn=None, fade: bool = False) -> Optional[Dict[str, Any]]:
         staked = pnl = wins = fees = 0.0
         n = 0
         cum = 0.0
@@ -748,15 +748,32 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         for b in all_bets:
             if validated and not b["in_validated"]:
                 continue
+            if filter_fn is not None and not filter_fn(b):
+                continue
             stake = sizing(b["edge"])
-            fee = _bet_fee(b["platform"], stake, b["market_probability"] if b["side"] == "YES" else (1.0 - b["market_probability"]))
-            p_side = b["market_probability"] if b["side"] == "YES" else (1.0 - b["market_probability"])
+            
+            mkt_p = b["market_probability"]
+            side = b["side"]
+            win_val = b["win"]
+            
+            if fade:
+                fade_side = "NO" if side == "YES" else "YES"
+                p_side = (1.0 - mkt_p) if fade_side == "NO" else mkt_p
+                win = (b["outcome"] == 1) if fade_side == "YES" else (b["outcome"] == 0)
+            else:
+                p_side = mkt_p if side == "YES" else (1.0 - mkt_p)
+                win = win_val
+                
+            if p_side <= 0.0 or p_side >= 1.0:
+                continue
+                
             payout = (1.0 - p_side) / p_side
-            profit = stake * (payout if b["win"] else -1.0) - fee
+            fee = _bet_fee(b["platform"], stake, p_side)
+            profit = stake * (payout if win else -1.0) - fee
             staked += stake
             pnl += profit
             fees += fee
-            wins += 1 if b["win"] else 0
+            wins += 1 if win else 0
             n += 1
             cum += profit
             curve.append(round(cum, 4))
@@ -777,6 +794,12 @@ def paper_pnl(resolved: List[Dict[str, Any]],
     flat = _run(lambda e: 1.0)
     if flat is None:
         return None
+        
+    def _mid_price_filter(b):
+        mkt_p = b["market_probability"]
+        p_side = mkt_p if b["side"] == "YES" else (1.0 - mkt_p)
+        return 0.30 <= p_side <= 0.70
+
     return {
         "min_edge": min_edge,
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; "
@@ -785,6 +808,8 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         "flat": flat,
         "edge_weighted": _run(lambda e: min(e, stake_cap)),
         "validated_only": _run(lambda e: 1.0, validated=True),
+        "mid_price_only": _run(lambda e: 1.0, filter_fn=_mid_price_filter),
+        "fade_extreme": _run(lambda e: 1.0, filter_fn=lambda b: b["edge"] >= 0.15, fade=True),
         "bets": all_bets,
     }
 
@@ -1251,6 +1276,38 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     overall = _bucket_stats(resolved_primary)
     # by_horizon computed above (with significance) so the edge board can link to it.
 
+    # Resolved forecast log (most recent 30) — mirrors the backtest `log` field shape
+    # so renderTrackRecord can render it without format-sniffing.
+    _log_rows = sorted(resolved_primary, key=lambda x: x.get("resolved_ts") or "", reverse=True)[:30]
+    resolved_log = []
+    for _r in _log_rows:
+        _prob = float(_r.get("model_probability") or 0.5)
+        _outcome = _r.get("outcome")
+        _correct = _r.get("model_correct")
+        if _correct is None and _outcome is not None:
+            _correct = (_prob >= 0.5) == (_outcome == 1)
+        resolved_log.append({
+            "correct": bool(_correct),
+            "question": _r.get("question") or "",
+            "category": _r.get("domain") or _r.get("category") or "",
+            "resolve_time": str(_r.get("resolved_ts") or _r.get("close_time") or "")[:10],
+            "predicted": "Yes" if _prob >= 0.5 else "No",
+            "confidence": round(_prob, 3),
+            "actual": "Yes" if _outcome == 1 else "No",
+        })
+
+    # Reliability diagram bins (10pp wide) for the calibration chart.
+    _calib_bins: List[Dict[str, Any]] = []
+    for _lo in (i / 10 for i in range(10)):
+        _hi = _lo + 0.1
+        _bin = [r for r in resolved_primary if _lo <= float(r.get("model_probability") or 0) < _hi]
+        if _bin:
+            _calib_bins.append({
+                "avg_predicted": round(sum(float(r.get("model_probability") or 0) for r in _bin) / len(_bin), 3),
+                "observed_yes_rate": round(sum(1 for r in _bin if r.get("outcome") == 1) / len(_bin), 3),
+                "n": len(_bin),
+            })
+
     # Trajectory samples: a few resolved markets with their snapshot series.
     by_market: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
     for r in resolved_primary:
@@ -1353,6 +1410,9 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "edge_board": edge_board_result,
         "models_comparison": build_models_comparison(resolved, default_model=model, crowd_baseline=_crowd_base),
         "trajectories": trajectories,
+        "resolved_log": resolved_log,
+        "log_sample_size": len(resolved_log),
+        "calibration": _calib_bins,
         "calibration_model": _calibration_report(resolved_skill),
         "knowledge_graph": kg_summary,
         "n_snapshots_skill": len(resolved_skill),

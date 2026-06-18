@@ -3922,12 +3922,16 @@ async function refreshEquityCurve() {
     const pnl = d.paper_pnl;
     if (!pnl) return;
     const EB_MIN_N = 5;
+    const EB_SMALL_N = 30;
     const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
-    const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets') : _build(s && s.n_bets);
+    const _smallN = n => `<span style="color:var(--text-dim);font-size:0.75em;opacity:0.7"> (small n)</span>`;
+    const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
     const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
     _upd('eb-pnl-flat-v',  _roiVal(pnl.flat));
     _upd('eb-pnl-edge-v',  _roiVal(pnl.edge_weighted));
     _upd('eb-pnl-val-v',   _roiVal(pnl.validated_only));
+    _upd('eb-pnl-mid-v',   _roiVal(pnl.mid_price_only));
+    _upd('eb-pnl-fade-v',  _roiVal(pnl.fade_extreme));
     const _normCurve = s => s?.equity_curve?.length && s.total_staked
       ? s.equity_curve.map(v => v / s.total_staked) : null;
     const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
@@ -3944,6 +3948,8 @@ async function refreshEquityCurve() {
       _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
       _mk(pnl.edge_weighted,  '#a78bfa', 'Edge-weighted'),
       _mk(pnl.validated_only, '#34d399', 'Validated-only'),
+      _mk(pnl.mid_price_only, '#f59e0b', 'Mid-price only'),
+      _mk(pnl.fade_extreme,   '#ec4899', 'Fade extreme ⚗️', true),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
     el.innerHTML = curves.length ? _equitySvg(curves) : '';
@@ -4756,15 +4762,19 @@ function renderEdgeBoard(d) {
       _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
       _mk(pnl.edge_weighted,  '#a78bfa', 'Edge-weighted'),
       _mk(pnl.validated_only, '#34d399', 'Validated-only'),
+      _mk(pnl.mid_price_only, '#f59e0b', 'Mid-price only'),
+      _mk(pnl.fade_extreme,   '#ec4899', 'Fade extreme ⚗️', true),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
     const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves) : ''}</div>`;
     // Per-sizing explainer: what each number means and what the gap between them signals.
     const _pnlExplainer = () => {
-      const fl = pnl.flat, ew = pnl.edge_weighted, vo = pnl.validated_only;
+      const fl = pnl.flat, ew = pnl.edge_weighted, vo = pnl.validated_only, mid = pnl.mid_price_only, fade = pnl.fade_extreme;
       const hasFlat = fl && fl.n_bets >= EB_MIN_N;
       const hasEw   = ew && ew.n_bets >= EB_MIN_N;
       const hasVo   = vo && vo.n_bets >= EB_MIN_N;
+      const hasMid  = mid && mid.n_bets >= EB_MIN_N;
+      const hasFade = fade && fade.n_bets >= EB_MIN_N;
       const rows = [];
 
       if (hasFlat) {
@@ -4822,6 +4832,29 @@ function renderEdgeBoard(d) {
         </div>`);
       }
 
+      if (hasMid) {
+        const sign = mid.roi >= 0 ? 'positive' : 'negative';
+        const verb = mid.roi >= 0 ? 'profitable' : 'loss-making';
+        rows.push(`<div class="pnl-exp-row">
+          <span class="pnl-exp-dot" style="background:#f59e0b"></span>
+          <div><strong>Mid-price only ${_roiPct(mid.roi)}</strong> — flat stake, only betting when the entry price is between 30¢ and 70¢, ${mid.n_bets} bets.
+          This avoids high-priced asymmetric risk (where single losses wipe out multiple tiny payouts) and extreme long-shots.
+          A ${sign} result here shows the model's performance in uncertain, liquid territory.
+          Win rate was ${pct(mid.win_rate)}%.</div>
+        </div>`);
+      }
+
+      if (hasFade) {
+        const sign = fade.roi >= 0 ? 'positive' : 'negative';
+        rows.push(`<div class="pnl-exp-row">
+          <span class="pnl-exp-dot" style="background:#ec4899"></span>
+          <div><strong>Fade extreme ⚗️ ${_roiPct(fade.roi)}</strong> — <em>experimental / diagnostic</em>. Flat stake, counter-trading the model when it disagrees with the market by &ge; 15pp, ${fade.n_bets} bets.
+          This bets <em>against</em> the model on its highest-conviction calls. A ${sign} result here suggests the model ${sign === 'positive' ? 'may be overconfident on extreme calls' : 'is genuinely skilled even at extreme conviction levels'}.
+          <strong style="color:var(--text-dim)">⚠ Small sample, outlier-dominated</strong> — treat as a diagnostic tool, not a deployable strategy. Needs 50+ bets minimum before drawing conclusions.
+          Win rate was ${pct(fade.win_rate)}%.</div>
+        </div>`);
+      }
+
       if (!rows.length) return '';
       return `<div class="pnl-explainer"><h5 class="pnl-exp-title">What these numbers mean</h5>${rows.join('')}</div>`;
     };
@@ -4829,6 +4862,8 @@ function renderEdgeBoard(d) {
     pnlHtml = intro + `<div class="tr-stats">
       <div class="tr-stat" title="Equal stake on every call. Pure hit-rate at the odds paid — a winning favourite pays little, any loss costs the full stake."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
       <div class="tr-stat" title="Stake scales with how far the model sits from the market price — big where it disagrees with the crowd, almost nothing where it agrees."><div class="v" id="eb-pnl-edge-v">${roi(pnl.edge_weighted)}</div><div class="k label">Edge-weighted</div>${_sub('stake the gap vs market')}</div>
+      <div class="tr-stat" title="Flat stake, but only when entry price is between 30¢ and 70¢ to avoid asymmetric payout risks."><div class="v" id="eb-pnl-mid-v">${roi(pnl.mid_price_only)}</div><div class="k label">Mid-price only</div>${_sub('30¢ to 70¢ entries')}</div>
+      <div class="tr-stat" title="⚗️ Experimental · Flat stake, counter-trading the model (betting opposite) when model-vs-market disagreement is >= 15pp. Small sample, outlier-dominated — treat as diagnostic, not a strategy."><div class="v" id="eb-pnl-fade-v">${roi(pnl.fade_extreme)}</div><div class="k label">Fade extreme ⚗️</div>${_sub('experimental · fade gaps >=15%')}</div>
       <div class="tr-stat" title="Flat stake, but only on calls in disagreement buckets whose resolved skill is already statistically significant. Builds as more markets resolve."><div class="v" id="eb-pnl-val-v">${roi(pnl.validated_only)}</div><div class="k label">Validated-only</div>${_sub('only proven-edge calls')}</div>
     </div>${svgChart}${_pnlExplainer()}<p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(pnl.disclaimer || '')}</p>`;
   } else {
@@ -4874,12 +4909,23 @@ function _fmtVolume(value) {
   return '$' + Math.round(n);
 }
 function renderTrackRecord(d) {
+  // Normalize live format (d.overall.*) and backtest format (top-level fields).
+  const ov = d.overall || {};
+  const accuracy = ov.accuracy ?? d.accuracy ?? 0;
+  const brierScore = ov.model_brier ?? d.brier_score ?? 0;
+  const skillVsMkt = ov.skill_vs_market ?? null;
+  const nResolved = d.n_snapshots_resolved ?? d.n_resolved ?? ov.n ?? 0;
+  const ece = d.ece ?? null;
+  const logEntries = d.resolved_log ?? d.log ?? [];
+  const logSample = d.log_sample_size ?? logEntries.length;
   const stats = `
     <div class="tr-stats">
-      <div class="tr-stat"><div class="v">${pct(d.accuracy)}%</div><div class="k label">Accuracy</div></div>
-      <div class="tr-stat"><div class="v">${(d.brier_score ?? 0).toFixed(3)}</div><div class="k label">Brier score</div></div>
-      <div class="tr-stat"><div class="v">${(d.ece ?? 0).toFixed(3)}</div><div class="k label">Calibration error</div></div>
-      <div class="tr-stat"><div class="v">${(d.n_resolved || 0).toLocaleString()}</div><div class="k label">Resolved</div></div>
+      <div class="tr-stat"><div class="v">${pct(accuracy)}%</div><div class="k label">Accuracy</div></div>
+      <div class="tr-stat"><div class="v">${brierScore.toFixed(3)}</div><div class="k label">Brier score</div></div>
+      ${skillVsMkt !== null
+        ? `<div class="tr-stat"><div class="v" style="color:${skillVsMkt >= 0 ? '#0a7' : '#c33'}">${skillVsMkt >= 0 ? '+' : ''}${skillVsMkt.toFixed(3)}</div><div class="k label">Skill vs market</div></div>`
+        : ece !== null ? `<div class="tr-stat"><div class="v">${ece.toFixed(3)}</div><div class="k label">Calibration error</div></div>` : ''}
+      <div class="tr-stat"><div class="v">${nResolved.toLocaleString()}</div><div class="k label">Resolved</div></div>
     </div>`;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleDateString() : '';
   const method = `<p class="tr-method">${escHtml(d.methodology || '')} ${gen ? 'Updated ' + gen + '.' : ''}</p>`;
@@ -4889,7 +4935,7 @@ function renderTrackRecord(d) {
       <span class="tr-bar"><i style="width:${pct(b.observed_yes_rate)}%"></i></span>
       <span>${pct(b.observed_yes_rate)}%</span>
     </div>`).join('');
-  const log = (d.log || []).map(r => `
+  const log = logEntries.map(r => `
     <div class="tr-log-row">
       <span class="tr-mark ${r.correct ? 'hit' : 'miss'}" title="${r.correct ? 'Correct' : 'Missed'}"></span>
       <span>
@@ -4907,10 +4953,9 @@ function renderTrackRecord(d) {
       <h2 class="display tr-hero-title">Market forecasts, scored against reality.</h2>
       ${stats}
       ${method}
-      <p class="tr-section-title label">Calibration — predicted vs. resolved yes-rate</p>
-      <div class="tr-calib">${calib}</div>
-      <p class="tr-section-title label">Resolved forecasts · most recent ${(d.log_sample_size || 0)} of ${(d.n_resolved || 0).toLocaleString()}</p>
-      <div class="tr-log">${log}</div>
+      ${calib ? `<p class="tr-section-title label">Calibration — predicted vs. resolved yes-rate</p><div class="tr-calib">${calib}</div>` : ''}
+      <p class="tr-section-title label">Resolved forecasts · most recent ${logSample} of ${nResolved.toLocaleString()}</p>
+      <div class="tr-log">${log || '<p class="text-sm text-gray-500">Resolved log building…</p>'}</div>
     </div>`;
 }
 
