@@ -878,13 +878,20 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         # Clamp: no negative stakes, cap at $1 for comparability
         return max(0.0, min(half_kelly, 1.0))
 
+    def _calibrated_edge_weighted(b):
+        """Scale bet size by the walk-forward calibrated edge, capped at stake_cap."""
+        model_p = b["calibrated_model_probability"]
+        mkt_p = b["market_probability"]
+        cal_edge = abs(model_p - mkt_p)
+        return min(cal_edge, stake_cap)
+
     return {
         "min_edge": min_edge,
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; "
                       "Polymarket fee-free). Excludes slippage/liquidity unless configured. "
                       "Signal check, not live PnL.",
         "flat": flat,
-        "edge_weighted": _run(lambda b: min(b["edge"], stake_cap)),
+        "edge_weighted": _run(_calibrated_edge_weighted, filter_fn=_smart_filter),
         "validated_only": _run(lambda b: 1.0, validated=True),
         "mid_price_only": _run(lambda b: 1.0, filter_fn=_mid_price_filter),
         "fade_extreme": _run(lambda b: 1.0, filter_fn=lambda b: b["edge"] >= 0.15, fade=True),
