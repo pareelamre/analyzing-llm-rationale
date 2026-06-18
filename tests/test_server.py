@@ -793,8 +793,9 @@ class ServerTests(unittest.TestCase):
 
     def test_market_history_and_explain_shift(self):
         import tempfile
-        from pathlib import Path
         from datetime import datetime, timezone
+        from pathlib import Path
+
         from analyzing_llm_rationale.trackrec_store import DuckDBStore, Entity
 
         temp_dir = tempfile.TemporaryDirectory()
