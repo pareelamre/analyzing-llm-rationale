@@ -60,6 +60,7 @@
       --text-dim:   #70727a;
       --text-mute:  #a0a2aa;
       --paper:      #f4f4f6;
+      --description-bg: #f4f4f6;
       --accent:     #111827;
       --accent-bg:  #eef2ff;
       --signal:     #0f766e;
@@ -829,6 +830,16 @@
     .tr-stat { background: #fff; padding: 18px 16px; }
     .tr-stat .v { font-family: var(--font-db); font-weight: 700; font-size: 30px; color: var(--ink); line-height: 1; }
     .tr-stat .k { margin-top: 9px; }
+    .tr-stat-description {
+      background: var(--description-bg);
+      border-radius: 8px;
+      color: var(--text-dim);
+      font-size: 10.5px;
+      line-height: 1.4;
+      margin-top: 9px;
+      max-width: 100%;
+      padding: 8px 10px;
+    }
     .tr-method { font-size: 13px; color: var(--text-dim); line-height: 1.65; margin-top: 16px; max-width: 660px; }
     .tr-section-title { margin-top: 36px; margin-bottom: 12px; }
     .tr-calib { display: flex; flex-direction: column; gap: 7px; }
@@ -845,10 +856,10 @@
     .eb-calib-row { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-dim); padding: 4px 0; }
     .pnl-explainer { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
     .pnl-exp-title { font-size: 12px; font-weight: 600; color: var(--text-dim); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 10px; }
-    .pnl-exp-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+    .pnl-exp-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; padding: 10px 12px; border-radius: 8px; background: var(--description-bg); font-size: 13px; color: var(--text-dim); line-height: 1.6; }
     .pnl-exp-row strong { color: var(--ink); }
     .pnl-exp-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; }
-    .pnl-exp-gap { background: var(--paper); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+    .pnl-exp-gap { margin-bottom: 10px; }
     .eb-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--paper); color: var(--text-dim); white-space: nowrap; }
     .eb-badge.eb-sig { background: #e7f6ee; color: #0a7a4a; }
     .eb-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; justify-content: center; }
@@ -4075,7 +4086,7 @@ function _crypto5mSummaryCard(curve) {
     <div class="k label">${escHtml(_crypto5mLabel(curve))}</div>
     <div class="k" style="font-size:11px;color:var(--text-dim)">${curve.trades || 0} trades · ${curve.hit_rate == null ? '—' : pct(curve.hit_rate) + '%'} hit</div>
     ${longTerm ? `<div class="k" style="font-size:11px;color:var(--text-dim)">${escHtml(longTerm)}</div>` : ''}
-    ${desc ? `<div class="k" style="font-size:10.5px;color:var(--text-dim);margin-top:3px;line-height:1.4;max-width:180px">${escHtml(desc)}</div>` : ''}
+    ${desc ? `<div class="k tr-stat-description">${escHtml(desc)}</div>` : ''}
   </div>`;
 }
 
@@ -4819,7 +4830,7 @@ function renderEdgeBoard(d) {
         if (gap < -0.05) {
           interp = `Edge-weighting made things <strong>worse by ${gapPct}pp</strong>. This means the model's biggest disagreements with the market were its <em>least</em> accurate calls — precisely where the model was most confident it was right and the crowd was wrong, the crowd turned out to be more right. The direction call has signal; the magnitude of conviction does not (yet).`;
         } else if (gap > 0.05) {
-          interp = `Edge-weighting made things <strong>better by ${gapPct}pp</strong>. The model's biggest disagreements were also its best calls — sizing up on high-conviction gaps paid off on top of the direction.`;
+          interp = `Edge-weighting <strong>improved ROI by ${gapPct}pp</strong> over flat staking. The largest model-market gaps were also the strongest calls, so increasing stake size on high-conviction disagreements added value beyond simply choosing the right side.`;
         } else {
           interp = `Edge-weighting made little difference (${gapPct}pp). Sizing up on larger disagreements didn't help or hurt meaningfully — the signal is in the direction, not the conviction size.`;
         }
@@ -4925,7 +4936,7 @@ function renderEdgeBoard(d) {
       <div class="tr-stat" title="Calibrated Half-Kelly criterion sizing. Bet size proportional to estimated edge / odds. Naturally sizes down on heavy favourites."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
       <div class="tr-stat" title="Flat stake, but only when predicting YES. Highly accurate historically when forecasting change."><div class="v" id="eb-pnl-yes-v">${roi(pnl.yes_only)}</div><div class="k label">YES-Only Flat</div>${_sub('only YES calls')}</div>
       <div class="tr-stat" title="Equal stake on every call. Pure hit-rate at the odds paid — a winning favourite pays little, any loss costs the full stake."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
-      <div class="tr-stat" title="Flat stake, always betting the crowd's own direction (zero edge baseline)."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">Crowd baseline</div>${_sub('agree with market')}</div>
+      <div class="tr-stat" title="Flat stake, always betting the crowd's own direction (zero edge baseline)."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">Crowd baseline</div>${_sub('agree with market')}<div class="k tr-stat-description">Flat $1 stake on the market consensus side for every resolved question. This is the zero-edge benchmark: the model only adds value if its disagreement strategies beat this baseline.</div></div>
       <div class="tr-stat" title="Stake scales with walk-forward calibrated model-vs-market gap, capped at 25¢ + Smart filters."><div class="v" id="eb-pnl-edge-v">${roi(pnl.edge_weighted)}</div><div class="k label">Edge-weighted</div>${_sub('calibrated gap + filters')}</div>
       <div class="tr-stat" title="Flat stake, but only when entry price is between 30¢ and 70¢ to avoid asymmetric payout risks."><div class="v" id="eb-pnl-mid-v">${roi(pnl.mid_price_only)}</div><div class="k label">Mid-price only</div>${_sub('30¢ to 70¢ entries')}</div>
       <div class="tr-stat" title="⚗️ Experimental · Flat stake, counter-trading the model (betting opposite) when model-vs-market disagreement is >= 15pp. Small sample, outlier-dominated — treat as diagnostic, not a strategy."><div class="v" id="eb-pnl-fade-v">${roi(pnl.fade_extreme)}</div><div class="k label">Fade extreme ⚗️</div>${_sub('experimental · fade gaps >=15%')}</div>
