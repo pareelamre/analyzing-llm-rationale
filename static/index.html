@@ -4952,6 +4952,9 @@ function renderTrackRecord(d) {
   const ece = d.ece ?? null;
   const logEntries = d.resolved_log ?? d.log ?? [];
   const logSample = d.log_sample_size ?? logEntries.length;
+  const logCountLabel = logSample > 0 && logSample < nResolved
+    ? `most recent ${logSample} of ${nResolved.toLocaleString()}`
+    : `${nResolved.toLocaleString()} scored`;
   const stats = `
     <div class="tr-stats">
       <div class="tr-stat"><div class="v">${pct(accuracy)}%</div><div class="k label">Accuracy</div></div>
@@ -4988,7 +4991,7 @@ function renderTrackRecord(d) {
       ${stats}
       ${method}
       ${calib ? `<p class="tr-section-title label">Calibration — predicted vs. resolved yes-rate</p><div class="tr-calib">${calib}</div>` : ''}
-      <p class="tr-section-title label">Resolved forecasts · most recent ${logSample} of ${nResolved.toLocaleString()}</p>
+      <p class="tr-section-title label">Resolved forecasts · ${logCountLabel}</p>
       <div class="tr-log">${log || '<p class="text-sm text-gray-500">Resolved log building…</p>'}</div>
     </div>`;
 }
