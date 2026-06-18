@@ -740,6 +740,17 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         })
 
     def _run(sizing, *, validated: bool = False, filter_fn=None, fade: bool = False) -> Optional[Dict[str, Any]]:
+        """Run a paper-PnL simulation over all resolved bets.
+
+        Args:
+            sizing: callable(bet_dict) -> stake amount.  Receives the full bet
+                    dict so Kelly-style functions can read model_probability,
+                    market_probability, edge, etc.
+            validated: if True only include bets in statistically-significant
+                       edge buckets.
+            filter_fn: optional callable(bet_dict) -> bool, skip bet if False.
+            fade: if True, bet the *opposite* side to the model's call.
+        """
         staked = pnl = wins = fees = 0.0
         n = 0
         cum = 0.0
@@ -750,12 +761,14 @@ def paper_pnl(resolved: List[Dict[str, Any]],
                 continue
             if filter_fn is not None and not filter_fn(b):
                 continue
-            stake = sizing(b["edge"])
-            
+            stake = sizing(b)
+            if stake <= 0.0:
+                continue
+
             mkt_p = b["market_probability"]
             side = b["side"]
             win_val = b["win"]
-            
+
             if fade:
                 fade_side = "NO" if side == "YES" else "YES"
                 p_side = (1.0 - mkt_p) if fade_side == "NO" else mkt_p
@@ -763,10 +776,10 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             else:
                 p_side = mkt_p if side == "YES" else (1.0 - mkt_p)
                 win = win_val
-                
+
             if p_side <= 0.0 or p_side >= 1.0:
                 continue
-                
+
             payout = (1.0 - p_side) / p_side
             fee = _bet_fee(b["platform"], stake, p_side)
             profit = stake * (payout if win else -1.0) - fee
@@ -791,14 +804,64 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "equity_curve_ts": curve_ts[-60:],
         }
 
-    flat = _run(lambda e: 1.0)
+    flat = _run(lambda b: 1.0)
     if flat is None:
         return None
-        
+
+    # ── Filters ──────────────────────────────────────────────
     def _mid_price_filter(b):
+        """Only bet when entry price is between 30¢ and 70¢."""
         mkt_p = b["market_probability"]
         p_side = mkt_p if b["side"] == "YES" else (1.0 - mkt_p)
         return 0.30 <= p_side <= 0.70
+
+    def _smart_filter(b):
+        """Data-driven composite filter:
+        1. Entry price between 20¢-80¢ (avoid heavy-fav trap + extreme longshots)
+        2. Skip geopolitics when edge is large (model can't forecast geopolitics)
+        3. Cap edge at 40% (above that the model is hallucinating)
+        """
+        mkt_p = b["market_probability"]
+        p_side = mkt_p if b["side"] == "YES" else (1.0 - mkt_p)
+        # Price guard: no extreme favourites or extreme longshots
+        if p_side < 0.20 or p_side > 0.80:
+            return False
+        # Domain guard: geopolitics is a coin-flip; only allow tiny-edge geo bets
+        if b.get("domain") == "geopolitics" and b["edge"] > 0.10:
+            return False
+        # Overconfidence guard: extreme edge = hallucination
+        if b["edge"] > 0.40:
+            return False
+        return True
+
+    # ── Kelly sizing ─────────────────────────────────────────
+    def _half_kelly(b):
+        """Half-Kelly criterion: f* = 0.5 * (p*b - q) / b
+        where p = model's estimated probability of winning,
+              b = payout odds (decimal, e.g. 1.5 means you get $1.50 on $1),
+              q = 1 - p.
+        Capped at $1 to keep comparable to flat-stake.
+        """
+        mkt_p = b["market_probability"]
+        model_p = b["model_probability"]
+        side = b["side"]
+        # Probability of the bet winning according to the *model*
+        if side == "YES":
+            p_win = model_p          # model thinks YES wins with prob model_p
+            p_side = mkt_p           # market price of YES contract
+        else:
+            p_win = 1.0 - model_p    # model thinks NO wins with prob 1-model_p
+            p_side = 1.0 - mkt_p     # market price of NO contract
+        if p_side <= 0.0 or p_side >= 1.0:
+            return 0.0
+        odds = (1.0 - p_side) / p_side   # decimal payout per $1 staked
+        if odds <= 0:
+            return 0.0
+        q_win = 1.0 - p_win
+        kelly_f = (p_win * odds - q_win) / odds
+        half_kelly = 0.5 * kelly_f
+        # Clamp: no negative stakes, cap at $1 for comparability
+        return max(0.0, min(half_kelly, 1.0))
 
     return {
         "min_edge": min_edge,
@@ -806,10 +869,12 @@ def paper_pnl(resolved: List[Dict[str, Any]],
                       "Polymarket fee-free). Excludes slippage/liquidity unless configured. "
                       "Signal check, not live PnL.",
         "flat": flat,
-        "edge_weighted": _run(lambda e: min(e, stake_cap)),
-        "validated_only": _run(lambda e: 1.0, validated=True),
-        "mid_price_only": _run(lambda e: 1.0, filter_fn=_mid_price_filter),
-        "fade_extreme": _run(lambda e: 1.0, filter_fn=lambda b: b["edge"] >= 0.15, fade=True),
+        "edge_weighted": _run(lambda b: min(b["edge"], stake_cap)),
+        "validated_only": _run(lambda b: 1.0, validated=True),
+        "mid_price_only": _run(lambda b: 1.0, filter_fn=_mid_price_filter),
+        "fade_extreme": _run(lambda b: 1.0, filter_fn=lambda b: b["edge"] >= 0.15, fade=True),
+        "half_kelly": _run(_half_kelly),
+        "smart": _run(_half_kelly, filter_fn=_smart_filter),
         "bets": all_bets,
     }
 
