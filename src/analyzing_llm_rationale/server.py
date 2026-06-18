@@ -397,24 +397,46 @@ def _get_datastore():
     return _ds_client
 
 
-def _upsert_user(sub: str, email: str, name: str, picture: str) -> None:
-    """Create or update a User entity in Cloud Datastore."""
+def _upsert_user(sub: str, email: str, name: str, picture: str) -> str:
+    """Create or update a User entity, deduped by email.
+
+    A user can get a *new* Google/GitHub ``sub`` (re-consent, a different OAuth
+    client, or Google rotating the subject) — keying on ``sub`` then forks a
+    duplicate account for the same person. So we resolve by verified email first:
+    if any account already exists for this email, reuse the oldest one as
+    canonical (recording the new ``sub`` in ``alt_subs``) instead of creating a
+    duplicate. Returns the effective user id to use for the session.
+    """
     client = _get_datastore()
     if client is None:
-        return
+        return sub
     from google.cloud import datastore as _ds
-    key = client.key("User", sub)
-    entity = client.get(key)
+    now = datetime.now(timezone.utc)
+    entity = None
+    if email:
+        try:
+            q = client.query(kind="User")
+            q.add_filter("email", "=", email)
+            matches = list(q.fetch())
+        except Exception:
+            logger.warning("user email-dedup lookup failed", exc_info=True)
+            matches = []
+        if matches:
+            matches.sort(key=lambda e: e.get("created_at") or now)
+            entity = matches[0]  # oldest account for this email is canonical
+            if entity.key.name != sub:
+                aliases = set(entity.get("alt_subs") or [])
+                aliases.add(sub)
+                entity["alt_subs"] = sorted(aliases)
     if entity is None:
-        entity = _ds.Entity(key=key, exclude_from_indexes=("picture",))
-        entity["created_at"] = datetime.now(timezone.utc)
-    entity.update(
-        email=email,
-        name=name,
-        picture=picture,
-        last_login=datetime.now(timezone.utc),
-    )
+        key = client.key("User", sub)
+        entity = client.get(key)
+        if entity is None:
+            entity = _ds.Entity(key=key, exclude_from_indexes=("picture",))
+            entity["created_at"] = now
+    entity.update(email=email, name=name, picture=picture, last_login=now)
     client.put(entity)
+    return entity.key.name or sub
 
 
 # Datastore kind: agent-forecast markets to enrol into the live track record.
@@ -3936,9 +3958,9 @@ async def auth_google(req: GoogleAuthRequest) -> SessionResponse:
     name = claims.get("name", "")
     picture = claims.get("picture", "")
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _upsert_user, sub, email, name, picture)
-    token = _issue_session(sub, email, name, picture)
-    return SessionResponse(token=token, user_id=sub, email=email, name=name, picture=picture)
+    uid = await loop.run_in_executor(None, _upsert_user, sub, email, name, picture)
+    token = _issue_session(uid, email, name, picture)
+    return SessionResponse(token=token, user_id=uid, email=email, name=name, picture=picture)
 
 
 @app.post("/auth/github", tags=["Auth"], summary="Sign in with GitHub", response_model=SessionResponse)
@@ -3952,9 +3974,9 @@ async def auth_github(req: GitHubAuthRequest) -> SessionResponse:
     loop = asyncio.get_running_loop()
     profile = await loop.run_in_executor(None, _exchange_github_code, req.code, req.redirect_uri)
     sub, email, name, picture = profile["sub"], profile["email"], profile["name"], profile["picture"]
-    await loop.run_in_executor(None, _upsert_user, sub, email, name, picture)
-    token = _issue_session(sub, email, name, picture)
-    return SessionResponse(token=token, user_id=sub, email=email, name=name, picture=picture)
+    uid = await loop.run_in_executor(None, _upsert_user, sub, email, name, picture)
+    token = _issue_session(uid, email, name, picture)
+    return SessionResponse(token=token, user_id=uid, email=email, name=name, picture=picture)
 
 
 @app.post("/auth/register", tags=["Auth"], summary="Create an account", response_model=SessionResponse)
