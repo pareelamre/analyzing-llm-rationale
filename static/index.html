@@ -678,6 +678,10 @@
     .market-lens-signal span {
       color: var(--text-dim);
     }
+    .market-history-section {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+    }
     .product-panel {
       background: #fff;
       border: 1px solid var(--border);
@@ -2773,6 +2777,32 @@ function makeMarketLens(data) {
         </div>
       </div>`;
   }
+
+  const platform = ctx.platform || '';
+  const url = ctx.market_url || '';
+  const ident = getIdentFromUrl(platform, url);
+  const uniqueChartId = 'hist_chart_' + Math.random().toString(36).substring(2, 11);
+  const uniqueExplId = 'hist_expl_' + Math.random().toString(36).substring(2, 11);
+  const uniqueBtnId = 'hist_btn_' + Math.random().toString(36).substring(2, 11);
+
+  setTimeout(async () => {
+    const chartCont = document.getElementById(uniqueChartId);
+    if (!chartCont) return;
+    try {
+      const r = await fetch(`/market/history?platform=${encodeURIComponent(platform)}&ident=${encodeURIComponent(ident)}`);
+      if (r.ok) {
+        const hist = (await r.json()).history || [];
+        renderMarketHistoryChart(chartCont, hist);
+        const btn = document.getElementById(uniqueBtnId);
+        if (hist.length < 2 && btn) {
+          btn.style.display = 'none';
+        }
+      }
+    } catch (_) {
+      chartCont.innerHTML = '';
+    }
+  }, 50);
+
   return `
     <div class="market-lens mt-3">
       <div class="market-lens-grid">
@@ -2796,7 +2826,133 @@ function makeMarketLens(data) {
         <strong><span class="market-gap ${escAttr(signal.klass)}">${escHtml(signal.label)}</span></strong>
         <span>${escHtml(signal.detail)}</span>
       </div>
+      <div class="market-history-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:8px">
+          <span class="label" style="flex:1">Historical odds shift</span>
+          <button type="button" id="${uniqueBtnId}" class="wl-act" style="padding:2px 8px;font-size:11px" onclick="triggerExplainShift(this, '${escAttr(platform)}', '${escAttr(ident)}')">Explain shift</button>
+        </div>
+        <div id="${uniqueChartId}"></div>
+        <div id="${uniqueExplId}" class="market-shift-explanation" style="margin-top:6px"></div>
+      </div>
     </div>`;
+}
+
+function getIdentFromUrl(platform, url) {
+  if (!url) return '';
+  const u = String(url).replace(/\/+$/, '');
+  if (u.includes('/market/')) {
+    return u.split('/market/').pop();
+  }
+  if (u.includes('/markets/')) {
+    return u.split('/markets/').pop();
+  }
+  return u;
+}
+
+function renderMarketHistoryChart(container, history) {
+  if (!history || !history.length) {
+    container.innerHTML = '<p style="font-size:11px;color:var(--text-dim)">No snapshot history tracked yet.</p>';
+    return;
+  }
+  
+  if (history.length < 2) {
+    container.innerHTML = '<p style="font-size:11px;color:var(--text-dim)">Building history (need 2+ daily snapshots)...</p>';
+    return;
+  }
+
+  const W = 460;
+  const H = 90;
+  const padL = 35;
+  const padR = 15;
+  const padT = 10;
+  const padB = 25;
+  const cW = W - padL - padR;
+  const cH = H - padT - padB;
+
+  const modelProbs = history.map(h => h.model_probability);
+  const marketProbs = history.map(h => h.market_probability);
+
+  const toX = (i) => padL + (history.length > 1 ? (i / (history.length - 1)) * cW : cW / 2);
+  const toY = (v) => padT + cH - (v * cH);
+
+  let modelPath = '';
+  let marketPath = '';
+  for (let i = 0; i < history.length; i++) {
+    const mx = toX(i).toFixed(1);
+    const myModel = toY(modelProbs[i] ?? 0).toFixed(1);
+    const myMarket = toY(marketProbs[i] ?? 0).toFixed(1);
+
+    if (i === 0) {
+      modelPath = `M ${mx} ${myModel}`;
+      marketPath = `M ${mx} ${myMarket}`;
+    } else {
+      modelPath += ` L ${mx} ${myModel}`;
+      marketPath += ` L ${mx} ${myMarket}`;
+    }
+  }
+
+  const yLabels = [0, 0.5, 1.0];
+  const yAxisHtml = yLabels.map(v => {
+    return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--text-dim)">${Math.round(v * 100)}%</text>`;
+  }).join('');
+
+  const xLabels = [];
+  if (history.length >= 2) {
+    const fDate = new Date(history[0].snapshot_ts).toLocaleDateString(undefined, {month:'short', day:'numeric'});
+    const lDate = new Date(history[history.length - 1].snapshot_ts).toLocaleDateString(undefined, {month:'short', day:'numeric'});
+    xLabels.push(`<text x="${padL}" y="${H - 6}" font-size="9" fill="var(--text-dim)" text-anchor="start">${fDate}</text>`);
+    xLabels.push(`<text x="${padL + cW}" y="${H - 6}" font-size="9" fill="var(--text-dim)" text-anchor="end">${lDate}</text>`);
+  }
+
+  const svgHtml = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="overflow:visible;background:var(--paper);border-radius:4px;padding:4px">
+      <line x1="${padL}" y1="${toY(0.5)}" x2="${padL + cW}" y2="${toY(0.5)}" stroke="var(--border)" stroke-dasharray="2 2" />
+      <line x1="${padL}" y1="${toY(1.0)}" x2="${padL + cW}" y2="${toY(1.0)}" stroke="var(--border)" stroke-dasharray="2 2" />
+      <line x1="${padL}" y1="${toY(0.0)}" x2="${padL + cW}" y2="${toY(0.0)}" stroke="var(--border)" />
+      
+      <path d="${marketPath}" fill="none" stroke="#60a5fa" stroke-width="2" />
+      <path d="${modelPath}" fill="none" stroke="#10b981" stroke-width="2" />
+      
+      <circle cx="${toX(history.length - 1)}" cy="${toY(modelProbs[history.length - 1] ?? 0)}" r="3" fill="#10b981" />
+      <circle cx="${toX(history.length - 1)}" cy="${toY(marketProbs[history.length - 1] ?? 0)}" r="3" fill="#60a5fa" />
+      
+      ${yAxisHtml}
+      ${xLabels.join('')}
+    </svg>
+    <div class="flex items-center gap-4 mt-2 justify-center" style="font-size:10px">
+      <span class="flex items-center gap-1"><i style="width:8px;height:8px;background:#10b981;display:inline-block;border-radius:50%"></i> Foresea model</span>
+      <span class="flex items-center gap-1"><i style="width:8px;height:8px;background:#60a5fa;display:inline-block;border-radius:50%"></i> Market quote</span>
+    </div>
+  `;
+  container.innerHTML = svgHtml;
+}
+
+async function triggerExplainShift(btn, platform, ident) {
+  const container = btn.closest('.market-history-section').querySelector('.market-shift-explanation');
+  if (!container) return;
+  btn.disabled = true;
+  btn.textContent = 'Explaining...';
+  container.innerHTML = '<span style="color:var(--text-dim)">Analyzing temporal delta...</span>';
+  try {
+    const r = await fetch('/market/explain-shift', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ platform, ident })
+    });
+    if (!r.ok) throw new Error('API error');
+    const d = await r.json();
+    container.innerHTML = `
+      <div style="background:var(--paper);border-left:3px solid #10b981;padding:8px 12px;border-radius:0 4px 4px 0;margin-top:8px">
+        <div style="font-weight:600;margin-bottom:4px;color:var(--ink)">Shift Explanation (${d.shift >= 0 ? '+' : ''}${Math.round(d.shift * 100)}%):</div>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.4">${escHtml(d.explanation)}</div>
+      </div>
+    `;
+    btn.textContent = 'Shift explained';
+  } catch (e) {
+    container.innerHTML = '<span style="color:#c33">Could not generate shift explanation.</span>';
+    btn.disabled = false;
+    btn.textContent = 'Explain shift';
+  }
 }
 
 // Clickable source feed rendered at the bottom of an answer so the reader can
@@ -4945,8 +5101,51 @@ function renderEdgeBoard(d) {
   } else {
     pnlHtml = `<p class="text-sm text-gray-500">Hypothetical paper PnL — following the model's calls — starts once markets resolve. No fees/slippage; a signal check, not live trading.</p>`;
   }
-  // Lead-time calibration is the primary axis the live rows link to: resolved
-  // skill grouped by how early the forecast was made. Ordered earliest → latest.
+  const arbitrage = d.arbitrage_signals || [];
+  let arbitrageHtml = '';
+  if (arbitrage.length) {
+    arbitrageHtml = `
+      <div class="md-table-wrap">
+        <table class="eb-table">
+          <thead>
+            <tr>
+              <th>Platform 1</th>
+              <th>Platform 2</th>
+              <th>Spread</th>
+              <th>Total Cost</th>
+              <th>Net Profit</th>
+              <th>Risk-Free ROI</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${arbitrage.map(sig => `
+              <tr class="eb-row">
+                <td style="max-width:300px">
+                  <span class="eb-badge" style="background:var(--accent-dim);color:var(--accent);margin-right:6px">${escHtml(sig.platform1)}</span>
+                  <a href="${escHtml(sig.market_url1)}" target="_blank" rel="noopener" class="wl-q-link" style="font-size:12px;font-weight:600;text-decoration:none;color:var(--accent)">${escHtml(sig.question1)}</a>
+                  <div style="font-size:11px;color:var(--text-dim);margin-top:2px">YES price: <b>${Math.round(sig.price1 * 100)}¢</b></div>
+                </td>
+                <td style="max-width:300px">
+                  <span class="eb-badge" style="background:var(--accent-dim);color:var(--accent);margin-right:6px">${escHtml(sig.platform2)}</span>
+                  <a href="${escHtml(sig.market_url2)}" target="_blank" rel="noopener" class="wl-q-link" style="font-size:12px;font-weight:600;text-decoration:none;color:var(--accent)">${escHtml(sig.question2)}</a>
+                  <div style="font-size:11px;color:var(--text-dim);margin-top:2px">YES price: <b>${Math.round(sig.price2 * 100)}¢</b></div>
+                </td>
+                <td style="font-weight:600;color:#10b981">${Math.round(sig.arbitrage_gap * 100)}¢</td>
+                <td>${Math.round(sig.total_cost * 100)}¢</td>
+                <td style="font-weight:600">${Math.round(sig.net_profit * 100)}¢</td>
+                <td>
+                  <span class="eb-badge eb-sig" style="background:#10b981;color:#fff;font-weight:700">${(sig.roi * 100).toFixed(1)}%</span>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    arbitrageHtml = `<p class="text-sm text-gray-500">No active arbitrage opportunities found between Polymarket and Kalshi.</p>`;
+  }
+
   const byHorizon = d.by_horizon || [];
   const _hOrder = { '30d+': 0, '14-30d': 1, '7-14d': 2, '3-7d': 3, '1-3d': 4, '<1d': 5 };
   let calibHtml;
@@ -4965,6 +5164,7 @@ function renderEdgeBoard(d) {
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced — and our track record of being right about it</h3>
     <p class="tr-method">Live model-vs-market gaps, ranked. Calibration, lead/lag and paper PnL come from resolved forecasts only — hypothetical, no fees or slippage. ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${stats}
+    <h4 class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
     <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
     <h4 class="eb-h">Hypothetical paper PnL · following the model's calls <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${pnlHtml}
     <h4 class="eb-h">Does an early call pay? · skill by how early the forecast was made</h4>${calibHtml}

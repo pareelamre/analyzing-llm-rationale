@@ -565,6 +565,49 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertEqual(board[0]["market_probability"], 0.5)
         self.assertEqual(board[0]["edge"], 0.3)
 
+    def test_is_similar_question(self):
+        q1 = "Will the Federal Reserve cut interest rates in September 2026?"
+        q2 = "Will the Fed cut interest rates in September 2026?"
+        self.assertTrue(trl._is_similar_question(q1, q2))
+
+        q3 = "Will the Fed cut interest rates in September 2025?"
+        self.assertFalse(trl._is_similar_question(q1, q3))
+
+        q4 = "Will SpaceX launch Starship in September 2026?"
+        self.assertFalse(trl._is_similar_question(q1, q4))
+
+    def test_build_arbitrage_board(self):
+        now = datetime.now(timezone.utc)
+        open_rows = [
+            {
+                "platform": "Polymarket",
+                "ident": "fed-sept-26",
+                "question": "Will the Fed cut interest rates in September 2026?",
+                "market_url": "https://polymarket.com/fed-sept-26",
+                "snapshot_ts": now,
+            },
+            {
+                "platform": "Kalshi",
+                "ident": "FED-26SEPT",
+                "question": "Will the Federal Reserve cut interest rates in September 2026?",
+                "market_url": "https://kalshi.com/FED-26SEPT",
+                "snapshot_ts": now,
+            }
+        ]
+        latest_prices = {
+            "fed-sept-26": 0.40,
+            "FED-26SEPT": 0.55
+        }
+        signals = trl.build_arbitrage_board(open_rows, latest_prices)
+        self.assertEqual(len(signals), 1)
+        sig = signals[0]
+        self.assertEqual(sig["price1"], 0.40)
+        self.assertEqual(sig["price2"], 0.55)
+        self.assertEqual(sig["arbitrage_gap"], 0.15)
+        self.assertEqual(sig["total_cost"], 0.85)
+        self.assertEqual(sig["net_profit"], 0.15)
+        self.assertAlmostEqual(sig["roi"], 0.1765, places=4)
+
 
 if __name__ == "__main__":
     unittest.main()

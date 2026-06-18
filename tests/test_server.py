@@ -791,6 +791,71 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["edge_board"], [])
 
+    def test_market_history_and_explain_shift(self):
+        import tempfile
+        from pathlib import Path
+        from datetime import datetime, timezone
+        from analyzing_llm_rationale.trackrec_store import DuckDBStore, Entity
+
+        temp_dir = tempfile.TemporaryDirectory()
+        db_path = Path(temp_dir.name) / "test_track_record.duckdb"
+        store = DuckDBStore(db_path)
+        try:
+            snap1 = Entity(store.key("ForecastSnapshot", "Polymarket:fed-sept-26:gpt-oss-120b:2026-06-03"))
+            snap1.update(
+                platform="Polymarket",
+                ident="fed-sept-26",
+                model="gpt-oss-120b",
+                snapshot_date="2026-06-03",
+                snapshot_ts=datetime(2026, 6, 3, 12, 0, tzinfo=timezone.utc),
+                question="Will the Fed cut rates?",
+                market_url="https://polymarket.com/fed-sept-26",
+                model_probability=0.40,
+                market_probability=0.42,
+                rationale="Interest rate cuts are unlikely in June given high CPI.",
+                resolved=False,
+            )
+            store.put(snap1)
+
+            snap2 = Entity(store.key("ForecastSnapshot", "Polymarket:fed-sept-26:gpt-oss-120b:2026-06-04"))
+            snap2.update(
+                platform="Polymarket",
+                ident="fed-sept-26",
+                model="gpt-oss-120b",
+                snapshot_date="2026-06-04",
+                snapshot_ts=datetime(2026, 6, 4, 12, 0, tzinfo=timezone.utc),
+                question="Will the Fed cut rates?",
+                market_url="https://polymarket.com/fed-sept-26",
+                model_probability=0.55,
+                market_probability=0.52,
+                rationale="Retrieved news confirming CPI dropped, opening path for rate cut.",
+                resolved=False,
+            )
+            store.put(snap2)
+            store.save()
+        finally:
+            store.close()
+
+        with mock.patch.dict("os.environ", {"TRACK_STORE_PATH": str(db_path)}):
+            r_hist = self.client.get("/market/history", params={"platform": "polymarket", "ident": "fed-sept-26"})
+            self.assertEqual(r_hist.status_code, 200)
+            hist_data = r_hist.json()["history"]
+            self.assertEqual(len(hist_data), 2)
+            self.assertEqual(hist_data[0]["model_probability"], 0.40)
+            self.assertEqual(hist_data[1]["model_probability"], 0.55)
+            self.assertEqual(hist_data[1]["rationale"], "Retrieved news confirming CPI dropped, opening path for rate cut.")
+
+            self.provider.response = "The model increased cuts probability to 55.0% due to CPI dropping."
+            r_explain = self.client.post("/market/explain-shift", json={"platform": "polymarket", "ident": "fed-sept-26"})
+            self.assertEqual(r_explain.status_code, 200)
+            exp_data = r_explain.json()
+            self.assertEqual(exp_data["latest_prob"], 0.55)
+            self.assertEqual(exp_data["previous_prob"], 0.40)
+            self.assertAlmostEqual(exp_data["shift"], 0.15)
+            self.assertEqual(exp_data["explanation"], "The model increased cuts probability to 55.0% due to CPI dropping.")
+
+        temp_dir.cleanup()
+
     def test_crypto_5m_equity_endpoint_returns_candidate_curves(self):
         import analyzing_llm_rationale.server as srv
         payload = {

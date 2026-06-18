@@ -1784,9 +1784,171 @@ async def edge_board():
             "n_markets_open": live.get("n_markets_open", 0),
             "n_markets_tracked": live.get("n_markets_tracked", 0),
             "n_snapshots_resolved": live.get("n_snapshots_resolved", 0),
+            "arbitrage_signals": live.get("arbitrage_signals", []),
         },
         headers={"Cache-Control": "public, max-age=300"},
     )
+
+
+class ExplainShiftRequest(BaseModel):
+    platform: str = Field(..., max_length=20, description="Polymarket or Kalshi")
+    ident: str = Field(..., max_length=200, description="Market identifier")
+
+
+@app.get("/market/history", tags=["System"], summary="Get historical forecast snapshots for a market")
+async def market_history(
+    platform: str = Query(..., max_length=20),
+    ident: str = Query(..., max_length=200),
+) -> Dict[str, Any]:
+    """Retrieve historical forecasts for a given market (platform + ident)."""
+    store_path = Path(os.environ.get("TRACK_STORE_PATH") or _REPO_ROOT / "data" / "track_record_store.duckdb")
+    if not store_path.exists():
+        return {"history": []}
+
+    def _fetch_history():
+        from analyzing_llm_rationale.trackrec_store import DuckDBStore
+        store = DuckDBStore(store_path)
+        try:
+            plat = platform.strip().lower()
+            query = store.query("ForecastSnapshot")
+            query.add_filter("ident", "=", ident)
+            snapshots = list(query.fetch())
+            filtered = [
+                s for s in snapshots
+                if (s.get("platform") or "").lower() == plat
+            ]
+            filtered.sort(key=lambda s: s.get("snapshot_ts") or "")
+
+            history = []
+            for s in filtered:
+                ts = s.get("snapshot_ts")
+                if isinstance(ts, datetime):
+                    ts_str = ts.isoformat()
+                else:
+                    ts_str = str(ts) if ts else None
+
+                history.append({
+                    "snapshot_ts": ts_str,
+                    "model_probability": s.get("model_probability"),
+                    "market_probability": s.get("market_probability"),
+                    "rationale": s.get("rationale") or "",
+                    "question": s.get("question"),
+                    "market_url": s.get("market_url"),
+                    "model": s.get("model"),
+                })
+            return history
+        finally:
+            store.close()
+
+    loop = asyncio.get_running_loop()
+    history = await loop.run_in_executor(None, _fetch_history)
+    return {"history": history}
+
+
+@app.post("/market/explain-shift", tags=["System"], summary="Explain the temporal shift in model odds")
+async def explain_shift(req: ExplainShiftRequest, request: Request) -> Dict[str, Any]:
+    """Compare the latest forecast snapshot to the previous one and explain the probability shift using the default LLM."""
+    _check_rate_limit(request)
+
+    store_path = Path(os.environ.get("TRACK_STORE_PATH") or _REPO_ROOT / "data" / "track_record_store.duckdb")
+    if not store_path.exists():
+        raise HTTPException(status_code=404, detail="Track record store not found.")
+
+    plat = req.platform.strip().lower()
+    ident = req.ident
+
+    def _fetch_snaps():
+        from analyzing_llm_rationale.trackrec_store import DuckDBStore
+        store = DuckDBStore(store_path)
+        try:
+            query = store.query("ForecastSnapshot")
+            query.add_filter("ident", "=", ident)
+            snapshots = list(query.fetch())
+            filtered = [
+                s for s in snapshots
+                if (s.get("platform") or "").lower() == plat
+            ]
+            filtered.sort(key=lambda s: s.get("snapshot_ts") or "")
+            return [dict(s) for s in filtered]
+        finally:
+            store.close()
+
+    loop = asyncio.get_running_loop()
+    snapshots = await loop.run_in_executor(None, _fetch_snaps)
+
+    if len(snapshots) < 2:
+        return {
+            "explanation": "Not enough historical snapshots to explain a shift (need at least 2 snapshots).",
+            "latest_prob": snapshots[-1]["model_probability"] if snapshots else None,
+            "previous_prob": None,
+            "shift": 0.0
+        }
+
+    latest = snapshots[-1]
+    previous = snapshots[-2]
+    for s in reversed(snapshots[:-1]):
+        if abs(s.get("model_probability", 0.0) - latest.get("model_probability", 0.0)) >= 0.03:
+            previous = s
+            break
+
+    latest_prob = latest.get("model_probability") or 0.0
+    prev_prob = previous.get("model_probability") or 0.0
+    shift = latest_prob - prev_prob
+
+    if not _state or "provider" not in _state:
+        return {
+            "explanation": "Default LLM provider not configured on server.",
+            "latest_prob": latest_prob,
+            "previous_prob": prev_prob,
+            "shift": shift
+        }
+
+    provider = _state["provider"]
+    temperature = _state.get("temperature", 0.0)
+    max_tokens = _state.get("max_tokens", 1024)
+
+    system_prompt = (
+        "You are a prediction market analyst. Your job is to explain why the forecasting model "
+        "adjusted its probability odds for a market question between two daily snapshots. "
+        "Explain the shift concisely (1-2 sentences), focusing on the new evidence, news, or arguments. "
+        "Be direct, plainspoken, and street-smart. Avoid AI corporate buzzwords."
+    )
+    user_prompt = (
+        f"Question: {latest.get('question')}\n"
+        f"Platform: {latest.get('platform')} ({latest.get('ident')})\n\n"
+        f"Previous Snapshot Date: {previous.get('snapshot_date')}\n"
+        f"Previous Forecast Probability: {prev_prob * 100:.1f}%\n"
+        f"Previous Forecast Rationale/Evidence:\n{previous.get('rationale') or 'No rationale recorded.'}\n\n"
+        f"Latest Snapshot Date: {latest.get('snapshot_date')}\n"
+        f"Latest Forecast Probability: {latest_prob * 100:.1f}%\n"
+        f"Latest Forecast Rationale/Evidence:\n{latest.get('rationale') or 'No rationale recorded.'}\n\n"
+        f"Explain the shift of {shift * 100:+.1f}% in odds concisely based on what changed in the evidence."
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+
+    try:
+        explanation = await _provider_chat(provider, messages, temperature, max_tokens)
+        explanation = explanation.strip()
+        if (explanation.startswith('"') and explanation.endswith('"')) or (explanation.startswith("'") and explanation.endswith("'")):
+            try:
+                import json
+                cleaned = json.loads(explanation)
+                if isinstance(cleaned, str):
+                    explanation = cleaned
+            except Exception:
+                pass
+    except Exception as exc:
+        explanation = f"Failed to generate explanation: {exc}"
+
+    return {
+        "explanation": explanation,
+        "latest_prob": latest_prob,
+        "previous_prob": prev_prob,
+        "shift": shift
+    }
 
 
 @app.get("/live-prices", tags=["System"], summary="Real-time market prices for tracked open markets")

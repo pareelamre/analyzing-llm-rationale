@@ -193,6 +193,7 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         "model_probability": analysis["model_probability"],
         "market_probability": analysis.get("market_probability"),
         "evidence_count": len(res.get("evidence_sources") or []),
+        "rationale": res.get("model_rationale") or res.get("rationale") or "",
     }
 
 

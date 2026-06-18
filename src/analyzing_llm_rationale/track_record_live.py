@@ -333,7 +333,7 @@ async def record_snapshots(
         tags = tag_question(quote.get("question") or "", quote.get("category"))
         entity = _ds.Entity(key, exclude_from_indexes=(
             "question", "market_url", "close_time", "category", "entities",
-            "description", "resolution_criteria"))
+            "description", "resolution_criteria", "rationale"))
         entity.update(
             platform=quote.get("platform"),
             ident=ident,
@@ -361,6 +361,7 @@ async def record_snapshots(
             drift_reforecast=existing is not None,
             domain=tags["domain"],
             entities=tags["entities"],
+            rationale=scored.get("rationale"),
         )
         client.put(entity)
 
@@ -1265,6 +1266,111 @@ def _calibration_report(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
     return report
 
 
+def _is_similar_question(q1: str, q2: str) -> bool:
+    import re
+    # Lowercase and split into alphanumeric tokens
+    tokens1 = set(re.findall(r'[a-z0-9]+', q1.lower()))
+    tokens2 = set(re.findall(r'[a-z0-9]+', q2.lower()))
+    
+    # Filter stopwords
+    stopwords = {"will", "the", "a", "an", "is", "are", "on", "before", "by", "to", "in", "of", "at", "for", "with", "that", "and", "or", "happen", "be"}
+    words1 = tokens1 - stopwords
+    words2 = tokens2 - stopwords
+    
+    if not words1 or not words2:
+        return False
+        
+    # Check numbers/digits (years, percentages, dates)
+    digits1 = {w for w in tokens1 if w.isdigit()}
+    digits2 = {w for w in tokens2 if w.isdigit()}
+    if digits1 != digits2:
+        return False
+        
+    intersection = words1.intersection(words2)
+    union = words1.union(words2)
+    
+    jaccard = len(intersection) / len(union) if union else 0.0
+    overlap = len(intersection) / min(len(words1), len(words2)) if words1 and words2 else 0.0
+    
+    # We want either high Jaccard or high overlap
+    return jaccard >= 0.65 or overlap >= 0.80
+
+
+def build_arbitrage_board(open_rows: List[Dict[str, Any]], latest_price: Dict[str, float]) -> List[Dict[str, Any]]:
+    """Find price discrepancies between platforms for identical/similar questions."""
+    # Group latest open snapshots by key (platform, ident)
+    latest: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for r in open_rows:
+        key = (r.get("platform"), r.get("ident"))
+        cur = latest.get(key)
+        if cur is None or (r.get("snapshot_ts") or _now()) > (cur.get("snapshot_ts") or _now()):
+            latest[key] = r
+
+    # Filter only those that are actively priced in latest_price
+    active_markets = []
+    for (platform, ident), r in latest.items():
+        market_p = latest_price.get(ident)
+        if market_p is not None and r.get("question") and r.get("market_url"):
+            active_markets.append({
+                "question": r["question"],
+                "platform": platform,
+                "market_url": r["market_url"],
+                "market_probability": float(market_p),
+                "ident": ident
+            })
+
+    # Find cross-platform pairs
+    pairs = []
+    for i in range(len(active_markets)):
+        m1 = active_markets[i]
+        for j in range(i + 1, len(active_markets)):
+            m2 = active_markets[j]
+            # Must be different platforms
+            if m1["platform"] == m2["platform"]:
+                continue
+            if _is_similar_question(m1["question"], m2["question"]):
+                p1, p2 = m1["market_probability"], m2["market_probability"]
+                # Price gap (arbitrage spread)
+                gap = abs(p1 - p2)
+                if gap >= 0.02: # at least 2 cents difference
+                    # Determine which is cheaper
+                    if p1 < p2:
+                        cheaper = m1
+                        dearer = m2
+                    else:
+                        cheaper = m2
+                        dearer = m1
+                    
+                    p_cheap = cheaper["market_probability"]
+                    p_dear = dearer["market_probability"]
+                    
+                    # Buying YES on cheaper platform, buying NO on dearer platform
+                    total_cost = p_cheap + (1.0 - p_dear)
+                    
+                    if total_cost < 1.0:
+                        net_profit = 1.0 - total_cost
+                        roi = net_profit / total_cost if total_cost > 0 else 0.0
+                        pairs.append({
+                            "question1": cheaper["question"],
+                            "platform1": cheaper["platform"],
+                            "market_url1": cheaper["market_url"],
+                            "price1": round(p_cheap, 3),
+                            
+                            "question2": dearer["question"],
+                            "platform2": dearer["platform"],
+                            "market_url2": dearer["market_url"],
+                            "price2": round(p_dear, 3),
+                            
+                            "arbitrage_gap": round(gap, 3),
+                            "total_cost": round(total_cost, 3),
+                            "net_profit": round(net_profit, 3),
+                            "roi": round(roi, 4)
+                        })
+    # Sort by ROI descending
+    pairs.sort(key=lambda x: x["roi"], reverse=True)
+    return pairs
+
+
 def aggregate(client, *, model: str, variant: str, temperature: float,
               trajectory_samples: int = 8) -> Dict[str, Any]:
     """Recompute the public aggregate (overall + by-horizon) and persist it."""
@@ -1496,6 +1602,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "paper_pnl": {**(paper_pnl(resolved_skill, by_edge_skill) or {}),
                       "crowd_baseline": (_crowd_base := crowd_baseline_equity(resolved_skill))},
         "edge_board": edge_board_result,
+        "arbitrage_signals": build_arbitrage_board(open_primary, latest_price),
         "models_comparison": build_models_comparison(resolved, default_model=model, crowd_baseline=_crowd_base),
         "trajectories": trajectories,
         "resolved_log": resolved_log,

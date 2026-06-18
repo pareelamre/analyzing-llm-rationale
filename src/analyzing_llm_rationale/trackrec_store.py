@@ -152,6 +152,7 @@ _SNAPSHOT_COLS: Dict[str, str] = {
     "evidence_count": "INTEGER", "entities": "TEXT",
     "resolved": "BOOLEAN", "outcome": "INTEGER", "resolved_ts": "TEXT",
     "model_brier": "DOUBLE", "market_brier": "DOUBLE", "model_correct": "BOOLEAN",
+    "rationale": "TEXT",
 }
 
 _PRICE_COLS: Dict[str, str] = {
