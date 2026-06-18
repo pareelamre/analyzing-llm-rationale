@@ -110,6 +110,12 @@ Push to `main` triggers GitHub Actions:
 
 Required GitHub secrets: `GCP_SA_KEY`.
 
+### Codex GitHub helper skill
+Use the GitHub publish skill for commit/push/PR flows when available:
+```
+/home/h3/paam844f/.codex/plugins/cache/openai-curated-remote/github/0.1.5/skills/yeet/SKILL.md
+```
+
 ## Adding a new prompt variant
 
 1. Add entry to `configs/variants.yaml` with `name`, `prompt_path`, `output_fields`

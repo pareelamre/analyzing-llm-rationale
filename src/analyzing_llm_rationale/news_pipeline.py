@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 from typing import Callable, List, Optional, Sequence
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse, urlunparse
 from xml.etree import ElementTree
 
 import numpy as np
@@ -251,6 +251,43 @@ def _keyword_search_query(question: str, max_terms: int = 12) -> str:
     return " ".join(kept[:max_terms]) or question
 
 
+def _normalize_article_url(url: str) -> str:
+    if not url:
+        return ""
+    try:
+        parsed = urlparse(url.strip())
+    except Exception:
+        return url.strip()
+    path = parsed.path.rstrip("/") or parsed.path
+    return urlunparse((
+        parsed.scheme.lower(),
+        parsed.netloc.lower().removeprefix("www."),
+        path,
+        "",
+        parsed.query,
+        "",
+    ))
+
+
+def _normalize_article_title(title: str) -> str:
+    title = re.sub(r"\s+", " ", (title or "").lower()).strip()
+    title = re.sub(r"\s[-|–—:]\s[^-|–—:]{2,80}$", "", title).strip()
+    return re.sub(r"[^a-z0-9]+", " ", title).strip()
+
+
+def _article_dedupe_keys(article: dict) -> List[str]:
+    keys: List[str] = []
+    url_key = _normalize_article_url(str(article.get("url") or ""))
+    if url_key:
+        keys.append(f"url:{url_key}")
+    title_key = _normalize_article_title(str(article.get("title") or ""))
+    if title_key:
+        keys.append(f"title:{title_key}")
+    if not keys:
+        keys.append(f"source-title:{article.get('source', '')}:{article.get('title', '')}")
+    return keys
+
+
 def _source_credibility(article: dict) -> float:
     """Small prior favoring established publishers without excluding other hits."""
     source = (article.get("source") or "").lower()
@@ -392,14 +429,13 @@ class NewsPipeline:
         if "rss" in self._fetch_sources:
             articles.extend(self._fetch_rss(limit=per_source_limit))
 
-        seen_urls: set = set()
+        seen_keys: set = set()
         unique: List[dict] = []
         for a in articles:
-            url = a.get("url", "")
-            dedupe_key = url or f"{a.get('source', '')}:{a.get('title', '')}"
-            if dedupe_key in seen_urls:
+            dedupe_keys = _article_dedupe_keys(a)
+            if any(key in seen_keys for key in dedupe_keys):
                 continue
-            seen_urls.add(dedupe_key)
+            seen_keys.update(dedupe_keys)
             unique.append(a)
 
         return unique
@@ -1061,12 +1097,12 @@ class NewsPipeline:
             return []
 
         selected: List[dict] = []
-        seen_urls: set = set()
+        seen_keys: set = set()
 
-        def add(article: dict) -> None:
-            url = article.get("url") or f"{article.get('source', '')}:{article.get('title', '')}"
-            if url in seen_urls or len(selected) >= top_k:
-                return
+        def add(article: dict) -> bool:
+            dedupe_keys = _article_dedupe_keys(article)
+            if any(key in seen_keys for key in dedupe_keys) or len(selected) >= top_k:
+                return False
             # Relevance floor for ALL sources, so irrelevant junk (memes, unrelated
             # PDFs) can't be cited or ground the forecast. Query-agnostic channels
             # (Stooq, generic RSS) clear the stricter of the two floors.
@@ -1074,16 +1110,16 @@ class NewsPipeline:
             if article.get("source_channel") in _QUERY_AGNOSTIC_CHANNELS:
                 floor = max(floor, _MIN_GENERIC_RELEVANCE)
             if article.get("relevance", 1.0) < floor:
-                return
-            seen_urls.add(url)
+                return False
+            seen_keys.update(dedupe_keys)
             selected.append(article)
+            return True
 
         for channel in SOURCE_DIVERSITY_ORDER:
             if channel not in self._fetch_sources:
                 continue
             for article in ranked:
-                if article.get("source_channel") == channel:
-                    add(article)
+                if article.get("source_channel") == channel and add(article):
                     break
 
         for article in ranked:

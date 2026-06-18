@@ -276,6 +276,28 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual([call[0] for call in calls], ["gdelt", "google-news", "stooq"])
         self.assertEqual(len(articles), 3)
 
+    def test_fetch_dedupes_same_headline_across_syndicated_urls(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._newsapi_key = None
+        pipeline._fetch_sources = ("gdelt", "google-news")
+        title = "Federal Reserve signals September rate decision"
+
+        pipeline._fetch_gdelt = lambda query, limit: [{
+            "title": title,
+            "url": "https://example.com/fed-september-rate-decision",
+            "source_channel": "gdelt",
+        }]
+        pipeline._fetch_google_news = lambda query, limit: [{
+            "title": f"{title} - Example News",
+            "url": "https://news.example.com/story/123",
+            "source_channel": "google-news",
+        }]
+
+        articles = pipeline.fetch("Federal Reserve rate decision", top_k=5)
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["source_channel"], "gdelt")
+
     def test_select_diverse_sources_keeps_gdelt_google_and_stooq_when_available(self):
         pipeline = NewsPipeline.__new__(NewsPipeline)
         pipeline._fetch_sources = ("gdelt", "google-news", "stooq")
@@ -333,6 +355,20 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertIn("gdelt", channels)
         self.assertNotIn("stooq", channels)
         self.assertNotIn("rss", channels)
+
+    def test_select_diverse_tries_next_channel_article_after_floor_rejection(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._fetch_sources = ("gdelt", "rss")
+        pipeline._min_relevance = 0.3
+        ranked = [
+            {"title": "GDELT", "url": "https://e.com/g", "source_channel": "gdelt", "relevance": 0.50},
+            {"title": "RSS junk", "url": "https://e.com/r1", "source_channel": "rss", "relevance": 0.02},
+            {"title": "RSS relevant", "url": "https://e.com/r2", "source_channel": "rss", "relevance": 0.45},
+        ]
+
+        selected = pipeline.select_diverse_sources(ranked, top_k=3)
+
+        self.assertEqual([article["url"] for article in selected], ["https://e.com/g", "https://e.com/r2"])
 
     def test_select_diverse_keeps_relevant_generic_sources(self):
         pipeline = NewsPipeline.__new__(NewsPipeline)
