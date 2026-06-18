@@ -437,6 +437,8 @@
       padding: 8px 6px;
       font-size: 16px;
       line-height: 1.45;
+      border: none;
+      outline: none;
     }
     .landing-question:focus-within {
       border-color: #c8c8d0;
@@ -4919,7 +4921,7 @@ function renderEdgeBoard(d) {
     };
 
     pnlHtml = intro + `<div class="tr-stats">
-      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05)" title="★ Recommended · Calibrated Half-Kelly sizing + data-driven filters: 20¢-80¢ entries only, geo domain capped, edge < 40%."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">★ Smart</div>${_sub('Kelly + filters')}</div>
+      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="★ Recommended · Calibrated Half-Kelly sizing + data-driven filters: 20¢-80¢ entries only, geo domain capped, edge < 40%."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">★ Smart</div>${_sub('Kelly + filters')}</div>
       <div class="tr-stat" title="Calibrated Half-Kelly criterion sizing. Bet size proportional to estimated edge / odds. Naturally sizes down on heavy favourites."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
       <div class="tr-stat" title="Flat stake, but only when predicting YES. Highly accurate historically when forecasting change."><div class="v" id="eb-pnl-yes-v">${roi(pnl.yes_only)}</div><div class="k label">YES-Only Flat</div>${_sub('only YES calls')}</div>
       <div class="tr-stat" title="Equal stake on every call. Pure hit-rate at the odds paid — a winning favourite pays little, any loss costs the full stake."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
