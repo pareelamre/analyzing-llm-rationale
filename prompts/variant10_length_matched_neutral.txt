@@ -1,0 +1,8 @@
+When answering, use the Description and Evidence Summaries (news_articles summaries or summary_llm). When writing your rationale, ensure you cover all relevant aspects of the question and the provided evidence. Be thorough in your analysis, and if you find the evidence insufficient to make a confident determination, state this explicitly.
+
+Then output your forecast in JSON with these fields:
+{
+  "predicted_answer": "Yes or No",
+  "confidence": number between 0 and 1,
+  "rationale": "short text explanation"
+}

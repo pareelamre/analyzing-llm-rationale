@@ -1,0 +1,9 @@
+When answering, use the Description and Evidence Summaries (news_articles summaries or summary_llm). Before giving your forecast, note: (1) the primary geographic region mentioned in the evidence, (2) the main stakeholder type involved (e.g. government, corporation, individual), (3) the overall sentiment of the evidence (positive, negative, or neutral). These are for context only.
+
+Then output your forecast in JSON with these fields:
+{
+  "predicted_answer": "Yes or No",
+  "confidence": number between 0 and 1,
+  "rationale": "short text explanation",
+  "context_notes": "brief notes on geography, stakeholder type, and evidence sentiment"
+}
