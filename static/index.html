@@ -4236,7 +4236,6 @@ async function loadEdgeBoard() {
     host.innerHTML = renderEdgeBoard(await _readJson(r));
     const eqDiv = document.getElementById('eb-equity-svg');
     if (eqDiv) _attachEquityHover(eqDiv);
-    loadCrypto5mEquity();
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#edgeBody .tr-stat',
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
@@ -4925,7 +4924,6 @@ function renderEdgeBoard(d) {
     ${stats}
     <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
     <h4 class="eb-h">Hypothetical paper PnL · following the model's calls <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${pnlHtml}
-    <h4 class="eb-h">Crypto model calibration · real Kalshi BTC markets</h4><div id="crypto5mEquity"><p class="text-sm text-gray-500">Loading real Kalshi BTC calibration…</p></div>
     <h4 class="eb-h">Does an early call pay? · skill by how early the forecast was made</h4>${calibHtml}
     <h4 class="eb-h">Live forecasts · ranked by disagreement, linked to skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;
