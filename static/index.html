@@ -1627,6 +1627,7 @@
     <div class="landing-data-links">
       <button type="button" class="topbar-link" onclick="openTrackRecord()">Track record</button>
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
+      <button type="button" class="topbar-link" onclick="openArbitrage()">Arbitrage</button>
       <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
       <a href="/agents" target="_blank" class="topbar-link nav-collapse">Agents</a>
       <a href="/docs" target="_blank" class="topbar-link nav-collapse">API docs</a>
@@ -1737,6 +1738,9 @@
   <nav class="side-nav" aria-label="Sections">
     <button type="button" class="side-nav-link" onclick="openEdgeBoard()">
       <span class="side-nav-ico">⚗️</span>Edge board
+    </button>
+    <button type="button" class="side-nav-link" onclick="openArbitrage()">
+      <span class="side-nav-ico">⇄</span>Arbitrage
     </button>
     <button type="button" class="side-nav-link" onclick="openTrackRecord()">
       <span class="side-nav-ico">📈</span>Track record
@@ -4392,6 +4396,10 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   _crypto5mTimer = setInterval(loadCrypto5mEquity, 30 * 1000);
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
+async function openArbitrage() {
+  await openEdgeBoard();
+  setTimeout(() => document.getElementById('arbitragePanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+}
 function closeEdgeBoard({ updateHistory = true } = {}) {
   clearInterval(_edgePriceTimer);
   _edgePriceTimer = null;
@@ -5199,7 +5207,7 @@ function renderEdgeBoard(d) {
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced — and our track record of being right about it</h3>
     <p class="tr-method">Live model-vs-market gaps, ranked. Calibration, lead/lag and paper PnL come from resolved forecasts only — hypothetical, no fees or slippage. ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${stats}
-    <h4 class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
+    <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
     <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
     <h4 class="eb-h">Hypothetical paper PnL · following the model's calls <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${pnlHtml}
     <h4 class="eb-h">Does an early call pay? · skill by how early the forecast was made</h4>${calibHtml}
