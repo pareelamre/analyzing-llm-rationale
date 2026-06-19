@@ -4080,15 +4080,43 @@ async function refreshEdgePrices() {
       const payoutOdds = (entry > 0 && entry < 1) ? Math.round((1 - entry) / entry * 10) / 10 : null;
       row.querySelector('.eb-live-market').textContent = Math.round(marketP * 100) + '%';
       row.querySelector('.eb-live-edge').innerHTML = `<b style="color:${edge >= 0 ? '#0a7' : '#c33'}">${edge >= 0 ? '+' : ''}${edge.toFixed(3)}</b>`;
-      if (side) {
-        const entryC = Math.round(entry * 100);
-        row.querySelector('.eb-live-trade').innerHTML = `Buy ${side} @ ${entryC}¢` +
-          (payoutOdds ? ` <span style="color:#999">≈${payoutOdds}:1</span>` : '');
+      const tradeCell = row.querySelector('.eb-live-trade');
+      if (tradeCell) {
+        tradeCell.innerHTML = _formatEdgeSignal({
+          side,
+          entry_price: entry,
+          payout_odds: payoutOdds,
+          edge,
+          lead_track_record: {
+            skill_significant: row.dataset.leadSkill === 'true',
+            n: row.dataset.leadN ? Number(row.dataset.leadN) : null,
+          },
+        });
       }
     });
     const ts = document.getElementById('edgeLiveTs');
     if (ts) ts.textContent = '· prices live ' + new Date().toLocaleTimeString();
   } catch (_) {}
+}
+
+function _formatEdgeSignal(e) {
+  const side = e && e.side;
+  if (!side) return '<span style="color:var(--text-dim)">No signal</span>';
+  const entry = Number(e.entry_price);
+  const edge = Math.abs(Number(e.edge || 0));
+  const tr = e.lead_track_record || {};
+  const leadN = Number(tr.n || 0);
+  const validated = tr.skill_significant === true;
+  const entryText = e.entry_price != null && Number.isFinite(entry) ? ` @ ${Math.round(entry * 100)}¢` : '';
+  const oddsText = e.payout_odds ? ` <span style="color:#999">≈${e.payout_odds}:1</span>` : '';
+  if (validated) {
+    return `Validated ${side}${entryText}${oddsText}`;
+  }
+  if (edge < 0.03) {
+    return `<span style="color:var(--text-dim)">No trade · ${side}${entryText}</span>`;
+  }
+  const evidence = leadN ? `n=${leadN}` : 'low evidence';
+  return `<span style="color:var(--text-dim)">Watch ${side}${entryText} · unproven ${evidence}</span>`;
 }
 
 async function refreshEquityCurve() {
@@ -4860,16 +4888,13 @@ function _renderBoardPage(board, page) {
       ? `<a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" class="eb-ext-link" title="Open on ${escHtml(e.platform||'market')}">↗</a>`
       : '';
     const qIdent = escAttr(e.ident || e.market_url || '');
-    const trade = e.side
-      ? `Buy ${e.side} @ ${Math.round((e.entry_price || 0) * 100)}¢` +
-        (e.payout_odds ? ` <span style="color:#999">≈${e.payout_odds}:1</span>` : '')
-      : '—';
+    const trade = _formatEdgeSignal(e);
     const favKey = (e.platform && e.ident) ? `${String(e.platform).toLowerCase()}:${e.ident}` : '';
     const star = favKey
       ? `<button type="button" class="fav-star ${_isFav(favKey) ? 'on' : ''}" title="Watch this market"
            onclick='toggleFavorite(${JSON.stringify({ key: favKey, question: e.question || '', platform: e.platform || '', ident: e.ident || '', market_url: e.market_url || '', model_probability: e.model_probability ?? null, market_probability: e.market_probability ?? null }).replace(/'/g, "&#39;")}, this)'>${_isFav(favKey) ? '★' : '☆'}</button>`
       : '';
-    return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}">` +
+    return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}" data-lead-skill="${tr && tr.skill_significant ? 'true' : 'false'}" data-lead-n="${tr && tr.n != null ? escAttr(String(tr.n)) : ''}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
       `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}</td>` +
       `<td>${escHtml(e.platform || '')}</td><td class="eb-live-model">${pct(e.model_probability)}%</td>` +
@@ -4878,7 +4903,7 @@ function _renderBoardPage(board, page) {
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
       `<td style="white-space:nowrap">${lead}</td><td>${badge}</td></tr>`;
   }).join('');
-  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Model</th><th>Crowd</th><th>Edge</th><th>Trade</th><th>Lead</th><th>Skill at this lead</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Model</th><th>Crowd</th><th>Edge</th><th>Signal</th><th>Lead</th><th>Skill at this lead</th></tr></thead><tbody>${rows}</tbody></table>`;
   let pagination = '';
   if (pages > 1) {
     const prev = page > 0
