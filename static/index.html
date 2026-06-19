@@ -4096,7 +4096,7 @@ async function refreshEdgePrices() {
           payout_odds: payoutOdds,
           edge,
           lead_track_record: {
-            skill_significant: row.dataset.leadSkill === 'true',
+            skill_significant: row.dataset.leadSkill === 'validated',
             n: row.dataset.leadN ? Number(row.dataset.leadN) : null,
           },
         });
@@ -4114,7 +4114,7 @@ function _formatEdgeSignal(e) {
   const edge = Math.abs(Number(e.edge || 0));
   const tr = e.lead_track_record || {};
   const leadN = Number(tr.n || 0);
-  const validated = tr.skill_significant === true;
+  const validated = _leadSkillState(tr).key === 'validated';
   const entryText = e.entry_price != null && Number.isFinite(entry) ? ` @ ${Math.round(entry * 100)}¢` : '';
   const oddsText = e.payout_odds ? ` <span style="color:#999">≈${e.payout_odds}:1</span>` : '';
   if (validated) {
@@ -4125,6 +4125,24 @@ function _formatEdgeSignal(e) {
   }
   const evidence = leadN ? `n=${leadN}` : 'low evidence';
   return `<span style="color:var(--text-dim)">Watch ${side}${entryText} · unproven ${evidence}</span>`;
+}
+
+function _leadSkillState(tr) {
+  if (!tr) return { key: 'none', label: '—', proven: false };
+  const n = Number(tr.n || 0);
+  const brierBetter = tr.skill_significant === true;
+  const directionOk = tr.accuracy == null || Number(tr.accuracy) >= 0.30;
+  const enoughN = n >= 10;
+  if (brierBetter && directionOk && enoughN) return { key: 'validated', label: `validated (n=${n})`, proven: true };
+  if (brierBetter && !directionOk) return { key: 'direction_wrong', label: `Brier better, direction wrong (n=${n})`, proven: false };
+  if (brierBetter && !enoughN) return { key: 'small_sample', label: `small sample (n=${n})`, proven: false };
+  return { key: 'unproven', label: `unproven (n=${n})`, proven: false };
+}
+
+function _leadSkillBadge(tr) {
+  const state = _leadSkillState(tr);
+  if (state.key === 'none') return '—';
+  return `<span class="eb-badge ${state.proven ? 'eb-sig' : ''}">${state.label}</span>`;
 }
 
 async function refreshEquityCurve() {
@@ -4894,9 +4912,7 @@ function _renderBoardPage(board, page) {
     // Primary link is the lead-time (how-early) track record; fall back to the
     // edge-size bucket record only if no lead-time record exists.
     const tr = e.lead_track_record || e.track_record;
-    const badge = !tr ? '—' : (tr.skill_significant
-      ? `<span class="eb-badge eb-sig">proven (n=${tr.n})</span>`
-      : `<span class="eb-badge">unproven (n=${tr.n ?? 0})</span>`);
+    const badge = _leadSkillBadge(tr);
     const lead = (e.lead_days != null)
       ? (e.lead_days >= 1 ? Math.round(e.lead_days) + 'd' : '<1d') + ' ahead'
       : (e.lead_bucket || '—');
@@ -4910,7 +4926,7 @@ function _renderBoardPage(board, page) {
       ? `<button type="button" class="fav-star ${_isFav(favKey) ? 'on' : ''}" title="Watch this market"
            onclick='toggleFavorite(${JSON.stringify({ key: favKey, question: e.question || '', platform: e.platform || '', ident: e.ident || '', market_url: e.market_url || '', model_probability: e.model_probability ?? null, market_probability: e.market_probability ?? null }).replace(/'/g, "&#39;")}, this)'>${_isFav(favKey) ? '★' : '☆'}</button>`
       : '';
-    return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}" data-lead-skill="${tr && tr.skill_significant ? 'true' : 'false'}" data-lead-n="${tr && tr.n != null ? escAttr(String(tr.n)) : ''}">` +
+    return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}" data-lead-skill="${_leadSkillState(tr).key}" data-lead-n="${tr && tr.n != null ? escAttr(String(tr.n)) : ''}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
       `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}</td>` +
       `<td>${escHtml(e.platform || '')}</td><td class="eb-live-model">${pct(e.model_probability)}%</td>` +
@@ -5202,16 +5218,7 @@ function renderEdgeBoard(d) {
   let calibHtml;
   if (byHorizon.length) {
     calibHtml = byHorizon.slice().sort((a, b) => (_hOrder[a.horizon] ?? 9) - (_hOrder[b.horizon] ?? 9)).map(b => {
-      const brierBetter = b.skill_significant === true;
-      const directionOk = b.accuracy == null || b.accuracy >= 0.30;
-      const enoughN = (b.n || 0) >= 10;
-      const sig = brierBetter && directionOk && enoughN
-        ? '<span class="eb-badge eb-sig">validated</span>'
-        : brierBetter && !directionOk
-          ? '<span class="eb-badge">Brier better, direction wrong</span>'
-          : brierBetter && !enoughN
-            ? '<span class="eb-badge">small sample</span>'
-            : '<span class="eb-badge">not yet proven</span>';
+      const sig = _leadSkillBadge(b);
       const accStr = b.accuracy != null ? `<span style="color:var(--text-dim);margin-right:10px">acc ${pct(b.accuracy)}%</span>` : '';
       return `<div class="eb-calib-row eb-row"><span style="width:90px;font-weight:600">${b.horizon} ahead</span>${accStr}<span style="flex:1">skill ${_sg(b.skill_vs_market)} (n=${b.n})</span>${sig}</div>`;
     }).join('');

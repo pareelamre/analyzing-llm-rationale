@@ -1096,6 +1096,7 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "lead_track_record": {
                 "horizon": lead_label,
                 "n": lead_tr.get("n"),
+                "accuracy": lead_tr.get("accuracy"),
                 "skill_vs_market": lead_tr.get("skill_vs_market"),
                 "skill_ci_low": lead_tr.get("skill_ci_low"),
                 "skill_significant": lead_tr.get("skill_significant"),

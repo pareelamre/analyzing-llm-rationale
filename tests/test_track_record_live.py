@@ -498,7 +498,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         open_rows = [{"platform": "Polymarket", "ident": "A", "model_probability": 0.8,
                       "market_probability": 0.5, "snapshot_ts": now, "question": "Q1",
                       "market_url": "u1", "close_time": (now + timedelta(days=40)).isoformat()}]
-        horizon_calib = [{"horizon": "30d+", "n": 12, "skill_vs_market": 0.04,
+        horizon_calib = [{"horizon": "30d+", "n": 12, "accuracy": 0.58, "skill_vs_market": 0.04,
                           "skill_ci_low": 0.01, "skill_significant": True}]
         board = trl.build_edge_board(open_rows, {"A": 0.5}, [], horizon_calib)
         ltr = board[0]["lead_track_record"]
@@ -506,6 +506,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertEqual(ltr["horizon"], "30d+")
         self.assertTrue(ltr["skill_significant"])
         self.assertEqual(ltr["n"], 12)
+        self.assertEqual(ltr["accuracy"], 0.58)
 
     def test_edge_board_accepts_datetime_close_time(self):
         now = datetime.now(timezone.utc)
