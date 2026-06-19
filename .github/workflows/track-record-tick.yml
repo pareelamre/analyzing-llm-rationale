@@ -14,9 +14,9 @@ name: Track record tick
 
 on:
   schedule:
-    # Every 15 min: price points for all markets (cheap); LLM re-forecast only
-    # when the crowd price has drifted ≥ PRICE_DRIFT_THRESHOLD since last snapshot.
-    # First tick of each UTC day forecasts all markets (no today-snapshot yet).
+    # Every 15 min: price points for all markets (cheap). LLM forecast snapshots:
+    # daily for slower markets; every SHORT_HORIZON_SLOT_HOURS for markets near
+    # resolution; and immediately when crowd price drifts ≥ PRICE_DRIFT_THRESHOLD.
     - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
@@ -51,6 +51,8 @@ jobs:
           # too noisy — triggered near-full re-forecast sets on almost every tick.
           REFORECAST_EACH_TICK: "0"
           PRICE_DRIFT_THRESHOLD: "0.10"
+          SHORT_HORIZON_REFORECAST_LEAD_DAYS: "3"
+          SHORT_HORIZON_SLOT_HOURS: "6"
           PREDICT_API_KEY: ${{ secrets.PREDICT_API_KEY }}
           # Pulls agent-enrolled markets from the evolution-loop bridge (no-op until set).
           TRACK_RECORD_TOKEN: ${{ secrets.TRACK_RECORD_TOKEN }}

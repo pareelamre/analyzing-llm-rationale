@@ -1,9 +1,10 @@
 """Live, point-in-time track record built from forecast *trajectories*.
 
-For each live market we take a fresh forecast snapshot on every daily tick —
-each snapshot uses only the price and news available at that moment (no
-look-ahead) — and keep going until the market resolves. At resolution every
-snapshot of that market is scored against the outcome.
+For each live market we take point-in-time forecast snapshots: daily for slower
+markets and intraday for short-horizon markets near resolution. Each snapshot
+uses only the price and news available at that moment (no look-ahead) and keeps
+going until the market resolves. At resolution every snapshot of that market is
+scored against the outcome.
 
 Because each snapshot is paired with the market price *at the same instant*, we
 can report **skill vs market** (market Brier − model Brier; positive = the model
@@ -19,8 +20,8 @@ take their dependencies (store client, ``market_data`` module, an async forecast
 callable) as arguments so they can be unit-tested with fakes.
 
 Store kinds:
-- ``ForecastSnapshot`` keyed ``"{platform}:{ident}:{date}"`` — one snapshot per
-  market per UTC day.
+- ``ForecastSnapshot`` keyed by market/model/snapshot slot. Slow markets use a
+  daily slot; short-horizon markets use an intraday slot.
 - ``TrackRecordLive`` singleton ``"global"`` — the precomputed public aggregate.
 """
 from __future__ import annotations
@@ -69,6 +70,8 @@ ForecastFn = Callable[[Dict[str, Any], int, Optional[str]], Awaitable[Optional[D
 # probability points since the snapshot was taken. Keeps the edge board accurate
 # after large price swings without re-forecasting every stable market every hour.
 PRICE_DRIFT_THRESHOLD = 0.05
+SHORT_HORIZON_REFORECAST_LEAD_DAYS = 3.0
+SHORT_HORIZON_SLOT_HOURS = 6
 
 
 
@@ -90,6 +93,23 @@ def _now() -> datetime:
 
 def _today() -> str:
     return _now().strftime("%Y-%m-%d")
+
+
+def _snapshot_slot(lead_days: Optional[float],
+                   *,
+                   now: Optional[datetime] = None,
+                   short_lead_days: float = SHORT_HORIZON_REFORECAST_LEAD_DAYS,
+                   short_slot_hours: int = SHORT_HORIZON_SLOT_HOURS) -> str:
+    """Storage slot for a forecast snapshot.
+
+    Slow markets keep one snapshot per UTC day. Short-horizon markets need
+    intraday snapshots, otherwise same-day re-forecasts overwrite the drift trail.
+    """
+    now = now or _now()
+    if lead_days is None or lead_days > short_lead_days or short_slot_hours <= 0:
+        return now.strftime("%Y-%m-%d")
+    hour = (now.hour // short_slot_hours) * short_slot_hours
+    return now.replace(hour=hour, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H")
 
 
 OPEN_SNAPSHOT_MAX_AGE_DAYS = 2
@@ -238,6 +258,8 @@ async def record_snapshots(
     seed_idents: Optional[List[Tuple[str, str]]] = None,
     price_drift_threshold: float = PRICE_DRIFT_THRESHOLD,
     reforecast_each_tick: bool = False,
+    short_horizon_reforecast_lead_days: float = SHORT_HORIZON_REFORECAST_LEAD_DAYS,
+    short_horizon_slot_hours: int = SHORT_HORIZON_SLOT_HOURS,
     concurrency: int = 4,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
@@ -246,14 +268,16 @@ async def record_snapshots(
 
     With multiple ``models`` (labels passed to ``forecast_fn``), each market is
     forecast once per model per day — the per-model snapshots back the
-    paper-trading comparison. One snapshot per (market, model, day).
+    paper-trading comparison. Slow markets use one snapshot per
+    (market, model, UTC day); short-horizon markets use intraday slots.
 
     ``price_drift_threshold``: if the live market price has moved more than this
     many probability points since today's snapshot was taken, discard it and
     re-forecast so the edge board reflects the new information rather than a
     stale model opinion paired with a current price."""
     model_list = list(models) if models else [default_model]
-    today = _today()
+    tick_now = _now()
+    today = tick_now.strftime("%Y-%m-%d")
 
     # 1) Markets we're already tracking that are still open → re-fetch live quote.
     targets: List[Dict[str, Any]] = []
@@ -375,8 +399,14 @@ async def record_snapshots(
             continue
         market_prob = quote.get("probability")
         lead = _lead_time_days(quote.get("close_time"))
+        slot = _snapshot_slot(
+            lead,
+            now=tick_now,
+            short_lead_days=short_horizon_reforecast_lead_days,
+            short_slot_hours=short_horizon_slot_hours,
+        )
         for model in model_list:
-            key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{today}")
+            key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{slot}")
             existing = client.get(key)
             if existing is not None and not reforecast_each_tick:
                 last_market_prob = float(existing.get("market_probability") or 0.0)

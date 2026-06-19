@@ -8,7 +8,8 @@ removes the OOM/timeout class entirely: Cloud Run only *serves* the result.
 Each run:
   1. scores snapshots whose markets resolved since last time,
   2. appends a cheap hourly price point per open market,
-  3. takes the daily LLM forecast on tracked-open + newly-discovered markets
+  3. takes LLM forecast snapshots on tracked-open + newly-discovered markets
+     (daily for slow markets; intraday slots for short-horizon markets)
      (one HTTP call to ``/predict`` per market — inference stays server-side,
      so no model is held in this runner's memory),
   4. recomputes the public aggregate.
@@ -66,6 +67,12 @@ TRACK_RECORD_TOKEN = os.environ.get("TRACK_RECORD_TOKEN") or None
 # today's snapshot. Prevents stale model probability from being paired with a
 # current price on the edge board. Set to 1.0 to disable drift re-forecasting.
 PRICE_DRIFT_THRESHOLD = float(os.environ.get("PRICE_DRIFT_THRESHOLD") or trl.PRICE_DRIFT_THRESHOLD)
+SHORT_HORIZON_REFORECAST_LEAD_DAYS = float(
+    os.environ.get("SHORT_HORIZON_REFORECAST_LEAD_DAYS")
+    or trl.SHORT_HORIZON_REFORECAST_LEAD_DAYS)
+SHORT_HORIZON_SLOT_HOURS = int(
+    os.environ.get("SHORT_HORIZON_SLOT_HOURS")
+    or trl.SHORT_HORIZON_SLOT_HOURS)
 # Re-run the LLM forecast for every tracked-open market on every tick (not just
 # the daily first pass / price-drift), so the edge board always reflects the
 # model's current opinion and matches live /predict. Default on. Each tick then
@@ -208,6 +215,8 @@ async def main() -> int:
         models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE,
         seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
         reforecast_each_tick=REFORECAST_EACH_TICK,
+        short_horizon_reforecast_lead_days=SHORT_HORIZON_REFORECAST_LEAD_DAYS,
+        short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
         concurrency=PREDICT_CONCURRENCY)
     # Flip enrolled markets out of the pending queue (and let the server prune).
     _mark_enrolled([f"{p}:{i}" for p, i in seeds])

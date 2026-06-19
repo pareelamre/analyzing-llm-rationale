@@ -100,7 +100,8 @@ class TrajectoryTests(unittest.TestCase):
         self._p.stop()
 
     def _record(self, md, day):
-        with mock.patch.object(trl, "_today", return_value=day):
+        now = datetime.fromisoformat(day).replace(tzinfo=timezone.utc)
+        with mock.patch.object(trl, "_now", return_value=now):
             return asyncio.run(trl.record_snapshots(
                 self.client, md, self.forecast_fn, default_model="m", per_venue=3))
 
@@ -112,7 +113,7 @@ class TrajectoryTests(unittest.TestCase):
     def test_seed_idents_enroll_market_without_discovery(self):
         far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)
-        with mock.patch.object(trl, "_today", return_value="2026-06-03"):
+        with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, tzinfo=timezone.utc)):
             recorded = asyncio.run(trl.record_snapshots(
                 self.client, md, self.forecast_fn, default_model="m",
                 per_venue=0, seed_idents=[("Polymarket", "slug-a")]))
@@ -122,7 +123,7 @@ class TrajectoryTests(unittest.TestCase):
 
     def test_short_dated_market_not_discovered(self):
         # Market resolves in 6 hours -> below min_discovery_lead_days, skipped.
-        soon = (datetime.now(timezone.utc) + timedelta(hours=6)).isoformat()
+        soon = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(hours=6)).isoformat()
         md = _fake_market_data(soon)
         recorded = self._record(md, "2026-06-03")
         self.assertEqual(recorded, 0)
@@ -143,7 +144,7 @@ class TrajectoryTests(unittest.TestCase):
         # Same day, model opinion changed; with reforecast_each_tick it re-runs
         # and overwrites today's snapshot rather than skipping.
         self.model_probs = {"Will A happen?": 0.55, "Will B happen?": 0.45}
-        with mock.patch.object(trl, "_today", return_value="2026-06-03"):
+        with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, tzinfo=timezone.utc)):
             again = asyncio.run(trl.record_snapshots(
                 self.client, md, self.forecast_fn, default_model="m",
                 per_venue=3, reforecast_each_tick=True))
@@ -152,6 +153,26 @@ class TrajectoryTests(unittest.TestCase):
         self.assertEqual(len(snaps), 2)  # still one per (market, model, day)
         a = next(e for e in snaps if e.get("question") == "Will A happen?")
         self.assertAlmostEqual(a["model_probability"], 0.55)  # refreshed
+
+    def test_short_horizon_markets_get_intraday_slots(self):
+        ref = datetime(2026, 6, 3, 1, tzinfo=timezone.utc)
+        close = (ref + timedelta(days=2)).isoformat()
+        md = _fake_market_data(close)
+        with mock.patch.object(trl, "_now", return_value=ref):
+            self.assertEqual(asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m", per_venue=3,
+                short_horizon_reforecast_lead_days=3, short_horizon_slot_hours=6)), 2)
+        with mock.patch.object(trl, "_now", return_value=ref.replace(hour=5)):
+            self.assertEqual(asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m", per_venue=3,
+                short_horizon_reforecast_lead_days=3, short_horizon_slot_hours=6)), 0)
+        with mock.patch.object(trl, "_now", return_value=ref.replace(hour=7)):
+            self.assertEqual(asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m", per_venue=3,
+                short_horizon_reforecast_lead_days=3, short_horizon_slot_hours=6)), 2)
+        snaps = [k[1] for k in self.client.store if k[0] == trl.SNAPSHOT_KIND]
+        self.assertTrue(any(":2026-06-03T00" in k for k in snaps))
+        self.assertTrue(any(":2026-06-03T06" in k for k in snaps))
 
     def test_drop_stale_open_removes_orphaned_readings(self):
         rows = [
@@ -163,7 +184,7 @@ class TrajectoryTests(unittest.TestCase):
         self.assertEqual(kept, {"fresh", "recent"})  # 06-07 is >2 days older than newest
 
     def test_resolution_scores_all_snapshots_and_buckets_by_horizon(self):
-        far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        far = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)
         self._record(md, "2026-06-03")  # both at ~10d horizon
         # Now both markets resolve: A -> YES(1), B -> NO(0).
