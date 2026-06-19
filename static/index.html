@@ -5202,7 +5202,16 @@ function renderEdgeBoard(d) {
   let calibHtml;
   if (byHorizon.length) {
     calibHtml = byHorizon.slice().sort((a, b) => (_hOrder[a.horizon] ?? 9) - (_hOrder[b.horizon] ?? 9)).map(b => {
-      const sig = b.skill_significant ? '<span class="eb-badge eb-sig">proven edge</span>' : '<span class="eb-badge">not yet proven</span>';
+      const brierBetter = b.skill_significant === true;
+      const directionOk = b.accuracy == null || b.accuracy >= 0.30;
+      const enoughN = (b.n || 0) >= 10;
+      const sig = brierBetter && directionOk && enoughN
+        ? '<span class="eb-badge eb-sig">validated</span>'
+        : brierBetter && !directionOk
+          ? '<span class="eb-badge">Brier better, direction wrong</span>'
+          : brierBetter && !enoughN
+            ? '<span class="eb-badge">small sample</span>'
+            : '<span class="eb-badge">not yet proven</span>';
       const accStr = b.accuracy != null ? `<span style="color:var(--text-dim);margin-right:10px">acc ${pct(b.accuracy)}%</span>` : '';
       return `<div class="eb-calib-row eb-row"><span style="width:90px;font-weight:600">${b.horizon} ahead</span>${accStr}<span style="flex:1">skill ${_sg(b.skill_vs_market)} (n=${b.n})</span>${sig}</div>`;
     }).join('');
