@@ -1735,6 +1735,12 @@
 
   <!-- Primary navigation -->
   <nav class="side-nav" aria-label="Sections">
+    <button type="button" class="side-nav-link" onclick="openEdgeBoard()">
+      <span class="side-nav-ico">⚗️</span>Edge board
+    </button>
+    <button type="button" class="side-nav-link" onclick="openTrackRecord()">
+      <span class="side-nav-ico">📈</span>Track record
+    </button>
     <button type="button" class="side-nav-link" onclick="openWatchlist()">
       <span class="side-nav-ico">☆</span>Watchlist
     </button>
@@ -2730,6 +2736,8 @@ function buildMarketContext(question, data) {
       market_probability: clamp01(Number(analysis.market_probability)),
       gap: analysis.edge == null ? null : Number(analysis.edge),
       signal: marketSignalFromAnalysis(analysis),
+      platform: analysis.platform || detectMarketPlatform(question) || '',
+      market_url: analysis.market_url || '',
     };
   }
 
@@ -2744,6 +2752,8 @@ function buildMarketContext(question, data) {
     market_probability: marketProbability,
     gap,
     signal: gap == null ? null : marketSignal(gap),
+    platform: detectMarketPlatform(question) || '',
+    market_url: '',
   };
 }
 
