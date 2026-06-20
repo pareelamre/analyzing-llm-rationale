@@ -4164,7 +4164,7 @@ async function refreshEquityCurve() {
     const _normCurve = s => {
       if (!s?.equity_curve?.length) return null;
       const staked = s.total_staked || s.n_bets || 1;
-      return s.equity_curve.map(v => v / staked);
+      return s.equity_curve.map(v => (v / staked) * 100);
     };
     const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
     const _mk = (s, color, label, dash) => {
@@ -4666,8 +4666,8 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false} = {}) {
   const yAxisHtml = yLabels.map(v => {
     let labelStr;
     if (asPct) {
-      const pctVal = (Math.abs(v) * 100).toFixed(0);
-      labelStr = v === 0 ? '0%' : (v > 0 ? '+' : '-') + pctVal + '%';
+      const absVal = Math.abs(v).toFixed(1);
+      labelStr = v === 0 ? '$0' : (v > 0 ? '+$' : '-$') + absVal;
     } else {
       const absVal = Math.abs(v).toFixed(1);
       labelStr = v === 0 ? '$0' : (v > 0 ? '+$' : '-$') + absVal;
@@ -4991,7 +4991,7 @@ function renderEdgeBoard(d) {
     const _normCurve = s => {
       if (!s?.equity_curve?.length) return null;
       const staked = s.total_staked || s.n_bets || 1;
-      return s.equity_curve.map(v => v / staked);
+      return s.equity_curve.map(v => (v / staked) * 100);
     };
     const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
     const _mk = (s, color, label, dash) => {
