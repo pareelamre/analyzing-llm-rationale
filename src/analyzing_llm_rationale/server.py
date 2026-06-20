@@ -5137,6 +5137,118 @@ async def rag_delete(request: Request, namespace: str = "kb", doc_id: Optional[s
     },
     response_model=PredictResponse,
 )
+
+
+def _council_provider(label: str):
+    """Return the LLM provider for a council-member model label."""
+    if label == _state.get("model_key"):
+        return _state.get("provider")
+    return _scads_alt_provider(label)
+
+
+async def _council_forecast(
+    messages: List[Dict[str, str]],
+    req: "PredictRequest",
+    evidence_articles: List[Dict[str, Any]],
+    evidence_error: Optional[str],
+) -> "PredictResponse":
+    """Two-round debate between all SCADS LLM models; returns the consensus.
+
+    Round 1: all models forecast independently from the same evidence.
+    Round 2: each model sees the others' Round-1 probability + rationale and
+             gives a revised estimate, correcting for groupthink or stale evidence.
+    Final: median of Round-2 probabilities (robust to one outlier)."""
+    temperature = _state.get("temperature", 0.0)
+    max_tokens = _state.get("max_tokens", 1024)
+    council_models = list(_SCADS_MODEL_ALLOWLIST.keys())
+
+    async def _call(label: str, msgs: List[Dict]) -> tuple:
+        provider = _council_provider(label)
+        if provider is None:
+            return label, None
+        try:
+            content = await _provider_chat(provider, msgs, temperature, max_tokens)
+            return label, content
+        except Exception:
+            return label, None
+
+    def _extract_prob(content: Optional[str]) -> Optional[Dict]:
+        if not content:
+            return None
+        parsed = _parse_json_dict(content)
+        if not parsed:
+            return None
+        conf = parsed.get("confidence")
+        if conf is None:
+            return None
+        answer = (parsed.get("predicted_answer") or "").strip().lower()
+        prob = float(conf) if answer in ("yes", "y") else 1.0 - float(conf)
+        return {
+            "probability": max(0.01, min(0.99, prob)),
+            "rationale": (parsed.get("rationale") or "")[:300],
+        }
+
+    # Round 1: independent forecasts ─────────────────────────────────────────
+    r1_raw = dict(await asyncio.gather(*[_call(m, messages) for m in council_models]))
+    r1 = {m: _extract_prob(c) for m, c in r1_raw.items()}
+    r1 = {m: v for m, v in r1.items() if v}
+
+    if not r1:
+        # All failed — fall back to primary model
+        content = r1_raw.get(_state.get("model_key", ""), "")
+        return _build_typed_response(req, _parse_json_dict(content or ""), content or "",
+                                     evidence_articles, evidence_error)
+
+    # Round 2: share perspectives, ask for revision ───────────────────────────
+    lines = ["Independent forecasters' initial estimates:\n"]
+    for label, v in r1.items():
+        pct = round(v["probability"] * 100)
+        snippet = v["rationale"].replace("\n", " ")
+        lines.append(f"• {label} ({pct}% YES): \"{snippet}\"")
+    lines.append(
+        "\nReview each estimate carefully. Flag stale evidence, past events "
+        "misread as ongoing, or reasoning errors you spot in ANY of the above. "
+        "Provide your REVISED probability in the same JSON format — update "
+        "substantially if you identify a clear error."
+    )
+    debate_msg: Dict[str, str] = {"role": "user", "content": "\n".join(lines)}
+    r2_messages = messages + [debate_msg]
+
+    r2_raw = dict(await asyncio.gather(*[_call(m, r2_messages) for m in r1]))
+    r2 = {m: _extract_prob(c) for m, c in r2_raw.items()}
+    r2 = {m: v for m, v in r2.items() if v}
+
+    # Consensus: median of revised probabilities (fall back to R1 if R2 missing)
+    final = {**r1, **r2}
+    probs = sorted(v["probability"] for v in final.values())
+    consensus = probs[len(probs) // 2]
+
+    # Build rationale showing the debate ─────────────────────────────────────
+    debate_lines = ["[Council debate]"]
+    for label in council_models:
+        v1, v2 = r1.get(label), r2.get(label)
+        if not v1:
+            continue
+        if v2 and abs(v2["probability"] - v1["probability"]) >= 0.05:
+            debate_lines.append(
+                f"{label}: {round(v1['probability']*100)}% → {round(v2['probability']*100)}% "
+                f"— {v2['rationale']}"
+            )
+        else:
+            v = v2 or v1
+            debate_lines.append(f"{label}: {round(v['probability']*100)}% — {v['rationale']}")
+    rationale = "\n".join(debate_lines)
+
+    consensus_answer = "Yes" if consensus >= 0.5 else "No"
+    consensus_conf = consensus if consensus >= 0.5 else 1.0 - consensus
+    synthetic = {
+        "type": "binary",
+        "predicted_answer": consensus_answer,
+        "confidence": round(consensus_conf, 4),
+        "rationale": rationale,
+    }
+    req_binary = req.model_copy(update={"question_type": "binary"})
+    return _build_typed_response(req_binary, synthetic, "", evidence_articles, evidence_error)
 async def predict(req: PredictRequest, request: Request = None, kb_user_id: Optional[str] = None) -> PredictResponse:
     """Submit a forecasting question and receive a typed structured prediction.
 
@@ -5259,6 +5371,12 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
             return PredictResponse(**cached)
 
     messages, evidence_articles, evidence_error = await _prepare_predict_messages(req, rag_user_id)
+
+    if req.model == "council":
+        response = await _council_forecast(messages, req, evidence_articles, evidence_error)
+        await _finalize_predict_response(req, response, rag_user_id, predict_cache_key)
+        return response
+
     provider, temperature, max_tokens = _select_predict_provider(req)
 
     try:
