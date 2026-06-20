@@ -556,6 +556,23 @@
     .market-gap.buy { color: var(--signal); background: var(--signal-bg); }
     .market-gap.sell { color: #991b1b; background: #fef2f2; }
     .market-gap.watch { color: var(--caution); background: var(--caution-bg); }
+    .market-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .market-action {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 4px 7px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .market-action:hover { border-color: var(--ink); }
     .market-stack {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -2847,6 +2864,87 @@ function makeMarketLens(data) {
     </div>`;
 }
 
+function forecastFavoritePayload(data) {
+  const question = data.question || data.original_question || 'Forecast';
+  const ctx = data.market_context || buildMarketContext(question, data) || {};
+  const analysis = data.market_analysis || {};
+  const platform = ctx.platform || analysis.platform || detectMarketPlatform(question) || 'Forecast';
+  const url = ctx.market_url || analysis.market_url || '';
+  const ident = getIdentFromUrl(platform, url) || _slugKey(question);
+  const key = `${platform}:${ident}`.replace(/[^A-Za-z0-9:_\-./]+/g, '-').slice(0, 160);
+  return {
+    key,
+    question,
+    platform,
+    ident,
+    market_url: url,
+    model_probability: ctx.yes_probability ?? analysis.model_probability ?? binaryYesProbability(data) ?? data.confidence ?? null,
+    market_probability: ctx.market_probability ?? analysis.market_probability ?? null,
+    notify: true,
+  };
+}
+
+function forecastActionsHtml(data) {
+  const fav = forecastFavoritePayload(data);
+  return `<div class="market-actions pt-2">` +
+    `<button type="button" class="market-action" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"forecast_card",platform:${JSON.stringify(fav.platform || '')}})'>☆ Track</button>` +
+    `<button type="button" class="market-action" onclick='shareForecastFromButton(this);trackEvent("share_clicked",{source:"forecast_card"})'>Share</button>` +
+    `</div>`;
+}
+
+async function shareForecastFromButton(btn) {
+  const wrap = btn.closest('.max-w-2xl');
+  const data = wrap?._forecastData;
+  if (!data) return;
+  const fav = forecastFavoritePayload(data);
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = 'Sharing...';
+  try {
+    const r = await fetch('/forecasts/share', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        question: data.question || fav.question || 'Forecast',
+        question_type: data.question_type || 'binary',
+        predicted_answer: data.predicted_answer || null,
+        confidence: data.confidence ?? null,
+        rationale: data.rationale || data.model_rationale || '',
+        model_probability: fav.model_probability ?? null,
+        market_probability: fav.market_probability ?? null,
+        market_platform: fav.platform || null,
+        market_url: fav.market_url || null,
+        sources: data.evidence_sources || [],
+        model: data.model_key || '',
+        variant: data.variant || '',
+      }),
+    });
+    const d = await _readJson(r);
+    if (!r.ok || !d.url) throw new Error(d.detail || 'Share failed');
+    await _copyText(d.url);
+    btn.textContent = 'Link copied';
+    setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1600);
+  } catch (e) {
+    btn.textContent = 'Retry share';
+    btn.disabled = false;
+  }
+}
+
+async function _copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  ta.remove();
+}
+
 function getIdentFromUrl(platform, url) {
   if (!url) return '';
   const u = String(url).replace(/\/+$/, '');
@@ -2986,6 +3084,7 @@ function sourceFeedHtml(sources) {
 }
 
 function makeAIBubble(data, variant) {
+  if (variant && !data.variant) data.variant = variant;
   const qtype = data.question_type || 'binary';
   const rationale = data.rationale || '';
   const sources   = data.evidence_sources || [];
@@ -3062,8 +3161,10 @@ function makeAIBubble(data, variant) {
 
   const typeTag = qtype !== 'binary' ? ' · ' + qtype.replace(/_/g, ' ') : '';
   const marketLensHtml = makeMarketLens(data);
+  const actionsHtml = forecastActionsHtml(data);
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
+  div._forecastData = data;
   div.innerHTML = `
     <div class="msg-ai p-4 sm:p-5 space-y-3">
       ${verdict}
@@ -3074,6 +3175,7 @@ function makeAIBubble(data, variant) {
           <p class="text-[15px] text-gray-700 leading-relaxed">${escHtml(rationale)}</p>
         </div>` : ''}
       ${sourcesHtml}
+      ${actionsHtml}
       <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
         <span class="logo-dot" style="width:5px;height:5px"></span>
         ${escHtml(modelKey)}${typeTag} · ${escHtml(variantLabel)}
@@ -3145,7 +3247,15 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
       rationale: text,
       model_key: body.openrouter_model || body.model || 'gpt-oss-120b',
     };
+    data.question = body.question || data.question || '';
     if (data.question_type !== 'chat') data.market_context = buildMarketContext(body.question, data);
+    trackEvent('forecast_completed', {
+      question_type: data.question_type || 'unknown',
+      has_market_price: !!(body.market_probability != null || data.market_analysis?.market_probability != null),
+      platform: body.market_platform || data.market_analysis?.platform || '',
+      model: data.model_key || body.openrouter_model || body.model || '',
+      streamed: true,
+    });
     appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     const finalNode = makeAIBubble(data, variant);
     if (bubble) bubble.replaceWith(finalNode);
@@ -3297,6 +3407,7 @@ async function sendQuestion(options = {}) {
   const input = document.getElementById('questionInput');
   const question = String(options.question ?? input.value).trim();
   if (!question || !activeId || activeRequest) return;
+  trackEvent('first_forecast', { source: options.source || (_pendingMarketCtx ? 'market_context' : 'manual') });
 
   const variant = document.getElementById('variantSelect').value;
   if (!options.question) {
@@ -3468,8 +3579,16 @@ async function sendQuestion(options = {}) {
       data = await _readJson(resp);
       typingEl.remove();
       if (!resp.ok) { addError(data.detail || 'Server error'); return; }
+      data.question = question;
       data.market_context = buildMarketContext(question, data);
     }
+    trackEvent('forecast_completed', {
+      question_type: data.question_type || 'unknown',
+      has_market_price: !!(body.market_probability != null || data.market_analysis?.market_probability != null),
+      platform: body.market_platform || data.market_analysis?.platform || '',
+      model: data.model_key || body.openrouter_model || body.model || '',
+      streamed: false,
+    });
     appendMessage(activeId, { role: 'assistant', data, variant, content: data.rationale || '' });
     const aiNode = makeAIBubble(data, variant);
     document.getElementById('messages').appendChild(aiNode);
@@ -3972,6 +4091,26 @@ function recordPageVisit() {
   fetch('/analytics/visit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: payload,
+    keepalive: true,
+  }).catch(() => {});
+}
+
+function trackEvent(eventName, metadata = {}) {
+  const payload = JSON.stringify({
+    event_name: eventName,
+    path: window.location.pathname + window.location.hash,
+    metadata,
+  });
+  const url = '/analytics/event';
+  if (navigator.sendBeacon) {
+    const blob = new Blob([payload], { type: 'application/json' });
+    navigator.sendBeacon(url, blob);
+    return;
+  }
+  fetch(url, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: payload,
     keepalive: true,
   }).catch(() => {});
@@ -4590,11 +4729,10 @@ function _renderWatchTable() {
 
 async function loadLandingPanels() {
   try {
-    const r = await fetch('/edge-board');
+    const r = await fetch('/radar?limit=6');
     if (!r.ok) return;
     const d = await _readJson(r);
-    const board = (d.edge_board || []).filter(e => e.market_url);
-    _renderLandingMarketTable(board.slice(0, 2));
+    _renderLandingMarketTable((d.markets || []).slice(0, 3));
   } catch (_) { /* leave placeholders */ }
 }
 
@@ -4609,17 +4747,45 @@ function _renderLandingMarketTable(items) {
   let html = '<div class="market-head">Question</div><div class="market-head">Crowd</div><div class="market-head">Foresea</div><div class="market-head">Signal</div>';
   for (const e of items) {
     const mkt = Math.round((e.market_probability || 0) * 100);
-    const mdl = Math.round((e.model_probability || 0) * 100);
-    const diff = mdl - mkt;
-    const dir = diff > 0 ? 'buy' : diff < 0 ? 'sell' : 'watch';
-    const label = Math.abs(diff) < 3 ? 'Near fair'
+    const mdl = e.model_probability == null ? null : Math.round(e.model_probability * 100);
+    const diff = mdl == null ? null : mdl - mkt;
+    const dir = diff == null ? 'watch' : diff > 0 ? 'buy' : diff < 0 ? 'sell' : 'watch';
+    const label = mdl == null ? 'Analyze'
+      : Math.abs(diff) < 3 ? 'Near fair'
       : (diff > 0 ? `+${diff} pp Yes` : `${diff} pp No`);
     const q = (e.question || '').slice(0, 72);
-    html += `<div class="market-question-cell"><a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${escHtml(q)}</a></div>` +
-      `<div>${mkt}%</div><div>${mdl}%</div>` +
+    const ctx = {
+      market_probability: e.market_probability ?? null,
+      market_url: e.market_url || '',
+      market_platform: e.platform || '',
+      description: e.reason || '',
+      categories: e.category ? [e.category] : [],
+    };
+    const fav = {
+      key: `${e.platform || 'radar'}:${e.id || _slugKey(e.question || 'market')}`,
+      question: e.question || '',
+      platform: e.platform || '',
+      ident: e.id || '',
+      market_url: e.market_url || '',
+      model_probability: e.model_probability ?? null,
+      market_probability: e.market_probability ?? null,
+      notify: true,
+    };
+    const qTarget = e.market_url
+      ? `<a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onclick="trackEvent('market_link_clicked',{source:'radar',platform:'${escAttr(e.platform || '')}'})">${escHtml(q)}</a>`
+      : escHtml(q);
+    html += `<div class="market-question-cell">${qTarget}<div class="market-actions">` +
+      `<button type="button" class="market-action" onclick='startForecast(${JSON.stringify(e.question || '').replace(/'/g, "&#39;")}, ${JSON.stringify(ctx).replace(/'/g, "&#39;")});trackEvent("radar_ask_clicked",{platform:${JSON.stringify(e.platform || '')}})'>Ask</button>` +
+      `<button type="button" class="market-action" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"radar",platform:${JSON.stringify(e.platform || '')}})'>☆ Track</button>` +
+      `</div></div>` +
+      `<div>${mkt || '—'}${mkt ? '%' : ''}</div><div>${mdl == null ? '—' : mdl + '%'}</div>` +
       `<div><span class="market-gap ${dir}">${escHtml(label)}</span></div>`;
   }
   el.innerHTML = html;
+}
+
+function _slugKey(text) {
+  return String(text || 'market').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'market';
 }
 
 function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
@@ -5963,6 +6129,7 @@ async function submitTrade() {
 // Stored in localStorage `foresea_favorites` (keyed by `{platform}:{ident}`);
 // when signed in, mirrored to the server (/favorites) so it syncs across devices
 // and feeds the email digest.
+let _pendingFavoriteAfterSignIn = null;
 function _loadFavorites() {
   try { return JSON.parse(localStorage.getItem('foresea_favorites') || '{}') || {}; }
   catch { return {}; }
@@ -5972,7 +6139,12 @@ function _isFav(key) { return Object.prototype.hasOwnProperty.call(_loadFavorite
 
 async function toggleFavorite(fav, btn) {
   // Watchlist requires sign-in so saved markets persist to the account.
-  if (!currentUser) { openAuthModal('login'); return; }
+  if (!currentUser) {
+    _pendingFavoriteAfterSignIn = fav;
+    trackEvent('sign_in_started', { source: 'track' });
+    openAuthModal('login');
+    return;
+  }
   const store = _loadFavorites();
   const on = !_isFav(fav.key);
   if (on) {
@@ -5984,6 +6156,10 @@ async function toggleFavorite(fav, btn) {
   }
   _saveFavorites(store);
   if (btn) { btn.classList.toggle('on', on); btn.textContent = on ? '★' : '☆'; }
+  trackEvent(on ? 'watchlist_add' : 'watchlist_remove', {
+    platform: fav.platform || '',
+    source: 'toggle',
+  });
   renderWatchlist();
   // Best-effort server sync (only when signed in).
   if (currentUser) {
@@ -6701,7 +6877,7 @@ async function _maybeCompleteGitHubLogin() {
     _saveSession(d.token, user);
     updateAuthUI(user);
     closeAuthModal();
-    await syncConversationsAfterSignIn(user);
+    await _afterSignIn(user, 'github');
   } catch (e) { console.error('GitHub auth error:', e); }
 }
 
@@ -6719,6 +6895,18 @@ function _saveSession(token, user) {
     localStorage.setItem('foresea_session', token);
     localStorage.setItem('foresea_user', JSON.stringify(user));
   } catch {}
+}
+
+async function _afterSignIn(user, source = 'auth') {
+  trackEvent('sign_in_completed', { source });
+  await syncConversationsAfterSignIn(user);
+  await _syncFavoritesFromServer();
+  if (_pendingFavoriteAfterSignIn) {
+    const fav = _pendingFavoriteAfterSignIn;
+    _pendingFavoriteAfterSignIn = null;
+    await toggleFavorite(fav, null);
+    refreshWatchlist();
+  }
 }
 
 function _clearSession() {
@@ -6953,7 +7141,7 @@ async function submitAuthForm(event) {
     updateAuthUI(user);
     closeAuthModal();
     document.getElementById('authForm').reset();
-    await syncConversationsAfterSignIn(user);
+    await _afterSignIn(user, _authMode === 'register' ? 'register' : 'password');
   } catch (e) {
     _showAuthError('Network error. Check your connection and try again.');
   } finally {
@@ -6983,7 +7171,7 @@ async function handleGoogleCredential(response) {
     _saveSession(d.token, user);
     updateAuthUI(user);
     closeAuthModal();
-    await syncConversationsAfterSignIn(user);
+    await _afterSignIn(user, 'google');
   } catch (e) { console.error('Auth error:', e); }
 }
 

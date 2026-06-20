@@ -16,7 +16,7 @@ before secrets are wired up.
 Env:
   SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / ALERT_FROM  — mail transport
   CUSTOM_DOMAIN     public base for links in the email (default https://foresea.ink)
-  DIGEST_MIN_MOVE   minimum |price move| (0-1) to include a market (default 0.03)
+  DIGEST_MIN_MOVE   minimum |price move| (0-1) to include a market (default 0.05)
   DIGEST_FORCE      "1" to email even with no moves (default off)
 """
 from __future__ import annotations
@@ -89,6 +89,25 @@ def _send(to: str, subject: str, body: str) -> bool:
         return False
 
 
+def _record_event(client: Any, event_name: str, user_id: str, metadata: Dict[str, Any]) -> None:
+    try:
+        from google.cloud import datastore as _ds
+        entity = _ds.Entity(client.key("AnalyticsEvent"), exclude_from_indexes=("metadata", "path"))
+        now = datetime.now(timezone.utc)
+        entity.update(
+            ts=now,
+            day=now.strftime("%Y-%m-%d"),
+            event_name=event_name,
+            path="/digest",
+            user_id=user_id,
+            visitor_id="digest",
+            metadata=str(metadata)[:4000],
+        )
+        client.put(entity)
+    except Exception:
+        pass
+
+
 def _format_line(fav: Dict[str, Any], price: Optional[float], prev: Optional[float]) -> str:
     q = (fav.get("question") or fav.get("key") or "market")[:90]
     if price is None:
@@ -110,7 +129,7 @@ def run() -> int:
         print("SMTP not configured — nothing to send.")
         return 0
 
-    min_move = float(os.environ.get("DIGEST_MIN_MOVE", "0.03"))
+    min_move = float(os.environ.get("DIGEST_MIN_MOVE", "0.05"))
     force = os.environ.get("DIGEST_FORCE", "") in ("1", "true", "yes")
 
     # All opted-in favourites, grouped by their owning User key.
@@ -146,11 +165,12 @@ def run() -> int:
             body = (
                 "Here's what moved on your Foresea watchlist:\n\n"
                 + "\n".join(lines)
-                + f"\n\nSee them all: {_BASE_URL}/#edge\n\n"
+                + f"\n\nSee them all: {_BASE_URL}/?utm_source=digest#watchlist\n\n"
                 "— Foresea\nReply STOP-style: open the app and un-star a market to stop updates."
             )
             if _send(email, "Your Foresea watchlist update", body):
                 sent += 1
+                _record_event(client, "digest_sent", user_key.name or str(user_key.id), {"markets": len(lines)})
                 if updates:
                     client.put_multi(updates)
 

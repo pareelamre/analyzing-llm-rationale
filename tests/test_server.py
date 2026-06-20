@@ -315,9 +315,48 @@ class ServerTests(unittest.TestCase):
             response = self.client.get("/markets/kalshi?ticker=NOPE")
         self.assertEqual(response.status_code, 404)
 
-    def test_radar_endpoint_removed(self):
+    def test_radar_endpoint_returns_markets(self):
         response = self.client.get("/radar")
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("updated_at", payload)
+        self.assertGreaterEqual(len(payload["markets"]), 1)
+        self.assertIn("question", payload["markets"][0])
+
+    def test_analytics_event_summary_counts_events(self):
+        response = self.client.post(
+            "/analytics/event",
+            json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test"}},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        summary = self.client.get("/analytics/events/summary")
+        self.assertEqual(summary.status_code, 200)
+        payload = summary.json()
+        self.assertEqual(payload["total_events"], 1)
+        self.assertEqual(payload["by_event"][0]["event_name"], "forecast_completed")
+
+    def test_share_forecast_creates_public_page(self):
+        response = self.client.post(
+            "/forecasts/share",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "predicted_answer": "Yes",
+                "confidence": 0.7,
+                "rationale": "Evidence supports a yes forecast.",
+                "model_probability": 0.7,
+                "market_probability": 0.42,
+                "market_platform": "Polymarket",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        share = response.json()
+        self.assertIn("/forecast/", share["url"])
+
+        page = self.client.get(f"/forecast/{share['share_id']}")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Will the Fed cut rates", page.text)
+        self.assertIn("Evidence supports", page.text)
 
     def test_trading_accounts_requires_session(self):
         response = self.client.get("/trading/accounts")

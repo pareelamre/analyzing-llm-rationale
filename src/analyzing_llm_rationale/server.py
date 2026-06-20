@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote as url_quote
 from urllib.parse import urlparse
 
 import duckdb
@@ -1408,6 +1409,29 @@ async def agents_page():
     """Human- and crawler-readable integration surface for AI agents."""
     return FileResponse(
         str(_STATIC_DIR / "agents.html"),
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+@app.get("/forecast/{share_id}", include_in_schema=False)
+async def shared_forecast_page(share_id: str, request: Request) -> Response:
+    if not re.fullmatch(r"[A-Za-z0-9]{6,32}", share_id):
+        raise HTTPException(status_code=404, detail="Forecast not found.")
+    payload = await asyncio.get_running_loop().run_in_executor(None, _read_shared_forecast, share_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Forecast not found.")
+    try:
+        await asyncio.get_running_loop().run_in_executor(
+            None,
+            _record_analytics_event,
+            AnalyticsEventRequest(event_name="share_page_view", path=f"/forecast/{share_id}", metadata={}),
+            request,
+        )
+    except Exception:
+        pass
+    return Response(
+        _shared_forecast_html(share_id, payload),
+        media_type="text/html",
         headers={"Cache-Control": "public, max-age=300"},
     )
 
@@ -2873,6 +2897,28 @@ class AnalyticsSummary(BaseModel):
     by_day: List[Dict[str, Any]]
 
 
+class AnalyticsEventRequest(BaseModel):
+    """Anonymous or signed-in product event from the browser."""
+
+    event_name: str = Field(..., min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
+    path: str = Field("/", max_length=500)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("metadata")
+    @classmethod
+    def _small_metadata(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        raw = json.dumps(value or {}, default=str)
+        if len(raw) > 4000:
+            raise ValueError("metadata is too large")
+        return value or {}
+
+
+class AnalyticsEventSummary(BaseModel):
+    total_events: int
+    by_event: List[Dict[str, Any]]
+    by_day: List[Dict[str, Any]]
+
+
 class GoogleAuthRequest(BaseModel):
     """Google One-Tap credential submitted by the browser."""
     credential: str = Field(..., max_length=8192)
@@ -2967,6 +3013,46 @@ class FavoriteMarket(BaseModel):
 
 class FavoriteList(BaseModel):
     favorites: List[FavoriteMarket]
+
+
+class RadarMarket(BaseModel):
+    id: str
+    platform: str = ""
+    question: str
+    market_url: Optional[str] = None
+    market_probability: Optional[float] = None
+    model_probability: Optional[float] = None
+    edge: Optional[float] = None
+    abs_edge: Optional[float] = None
+    side: Optional[str] = None
+    category: Optional[str] = None
+    horizon: Optional[str] = None
+    reason: str = ""
+
+
+class RadarResponse(BaseModel):
+    updated_at: str
+    markets: List[RadarMarket]
+
+
+class SharedForecastRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=800)
+    question_type: str = Field("binary", max_length=40)
+    predicted_answer: Optional[str] = Field(None, max_length=500)
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
+    rationale: str = Field("", max_length=5000)
+    model_probability: Optional[float] = Field(None, ge=0.0, le=1.0)
+    market_probability: Optional[float] = Field(None, ge=0.0, le=1.0)
+    market_platform: Optional[str] = Field(None, max_length=80)
+    market_url: Optional[str] = Field(None, max_length=1000)
+    sources: List[Dict[str, Any]] = Field(default_factory=list, max_length=12)
+    model: Optional[str] = Field(None, max_length=120)
+    variant: Optional[str] = Field(None, max_length=120)
+
+
+class SharedForecastResponse(BaseModel):
+    share_id: str
+    url: str
 
 
 class RagIngestRequest(BaseModel):
@@ -3596,6 +3682,29 @@ def _analytics_conn():
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analytics_events (
+            ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            day TEXT,
+            event_name TEXT,
+            path TEXT,
+            user_id TEXT,
+            visitor_id TEXT,
+            metadata_json TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS shared_forecasts (
+            share_id TEXT PRIMARY KEY,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            user_id TEXT,
+            payload_json TEXT
+        )
+        """
+    )
     return conn
 
 
@@ -3694,6 +3803,291 @@ def _record_visit(event: VisitRequest, request: Request) -> None:
     _record_visit_duckdb(event, request)
 
 
+def _record_analytics_event_duckdb(event: AnalyticsEventRequest, request: Request) -> None:
+    conn = _analytics_conn()
+    try:
+        conn.execute(
+            """
+            INSERT INTO analytics_events (day, event_name, path, user_id, visitor_id, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                time.strftime("%Y-%m-%d", time.gmtime()),
+                event.event_name,
+                event.path,
+                _optional_user_id(request),
+                _visitor_id(request),
+                json.dumps(event.metadata or {}, default=str, sort_keys=True),
+            ],
+        )
+    finally:
+        conn.close()
+
+
+def _record_analytics_event_datastore(event: AnalyticsEventRequest, request: Request) -> None:
+    client = _get_datastore()
+    from google.cloud import datastore as _ds
+
+    now = datetime.now(timezone.utc)
+    entity = _ds.Entity(
+        client.key("AnalyticsEvent"),
+        exclude_from_indexes=("metadata", "path"),
+    )
+    entity.update(
+        ts=now,
+        day=time.strftime("%Y-%m-%d", time.gmtime()),
+        event_name=event.event_name,
+        path=event.path,
+        user_id=_optional_user_id(request),
+        visitor_id=_visitor_id(request),
+        metadata=json.dumps(event.metadata or {}, default=str, sort_keys=True)[:4000],
+    )
+    client.put(entity)
+
+
+def _record_analytics_event(event: AnalyticsEventRequest, request: Request) -> None:
+    if _get_datastore() is not None:
+        try:
+            _record_analytics_event_datastore(event, request)
+            return
+        except Exception:
+            logger.warning("datastore analytics event failed; falling back to duckdb", exc_info=True)
+    _record_analytics_event_duckdb(event, request)
+
+
+def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
+    client = _get_datastore()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    query = client.query(kind="AnalyticsEvent")
+    query.add_filter("ts", ">=", cutoff)
+    by_event: Dict[str, int] = defaultdict(int)
+    by_day: Dict[str, int] = defaultdict(int)
+    total = 0
+    for entity in query.fetch(limit=10000):
+        total += 1
+        by_event[entity.get("event_name") or "unknown"] += 1
+        by_day[entity.get("day") or entity["ts"].strftime("%Y-%m-%d")] += 1
+    return AnalyticsEventSummary(
+        total_events=total,
+        by_event=[
+            {"event_name": name, "count": count}
+            for name, count in sorted(by_event.items(), key=lambda kv: kv[1], reverse=True)
+        ],
+        by_day=[
+            {"day": day, "count": count}
+            for day, count in sorted(by_day.items(), reverse=True)
+        ],
+    )
+
+
+def _radar_id(platform: str, market_url: Optional[str], question: str) -> str:
+    source = f"{platform}:{market_url or question}"
+    return hashlib.sha256(source.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
+    cache_key = _cache_key("radar", limit)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return RadarResponse(**cached)
+    payload = _read_live_track_record() or {}
+    rows = payload.get("edge_board") or []
+    markets: List[RadarMarket] = []
+    seen: set[str] = set()
+    for row in rows:
+        question = str(row.get("question") or "").strip()
+        if not question:
+            continue
+        platform = str(row.get("platform") or "").strip() or "Prediction market"
+        market_url = row.get("market_url")
+        ident = _radar_id(platform, market_url, question)
+        if ident in seen:
+            continue
+        seen.add(ident)
+        edge = row.get("edge")
+        abs_edge = row.get("abs_edge")
+        try:
+            edge_pp = round(float(edge) * 100)
+            reason = f"Foresea is {abs(edge_pp)} pts {'above' if edge_pp > 0 else 'below'} the market."
+        except Exception:
+            reason = "Live market with a model-vs-market gap."
+        markets.append(RadarMarket(
+            id=ident,
+            platform=platform,
+            question=question[:500],
+            market_url=market_url,
+            market_probability=row.get("market_probability"),
+            model_probability=row.get("model_probability"),
+            edge=edge,
+            abs_edge=abs_edge,
+            side=row.get("side"),
+            category=row.get("domain"),
+            horizon=row.get("horizon") or row.get("lead_bucket"),
+            reason=reason,
+        ))
+        if len(markets) >= limit:
+            break
+    if not markets:
+        examples = [
+            ("Polymarket", "Will the Fed cut rates before September 30, 2026?", 0.54),
+            ("Kalshi", "Will the NASDAQ close higher at the end of the month?", 0.50),
+            ("Polymarket", "Will a major AI model be released this month?", 0.42),
+        ]
+        for platform, question, market_p in examples[:limit]:
+            markets.append(RadarMarket(
+                id=_radar_id(platform, None, question),
+                platform=platform,
+                question=question,
+                market_probability=market_p,
+                reason="Example market prompt for a quick Foresea analysis.",
+            ))
+    response = RadarResponse(
+        updated_at=str(payload.get("generated_at") or datetime.now(timezone.utc).isoformat()),
+        markets=markets,
+    )
+    _cache_set(cache_key, response.model_dump(mode="json"), int(os.environ.get("RADAR_CACHE_TTL", "300")))
+    return response
+
+
+def _share_payload(req: SharedForecastRequest, request: Request) -> Dict[str, Any]:
+    payload = req.model_dump(mode="json")
+    payload["created_at"] = datetime.now(timezone.utc).isoformat()
+    payload["user_id"] = _optional_user_id(request)
+    payload["sources"] = [
+        {
+            "title": str(src.get("title") or src.get("source") or "")[:300],
+            "source": str(src.get("source") or "")[:160],
+            "url": str(src.get("url") or "")[:1000],
+        }
+        for src in (req.sources or [])[:12]
+        if isinstance(src, dict)
+    ]
+    return payload
+
+
+def _store_shared_forecast(req: SharedForecastRequest, request: Request) -> "SharedForecastResponse":
+    share_id = secrets.token_urlsafe(8).replace("_", "").replace("-", "")[:10]
+    payload = _share_payload(req, request)
+    client = _get_datastore()
+    if client is not None:
+        try:
+            from google.cloud import datastore as _ds
+            entity = _ds.Entity(
+                key=client.key("SharedForecast", share_id),
+                exclude_from_indexes=("payload",),
+            )
+            entity.update(
+                share_id=share_id,
+                created_at=datetime.now(timezone.utc),
+                user_id=payload.get("user_id"),
+                payload=json.dumps(payload, default=str, sort_keys=True),
+            )
+            client.put(entity)
+            return SharedForecastResponse(share_id=share_id, url=f"{_CANONICAL}/forecast/{share_id}")
+        except Exception:
+            logger.warning("datastore shared forecast write failed; falling back to duckdb", exc_info=True)
+    conn = _analytics_conn()
+    try:
+        conn.execute(
+            "INSERT INTO shared_forecasts (share_id, user_id, payload_json) VALUES (?, ?, ?)",
+            [share_id, payload.get("user_id"), json.dumps(payload, default=str, sort_keys=True)],
+        )
+    finally:
+        conn.close()
+    return SharedForecastResponse(share_id=share_id, url=f"{_CANONICAL}/forecast/{share_id}")
+
+
+def _read_shared_forecast(share_id: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is not None:
+        try:
+            entity = client.get(client.key("SharedForecast", share_id))
+            if entity is not None:
+                return json.loads(entity.get("payload") or "{}")
+        except Exception:
+            logger.warning("datastore shared forecast read failed; falling back to duckdb", exc_info=True)
+    conn = _analytics_conn()
+    try:
+        row = conn.execute(
+            "SELECT payload_json FROM shared_forecasts WHERE share_id = ?",
+            [share_id],
+        ).fetchone()
+        return json.loads(row[0]) if row else None
+    finally:
+        conn.close()
+
+
+def _shared_forecast_html(share_id: str, payload: Dict[str, Any]) -> str:
+    q = html.escape(str(payload.get("question") or "Forecast"))
+    q_param = url_quote(str(payload.get("question") or "Forecast"))
+    answer = html.escape(str(payload.get("predicted_answer") or "Forecast"))
+    rationale = html.escape(str(payload.get("rationale") or ""))
+    model = html.escape(str(payload.get("model") or "Foresea"))
+    conf = payload.get("confidence")
+    model_p = payload.get("model_probability")
+    market_p = payload.get("market_probability")
+    platform = html.escape(str(payload.get("market_platform") or "Market"))
+    market_url = html.escape(str(payload.get("market_url") or ""))
+    pct_line = []
+    if model_p is not None:
+        pct_line.append(f"Foresea {round(float(model_p) * 100)}%")
+    elif conf is not None:
+        pct_line.append(f"Confidence {round(float(conf) * 100)}%")
+    if market_p is not None:
+        pct_line.append(f"{platform} {round(float(market_p) * 100)}%")
+    sources = payload.get("sources") or []
+    source_html = "".join(
+        f'<a class="chip" href="{html.escape(str(s.get("url") or "#"))}" target="_blank" rel="noopener">'
+        f'{html.escape(str(s.get("title") or s.get("source") or "Source"))}</a>'
+        for s in sources if isinstance(s, dict)
+    )
+    market_link = (
+        f'<a class="btn ghost" href="{market_url}" target="_blank" rel="noopener">Open market</a>'
+        if market_url else ""
+    )
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{q} | Foresea forecast</title>
+  <meta name="description" content="{q}">
+  <link rel="canonical" href="{_CANONICAL}/forecast/{share_id}">
+  <style>
+    body {{ margin:0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color:#111; background:#f7f7f8; }}
+    main {{ max-width:760px; margin:0 auto; padding:48px 18px; }}
+    .card {{ background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:28px; box-shadow:0 18px 50px rgba(15,15,16,.06); }}
+    .brand {{ display:flex; align-items:center; gap:9px; font-weight:700; margin-bottom:24px; }}
+    .dot {{ width:20px; height:20px; border-radius:6px; background:#111; }}
+    h1 {{ font-size:30px; line-height:1.12; margin:0 0 18px; letter-spacing:0; }}
+    .answer {{ display:inline-flex; background:#111827; color:#fff; border-radius:4px; padding:6px 12px; font-weight:700; margin-right:10px; }}
+    .muted {{ color:#6b7280; }}
+    .rationale {{ margin-top:22px; line-height:1.65; white-space:pre-wrap; }}
+    .actions {{ margin-top:26px; display:flex; gap:10px; flex-wrap:wrap; }}
+    .btn {{ display:inline-block; border-radius:999px; padding:9px 14px; background:#111; color:#fff; text-decoration:none; font-weight:600; font-size:14px; }}
+    .btn.ghost {{ background:#fff; color:#111; border:1px solid #d1d5db; }}
+    .chip {{ display:inline-block; margin:6px 6px 0 0; border:1px solid #e5e7eb; border-radius:999px; padding:6px 10px; color:#374151; text-decoration:none; font-size:13px; }}
+  </style>
+</head>
+<body>
+  <main>
+    <article class="card">
+      <div class="brand"><span class="dot"></span><span>Foresea</span></div>
+      <h1>{q}</h1>
+      <div><span class="answer">{answer}</span><span class="muted">{html.escape(" · ".join(pct_line))}</span></div>
+      <div class="rationale">{rationale}</div>
+      {f'<div style="margin-top:22px">{source_html}</div>' if source_html else ''}
+      <div class="actions">
+        <a class="btn" href="{_CANONICAL}/?q={q_param}">Ask Foresea</a>
+        {market_link}
+      </div>
+      <p class="muted" style="margin-top:24px;font-size:12px">Shared forecast generated by {model}. Decision support only.</p>
+    </article>
+  </main>
+</body>
+</html>"""
+
+
 def _analytics_summary_datastore() -> "AnalyticsSummary":
     client = _get_datastore()
     stats = client.get(client.key("AnalyticsStats", "global"))
@@ -3778,6 +4172,13 @@ async def record_visit(event: VisitRequest, request: Request) -> Dict[str, str]:
     return {"status": "ok"}
 
 
+@app.post("/analytics/event", tags=["System"], summary="Record product engagement event")
+async def record_analytics_event(event: AnalyticsEventRequest, request: Request) -> Dict[str, str]:
+    """Record a lightweight product event for engagement funnel analysis."""
+    await asyncio.get_running_loop().run_in_executor(None, _record_analytics_event, event, request)
+    return {"status": "ok"}
+
+
 @app.get("/analytics/summary", tags=["System"], response_model=AnalyticsSummary)
 async def analytics_summary(request: Request) -> AnalyticsSummary:
     """Return basic page-visit counts.
@@ -3827,6 +4228,66 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
             for day, visits, unique_count in rows
         ],
     )
+
+
+@app.get("/analytics/events/summary", tags=["System"], response_model=AnalyticsEventSummary)
+async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
+    """Return product-event counts for the last 30 days.
+
+    If `API_KEY` is configured, this endpoint requires `X-API-Key`.
+    """
+    _check_api_key(request)
+    if _get_datastore() is not None:
+        try:
+            return await asyncio.get_running_loop().run_in_executor(
+                None, _analytics_events_summary_datastore
+            )
+        except Exception:
+            logger.warning("datastore event summary failed; falling back to duckdb", exc_info=True)
+    conn = _analytics_conn()
+    try:
+        total = conn.execute("SELECT COUNT(*) FROM analytics_events").fetchone()[0]
+        by_event = conn.execute(
+            """
+            SELECT event_name, COUNT(*) AS count
+            FROM analytics_events
+            GROUP BY 1
+            ORDER BY 2 DESC
+            LIMIT 50
+            """
+        ).fetchall()
+        by_day = conn.execute(
+            """
+            SELECT day, COUNT(*) AS count
+            FROM analytics_events
+            GROUP BY 1
+            ORDER BY 1 DESC
+            LIMIT 30
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+    return AnalyticsEventSummary(
+        total_events=int(total or 0),
+        by_event=[{"event_name": name, "count": int(count)} for name, count in by_event],
+        by_day=[{"day": str(day), "count": int(count)} for day, count in by_day],
+    )
+
+
+@app.post("/forecasts/share", tags=["System"], response_model=SharedForecastResponse)
+async def share_forecast(req: SharedForecastRequest, request: Request) -> SharedForecastResponse:
+    """Create a public, intentionally shared forecast page."""
+    response = await asyncio.get_running_loop().run_in_executor(None, _store_shared_forecast, req, request)
+    try:
+        await asyncio.get_running_loop().run_in_executor(
+            None,
+            _record_analytics_event,
+            AnalyticsEventRequest(event_name="share_created", path="/forecasts/share", metadata={"share_id": response.share_id}),
+            request,
+        )
+    except Exception:
+        pass
+    return response
 
 
 @app.post("/feedback", tags=["System"], summary="Submit user feedback")
@@ -3908,6 +4369,16 @@ async def market_kalshi(request: Request, ticker: str) -> "MarketQuote":
     if not ticker.strip():
         raise HTTPException(status_code=422, detail="Provide a Kalshi 'ticker'.")
     return await _fetch_market_quote("kalshi", ticker=ticker)
+
+
+@app.get("/radar", tags=["Markets"], summary="Live Foresea market radar", response_model=RadarResponse)
+async def radar(limit: int = Query(12, ge=1, le=30)) -> JSONResponse:
+    """Return a cached list of live markets with notable model-vs-market gaps."""
+    payload = await asyncio.get_running_loop().run_in_executor(None, _radar_from_track_record, limit)
+    return JSONResponse(
+        payload.model_dump(mode="json"),
+        headers={"Cache-Control": "public, max-age=60"},
+    )
 
 
 def _trading_http_exception(exc: Exception) -> HTTPException:
