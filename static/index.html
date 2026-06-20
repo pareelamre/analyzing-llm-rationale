@@ -4161,7 +4161,11 @@ async function refreshEquityCurve() {
     _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
     _upd('eb-pnl-yes-v',   _roiVal(pnl.yes_only));
     _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
-    const _normCurve = s => s?.equity_curve?.length ? s.equity_curve : null;
+    const _normCurve = s => {
+      if (!s?.equity_curve?.length) return null;
+      const staked = s.total_staked || s.n_bets || 1;
+      return s.equity_curve.map(v => v / staked);
+    };
     const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
     const _mk = (s, color, label, dash) => {
       const points = _normCurve(s);
@@ -4183,7 +4187,7 @@ async function refreshEquityCurve() {
       _mk(pnl.fade_extreme,   '#ec4899', 'Fade extreme ⚗️', true),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
-    el.innerHTML = curves.length ? _equitySvg(curves) : '';
+    el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: true}) : '';
     if (curves.length) _attachEquityHover(el);
     const ts = document.getElementById('eb-pnl-ts');
     if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
@@ -4631,11 +4635,10 @@ function _ebGoPage(n) {
   if (sec) sec.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
 }
 
-function _equitySvg(curves, W = 460, H = 110) {
+function _equitySvg(curves, W = 460, H = 110, {asPct = false} = {}) {
   // curves = [{points: float[], color: string, label: string}, ...]
-  // points = cumulative ROI after each bet (normalised by total_staked so the
-  // final value exactly matches the displayed ROI %, and all three curves share
-  // a common % scale regardless of their stake sizes).
+  // points = cumulative ROI per dollar staked (normalised by total_staked) so
+  // all curves share a common % scale regardless of sizing strategy.
   const allPts = curves.flatMap(c => c.points);
   if (!allPts.length) return '';
   // Use a real time x-axis when every curve carries a matching `times` array.
@@ -4658,11 +4661,17 @@ function _equitySvg(curves, W = 460, H = 110) {
     : padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
   const toY = v => padT + cH - ((v - lo) / range) * cH;
   const zeroY = toY(0).toFixed(1);
-  // Y-axis labels as PnL (top, bottom, and zero when it falls in range)
+  // Y-axis labels: % ROI when asPct, otherwise raw dollar PnL
   const yLabels = [...new Set([lo, 0, hi])].filter(v => v !== 0 || (lo < 0 && hi > 0));
   const yAxisHtml = yLabels.map(v => {
-    const absVal = Math.abs(v).toFixed(1);
-    const labelStr = v === 0 ? '$0' : (v > 0 ? '+$' : '-$') + absVal;
+    let labelStr;
+    if (asPct) {
+      const pctVal = (Math.abs(v) * 100).toFixed(0);
+      labelStr = v === 0 ? '0%' : (v > 0 ? '+' : '-') + pctVal + '%';
+    } else {
+      const absVal = Math.abs(v).toFixed(1);
+      labelStr = v === 0 ? '$0' : (v > 0 ? '+$' : '-$') + absVal;
+    }
     return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${labelStr}</text>`;
   }).join('');
   let xAxisHtml = '';
@@ -4979,7 +4988,11 @@ function renderEdgeBoard(d) {
     const nRes = d.n_snapshots_resolved || 0;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. Three ways to size each bet (${nBet} of ${nRes} resolved markets bet):</p>`;
-    const _normCurve = s => s?.equity_curve?.length ? s.equity_curve : null;
+    const _normCurve = s => {
+      if (!s?.equity_curve?.length) return null;
+      const staked = s.total_staked || s.n_bets || 1;
+      return s.equity_curve.map(v => v / staked);
+    };
     const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
     const _mk = (s, color, label, dash) => {
       const points = _normCurve(s);
@@ -5001,7 +5014,7 @@ function renderEdgeBoard(d) {
       _mk(pnl.fade_extreme,   '#ec4899', 'Fade extreme ⚗️', true),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
-    const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves) : ''}</div>`;
+    const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: true}) : ''}</div>`;
     // Per-sizing explainer: what each number means and what the gap between them signals.
     const _pnlExplainer = () => {
       const fl = pnl.flat, ew = pnl.edge_weighted, vo = pnl.validated_only, mid = pnl.mid_price_only, fade = pnl.fade_extreme, kelly = pnl.half_kelly, smart = pnl.smart, yes = pnl.yes_only, crowd = pnl.crowd_baseline;
