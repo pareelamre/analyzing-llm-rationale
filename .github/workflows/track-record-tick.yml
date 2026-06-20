@@ -45,7 +45,7 @@ jobs:
         env:
           FORESEA_BASE_URL: https://foresea.ink
           PER_VENUE: "3"
-          TRACK_MODELS: "gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,council,crowd-follow"
+          TRACK_MODELS: "council,gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,crowd-follow"
           # Drift-triggered re-forecast: price-only most ticks; LLM re-forecast
           # only when the crowd has moved ≥ 10pp since the last snapshot. 3pp was
           # too noisy — triggered near-full re-forecast sets on almost every tick.
