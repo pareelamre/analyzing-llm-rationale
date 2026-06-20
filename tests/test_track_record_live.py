@@ -156,23 +156,49 @@ class TrajectoryTests(unittest.TestCase):
 
     def test_short_horizon_markets_get_intraday_slots(self):
         ref = datetime(2026, 6, 3, 1, tzinfo=timezone.utc)
+        # 5-day close: inside the 6h tier but outside the 1h expiry tier (≤3d).
+        close = (ref + timedelta(days=5)).isoformat()
+        md = _fake_market_data(close)
+        with mock.patch.object(trl, "_now", return_value=ref):
+            self.assertEqual(asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m", per_venue=3,
+                short_horizon_reforecast_lead_days=7, short_horizon_slot_hours=6,
+                expiry_reforecast_lead_days=3, expiry_slot_hours=1)), 2)
+        # hour=5 is still in the 00-06 slot → no new snapshots
+        with mock.patch.object(trl, "_now", return_value=ref.replace(hour=5)):
+            self.assertEqual(asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m", per_venue=3,
+                short_horizon_reforecast_lead_days=7, short_horizon_slot_hours=6,
+                expiry_reforecast_lead_days=3, expiry_slot_hours=1)), 0)
+        # hour=7 crosses into the 06-12 slot → new snapshots
+        with mock.patch.object(trl, "_now", return_value=ref.replace(hour=7)):
+            self.assertEqual(asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m", per_venue=3,
+                short_horizon_reforecast_lead_days=7, short_horizon_slot_hours=6,
+                expiry_reforecast_lead_days=3, expiry_slot_hours=1)), 2)
+        snaps = [k[1] for k in self.client.store if k[0] == trl.SNAPSHOT_KIND]
+        self.assertTrue(any(":2026-06-03T00" in k for k in snaps))
+        self.assertTrue(any(":2026-06-03T06" in k for k in snaps))
+
+    def test_expiry_markets_get_hourly_slots(self):
+        ref = datetime(2026, 6, 3, 1, tzinfo=timezone.utc)
+        # 2-day close: inside the 1h expiry tier (≤3d)
         close = (ref + timedelta(days=2)).isoformat()
         md = _fake_market_data(close)
         with mock.patch.object(trl, "_now", return_value=ref):
             self.assertEqual(asyncio.run(trl.record_snapshots(
                 self.client, md, self.forecast_fn, default_model="m", per_venue=3,
-                short_horizon_reforecast_lead_days=3, short_horizon_slot_hours=6)), 2)
-        with mock.patch.object(trl, "_now", return_value=ref.replace(hour=5)):
+                short_horizon_reforecast_lead_days=7, short_horizon_slot_hours=6,
+                expiry_reforecast_lead_days=3, expiry_slot_hours=1)), 2)
+        # hour=1 is a new 1h slot → records again
+        with mock.patch.object(trl, "_now", return_value=ref.replace(hour=2)):
             self.assertEqual(asyncio.run(trl.record_snapshots(
                 self.client, md, self.forecast_fn, default_model="m", per_venue=3,
-                short_horizon_reforecast_lead_days=3, short_horizon_slot_hours=6)), 0)
-        with mock.patch.object(trl, "_now", return_value=ref.replace(hour=7)):
-            self.assertEqual(asyncio.run(trl.record_snapshots(
-                self.client, md, self.forecast_fn, default_model="m", per_venue=3,
-                short_horizon_reforecast_lead_days=3, short_horizon_slot_hours=6)), 2)
+                short_horizon_reforecast_lead_days=7, short_horizon_slot_hours=6,
+                expiry_reforecast_lead_days=3, expiry_slot_hours=1)), 2)
         snaps = [k[1] for k in self.client.store if k[0] == trl.SNAPSHOT_KIND]
-        self.assertTrue(any(":2026-06-03T00" in k for k in snaps))
-        self.assertTrue(any(":2026-06-03T06" in k for k in snaps))
+        self.assertTrue(any(":2026-06-03T01" in k for k in snaps))
+        self.assertTrue(any(":2026-06-03T02" in k for k in snaps))
 
     def test_drop_stale_open_removes_orphaned_readings(self):
         rows = [
