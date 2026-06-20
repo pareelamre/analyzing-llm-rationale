@@ -540,6 +540,152 @@ def record_price_points(client, market_data) -> int:
     return recorded
 
 
+async def backfill_missing_model_snapshots(
+    client,
+    forecast_fn: ForecastFn,
+    *,
+    models: List[str],
+    default_model: str,
+    evidence_top_k: int = 5,
+    concurrency: int = 4,
+) -> int:
+    """Retroactively forecast resolved markets for models that missed them.
+
+    For each resolved market the primary model has a snapshot for but a
+    secondary model doesn't, calls forecast_fn and writes a resolved snapshot
+    so all models are graded on the same market set. This heals gaps caused by
+    a model being temporarily disabled."""
+    con = _sql_con(client)
+    if con is None:
+        return 0
+
+    llm_models = [m for m in models if m != "crowd-follow" and m != default_model]
+    if not llm_models:
+        return 0
+
+    # Primary model's resolved snapshots keyed by (platform, ident).
+    # Keep the earliest snapshot per market (closest to original forecast time).
+    primary_refs: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for r in _sql_rows(con, """
+        SELECT * FROM forecast_snapshot
+        WHERE resolved = true AND outcome IS NOT NULL AND model = ?
+        ORDER BY snapshot_ts
+    """, [default_model]):
+        key = (r.get("platform") or "", r.get("ident") or "")
+        if key not in primary_refs:
+            primary_refs[key] = r
+
+    if not primary_refs:
+        return 0
+
+    # Find which (model, market) pairs are missing entirely.
+    import asyncio as _asyncio
+
+    tasks: List[Tuple[str, Tuple[str, str], Dict[str, Any]]] = []
+    for model in llm_models:
+        model_markets = {
+            (r[0] or "", r[1] or "")
+            for r in con.execute(
+                "SELECT platform, ident FROM forecast_snapshot WHERE model = ?", [model]
+            ).fetchall()
+        }
+        for mkey, ref in primary_refs.items():
+            if mkey not in model_markets:
+                tasks.append((model, mkey, ref))
+
+    if not tasks:
+        return 0
+
+    print(f"  backfill: {len(tasks)} missing (model, market) pairs")
+
+    sem = _asyncio.Semaphore(concurrency)
+    today = _now().strftime("%Y-%m-%d")
+
+    async def _backfill_one(model: str, ref: Dict[str, Any]) -> bool:
+        async with sem:
+            try:
+                quote = {
+                    "platform": ref.get("platform"),
+                    "question": ref.get("question"),
+                    "description": ref.get("description"),
+                    "resolution_criteria": ref.get("resolution_criteria"),
+                    "market_url": ref.get("market_url"),
+                    "close_time": ref.get("close_time"),
+                    "created_time": ref.get("publish_time"),
+                    "category": ref.get("category"),
+                    "volume": ref.get("market_volume"),
+                    "liquidity": ref.get("market_liquidity"),
+                    "probability": ref.get("market_probability"),
+                    "price_history": [],
+                }
+                scored = await forecast_fn(quote, evidence_top_k, model)
+            except Exception:
+                return False
+        if not scored or scored.get("model_probability") is None:
+            return False
+
+        # Key the snapshot to the original date with a _backfill suffix so it
+        # never collides with a real future snapshot for this market+model.
+        slot = (ref.get("snapshot_date") or today) + "_backfill"
+        snap_key = client.key(
+            SNAPSHOT_KIND,
+            f"{ref.get('platform')}:{ref.get('ident')}:{model}:{slot}",
+        )
+        if client.get(snap_key) is not None:
+            return False  # idempotent
+
+        mp = float(scored["model_probability"])
+        mkt_prob = ref.get("market_probability")
+        lead = ref.get("lead_time_days")
+        outcome = ref.get("outcome")
+        tags = tag_question(ref.get("question") or "", ref.get("category"))
+
+        entity = _ds.Entity(snap_key, exclude_from_indexes=(
+            "question", "market_url", "close_time", "category", "entities",
+            "description", "resolution_criteria", "rationale"))
+        entity.update(
+            platform=ref.get("platform"),
+            ident=ref.get("ident"),
+            model=model,
+            question=ref.get("question"),
+            market_url=ref.get("market_url"),
+            description=ref.get("description"),
+            resolution_criteria=ref.get("resolution_criteria"),
+            publish_time=ref.get("publish_time"),
+            snapshot_ts=ref.get("snapshot_ts") or _now(),
+            snapshot_date=ref.get("snapshot_date") or today,
+            model_probability=mp,
+            market_probability=float(mkt_prob) if mkt_prob is not None else None,
+            close_time=ref.get("close_time"),
+            lead_time_days=lead,
+            horizon=ref.get("horizon") or _horizon_label(lead),
+            category=ref.get("category"),
+            market_volume=ref.get("market_volume"),
+            market_liquidity=ref.get("market_liquidity"),
+            evidence_count=scored.get("evidence_count"),
+            resolved=True,
+            outcome=outcome,
+            resolved_ts=ref.get("resolved_ts"),
+            domain=tags["domain"],
+            entities=tags["entities"],
+            rationale=scored.get("rationale"),
+        )
+        if outcome is not None and mkt_prob is not None:
+            entity["model_brier"] = brier(mp, outcome)
+            entity["market_brier"] = brier(float(mkt_prob), outcome)
+            entity["model_correct"] = (mp >= 0.5) == bool(outcome)
+        client.put(entity)
+        return True
+
+    results = await _asyncio.gather(
+        *[_backfill_one(model, ref) for model, _key, ref in tasks],
+        return_exceptions=True,
+    )
+    recorded = sum(1 for r in results if r is True)
+    print(f"  backfill: wrote {recorded}/{len(tasks)} snapshots")
+    return recorded
+
+
 def _bucket_stats(rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not rows:
         return None

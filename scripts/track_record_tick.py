@@ -218,6 +218,11 @@ async def main() -> int:
         short_horizon_reforecast_lead_days=SHORT_HORIZON_REFORECAST_LEAD_DAYS,
         short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
         concurrency=PREDICT_CONCURRENCY)
+    # Catch up any secondary models that missed resolved markets while disabled.
+    backfilled = await trl.backfill_missing_model_snapshots(
+        store, forecast_fn,
+        models=TRACK_MODELS, default_model=TRACK_MODELS[0],
+        concurrency=PREDICT_CONCURRENCY)
     # Flip enrolled markets out of the pending queue (and let the server prune).
     _mark_enrolled([f"{p}:{i}" for p, i in seeds])
     agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)
@@ -227,6 +232,7 @@ async def main() -> int:
 
     summary = {
         "snapshots_recorded": recorded,
+        "snapshots_backfilled": backfilled,
         "price_points_recorded": price_points,
         "snapshots_resolved": newly_resolved,
         "n_markets_resolved": agg.get("n_markets_resolved"),
