@@ -5123,22 +5123,6 @@ async def rag_delete(request: Request, namespace: str = "kb", doc_id: Optional[s
     return {"removed": removed}
 
 
-@app.post(
-    "/predict",
-    tags=["Inference"],
-    summary="Run a single forecasting prediction",
-    response_description="Prediction result with confidence score, rationale, and evidence sources.",
-    responses={
-        200: {"description": "Prediction returned successfully."},
-        400: {"description": "Invalid request — unknown variant or malformed input."},
-        401: {"description": "Missing or invalid `X-API-Key` header (only when API key is configured)."},
-        429: {"description": "Rate limit exceeded. Retry after 60 seconds."},
-        503: {"description": "Server not yet initialised — LLM provider not loaded."},
-    },
-    response_model=PredictResponse,
-)
-
-
 def _council_provider(label: str):
     """Return the LLM provider for a council-member model label."""
     if label == _state.get("model_key"):
@@ -5249,6 +5233,22 @@ async def _council_forecast(
     }
     req_binary = req.model_copy(update={"question_type": "binary"})
     return _build_typed_response(req_binary, synthetic, "", evidence_articles, evidence_error)
+
+
+@app.post(
+    "/predict",
+    tags=["Inference"],
+    summary="Run a single forecasting prediction",
+    response_description="Prediction result with confidence score, rationale, and evidence sources.",
+    responses={
+        200: {"description": "Prediction returned successfully."},
+        400: {"description": "Invalid request — unknown variant or malformed input."},
+        401: {"description": "Missing or invalid `X-API-Key` header (only when API key is configured)."},
+        429: {"description": "Rate limit exceeded. Retry after 60 seconds."},
+        503: {"description": "Server not yet initialised — LLM provider not loaded."},
+    },
+    response_model=PredictResponse,
+)
 async def predict(req: PredictRequest, request: Request = None, kb_user_id: Optional[str] = None) -> PredictResponse:
     """Submit a forecasting question and receive a typed structured prediction.
 
