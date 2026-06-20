@@ -72,6 +72,10 @@ SHORT_HORIZON_REFORECAST_LEAD_DAYS = float(
 SHORT_HORIZON_SLOT_HOURS = int(
     os.environ.get("SHORT_HORIZON_SLOT_HOURS")
     or trl.SHORT_HORIZON_SLOT_HOURS)
+EXPIRY_REFORECAST_LEAD_DAYS = float(
+    os.environ.get("EXPIRY_REFORECAST_LEAD_DAYS") or trl.EXPIRY_REFORECAST_LEAD_DAYS)
+EXPIRY_SLOT_HOURS = int(
+    os.environ.get("EXPIRY_SLOT_HOURS") or trl.EXPIRY_SLOT_HOURS)
 # Re-run the LLM forecast for every tracked-open market on every tick (not just
 # the daily first pass / price-drift), so the edge board always reflects the
 # model's current opinion and matches live /predict. Default on. Each tick then
@@ -216,6 +220,8 @@ async def main() -> int:
         reforecast_each_tick=REFORECAST_EACH_TICK,
         short_horizon_reforecast_lead_days=SHORT_HORIZON_REFORECAST_LEAD_DAYS,
         short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
+        expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
+        expiry_slot_hours=EXPIRY_SLOT_HOURS,
         concurrency=PREDICT_CONCURRENCY)
     # Catch up any secondary models that missed resolved markets while disabled.
     backfilled = await trl.backfill_missing_model_snapshots(

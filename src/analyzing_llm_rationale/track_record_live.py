@@ -72,6 +72,8 @@ ForecastFn = Callable[[Dict[str, Any], int, Optional[str]], Awaitable[Optional[D
 PRICE_DRIFT_THRESHOLD = 0.05
 SHORT_HORIZON_REFORECAST_LEAD_DAYS = 3.0
 SHORT_HORIZON_SLOT_HOURS = 6
+EXPIRY_REFORECAST_LEAD_DAYS = 3.0   # markets within this many days get hourly slots
+EXPIRY_SLOT_HOURS = 1
 
 
 
@@ -99,16 +101,22 @@ def _snapshot_slot(lead_days: Optional[float],
                    *,
                    now: Optional[datetime] = None,
                    short_lead_days: float = SHORT_HORIZON_REFORECAST_LEAD_DAYS,
-                   short_slot_hours: int = SHORT_HORIZON_SLOT_HOURS) -> str:
+                   short_slot_hours: int = SHORT_HORIZON_SLOT_HOURS,
+                   expiry_lead_days: float = EXPIRY_REFORECAST_LEAD_DAYS,
+                   expiry_slot_hours: int = EXPIRY_SLOT_HOURS) -> str:
     """Storage slot for a forecast snapshot.
 
-    Slow markets keep one snapshot per UTC day. Short-horizon markets need
-    intraday snapshots, otherwise same-day re-forecasts overwrite the drift trail.
+    Three tiers by days-to-resolution:
+      > short_lead_days        → one slot per UTC day
+      ≤ short_lead_days        → one slot per short_slot_hours (default 6h)
+      ≤ expiry_lead_days       → one slot per expiry_slot_hours (default 1h)
     """
     now = now or _now()
     if lead_days is None or lead_days > short_lead_days or short_slot_hours <= 0:
         return now.strftime("%Y-%m-%d")
-    hour = (now.hour // short_slot_hours) * short_slot_hours
+    slot_h = (expiry_slot_hours if (lead_days <= expiry_lead_days and expiry_slot_hours > 0)
+              else short_slot_hours)
+    hour = (now.hour // slot_h) * slot_h
     return now.replace(hour=hour, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H")
 
 
@@ -260,6 +268,8 @@ async def record_snapshots(
     reforecast_each_tick: bool = False,
     short_horizon_reforecast_lead_days: float = SHORT_HORIZON_REFORECAST_LEAD_DAYS,
     short_horizon_slot_hours: int = SHORT_HORIZON_SLOT_HOURS,
+    expiry_reforecast_lead_days: float = EXPIRY_REFORECAST_LEAD_DAYS,
+    expiry_slot_hours: int = EXPIRY_SLOT_HOURS,
     concurrency: int = 4,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
@@ -404,6 +414,8 @@ async def record_snapshots(
             now=tick_now,
             short_lead_days=short_horizon_reforecast_lead_days,
             short_slot_hours=short_horizon_slot_hours,
+            expiry_lead_days=expiry_reforecast_lead_days,
+            expiry_slot_hours=expiry_slot_hours,
         )
         for model in model_list:
             key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{slot}")

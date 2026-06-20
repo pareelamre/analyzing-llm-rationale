@@ -58,6 +58,9 @@ jobs:
           # 90-day horizon means ALL open markets use 6h slots (not just expiring ones).
           SHORT_HORIZON_REFORECAST_LEAD_DAYS: "90"
           SHORT_HORIZON_SLOT_HOURS: "6"
+          # Markets within 3 days of resolution get hourly forecasts.
+          EXPIRY_REFORECAST_LEAD_DAYS: "3"
+          EXPIRY_SLOT_HOURS: "1"
           PREDICT_API_KEY: ${{ secrets.PREDICT_API_KEY }}
           # Pulls agent-enrolled markets from the evolution-loop bridge (no-op until set).
           TRACK_RECORD_TOKEN: ${{ secrets.TRACK_RECORD_TOKEN }}
