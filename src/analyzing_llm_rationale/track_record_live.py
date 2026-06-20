@@ -1247,6 +1247,7 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
         board.append({
             "question": r.get("question"),
             "platform": platform,
+            "ident": ident,
             "market_url": r.get("market_url"),
             "domain": r.get("domain") or "other",
             "horizon": r.get("horizon"),
