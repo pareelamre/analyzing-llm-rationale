@@ -136,6 +136,26 @@ class ServerTests(unittest.TestCase):
         )
         self.assertIn("Central bank signals", self.provider.calls[0][1]["content"])
 
+    def test_predict_council_returns_structured_probability(self):
+        with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": {}}):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "model": "council",
+                    "market_probability": 0.4,
+                    "market_outcome": "Yes",
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["predicted_answer"], "Yes")
+        self.assertEqual(payload["confidence"], 0.7)
+        self.assertEqual(payload["market_analysis"]["model_probability"], 0.7)
+        self.assertIn("[Council debate]", payload["rationale"])
+
     def test_predict_stream_chat_returns_sse_chunks(self):
         response = self.client.post(
             "/predict/stream",

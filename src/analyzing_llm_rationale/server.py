@@ -5232,7 +5232,9 @@ async def _council_forecast(
         "rationale": rationale,
     }
     req_binary = req.model_copy(update={"question_type": "binary"})
-    return _build_typed_response(req_binary, synthetic, "", evidence_articles, evidence_error)
+    return _build_typed_response(
+        req_binary, synthetic, json.dumps(synthetic), evidence_articles, evidence_error
+    )
 
 
 @app.post(
