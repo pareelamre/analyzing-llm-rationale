@@ -1704,7 +1704,7 @@
           <div class="market-table" id="landingMarketTable">
             <div class="market-head">Question</div>
             <div class="market-head">Crowd</div>
-            <div class="market-head">Foresea</div>
+            <div class="market-head">Council</div>
             <div class="market-head">Signal</div>
             <div class="market-question-cell" style="color:var(--text-dim)">Loading…</div>
             <div></div><div></div><div></div>
@@ -3487,6 +3487,7 @@ async function sendQuestion(options = {}) {
       if (mCtx.description)                body.description = mCtx.description;
       if (mCtx.resolution_criteria)        body.resolution_criteria = mCtx.resolution_criteria;
       if (mCtx.categories?.length)         body.categories = mCtx.categories;
+      if (mCtx.model && !activeModel)       body.model = mCtx.model;
     }
     if (mCtx?.market_probability == null) {
       const marketProbability = extractMarketProbability(question);
@@ -4601,6 +4602,7 @@ function _ebAskQuestion(ident) {
   if (entry.description)                ctx.description = entry.description;
   if (entry.resolution_criteria)        ctx.resolution_criteria = entry.resolution_criteria;
   if (entry.categories?.length)         ctx.categories = entry.categories;
+  ctx.model = 'council';
   closeEdgeBoard({ updateHistory: false });
   startForecast(entry.question || '', ctx);
 }
@@ -4706,8 +4708,8 @@ function _renderWatchTable() {
     return;
   }
   const rows = favs.map(f => {
-    // Live cells (Model / Yes-No / Chg / Edge) are filled by _applyQuote on poll;
-    // seed Model with the captured value so there's something before the first tick.
+    // Live cells (Council / Yes-No / Chg / Edge) are filled by _applyQuote on poll;
+    // seed Council with the captured value so there's something before the first tick.
     const keyJson = JSON.stringify({ key: f.key }).replace(/'/g, '&#39;');
     return `<tr class="eb-row" data-key="${escAttr(f.key)}" data-q="${escAttr(f.question || f.key)}">
       <td style="max-width:340px" class="wl-q">${_qLink(f.question || f.key, f.market_url)}</td>
@@ -4723,7 +4725,7 @@ function _renderWatchTable() {
       </td></tr>`;
   }).join('');
   wrap.innerHTML = `<div class="md-table-wrap"><table class="eb-table">
-    <thead><tr><th>Question</th><th>Venue</th><th>Model</th><th>Yes / No</th><th>Chg</th><th>Edge</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Question</th><th>Venue</th><th>Council</th><th>Yes / No</th><th>Chg</th><th>Edge</th><th>Actions</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -4740,11 +4742,11 @@ function _renderLandingMarketTable(items) {
   const el = document.getElementById('landingMarketTable');
   if (!el) return;
   if (!items.length) {
-    el.innerHTML = '<div class="market-head">Question</div><div class="market-head">Crowd</div><div class="market-head">Foresea</div><div class="market-head">Signal</div>' +
+    el.innerHTML = '<div class="market-head">Question</div><div class="market-head">Crowd</div><div class="market-head">Council</div><div class="market-head">Signal</div>' +
       '<div class="market-question-cell" style="color:var(--text-dim)">No live markets yet.</div><div></div><div></div><div></div>';
     return;
   }
-  let html = '<div class="market-head">Question</div><div class="market-head">Crowd</div><div class="market-head">Foresea</div><div class="market-head">Signal</div>';
+  let html = '<div class="market-head">Question</div><div class="market-head">Crowd</div><div class="market-head">Council</div><div class="market-head">Signal</div>';
   for (const e of items) {
     const mkt = Math.round((e.market_probability || 0) * 100);
     const mdl = e.model_probability == null ? null : Math.round(e.model_probability * 100);
@@ -4760,6 +4762,7 @@ function _renderLandingMarketTable(items) {
       market_platform: e.platform || '',
       description: e.reason || '',
       categories: e.category ? [e.category] : [],
+      model: 'council',
     };
     const fav = {
       key: `${e.platform || 'radar'}:${e.id || _slugKey(e.question || 'market')}`,
@@ -5103,7 +5106,7 @@ function _renderBoardPage(board, page) {
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
       `<td style="white-space:nowrap">${lead}</td><td>${badge}</td></tr>`;
   }).join('');
-  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Model</th><th>Crowd</th><th>Edge</th><th>Signal</th><th>Lead</th><th>Skill at this lead</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Council</th><th>Crowd</th><th>Edge</th><th>Signal</th><th>Lead</th><th>Skill at this lead</th></tr></thead><tbody>${rows}</tbody></table>`;
   let pagination = '';
   if (pages > 1) {
     const prev = page > 0
@@ -5133,7 +5136,7 @@ function renderEdgeBoard(d) {
     <div class="tr-stats">
       <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div>${d.n_markets_tracked ? `<div class="k" style="font-size:11px;color:var(--text-dim)">tracking ${d.n_markets_tracked}</div>` : ''}</div>
       <div class="tr-stat"><div class="v">${(d.n_snapshots_resolved || 0)}</div><div class="k label">Resolved forecasts</div></div>
-      <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Model follows market</div></div>
+      <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Council follows market</div></div>
     </div>`;
   let compHtml;
   if (comp.length) {
@@ -5401,13 +5404,13 @@ function renderEdgeBoard(d) {
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced — and our track record of being right about it</h3>
-    <p class="tr-method">Live model-vs-market gaps, ranked. Calibration, lead/lag and paper PnL come from resolved forecasts only — hypothetical, no fees or slippage. ${gen ? 'Updated ' + gen + '.' : ''}</p>
+    <p class="tr-method">Live council-vs-market gaps, ranked. Calibration, lead/lag and paper PnL come from resolved saved forecasts only — hypothetical, no fees or slippage. ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${stats}
     <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
     <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
     <h4 class="eb-h">Hypothetical paper PnL · following the model's calls <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${pnlHtml}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift · does an early call pay?</h4>${calibHtml}
-    <h4 class="eb-h">Live forecasts · ranked by disagreement, linked to skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
+    <h4 class="eb-h">Live council forecasts · ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;
 }
 function _fmtDate(value) {
