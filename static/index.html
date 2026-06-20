@@ -4951,13 +4951,13 @@ function renderEdgeBoard(d) {
   // Below EB_MIN_N samples a metric reads "building n=…" instead of a misleading zero.
   const EB_MIN_N = 5;
   const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
-  const conv = (ll && ll.n_markets >= EB_MIN_N && ll.market_converged_to_model_pct != null)
-    ? pct(ll.market_converged_to_model_pct) + '%' : _build(ll && ll.n_markets);
+  const modelFollowsMkt = (ll && ll.n_markets >= EB_MIN_N && ll.market_converged_to_model_pct != null)
+    ? pct(1 - ll.market_converged_to_model_pct) + '%' : _build(ll && ll.n_markets);
   const stats = `
     <div class="tr-stats">
       <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div>${d.n_markets_tracked ? `<div class="k" style="font-size:11px;color:var(--text-dim)">tracking ${d.n_markets_tracked}</div>` : ''}</div>
       <div class="tr-stat"><div class="v">${(d.n_snapshots_resolved || 0)}</div><div class="k label">Resolved forecasts</div></div>
-      <div class="tr-stat"><div class="v">${conv}</div><div class="k label">Market follows model</div></div>
+      <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Model follows market</div></div>
     </div>`;
   let compHtml;
   if (comp.length) {
