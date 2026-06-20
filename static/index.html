@@ -4702,8 +4702,9 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false} = {}) {
   }).join('');
   const svgH = H + (hasTimes ? 14 : 0);
   _lastEquityCurves = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan };
+  const chartLabel = asPct ? `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">P&amp;L on $100 stake</text>` : '';
   return `<svg class="eq-svg" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
-    ${yAxisHtml}${xAxisHtml}${baseline}${paths}${legend}
+    ${chartLabel}${yAxisHtml}${xAxisHtml}${baseline}${paths}${legend}
   </svg>`;
 }
 
