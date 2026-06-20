@@ -408,11 +408,37 @@ def build_user_prompt(
         parts.append("Evidence (newest first):")
     else:
         parts.append("Evidence (newest first, full fields):")
+
+    # Parse current_time once for article-age computation.
+    _now_dt = parse_iso_datetime(str(current_time)) if current_time else None
+
     summary_items = extract_summary_items(record, article_detail=article_detail, cutoff_ts=cutoff_ts)
+    stale_indices: List[int] = []
     if summary_items:
         for index, item in enumerate(summary_items, start=1):
-            date_label = f" [{item.get('publish_date', '')}]" if item.get("publish_date") else ""
-            parts.append(f"Article {index}{date_label}: {json.dumps(item, ensure_ascii=False)}")
+            pub = item.get("publish_date") or ""
+            date_label = f" [{pub}]" if pub else ""
+
+            # Annotate articles older than 21 days so the model notices the gap.
+            age_note = ""
+            if _now_dt and pub:
+                pub_dt = parse_iso_datetime(pub)
+                if pub_dt is not None:
+                    age_days = (_now_dt - pub_dt).days
+                    if age_days >= 21:
+                        age_note = f" [⚠ {age_days}d old]"
+                        stale_indices.append(index)
+
+            parts.append(f"Article {index}{date_label}{age_note}: {json.dumps(item, ensure_ascii=False)}")
+
+        if stale_indices:
+            idx_str = ", ".join(f"#{i}" for i in stale_indices)
+            parts.append(
+                f"\n[TEMPORAL SANITY CHECK] Article(s) {idx_str} are 21+ days old. "
+                "Events described in older articles may have already concluded, reversed, or been superseded. "
+                "Do NOT assume a past closure, shutdown, or event mentioned in a stale article is still ongoing. "
+                "Explicitly ask: is the condition described still true TODAY, or did it end after the article was written?"
+            )
     else:
         parts.append("(none)")
 
