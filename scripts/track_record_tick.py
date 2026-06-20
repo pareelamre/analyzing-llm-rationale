@@ -68,8 +68,7 @@ TRACK_RECORD_TOKEN = os.environ.get("TRACK_RECORD_TOKEN") or None
 # current price on the edge board. Set to 1.0 to disable drift re-forecasting.
 PRICE_DRIFT_THRESHOLD = float(os.environ.get("PRICE_DRIFT_THRESHOLD") or trl.PRICE_DRIFT_THRESHOLD)
 SHORT_HORIZON_REFORECAST_LEAD_DAYS = float(
-    os.environ.get("SHORT_HORIZON_REFORECAST_LEAD_DAYS")
-    or trl.SHORT_HORIZON_REFORECAST_LEAD_DAYS)
+    os.environ.get("SHORT_HORIZON_REFORECAST_LEAD_DAYS") or 90.0)
 SHORT_HORIZON_SLOT_HOURS = int(
     os.environ.get("SHORT_HORIZON_SLOT_HOURS")
     or trl.SHORT_HORIZON_SLOT_HOURS)

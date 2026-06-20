@@ -15,10 +15,15 @@ name: Track record tick
 on:
   schedule:
     # Every 15 min: price points for all markets (cheap). LLM forecast snapshots:
-    # daily for slower markets; every SHORT_HORIZON_SLOT_HOURS for markets near
-    # resolution; and immediately when crowd price drifts ≥ PRICE_DRIFT_THRESHOLD.
+    # every 6h for all open markets (SHORT_HORIZON_REFORECAST_LEAD_DAYS=90 covers
+    # the full universe); and immediately when crowd price drifts ≥ PRICE_DRIFT_THRESHOLD.
     - cron: "*/15 * * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      reforecast_each_tick:
+        description: "Force re-forecast all open markets regardless of slot (1=yes, 0=no)"
+        required: false
+        default: "0"
 
 permissions:
   contents: write
@@ -46,12 +51,12 @@ jobs:
           FORESEA_BASE_URL: https://foresea.ink
           PER_VENUE: "3"
           TRACK_MODELS: "gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,council,crowd-follow"
-          # Drift-triggered re-forecast: price-only most ticks; LLM re-forecast
-          # only when the crowd has moved ≥ 10pp since the last snapshot. 3pp was
-          # too noisy — triggered near-full re-forecast sets on almost every tick.
-          REFORECAST_EACH_TICK: "0"
+          # Drift-triggered re-forecast: skip slots already forecast this window.
+          # manual workflow_dispatch can pass reforecast_each_tick=1 to force-refresh all.
+          REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}
           PRICE_DRIFT_THRESHOLD: "0.10"
-          SHORT_HORIZON_REFORECAST_LEAD_DAYS: "3"
+          # 90-day horizon means ALL open markets use 6h slots (not just expiring ones).
+          SHORT_HORIZON_REFORECAST_LEAD_DAYS: "90"
           SHORT_HORIZON_SLOT_HOURS: "6"
           PREDICT_API_KEY: ${{ secrets.PREDICT_API_KEY }}
           # Pulls agent-enrolled markets from the evolution-loop bridge (no-op until set).
