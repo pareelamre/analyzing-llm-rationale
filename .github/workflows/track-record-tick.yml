@@ -1,41 +1,25 @@
-name: Track record tick
+name: Track record price tick
 
-# Advances the live, point-in-time track record and commits it back to the repo
-# (git-scraping). Each run scores forecasts whose markets resolved, appends a
-# cheap hourly price point per open market, takes the daily LLM forecast (one
-# /predict call per market — inference stays server-side), recomputes the public
-# aggregate, and commits:
-#   data/track_record_store.json   — full entity store (source of truth)
-#   static/track_record_live.json  — public aggregate served at GET /track-record
-#
-# This used to POST to a Cloud Run endpoint that ran the whole loop in one
-# request and kept OOM/timeout-failing. Running it on the Actions runner (16 GB /
-# 6 h) removes that failure class; Cloud Run only serves the committed result.
+# Cheap 15-minute heartbeat: records price points, scores newly-resolved markets,
+# and refreshes the public aggregate. No LLM calls — always completes in < 10 min.
+# LLM forecast snapshots are handled by track-record-forecast.yml (every 6 h).
 
 on:
   schedule:
-    # Every 15 min: price points for all markets (cheap). LLM forecast snapshots:
-    # every 6h for all open markets (SHORT_HORIZON_REFORECAST_LEAD_DAYS=90 covers
-    # the full universe); and immediately when crowd price drifts ≥ PRICE_DRIFT_THRESHOLD.
     - cron: "*/15 * * * *"
-  workflow_dispatch:
-    inputs:
-      reforecast_each_tick:
-        description: "Force re-forecast all open markets regardless of slot (1=yes, 0=no)"
-        required: false
-        default: "0"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
 
 concurrency:
-  group: track-record-tick
+  group: track-record
   cancel-in-progress: false
 
 jobs:
-  tick:
+  price-tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 50   # daily first pass: up to 4 models × N markets LLM calls
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -46,25 +30,11 @@ jobs:
       - name: Install deps
         run: pip install --quiet requests duckdb
 
-      - name: Advance live track record
+      - name: Record price points
         env:
           FORESEA_BASE_URL: https://foresea.ink
-          PER_VENUE: "3"
           TRACK_MODELS: "gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,council,crowd-follow"
-          # Drift-triggered re-forecast: skip slots already forecast this window.
-          # manual workflow_dispatch can pass reforecast_each_tick=1 to force-refresh all.
-          REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}
-          PRICE_DRIFT_THRESHOLD: "0.10"
-          # 90-day horizon means ALL open markets use 6h slots (not just expiring ones).
-          SHORT_HORIZON_REFORECAST_LEAD_DAYS: "90"
-          SHORT_HORIZON_SLOT_HOURS: "6"
-          # Markets within 3 days of resolution get hourly forecasts.
-          EXPIRY_REFORECAST_LEAD_DAYS: "3"
-          EXPIRY_SLOT_HOURS: "1"
-          PREDICT_API_KEY: ${{ secrets.PREDICT_API_KEY }}
-          # Pulls agent-enrolled markets from the evolution-loop bridge (no-op until set).
-          TRACK_RECORD_TOKEN: ${{ secrets.TRACK_RECORD_TOKEN }}
-        run: python scripts/track_record_tick.py
+        run: python scripts/track_record_tick.py --price-only
 
       - name: Commit updated track record
         run: |
@@ -75,7 +45,6 @@ jobs:
             echo "No track-record changes to commit."
             exit 0
           fi
-          git commit -m "track record: hourly tick [skip ci]"
-          # Re-base on any concurrent change before pushing (single writer, but be safe).
+          git commit -m "track record: price tick [skip ci]"
           git pull --rebase --autostash origin main || true
           git push origin HEAD:main

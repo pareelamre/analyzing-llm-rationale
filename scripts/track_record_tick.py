@@ -207,29 +207,35 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
     }
 
 
+PRICE_ONLY = "--price-only" in sys.argv
+
+
 async def main() -> int:
     store = DuckDBStore(STORE_PATH)
 
-    seeds = _get_pending_markets()  # agent-enrolled markets from the evolution-loop bridge
     newly_resolved = trl.resolve_open_snapshots(store, market_data)
     price_points = trl.record_price_points(store, market_data)
-    recorded = await trl.record_snapshots(
-        store, market_data, forecast_fn,
-        models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE,
-        seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
-        reforecast_each_tick=REFORECAST_EACH_TICK,
-        short_horizon_reforecast_lead_days=SHORT_HORIZON_REFORECAST_LEAD_DAYS,
-        short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
-        expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
-        expiry_slot_hours=EXPIRY_SLOT_HOURS,
-        concurrency=PREDICT_CONCURRENCY)
-    # Catch up any secondary models that missed resolved markets while disabled.
-    backfilled = await trl.backfill_missing_model_snapshots(
-        store, forecast_fn,
-        models=TRACK_MODELS, default_model=TRACK_MODELS[0],
-        concurrency=PREDICT_CONCURRENCY)
-    # Flip enrolled markets out of the pending queue (and let the server prune).
-    _mark_enrolled([f"{p}:{i}" for p, i in seeds])
+
+    recorded = 0
+    backfilled = 0
+    if not PRICE_ONLY:
+        seeds = _get_pending_markets()
+        recorded = await trl.record_snapshots(
+            store, market_data, forecast_fn,
+            models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE,
+            seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
+            reforecast_each_tick=REFORECAST_EACH_TICK,
+            short_horizon_reforecast_lead_days=SHORT_HORIZON_REFORECAST_LEAD_DAYS,
+            short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
+            expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
+            expiry_slot_hours=EXPIRY_SLOT_HOURS,
+            concurrency=PREDICT_CONCURRENCY)
+        backfilled = await trl.backfill_missing_model_snapshots(
+            store, forecast_fn,
+            models=TRACK_MODELS, default_model=TRACK_MODELS[0],
+            concurrency=PREDICT_CONCURRENCY)
+        _mark_enrolled([f"{p}:{i}" for p, i in seeds])
+
     agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)
 
     PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)
