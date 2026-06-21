@@ -13,15 +13,15 @@
       "skill_vs_market": -0.0
     },
     {
-      "accuracy": 0.8361,
+      "accuracy": 0.8413,
       "domain": "other",
-      "market_brier": 0.1352,
-      "model_brier": 0.1491,
-      "n": 122,
+      "market_brier": 0.1312,
+      "model_brier": 0.1446,
+      "n": 126,
       "skill_ci_high": 0.0013,
-      "skill_ci_low": -0.0291,
+      "skill_ci_low": -0.0282,
       "skill_significant": false,
-      "skill_vs_market": -0.0139
+      "skill_vs_market": -0.0134
     },
     {
       "accuracy": 0.5538,
@@ -81,11 +81,11 @@
       "skill_vs_market": 0.0234
     },
     {
-      "accuracy": 0.838,
+      "accuracy": 0.8415,
       "edge_bucket": "0-5pp",
-      "market_brier": 0.1591,
-      "model_brier": 0.1593,
-      "n": 179,
+      "market_brier": 0.1558,
+      "model_brier": 0.156,
+      "n": 183,
       "skill_ci_high": 0.0018,
       "skill_ci_low": -0.0021,
       "skill_significant": false,
@@ -149,15 +149,15 @@
       "skill_vs_market": -0.0176
     },
     {
-      "accuracy": 0.8444,
+      "accuracy": 0.8489,
       "horizon": "<1d",
-      "market_brier": 0.1216,
-      "model_brier": 0.1379,
-      "n": 135,
+      "market_brier": 0.1183,
+      "model_brier": 0.1342,
+      "n": 139,
       "skill_ci_high": 0.001,
-      "skill_ci_low": -0.0336,
+      "skill_ci_low": -0.0327,
       "skill_significant": false,
-      "skill_vs_market": -0.0163
+      "skill_vs_market": -0.0159
     }
   ],
   "by_liquidity": [
@@ -184,22 +184,22 @@
       "skill_vs_market": -0.0038
     },
     {
-      "accuracy": 0.7731,
+      "accuracy": 0.7773,
       "liquidity": "liquid (>$25k)",
-      "market_brier": 0.1571,
-      "model_brier": 0.1961,
-      "n": 216,
-      "skill_ci_high": -0.0179,
-      "skill_ci_low": -0.0601,
+      "market_brier": 0.1544,
+      "model_brier": 0.1927,
+      "n": 220,
+      "skill_ci_high": -0.0176,
+      "skill_ci_low": -0.0591,
       "skill_significant": false,
-      "skill_vs_market": -0.039
+      "skill_vs_market": -0.0383
     }
   ],
   "calibration": [
     {
-      "avg_predicted": 0.053,
-      "n": 40,
-      "observed_yes_rate": 0.15
+      "avg_predicted": 0.054,
+      "n": 42,
+      "observed_yes_rate": 0.143
     },
     {
       "avg_predicted": 0.16,
@@ -237,9 +237,9 @@
       "observed_yes_rate": 0.933
     },
     {
-      "avg_predicted": 0.841,
-      "n": 9,
-      "observed_yes_rate": 0.556
+      "avg_predicted": 0.85,
+      "n": 11,
+      "observed_yes_rate": 0.636
     },
     {
       "avg_predicted": 0.96,
@@ -276,19 +276,23 @@
       ],
       [
         0.05,
-        0.1429
+        0.1111
       ],
       [
         0.06,
-        0.1429
+        0.1111
       ],
       [
         0.07,
-        0.1429
+        0.1111
+      ],
+      [
+        0.075,
+        0.1111
       ],
       [
         0.08,
-        0.1587
+        0.1481
       ],
       [
         0.08,
@@ -551,6 +555,14 @@
         1.0
       ],
       [
+        0.885,
+        1.0
+      ],
+      [
+        0.89,
+        1.0
+      ],
+      [
         0.9,
         1.0
       ],
@@ -583,46 +595,112 @@
         1.0
       ]
     ],
-    "calibrated_brier_cv": 0.1642,
-    "calibrated_skill_vs_market": -0.0015,
+    "calibrated_brier_cv": 0.1613,
+    "calibrated_skill_vs_market": -0.0014,
     "method": "isotonic",
-    "n_resolved": 220,
-    "raw_brier": 0.1995,
-    "raw_ece": 0.1877,
-    "raw_skill_vs_market": -0.0368
+    "n_resolved": 224,
+    "raw_brier": 0.1961,
+    "raw_ece": 0.1827,
+    "raw_skill_vs_market": -0.0361
   },
   "edge_board": [
     {
-      "abs_edge": 0.108,
-      "domain": "other",
-      "edge": -0.108,
-      "edge_bucket": "10-20pp",
-      "entry_price": 0.002,
+      "abs_edge": 0.095,
+      "domain": "elections",
+      "edge": -0.095,
+      "edge_bucket": "5-10pp",
+      "entry_price": 0.79,
       "horizon": "<1d",
-      "ident": "fifwc-esp-ksa-2026-06-21-esp",
+      "ident": "will-ivan-cepeda-castro-win-the-2026-colombian-presidential-election",
       "lead_bucket": "<1d",
-      "lead_days": -0.0,
+      "lead_days": -0.2,
       "lead_track_record": {
-        "accuracy": 0.8444,
+        "accuracy": 0.8489,
         "horizon": "<1d",
-        "n": 135,
-        "skill_ci_low": -0.0336,
+        "n": 139,
+        "skill_ci_low": -0.0327,
         "skill_significant": false,
-        "skill_vs_market": -0.0163
+        "skill_vs_market": -0.0159
       },
-      "market_probability": 0.998,
-      "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
-      "model_probability": 0.89,
-      "payout_odds": 399.0,
+      "market_probability": 0.21,
+      "market_url": "https://polymarket.com/market/will-ivan-cepeda-castro-win-the-2026-colombian-presidential-election",
+      "model_probability": 0.115,
+      "payout_odds": 0.3,
       "platform": "Polymarket",
-      "question": "Will Spain win on 2026-06-21?",
+      "question": "Will Ivan Cepeda Castro win the 2026 Colombian presidential election?",
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 5,
-        "skill_ci_low": -0.071,
+        "n": 17,
+        "skill_ci_low": -0.0159,
         "skill_significant": false,
-        "skill_vs_market": 0.0435
+        "skill_vs_market": 0.0234
+      }
+    },
+    {
+      "abs_edge": 0.095,
+      "domain": "elections",
+      "edge": 0.095,
+      "edge_bucket": "5-10pp",
+      "entry_price": 0.79,
+      "horizon": "<1d",
+      "ident": "will-abelardo-de-la-espriella-win-the-2026-colombian-presidential-election",
+      "lead_bucket": "<1d",
+      "lead_days": -0.2,
+      "lead_track_record": {
+        "accuracy": 0.8489,
+        "horizon": "<1d",
+        "n": 139,
+        "skill_ci_low": -0.0327,
+        "skill_significant": false,
+        "skill_vs_market": -0.0159
+      },
+      "market_probability": 0.79,
+      "market_url": "https://polymarket.com/market/will-abelardo-de-la-espriella-win-the-2026-colombian-presidential-election",
+      "model_probability": 0.885,
+      "payout_odds": 0.3,
+      "platform": "Polymarket",
+      "question": "Will Abelardo de la Espriella  win the 2026 Colombian presidential election?",
+      "side": "YES",
+      "stance": "model_above_market",
+      "track_record": {
+        "n": 17,
+        "skill_ci_low": -0.0159,
+        "skill_significant": false,
+        "skill_vs_market": 0.0234
+      }
+    },
+    {
+      "abs_edge": 0.095,
+      "domain": "other",
+      "edge": -0.095,
+      "edge_bucket": "5-10pp",
+      "entry_price": 0.325,
+      "horizon": "<1d",
+      "ident": "starmer-out-by-june-22-2026",
+      "lead_bucket": "<1d",
+      "lead_days": 0.7,
+      "lead_track_record": {
+        "accuracy": 0.8489,
+        "horizon": "<1d",
+        "n": 139,
+        "skill_ci_low": -0.0327,
+        "skill_significant": false,
+        "skill_vs_market": -0.0159
+      },
+      "market_probability": 0.675,
+      "market_url": "https://polymarket.com/market/starmer-out-by-june-22-2026",
+      "model_probability": 0.58,
+      "payout_odds": 2.1,
+      "platform": "Polymarket",
+      "question": "Starmer out by June 22, 2026?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 17,
+        "skill_ci_low": -0.0159,
+        "skill_significant": false,
+        "skill_vs_market": 0.0234
       }
     },
     {
@@ -634,7 +712,7 @@
       "horizon": "30d+",
       "ident": "KXNFLRETIRE-LJOHNSON65-2627",
       "lead_bucket": "30d+",
-      "lead_days": 100.5,
+      "lead_days": 100.4,
       "lead_track_record": {
         "accuracy": 0.5,
         "horizon": "30d+",
@@ -659,138 +737,6 @@
       }
     },
     {
-      "abs_edge": 0.073,
-      "domain": "other",
-      "edge": 0.073,
-      "edge_bucket": "5-10pp",
-      "entry_price": 0.002,
-      "horizon": "<1d",
-      "ident": "fifwc-esp-ksa-2026-06-21-draw",
-      "lead_bucket": "<1d",
-      "lead_days": -0.0,
-      "lead_track_record": {
-        "accuracy": 0.8444,
-        "horizon": "<1d",
-        "n": 135,
-        "skill_ci_low": -0.0336,
-        "skill_significant": false,
-        "skill_vs_market": -0.0163
-      },
-      "market_probability": 0.002,
-      "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
-      "model_probability": 0.075,
-      "payout_odds": 665.7,
-      "platform": "Polymarket",
-      "question": "Will Spain vs. Saudi Arabia end in a draw?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": {
-        "n": 17,
-        "skill_ci_low": -0.0159,
-        "skill_significant": false,
-        "skill_vs_market": 0.0234
-      }
-    },
-    {
-      "abs_edge": 0.05,
-      "domain": "elections",
-      "edge": 0.05,
-      "edge_bucket": "5-10pp",
-      "entry_price": 0.835,
-      "horizon": "<1d",
-      "ident": "will-abelardo-de-la-espriella-win-the-2026-colombian-presidential-election",
-      "lead_bucket": "<1d",
-      "lead_days": -0.1,
-      "lead_track_record": {
-        "accuracy": 0.8444,
-        "horizon": "<1d",
-        "n": 135,
-        "skill_ci_low": -0.0336,
-        "skill_significant": false,
-        "skill_vs_market": -0.0163
-      },
-      "market_probability": 0.835,
-      "market_url": "https://polymarket.com/market/will-abelardo-de-la-espriella-win-the-2026-colombian-presidential-election",
-      "model_probability": 0.885,
-      "payout_odds": 0.2,
-      "platform": "Polymarket",
-      "question": "Will Abelardo de la Espriella  win the 2026 Colombian presidential election?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": {
-        "n": 17,
-        "skill_ci_low": -0.0159,
-        "skill_significant": false,
-        "skill_vs_market": 0.0234
-      }
-    },
-    {
-      "abs_edge": 0.04,
-      "domain": "elections",
-      "edge": -0.04,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.845,
-      "horizon": "<1d",
-      "ident": "will-ivan-cepeda-castro-win-the-2026-colombian-presidential-election",
-      "lead_bucket": "<1d",
-      "lead_days": -0.1,
-      "lead_track_record": {
-        "accuracy": 0.8444,
-        "horizon": "<1d",
-        "n": 135,
-        "skill_ci_low": -0.0336,
-        "skill_significant": false,
-        "skill_vs_market": -0.0163
-      },
-      "market_probability": 0.155,
-      "market_url": "https://polymarket.com/market/will-ivan-cepeda-castro-win-the-2026-colombian-presidential-election",
-      "model_probability": 0.115,
-      "payout_odds": 0.2,
-      "platform": "Polymarket",
-      "question": "Will Ivan Cepeda Castro win the 2026 Colombian presidential election?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 179,
-        "skill_ci_low": -0.0021,
-        "skill_significant": false,
-        "skill_vs_market": -0.0002
-      }
-    },
-    {
-      "abs_edge": 0.03,
-      "domain": "other",
-      "edge": 0.03,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.55,
-      "horizon": "<1d",
-      "ident": "starmer-out-by-june-22-2026",
-      "lead_bucket": "<1d",
-      "lead_days": 0.8,
-      "lead_track_record": {
-        "accuracy": 0.8444,
-        "horizon": "<1d",
-        "n": 135,
-        "skill_ci_low": -0.0336,
-        "skill_significant": false,
-        "skill_vs_market": -0.0163
-      },
-      "market_probability": 0.55,
-      "market_url": "https://polymarket.com/market/starmer-out-by-june-22-2026",
-      "model_probability": 0.58,
-      "payout_odds": 0.8,
-      "platform": "Polymarket",
-      "question": "Starmer out by June 22, 2026?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": {
-        "n": 179,
-        "skill_ci_low": -0.0021,
-        "skill_significant": false,
-        "skill_vs_market": -0.0002
-      }
-    },
-    {
       "abs_edge": 0.02,
       "domain": "other",
       "edge": -0.02,
@@ -799,7 +745,7 @@
       "horizon": "30d+",
       "ident": "will-an-artwork-sell-for-150-million-by-december-31",
       "lead_bucket": "30d+",
-      "lead_days": 193.5,
+      "lead_days": 193.4,
       "lead_track_record": {
         "accuracy": 0.5,
         "horizon": "30d+",
@@ -817,7 +763,7 @@
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -832,7 +778,7 @@
       "horizon": "30d+",
       "ident": "KXNFLRETIRE-MSTAFFORD9-2627",
       "lead_bucket": "30d+",
-      "lead_days": 100.5,
+      "lead_days": 100.4,
       "lead_track_record": {
         "accuracy": 0.5,
         "horizon": "30d+",
@@ -850,22 +796,22 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
       }
     },
     {
-      "abs_edge": 0.015,
-      "domain": "elections",
-      "edge": -0.015,
+      "abs_edge": 0.012,
+      "domain": "geopolitics",
+      "edge": 0.012,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.275,
+      "entry_price": 0.029,
       "horizon": "7-14d",
-      "ident": "will-victor-marx-win-the-2026-colorado-governor-republican-primary-election",
+      "ident": "israel-x-iran-permanent-peace-deal-by-june-30-2026-262",
       "lead_bucket": "7-14d",
-      "lead_days": 8.3,
+      "lead_days": 8.2,
       "lead_track_record": {
         "accuracy": 0.4545,
         "horizon": "7-14d",
@@ -874,16 +820,16 @@
         "skill_significant": true,
         "skill_vs_market": 0.0754
       },
-      "market_probability": 0.725,
-      "market_url": "https://polymarket.com/market/will-victor-marx-win-the-2026-colorado-governor-republican-primary-election",
-      "model_probability": 0.71,
-      "payout_odds": 2.6,
+      "market_probability": 0.029,
+      "market_url": "https://polymarket.com/market/israel-x-iran-permanent-peace-deal-by-june-30-2026-262",
+      "model_probability": 0.04,
+      "payout_odds": 34.1,
       "platform": "Polymarket",
-      "question": "Will Victor Marx win the 2026 Colorado Governor Republican primary election?",
-      "side": "NO",
-      "stance": "model_below_market",
+      "question": "Israel x Iran permanent peace deal by June 30, 2026?",
+      "side": "YES",
+      "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -898,14 +844,14 @@
       "horizon": "<1d",
       "ident": "fifwc-ury-cvi-2026-06-21-ury",
       "lead_bucket": "<1d",
-      "lead_days": 0.2,
+      "lead_days": 0.1,
       "lead_track_record": {
-        "accuracy": 0.8444,
+        "accuracy": 0.8489,
         "horizon": "<1d",
-        "n": 135,
-        "skill_ci_low": -0.0336,
+        "n": 139,
+        "skill_ci_low": -0.0327,
         "skill_significant": false,
-        "skill_vs_market": -0.0163
+        "skill_vs_market": -0.0159
       },
       "market_probability": 0.685,
       "market_url": "https://polymarket.com/market/fifwc-ury-cvi-2026-06-21-ury",
@@ -916,7 +862,7 @@
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -931,14 +877,14 @@
       "horizon": "<1d",
       "ident": "fifwc-bel-irn-2026-06-21-bel",
       "lead_bucket": "<1d",
-      "lead_days": 0.1,
+      "lead_days": 0.0,
       "lead_track_record": {
-        "accuracy": 0.8444,
+        "accuracy": 0.8489,
         "horizon": "<1d",
-        "n": 135,
-        "skill_ci_low": -0.0336,
+        "n": 139,
+        "skill_ci_low": -0.0327,
         "skill_significant": false,
-        "skill_vs_market": -0.0163
+        "skill_vs_market": -0.0159
       },
       "market_probability": 0.695,
       "market_url": "https://polymarket.com/market/fifwc-bel-irn-2026-06-21-bel",
@@ -949,7 +895,106 @@
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
+        "skill_ci_low": -0.0021,
+        "skill_significant": false,
+        "skill_vs_market": -0.0002
+      }
+    },
+    {
+      "abs_edge": 0.01,
+      "domain": "other",
+      "edge": -0.01,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.355,
+      "horizon": "1-3d",
+      "ident": "fifwc-arg-aut-2026-06-22-arg",
+      "lead_bucket": "<1d",
+      "lead_days": 0.9,
+      "lead_track_record": {
+        "accuracy": 0.8489,
+        "horizon": "<1d",
+        "n": 139,
+        "skill_ci_low": -0.0327,
+        "skill_significant": false,
+        "skill_vs_market": -0.0159
+      },
+      "market_probability": 0.645,
+      "market_url": "https://polymarket.com/market/fifwc-arg-aut-2026-06-22-arg",
+      "model_probability": 0.635,
+      "payout_odds": 1.8,
+      "platform": "Polymarket",
+      "question": "Will Argentina win on 2026-06-22?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 183,
+        "skill_ci_low": -0.0021,
+        "skill_significant": false,
+        "skill_vs_market": -0.0002
+      }
+    },
+    {
+      "abs_edge": 0.01,
+      "domain": "elections",
+      "edge": -0.01,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.28,
+      "horizon": "7-14d",
+      "ident": "will-victor-marx-win-the-2026-colorado-governor-republican-primary-election",
+      "lead_bucket": "7-14d",
+      "lead_days": 8.2,
+      "lead_track_record": {
+        "accuracy": 0.4545,
+        "horizon": "7-14d",
+        "n": 11,
+        "skill_ci_low": 0.028,
+        "skill_significant": true,
+        "skill_vs_market": 0.0754
+      },
+      "market_probability": 0.72,
+      "market_url": "https://polymarket.com/market/will-victor-marx-win-the-2026-colorado-governor-republican-primary-election",
+      "model_probability": 0.71,
+      "payout_odds": 2.6,
+      "platform": "Polymarket",
+      "question": "Will Victor Marx win the 2026 Colorado Governor Republican primary election?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 183,
+        "skill_ci_low": -0.0021,
+        "skill_significant": false,
+        "skill_vs_market": -0.0002
+      }
+    },
+    {
+      "abs_edge": 0.007,
+      "domain": "geopolitics",
+      "edge": -0.007,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.953,
+      "horizon": "7-14d",
+      "ident": "israel-closes-its-airspace-by-june-30-324-253-464-332-827-713-671-846",
+      "lead_bucket": "7-14d",
+      "lead_days": 8.2,
+      "lead_track_record": {
+        "accuracy": 0.4545,
+        "horizon": "7-14d",
+        "n": 11,
+        "skill_ci_low": 0.028,
+        "skill_significant": true,
+        "skill_vs_market": 0.0754
+      },
+      "market_probability": 0.048,
+      "market_url": "https://polymarket.com/market/israel-closes-its-airspace-by-june-30-324-253-464-332-827-713-671-846",
+      "model_probability": 0.04,
+      "payout_odds": 0.0,
+      "platform": "Polymarket",
+      "question": "Israel closes its airspace by June 30?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -964,7 +1009,7 @@
       "horizon": "14-30d",
       "ident": "will-germany-win-the-2026-fifa-world-cup-467",
       "lead_bucket": "14-30d",
-      "lead_days": 28.3,
+      "lead_days": 28.2,
       "lead_track_record": {
         "accuracy": 0.8438,
         "horizon": "14-30d",
@@ -982,106 +1027,7 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
-        "skill_ci_low": -0.0021,
-        "skill_significant": false,
-        "skill_vs_market": -0.0002
-      }
-    },
-    {
-      "abs_edge": 0.007,
-      "domain": "geopolitics",
-      "edge": 0.007,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.033,
-      "horizon": "7-14d",
-      "ident": "israel-x-iran-permanent-peace-deal-by-june-30-2026-262",
-      "lead_bucket": "7-14d",
-      "lead_days": 8.3,
-      "lead_track_record": {
-        "accuracy": 0.4545,
-        "horizon": "7-14d",
-        "n": 11,
-        "skill_ci_low": 0.028,
-        "skill_significant": true,
-        "skill_vs_market": 0.0754
-      },
-      "market_probability": 0.033,
-      "market_url": "https://polymarket.com/market/israel-x-iran-permanent-peace-deal-by-june-30-2026-262",
-      "model_probability": 0.04,
-      "payout_odds": 29.3,
-      "platform": "Polymarket",
-      "question": "Israel x Iran permanent peace deal by June 30, 2026?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": {
-        "n": 179,
-        "skill_ci_low": -0.0021,
-        "skill_significant": false,
-        "skill_vs_market": -0.0002
-      }
-    },
-    {
-      "abs_edge": 0.006,
-      "domain": "geopolitics",
-      "edge": 0.006,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.014,
-      "horizon": "7-14d",
-      "ident": "KXZELENSKYPUTIN-29-26JUL",
-      "lead_bucket": "7-14d",
-      "lead_days": 9.5,
-      "lead_track_record": {
-        "accuracy": 0.4545,
-        "horizon": "7-14d",
-        "n": 11,
-        "skill_ci_low": 0.028,
-        "skill_significant": true,
-        "skill_vs_market": 0.0754
-      },
-      "market_probability": 0.014,
-      "market_url": "https://kalshi.com/markets/kxzelenskyputin",
-      "model_probability": 0.02,
-      "payout_odds": 70.4,
-      "platform": "Kalshi",
-      "question": "Volodymyr Zelenskyy and Vladimir Putin meet before Jul 1, 2026?",
-      "side": "YES",
-      "stance": "model_above_market",
-      "track_record": {
-        "n": 179,
-        "skill_ci_low": -0.0021,
-        "skill_significant": false,
-        "skill_vs_market": -0.0002
-      }
-    },
-    {
-      "abs_edge": 0.005,
-      "domain": "geopolitics",
-      "edge": -0.005,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.955,
-      "horizon": "7-14d",
-      "ident": "israel-closes-its-airspace-by-june-30-324-253-464-332-827-713-671-846",
-      "lead_bucket": "7-14d",
-      "lead_days": 8.3,
-      "lead_track_record": {
-        "accuracy": 0.4545,
-        "horizon": "7-14d",
-        "n": 11,
-        "skill_ci_low": 0.028,
-        "skill_significant": true,
-        "skill_vs_market": 0.0754
-      },
-      "market_probability": 0.045,
-      "market_url": "https://polymarket.com/market/israel-closes-its-airspace-by-june-30-324-253-464-332-827-713-671-846",
-      "model_probability": 0.04,
-      "payout_odds": 0.0,
-      "platform": "Polymarket",
-      "question": "Israel closes its airspace by June 30?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1096,7 +1042,7 @@
       "horizon": "7-14d",
       "ident": "strait-of-hormuz-traffic-returns-to-normal-by-end-of-june",
       "lead_bucket": "7-14d",
-      "lead_days": 8.3,
+      "lead_days": 8.2,
       "lead_track_record": {
         "accuracy": 0.4545,
         "horizon": "7-14d",
@@ -1114,55 +1060,22 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
       }
     },
     {
-      "abs_edge": 0.004,
-      "domain": "sports",
-      "edge": -0.004,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.856,
-      "horizon": "14-30d",
-      "ident": "will-spain-win-the-2026-fifa-world-cup-963",
-      "lead_bucket": "14-30d",
-      "lead_days": 28.3,
-      "lead_track_record": {
-        "accuracy": 0.8438,
-        "horizon": "14-30d",
-        "n": 32,
-        "skill_ci_low": -0.1746,
-        "skill_significant": false,
-        "skill_vs_market": -0.0927
-      },
-      "market_probability": 0.144,
-      "market_url": "https://polymarket.com/market/will-spain-win-the-2026-fifa-world-cup-963",
-      "model_probability": 0.14,
-      "payout_odds": 0.2,
-      "platform": "Polymarket",
-      "question": "Will Spain win the 2026 FIFA World Cup?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 179,
-        "skill_ci_low": -0.0021,
-        "skill_significant": false,
-        "skill_vs_market": -0.0002
-      }
-    },
-    {
-      "abs_edge": 0.004,
+      "abs_edge": 0.003,
       "domain": "geopolitics",
-      "edge": 0.004,
+      "edge": 0.003,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.036,
+      "entry_price": 0.037,
       "horizon": "7-14d",
       "ident": "iran-agrees-to-end-enrichment-of-uranium-by-june-30",
       "lead_bucket": "7-14d",
-      "lead_days": 8.3,
+      "lead_days": 8.2,
       "lead_track_record": {
         "accuracy": 0.4545,
         "horizon": "7-14d",
@@ -1171,16 +1084,16 @@
         "skill_significant": true,
         "skill_vs_market": 0.0754
       },
-      "market_probability": 0.036,
+      "market_probability": 0.037,
       "market_url": "https://polymarket.com/market/iran-agrees-to-end-enrichment-of-uranium-by-june-30",
       "model_probability": 0.04,
-      "payout_odds": 26.8,
+      "payout_odds": 25.7,
       "platform": "Polymarket",
       "question": " Iran agrees to end enrichment of uranium by June 30?",
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1191,11 +1104,11 @@
       "domain": "geopolitics",
       "edge": -0.003,
       "edge_bucket": "0-5pp",
-      "entry_price": 0.937,
+      "entry_price": 0.936,
       "horizon": "30d+",
       "ident": "will-china-invade-taiwan-before-2027",
       "lead_bucket": "30d+",
-      "lead_days": 192.3,
+      "lead_days": 192.2,
       "lead_track_record": {
         "accuracy": 0.5,
         "horizon": "30d+",
@@ -1204,7 +1117,7 @@
         "skill_significant": false,
         "skill_vs_market": -0.3271
       },
-      "market_probability": 0.063,
+      "market_probability": 0.064,
       "market_url": "https://polymarket.com/market/will-china-invade-taiwan-before-2027",
       "model_probability": 0.06,
       "payout_odds": 0.1,
@@ -1213,7 +1126,7 @@
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1228,7 +1141,7 @@
       "horizon": "14-30d",
       "ident": "will-portugal-win-the-2026-fifa-world-cup-912",
       "lead_bucket": "14-30d",
-      "lead_days": 28.3,
+      "lead_days": 28.2,
       "lead_track_record": {
         "accuracy": 0.8438,
         "horizon": "14-30d",
@@ -1246,7 +1159,73 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
+        "skill_ci_low": -0.0021,
+        "skill_significant": false,
+        "skill_vs_market": -0.0002
+      }
+    },
+    {
+      "abs_edge": 0.002,
+      "domain": "geopolitics",
+      "edge": -0.002,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.978,
+      "horizon": "7-14d",
+      "ident": "KXZELENSKYPUTIN-29-26JUL",
+      "lead_bucket": "7-14d",
+      "lead_days": 9.4,
+      "lead_track_record": {
+        "accuracy": 0.4545,
+        "horizon": "7-14d",
+        "n": 11,
+        "skill_ci_low": 0.028,
+        "skill_significant": true,
+        "skill_vs_market": 0.0754
+      },
+      "market_probability": 0.022,
+      "market_url": "https://kalshi.com/markets/kxzelenskyputin",
+      "model_probability": 0.02,
+      "payout_odds": 0.0,
+      "platform": "Kalshi",
+      "question": "Volodymyr Zelenskyy and Vladimir Putin meet before Jul 1, 2026?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 183,
+        "skill_ci_low": -0.0021,
+        "skill_significant": false,
+        "skill_vs_market": -0.0002
+      }
+    },
+    {
+      "abs_edge": 0.002,
+      "domain": "sports",
+      "edge": -0.002,
+      "edge_bucket": "0-5pp",
+      "entry_price": 0.858,
+      "horizon": "14-30d",
+      "ident": "will-spain-win-the-2026-fifa-world-cup-963",
+      "lead_bucket": "14-30d",
+      "lead_days": 28.2,
+      "lead_track_record": {
+        "accuracy": 0.8438,
+        "horizon": "14-30d",
+        "n": 32,
+        "skill_ci_low": -0.1746,
+        "skill_significant": false,
+        "skill_vs_market": -0.0927
+      },
+      "market_probability": 0.142,
+      "market_url": "https://polymarket.com/market/will-spain-win-the-2026-fifa-world-cup-963",
+      "model_probability": 0.14,
+      "payout_odds": 0.2,
+      "platform": "Polymarket",
+      "question": "Will Spain win the 2026 FIFA World Cup?",
+      "side": "NO",
+      "stance": "model_below_market",
+      "track_record": {
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1261,7 +1240,7 @@
       "horizon": "14-30d",
       "ident": "will-netherlands-win-the-2026-fifa-world-cup-739",
       "lead_bucket": "14-30d",
-      "lead_days": 28.3,
+      "lead_days": 28.2,
       "lead_track_record": {
         "accuracy": 0.8438,
         "horizon": "14-30d",
@@ -1279,40 +1258,7 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
-        "skill_ci_low": -0.0021,
-        "skill_significant": false,
-        "skill_vs_market": -0.0002
-      }
-    },
-    {
-      "abs_edge": 0.001,
-      "domain": "sports",
-      "edge": -0.001,
-      "edge_bucket": "0-5pp",
-      "entry_price": 0.881,
-      "horizon": "14-30d",
-      "ident": "will-argentina-win-the-2026-fifa-world-cup-245",
-      "lead_bucket": "14-30d",
-      "lead_days": 28.3,
-      "lead_track_record": {
-        "accuracy": 0.8438,
-        "horizon": "14-30d",
-        "n": 32,
-        "skill_ci_low": -0.1746,
-        "skill_significant": false,
-        "skill_vs_market": -0.0927
-      },
-      "market_probability": 0.118,
-      "market_url": "https://polymarket.com/market/will-argentina-win-the-2026-fifa-world-cup-245",
-      "model_probability": 0.118,
-      "payout_odds": 0.1,
-      "platform": "Polymarket",
-      "question": "Will Argentina win the 2026 FIFA World Cup?",
-      "side": "NO",
-      "stance": "model_below_market",
-      "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1327,7 +1273,7 @@
       "horizon": "14-30d",
       "ident": "will-brazil-win-the-2026-fifa-world-cup-183",
       "lead_bucket": "14-30d",
-      "lead_days": 28.3,
+      "lead_days": 28.2,
       "lead_track_record": {
         "accuracy": 0.8438,
         "horizon": "14-30d",
@@ -1345,7 +1291,7 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1360,7 +1306,7 @@
       "horizon": "14-30d",
       "ident": "will-france-win-the-2026-fifa-world-cup-924",
       "lead_bucket": "14-30d",
-      "lead_days": 28.3,
+      "lead_days": 28.2,
       "lead_track_record": {
         "accuracy": 0.8438,
         "horizon": "14-30d",
@@ -1378,7 +1324,7 @@
       "side": null,
       "stance": "agree",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1393,7 +1339,7 @@
       "horizon": "14-30d",
       "ident": "will-england-win-the-2026-fifa-world-cup-937",
       "lead_bucket": "14-30d",
-      "lead_days": 28.3,
+      "lead_days": 28.2,
       "lead_track_record": {
         "accuracy": 0.8438,
         "horizon": "14-30d",
@@ -1411,7 +1357,7 @@
       "side": "NO",
       "stance": "model_below_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1426,7 +1372,7 @@
       "horizon": "7-14d",
       "ident": "KXMEDIARELEASEPRISONBREAK-30JAN01-26JUL01",
       "lead_bucket": "7-14d",
-      "lead_days": 9.5,
+      "lead_days": 9.4,
       "lead_track_record": {
         "accuracy": 0.4545,
         "horizon": "7-14d",
@@ -1444,7 +1390,7 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1459,7 +1405,7 @@
       "horizon": "7-14d",
       "ident": "KXMARRIAGESTYLESKRAVITZ-HSZK-26JUL01",
       "lead_bucket": "7-14d",
-      "lead_days": 9.5,
+      "lead_days": 9.4,
       "lead_track_record": {
         "accuracy": 0.4545,
         "horizon": "7-14d",
@@ -1477,7 +1423,7 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1485,32 +1431,32 @@
     },
     {
       "abs_edge": 0.0,
-      "domain": "other",
+      "domain": "sports",
       "edge": 0.0,
       "edge_bucket": "0-5pp",
-      "entry_price": null,
-      "horizon": "1-3d",
-      "ident": "fifwc-arg-aut-2026-06-22-arg",
-      "lead_bucket": "<1d",
-      "lead_days": 1.0,
+      "entry_price": 0.117,
+      "horizon": "14-30d",
+      "ident": "will-argentina-win-the-2026-fifa-world-cup-245",
+      "lead_bucket": "14-30d",
+      "lead_days": 28.2,
       "lead_track_record": {
-        "accuracy": 0.8444,
-        "horizon": "<1d",
-        "n": 135,
-        "skill_ci_low": -0.0336,
+        "accuracy": 0.8438,
+        "horizon": "14-30d",
+        "n": 32,
+        "skill_ci_low": -0.1746,
         "skill_significant": false,
-        "skill_vs_market": -0.0163
+        "skill_vs_market": -0.0927
       },
-      "market_probability": 0.635,
-      "market_url": "https://polymarket.com/market/fifwc-arg-aut-2026-06-22-arg",
-      "model_probability": 0.635,
-      "payout_odds": null,
+      "market_probability": 0.117,
+      "market_url": "https://polymarket.com/market/will-argentina-win-the-2026-fifa-world-cup-245",
+      "model_probability": 0.118,
+      "payout_odds": 7.5,
       "platform": "Polymarket",
-      "question": "Will Argentina win on 2026-06-22?",
-      "side": null,
-      "stance": "agree",
+      "question": "Will Argentina win the 2026 FIFA World Cup?",
+      "side": "YES",
+      "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1525,7 +1471,7 @@
       "horizon": "7-14d",
       "ident": "KXAGICO-COMP-26Q2",
       "lead_bucket": "7-14d",
-      "lead_days": 9.5,
+      "lead_days": 9.4,
       "lead_track_record": {
         "accuracy": 0.4545,
         "horizon": "7-14d",
@@ -1543,7 +1489,7 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
@@ -1558,7 +1504,7 @@
       "horizon": "30d+",
       "ident": "KXNFLRETIRE-MEVANS5-2627",
       "lead_bucket": "30d+",
-      "lead_days": 100.5,
+      "lead_days": 100.4,
       "lead_track_record": {
         "accuracy": 0.5,
         "horizon": "30d+",
@@ -1576,24 +1522,24 @@
       "side": "YES",
       "stance": "model_above_market",
       "track_record": {
-        "n": 179,
+        "n": 183,
         "skill_ci_low": -0.0021,
         "skill_significant": false,
         "skill_vs_market": -0.0002
       }
     }
   ],
-  "generated_at": "2026-06-21T17:03:39.996635+00:00",
+  "generated_at": "2026-06-21T18:50:34.169420+00:00",
   "knowledge_graph": {
     "domain_distribution": {
       "elections": 16,
       "entertainment": 10,
       "geopolitics": 23,
-      "other": 22,
+      "other": 18,
       "sports": 48,
       "technology": 5
     },
-    "n_tagged": 124,
+    "n_tagged": 120,
     "top_entities": [
       {
         "count": 40,
@@ -1614,10 +1560,6 @@
       {
         "count": 10,
         "entity": "Israel"
-      },
-      {
-        "count": 9,
-        "entity": "Spain"
       },
       {
         "count": 8,
@@ -1642,6 +1584,10 @@
       {
         "count": 5,
         "entity": "Volodymyr Zelenskyy"
+      },
+      {
+        "count": 5,
+        "entity": "Spain"
       },
       {
         "count": 5,
@@ -1718,18 +1664,18 @@
     ]
   },
   "lead_lag": {
-    "avg_convergence_fraction": 0.2317,
-    "market_converged_to_model_pct": 0.2769,
+    "avg_convergence_fraction": 0.2282,
+    "market_converged_to_model_pct": 0.2727,
     "min_edge": 0.0,
-    "model_right_pct": 0.4154,
-    "n_markets": 65
+    "model_right_pct": 0.4242,
+    "n_markets": 66
   },
   "log_sample_size": 30,
   "methodology": "Forecast trajectories on live Polymarket/Kalshi markets: a fresh point-in-time forecast each day (latest price + latest news, no look-ahead) until the market resolves, then every snapshot is scored. Skill vs market = market Brier \u2212 model Brier, reported by forecast horizon; long-horizon skill is the meaningful signal.",
   "model": "gpt-oss-120b",
   "models_comparison": [
     {
-      "accuracy": 0.8267,
+      "accuracy": 0.8354,
       "by_horizon": [
         {
           "accuracy": 0.0,
@@ -1787,21 +1733,21 @@
           "skill_vs_market": -0.0151
         },
         {
-          "accuracy": 0.8814,
+          "accuracy": 0.8889,
           "horizon": "<1d",
-          "market_brier": 0.1212,
-          "model_brier": 0.1269,
-          "n": 59,
-          "skill_ci_high": 0.0184,
-          "skill_ci_low": -0.0298,
+          "market_brier": 0.114,
+          "model_brier": 0.1194,
+          "n": 63,
+          "skill_ci_high": 0.0172,
+          "skill_ci_low": -0.0279,
           "skill_significant": false,
-          "skill_vs_market": -0.0057
+          "skill_vs_market": -0.0053
         }
       ],
       "model": "council",
-      "model_brier": 0.156,
-      "n_markets_resolved": 72,
-      "n_snapshots_resolved": 75,
+      "model_brier": 0.1486,
+      "n_markets_resolved": 74,
+      "n_snapshots_resolved": 79,
       "paper_pnl": {
         "bets": [
           {
@@ -3579,6 +3525,102 @@
             "stake_edge": 0.003,
             "stake_flat": 1.0,
             "win": true
+          },
+          {
+            "calibrated_model_probability": 0.9889,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-esp",
+            "in_validated": false,
+            "market_probability": 0.885,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
+            "model": "council",
+            "model_probability": 0.885,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.1299,
+            "question": "Will Spain win on 2026-06-21?",
+            "resolved_ts": "2026-06-21T18:50:31.308854+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-21T09:55:10.429631+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.125,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-draw",
+            "in_validated": false,
+            "market_probability": 0.075,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+            "model": "council",
+            "model_probability": 0.075,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.0811,
+            "question": "Will Spain vs. Saudi Arabia end in a draw?",
+            "resolved_ts": "2026-06-21T18:50:31.352362+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-21T09:59:05.420683+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.1111,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-draw",
+            "in_validated": false,
+            "market_probability": 0.075,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+            "model": "council",
+            "model_probability": 0.075,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.0811,
+            "question": "Will Spain vs. Saudi Arabia end in a draw?",
+            "resolved_ts": "2026-06-21T18:50:31.384449+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-21T13:57:44.939113+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 1.0,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-esp",
+            "in_validated": false,
+            "market_probability": 0.895,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
+            "model": "council",
+            "model_probability": 0.895,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.1173,
+            "question": "Will Spain win on 2026-06-21?",
+            "resolved_ts": "2026-06-21T18:50:31.427927+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-21T14:05:46.438330+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
@@ -3692,10 +3734,6 @@
         },
         "flat": {
           "equity_curve": [
-            -0.4523,
-            -0.3828,
-            -0.1406,
-            0.0155,
             0.2734,
             0.4033,
             0.8019,
@@ -3751,13 +3789,13 @@
             11.9125,
             12.1425,
             12.212,
-            12.219
+            12.219,
+            12.349,
+            12.4301,
+            12.5111,
+            12.6285
           ],
           "equity_curve_ts": [
-            "2026-06-16T22:48:34.581457+00:00",
-            "2026-06-17T00:14:32.311279+00:00",
-            "2026-06-17T05:19:17.569504+00:00",
-            "2026-06-17T05:19:17.640532+00:00",
             "2026-06-17T05:19:17.649087+00:00",
             "2026-06-17T05:19:17.700906+00:00",
             "2026-06-17T10:13:54.778045+00:00",
@@ -3813,14 +3851,18 @@
             "2026-06-21T08:28:37.394000+00:00",
             "2026-06-21T13:46:04.340644+00:00",
             "2026-06-21T13:46:04.376612+00:00",
-            "2026-06-21T13:46:04.427342+00:00"
+            "2026-06-21T13:46:04.427342+00:00",
+            "2026-06-21T18:50:31.308854+00:00",
+            "2026-06-21T18:50:31.352362+00:00",
+            "2026-06-21T18:50:31.384449+00:00",
+            "2026-06-21T18:50:31.427927+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 74,
-          "pnl": 12.219,
-          "roi": 0.1651,
-          "total_staked": 74.0,
-          "win_rate": 0.8243
+          "n_bets": 78,
+          "pnl": 12.6285,
+          "roi": 0.1619,
+          "total_staked": 78.0,
+          "win_rate": 0.8333
         },
         "half_kelly": {
           "equity_curve": [
@@ -3864,7 +3906,9 @@
             2.6566,
             2.7717,
             2.8064,
-            2.8099
+            2.8099,
+            2.8686,
+            2.9273
           ],
           "equity_curve_ts": [
             "2026-06-09T13:50:21.443414+00:00",
@@ -3907,14 +3951,16 @@
             "2026-06-21T08:28:37.394000+00:00",
             "2026-06-21T13:46:04.340644+00:00",
             "2026-06-21T13:46:04.376612+00:00",
-            "2026-06-21T13:46:04.427342+00:00"
+            "2026-06-21T13:46:04.427342+00:00",
+            "2026-06-21T18:50:31.308854+00:00",
+            "2026-06-21T18:50:31.427927+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 41,
-          "pnl": 2.8099,
-          "roi": 0.2348,
-          "total_staked": 11.9651,
-          "win_rate": 0.8293
+          "n_bets": 43,
+          "pnl": 2.9273,
+          "roi": 0.2266,
+          "total_staked": 12.9168,
+          "win_rate": 0.8372
         },
         "mid_price_only": {
           "equity_curve": [
@@ -4074,7 +4120,9 @@
             6.6894,
             6.9194,
             6.9889,
-            6.996
+            6.996,
+            7.1259,
+            7.2433
           ],
           "equity_curve_ts": [
             "2026-06-11T23:55:00.477610+00:00",
@@ -4104,34 +4152,32 @@
             "2026-06-21T08:28:37.336010+00:00",
             "2026-06-21T13:46:04.340644+00:00",
             "2026-06-21T13:46:04.376612+00:00",
-            "2026-06-21T13:46:04.427342+00:00"
+            "2026-06-21T13:46:04.427342+00:00",
+            "2026-06-21T18:50:31.308854+00:00",
+            "2026-06-21T18:50:31.427927+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 28,
-          "pnl": 6.996,
-          "roi": 0.2499,
-          "total_staked": 28.0,
-          "win_rate": 0.8929
+          "n_bets": 30,
+          "pnl": 7.2433,
+          "roi": 0.2414,
+          "total_staked": 30.0,
+          "win_rate": 0.9
         }
       },
-      "paper_roi": 0.1651,
+      "paper_roi": 0.1619,
       "paper_roi_validated": 0.1804,
-      "skill_vs_market": -0.0105
+      "skill_vs_market": -0.01
     },
     {
-      "accuracy": 0.8318,
+      "accuracy": 0.8348,
       "by_horizon": [],
       "model": "crowd-follow",
       "model_brier": null,
-      "n_markets_resolved": 220,
-      "n_snapshots_resolved": 220,
+      "n_markets_resolved": 224,
+      "n_snapshots_resolved": 224,
       "paper_pnl": {
         "flat": {
           "equity_curve": [
-            13.9983,
-            14.8675,
-            14.9586,
-            15.0379,
             15.9427,
             16.0726,
             16.9774,
@@ -4187,13 +4233,13 @@
             22.6955,
             22.8685,
             22.938,
-            22.9451
+            22.9451,
+            23.075,
+            23.1561,
+            23.2372,
+            23.3545
           ],
           "equity_curve_ts": [
-            "2026-06-20T06:03:17.554302+00:00",
-            "2026-06-20T06:03:17.608694+00:00",
-            "2026-06-20T06:03:17.626291+00:00",
-            "2026-06-20T06:03:17.677717+00:00",
             "2026-06-20T06:03:17.694817+00:00",
             "2026-06-20T06:03:17.720074+00:00",
             "2026-06-20T06:03:17.769267+00:00",
@@ -4249,13 +4295,17 @@
             "2026-06-21T13:46:04.279760+00:00",
             "2026-06-21T13:46:04.314620+00:00",
             "2026-06-21T13:46:04.359217+00:00",
-            "2026-06-21T13:46:04.402358+00:00"
+            "2026-06-21T13:46:04.402358+00:00",
+            "2026-06-21T18:50:31.317782+00:00",
+            "2026-06-21T18:50:31.326992+00:00",
+            "2026-06-21T18:50:31.376102+00:00",
+            "2026-06-21T18:50:31.411125+00:00"
           ],
-          "n_bets": 220,
-          "pnl": 22.9451,
+          "n_bets": 224,
+          "pnl": 23.3545,
           "roi": 0.1043,
-          "total_staked": 220.0,
-          "win_rate": 0.8318
+          "total_staked": 224.0,
+          "win_rate": 0.8348
         }
       },
       "paper_roi": 0.1043,
@@ -4263,7 +4313,7 @@
       "skill_vs_market": 0.0
     },
     {
-      "accuracy": 0.7887,
+      "accuracy": 0.7926,
       "by_horizon": [
         {
           "accuracy": 0.6,
@@ -4321,21 +4371,21 @@
           "skill_vs_market": -0.0068
         },
         {
-          "accuracy": 0.8444,
+          "accuracy": 0.8489,
           "horizon": "<1d",
-          "market_brier": 0.1189,
-          "model_brier": 0.1368,
-          "n": 135,
-          "skill_ci_high": 0.0019,
-          "skill_ci_low": -0.0377,
+          "market_brier": 0.1158,
+          "model_brier": 0.1332,
+          "n": 139,
+          "skill_ci_high": 0.0018,
+          "skill_ci_low": -0.0366,
           "skill_significant": false,
-          "skill_vs_market": -0.0179
+          "skill_vs_market": -0.0174
         }
       ],
       "model": "gemma-4-31b-it",
-      "model_brier": 0.1852,
-      "n_markets_resolved": 72,
-      "n_snapshots_resolved": 213,
+      "model_brier": 0.182,
+      "n_markets_resolved": 74,
+      "n_snapshots_resolved": 217,
       "paper_pnl": {
         "bets": [
           {
@@ -9401,6 +9451,102 @@
             "stake_edge": 0.003,
             "stake_flat": 1.0,
             "win": true
+          },
+          {
+            "calibrated_model_probability": 0.9016,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-esp",
+            "in_validated": false,
+            "market_probability": 0.885,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
+            "model": "gemma-4-31b-it",
+            "model_probability": 0.885,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.1299,
+            "question": "Will Spain win on 2026-06-21?",
+            "resolved_ts": "2026-06-21T18:50:31.299249+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-21T09:55:10.244276+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.1765,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-draw",
+            "in_validated": false,
+            "market_probability": 0.075,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+            "model": "gemma-4-31b-it",
+            "model_probability": 0.075,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.0811,
+            "question": "Will Spain vs. Saudi Arabia end in a draw?",
+            "resolved_ts": "2026-06-21T18:50:31.335427+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-21T09:58:30.400280+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.1667,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-draw",
+            "in_validated": false,
+            "market_probability": 0.075,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+            "model": "gemma-4-31b-it",
+            "model_probability": 0.075,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.0811,
+            "question": "Will Spain vs. Saudi Arabia end in a draw?",
+            "resolved_ts": "2026-06-21T18:50:31.392793+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-21T13:58:06.369410+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.9032,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-esp",
+            "in_validated": false,
+            "market_probability": 0.895,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
+            "model": "gemma-4-31b-it",
+            "model_probability": 0.895,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.1173,
+            "question": "Will Spain win on 2026-06-21?",
+            "resolved_ts": "2026-06-21T18:50:31.418840+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-21T14:04:24.817100+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
@@ -9590,10 +9736,6 @@
         },
         "flat": {
           "equity_curve": [
-            -2.2638,
-            -1.3946,
-            -1.3035,
-            -0.3988,
             -0.3194,
             -0.1895,
             0.7153,
@@ -9649,13 +9791,13 @@
             14.1573,
             14.3303,
             14.3998,
-            14.4069
+            14.4069,
+            14.5368,
+            14.6179,
+            14.699,
+            14.8163
           ],
           "equity_curve_ts": [
-            "2026-06-20T06:03:17.565335+00:00",
-            "2026-06-20T06:03:17.600108+00:00",
-            "2026-06-20T06:03:17.635551+00:00",
-            "2026-06-20T06:03:17.686347+00:00",
             "2026-06-20T06:03:17.703104+00:00",
             "2026-06-20T06:03:17.728576+00:00",
             "2026-06-20T06:03:17.777702+00:00",
@@ -9711,19 +9853,21 @@
             "2026-06-21T13:46:04.296761+00:00",
             "2026-06-21T13:46:04.323603+00:00",
             "2026-06-21T13:46:04.385627+00:00",
-            "2026-06-21T13:46:04.411036+00:00"
+            "2026-06-21T13:46:04.411036+00:00",
+            "2026-06-21T18:50:31.299249+00:00",
+            "2026-06-21T18:50:31.335427+00:00",
+            "2026-06-21T18:50:31.392793+00:00",
+            "2026-06-21T18:50:31.418840+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 211,
-          "pnl": 14.4069,
-          "roi": 0.0683,
-          "total_staked": 211.0,
-          "win_rate": 0.7867
+          "n_bets": 215,
+          "pnl": 14.8163,
+          "roi": 0.0689,
+          "total_staked": 215.0,
+          "win_rate": 0.7907
         },
         "half_kelly": {
           "equity_curve": [
-            -2.0828,
-            -2.2177,
             -2.2165,
             -2.0618,
             -1.9232,
@@ -9781,11 +9925,11 @@
             4.1637,
             4.0608,
             4.0876,
-            4.0911
+            4.0911,
+            4.1005,
+            4.1051
           ],
           "equity_curve_ts": [
-            "2026-06-18T01:42:41.063473+00:00",
-            "2026-06-18T01:42:41.113234+00:00",
             "2026-06-18T01:42:41.146286+00:00",
             "2026-06-18T06:29:23.042708+00:00",
             "2026-06-18T06:29:23.160034+00:00",
@@ -9843,14 +9987,16 @@
             "2026-06-21T13:46:04.097567+00:00",
             "2026-06-21T13:46:04.218456+00:00",
             "2026-06-21T13:46:04.323603+00:00",
-            "2026-06-21T13:46:04.411036+00:00"
+            "2026-06-21T13:46:04.411036+00:00",
+            "2026-06-21T18:50:31.299249+00:00",
+            "2026-06-21T18:50:31.418840+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 107,
-          "pnl": 4.0911,
+          "n_bets": 109,
+          "pnl": 4.1051,
           "roi": 0.1198,
-          "total_staked": 34.1438,
-          "win_rate": 0.7664
+          "total_staked": 34.2551,
+          "win_rate": 0.7706
         },
         "mid_price_only": {
           "equity_curve": [
@@ -10114,8 +10260,6 @@
         "validated_only": null,
         "yes_only": {
           "equity_curve": [
-            4.9618,
-            5.4217,
             5.4222,
             5.9726,
             6.3712,
@@ -10173,11 +10317,11 @@
             23.1711,
             23.3441,
             23.4136,
-            23.4207
+            23.4207,
+            23.5506,
+            23.6679
           ],
           "equity_curve_ts": [
-            "2026-06-17T05:19:17.559766+00:00",
-            "2026-06-17T05:19:17.578420+00:00",
             "2026-06-17T05:19:17.784297+00:00",
             "2026-06-17T05:19:17.800142+00:00",
             "2026-06-17T10:13:54.761782+00:00",
@@ -10235,22 +10379,24 @@
             "2026-06-21T13:46:04.097567+00:00",
             "2026-06-21T13:46:04.323603+00:00",
             "2026-06-21T13:46:04.385627+00:00",
-            "2026-06-21T13:46:04.411036+00:00"
+            "2026-06-21T13:46:04.411036+00:00",
+            "2026-06-21T18:50:31.299249+00:00",
+            "2026-06-21T18:50:31.418840+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 80,
-          "pnl": 23.4207,
-          "roi": 0.2928,
-          "total_staked": 80.0,
-          "win_rate": 0.875
+          "n_bets": 82,
+          "pnl": 23.6679,
+          "roi": 0.2886,
+          "total_staked": 82.0,
+          "win_rate": 0.878
         }
       },
-      "paper_roi": 0.0683,
+      "paper_roi": 0.0689,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.0383
+      "skill_vs_market": -0.0376
     },
     {
-      "accuracy": 0.7682,
+      "accuracy": 0.7723,
       "by_horizon": [
         {
           "accuracy": 0.5,
@@ -10308,21 +10454,21 @@
           "skill_vs_market": -0.0176
         },
         {
-          "accuracy": 0.8444,
+          "accuracy": 0.8489,
           "horizon": "<1d",
-          "market_brier": 0.1216,
-          "model_brier": 0.1379,
-          "n": 135,
+          "market_brier": 0.1183,
+          "model_brier": 0.1342,
+          "n": 139,
           "skill_ci_high": 0.001,
-          "skill_ci_low": -0.0336,
+          "skill_ci_low": -0.0327,
           "skill_significant": false,
-          "skill_vs_market": -0.0163
+          "skill_vs_market": -0.0159
         }
       ],
       "model": "gpt-oss-120b",
-      "model_brier": 0.1995,
-      "n_markets_resolved": 72,
-      "n_snapshots_resolved": 220,
+      "model_brier": 0.1961,
+      "n_markets_resolved": 74,
+      "n_snapshots_resolved": 224,
       "paper_pnl": {
         "bets": [
           {
@@ -15556,6 +15702,102 @@
             "stake_edge": 0.0,
             "stake_flat": 1.0,
             "win": true
+          },
+          {
+            "calibrated_model_probability": 1.0,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-esp",
+            "in_validated": false,
+            "market_probability": 0.885,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
+            "model": "gpt-oss-120b",
+            "model_probability": 0.885,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.1299,
+            "question": "Will Spain win on 2026-06-21?",
+            "resolved_ts": "2026-06-21T18:50:31.317782+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-21T09:55:14.078397+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.1429,
+            "domain": "other",
+            "edge": 0.005,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-draw",
+            "in_validated": false,
+            "market_probability": 0.075,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+            "model": "gpt-oss-120b",
+            "model_probability": 0.07,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": 0.0004,
+            "profit_flat": 0.0811,
+            "question": "Will Spain vs. Saudi Arabia end in a draw?",
+            "resolved_ts": "2026-06-21T18:50:31.326992+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-21T09:56:47.034061+00:00",
+            "stake_edge": 0.005,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.1406,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-draw",
+            "in_validated": false,
+            "market_probability": 0.075,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+            "model": "gpt-oss-120b",
+            "model_probability": 0.075,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.0811,
+            "question": "Will Spain vs. Saudi Arabia end in a draw?",
+            "resolved_ts": "2026-06-21T18:50:31.376102+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-21T13:57:40.554888+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 1.0,
+            "domain": "other",
+            "edge": 0.005,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-esp",
+            "in_validated": false,
+            "market_probability": 0.895,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
+            "model": "gpt-oss-120b",
+            "model_probability": 0.89,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0006,
+            "profit_flat": 0.1173,
+            "question": "Will Spain win on 2026-06-21?",
+            "resolved_ts": "2026-06-21T18:50:31.411125+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-21T14:03:37.460223+00:00",
+            "stake_edge": 0.005,
+            "stake_flat": 1.0,
+            "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
@@ -15745,10 +15987,6 @@
         },
         "flat": {
           "equity_curve": [
-            -2.9114,
-            -2.0422,
-            -1.9511,
-            -1.8718,
             -0.967,
             -0.8371,
             0.0677,
@@ -15804,13 +16042,13 @@
             5.7858,
             5.9588,
             6.0283,
-            6.0354
+            6.0354,
+            6.1653,
+            6.2464,
+            6.3275,
+            6.4448
           ],
           "equity_curve_ts": [
-            "2026-06-20T06:03:17.554302+00:00",
-            "2026-06-20T06:03:17.608694+00:00",
-            "2026-06-20T06:03:17.626291+00:00",
-            "2026-06-20T06:03:17.677717+00:00",
             "2026-06-20T06:03:17.694817+00:00",
             "2026-06-20T06:03:17.720074+00:00",
             "2026-06-20T06:03:17.769267+00:00",
@@ -15866,19 +16104,21 @@
             "2026-06-21T13:46:04.279760+00:00",
             "2026-06-21T13:46:04.314620+00:00",
             "2026-06-21T13:46:04.359217+00:00",
-            "2026-06-21T13:46:04.402358+00:00"
+            "2026-06-21T13:46:04.402358+00:00",
+            "2026-06-21T18:50:31.317782+00:00",
+            "2026-06-21T18:50:31.326992+00:00",
+            "2026-06-21T18:50:31.376102+00:00",
+            "2026-06-21T18:50:31.411125+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 218,
-          "pnl": 6.0354,
-          "roi": 0.0277,
-          "total_staked": 218.0,
-          "win_rate": 0.7661
+          "n_bets": 222,
+          "pnl": 6.4448,
+          "roi": 0.029,
+          "total_staked": 222.0,
+          "win_rate": 0.7703
         },
         "half_kelly": {
           "equity_curve": [
-            -1.4175,
-            -1.6897,
             -1.5294,
             -1.3857,
             -1.8133,
@@ -15936,11 +16176,11 @@
             1.4431,
             1.4644,
             1.4992,
-            1.5027
+            1.5027,
+            1.5677,
+            1.6264
           ],
           "equity_curve_ts": [
-            "2026-06-18T01:42:41.104851+00:00",
-            "2026-06-18T01:42:41.130164+00:00",
             "2026-06-18T06:29:23.025388+00:00",
             "2026-06-18T06:29:23.144106+00:00",
             "2026-06-18T19:40:56.758195+00:00",
@@ -15998,14 +16238,16 @@
             "2026-06-21T13:46:04.209484+00:00",
             "2026-06-21T13:46:04.314620+00:00",
             "2026-06-21T13:46:04.359217+00:00",
-            "2026-06-21T13:46:04.402358+00:00"
+            "2026-06-21T13:46:04.402358+00:00",
+            "2026-06-21T18:50:31.317782+00:00",
+            "2026-06-21T18:50:31.411125+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 110,
-          "pnl": 1.5027,
-          "roi": 0.0403,
-          "total_staked": 37.2581,
-          "win_rate": 0.7636
+          "n_bets": 112,
+          "pnl": 1.6264,
+          "roi": 0.0425,
+          "total_staked": 38.2581,
+          "win_rate": 0.7679
         },
         "mid_price_only": {
           "equity_curve": [
@@ -16269,8 +16511,6 @@
         "validated_only": null,
         "yes_only": {
           "equity_curve": [
-            6.8866,
-            7.3681,
             7.6104,
             8.0702,
             8.0707,
@@ -16328,11 +16568,11 @@
             19.581,
             19.754,
             19.8236,
-            19.8306
+            19.8306,
+            19.9605,
+            20.0779
           ],
           "equity_curve_ts": [
-            "2026-06-16T07:43:12.891813+00:00",
-            "2026-06-16T22:48:34.521566+00:00",
             "2026-06-17T05:19:17.569504+00:00",
             "2026-06-17T05:19:17.586812+00:00",
             "2026-06-17T05:19:17.767742+00:00",
@@ -16390,22 +16630,24 @@
             "2026-06-21T08:28:37.310279+00:00",
             "2026-06-21T13:46:04.314620+00:00",
             "2026-06-21T13:46:04.359217+00:00",
-            "2026-06-21T13:46:04.402358+00:00"
+            "2026-06-21T13:46:04.402358+00:00",
+            "2026-06-21T18:50:31.317782+00:00",
+            "2026-06-21T18:50:31.411125+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 81,
-          "pnl": 19.8306,
-          "roi": 0.2448,
-          "total_staked": 81.0,
-          "win_rate": 0.8765
+          "n_bets": 83,
+          "pnl": 20.0779,
+          "roi": 0.2419,
+          "total_staked": 83.0,
+          "win_rate": 0.8795
         }
       },
-      "paper_roi": 0.0277,
+      "paper_roi": 0.029,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.0368
+      "skill_vs_market": -0.0361
     },
     {
-      "accuracy": 0.7659,
+      "accuracy": 0.7692,
       "by_horizon": [
         {
           "accuracy": 0.5,
@@ -16463,21 +16705,21 @@
           "skill_vs_market": -0.0203
         },
         {
-          "accuracy": 0.8268,
+          "accuracy": 0.8308,
           "horizon": "<1d",
-          "market_brier": 0.1229,
-          "model_brier": 0.1498,
-          "n": 127,
+          "market_brier": 0.1203,
+          "model_brier": 0.1465,
+          "n": 130,
           "skill_ci_high": -0.0015,
-          "skill_ci_low": -0.0522,
+          "skill_ci_low": -0.051,
           "skill_significant": false,
-          "skill_vs_market": -0.0269
+          "skill_vs_market": -0.0262
         }
       ],
       "model": "kimi-k2.6",
-      "model_brier": 0.1994,
-      "n_markets_resolved": 71,
-      "n_snapshots_resolved": 205,
+      "model_brier": 0.1966,
+      "n_markets_resolved": 73,
+      "n_snapshots_resolved": 208,
       "paper_pnl": {
         "bets": [
           {
@@ -21351,6 +21593,78 @@
             "stake_edge": 0.003,
             "stake_flat": 1.0,
             "win": true
+          },
+          {
+            "calibrated_model_probability": 0.1429,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-draw",
+            "in_validated": false,
+            "market_probability": 0.075,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+            "model": "kimi-k2.6",
+            "model_probability": 0.075,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.0811,
+            "question": "Will Spain vs. Saudi Arabia end in a draw?",
+            "resolved_ts": "2026-06-21T18:50:31.343626+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-21T09:58:39.838758+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.125,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-draw",
+            "in_validated": false,
+            "market_probability": 0.075,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+            "model": "kimi-k2.6",
+            "model_probability": 0.075,
+            "outcome": 0,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.0811,
+            "question": "Will Spain vs. Saudi Arabia end in a draw?",
+            "resolved_ts": "2026-06-21T18:50:31.402408+00:00",
+            "side": "NO",
+            "snapshot_ts": "2026-06-21T13:59:25.793665+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.9231,
+            "domain": "other",
+            "edge": 0.0,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "fifwc-esp-ksa-2026-06-21-esp",
+            "in_validated": false,
+            "market_probability": 0.895,
+            "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
+            "model": "kimi-k2.6",
+            "model_probability": 0.895,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0,
+            "profit_flat": 0.1173,
+            "question": "Will Spain win on 2026-06-21?",
+            "resolved_ts": "2026-06-21T18:50:31.436955+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-06-21T14:07:15.547779+00:00",
+            "stake_edge": 0.0,
+            "stake_flat": 1.0,
+            "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
@@ -21542,9 +21856,6 @@
         },
         "flat": {
           "equity_curve": [
-            -4.5806,
-            -3.8712,
-            -3.6878,
             -3.6873,
             -2.8181,
             -1.9489,
@@ -21601,12 +21912,12 @@
             2.2562,
             2.4292,
             2.4987,
-            2.5058
+            2.5058,
+            2.5869,
+            2.6679,
+            2.7853
           ],
           "equity_curve_ts": [
-            "2026-06-20T01:35:25.979039+00:00",
-            "2026-06-20T01:35:26.011982+00:00",
-            "2026-06-20T01:35:26.049026+00:00",
             "2026-06-20T01:35:26.067326+00:00",
             "2026-06-20T06:03:17.574233+00:00",
             "2026-06-20T06:03:17.617059+00:00",
@@ -21663,18 +21974,20 @@
             "2026-06-21T13:46:04.288222+00:00",
             "2026-06-21T13:46:04.331947+00:00",
             "2026-06-21T13:46:04.367867+00:00",
-            "2026-06-21T13:46:04.418787+00:00"
+            "2026-06-21T13:46:04.418787+00:00",
+            "2026-06-21T18:50:31.343626+00:00",
+            "2026-06-21T18:50:31.402408+00:00",
+            "2026-06-21T18:50:31.436955+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 203,
-          "pnl": 2.5058,
-          "roi": 0.0123,
-          "total_staked": 203.0,
-          "win_rate": 0.7635
+          "n_bets": 206,
+          "pnl": 2.7853,
+          "roi": 0.0135,
+          "total_staked": 206.0,
+          "win_rate": 0.767
         },
         "half_kelly": {
           "equity_curve": [
-            0.3091,
             -0.0541,
             -0.5541,
             -1.0541,
@@ -21733,10 +22046,10 @@
             0.066,
             0.0114,
             -0.0484,
-            -0.0308
+            -0.0308,
+            -0.0151
           ],
           "equity_curve_ts": [
-            "2026-06-18T01:42:40.738639+00:00",
             "2026-06-18T01:42:40.747380+00:00",
             "2026-06-18T01:42:40.956079+00:00",
             "2026-06-18T01:42:40.978555+00:00",
@@ -21795,14 +22108,15 @@
             "2026-06-21T08:28:37.378376+00:00",
             "2026-06-21T13:46:04.117188+00:00",
             "2026-06-21T13:46:04.227066+00:00",
-            "2026-06-21T13:46:04.331947+00:00"
+            "2026-06-21T13:46:04.331947+00:00",
+            "2026-06-21T18:50:31.436955+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 101,
-          "pnl": -0.0308,
-          "roi": -0.001,
-          "total_staked": 30.9218,
-          "win_rate": 0.7228
+          "n_bets": 102,
+          "pnl": -0.0151,
+          "roi": -0.0005,
+          "total_staked": 31.0556,
+          "win_rate": 0.7255
         },
         "mid_price_only": {
           "equity_curve": [
@@ -22064,7 +22378,6 @@
         "validated_only": null,
         "yes_only": {
           "equity_curve": [
-            5.0035,
             5.2381,
             4.2381,
             4.7196,
@@ -22123,10 +22436,10 @@
             14.0782,
             14.2512,
             14.3207,
-            14.3278
+            14.3278,
+            14.4451
           ],
           "equity_curve_ts": [
-            "2026-06-15T12:33:00.528384+00:00",
             "2026-06-15T12:33:00.535236+00:00",
             "2026-06-16T07:43:12.951557+00:00",
             "2026-06-16T22:48:34.555883+00:00",
@@ -22185,32 +22498,33 @@
             "2026-06-21T08:28:37.378376+00:00",
             "2026-06-21T13:46:04.331947+00:00",
             "2026-06-21T13:46:04.367867+00:00",
-            "2026-06-21T13:46:04.418787+00:00"
+            "2026-06-21T13:46:04.418787+00:00",
+            "2026-06-21T18:50:31.436955+00:00"
           ],
           "fees": 0.0,
-          "n_bets": 76,
-          "pnl": 14.3278,
-          "roi": 0.1885,
-          "total_staked": 76.0,
-          "win_rate": 0.8553
+          "n_bets": 77,
+          "pnl": 14.4451,
+          "roi": 0.1876,
+          "total_staked": 77.0,
+          "win_rate": 0.8571
         }
       },
-      "paper_roi": 0.0123,
+      "paper_roi": 0.0135,
       "paper_roi_validated": null,
-      "skill_vs_market": -0.0489
+      "skill_vs_market": -0.0482
     }
   ],
-  "n_markets_open": 30,
-  "n_markets_resolved": 72,
-  "n_markets_tracked": 30,
-  "n_snapshots_resolved": 220,
-  "n_snapshots_skill": 220,
+  "n_markets_open": 28,
+  "n_markets_resolved": 74,
+  "n_markets_tracked": 28,
+  "n_snapshots_resolved": 224,
+  "n_snapshots_skill": 224,
   "overall": {
-    "accuracy": 0.7682,
-    "market_brier": 0.1627,
-    "model_brier": 0.1995,
-    "n": 220,
-    "skill_vs_market": -0.0368
+    "accuracy": 0.7723,
+    "market_brier": 0.16,
+    "model_brier": 0.1961,
+    "n": 224,
+    "skill_vs_market": -0.0361
   },
   "paper_pnl": {
     "bets": [
@@ -27445,14 +27759,106 @@
         "stake_edge": 0.0,
         "stake_flat": 1.0,
         "win": true
+      },
+      {
+        "calibrated_model_probability": 1.0,
+        "domain": "other",
+        "edge": 0.0,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "fifwc-esp-ksa-2026-06-21-esp",
+        "in_validated": false,
+        "market_probability": 0.885,
+        "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
+        "model": "gpt-oss-120b",
+        "model_probability": 0.885,
+        "outcome": 1,
+        "platform": "Polymarket",
+        "profit_edge": 0.0,
+        "profit_flat": 0.1299,
+        "question": "Will Spain win on 2026-06-21?",
+        "resolved_ts": "2026-06-21T18:50:31.317782+00:00",
+        "side": "YES",
+        "snapshot_ts": "2026-06-21T09:55:14.078397+00:00",
+        "stake_edge": 0.0,
+        "stake_flat": 1.0,
+        "win": true
+      },
+      {
+        "calibrated_model_probability": 0.1429,
+        "domain": "other",
+        "edge": 0.005,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "fifwc-esp-ksa-2026-06-21-draw",
+        "in_validated": false,
+        "market_probability": 0.075,
+        "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+        "model": "gpt-oss-120b",
+        "model_probability": 0.07,
+        "outcome": 0,
+        "platform": "Polymarket",
+        "profit_edge": 0.0004,
+        "profit_flat": 0.0811,
+        "question": "Will Spain vs. Saudi Arabia end in a draw?",
+        "resolved_ts": "2026-06-21T18:50:31.326992+00:00",
+        "side": "NO",
+        "snapshot_ts": "2026-06-21T09:56:47.034061+00:00",
+        "stake_edge": 0.005,
+        "stake_flat": 1.0,
+        "win": true
+      },
+      {
+        "calibrated_model_probability": 0.1406,
+        "domain": "other",
+        "edge": 0.0,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "fifwc-esp-ksa-2026-06-21-draw",
+        "in_validated": false,
+        "market_probability": 0.075,
+        "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+        "model": "gpt-oss-120b",
+        "model_probability": 0.075,
+        "outcome": 0,
+        "platform": "Polymarket",
+        "profit_edge": 0.0,
+        "profit_flat": 0.0811,
+        "question": "Will Spain vs. Saudi Arabia end in a draw?",
+        "resolved_ts": "2026-06-21T18:50:31.376102+00:00",
+        "side": "NO",
+        "snapshot_ts": "2026-06-21T13:57:40.554888+00:00",
+        "stake_edge": 0.0,
+        "stake_flat": 1.0,
+        "win": true
+      },
+      {
+        "calibrated_model_probability": 1.0,
+        "domain": "other",
+        "edge": 0.005,
+        "fee_edge": 0.0,
+        "fee_flat": 0.0,
+        "ident": "fifwc-esp-ksa-2026-06-21-esp",
+        "in_validated": false,
+        "market_probability": 0.895,
+        "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
+        "model": "gpt-oss-120b",
+        "model_probability": 0.89,
+        "outcome": 1,
+        "platform": "Polymarket",
+        "profit_edge": 0.0006,
+        "profit_flat": 0.1173,
+        "question": "Will Spain win on 2026-06-21?",
+        "resolved_ts": "2026-06-21T18:50:31.411125+00:00",
+        "side": "YES",
+        "snapshot_ts": "2026-06-21T14:03:37.460223+00:00",
+        "stake_edge": 0.005,
+        "stake_flat": 1.0,
+        "win": true
       }
     ],
     "crowd_baseline": {
       "equity_curve": [
-        13.9983,
-        14.8675,
-        14.9586,
-        15.0379,
         15.9427,
         16.0726,
         16.9774,
@@ -27508,13 +27914,13 @@
         22.6955,
         22.8685,
         22.938,
-        22.9451
+        22.9451,
+        23.075,
+        23.1561,
+        23.2372,
+        23.3545
       ],
       "equity_curve_ts": [
-        "2026-06-20T06:03:17.554302+00:00",
-        "2026-06-20T06:03:17.608694+00:00",
-        "2026-06-20T06:03:17.626291+00:00",
-        "2026-06-20T06:03:17.677717+00:00",
         "2026-06-20T06:03:17.694817+00:00",
         "2026-06-20T06:03:17.720074+00:00",
         "2026-06-20T06:03:17.769267+00:00",
@@ -27570,13 +27976,17 @@
         "2026-06-21T13:46:04.279760+00:00",
         "2026-06-21T13:46:04.314620+00:00",
         "2026-06-21T13:46:04.359217+00:00",
-        "2026-06-21T13:46:04.402358+00:00"
+        "2026-06-21T13:46:04.402358+00:00",
+        "2026-06-21T18:50:31.317782+00:00",
+        "2026-06-21T18:50:31.326992+00:00",
+        "2026-06-21T18:50:31.376102+00:00",
+        "2026-06-21T18:50:31.411125+00:00"
       ],
-      "n_bets": 220,
-      "pnl": 22.9451,
+      "n_bets": 224,
+      "pnl": 23.3545,
       "roi": 0.1043,
-      "total_staked": 220.0,
-      "win_rate": 0.8318
+      "total_staked": 224.0,
+      "win_rate": 0.8348
     },
     "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
     "edge_weighted": {
@@ -27765,10 +28175,6 @@
     },
     "flat": {
       "equity_curve": [
-        -2.9114,
-        -2.0422,
-        -1.9511,
-        -1.8718,
         -0.967,
         -0.8371,
         0.0677,
@@ -27824,13 +28230,13 @@
         5.7858,
         5.9588,
         6.0283,
-        6.0354
+        6.0354,
+        6.1653,
+        6.2464,
+        6.3275,
+        6.4448
       ],
       "equity_curve_ts": [
-        "2026-06-20T06:03:17.554302+00:00",
-        "2026-06-20T06:03:17.608694+00:00",
-        "2026-06-20T06:03:17.626291+00:00",
-        "2026-06-20T06:03:17.677717+00:00",
         "2026-06-20T06:03:17.694817+00:00",
         "2026-06-20T06:03:17.720074+00:00",
         "2026-06-20T06:03:17.769267+00:00",
@@ -27886,19 +28292,21 @@
         "2026-06-21T13:46:04.279760+00:00",
         "2026-06-21T13:46:04.314620+00:00",
         "2026-06-21T13:46:04.359217+00:00",
-        "2026-06-21T13:46:04.402358+00:00"
+        "2026-06-21T13:46:04.402358+00:00",
+        "2026-06-21T18:50:31.317782+00:00",
+        "2026-06-21T18:50:31.326992+00:00",
+        "2026-06-21T18:50:31.376102+00:00",
+        "2026-06-21T18:50:31.411125+00:00"
       ],
       "fees": 0.0,
-      "n_bets": 218,
-      "pnl": 6.0354,
-      "roi": 0.0277,
-      "total_staked": 218.0,
-      "win_rate": 0.7661
+      "n_bets": 222,
+      "pnl": 6.4448,
+      "roi": 0.029,
+      "total_staked": 222.0,
+      "win_rate": 0.7703
     },
     "half_kelly": {
       "equity_curve": [
-        -1.4175,
-        -1.6897,
         -1.5294,
         -1.3857,
         -1.8133,
@@ -27956,11 +28364,11 @@
         1.4431,
         1.4644,
         1.4992,
-        1.5027
+        1.5027,
+        1.5677,
+        1.6264
       ],
       "equity_curve_ts": [
-        "2026-06-18T01:42:41.104851+00:00",
-        "2026-06-18T01:42:41.130164+00:00",
         "2026-06-18T06:29:23.025388+00:00",
         "2026-06-18T06:29:23.144106+00:00",
         "2026-06-18T19:40:56.758195+00:00",
@@ -28018,14 +28426,16 @@
         "2026-06-21T13:46:04.209484+00:00",
         "2026-06-21T13:46:04.314620+00:00",
         "2026-06-21T13:46:04.359217+00:00",
-        "2026-06-21T13:46:04.402358+00:00"
+        "2026-06-21T13:46:04.402358+00:00",
+        "2026-06-21T18:50:31.317782+00:00",
+        "2026-06-21T18:50:31.411125+00:00"
       ],
       "fees": 0.0,
-      "n_bets": 110,
-      "pnl": 1.5027,
-      "roi": 0.0403,
-      "total_staked": 37.2581,
-      "win_rate": 0.7636
+      "n_bets": 112,
+      "pnl": 1.6264,
+      "roi": 0.0425,
+      "total_staked": 38.2581,
+      "win_rate": 0.7679
     },
     "mid_price_only": {
       "equity_curve": [
@@ -28289,8 +28699,6 @@
     "validated_only": null,
     "yes_only": {
       "equity_curve": [
-        6.8866,
-        7.3681,
         7.6104,
         8.0702,
         8.0707,
@@ -28348,11 +28756,11 @@
         19.581,
         19.754,
         19.8236,
-        19.8306
+        19.8306,
+        19.9605,
+        20.0779
       ],
       "equity_curve_ts": [
-        "2026-06-16T07:43:12.891813+00:00",
-        "2026-06-16T22:48:34.521566+00:00",
         "2026-06-17T05:19:17.569504+00:00",
         "2026-06-17T05:19:17.586812+00:00",
         "2026-06-17T05:19:17.767742+00:00",
@@ -28410,17 +28818,55 @@
         "2026-06-21T08:28:37.310279+00:00",
         "2026-06-21T13:46:04.314620+00:00",
         "2026-06-21T13:46:04.359217+00:00",
-        "2026-06-21T13:46:04.402358+00:00"
+        "2026-06-21T13:46:04.402358+00:00",
+        "2026-06-21T18:50:31.317782+00:00",
+        "2026-06-21T18:50:31.411125+00:00"
       ],
       "fees": 0.0,
-      "n_bets": 81,
-      "pnl": 19.8306,
-      "roi": 0.2448,
-      "total_staked": 81.0,
-      "win_rate": 0.8765
+      "n_bets": 83,
+      "pnl": 20.0779,
+      "roi": 0.2419,
+      "total_staked": 83.0,
+      "win_rate": 0.8795
     }
   },
   "resolved_log": [
+    {
+      "actual": "Yes",
+      "category": "other",
+      "confidence": 0.89,
+      "correct": true,
+      "predicted": "Yes",
+      "question": "Will Spain win on 2026-06-21?",
+      "resolve_time": "2026-06-21"
+    },
+    {
+      "actual": "No",
+      "category": "other",
+      "confidence": 0.075,
+      "correct": true,
+      "predicted": "No",
+      "question": "Will Spain vs. Saudi Arabia end in a draw?",
+      "resolve_time": "2026-06-21"
+    },
+    {
+      "actual": "No",
+      "category": "other",
+      "confidence": 0.07,
+      "correct": true,
+      "predicted": "No",
+      "question": "Will Spain vs. Saudi Arabia end in a draw?",
+      "resolve_time": "2026-06-21"
+    },
+    {
+      "actual": "Yes",
+      "category": "other",
+      "confidence": 0.885,
+      "correct": true,
+      "predicted": "Yes",
+      "question": "Will Spain win on 2026-06-21?",
+      "resolve_time": "2026-06-21"
+    },
     {
       "actual": "Yes",
       "category": "geopolitics",
@@ -28654,47 +29100,87 @@
       "predicted": "No",
       "question": "Will Team Spirit win IEM Cologne Major 2026?",
       "resolve_time": "2026-06-20"
-    },
-    {
-      "actual": "Yes",
-      "category": "other",
-      "confidence": 0.65,
-      "correct": true,
-      "predicted": "Yes",
-      "question": "Will Germany win on 2026-06-20?",
-      "resolve_time": "2026-06-20"
-    },
-    {
-      "actual": "No",
-      "category": "other",
-      "confidence": 0.35,
-      "correct": true,
-      "predicted": "No",
-      "question": "Will Team Spirit win IEM Cologne Major 2026?",
-      "resolve_time": "2026-06-20"
-    },
-    {
-      "actual": "Yes",
-      "category": "crypto",
-      "confidence": 0.58,
-      "correct": true,
-      "predicted": "Yes",
-      "question": "Netherlands vs. Sweden: Both Teams to Score",
-      "resolve_time": "2026-06-20"
-    },
-    {
-      "actual": "No",
-      "category": "other",
-      "confidence": 0.04,
-      "correct": true,
-      "predicted": "No",
-      "question": "Will Sweden win on 2026-06-20?",
-      "resolve_time": "2026-06-20"
     }
   ],
   "source": "live",
   "temperature": 0.0,
   "trajectories": [
+    {
+      "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-esp",
+      "outcome": 1,
+      "platform": "Polymarket",
+      "points": [
+        {
+          "date": "2026-06-21",
+          "lead_days": 0.3,
+          "market": 0.885,
+          "model": 0.885
+        },
+        {
+          "date": "2026-06-21",
+          "lead_days": 0.1,
+          "market": 0.895,
+          "model": 0.89
+        }
+      ],
+      "price_points": [
+        {
+          "market": 0.885,
+          "ts": "2026-06-21T11:32:50.648502+00:00"
+        },
+        {
+          "market": 0.895,
+          "ts": "2026-06-21T13:25:57.193524+00:00"
+        },
+        {
+          "market": 0.885,
+          "ts": "2026-06-21T15:25:17.130150+00:00"
+        },
+        {
+          "market": 0.998,
+          "ts": "2026-06-21T17:03:36.860596+00:00"
+        }
+      ],
+      "question": "Will Spain win on 2026-06-21?"
+    },
+    {
+      "market_url": "https://polymarket.com/market/fifwc-esp-ksa-2026-06-21-draw",
+      "outcome": 0,
+      "platform": "Polymarket",
+      "points": [
+        {
+          "date": "2026-06-21",
+          "lead_days": 0.3,
+          "market": 0.075,
+          "model": 0.07
+        },
+        {
+          "date": "2026-06-21",
+          "lead_days": 0.1,
+          "market": 0.075,
+          "model": 0.075
+        }
+      ],
+      "price_points": [
+        {
+          "market": 0.075,
+          "ts": "2026-06-21T11:32:50.648502+00:00"
+        },
+        {
+          "market": 0.075,
+          "ts": "2026-06-21T13:25:57.193524+00:00"
+        },
+        {
+          "market": 0.075,
+          "ts": "2026-06-21T15:25:17.130150+00:00"
+        },
+        {
+          "market": 0.002,
+          "ts": "2026-06-21T17:03:36.860596+00:00"
+        }
+      ],
+      "question": "Will Spain vs. Saudi Arabia end in a draw?"
+    },
     {
       "market_url": "https://polymarket.com/market/us-x-iran-diplomatic-meeting-by-june-21-2026-631-919-131-645-654-454-281-531-319-585-646",
       "outcome": 1,
@@ -29032,58 +29518,6 @@
         }
       ],
       "question": "Will Cura\u00e7ao win on 2026-06-20?"
-    },
-    {
-      "market_url": "https://polymarket.com/market/fifwc-ecu-kor-2026-06-20-ecu",
-      "outcome": 0,
-      "platform": "Polymarket",
-      "points": [
-        {
-          "date": "2026-06-20",
-          "lead_days": 0.2,
-          "market": 0.865,
-          "model": 0.86
-        }
-      ],
-      "price_points": [
-        {
-          "market": 0.865,
-          "ts": "2026-06-20T19:05:41.106671+00:00"
-        },
-        {
-          "market": 0.835,
-          "ts": "2026-06-20T21:20:02.224171+00:00"
-        },
-        {
-          "market": 0.835,
-          "ts": "2026-06-20T22:07:11.262845+00:00"
-        },
-        {
-          "market": 0.845,
-          "ts": "2026-06-20T23:50:03.368551+00:00"
-        }
-      ],
-      "question": "Will Ecuador win on 2026-06-20?"
-    },
-    {
-      "market_url": "https://polymarket.com/market/fifwc-ger-civ-2026-06-20-btts",
-      "outcome": 1,
-      "platform": "Polymarket",
-      "points": [
-        {
-          "date": "2026-06-20",
-          "lead_days": -0.1,
-          "market": 0.73,
-          "model": 0.73
-        }
-      ],
-      "price_points": [
-        {
-          "market": 1.0,
-          "ts": "2026-06-20T22:07:11.262845+00:00"
-        }
-      ],
-      "question": "Germany vs. C\u00f4te d'Ivoire: Both Teams to Score"
     }
   ],
   "variant": "variant0_neutral_baseline"
