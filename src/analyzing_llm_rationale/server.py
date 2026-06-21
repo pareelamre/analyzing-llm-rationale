@@ -107,11 +107,97 @@ _CHAT_SYSTEM_PROMPT = (
     "numbered lists when they help. Ground your answer in the provided evidence "
     "summaries and any prediction-market context when relevant, and be honest about "
     "uncertainty. Treat the provided Current Time as today's date/time for temporal "
-    "phrases and deadlines. If the question implies a probability, you may express it in prose "
+    "phrases and deadlines. If the question implies a probability, express it in prose "
     "(e.g., \"around 60%\") and, when a market price is given, briefly note whether "
-    "you lean above or below it. Do NOT output JSON, key/value objects, or a rigid "
-    "forecast template — just talk to the user."
+    "you lean above or below it. "
+    "Whenever you give a probability estimate, append a machine-readable tag on its own "
+    "line at the very end of your response: [p:0.XX] where 0.XX is your estimate as a "
+    "decimal (e.g. [p:0.65]). Omit the tag if you give no probability. "
+    "Do NOT output JSON, key/value objects, or a rigid forecast template — just talk to the user."
 )
+
+_CHAT_PROB_RE = re.compile(r"\[p:(0(?:\.\d+)?|1(?:\.0+)?)\]\s*$", re.MULTILINE)
+
+_TRADING_INTENT_RE = re.compile(
+    r"\b(bet|order|trade|place|buy|sell|position|recommend|suggest|should i|what to|portfolio|stake|wager)\b",
+    re.IGNORECASE,
+)
+
+
+def _detect_trading_intent(question: str) -> bool:
+    return bool(_TRADING_INTENT_RE.search(question))
+
+
+def _strategy_filter_edge_entry(entry: dict, strategy: str) -> bool:
+    """Apply a paper-pnl strategy's filter logic to a live edge board entry."""
+    entry_price = entry.get("entry_price", 0.5)
+    abs_edge = entry.get("abs_edge", 0.0)
+    domain = entry.get("domain", "")
+    if strategy == "mid_price_only":
+        return 0.30 <= entry_price <= 0.70
+    if strategy in ("smart", "edge_weighted"):
+        if entry_price < 0.20 or entry_price > 0.80:
+            return False
+        if domain == "geopolitics" and abs_edge > 0.10:
+            return False
+        if abs_edge > 0.40:
+            return False
+        return True
+    if strategy == "validated_only":
+        return bool((entry.get("track_record") or {}).get("skill_significant"))
+    if strategy == "fade_extreme":
+        return abs_edge >= 0.15
+    return True  # flat / yes_only / half_kelly — no extra filter beyond min_edge
+
+
+def _pick_best_strategy(paper_pnl: dict) -> tuple:
+    """Return (name, data) of the highest-ROI strategy with at least 20 resolved bets."""
+    candidates = [
+        (k, v) for k, v in paper_pnl.items()
+        if isinstance(v, dict) and v.get("roi") is not None and (v.get("n_bets") or 0) >= 20
+    ]
+    if not candidates:
+        return ("flat", paper_pnl.get("flat") or {})
+    return max(candidates, key=lambda x: x[1]["roi"])
+
+
+def _edge_board_order_context(trl: dict) -> str:
+    """Format the top edge board picks for the best paper strategy as chat context."""
+    paper_pnl = trl.get("paper_pnl") or {}
+    edge_board = trl.get("edge_board") or []
+    if not edge_board or not paper_pnl:
+        return ""
+    strategy_name, strategy_data = _pick_best_strategy(paper_pnl)
+    filtered = [e for e in edge_board if _strategy_filter_edge_entry(e, strategy_name)]
+    filtered.sort(key=lambda e: e.get("abs_edge", 0.0), reverse=True)
+    if not filtered:
+        return ""
+    roi_pct = f"{strategy_data['roi']:.1%}" if strategy_data.get("roi") is not None else "n/a"
+    n_bets = strategy_data.get("n_bets", "?")
+    lines = [
+        f"## Live order recommendations",
+        f"Best back-tested strategy: **{strategy_name}** "
+        f"(historical ROI {roi_pct} over {n_bets} resolved bets, paper only).",
+        "",
+    ]
+    for i, e in enumerate(filtered[:10], 1):
+        sig = e.get("track_record") or {}
+        proven = "proven" if sig.get("skill_significant") else "unproven"
+        model_p = f"{e.get('model_probability', 0):.0%}"
+        mkt_p = f"{e.get('market_probability', 0):.0%}"
+        edge_pct = f"{e.get('abs_edge', 0):.0%}"
+        payout = e.get("payout_odds", "?")
+        lines.append(
+            f"{i}. **{e.get('question', '')}** [{e.get('platform', '')}]  "
+            f"Bet {e.get('side', '?')} @ {mkt_p} | Model {model_p} | "
+            f"Edge {edge_pct} | {payout}x payout | {proven}  "
+            f"{e.get('market_url', '')}"
+        )
+    lines.append(
+        "\nAll figures are paper/hypothetical. Entry prices are live at last tick."
+    )
+    return "\n".join(lines)
+
 
 _DESCRIPTION = """
 ## Overview
@@ -2431,7 +2517,7 @@ class PredictRequest(BaseModel):
         ),
     )
     chat_mode: bool = Field(
-        False,
+        True,
         description=(
             "When `true`, skips the forecast output template entirely. "
             "The model responds in plain natural language with no structured JSON."
@@ -3570,6 +3656,15 @@ async def _prepare_predict_messages(
         # model replies in natural language. Pass an empty template so the user
         # prompt is just the question + evidence/market context, no JSON suffix.
         system_prompt = _CHAT_SYSTEM_PROMPT
+        if _detect_trading_intent(req.question):
+            try:
+                trl = _read_live_track_record()
+                if trl:
+                    ctx = _edge_board_order_context(trl)
+                    if ctx:
+                        system_prompt += f"\n\n{ctx}"
+            except Exception:
+                pass
         user_prompt = build_user_prompt(record, "[question]", "full")
     else:
         user_prompt = build_user_prompt(record, prompt_text, "full")
@@ -5389,7 +5484,29 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     parsed = _parse_json_dict(content)
     if req.chat_mode:
         text = content.strip()
+        # Extract and strip the hidden probability tag so it never reaches the user.
+        chat_prob: Optional[float] = None
+        m = _CHAT_PROB_RE.search(text)
+        if m:
+            try:
+                chat_prob = float(m.group(1))
+            except ValueError:
+                pass
+            text = _CHAT_PROB_RE.sub("", text).rstrip()
         model_key = _model_key_for_request(req)
+        # Build a minimal market_analysis when we have a probability + a market URL
+        # in the question so _finalize_predict_response can enroll it in the track record.
+        chat_market_analysis: Optional[MarketAnalysis] = None
+        if chat_prob is not None:
+            _purl = _parse_market_url(req.question or "")
+            _url_m = re.search(r"https?://\S+", req.question or "")
+            if _purl and _url_m:
+                _venue, _kind, _mid = _purl
+                chat_market_analysis = MarketAnalysis(
+                    platform=_venue,
+                    market_url=_url_m.group(0).rstrip(").,"),
+                    model_probability=chat_prob,
+                )
         response = PredictResponse(
             question_type="chat",
             rationale=text, model_rationale=text,
@@ -5397,6 +5514,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
             evidence_sources=_evidence_sources(evidence_articles),
             evidence_articles=_news_articles(evidence_articles),
             evidence_error=evidence_error,
+            market_analysis=chat_market_analysis,
         )
     else:
         response = _build_typed_response(req, parsed, content, evidence_articles, evidence_error)

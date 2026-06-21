@@ -909,6 +909,21 @@
     }
 
     /* ── Attachments ─────────────────────────────────────────────────────── */
+    .slash-palette {
+      position: absolute; bottom: calc(100% + 8px); left: 0; right: 0;
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.14); overflow: hidden; z-index: 200;
+      display: none;
+    }
+    .slash-palette.visible { display: block; }
+    .slash-item {
+      display: flex; align-items: baseline; gap: 10px; padding: 9px 14px;
+      cursor: pointer; transition: background var(--dur-fast);
+    }
+    .slash-item:hover, .slash-item.selected { background: var(--paper); }
+    .slash-item .slash-cmd { font-family: monospace; font-size: 13px; color: var(--accent); font-weight: 600; flex-shrink: 0; }
+    .slash-item .slash-desc { font-size: 13px; color: var(--text-dim); }
+    .slash-item .slash-args { font-size: 12px; color: var(--text-mute); margin-left: auto; flex-shrink: 0; }
     .attach-btn {
       background: none; border: none; padding: 4px; cursor: pointer;
       color: var(--text-dim); border-radius: 999px; flex-shrink: 0;
@@ -2038,14 +2053,17 @@
     <div class="max-w-3xl mx-auto">
       <!-- Attachment chips -->
       <div id="attachChips" class="flex flex-wrap gap-1.5 mb-2"></div>
+      <div style="position:relative">
+        <div id="slashPalette" class="slash-palette" role="listbox" aria-label="Commands"></div>
+      </div>
       <div class="input-box flex gap-2 sm:gap-3 items-end p-2 sm:p-3">
         <textarea
           id="questionInput"
           rows="1"
-          placeholder="Ask about a market, quote, or resolution criteria"
+          placeholder="Ask anything, or type / for commands"
           class="flex-1 bg-transparent border-none py-1 px-1"
           style="font-size: 16px;"
-          oninput="autoResize(this)"
+          oninput="autoResize(this); _updateSlashPalette(this.value)"
           onkeydown="handleKey(event)"
         ></textarea>
         <button id="agentModeBtn" class="agent-mode-btn" onclick="toggleAgentMode()" aria-pressed="false" title="Agent mode — fetch evidence, forecast, price the edge, and run your skills">
@@ -3407,6 +3425,19 @@ async function sendQuestion(options = {}) {
   const input = document.getElementById('questionInput');
   const question = String(options.question ?? input.value).trim();
   if (!question || !activeId || activeRequest) return;
+
+  _hideSlashPalette();
+
+  // Handle slash commands before anything else
+  if (!options._skipSlash) {
+    const slash = _parseSlashCommand(question);
+    if (slash) {
+      if (!options.question) { input.value = ''; input.style.height = 'auto'; }
+      const handled = await _runSlashCommand(slash.cmd, slash.args, question);
+      if (handled) return;
+    }
+  }
+
   trackEvent('first_forecast', { source: options.source || (_pendingMarketCtx ? 'market_context' : 'manual') });
 
   const variant = document.getElementById('variantSelect').value;
@@ -3433,7 +3464,7 @@ async function sendQuestion(options = {}) {
   const emptyState = document.getElementById('emptyState');
   if (emptyState) emptyState.remove();
 
-  const useScan = _agentEnabled() && _isDiscoveryRequest(question);
+  const useScan = (_agentEnabled() || options.forceAgent) && _isDiscoveryRequest(question) && !options.forceAgent;
   let request = null;
   if (!useScan) {
     request = { controller: new AbortController(), convId: activeId, userMessageId: null };
@@ -3471,7 +3502,8 @@ async function sendQuestion(options = {}) {
   try {
     const activeModel = getActiveModelConfig();
     const conversationSteer = getConversationSteer();
-    const body = { question, variant, history, chat_mode: isChatMode() };
+    const chat_mode = options.forceChatMode === false ? false : isChatMode();
+    const body = { question, variant, history, chat_mode };
     if (conversationSteer) body.conversation_steer = conversationSteer;
     const mCtx = _pendingMarketCtx;
     _pendingMarketCtx = null;
@@ -3513,7 +3545,7 @@ async function sendQuestion(options = {}) {
     _attachments = [];
     _renderChips();
     let data;
-    if (_agentEnabled()) {
+    if (_agentEnabled() || options.forceAgent) {
       const agentBody = {
         question,
         evidence_top_k: 5,
@@ -3907,6 +3939,32 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 160) + 'px';
 }
 function handleKey(e) {
+  const palette = document.getElementById('slashPalette');
+  const visible = palette && palette.classList.contains('visible');
+  if (visible) {
+    const items = [...palette.querySelectorAll('.slash-item')];
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      items[_slashSelected]?.classList.remove('selected');
+      _slashSelected = (_slashSelected + 1) % items.length;
+      items[_slashSelected]?.classList.add('selected');
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[_slashSelected]?.classList.remove('selected');
+      _slashSelected = (_slashSelected - 1 + items.length) % items.length;
+      items[_slashSelected]?.classList.add('selected');
+      return;
+    }
+    if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+      e.preventDefault();
+      const cmd = items[_slashSelected]?.dataset.cmd;
+      if (cmd) _selectSlashCommand(cmd);
+      return;
+    }
+    if (e.key === 'Escape') { _hideSlashPalette(); return; }
+  }
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
 }
 function handleLandingKey(e) {
@@ -6768,6 +6826,219 @@ function _parseScanIntent(q) {
     .trim();
   return { platform, query };
 }
+
+// ── Slash commands ────────────────────────────────────────────────────────────
+const _SLASH_COMMANDS = [
+  { cmd: '/predict',  args: '<question>',    desc: 'Structured YES/NO forecast with confidence bar' },
+  { cmd: '/analyze',  args: '<url or question>', desc: 'Full agent: evidence + market edge analysis' },
+  { cmd: '/scan',     args: '[platform] [topic]', desc: 'Scan for mispriced markets on Polymarket / Kalshi' },
+  { cmd: '/edge',     args: '',              desc: 'Show current live edge board' },
+  { cmd: '/track',    args: '',              desc: 'Show track record summary' },
+  { cmd: '/orders',   args: '',              desc: 'Suggest orders based on best back-tested strategy' },
+  { cmd: '/help',     args: '',              desc: 'List all available commands' },
+];
+
+let _slashSelected = 0;
+
+function _parseSlashCommand(q) {
+  if (!q.startsWith('/')) return null;
+  const parts = q.trim().split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+  const args = parts.slice(1).join(' ').trim();
+  const match = _SLASH_COMMANDS.find(c => c.cmd === cmd);
+  return match ? { cmd, args } : null;
+}
+
+function _slashMatches(prefix) {
+  const p = prefix.toLowerCase();
+  return _SLASH_COMMANDS.filter(c => c.cmd.startsWith(p));
+}
+
+function _updateSlashPalette(val) {
+  const palette = document.getElementById('slashPalette');
+  if (!palette) return;
+  const trimmed = (val || '').trimStart();
+  if (!trimmed.startsWith('/') || trimmed.includes(' ')) {
+    palette.classList.remove('visible');
+    return;
+  }
+  const matches = _slashMatches(trimmed);
+  if (!matches.length) { palette.classList.remove('visible'); return; }
+  _slashSelected = 0;
+  palette.innerHTML = matches.map((c, i) => `
+    <div class="slash-item${i === 0 ? ' selected' : ''}" role="option" data-cmd="${c.cmd}" onclick="_selectSlashCommand('${c.cmd}')">
+      <span class="slash-cmd">${escHtml(c.cmd)}</span>
+      <span class="slash-desc">${escHtml(c.desc)}</span>
+      ${c.args ? `<span class="slash-args">${escHtml(c.args)}</span>` : ''}
+    </div>`).join('');
+  palette.classList.add('visible');
+}
+
+function _selectSlashCommand(cmd) {
+  const input = document.getElementById('questionInput');
+  const c = _SLASH_COMMANDS.find(x => x.cmd === cmd);
+  if (!c) return;
+  input.value = c.args ? cmd + ' ' : cmd;
+  input.focus();
+  document.getElementById('slashPalette').classList.remove('visible');
+  if (!c.args) { sendQuestion(); }
+}
+
+function _hideSlashPalette() {
+  const p = document.getElementById('slashPalette');
+  if (p) p.classList.remove('visible');
+}
+
+async function _runSlashCommand(cmd, args, rawQuestion) {
+  const messagesEl = document.getElementById('messages');
+
+  const _appendInline = (html) => {
+    const emptyState = document.getElementById('emptyState');
+    if (emptyState) emptyState.remove();
+    const userNode = makeUserBubble(rawQuestion, {});
+    messagesEl.appendChild(userNode);
+    animateIn(userNode);
+    const div = document.createElement('div');
+    div.className = 'max-w-2xl mx-auto w-full';
+    div.innerHTML = `<div class="msg-ai p-4 sm:p-5"><div class="chat-md text-[15px] leading-relaxed">${html}</div></div>`;
+    messagesEl.appendChild(div);
+    animateIn(div);
+    scrollBottom();
+  };
+
+  const _appendError = (msg) => {
+    const div = document.createElement('div');
+    div.className = 'max-w-2xl mx-auto w-full';
+    div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">⚠ ${escHtml(msg)}</div>`;
+    messagesEl.appendChild(div);
+    scrollBottom();
+  };
+
+  if (cmd === '/help') {
+    const rows = _SLASH_COMMANDS.map(c =>
+      `<tr><td style="padding:4px 12px 4px 0;font-family:monospace;color:var(--accent);white-space:nowrap">${escHtml(c.cmd)}${c.args ? ' <span style="color:var(--text-mute)">' + escHtml(c.args) + '</span>' : ''}</td><td style="padding:4px 0;color:var(--text-dim)">${escHtml(c.desc)}</td></tr>`
+    ).join('');
+    _appendInline(`<p style="margin-bottom:10px"><strong>Available commands</strong></p><table style="border-collapse:collapse;width:100%">${rows}</table>`);
+    return true;
+  }
+
+  if (cmd === '/edge') {
+    const typing = addTyping();
+    try {
+      const r = await fetch('/edge-board');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      const board = d.edge_board || [];
+      if (!board.length) { typing.remove(); _appendInline('<p>No live edge board entries found.</p>'); return true; }
+      const rows = board.slice(0, 15).map(e => {
+        const proven = (e.track_record || {}).skill_significant ? '✓' : '';
+        const edgePct = Math.round((e.abs_edge || 0) * 100);
+        const mktPct  = Math.round((e.market_probability || 0) * 100);
+        const modPct  = Math.round((e.model_probability  || 0) * 100);
+        return `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px 10px 6px 0"><a href="${escHtml(e.market_url||'#')}" target="_blank" style="color:var(--accent);text-decoration:none">${escHtml((e.question||'').slice(0,60))}${(e.question||'').length>60?'…':''}</a><br><span style="font-size:11px;color:var(--text-mute)">${escHtml(e.platform||'')} · ${escHtml(e.horizon||'')}</span></td>
+          <td style="padding:6px 4px;text-align:center"><span class="${e.side==='YES'?'yes-badge':'no-badge'}" style="font-size:12px;padding:2px 8px">${escHtml(e.side||'?')}</span></td>
+          <td style="padding:6px 4px;text-align:right;font-size:13px">${mktPct}% → ${modPct}%</td>
+          <td style="padding:6px 0 6px 8px;text-align:right;font-size:13px;color:var(--accent);font-weight:600">${edgePct}pp ${proven}</td>
+        </tr>`;
+      }).join('');
+      typing.remove();
+      _appendInline(`<p style="margin-bottom:10px"><strong>Live edge board</strong> — ${board.length} open markets</p>
+        <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:13px">
+          <thead><tr style="border-bottom:2px solid var(--border)">
+            <th style="padding:4px 10px 4px 0;text-align:left;font-weight:600;color:var(--text-dim)">Market</th>
+            <th style="padding:4px;color:var(--text-dim)">Side</th>
+            <th style="padding:4px;text-align:right;color:var(--text-dim)">Mkt → Model</th>
+            <th style="padding:4px 0 4px 8px;text-align:right;color:var(--text-dim)">Edge</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">✓ = statistically proven edge bucket. Entry prices from last tick.</p>`);
+    } catch(e) { typing.remove(); _appendError('Could not load edge board: ' + e.message); }
+    return true;
+  }
+
+  if (cmd === '/track') {
+    const typing = addTyping();
+    try {
+      const r = await fetch('/track-record');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      const ov = d.overall || {};
+      const pp = d.paper_pnl || {};
+      const flat = pp.flat || {};
+      const smart = pp.smart || {};
+      const best = [flat, smart, pp.edge_weighted, pp.mid_price_only]
+        .filter(s => s && s.roi != null).sort((a,b) => b.roi - a.roi)[0] || flat;
+      const rows = (d.models_comparison || []).slice(0,5).map(m =>
+        `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:5px 10px 5px 0;font-family:monospace;font-size:12px">${escHtml(m.model||'?')}</td>
+          <td style="padding:5px 4px;text-align:right">${m.brier!=null?m.brier.toFixed(3):'—'}</td>
+          <td style="padding:5px 0 5px 8px;text-align:right;color:${(m.paper_roi||0)>=0?'var(--accent)':'#e55'}">${m.paper_roi!=null?(m.paper_roi>=0?'+':'')+(m.paper_roi*100).toFixed(1)+'%':'—'}</td>
+        </tr>`
+      ).join('');
+      typing.remove();
+      _appendInline(`
+        <p style="margin-bottom:10px"><strong>Track record</strong></p>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+          <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--ink)">${ov.n_resolved||0}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Resolved</div>
+          </div>
+          <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:var(--ink)">${ov.brier!=null?ov.brier.toFixed(3):'—'}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Brier score</div>
+          </div>
+          <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:${(best.roi||0)>=0?'var(--accent)':'#e55'}">${best.roi!=null?(best.roi>=0?'+':'')+(best.roi*100).toFixed(1)+'%':'—'}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Best paper ROI</div>
+          </div>
+        </div>
+        ${rows ? `<p style="margin-bottom:6px;font-size:13px;color:var(--text-dim);font-weight:600">Models</p>
+        <table style="border-collapse:collapse;width:100%;font-size:13px">
+          <thead><tr style="border-bottom:2px solid var(--border)">
+            <th style="padding:4px 10px 4px 0;text-align:left;color:var(--text-dim)">Model</th>
+            <th style="padding:4px;text-align:right;color:var(--text-dim)">Brier</th>
+            <th style="padding:4px 0 4px 8px;text-align:right;color:var(--text-dim)">Paper ROI</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>` : ''}
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. <a href="#track-app" style="color:var(--accent)" onclick="showView('track-app')">Full track record →</a></p>`);
+    } catch(e) { typing.remove(); _appendError('Could not load track record: ' + e.message); }
+    return true;
+  }
+
+  if (cmd === '/orders') {
+    sendQuestion({ question: args || 'what orders should I place based on the current edge board?' });
+    return true;
+  }
+
+  if (cmd === '/scan') {
+    const intent = _parseScanIntent(args || '');
+    const emptyState = document.getElementById('emptyState');
+    if (emptyState) emptyState.remove();
+    const userNode = makeUserBubble(rawQuestion, {});
+    messagesEl.appendChild(userNode);
+    animateIn(userNode);
+    runScan(intent.platform, intent.query, rawQuestion);
+    return true;
+  }
+
+  if (cmd === '/predict') {
+    if (!args) { _appendInline('<p>Usage: <code>/predict &lt;your question&gt;</code></p>'); return true; }
+    sendQuestion({ question: args, forceChatMode: false });
+    return true;
+  }
+
+  if (cmd === '/analyze') {
+    if (!args) { _appendInline('<p>Usage: <code>/analyze &lt;market URL or question&gt;</code></p>'); return true; }
+    sendQuestion({ question: args, forceAgent: true });
+    return true;
+  }
+
+  return false;
+}
+// ── End slash commands ─────────────────────────────────────────────────────────
 
 // Scan agent: find mispriced markets on a venue and render them as a table.
 function _scanToMarkdown(d, venue, topic) {
