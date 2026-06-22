@@ -1,17 +1,17 @@
 {
   "coverage": {
-    "days": 34.23,
+    "days": 34.32,
     "first_row_time_ms": 1779128880000,
-    "last_row_time_ms": 1782086040000
+    "last_row_time_ms": 1782094320000
   },
   "curves": [
     {
-      "avg_pnl_per_trade": 0.054744,
+      "avg_pnl_per_trade": 0.054622,
       "by_symbol": {
         "BTCUSDT": {
-          "hit_rate": 0.5578,
-          "pnl_per_contract": 118.5884,
-          "trades": 2058
+          "hit_rate": 0.5576,
+          "pnl_per_contract": 118.0882,
+          "trades": 2059
         },
         "ETHUSDT": {
           "hit_rate": 0.5526,
@@ -21,13 +21,13 @@
       },
       "color": "#34d399",
       "first_trade_at": "2026-06-17T15:24:04.674274+00:00",
-      "hit_rate": 0.5549,
+      "hit_rate": 0.5548,
       "key": "selector_btc_inverse_eth_fade",
       "label": "Recommended: BTC inverse + ETH fade",
-      "last_trade_at": "2026-06-21T22:38:31.788669+00:00",
+      "last_trade_at": "2026-06-22T07:40:14.740382+00:00",
       "max_drawdown": 20.5434,
-      "pnl_per_contract": 248.5918,
-      "pnl_per_day": 7.290082,
+      "pnl_per_contract": 248.0916,
+      "pnl_per_day": 7.232991,
       "points": [
         0.4998,
         0.9996,
@@ -4569,9 +4569,10 @@
         247.0924,
         247.5922,
         248.092,
-        248.5918
+        248.5918,
+        248.0916
       ],
-      "span_days": 34.1,
+      "span_days": 34.3,
       "times": [
         1779130680000,
         1779130920000,
@@ -9113,9 +9114,10 @@
         1781996280000,
         1782000240000,
         1782032460000,
-        1782077040000
+        1782077040000,
+        1782094320000
       ],
-      "trades": 4541
+      "trades": 4542
     },
     {
       "avg_pnl_per_trade": 0.043028,
@@ -13150,23 +13152,23 @@
       "trades": 2001
     },
     {
-      "avg_pnl_per_trade": 0.057623,
+      "avg_pnl_per_trade": 0.057352,
       "by_symbol": {
         "BTCUSDT": {
-          "hit_rate": 0.5578,
-          "pnl_per_contract": 118.5884,
-          "trades": 2058
+          "hit_rate": 0.5576,
+          "pnl_per_contract": 118.0882,
+          "trades": 2059
         }
       },
       "color": "#60a5fa",
       "first_trade_at": "2026-06-17T15:24:04.674274+00:00",
-      "hit_rate": 0.5578,
+      "hit_rate": 0.5576,
       "key": "btc_inverse_edge_004",
       "label": "BTC inverse edge >=4pp",
-      "last_trade_at": "2026-06-21T11:48:45.412188+00:00",
+      "last_trade_at": "2026-06-22T07:40:14.740382+00:00",
       "max_drawdown": 8.5298,
-      "pnl_per_contract": 118.5884,
-      "pnl_per_day": 3.530467,
+      "pnl_per_contract": 118.0882,
+      "pnl_per_day": 3.442805,
       "points": [
         0.4998,
         0.9996,
@@ -15225,9 +15227,10 @@
         118.089,
         117.5888,
         118.0886,
-        118.5884
+        118.5884,
+        118.0882
       ],
-      "span_days": 33.59,
+      "span_days": 34.3,
       "times": [
         1779130680000,
         1779130980000,
@@ -17286,9 +17289,10 @@
         1781879340000,
         1781888280000,
         1781996280000,
-        1782032460000
+        1782032460000,
+        1782094320000
       ],
-      "trades": 2058
+      "trades": 2059
     },
     {
       "avg_pnl_per_trade": 0.052357,
@@ -22284,16 +22288,16 @@
   ],
   "cutoff_start_time_ms": null,
   "db_path": "data/crypto_5m_signals.sqlite",
-  "generated_at": "2026-06-22T02:12:33.152793+00:00",
+  "generated_at": "2026-06-22T07:40:22.297143+00:00",
   "note": "Paper replay from live-collected 5-minute crypto rows. Uses 50c contract pricing in the collector; no slippage.",
   "recommendation": {
     "candidate": "selector_btc_inverse_eth_fade",
-    "hit_rate": 0.5549,
-    "pnl_per_contract": 248.5918,
+    "hit_rate": 0.5548,
+    "pnl_per_contract": 248.0916,
     "policy": "Main paper strategy: trade against very strong BTC model calls, fade sharp ETH 5-minute moves, and skip SOL until its rule is stable.",
     "status": "paper-positive",
-    "trades": 4541
+    "trades": 4542
   },
-  "resolved_rows": 29022,
+  "resolved_rows": 29025,
   "since_hours": 0.0
 }
