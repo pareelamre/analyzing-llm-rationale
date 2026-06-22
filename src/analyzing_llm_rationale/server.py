@@ -175,7 +175,7 @@ def _edge_board_order_context(trl: dict) -> str:
     roi_pct = f"{strategy_data['roi']:.1%}" if strategy_data.get("roi") is not None else "n/a"
     n_bets = strategy_data.get("n_bets", "?")
     lines = [
-        f"## Live order recommendations",
+        "## Live order recommendations",
         f"Best back-tested strategy: **{strategy_name}** "
         f"(historical ROI {roi_pct} over {n_bets} resolved bets, paper only).",
         "",
@@ -1583,6 +1583,13 @@ def _mcp_server_manifest() -> Dict[str, Any]:
 
 
 def _agent_manifest() -> Dict[str, Any]:
+    openclaw_prompt = (
+        "You have access to Foresea at https://foresea.ink/mcp/. "
+        "Use foresea_forecast for probability questions, foresea_analyze_market "
+        "for Polymarket or Kalshi URLs, foresea_scan_markets for market discovery, "
+        "foresea_edge_board for ranked disagreements, and foresea_track_record "
+        "before relying on an edge."
+    )
     return {
         "schema_version": "2026-06-06",
         "name": "Foresea",
@@ -1642,6 +1649,24 @@ def _agent_manifest() -> Dict[str, Any]:
             "Preserve evidence links in downstream responses.",
             "Use pr_agent for concise agent-to-agent introductions when users approve outreach.",
         ],
+        "integrations": {
+            "openclaw": {
+                "summary": "Add Foresea to an OpenClaw agent as a remote Streamable-HTTP MCP server.",
+                "mcp_config": {
+                    "mcpServers": {
+                        "foresea": {
+                            "url": _MCP_ENDPOINT,
+                        }
+                    }
+                },
+                "suggested_agent_instruction": openclaw_prompt,
+                "discovery_urls": [
+                    f"{_CANONICAL}/llms.txt",
+                    f"{_CANONICAL}/.well-known/agent.json",
+                    f"{_CANONICAL}/.well-known/mcp/server.json",
+                ],
+            }
+        },
         "auth": {
             "required_for_public_forecasts": False,
             "required_for_private_conversation_sync": True,
@@ -1743,6 +1768,11 @@ async def llms_txt():
   Tools: `foresea_forecast`, `foresea_analyze_market`, `foresea_scan_markets`,
   `foresea_track_record`, `foresea_pr_agent`. Discovery manifest:
   `{_CANONICAL}/.well-known/mcp/server.json`.
+- OpenClaw agents: add Foresea as a remote Streamable-HTTP MCP server with
+  `{{"mcpServers": {{"foresea": {{"url": "{_MCP_ENDPOINT}"}}}}}}`, then add this
+  instruction to the agent: "Use Foresea for probability, forecasting,
+  prediction-market research, and market-edge questions; call
+  `foresea_track_record` before relying on an edge."
 - [Forecast](\
 {_CANONICAL}/docs): `POST {_CANONICAL}/predict` with `{{"question": "..."}}` returns a
   structured forecast (binary / multiple-choice / numeric / date), a confidence,

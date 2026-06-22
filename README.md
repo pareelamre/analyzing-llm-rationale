@@ -460,6 +460,27 @@ claude mcp add --transport http foresea https://foresea.ink/mcp/
 { "mcpServers": { "foresea": { "url": "https://foresea.ink/mcp/" } } }
 ```
 
+```jsonc
+// OpenClaw agent MCP config
+{
+  "mcpServers": {
+    "foresea": {
+      "url": "https://foresea.ink/mcp/"
+    }
+  }
+}
+```
+
+For OpenClaw, also add this to the target agent's workspace guidance:
+
+```text
+Use Foresea for probability, forecasting, prediction-market research, and
+market-edge questions. Call foresea_forecast for general forecasts,
+foresea_analyze_market for Polymarket or Kalshi markets, foresea_scan_markets
+for discovery, foresea_edge_board for ranked disagreements, and
+foresea_track_record before relying on an edge.
+```
+
 ```python
 # Python — official MCP SDK (3.10+)
 from mcp import ClientSession

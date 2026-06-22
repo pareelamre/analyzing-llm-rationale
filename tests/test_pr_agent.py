@@ -19,7 +19,15 @@ class PRAgentTests(unittest.TestCase):
         self.assertEqual(packet["links"]["mcp"], "https://foresea.test/mcp/")
         self.assertIn("foresea_pr_agent", packet["mcp"]["tools"])
         self.assertIn("claude mcp add", packet["mcp"]["install_command"])
+        self.assertEqual(packet["mcp"]["openclaw_config"]["mcpServers"]["foresea"]["url"], "https://foresea.test/mcp/")
         self.assertIn("live market track record is still accumulating", packet["message"])
+
+    def test_openclaw_audience_includes_specific_copy(self):
+        packet = pr_agent.build_pr_agent_packet(audience="openclaw")
+
+        self.assertEqual(packet["audience"], "openclaw")
+        self.assertIn("OpenClaw agents", packet["intro"])
+        self.assertIn("OpenClaw MCP config", packet["message"])
 
     def test_unknown_audience_falls_back_to_agent(self):
         packet = pr_agent.build_pr_agent_packet(audience="unknown")

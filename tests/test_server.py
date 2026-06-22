@@ -710,6 +710,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Remote MCP server", r.text)
         self.assertIn("https://foresea.ink/mcp/", r.text)
         self.assertIn("foresea_forecast", r.text)
+        self.assertIn("OpenClaw agents", r.text)
         self.assertIn("/predict/stream", r.text)
         self.assertIn("/predict", r.text)
         self.assertIn("/openapi.json", r.text)
@@ -720,6 +721,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("text/html", r.headers.get("content-type", ""))
         self.assertIn("Agent integration surface", r.text)
         self.assertIn("https://foresea.ink/mcp/", r.text)
+        self.assertIn("OpenClaw agents", r.text)
         self.assertIn("/predict/stream", r.text)
 
     def test_agent_manifest(self):
@@ -728,6 +730,7 @@ class ServerTests(unittest.TestCase):
         body = r.json()
         self.assertEqual(body["name"], "Foresea")
         self.assertEqual(body["mcp"]["endpoint"], "https://foresea.ink/mcp/")
+        self.assertEqual(body["integrations"]["openclaw"]["mcp_config"]["mcpServers"]["foresea"]["url"], "https://foresea.ink/mcp/")
         self.assertEqual(body["http"]["streaming_forecast"]["path"], "/predict/stream")
         self.assertNotIn("foresea_radar", body["mcp"]["tools"])
         self.assertNotIn("radar", body["http"])

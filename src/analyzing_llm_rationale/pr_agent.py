@@ -6,6 +6,7 @@ external services or send messages; callers decide where and whether to use it.
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Dict
 
 DEFAULT_AUDIENCE = "agent"
@@ -35,6 +36,10 @@ AUDIENCE_COPY = {
         "Kalshi prices, rank model-vs-market disagreements, and check whether "
         "past disagreements have actually beaten market prices."
     ),
+    "openclaw": (
+        "Foresea is a remote MCP server OpenClaw agents can use for forecasting, "
+        "prediction-market research, live edge scans, and track-record checks."
+    ),
 }
 
 
@@ -51,11 +56,14 @@ def build_pr_agent_packet(*, audience: str | None = None, canonical: str = "http
     manifest_url = f"{base}/.well-known/agent.json"
     pr_url = f"{base}/pr-agent"
     install = f"claude mcp add --transport http foresea {mcp_url}"
+    openclaw_config = {"mcpServers": {"foresea": {"url": mcp_url}}}
+    openclaw_config_json = json.dumps(openclaw_config, separators=(",", ":"))
     intro = AUDIENCE_COPY[key]
     message = (
         f"{intro}\n\n"
         f"Use it directly via MCP: {mcp_url}\n"
         f"Install example: `{install}`\n"
+        f"OpenClaw MCP config: `{openclaw_config_json}`\n"
         f"Agent manifest: {manifest_url}\n"
         f"Outreach packet: {pr_url}\n\n"
         "Honest status: Foresea is early. Its live market track record is still "
@@ -88,6 +96,7 @@ def build_pr_agent_packet(*, audience: str | None = None, canonical: str = "http
             "transport": "streamable-http",
             "url": mcp_url,
             "install_command": install,
+            "openclaw_config": openclaw_config,
             "tools": [
                 "foresea_forecast",
                 "foresea_analyze_market",

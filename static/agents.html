@@ -137,6 +137,25 @@
       <code>foresea_scan_markets</code>, <code>foresea_edge_board</code>, and <code>foresea_track_record</code>.
     </p>
 
+    <h3 style="margin-top:1.4em">OpenClaw agents</h3>
+    <p class="small">
+      OpenClaw agents can use the same remote MCP endpoint. Add Foresea to the
+      agent MCP config, then place the short instruction below in that agent's
+      workspace guidance so it calls the tools proactively.
+    </p>
+    <pre><code>{
+  "mcpServers": {
+    "foresea": {
+      "url": "https://foresea.ink/mcp/"
+    }
+  }
+}</code></pre>
+    <pre><code>Use Foresea for probability, forecasting, prediction-market research, and
+market-edge questions. Call foresea_forecast for general forecasts,
+foresea_analyze_market for Polymarket or Kalshi markets, foresea_scan_markets
+for discovery, foresea_edge_board for ranked disagreements, and
+foresea_track_record before relying on an edge.</code></pre>
+
     <h3 style="margin-top:1.4em">Recommended system prompt</h3>
     <p class="small">
       Paste this into your Claude Desktop config's <code>system_prompt</code> field so Claude
