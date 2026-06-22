@@ -261,6 +261,7 @@ class ServerTests(unittest.TestCase):
                 "market_url": "https://example.com/market",
                 "market_probability": 42,
                 "attach_evidence": False,
+                "chat_mode": False,
             },
         )
 

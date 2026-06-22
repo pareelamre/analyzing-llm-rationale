@@ -4986,6 +4986,7 @@ def _market_forecast_predict_request(req: MarketForecastRequest) -> PredictReque
         market_ident=req.market_ident,
         market_url=req.market_url,
         market_outcome="Yes",
+        chat_mode=False,
     )
 
 
@@ -5930,6 +5931,7 @@ def _agent_prediction_request(
         openrouter_api_key=req.openrouter_api_key,
         openrouter_model=req.openrouter_model,
         provider_base_url=req.provider_base_url,
+        chat_mode=False,
     )
 
 
@@ -6166,7 +6168,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         r = await predict(PredictRequest(
             question=q, attach_evidence=True, evidence_top_k=req.evidence_top_k, variant=req.variant,
             market_probability=mp, openrouter_api_key=req.openrouter_api_key,
-            openrouter_model=req.openrouter_model, provider_base_url=req.provider_base_url),
+            openrouter_model=req.openrouter_model, provider_base_url=req.provider_base_url,
+            chat_mode=False),
             kb_user_id=_optional_user_id(request))
         a = r.market_analysis
         last.update(answer=r.predicted_answer, confidence=r.confidence,
