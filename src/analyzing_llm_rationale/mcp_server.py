@@ -4,11 +4,39 @@ import json
 import logging
 import os
 import sys
+import time
 from typing import Any, Dict, List, Optional
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+def _log_mcp_tool_call(tool: str, context: Optional[Dict[str, Any]] = None) -> None:
+    """Write a structured JSON line to stdout so Cloud Run indexes it as jsonPayload."""
+    record: Dict[str, Any] = {
+        "event": "mcp_tool_call",
+        "tool": tool,
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    if context:
+        record.update(context)
+    print(json.dumps(record, ensure_ascii=False), flush=True)
+
+
+def _mcp_tool_context(fn_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]:
+    """Extract a small, loggable summary from tool call arguments."""
+    if fn_name == "aforecast":
+        payload = args[0] if args else {}
+        q = str(payload.get("question", ""))
+        return {"question": q[:140] + ("…" if len(q) > 140 else "")}
+    if fn_name == "aanalyze":
+        payload = args[0] if args else {}
+        return {k: payload[k] for k in ("platform", "slug", "ticker", "market_id", "question") if k in payload}
+    if fn_name == "ascan_markets":
+        return {k: kwargs[k] for k in ("platform", "query", "min_edge") if k in kwargs}
+    return {}
+
 
 # tool method (aforecast/...) -> public tool name, for usage logging.
 _TOOL_NAMES = {
@@ -341,14 +369,16 @@ def create_mcp_server(
         return _TOOL_NAMES.get(getattr(fn, "__name__", ""), getattr(fn, "__name__", "?"))
 
     def _call_tool(fn, *args, **kwargs) -> Dict[str, Any]:
-        logger.info("mcp_tool_call tool=%s", _tool_name(fn))
+        fn_name = getattr(fn, "__name__", "")
+        _log_mcp_tool_call(_tool_name(fn), _mcp_tool_context(fn_name, args, kwargs))
         try:
             return fn(*args, **kwargs)
         except ForeseaApiError as exc:
             raise ToolError(f"Foresea API error ({exc.status_code}): {exc.detail}") from exc
 
     async def _call_tool_async(fn, *args, **kwargs) -> Dict[str, Any]:
-        logger.info("mcp_tool_call tool=%s", _tool_name(fn))
+        fn_name = getattr(fn, "__name__", "")
+        _log_mcp_tool_call(_tool_name(fn), _mcp_tool_context(fn_name, args, kwargs))
         try:
             return await fn(*args, **kwargs)
         except ForeseaApiError as exc:
