@@ -114,6 +114,7 @@ class ServerTests(unittest.TestCase):
                 "description": "A forecasting question.",
                 "variant": "variant0_neutral_baseline",
                 "evidence_top_k": 3,
+                "chat_mode": False,
             },
         )
 
@@ -1025,6 +1026,7 @@ class ServerTests(unittest.TestCase):
                 "question_type": "multiple_choice",
                 "options": ["Alice", "Bob", "Carol"],
                 "attach_evidence": False,
+                "chat_mode": False,
             },
         )
 
@@ -1055,6 +1057,7 @@ class ServerTests(unittest.TestCase):
                 "question": "What will Example Corp revenue be in Q4 2026?",
                 "question_type": "numeric",
                 "attach_evidence": False,
+                "chat_mode": False,
             },
         )
 
@@ -1085,6 +1088,7 @@ class ServerTests(unittest.TestCase):
             json={
                 "question": "What will US CPI inflation be in December 2026?",
                 "attach_evidence": False,
+                "chat_mode": False,
             },
         )
 
@@ -1111,6 +1115,7 @@ class ServerTests(unittest.TestCase):
                 "question": "When will the Example spacecraft launch?",
                 "question_type": "date",
                 "attach_evidence": False,
+                "chat_mode": False,
             },
         )
 

@@ -6369,6 +6369,7 @@ async def agent_scan(
                 market_url=quote.get("market_url"),
                 market_outcome=quote.get("outcome"),
                 market_probability=quote.get("probability"),
+                chat_mode=False,
             ))
         except Exception:
             return None
