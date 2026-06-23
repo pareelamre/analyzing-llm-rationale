@@ -287,6 +287,7 @@ def build_user_prompt(
     market_floor_strike = record.get("market_floor_strike")
     market_cap_strike = record.get("market_cap_strike")
     market_price_history: list = list(record.get("market_price_history") or [])
+    forecast_history: list = list(record.get("forecast_history") or [])
 
     prompt_suffix = user_prompt_template.replace("[question]", "").strip()
     parts = [f"Question: {question}"]
@@ -346,13 +347,20 @@ def build_user_prompt(
         if market_resolution_source:
             parts.append(f"Resolution Source: {market_resolution_source}")
         if market_price_history:
-            parts.append("Market Price History (UTC, newest first):")
+            parts.append("Market Context History (UTC, newest first):")
             for pt in market_price_history[:8]:
                 ts_raw = str(pt.get("ts") or "")
                 ts = ts_raw.replace("T", " ").replace("+00:00", "").replace("Z", "")[:16]
                 prob = pt.get("probability")
                 if prob is not None:
-                    parts.append(f"  {ts}  →  {round(float(prob) * 100, 1)}%")
+                    details = [f"{round(float(prob) * 100, 1)}%"]
+                    if pt.get("volume") is not None:
+                        details.append(f"vol ${float(pt['volume']):,.0f}")
+                    if pt.get("liquidity") is not None:
+                        details.append(f"liq ${float(pt['liquidity']):,.0f}")
+                    if pt.get("bid") is not None and pt.get("ask") is not None:
+                        details.append(f"bid/ask {float(pt['bid']):.2f}/{float(pt['ask']):.2f}")
+                    parts.append(f"  {ts}  ->  {', '.join(details)}")
 
         # Compute trajectory and market signal strength from available signals.
         # Newest-first history → history[0] is current, history[-1] is oldest.
@@ -403,6 +411,46 @@ def build_user_prompt(
                 "Market Signal: THIN — low liquidity; crowd price may be noisy. "
                 "Weight evidence more heavily than the market probability."
             )
+        _hist_liq = [
+            float(pt["liquidity"]) for pt in market_price_history[:8]
+            if pt.get("liquidity") is not None
+        ]
+        if len(_hist_liq) >= 2:
+            liq_move = _hist_liq[0] - _hist_liq[-1]
+            if abs(liq_move) >= max(250.0, 0.25 * max(_hist_liq[-1], 1.0)):
+                direction = "improving" if liq_move > 0 else "deteriorating"
+                parts.append(
+                    f"Liquidity Trajectory: {direction} "
+                    f"(${_hist_liq[-1]:,.0f} -> ${_hist_liq[0]:,.0f} over last "
+                    f"{len(_hist_liq)} ticks)."
+                )
+
+    if forecast_history:
+        parts.append("Prior Foresea Forecasts For This Market (newest first):")
+        for snap in forecast_history[:6]:
+            ts_raw = str(snap.get("snapshot_ts") or snap.get("snapshot_date") or "")
+            ts = ts_raw.replace("T", " ").replace("+00:00", "").replace("Z", "")[:16]
+            model_p = snap.get("model_probability")
+            market_p = snap.get("market_probability")
+            if model_p is None:
+                continue
+            line = f"  {ts}  -> model {float(model_p) * 100:.1f}%"
+            if market_p is not None:
+                line += f", market {float(market_p) * 100:.1f}%"
+            if snap.get("market_liquidity") is not None:
+                line += f", liq ${float(snap['market_liquidity']):,.0f}"
+            if snap.get("evidence_count") is not None:
+                line += f", evidence {snap.get('evidence_count')}"
+            rationale = str(snap.get("rationale") or "").strip()
+            if rationale:
+                line += f", prior rationale: {rationale[:240]}"
+            parts.append(line)
+        parts.append(
+            "Stateful Forecasting Instruction: Treat this as an update to a prior "
+            "forecast on the same market. Do not assume repeat forecasts are "
+            "independent. Explain meaningful changes from prior Foresea forecasts "
+            "using new evidence, price movement, and liquidity/tradability changes."
+        )
 
     if article_detail == "summary":
         parts.append("Evidence (newest first):")

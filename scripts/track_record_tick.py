@@ -188,7 +188,8 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         "market_price_change_24h": quote.get("price_change_24h"),
         "market_bid": quote.get("yes_bid"),
         "market_ask": quote.get("yes_ask"),
-        "market_price_history": quote.get("price_history") or [],
+        "market_price_history": quote.get("market_price_history") or quote.get("price_history") or [],
+        "forecast_history": quote.get("forecast_history") or [],
     }
     if model:
         payload["model"] = model

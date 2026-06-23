@@ -159,6 +159,9 @@ _PRICE_COLS: Dict[str, str] = {
     "key": "TEXT",
     "platform": "TEXT", "ident": "TEXT", "market_url": "TEXT",
     "ts": "TEXT", "hour": "TEXT", "market_probability": "DOUBLE",
+    "market_bid": "DOUBLE", "market_ask": "DOUBLE",
+    "market_volume": "DOUBLE", "market_liquidity": "DOUBLE",
+    "last_trade_price": "DOUBLE",
 }
 
 _KIND_TABLE = {

@@ -1971,6 +1971,8 @@ async def market_history(
                     "snapshot_ts": ts_str,
                     "model_probability": s.get("model_probability"),
                     "market_probability": s.get("market_probability"),
+                    "market_volume": s.get("market_volume"),
+                    "market_liquidity": s.get("market_liquidity"),
                     "rationale": s.get("rationale") or "",
                     "question": s.get("question"),
                     "market_url": s.get("market_url"),
@@ -2508,9 +2510,18 @@ class PredictRequest(BaseModel):
         None,
         description=(
             "Recent price points for this market, newest first. "
-            "Each entry: {ts: ISO timestamp, probability: float 0..1}. "
-            "Up to 8 entries. Shown to the model as a price-trajectory context so it can "
-            "detect rapid moves (spikes/crashes) that the current price alone would hide."
+            "Each entry: {ts: ISO timestamp, probability: float 0..1, volume?: float, "
+            "liquidity?: float, bid?: float, ask?: float}. Up to 8 entries. Shown to "
+            "the model as market-trajectory context so it can detect price and "
+            "tradability changes that the current price alone would hide."
+        ),
+    )
+    forecast_history: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description=(
+            "Prior Foresea forecast snapshots for the same market, newest first. "
+            "Used by scheduled re-forecasts so repeat forecasts are stateful updates, "
+            "not independent stateless calls."
         ),
     )
     openrouter_api_key: Optional[str] = Field(

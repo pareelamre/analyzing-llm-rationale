@@ -15,7 +15,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale import track_record_live as trl  # noqa: E402
-from analyzing_llm_rationale.trackrec_store import Entity, FileStore  # noqa: E402
+from analyzing_llm_rationale.trackrec_store import DuckDBStore, Entity, FileStore  # noqa: E402
 
 
 class FakeEntity(dict):
@@ -68,7 +68,9 @@ def _fake_market_data(close_iso):
     md.MarketDataError = MarketDataError
     md._poly = {"platform": "Polymarket", "question": "Will A happen?",
                 "market_url": "https://polymarket.com/market/slug-a", "outcome": "Yes",
-                "probability": 0.40, "close_time": close_iso, "category": "World", "volume": 1234.0}
+                "probability": 0.40, "close_time": close_iso, "category": "World",
+                "volume": 1234.0, "liquidity": 500.0, "yes_bid": 0.39,
+                "yes_ask": 0.41, "last_trade_price": 0.40}
     md._kalshi = {"platform": "Kalshi", "question": "Will B happen?",
                   "market_url": "https://kalshi.com/markets/TICKERB", "outcome": "Yes",
                   "probability": 0.45, "close_time": close_iso, "category": "Politics", "volume": 88.0}
@@ -153,6 +155,49 @@ class TrajectoryTests(unittest.TestCase):
         self.assertEqual(len(snaps), 2)  # still one per (market, model, day)
         a = next(e for e in snaps if e.get("question") == "Will A happen?")
         self.assertAlmostEqual(a["model_probability"], 0.55)  # refreshed
+
+    def test_hourly_price_points_store_liquidity_and_forecast_context_is_stateful(self):
+        far = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        seen_quotes = []
+
+        async def forecast_fn(quote, top_k, model=None):
+            seen_quotes.append(dict(quote))
+            return {"model_probability": 0.70,
+                    "market_probability": quote["probability"], "evidence_count": 2}
+
+        with tempfile.TemporaryDirectory() as td:
+            store = DuckDBStore(Path(td) / "track.duckdb")
+            try:
+                with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, 0, tzinfo=timezone.utc)):
+                    self.assertEqual(asyncio.run(trl.record_snapshots(
+                        store, md, forecast_fn, default_model="m", per_venue=1)), 2)
+
+                md._poly.update(probability=0.46, volume=2200.0, liquidity=900.0,
+                                yes_bid=0.45, yes_ask=0.47, last_trade_price=0.46)
+                with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, 1, tzinfo=timezone.utc)):
+                    self.assertEqual(trl.record_price_points(store, md), 2)
+
+                hist = trl._get_price_history(store, "slug-a")
+                self.assertEqual(hist[0]["probability"], 0.46)
+                self.assertEqual(hist[0]["volume"], 2200.0)
+                self.assertEqual(hist[0]["liquidity"], 900.0)
+                self.assertEqual(hist[0]["bid"], 0.45)
+                self.assertEqual(hist[0]["ask"], 0.47)
+
+                with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 4, 0, tzinfo=timezone.utc)):
+                    self.assertEqual(asyncio.run(trl.record_snapshots(
+                        store, md, forecast_fn, default_model="m", per_venue=1)), 2)
+
+                second_poly = next(
+                    q for q in seen_quotes
+                    if q.get("question") == "Will A happen?" and q.get("forecast_history")
+                )
+                self.assertEqual(second_poly["market_price_history"][0]["liquidity"], 900.0)
+                self.assertEqual(second_poly["forecast_history"][0]["model_probability"], 0.70)
+                self.assertEqual(second_poly["forecast_history"][0]["market_liquidity"], 500.0)
+            finally:
+                store.close()
 
     def test_short_horizon_markets_get_intraday_slots(self):
         ref = datetime(2026, 6, 3, 1, tzinfo=timezone.utc)

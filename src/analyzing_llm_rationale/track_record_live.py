@@ -196,15 +196,124 @@ def brier(prob: float, outcome: int) -> float:
 
 
 def _get_price_history(client, ident: str, limit: int = 8) -> List[Dict[str, Any]]:
-    """Return recent price points for a market (newest first), fail-open to []."""
+    """Return recent market context points (newest first), fail-open to []."""
     try:
         if hasattr(client, "_con"):  # DuckDBStore
             rows = client._con.execute(
-                "SELECT ts, market_probability FROM market_price_point "
-                "WHERE ident = ? ORDER BY ts DESC LIMIT ?",
+                """
+                SELECT ts, market_probability, market_bid, market_ask,
+                       market_volume, market_liquidity, last_trade_price
+                FROM market_price_point
+                WHERE ident = ? ORDER BY ts DESC LIMIT ?
+                """,
                 [ident, limit],
             ).fetchall()
-            return [{"ts": r[0], "probability": r[1]} for r in rows]
+            return [
+                {
+                    "ts": r[0],
+                    "probability": r[1],
+                    "bid": r[2],
+                    "ask": r[3],
+                    "volume": r[4],
+                    "liquidity": r[5],
+                    "last_trade_price": r[6],
+                }
+                for r in rows
+            ]
+    except Exception:
+        pass
+    try:
+        q = client.query(kind=PRICE_KIND)
+        q.add_filter("ident", "=", ident)
+        points = sorted(q.fetch(), key=lambda p: p.get("ts") or _now(), reverse=True)
+        return [
+            {
+                "ts": p.get("ts"),
+                "probability": p.get("market_probability"),
+                "bid": p.get("market_bid"),
+                "ask": p.get("market_ask"),
+                "volume": p.get("market_volume"),
+                "liquidity": p.get("market_liquidity"),
+                "last_trade_price": p.get("last_trade_price"),
+            }
+            for p in points[:limit]
+        ]
+    except Exception:
+        pass
+    return []
+
+
+def _get_forecast_history(
+    client,
+    platform: str,
+    ident: str,
+    model: Optional[str] = None,
+    limit: int = 6,
+) -> List[Dict[str, Any]]:
+    """Return prior forecast snapshots for this market/model, newest first."""
+    try:
+        if hasattr(client, "_con"):  # DuckDBStore
+            params: List[Any] = [ident]
+            platform_clause = ""
+            if platform:
+                platform_clause = " AND lower(platform) = ?"
+                params.append(platform.lower())
+            model_clause = ""
+            if model:
+                model_clause = " AND model = ?"
+                params.append(model)
+            params.append(limit)
+            rows = client._con.execute(
+                f"""
+                SELECT snapshot_ts, snapshot_date, model, model_probability,
+                       market_probability, market_volume, market_liquidity,
+                       evidence_count, rationale
+                FROM forecast_snapshot
+                WHERE ident = ?{platform_clause}{model_clause}
+                ORDER BY snapshot_ts DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+            return [
+                {
+                    "snapshot_ts": r[0],
+                    "snapshot_date": r[1],
+                    "model": r[2],
+                    "model_probability": r[3],
+                    "market_probability": r[4],
+                    "market_volume": r[5],
+                    "market_liquidity": r[6],
+                    "evidence_count": r[7],
+                    "rationale": r[8],
+                }
+                for r in rows
+            ]
+    except Exception:
+        pass
+    try:
+        q = client.query(kind=SNAPSHOT_KIND)
+        q.add_filter("ident", "=", ident)
+        snaps = [
+            s for s in q.fetch()
+            if (not platform or (s.get("platform") or "").lower() == platform.lower())
+            and (not model or s.get("model") == model)
+        ]
+        snaps.sort(key=lambda s: s.get("snapshot_ts") or _now(), reverse=True)
+        return [
+            {
+                "snapshot_ts": s.get("snapshot_ts"),
+                "snapshot_date": s.get("snapshot_date"),
+                "model": s.get("model"),
+                "model_probability": s.get("model_probability"),
+                "market_probability": s.get("market_probability"),
+                "market_volume": s.get("market_volume"),
+                "market_liquidity": s.get("market_liquidity"),
+                "evidence_count": s.get("evidence_count"),
+                "rationale": s.get("rationale"),
+            }
+            for s in snaps[:limit]
+        ]
     except Exception:
         pass
     return []
@@ -445,7 +554,9 @@ async def record_snapshots(
                         if not quote.get(_f) and existing.get(_f):
                             stored_ctx[_f] = existing[_f]
                 quote_with_history = {**quote, **stored_ctx,
-                                      "price_history": _get_price_history(client, ident)}
+                                      "market_price_history": _get_price_history(client, ident),
+                                      "forecast_history": _get_forecast_history(
+                                          client, quote.get("platform") or "", ident, model)}
                 llm_tasks.append((key, quote, ident, model, lead, market_prob, existing,
                                   quote_with_history))
 
@@ -542,8 +653,15 @@ def record_price_points(client, market_data) -> int:
         entity.update(
             platform=platform,
             ident=ident,
+            market_url=quote.get("market_url"),
             market_probability=float(quote["probability"]),
+            market_bid=quote.get("yes_bid"),
+            market_ask=quote.get("yes_ask"),
+            market_volume=quote.get("volume"),
+            market_liquidity=quote.get("liquidity"),
+            last_trade_price=quote.get("last_trade_price"),
             ts=now,
+            hour=hour_key,
             close_time=quote.get("close_time"),
             lead_time_days=_lead_time_days(quote.get("close_time")),
         )
@@ -1731,11 +1849,22 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         _ident = first.get("ident")
         if con is not None:
             _pp = con.execute(
-                "SELECT ts, market_probability FROM market_price_point"
+                "SELECT ts, market_probability, market_volume, market_liquidity,"
+                " market_bid, market_ask FROM market_price_point"
                 " WHERE ident = ? ORDER BY ts",
                 [_ident],
             ).fetchall()
-            price_points = [{"ts": r[0], "market_probability": r[1]} for r in _pp]
+            price_points = [
+                {
+                    "ts": r[0],
+                    "market_probability": r[1],
+                    "market_volume": r[2],
+                    "market_liquidity": r[3],
+                    "market_bid": r[4],
+                    "market_ask": r[5],
+                }
+                for r in _pp
+            ]
         else:
             price_q = client.query(kind=PRICE_KIND)
             price_q.add_filter("ident", "=", _ident)
