@@ -1088,7 +1088,6 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         staked = pnl = wins = fees = 0.0
         n = 0
         cum = 0.0
-        growth_B = 1.0
         curve: List[float] = []
         curve_ts: List[Any] = []
         growth_curve: List[float] = []
@@ -1128,8 +1127,9 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             curve.append(round(cum, 4))
             curve_ts.append(b["resolved_ts"])
             if _pre_staked > 0:
-                growth_B *= (1.0 + profit / _pre_staked)
-                growth_curve.append(round(growth_B, 6))
+                # Growth of $100 deployed across all bets; the last point equals
+                # 100*(1+roi) so the chart endpoint matches the displayed ROI.
+                growth_curve.append(round(100.0 * (1.0 + cum / _pre_staked), 6))
         if not n:
             return None
         return {
@@ -1269,12 +1269,11 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         curve_ts.append(ts)
     if not n:
         return None
-    # Growth curve: compound each bet's return as fraction of total capital
-    growth_curve: List[float] = []
-    growth_B = 1.0
-    for profit_val in (curve[i] - (curve[i - 1] if i > 0 else 0.0) for i in range(len(curve))):
-        growth_B *= (1.0 + profit_val / staked)
-        growth_curve.append(round(growth_B, 6))
+    # Growth curve: $100 deployed across all bets; the last point equals
+    # 100*(1+roi) so the chart endpoint matches the displayed ROI.
+    growth_curve: List[float] = (
+        [round(100.0 * (1.0 + c / staked), 6) for c in curve] if staked else []
+    )
     return {
         "n_bets": n,
         "total_staked": round(staked, 4),

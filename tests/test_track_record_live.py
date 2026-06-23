@@ -549,6 +549,21 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertIsNotNone(pnl["validated_only"])                 # 20pp+ bucket is significant
         self.assertEqual(pnl["validated_only"]["n_bets"], 10)
 
+    def test_growth_curve_endpoint_matches_roi(self):
+        # The edge-board chart plots growth_curve; its last point must equal
+        # 100*(1+roi) so the line ends where the displayed ROI says it should.
+        # Regression guard: a compounded curve silently diverged from ROI.
+        resolved = ([self._res(0.8, 0.5, 1) for _ in range(7)]
+                    + [self._res(0.3, 0.5, 0) for _ in range(3)])
+        pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
+        for name, s in pnl.items():
+            if not isinstance(s, dict) or not s.get("growth_curve"):
+                continue
+            roi = s["roi"]
+            self.assertAlmostEqual(
+                s["growth_curve"][-1], 100.0 * (1.0 + roi), places=2,
+                msg=f"{name}: growth_curve endpoint != 100*(1+roi)")
+
     def test_paper_pnl_is_net_of_kalshi_fees(self):
         # Same winning bet on Kalshi (price-based fee) vs Polymarket (fee-free):
         # Kalshi ROI must be lower, and the fee must be reported and positive.
