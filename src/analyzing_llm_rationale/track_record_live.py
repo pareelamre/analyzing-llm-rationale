@@ -1151,6 +1151,12 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         curve_ts.append(ts)
     if not n:
         return None
+    # Growth curve: compound each bet's return as fraction of total capital
+    growth_curve: List[float] = []
+    growth_B = 1.0
+    for profit_val in (curve[i] - (curve[i - 1] if i > 0 else 0.0) for i in range(len(curve))):
+        growth_B *= (1.0 + profit_val / staked)
+        growth_curve.append(round(growth_B, 6))
     return {
         "n_bets": n,
         "total_staked": round(staked, 4),
@@ -1159,6 +1165,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         "win_rate": round(wins / n, 4),
         "equity_curve": curve[-60:],
         "equity_curve_ts": curve_ts[-60:],
+        "growth_curve": growth_curve[-60:],
     }
 
 
