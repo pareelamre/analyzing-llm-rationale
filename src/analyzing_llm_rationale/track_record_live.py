@@ -955,11 +955,25 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             filter_fn: optional callable(bet_dict) -> bool, skip bet if False.
             fade: if True, bet the *opposite* side to the model's call.
         """
+        # Precount total capital deployed so the growth curve can compound correctly.
+        # Each bet's return is profit/pre_staked — its fraction of the starting bankroll.
+        _pre_staked = 0.0
+        for _b in all_bets:
+            if validated and not _b["in_validated"]:
+                continue
+            if filter_fn is not None and not filter_fn(_b):
+                continue
+            _s = sizing(_b)
+            if _s > 0.0:
+                _pre_staked += _s
+
         staked = pnl = wins = fees = 0.0
         n = 0
         cum = 0.0
+        growth_B = 1.0
         curve: List[float] = []
         curve_ts: List[Any] = []
+        growth_curve: List[float] = []
         for b in all_bets:
             if validated and not b["in_validated"]:
                 continue
@@ -995,6 +1009,9 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             cum += profit
             curve.append(round(cum, 4))
             curve_ts.append(b["resolved_ts"])
+            if _pre_staked > 0:
+                growth_B *= (1.0 + profit / _pre_staked)
+                growth_curve.append(round(growth_B, 6))
         if not n:
             return None
         return {
@@ -1006,6 +1023,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "win_rate": round(wins / n, 4),
             "equity_curve": curve[-60:],
             "equity_curve_ts": curve_ts[-60:],
+            "growth_curve": growth_curve[-60:],
         }
 
     flat = _run(lambda b: 1.0)

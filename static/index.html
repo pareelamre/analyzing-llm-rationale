@@ -4360,9 +4360,10 @@ async function refreshEquityCurve() {
     _upd('eb-pnl-yes-v',   _roiVal(pnl.yes_only));
     _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
     const _normCurve = s => {
+      if (s?.growth_curve?.length) return s.growth_curve.map(v => v * 100);
       if (!s?.equity_curve?.length) return null;
       const staked = s.total_staked || s.n_bets || 1;
-      return s.equity_curve.map(v => (v / staked) * 100);
+      return s.equity_curve.map(v => 100 + (v / staked) * 100);
     };
     const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
     const _mk = (s, color, label, dash) => {
@@ -4385,7 +4386,7 @@ async function refreshEquityCurve() {
       _mk(pnl.fade_extreme,   '#ec4899', 'Fade extreme ⚗️', true),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
-    el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: true}) : '';
+    el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : '';
     if (curves.length) _attachEquityHover(el);
     const ts = document.getElementById('eb-pnl-ts');
     if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
@@ -4862,19 +4863,17 @@ function _ebGoPage(n) {
   if (sec) sec.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
 }
 
-function _equitySvg(curves, W = 460, H = 110, {asPct = false} = {}) {
+function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}) {
   // curves = [{points: float[], color: string, label: string}, ...]
-  // points = cumulative ROI per dollar staked (normalised by total_staked) so
-  // all curves share a common % scale regardless of sizing strategy.
+  // points = growth-of-$100 value (starts at $100, compounds each bet's return).
   const allPts = curves.flatMap(c => c.points);
   if (!allPts.length) return '';
-  // Use a real time x-axis when every curve carries a matching `times` array.
   const hasTimes = curves.every(c => Array.isArray(c.times) && c.times.length === c.points.length);
   const n = Math.max(...curves.map(c => c.points.length));
-  const lo = Math.min(0, ...allPts);
-  const hi = Math.max(0, ...allPts);
+  const lo = Math.min(100, ...allPts);
+  const hi = Math.max(100, ...allPts);
   const range = hi - lo || 1;
-  const padL = 42, padR = 8, padT = 8, padB = hasTimes ? 32 : 20;
+  const padL = 46, padR = 8, padT = 8, padB = hasTimes ? 32 : 20;
   const cW = W - padL - padR, cH = H - padT - padB;
   let tMin = 0, tMax = 1;
   if (hasTimes) {
@@ -4887,19 +4886,12 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false} = {}) {
     ? padL + ((t - tMin) / tSpan) * cW
     : padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
   const toY = v => padT + cH - ((v - lo) / range) * cH;
-  const zeroY = toY(0).toFixed(1);
-  // Y-axis labels: % ROI when asPct, otherwise raw dollar PnL
-  const yLabels = [...new Set([lo, 0, hi])].filter(v => v !== 0 || (lo < 0 && hi > 0));
+  const baselineY = toY(100).toFixed(1);
+  // Y-axis: show $100 baseline plus lo/hi
+  const yLabels = [...new Set([lo, 100, hi])].filter(v => v === 100 || v !== 100);
   const yAxisHtml = yLabels.map(v => {
-    let labelStr;
-    if (asPct) {
-      const absVal = Math.abs(v).toFixed(1);
-      labelStr = v === 0 ? '$0' : (v > 0 ? '+$' : '-$') + absVal;
-    } else {
-      const absVal = Math.abs(v).toFixed(1);
-      labelStr = v === 0 ? '$0' : (v > 0 ? '+$' : '-$') + absVal;
-    }
-    return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="#888">${labelStr}</text>`;
+    const labelStr = '$' + v.toFixed(v >= 100 ? 0 : 1);
+    return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="${v === 100 ? '#94a3b8' : '#888'}">${labelStr}</text>`;
   }).join('');
   let xAxisHtml = '';
   if (hasTimes) {
@@ -4910,16 +4902,14 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false} = {}) {
       xAxisHtml += `<text x="${x.toFixed(1)}" y="${(padT + cH + 12).toFixed(1)}" font-size="8.5" text-anchor="${anchor}" fill="#888">${escHtml(_fmtEquityDate(t, withTime))}</text>`;
     }
   }
-  // Zero baseline
-  const baseline = `<line x1="${padL}" y1="${zeroY}" x2="${padL + cW}" y2="${zeroY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>`;
-  // Curve paths — dash=true renders as a dashed line (crowd baseline)
+  // $100 baseline
+  const baseline = `<line x1="${padL}" y1="${baselineY}" x2="${padL + cW}" y2="${baselineY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>`;
   const paths = curves.map(c => {
     if (!c.points.length) return '';
     const pts = c.points.map((v, i) => `${toX(i, c.times && c.times[i]).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
     const dashAttr = c.dash ? ' stroke-dasharray="5,3" stroke-width="1.4" opacity="0.75"' : ' stroke-width="1.8"';
     return `<polyline points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>`;
   }).join('');
-  // Legend — dashed swatch for crowd baseline
   const legendY = hasTimes ? H + 8 : H - 6;
   const legend = curves.map((c, i) => {
     const swatch = c.dash
@@ -4929,7 +4919,7 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false} = {}) {
   }).join('');
   const svgH = H + (hasTimes ? 14 : 0);
   _lastEquityCurves = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan };
-  const chartLabel = asPct ? `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">P&amp;L on $100 stake</text>` : '';
+  const chartLabel = `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">Growth of $100 (reinvested)</text>`;
   return `<svg class="eq-svg" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
     ${chartLabel}${yAxisHtml}${xAxisHtml}${baseline}${paths}${legend}
   </svg>`;
@@ -5014,7 +5004,7 @@ function _attachEquityHover(container) {
       const y = eq.padT + eq.cH - ((v - eq.lo) / eq.range) * eq.cH;
       dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
       dots[ci].style.display = '';
-      return `<span style="color:${c.color}">${c.label}: ${v >= 0 ? '+$' : '-$'}${Math.abs(v).toFixed(2)}</span>`;
+      return `<span style="color:${c.color}">${c.label}: $${v.toFixed(2)}</span>`;
     }).filter(Boolean);
     tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>` + lines.join('<br>');
     tip.style.display = 'block';
@@ -5217,9 +5207,10 @@ function renderEdgeBoard(d) {
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. Three ways to size each bet (${nBet} of ${nRes} resolved markets bet):</p>`;
     const _normCurve = s => {
+      if (s?.growth_curve?.length) return s.growth_curve.map(v => v * 100);
       if (!s?.equity_curve?.length) return null;
       const staked = s.total_staked || s.n_bets || 1;
-      return s.equity_curve.map(v => (v / staked) * 100);
+      return s.equity_curve.map(v => 100 + (v / staked) * 100);
     };
     const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
     const _mk = (s, color, label, dash) => {
@@ -5242,7 +5233,7 @@ function renderEdgeBoard(d) {
       _mk(pnl.fade_extreme,   '#ec4899', 'Fade extreme ⚗️', true),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
-    const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: true}) : ''}</div>`;
+    const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : ''}</div>`;
     // Per-sizing explainer: what each number means and what the gap between them signals.
     const _pnlExplainer = () => {
       const fl = pnl.flat, ew = pnl.edge_weighted, vo = pnl.validated_only, mid = pnl.mid_price_only, fade = pnl.fade_extreme, kelly = pnl.half_kelly, smart = pnl.smart, yes = pnl.yes_only, crowd = pnl.crowd_baseline;
