@@ -1,0 +1,12 @@
+When answering, use the Description and Evidence Summaries (news_articles summaries or summary_llm). Your rationale must address two things explicitly:
+1. The relevant dates or time ranges that matter for resolution of the question (if none are relevant, state "none").
+2. The credibility of the evidence: consider source reliability, recency, and whether the strongest support comes from high-credibility or weak/mixed sources.
+
+Then output your forecast in JSON with these fields:
+{
+  "predicted_answer": "Yes or No",
+  "confidence": number between 0 and 1,
+  "rationale": "short text explanation",
+  "temporal_anchors": "list of relevant dates or time ranges as a single string, or 'none' if none",
+  "credibility_assessment": "one sentence on source reliability and evidence quality"
+}

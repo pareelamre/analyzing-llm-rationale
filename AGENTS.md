@@ -103,6 +103,20 @@ https://foresea.ink
 - `GET /health` → `{"status": "ok"}`
 - `POST /predict` — PredictRequest → PredictResponse
 
+## Foresea runtime notes
+
+- The homepage "Market desk" uses `GET /radar`, which is built from
+  `static/track_record_live.json` / `edge_board` and surfaces model-vs-market gaps.
+- Product analytics are separate from page visits: `POST /analytics/event`,
+  `GET /analytics/events/summary`. Use these for funnel events such as
+  `forecast_completed`, `watchlist_add`, `share_created`, and `digest_sent`.
+- Anonymous chats are stored only in browser `localStorage`; signed-in users sync
+  conversations through `/chat/conversations`. Watchlist/favorites require sign-in.
+- Track buttons write `FavoriteMarket` entities. The daily digest is
+  `.github/workflows/favorites-digest.yml` running `scripts/favorites_digest.py`.
+- Forecast sharing is explicit only: `POST /forecasts/share` creates a public
+  `GET /forecast/{share_id}` page. Do not expose full private chat history.
+
 ### CI/CD
 Push to `main` triggers GitHub Actions:
 1. `ci.yml` — lint + tests
