@@ -4360,7 +4360,10 @@ async function refreshEquityCurve() {
     _upd('eb-pnl-yes-v',   _roiVal(pnl.yes_only));
     _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
     const _normCurve = s => {
-      if (s?.growth_curve?.length) return s.growth_curve.map(v => v * 100);
+      if (s?.growth_curve?.length) {
+        const base = s.growth_curve[0];
+        return s.growth_curve.map(v => (v / base) * 100);
+      }
       if (!s?.equity_curve?.length) return null;
       const staked = s.total_staked || s.n_bets || 1;
       return s.equity_curve.map(v => 100 + (v / staked) * 100);
@@ -5207,7 +5210,10 @@ function renderEdgeBoard(d) {
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. Three ways to size each bet (${nBet} of ${nRes} resolved markets bet):</p>`;
     const _normCurve = s => {
-      if (s?.growth_curve?.length) return s.growth_curve.map(v => v * 100);
+      if (s?.growth_curve?.length) {
+        const base = s.growth_curve[0];
+        return s.growth_curve.map(v => (v / base) * 100);
+      }
       if (!s?.equity_curve?.length) return null;
       const staked = s.total_staked || s.n_bets || 1;
       return s.equity_curve.map(v => 100 + (v / staked) * 100);
