@@ -5253,7 +5253,7 @@ function renderEdgeBoard(d) {
         const verb = fl.roi >= 0 ? 'profitable' : 'loss-making';
         rows.push(`<div class="pnl-exp-row">
           <span class="pnl-exp-dot" style="background:#60a5fa"></span>
-          <div><strong>Flat stake ${_roiPct(fl.roi)}</strong> — equal £/$ on every call, ${fl.n_bets} bets.
+          <div><strong>Flat stake ${_roiPct(fl.roi)}</strong> — equal $1 on every call, ${fl.n_bets} bets.
           The model bet the same amount regardless of how confident it was or how far it sat from the market price.
           A ${sign} result here means the model's <em>directional calls</em> were ${verb} at the odds the market offered at the time of each forecast.
           Win rate was ${pct(fl.win_rate)}% (the model picked the right side on ${Math.round(fl.win_rate * fl.n_bets)} of ${fl.n_bets} bets).</div>
@@ -5356,7 +5356,6 @@ function renderEdgeBoard(d) {
         rows.push(`<div class="pnl-exp-row">
           <span class="pnl-exp-dot" style="background:#fbbf24"></span>
           <div><strong>YES-Only Flat ${_roiPct(yes.roi)}</strong> — flat $1 stake, but only betting when the model predicts YES (buys YES contracts), ${yes.n_bets} bets.
-          On YES calls, the model has historically had an exceptional hit rate (95%).
           A ${sign} result here shows the model's performance when forecasting *change* rather than status-quo.
           Win rate was ${pct(yes.win_rate)}%.</div>
         </div>`);
