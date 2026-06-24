@@ -254,6 +254,22 @@ class TrajectoryTests(unittest.TestCase):
         kept = {r["ident"] for r in trl._drop_stale_open(rows)}
         self.assertEqual(kept, {"fresh", "recent"})  # 06-07 is >2 days older than newest
 
+    def test_drop_stale_open_window_is_per_model(self):
+        # A cheap heartbeat model (crowd-follow) snapshots every day; the primary
+        # LLM falls a few days behind. The LLM's snapshots must survive on their
+        # own per-model window, not be evicted by the heartbeat's newer date.
+        rows = [
+            {"ident": "m1", "model": "crowd-follow", "snapshot_date": "2026-06-24"},
+            {"ident": "m1", "model": "gpt-oss-120b", "snapshot_date": "2026-06-21"},
+            {"ident": "m1", "model": "gpt-oss-120b", "snapshot_date": "2026-06-15"},
+        ]
+        kept = {(r["model"], r["snapshot_date"]) for r in trl._drop_stale_open(rows)}
+        # gpt-oss 06-21 kept (newest for its model); 06-15 dropped (>2d behind 06-21).
+        self.assertEqual(kept, {
+            ("crowd-follow", "2026-06-24"),
+            ("gpt-oss-120b", "2026-06-21"),
+        })
+
     def test_resolution_scores_all_snapshots_and_buckets_by_horizon(self):
         far = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)

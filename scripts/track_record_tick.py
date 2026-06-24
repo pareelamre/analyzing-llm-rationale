@@ -174,6 +174,10 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         "question": quote["question"],
         "description": quote.get("description") or "",
         "resolution_criteria": quote.get("resolution_criteria") or "",
+        # Force the structured forecast template. Without this the server's
+        # always-on chat mode answers conversationally (question_type="chat",
+        # no market_analysis) and every LLM snapshot is silently dropped.
+        "chat_mode": False,
         "attach_evidence": True,
         "evidence_top_k": evidence_top_k,
         "market_platform": quote.get("platform"),

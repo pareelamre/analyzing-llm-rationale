@@ -126,9 +126,16 @@ OPEN_SNAPSHOT_MAX_AGE_DAYS = 2
 def _drop_stale_open(rows: List[Dict[str, Any]],
                      max_age_days: int = OPEN_SNAPSHOT_MAX_AGE_DAYS) -> List[Dict[str, Any]]:
     """Keep only open snapshots (re)forecast within ``max_age_days`` of the most
-    recent open snapshot. Orphaned readings — e.g. left behind when a venue
-    changes a market's ident/ticker — go stale and must not surface as the current
-    forecast. Self-relative (to the newest snapshot) so it's clock-independent."""
+    recent open snapshot *for the same model*. Orphaned readings — e.g. left
+    behind when a venue changes a market's ident/ticker — go stale and must not
+    surface as the current forecast.
+
+    The window is per-model (relative to each model's own newest snapshot), not
+    a single global cutoff. A cheap heartbeat model (e.g. ``crowd-follow``) that
+    snapshots every tick would otherwise pin the global cutoff to "today" and
+    evict a less-frequently-forecast model (the primary LLM) from the board the
+    moment it falls a couple of days behind. Self-relative so it's
+    clock-independent."""
     import datetime as _dt
 
     def _date(r: Dict[str, Any]) -> Optional["_dt.date"]:
@@ -137,11 +144,21 @@ def _drop_stale_open(rows: List[Dict[str, Any]],
         except Exception:
             return None
 
-    dates = [d for d in (_date(r) for r in rows) if d is not None]
-    if not dates:
+    newest_by_model: Dict[Any, "_dt.date"] = {}
+    for r in rows:
+        d = _date(r)
+        if d is None:
+            continue
+        m = r.get("model")
+        if m not in newest_by_model or d > newest_by_model[m]:
+            newest_by_model[m] = d
+    if not newest_by_model:
         return rows
-    cutoff = max(dates) - _dt.timedelta(days=max_age_days)
-    return [r for r in rows if (_date(r) is not None and _date(r) >= cutoff)]
+    return [
+        r for r in rows
+        if (_date(r) is not None and r.get("model") in newest_by_model
+            and _date(r) >= newest_by_model[r.get("model")] - _dt.timedelta(days=max_age_days))
+    ]
 
 
 def ident_from_url(platform: str, url: str) -> str:
