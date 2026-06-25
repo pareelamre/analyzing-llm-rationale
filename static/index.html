@@ -1574,38 +1574,42 @@
       width: 100%;
       max-width: 392px;
       margin: auto;
-      border-radius: 26px;
-      padding: 30px 28px 26px;
+      border-radius: 24px;
+      padding: 36px 32px 28px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 40px rgba(15, 15, 16, 0.08), 0 1px 3px rgba(15, 15, 16, 0.02);
       transform: translateY(12px) scale(.985);
       opacity: 0;
       transition: transform var(--dur-slow) var(--ease-soft), opacity var(--dur-med) var(--ease-soft);
     }
     .auth-overlay.show .auth-card { transform: none; opacity: 1; }
     .auth-close {
-      position: absolute; top: 14px; right: 16px;
-      width: 30px; height: 30px; border-radius: 999px;
+      position: absolute; top: 16px; right: 16px;
+      width: 32px; height: 32px; border-radius: 999px;
       border: 0; background: transparent; color: var(--text-mute);
-      font-size: 18px; line-height: 1; cursor: pointer;
+      font-size: 16px; line-height: 1; cursor: pointer;
       display: inline-flex; align-items: center; justify-content: center;
       transition: background var(--dur-med), color var(--dur-med);
     }
-    .auth-close:hover { background: rgba(15,15,16,.06); color: var(--ink); }
+    .auth-close:hover { background: var(--panel); color: var(--ink); }
     .feedback-star {
       font-size: 24px; cursor: pointer; color: var(--border);
       transition: color 0.15s; user-select: none;
     }
     .feedback-star.active, .feedback-star:hover { color: #f59e0b; }
     .auth-brand {
-      display: inline-flex; align-items: center; gap: 9px;
-      margin-bottom: 16px;
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-bottom: 12px;
     }
     .auth-title {
-      font-size: 22px; font-weight: 700; letter-spacing: 0;
+      font-size: 24px; font-weight: 700; letter-spacing: -0.02em;
       color: var(--ink); line-height: 1.15;
+      margin: 0;
     }
     .auth-sub {
-      font-size: 13px; color: var(--text-dim);
-      margin-top: 5px; margin-bottom: 18px; line-height: 1.5;
+      font-size: 13.5px; color: var(--text-dim);
+      margin-top: 8px; margin-bottom: 0; line-height: 1.5;
     }
 
     /* Clean Google button — single pill outline, full width, no double border */
@@ -1615,63 +1619,67 @@
       overflow: hidden;
     }
     .auth-github {
-      display: flex; align-items: center; justify-content: center; gap: 9px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
       width: 100%; margin-top: 10px;
-      background: #1f2328; color: #fff;
-      border: 1.5px solid #1f2328; border-radius: 999px;
-      padding: 11px 16px; font-size: 14px; font-weight: 500; cursor: pointer;
-      transition: background var(--dur-med), transform var(--dur-fast);
+      background: #ffffff; color: var(--ink);
+      border: 1px solid var(--border-2); border-radius: 999px;
+      padding: 10px 16px; font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: background var(--dur-med), border-color var(--dur-med), transform var(--dur-fast);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
     }
-    .auth-github:hover { background: #000; }
+    .auth-github:hover { background: var(--panel); border-color: var(--text-mute); }
     .auth-github:active { transform: translateY(1px); }
-    .auth-github svg { width: 18px; height: 18px; }
+    .auth-github svg { width: 18px; height: 18px; fill: var(--ink); }
 
     .auth-divider {
       display: flex; align-items: center; gap: 12px;
-      margin: 18px 0;
-      font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+      margin: 20px 0;
+      font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
       color: var(--text-mute);
+      font-weight: 500;
     }
     .auth-divider::before, .auth-divider::after {
-      content: ""; flex: 1; height: 1px; background: var(--border-2);
+      content: ""; flex: 1; height: 1px; background: var(--border);
     }
 
-    .auth-field { margin-bottom: 13px; }
+    .auth-field { margin-bottom: 16px; }
     .auth-label {
       display: block;
-      font-size: 12px; font-weight: 500; color: var(--text);
+      font-size: 12.5px; font-weight: 500; color: var(--text);
       margin-bottom: 6px;
     }
-    /* Tasteful black-bordered text fields */
+    /* Tasteful light-bordered text fields with subtle inner shadow */
     .auth-input {
       width: 100%;
-      font-size: 16px; /* >=16px avoids iOS focus zoom */
+      font-size: 15px;
       color: var(--ink);
-      background: rgba(255, 255, 255, .7);
-      border: 1.5px solid var(--ink);
-      border-radius: 13px;
-      padding: 12px 14px;
+      background: #ffffff;
+      border: 1px solid var(--border-2);
+      border-radius: 12px;
+      padding: 11px 14px;
       transition: box-shadow var(--dur-med), border-color var(--dur-med), background var(--dur-med);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02) inset;
     }
     .auth-input::placeholder { color: var(--text-mute); }
     .auth-input:focus {
       outline: none;
       border-color: var(--ink);
       background: #fff;
-      box-shadow: 0 0 0 4px rgba(15, 15, 16, .10);
+      box-shadow: 0 0 0 3px rgba(15, 15, 16, 0.08);
     }
     .auth-input:disabled { opacity: .55; cursor: not-allowed; }
 
     .auth-submit {
       width: 100%;
-      margin-top: 4px;
+      margin-top: 8px;
       background: var(--ink); color: #fff;
-      font-size: 14px; font-weight: 500;
-      border: 1.5px solid var(--ink);
-      border-radius: 999px;
+      font-size: 14.5px; font-weight: 600;
+      border: none;
+      border-radius: 12px;
       padding: 12px 16px;
       cursor: pointer;
       transition: background var(--dur-med), transform var(--dur-fast), opacity var(--dur-med);
+      box-shadow: 0 2px 4px rgba(15, 15, 16, 0.08);
     }
     .auth-submit:hover { background: #000; }
     .auth-submit:active { transform: translateY(1px); }
@@ -1687,18 +1695,21 @@
 
     .auth-switch {
       text-align: center;
-      font-size: 13px; color: var(--text-dim);
-      margin-top: 18px;
+      font-size: 13.5px; color: var(--text-dim);
+      margin-top: 24px;
     }
     .auth-switch button {
       background: none; border: 0; padding: 0;
-      font-size: 13px; font-weight: 600; color: var(--ink);
-      cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+      font-size: 13.5px; font-weight: 600; color: #4f46e5;
+      cursor: pointer; text-decoration: none;
+      margin-left: 4px;
+      transition: color var(--dur-fast);
     }
+    .auth-switch button:hover { color: #3730a3; text-decoration: underline; }
     .auth-fineprint {
       text-align: center;
       font-size: 11px; color: var(--text-mute);
-      margin-top: 16px; line-height: 1.5;
+      margin-top: 20px; line-height: 1.5;
     }
     @media (prefers-reduced-motion: reduce) {
       .auth-overlay, .auth-card { transition: none; }
@@ -2411,14 +2422,16 @@
 
 <!-- ── Auth modal ── -->
 <div id="authOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-hidden="true" onclick="if(event.target===this)closeAuthModal()">
-  <div class="auth-card glass" style="position:relative">
+  <div class="auth-card" style="position:relative">
     <button type="button" class="auth-close" onclick="closeAuthModal()" aria-label="Close">✕</button>
-    <span class="auth-brand">
-      <span class="logo-dot"></span>
-      <span class="brand text-lg">Foresea</span>
-    </span>
-    <h2 id="authTitle" class="auth-title">Welcome back</h2>
-    <p id="authSub" class="auth-sub">Sign in to sync your market briefs and track record.</p>
+    <div style="display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 28px;">
+      <span class="auth-brand" style="margin-bottom: 12px; margin-right: 0;">
+        <span class="logo-dot" style="width: 24px; height: 24px;"></span>
+        <span class="brand text-xl" style="font-weight: 600;">Foresea</span>
+      </span>
+      <h2 id="authTitle" class="auth-title">Welcome back</h2>
+      <p id="authSub" class="auth-sub">Sign in to sync your market briefs and track record.</p>
+    </div>
 
     <div id="authSocial" hidden>
       <div id="authGoogleSection" class="auth-google" hidden>
