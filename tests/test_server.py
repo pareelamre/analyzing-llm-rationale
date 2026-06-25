@@ -77,6 +77,21 @@ class ServerTests(unittest.TestCase):
             self.analytics_db.unlink()
         self._datastore_patch = mock.patch.object(server_module, "_get_datastore", return_value=None)
         self._datastore_patch.start()
+        def fake_require_auth(request):
+            auth = request.headers.get("Authorization", "")
+            if auth.startswith("Bearer "):
+                try:
+                    return server_module._decode_session(auth[7:])
+                except Exception:
+                    pass
+            return {"sub": "test-user", "email": "test@example.com", "name": "Test User"}
+
+        self._require_auth_patch = mock.patch.object(
+            server_module,
+            "_require_auth",
+            side_effect=fake_require_auth
+        )
+        self._require_auth_patch.start()
         _local_cache.clear()
         _rate_limiter._log.clear()
         _predict_rate_limiter._log.clear()
@@ -100,6 +115,7 @@ class ServerTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def tearDown(self):
+        self._require_auth_patch.stop()
         self._datastore_patch.stop()
         _state.clear()
         _local_cache.clear()
@@ -588,6 +604,22 @@ class ServerTests(unittest.TestCase):
     def test_agent_analyze_requires_question_or_market(self):
         response = self.client.post("/agent/analyze", json={"evidence_top_k": 3})
         self.assertEqual(response.status_code, 422)
+
+    def test_predict_requires_auth_when_not_mocked(self):
+        self._require_auth_patch.stop()
+        try:
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "variant": "variant0_neutral_baseline",
+                    "attach_evidence": False,
+                },
+            )
+            self.assertEqual(response.status_code, 401)
+            self.assertIn("Authentication required", response.json()["detail"])
+        finally:
+            self._require_auth_patch.start()
 
     def test_predict_rejects_short_standalone_question(self):
         response = self.client.post("/predict", json={"question": "why?", "attach_evidence": False})
@@ -1281,8 +1313,9 @@ class ServerTests(unittest.TestCase):
             "question_type": "binary",
             "attach_evidence": False,
         }
-        first = self.client.post("/predict", json=payload)
-        second = self.client.post("/predict", json=payload)
+        with mock.patch.object(server_module, "_require_auth", return_value={"sub": "api-key-user"}):
+            first = self.client.post("/predict", json=payload)
+            second = self.client.post("/predict", json=payload)
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 200)
         self.assertEqual(first.json(), second.json())

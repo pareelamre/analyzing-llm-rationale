@@ -131,10 +131,17 @@ class MiddlewareAndProbeTests(unittest.TestCase):
     def setUp(self):
         _local_cache.clear()
         _rate_limiter._log.clear()
+        self._require_auth_patch = mock.patch.object(
+            server,
+            "_require_auth",
+            return_value={"sub": "test-user", "email": "test@example.com", "name": "Test User"}
+        )
+        self._require_auth_patch.start()
         _configure_state(FlakyProvider(fail_times=0, error=RetryableProviderError("x")))
         self.client = TestClient(app)
 
     def tearDown(self):
+        self._require_auth_patch.stop()
         _state.clear()
         _local_cache.clear()
         if _ANALYTICS_DB.exists():

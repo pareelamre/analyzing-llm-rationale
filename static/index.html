@@ -1749,7 +1749,7 @@
       <!-- Left Column: Copy & Input -->
       <div class="hero-copy">
         <p class="label mb-4" style="align-self: flex-start;">AI forecasts, scored in public</p>
-        <h1 class="display hero-title" style="text-align: left; align-self: flex-start; max-width: 100%;">What are the odds it actually happens?</h1>
+        <h1 class="display hero-title" style="text-align: left; align-self: flex-start; max-width: 100%;">The intelligence layer for prediction markets</h1>
         <p class="hero-text" style="text-align: left; align-self: flex-start; max-width: 100%; margin-top: 14px;">
           Ask any yes-or-no question about the future. Foresea runs real-time searches to gather evidence, weighs facts via an LLM council, and calculates calibrated probabilities compared with live prediction markets.
         </p>
@@ -2302,10 +2302,6 @@
           oninput="autoResize(this); _updateSlashPalette(this.value)"
           onkeydown="handleKey(event)"
         ></textarea>
-        <button id="agentModeBtn" class="agent-mode-btn" onclick="toggleAgentMode()" aria-pressed="false" title="Agent mode — fetch evidence, forecast, price the edge, and run your skills">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
-          <span class="agent-mode-label">Agent</span>
-        </button>
         <button id="attachBtn" class="attach-btn" onclick="toggleAttachPanel()" title="Attach PDF or URL" aria-label="Attach file or URL" aria-expanded="false">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
@@ -2793,9 +2789,6 @@ function renderMessages() {
               ${escHtml(q)}
             </button>`).join('')}
             </div>
-            <button type="button" class="empty-suggestion" onclick="runScan('polymarket')" style="margin-top:10px;font-weight:500">
-              ⚡ Scan Polymarket for mispriced markets
-            </button>
           </div>
           <div class="empty-market-panel" aria-label="Foresea market intelligence format">
             <div class="panel-bar">
@@ -4239,6 +4232,11 @@ function showLanding({ updateHistory = true } = {}) {
   if (updateHistory) setHistoryState('landing');
 }
 function launchApp({ updateHistory = true } = {}) {
+  if (!isUserSignedIn()) {
+    showLanding({ updateHistory: true });
+    openAuthModal('login');
+    return;
+  }
   const app = document.getElementById('appShell');
   document.getElementById('landingPage').classList.add('hidden-view');
   app.classList.remove('hidden-view');
@@ -4281,6 +4279,11 @@ function submitLandingQuestion(event) {
 }
 
 async function _streamLandingQuestion(question) {
+  if (!isUserSignedIn()) {
+    _pendingQuestionAfterSignIn = question;
+    openAuthModal('login');
+    return;
+  }
   _landingLastQuestion = question;
   _landingLastData = null;
   const answerEl = document.getElementById('landingAnswer');
@@ -5808,6 +5811,14 @@ function applyHistoryState(state) {
   closeTrackRecord({ updateHistory: false });
   closeEdgeBoard({ updateHistory: false });
   closeWatchlistPage({ updateHistory: false });
+
+  const isAppView = ['app', 'track-app', 'edge-app', 'watch-app'].includes(view);
+  if (isAppView && !isUserSignedIn()) {
+    showLanding({ updateHistory: false });
+    openAuthModal('login');
+    isApplyingHistory = false;
+    return;
+  }
 
   if (view === 'app') {
     launchApp({ updateHistory: false });
@@ -7340,6 +7351,11 @@ async function runScan(platform, query, customLabel) {
 let _gClientId = null;
 let _ghClientId = null;
 let currentUser = null;
+let _pendingQuestionAfterSignIn = null;
+
+function isUserSignedIn() {
+  return !!(currentUser || localStorage.getItem('foresea_session'));
+}
 
 // ── GitHub OAuth (authorization-code flow) ────────────────────────────────────
 function _githubRedirectUri() { return location.origin + location.pathname; }
@@ -7405,6 +7421,21 @@ async function _afterSignIn(user, source = 'auth') {
   trackEvent('sign_in_completed', { source });
   await syncConversationsAfterSignIn(user);
   await _syncFavoritesFromServer();
+  
+  if (_pendingQuestionAfterSignIn) {
+    const question = _pendingQuestionAfterSignIn;
+    _pendingQuestionAfterSignIn = null;
+    launchApp();
+    const input = document.getElementById('questionInput');
+    if (input) {
+      input.value = question;
+      autoResize(input);
+    }
+    startForecast(question);
+  } else if (currentView === 'landing' || !currentView) {
+    launchApp();
+  }
+  
   if (_pendingFavoriteAfterSignIn) {
     const fav = _pendingFavoriteAfterSignIn;
     _pendingFavoriteAfterSignIn = null;
@@ -7713,6 +7744,7 @@ function signOut() {
   if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
   updateAuthUI(null);
   switchToAnonymousStore();
+  showLanding();
 }
 
 async function initAuth() {

@@ -456,6 +456,25 @@ def _require_session(request: Request) -> dict:
     return _decode_session(auth[7:])
 
 
+def _require_auth(request: Request) -> dict:
+    """Enforce authentication on core app endpoints.
+    Requires either a valid X-API-Key header (matching _REQUIRED_API_KEY if configured)
+    or a valid session Bearer token.
+    Returns session claims dict, or dummy claims if API key matches.
+    """
+    if _REQUIRED_API_KEY:
+        api_key = request.headers.get("X-API-Key")
+        if api_key == _REQUIRED_API_KEY:
+            return {"sub": "api-key-user", "email": "api@foresea.ink", "name": "API Key User"}
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return _decode_session(auth[7:])
+    raise HTTPException(
+        status_code=401,
+        detail="Authentication required. Please sign in to use Foresea.",
+    )
+
+
 def _optional_user_id(request: Optional[Request]) -> Optional[str]:
     """Decode the bearer token if present and valid; return the user id or None.
     Never raises — used to personalise public endpoints for signed-in users."""
@@ -5454,10 +5473,11 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
       }'
     ```
     """
+    claims = None
     if request is not None:
         _check_rate_limit(request)
         _check_predict_rate_limit(request)
-        _check_api_key(request)
+        claims = _require_auth(request)
 
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
@@ -5471,7 +5491,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
 
     # Signed-in users get personalised (knowledge-base) evidence, so their
     # responses must never be shared via the cache.
-    rag_user_id = kb_user_id or _optional_user_id(request)
+    rag_user_id = kb_user_id or (claims.get("sub") if claims else None)
 
     # Serve identical, non-personalised forecasts from cache to cut latency and
     # model spend. History, BYOK, or a signed-in user disable caching.
@@ -5479,7 +5499,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         _PREDICT_CACHE_TTL > 0
         and not req.history
         and not req.openrouter_api_key
-        and not rag_user_id
+        and (not rag_user_id or rag_user_id == "api-key-user")
     )
     predict_cache_key = None
     prompt_date = datetime.now(timezone.utc).date().isoformat()
@@ -5625,7 +5645,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
     numeric, and multiple-choice questions.
     """
     _check_rate_limit(request)
-    _check_api_key(request)
+    claims = _require_auth(request)
 
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
@@ -5637,7 +5657,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             detail=f"Unknown variant '{req.variant}'. Valid: {sorted(variants)}",
         )
 
-    rag_user_id = _optional_user_id(request)
+    rag_user_id = claims.get("sub")
 
     async def events():
         yield _sse_event("meta", {
@@ -6038,10 +6058,11 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
     identifier is given) → gather evidence and forecast → compute the model-vs-market
     edge → run any custom **skills** → recommend. Returns one structured report.
     """
+    claims = None
     if request is not None:
         _check_rate_limit(request)
         _check_predict_rate_limit(request)
-        _check_api_key(request)
+        claims = _require_auth(request)
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
 
@@ -6053,7 +6074,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
 
     # 2. Evidence + forecast + edge — reuse the /predict pipeline.
     pred_req = _agent_prediction_request(req, question, quote, grounding_note)
-    result = await predict(pred_req, kb_user_id=_optional_user_id(request))
+    result = await predict(pred_req, kb_user_id=(claims.get("sub") if claims else None))
     return await _agent_report_from_prediction(
         req, question, quote, grounding_note, pipeline, pred_req, result
     )
@@ -6074,7 +6095,7 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
     turns are interleaved with tool calls rather than one continuous answer.
     """
     _check_rate_limit(request)
-    _check_api_key(request)
+    claims = _require_auth(request)
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
     if req.tool_loop:
@@ -6090,7 +6111,7 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
                 "pipeline": pipeline,
             })
             pred_req = _agent_prediction_request(req, question, quote, grounding_note)
-            rag_user_id = _optional_user_id(request)
+            rag_user_id = claims.get("sub")
             messages, evidence_articles, evidence_error = await _prepare_predict_messages(
                 pred_req, rag_user_id
             )
@@ -6329,10 +6350,11 @@ async def agent_scan(
     (e.g. `nba`). Bounded by `limit` per venue (max 8) since each market runs a
     full forecast; results are cached briefly.
     """
+    claims = None
     if request is not None:
         _check_rate_limit(request)
         _check_predict_rate_limit(request)
-        _check_api_key(request)
+        claims = _require_auth(request)
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
 
@@ -6384,7 +6406,7 @@ async def agent_scan(
                 market_outcome=quote.get("outcome"),
                 market_probability=quote.get("probability"),
                 chat_mode=False,
-            ))
+            ), kb_user_id=(claims.get("sub") if claims else None))
         except Exception:
             return None
         analysis = res.market_analysis
