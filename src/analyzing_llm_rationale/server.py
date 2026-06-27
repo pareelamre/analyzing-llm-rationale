@@ -1257,6 +1257,34 @@ def _mount_public_mcp_endpoint() -> None:
 
 _mount_public_mcp_endpoint()
 
+from analyzing_llm_rationale.observability import init_observability
+from opentelemetry import metrics as otel_metrics, trace as otel_trace
+
+init_observability(app)
+
+_tracer = otel_trace.get_tracer("foresea.server")
+_meter = otel_metrics.get_meter("foresea.server")
+
+# Business metrics
+_forecast_counter = _meter.create_counter(
+    "forecast.requests", unit="1", description="Total forecast requests"
+)
+_forecast_errors = _meter.create_counter(
+    "forecast.errors", unit="1", description="Forecast requests that errored"
+)
+_forecast_duration = _meter.create_histogram(
+    "forecast.duration", unit="s", description="Forecast end-to-end latency"
+)
+_llm_calls = _meter.create_counter(
+    "llm.calls", unit="1", description="LLM provider call attempts"
+)
+_llm_errors = _meter.create_counter(
+    "llm.errors", unit="1", description="LLM provider call failures"
+)
+_agent_counter = _meter.create_counter(
+    "agent.requests", unit="1", description="Agent analyze requests"
+)
+
 
 # Redirect middleware: send requests from run.app hosts to the custom domain
 @app.middleware("http")
@@ -1409,38 +1437,62 @@ async def _provider_chat(provider, messages, temperature, max_tokens) -> str:
     Callers map the raised exception to a clean HTTP status via
     :func:`_provider_http_error`.
     """
+    from opentelemetry.trace import Status, StatusCode
     from analyzing_llm_rationale.providers import (
         ContextLimitError,
         RetryableProviderError,
     )
 
-    loop = asyncio.get_running_loop()
-    attempts = max(1, _PROVIDER_MAX_RETRIES + 1)
-    last_exc: Optional[Exception] = None
-    for attempt in range(attempts):
-        try:
-            return await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: provider.chat_completion(messages, temperature, max_tokens),
-                ),
-                timeout=_PROVIDER_TIMEOUT_S,
-            )
-        except ContextLimitError:
-            raise
-        except (RetryableProviderError, asyncio.TimeoutError) as exc:
-            last_exc = exc
-            if attempt == attempts - 1:
-                break
-            delay = _PROVIDER_BACKOFF_BASE_S * (2 ** attempt)
-            delay += random.uniform(0, delay * 0.25)  # jitter to avoid thundering herd
-            logger.warning(
-                "provider call failed (attempt %d/%d), retrying in %.2fs: %s",
-                attempt + 1, attempts, delay, type(exc).__name__,
-            )
-            await asyncio.sleep(delay)
-    assert last_exc is not None
-    raise last_exc
+    model_name = getattr(provider, "model_name", "unknown")
+    provider_type = type(provider).__name__
+
+    with _tracer.start_as_current_span("llm.chat_completion") as span:
+        span.set_attributes({
+            "gen_ai.request.model": model_name,
+            "gen_ai.provider.name": provider_type,
+            "gen_ai.request.temperature": temperature,
+            "gen_ai.request.max_tokens": max_tokens,
+        })
+        _llm_calls.add(1, {"gen_ai.request.model": model_name, "gen_ai.provider.name": provider_type})
+
+        loop = asyncio.get_running_loop()
+        attempts = max(1, _PROVIDER_MAX_RETRIES + 1)
+        last_exc: Optional[Exception] = None
+        for attempt in range(attempts):
+            try:
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        lambda: provider.chat_completion(messages, temperature, max_tokens),
+                    ),
+                    timeout=_PROVIDER_TIMEOUT_S,
+                )
+                span.set_attribute("outcome", "success")
+                return result
+            except ContextLimitError:
+                span.set_status(Status(StatusCode.ERROR))
+                span.set_attribute("outcome", "context_limit")
+                _llm_errors.add(1, {"gen_ai.request.model": model_name, "error.type": "context_limit"})
+                raise
+            except (RetryableProviderError, asyncio.TimeoutError) as exc:
+                last_exc = exc
+                if attempt == attempts - 1:
+                    break
+                delay = _PROVIDER_BACKOFF_BASE_S * (2 ** attempt)
+                delay += random.uniform(0, delay * 0.25)  # jitter to avoid thundering herd
+                logger.warning(
+                    "provider call failed (attempt %d/%d), retrying in %.2fs: %s",
+                    attempt + 1, attempts, delay, type(exc).__name__,
+                )
+                await asyncio.sleep(delay)
+
+        assert last_exc is not None
+        span.record_exception(last_exc)
+        span.set_status(Status(StatusCode.ERROR))
+        span.set_attribute("outcome", "error")
+        error_type = "timeout" if isinstance(last_exc, asyncio.TimeoutError) else "retryable"
+        _llm_errors.add(1, {"gen_ai.request.model": model_name, "error.type": error_type})
+        raise last_exc
 
 
 async def _provider_stream_chat(provider, messages, temperature, max_tokens):
@@ -5550,6 +5602,10 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     try:
         content = await _provider_chat(provider, messages, temperature, max_tokens)
     except Exception as exc:
+        _forecast_errors.add(1, {
+            "forecast.variant": req.variant or "unknown",
+            "error.type": type(exc).__name__,
+        })
         raise _provider_http_error(exc) from exc
 
     parsed = _parse_json_dict(content)
@@ -5601,6 +5657,12 @@ async def _finalize_predict_response(
     predict_cache_key: Optional[str] = None,
 ) -> None:
     """Apply best-effort side effects shared by blocking and streaming forecasts."""
+    _forecast_counter.add(1, {
+        "forecast.variant": req.variant or "unknown",
+        "forecast.question_type": response.question_type or "unknown",
+        "forecast.model": response.model_key or "default",
+    })
+
     if predict_cache_key is not None:
         _cache_set(predict_cache_key, response.model_dump(), _PREDICT_CACHE_TTL)
 
@@ -6083,6 +6145,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
 
     # 2. Evidence + forecast + edge — reuse the /predict pipeline.
     pred_req = _agent_prediction_request(req, question, quote, grounding_note)
+    _agent_counter.add(1, {"agent.platform": req.platform or "unknown"})
     result = await predict(pred_req, kb_user_id=(claims.get("sub") if claims else None))
     return await _agent_report_from_prediction(
         req, question, quote, grounding_note, pipeline, pred_req, result
