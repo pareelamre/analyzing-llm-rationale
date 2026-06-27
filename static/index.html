@@ -6340,18 +6340,12 @@ function openTradeModal(prefill) {
     _venueErr('Connect a Kalshi or Polymarket account here first, then Place an order.');
     return;
   }
-  _trError(''); _trResetPreview();
-  if (prefill && prefill.platform) {
+  let url = '/trade';
+  if (prefill && prefill.platform && prefill.ident) {
     const p = String(prefill.platform).toLowerCase().includes('kalshi') ? 'kalshi' : 'polymarket';
-    document.getElementById('trPlatform').value = p;
-    if (prefill.ident) {
-      if (p === 'kalshi') document.getElementById('trKalshiTicker').value = prefill.ident;
-      else document.getElementById('trPolyToken').value = prefill.ident;
-    }
+    url += `?platform=${p}&ident=${encodeURIComponent(prefill.ident)}`;
   }
-  _trToggleIdent();
-  const ov = document.getElementById('tradeOverlay');
-  ov.classList.add('show'); ov.setAttribute('aria-hidden', 'false');
+  window.open(url, '_blank');
 }
 function closeTradeModal() {
   const ov = document.getElementById('tradeOverlay');

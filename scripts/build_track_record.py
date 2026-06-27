@@ -109,7 +109,7 @@ def main() -> int:
         })
 
     # ── Per-question resolved log ─────────────────────────────────────────────
-    log = []
+    log_all = []
     for row in rows:
         rid = row.get("id")
         if rid not in targets:
@@ -122,7 +122,7 @@ def main() -> int:
         actual = "Yes" if targets[rid] == 1 else "No"
         predicted = ans.capitalize()
         cats = rec.get("categories") or []
-        log.append({
+        log_all.append({
             "id": rid,
             "question": rec.get("question") or "",
             "predicted": predicted,
@@ -133,8 +133,18 @@ def main() -> int:
             "resolve_time": rec.get("resolve_time"),
         })
 
-    # Most recently resolved first; keep an embedded sample for page weight
-    log.sort(key=lambda r: (r.get("resolve_time") or ""), reverse=True)
+    # Sort all by resolve_time descending
+    log_all.sort(key=lambda r: (r.get("resolve_time") or ""), reverse=True)
+
+    # Keep only the first occurrence of each unique question text
+    seen_questions = set()
+    log = []
+    for entry in log_all:
+        q_text = (entry.get("question") or "").strip().lower()
+        if not q_text or q_text in seen_questions:
+            continue
+        seen_questions.add(q_text)
+        log.append(entry)
     sample = log[:MAX_LOG_ROWS]
 
     payload = {

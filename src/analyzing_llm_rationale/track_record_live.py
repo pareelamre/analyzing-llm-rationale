@@ -1615,13 +1615,7 @@ def _calibration_report(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
     return report
 
 
-def _is_similar_question(q1: str, q2: str) -> bool:
-    import re
-    # Lowercase and split into alphanumeric tokens
-    tokens1 = set(re.findall(r'[a-z0-9]+', q1.lower()))
-    tokens2 = set(re.findall(r'[a-z0-9]+', q2.lower()))
-    
-    # Filter stopwords
+def _is_similar_tokens(tokens1: set[str], tokens2: set[str]) -> bool:
     stopwords = {"will", "the", "a", "an", "is", "are", "on", "before", "by", "to", "in", "of", "at", "for", "with", "that", "and", "or", "happen", "be"}
     words1 = tokens1 - stopwords
     words2 = tokens2 - stopwords
@@ -1643,6 +1637,14 @@ def _is_similar_question(q1: str, q2: str) -> bool:
     
     # We want either high Jaccard or high overlap
     return jaccard >= 0.65 or overlap >= 0.80
+
+
+def _is_similar_question(q1: str, q2: str) -> bool:
+    import re
+    # Lowercase and split into alphanumeric tokens
+    tokens1 = set(re.findall(r'[a-z0-9]+', q1.lower()))
+    tokens2 = set(re.findall(r'[a-z0-9]+', q2.lower()))
+    return _is_similar_tokens(tokens1, tokens2)
 
 
 def build_arbitrage_board(open_rows: List[Dict[str, Any]], latest_price: Dict[str, float]) -> List[Dict[str, Any]]:
@@ -1668,6 +1670,11 @@ def build_arbitrage_board(open_rows: List[Dict[str, Any]], latest_price: Dict[st
                 "ident": ident
             })
 
+    # Pre-tokenize all active markets' questions for O(N) regex performance
+    import re
+    for m in active_markets:
+        m["_tokens"] = set(re.findall(r'[a-z0-9]+', m["question"].lower()))
+
     # Find cross-platform pairs
     pairs = []
     for i in range(len(active_markets)):
@@ -1677,7 +1684,7 @@ def build_arbitrage_board(open_rows: List[Dict[str, Any]], latest_price: Dict[st
             # Must be different platforms
             if m1["platform"] == m2["platform"]:
                 continue
-            if _is_similar_question(m1["question"], m2["question"]):
+            if _is_similar_tokens(m1["_tokens"], m2["_tokens"]):
                 p1, p2 = m1["market_probability"], m2["market_probability"]
                 # Price gap (arbitrage spread)
                 gap = abs(p1 - p2)
@@ -1819,9 +1826,18 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     overall = _bucket_stats(resolved_primary)
     # by_horizon computed above (with significance) so the edge board can link to it.
 
-    # Resolved forecast log (most recent 30) — mirrors the backtest `log` field shape
-    # so renderTrackRecord can render it without format-sniffing.
-    _log_rows = sorted(resolved_primary, key=lambda x: x.get("resolved_ts") or "", reverse=True)[:30]
+    # Keep only the latest snapshot for each unique question text (most recently resolved first)
+    resolved_sorted = sorted(resolved_primary, key=lambda x: x.get("resolved_ts") or "", reverse=True)
+    seen_questions = set()
+    _log_rows = []
+    for r in resolved_sorted:
+        q_text = (r.get("question") or "").strip().lower()
+        if not q_text or q_text in seen_questions:
+            continue
+        seen_questions.add(q_text)
+        _log_rows.append(r)
+        if len(_log_rows) >= 30:
+            break
     resolved_log = []
     for _r in _log_rows:
         _prob = float(_r.get("model_probability") or 0.5)

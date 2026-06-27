@@ -5228,6 +5228,15 @@ async def watchlist_page() -> FileResponse:
     )
 
 
+@app.get("/trade", include_in_schema=False)
+async def trade_page() -> FileResponse:
+    """Serve a dedicated professional trading dashboard in its own window."""
+    return FileResponse(
+        str(_STATIC_DIR / "trade.html"),
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @app.post("/rag/ingest", tags=["Knowledge"], summary="Add a document to your knowledge base")
 async def rag_ingest(req: RagIngestRequest, request: Request) -> Dict[str, Any]:
     """Chunk, embed, and store a document (text or URL) in the signed-in user's

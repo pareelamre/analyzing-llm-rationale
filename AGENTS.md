@@ -41,10 +41,8 @@ analyze-llm-rationale run-batch \
   --model gpt-oss-120b \
   --temperature 0.0 --temperature-tag temperature_00
 
-# Start API server locally
-analyze-llm-rationale serve \
-  --model gpt-oss-120b \
-  --variant variant0_neutral_baseline
+# Start API server locally (Note: Port 8000 is reserved, run on 8080 instead)
+PYTHONPATH=src python -m uvicorn analyzing_llm_rationale.server:app --port 8080
 
 # Fetch + rank news for a question (LangChain pipeline)
 PYTHONPATH=src analyze-llm-rationale fetch-and-rank \
