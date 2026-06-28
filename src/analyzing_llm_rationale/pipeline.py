@@ -87,6 +87,7 @@ class RunConfig:
     retry_base_sleep_s: float = 1.5
     reprocess_null_only: bool = False
     drop_article_text: bool = False
+    omit_evidence: bool = False
     variant_name: str = ""
     model_key: str = ""
     model_label: str = ""
@@ -250,6 +251,7 @@ def build_user_prompt(
     user_prompt_template: str,
     article_detail: str,
     cutoff_ts: Optional[datetime] = None,
+    omit_evidence: bool = False,
 ) -> str:
     question = str(record.get("question") or "").strip()
     description = str(record.get("description") or "").strip()
@@ -451,6 +453,12 @@ def build_user_prompt(
             "independent. Explain meaningful changes from prior Foresea forecasts "
             "using new evidence, price movement, and liquidity/tradability changes."
         )
+
+    if omit_evidence:
+        parts.append("Evidence: omitted for this no-evidence baseline.")
+        parts.append("")
+        parts.append(prompt_suffix)
+        return "\n".join(parts).strip()
 
     if article_detail == "summary":
         parts.append("Evidence (newest first):")
@@ -837,6 +845,7 @@ def build_run_metadata(
         "retry_base_sleep_s": config.retry_base_sleep_s,
         "reprocess_null_only": config.reprocess_null_only,
         "drop_article_text": config.drop_article_text,
+        "omit_evidence": config.omit_evidence,
         "cutoff_reference": config.cutoff_reference,
         "forecast_lead_days": config.forecast_lead_days,
         "input_path": str(config.input_path),
@@ -928,6 +937,7 @@ def process_batch(config: RunConfig, provider: ChatProvider) -> RunSummary:
                 user_prompt_template=user_prompt_template,
                 article_detail=article_detail,
                 cutoff_ts=cutoff_ts,
+                omit_evidence=config.omit_evidence,
             )
             messages = [
                 {"role": "system", "content": system_prompt},
