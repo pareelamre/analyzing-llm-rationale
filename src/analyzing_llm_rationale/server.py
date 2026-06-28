@@ -38,6 +38,8 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
+from opentelemetry import metrics as otel_metrics
+from opentelemetry import trace as otel_trace
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from analyzing_llm_rationale import (
@@ -48,6 +50,7 @@ from analyzing_llm_rationale import (
     rag,
     venue_mcp,
 )
+from analyzing_llm_rationale.observability import init_observability
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
     build_user_prompt,
@@ -1257,9 +1260,6 @@ def _mount_public_mcp_endpoint() -> None:
 
 _mount_public_mcp_endpoint()
 
-from analyzing_llm_rationale.observability import init_observability
-from opentelemetry import metrics as otel_metrics, trace as otel_trace
-
 init_observability(app)
 
 _tracer = otel_trace.get_tracer("foresea.server")
@@ -1438,6 +1438,7 @@ async def _provider_chat(provider, messages, temperature, max_tokens) -> str:
     :func:`_provider_http_error`.
     """
     from opentelemetry.trace import Status, StatusCode
+
     from analyzing_llm_rationale.providers import (
         ContextLimitError,
         RetryableProviderError,

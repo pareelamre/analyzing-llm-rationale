@@ -103,6 +103,20 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("Full article text", prompt)
         self.assertNotIn("[question]", prompt)
 
+    def test_build_user_prompt_can_omit_evidence(self):
+        record = self.sample_record()
+        record["current_time"] = "2026-06-05T12:00:00Z"
+        prompt = build_user_prompt(
+            record,
+            user_prompt_template="[question]\nReturn JSON.",
+            article_detail="summary",
+            omit_evidence=True,
+        )
+        self.assertIn("Question: Will event X happen?", prompt)
+        self.assertIn("Evidence: omitted for this no-evidence baseline.", prompt)
+        self.assertNotIn("Article 1", prompt)
+        self.assertNotIn("LLM summary", prompt)
+
     def cutoff_record(self):
         return {
             "id": 7,
@@ -739,6 +753,8 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(generation_config.typical_p, 1.0)
 
     def test_cli_run_batch_writes_results_metadata_and_verifies_cleanly(self):
+        import os
+        os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
         with tempfile.TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             input_path = base / "input.json"
