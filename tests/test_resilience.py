@@ -108,6 +108,18 @@ class ProviderErrorMappingTests(unittest.TestCase):
         for exc in (RetryableProviderError(secret), ProviderResponseError(secret), ContextLimitError(secret)):
             self.assertNotIn(secret, _provider_http_error(exc).detail)
 
+    def test_error_log_never_leaks_raw_exception_text(self):
+        """The ERROR-level log line must not contain the raw exception string."""
+        secret = "secret-upstream-url-and-key"
+        import logging as _logging
+
+        with self.assertLogs("foresea", level=_logging.ERROR) as cm:
+            for exc in (RetryableProviderError(secret), ProviderResponseError(secret), ContextLimitError(secret)):
+                _provider_http_error(exc)
+
+        error_output = "\n".join(cm.output)
+        self.assertNotIn(secret, error_output)
+
 
 def _configure_state(provider):
     _state.clear()

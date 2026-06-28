@@ -1526,14 +1526,16 @@ def _provider_http_error(exc: Exception) -> HTTPException:
     """Map a provider exception to a clean, non-leaky HTTPException.
 
     The raw exception text (which can include upstream URLs/keys/prompts) is
-    logged server-side, never returned to the client.
+    emitted only at DEBUG level so it does not reach external observability
+    systems.  Only the exception *type* is logged at ERROR.
     """
     from analyzing_llm_rationale.providers import (
         ContextLimitError,
         RetryableProviderError,
     )
 
-    logger.error("provider error: %s: %s", type(exc).__name__, exc)
+    logger.error("provider error: %s", type(exc).__name__)
+    logger.debug("provider error detail: %s: %s", type(exc).__name__, exc)
     if isinstance(exc, ContextLimitError):
         return HTTPException(
             status_code=422,
