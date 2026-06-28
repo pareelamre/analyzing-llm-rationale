@@ -38,6 +38,11 @@ def init_observability(app: "FastAPI") -> None:
         return
     _INITIALIZED = True
 
+    # Honour the standard OTel kill-switch so test suites that import server.py
+    # do not accidentally send spans/metrics to the production Superlog backend.
+    if os.environ.get("OTEL_SDK_DISABLED", "false").lower() == "true":
+        return
+
     resource = Resource.create({
         "service.name": "foresea",
         "service.version": "1.0.0",
