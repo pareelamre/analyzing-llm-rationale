@@ -1177,6 +1177,16 @@ _predict_rate_limiter = _RateLimiter(calls=int(os.environ.get("PREDICT_RATE_LIMI
 async def lifespan(app: FastAPI):
     global _ready
     _ready = True
+    # Fail fast at startup rather than on the first form/file request.  FastAPI
+    # only checks for python-multipart when a matching endpoint is called, so a
+    # missing package produces a runtime 500 instead of a startup error.
+    try:
+        import python_multipart  # noqa: F401
+    except ImportError:
+        raise RuntimeError(
+            'python-multipart is required for Form/File endpoints. '
+            'Install the serve extras: pip install "analyzing-llm-rationale[serve]"'
+        )
     logger.info("foresea server starting up")
     async with AsyncExitStack() as stack:
         if _PUBLIC_MCP is not None:
