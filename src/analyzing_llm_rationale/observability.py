@@ -38,10 +38,17 @@ def init_observability(app: "FastAPI") -> None:
         return
     _INITIALIZED = True
 
+    environment = os.environ.get("ENVIRONMENT", "")
+    if environment != "production":
+        # Not an explicit production deployment — skip OTLP export so that test
+        # runs and local dev never send spans/metrics/logs to the live Superlog
+        # endpoint.  OTel API calls still work via the default NoOp providers.
+        return
+
     resource = Resource.create({
         "service.name": "foresea",
         "service.version": "1.0.0",
-        "deployment.environment.name": os.environ.get("ENVIRONMENT", "production"),
+        "deployment.environment.name": environment,
         "vcs.repository.url.full": "https://github.com/pareelamre/analyzing-llm-rationale",
         "vcs.ref.head.revision": os.environ.get("GITHUB_SHA", ""),
     })
