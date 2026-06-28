@@ -48,6 +48,7 @@ from analyzing_llm_rationale import (
     crypto_kalshi,
     pr_agent,
     rag,
+    server_security,
     venue_mcp,
 )
 from analyzing_llm_rationale.observability import init_observability
@@ -56,6 +57,7 @@ from analyzing_llm_rationale.pipeline import (
     build_user_prompt,
     parse_model_response,
 )
+from analyzing_llm_rationale.server_security import RateLimiter
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _STATIC_DIR = _REPO_ROOT / "static"
@@ -441,57 +443,23 @@ def _issue_session(sub: str, email: str, name: str, picture: str) -> str:
 
 
 def _decode_session(token: str) -> dict:
-    """Verify a session JWT and return its claims."""
-    import jwt as _jwt
-    try:
-        return _jwt.decode(token, _SESSION_SECRET, algorithms=["HS256"])
-    except _jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Session expired.") from None
-    except _jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid session token.") from None
+    return server_security.decode_session(token, _SESSION_SECRET)
 
 
 def _require_session(request: Request) -> dict:
-    """Return session claims from a required bearer token."""
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing Authorization: Bearer header.")
-    return _decode_session(auth[7:])
+    return server_security.require_session(request, _SESSION_SECRET)
 
 
 def _require_auth(request: Request) -> dict:
-    """Enforce authentication on core app endpoints.
-    Requires either a valid X-API-Key header (matching _REQUIRED_API_KEY if configured)
-    or a valid session Bearer token.
-    Returns session claims dict, or dummy claims if API key matches.
-    """
-    if _REQUIRED_API_KEY:
-        api_key = request.headers.get("X-API-Key")
-        if api_key == _REQUIRED_API_KEY:
-            return {"sub": "api-key-user", "email": "api@foresea.ink", "name": "API Key User"}
-    track_token = request.headers.get("X-Track-Token", "")
-    if _TRACK_RECORD_TOKEN and hmac.compare_digest(track_token, _TRACK_RECORD_TOKEN):
-        return {
-            "sub": "track-record-action",
-            "email": "track-record@foresea.ink",
-            "name": "Track Record Action",
-        }
-    auth = request.headers.get("Authorization", "")
-    if auth.startswith("Bearer "):
-        return _decode_session(auth[7:])
-    raise HTTPException(
-        status_code=401,
-        detail="Authentication required. Please sign in to use Foresea.",
+    return server_security.require_auth(
+        request,
+        _REQUIRED_API_KEY,
+        _TRACK_RECORD_TOKEN,
+        _SESSION_SECRET,
     )
 
 
 def _optional_predict_claims(request: Request) -> Optional[dict]:
-    """Return auth claims for /predict when credentials are supplied.
-
-    Public forecast calls are allowed when no server API key is configured; they
-    remain rate-limited by IP. Signed-in/API-key calls still get claims so
-    personalised knowledge-base evidence and trusted rate-limit bypasses work.
-    """
     has_auth = bool(request.headers.get("Authorization", "").startswith("Bearer "))
     has_api_key = bool(request.headers.get("X-API-Key"))
     has_track_token = bool(request.headers.get("X-Track-Token"))
@@ -501,17 +469,7 @@ def _optional_predict_claims(request: Request) -> Optional[dict]:
 
 
 def _optional_user_id(request: Optional[Request]) -> Optional[str]:
-    """Decode the bearer token if present and valid; return the user id or None.
-    Never raises — used to personalise public endpoints for signed-in users."""
-    if request is None:
-        return None
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return None
-    try:
-        return _decode_session(auth[7:]).get("sub")
-    except Exception:
-        return None
+    return server_security.optional_user_id(request, _SESSION_SECRET)
 
 
 _ds_client: Any = None
@@ -1144,55 +1102,8 @@ def _auto_selected_model() -> Optional[str]:
     except Exception:
         return None
 
-
-
-# ── Rate limiter ──────────────────────────────────────────────────────────────
-class _RateLimiter:
-    """Sliding/fixed-window limiter.
-
-    Uses Redis (shared across instances) when available so the limit holds no
-    matter how many Cloud Run instances are running; otherwise it falls back to
-    a per-instance in-memory window. The fallback fails open, so a Redis outage
-    never blocks traffic — it only loosens enforcement.
-    """
-
-    def __init__(self, calls: int = 20, period: int = 60):
-        self._calls = calls
-        self._period = period
-        self._log: Dict[str, List[float]] = defaultdict(list)
-
-    def is_allowed(self, key: str) -> bool:
-        client = _get_redis()
-        if client is not None:
-            try:
-                return self._is_allowed_redis(client, key)
-            except Exception:
-                pass  # fall through to in-memory on any Redis error
-        return self._is_allowed_local(key)
-
-    def _is_allowed_redis(self, client: Any, key: str) -> bool:
-        bucket = int(time.time() // self._period)
-        rkey = f"ratelimit:{key}:{bucket}"
-        pipe = client.pipeline()
-        pipe.incr(rkey, 1)
-        pipe.expire(rkey, self._period)
-        count = pipe.execute()[0]
-        return int(count) <= self._calls
-
-    def _is_allowed_local(self, key: str) -> bool:
-        now = time.monotonic()
-        window = now - self._period
-        log = self._log[key]
-        while log and log[0] < window:
-            log.pop(0)
-        if len(log) >= self._calls:
-            return False
-        log.append(now)
-        return True
-
-
-_rate_limiter = _RateLimiter(calls=int(os.environ.get("RATE_LIMIT_PER_MIN", "60")), period=60)
-_predict_rate_limiter = _RateLimiter(calls=int(os.environ.get("PREDICT_RATE_LIMIT_PER_MIN", "10")), period=60)
+_rate_limiter = RateLimiter(calls=int(os.environ.get("RATE_LIMIT_PER_MIN", "60")), period=60)
+_predict_rate_limiter = RateLimiter(calls=int(os.environ.get("PREDICT_RATE_LIMIT_PER_MIN", "10")), period=60)
 
 
 @asynccontextmanager
@@ -3304,45 +3215,28 @@ class RagSearchResult(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _check_api_key(request: Request) -> None:
-    if not _REQUIRED_API_KEY:
-        return
-    if request.headers.get("X-API-Key", "") != _REQUIRED_API_KEY:
-        raise HTTPException(status_code=401, detail="Missing or invalid X-API-Key header.")
+    server_security.check_api_key(request, _REQUIRED_API_KEY)
 
 
 def _check_rate_limit(request: Request) -> None:
-    # Requests carrying the server API key are trusted (e.g. the tick Action)
-    # and bypass the per-IP rate limit.
-    if _REQUIRED_API_KEY and request.headers.get("X-API-Key", "") == _REQUIRED_API_KEY:
-        return
-    if _TRACK_RECORD_TOKEN and hmac.compare_digest(
-        request.headers.get("X-Track-Token", ""), _TRACK_RECORD_TOKEN
-    ):
-        return
-    ip = request.client.host if request.client else "unknown"
-    if not _rate_limiter.is_allowed(ip):
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded — {_rate_limiter._calls} requests per minute per IP.",
-            headers={"Retry-After": "60"},
-        )
+    server_security.check_rate_limit(
+        request,
+        _rate_limiter,
+        _REQUIRED_API_KEY,
+        _TRACK_RECORD_TOKEN,
+        f"Rate limit exceeded — {_rate_limiter._calls} requests per minute per IP.",
+    )
 
 
 def _check_predict_rate_limit(request: Request) -> None:
     """Tighter per-IP limit for expensive LLM endpoints (/predict, /agent/analyze)."""
-    if _REQUIRED_API_KEY and request.headers.get("X-API-Key", "") == _REQUIRED_API_KEY:
-        return
-    if _TRACK_RECORD_TOKEN and hmac.compare_digest(
-        request.headers.get("X-Track-Token", ""), _TRACK_RECORD_TOKEN
-    ):
-        return
-    ip = request.client.host if request.client else "unknown"
-    if not _predict_rate_limiter.is_allowed(ip):
-        raise HTTPException(
-            status_code=429,
-            detail=f"Too many forecast requests — limit is {_predict_rate_limiter._calls} per minute per IP.",
-            headers={"Retry-After": "60"},
-        )
+    server_security.check_rate_limit(
+        request,
+        _predict_rate_limiter,
+        _REQUIRED_API_KEY,
+        _TRACK_RECORD_TOKEN,
+        f"Too many forecast requests — limit is {_predict_rate_limiter._calls} per minute per IP.",
+    )
 
 
 def _clean_text(value: Any) -> Any:
