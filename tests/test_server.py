@@ -1448,5 +1448,30 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(response.status_code, 422, bad_url)
 
 
+    def test_marketd_token_returns_none_outside_gcp(self):
+        """_marketd_token must short-circuit without touching 169.254.169.254
+        when K_SERVICE is absent, preventing noisy OTel timeout spans."""
+        import unittest.mock as _mock
+
+        # Ensure K_SERVICE is not set (simulates non-Cloud-Run environment).
+        env_without_k_service = {k: v for k, v in os.environ.items() if k != "K_SERVICE"}
+        with _mock.patch.dict(os.environ, env_without_k_service, clear=True):
+            with _mock.patch("google.oauth2.id_token.fetch_id_token") as mock_fetch:
+                result = server_module._marketd_token("https://example.com")
+        self.assertIsNone(result)
+        mock_fetch.assert_not_called()
+
+    def test_marketd_token_attempts_fetch_on_cloud_run(self):
+        """_marketd_token must call fetch_id_token when K_SERVICE is set."""
+        import unittest.mock as _mock
+
+        with _mock.patch.dict(os.environ, {"K_SERVICE": "foresea"}, clear=False):
+            with _mock.patch("google.oauth2.id_token.fetch_id_token", return_value="tok") as mock_fetch:
+                with _mock.patch("google.auth.transport.requests.Request"):
+                    result = server_module._marketd_token("https://example.com")
+        self.assertEqual(result, "tok")
+        mock_fetch.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

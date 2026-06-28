@@ -5159,6 +5159,11 @@ _MARKETD_URL = (os.environ.get("MARKETD_URL") or "").rstrip("/")
 
 def _marketd_token(audience: str) -> Optional[str]:
     """Mint a Cloud Run identity token for the authenticated call to marketd."""
+    # Cloud Run always sets K_SERVICE.  Outside GCP the metadata server at
+    # 169.254.169.254 is unreachable; skip the round-trip to avoid noisy OTel
+    # timeout spans and a 3-second stall on every /markets/search call.
+    if not os.environ.get("K_SERVICE"):
+        return None
     try:
         import google.auth.transport.requests as _greq
         import google.oauth2.id_token as _idt
