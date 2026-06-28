@@ -381,6 +381,70 @@ class TrajectoryTests(unittest.TestCase):
         self.assertEqual(agg["by_horizon"], [])
         self.assertFalse(agg["calibration_model"]["applied"])
 
+    def test_backfill_uses_crowd_follow_resolved_reference_when_primary_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = DuckDBStore(Path(td) / "track.duckdb")
+            try:
+                key = store.key(
+                    trl.SNAPSHOT_KIND,
+                    "Polymarket:slug-a:crowd-follow:2026-06-03",
+                )
+                ref = Entity(key)
+                ref.update(
+                    platform="Polymarket",
+                    ident="slug-a",
+                    model="crowd-follow",
+                    question="Will A happen?",
+                    market_url="https://polymarket.com/market/slug-a",
+                    description="",
+                    resolution_criteria="",
+                    publish_time="2026-06-01T00:00:00+00:00",
+                    snapshot_ts="2026-06-03T00:00:00+00:00",
+                    snapshot_date="2026-06-03",
+                    model_probability=0.4,
+                    market_probability=0.4,
+                    close_time="2026-06-04T00:00:00+00:00",
+                    lead_time_days=1.0,
+                    horizon="1-3d",
+                    category="World",
+                    market_volume=100.0,
+                    market_liquidity=50.0,
+                    evidence_count=0,
+                    resolved=True,
+                    outcome=1,
+                    resolved_ts="2026-06-04T01:00:00+00:00",
+                    model_brier=0.36,
+                    market_brier=0.36,
+                    model_correct=False,
+                    domain="world",
+                    entities=[],
+                    rationale="",
+                )
+                store.put(ref)
+
+                async def forecast_fn(quote, top_k, model=None):
+                    return {
+                        "model_probability": 0.72 if model == "council" else 0.65,
+                        "market_probability": quote["probability"],
+                        "evidence_count": 2,
+                        "rationale": f"{model} backfill",
+                    }
+
+                wrote = asyncio.run(trl.backfill_missing_model_snapshots(
+                    store,
+                    forecast_fn,
+                    models=["council", "gpt-oss-120b", "crowd-follow"],
+                    default_model="council",
+                ))
+
+                self.assertEqual(wrote, 2)
+                agg = trl.aggregate(store, model="council", variant="v", temperature=0.0)
+                self.assertEqual(agg["n_snapshots_resolved"], 1)
+                self.assertEqual(agg["n_markets_resolved"], 1)
+                self.assertEqual(agg["overall"]["accuracy"], 1.0)
+            finally:
+                store.close()
+
 
 class DigestTests(unittest.TestCase):
     def test_empty_digest(self):
@@ -614,6 +678,22 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertEqual(pnl["flat"]["n_bets"], 5)
         self.assertEqual(pnl["min_edge"], 0.0)
         self.assertIsNone(trl.paper_pnl([], []))                    # nothing resolved
+
+    def test_paper_pnl_public_bet_log_dedupes_market_model(self):
+        resolved = [
+            dict(
+                self._res(0.8, 0.5, 1),
+                platform="Polymarket",
+                ident="same-market",
+                model="council",
+                snapshot_ts=f"2026-06-0{i}T00:00:00+00:00",
+            )
+            for i in range(1, 4)
+        ]
+        pnl = trl.paper_pnl(resolved, [])
+        self.assertEqual(pnl["flat"]["n_bets"], 3)
+        self.assertEqual(len(pnl["bets"]), 1)
+        self.assertEqual(pnl["bets"][0]["snapshot_ts"], "2026-06-01T00:00:00+00:00")
 
     def test_edge_board_links_to_lead_time_track_record(self):
         now = datetime.now(timezone.utc)

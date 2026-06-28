@@ -698,31 +698,58 @@ async def backfill_missing_model_snapshots(
 ) -> int:
     """Retroactively forecast resolved markets for models that missed them.
 
-    For each resolved market the primary model has a snapshot for but a
-    secondary model doesn't, calls forecast_fn and writes a resolved snapshot
-    so all models are graded on the same market set. This heals gaps caused by
-    a model being temporarily disabled."""
+    For each resolved market with any reference snapshot, calls forecast_fn for
+    missing tracked LLM/council models and writes a resolved snapshot so all
+    models are graded on the same market set. This heals gaps caused by a model
+    being temporarily disabled or /predict being temporarily unavailable."""
     con = _sql_con(client)
     if con is None:
         return 0
 
-    llm_models = [m for m in models if m != "crowd-follow" and m != default_model]
+    llm_models = [m for m in models if m != "crowd-follow"]
     if not llm_models:
         return 0
 
-    # Primary model's resolved snapshots keyed by (platform, ident).
-    # Keep the earliest snapshot per market (closest to original forecast time).
-    primary_refs: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    # Reference resolved snapshots keyed by (platform, ident). Prefer the
+    # primary model, then any LLM/council model, then crowd-follow. Keep the
+    # earliest snapshot in that priority class to stay closest to the original
+    # forecast time.
+    refs: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    ref_priority: Dict[Tuple[str, str], int] = {}
     for r in _sql_rows(con, """
-        SELECT * FROM forecast_snapshot
+        SELECT *,
+               CASE
+                 WHEN model = ? THEN 0
+                 WHEN model != 'crowd-follow' THEN 1
+                 ELSE 2
+               END AS ref_priority
+        FROM forecast_snapshot
         WHERE resolved = true AND outcome IS NOT NULL AND model = ?
-        ORDER BY snapshot_ts
+        ORDER BY ref_priority, snapshot_ts
+    """, [default_model, default_model]):
+        key = (r.get("platform") or "", r.get("ident") or "")
+        if key not in refs:
+            refs[key] = r
+            ref_priority[key] = int(r.get("ref_priority") or 0)
+
+    for r in _sql_rows(con, """
+        SELECT *,
+               CASE
+                 WHEN model = ? THEN 0
+                 WHEN model != 'crowd-follow' THEN 1
+                 ELSE 2
+               END AS ref_priority
+        FROM forecast_snapshot
+        WHERE resolved = true AND outcome IS NOT NULL
+        ORDER BY ref_priority, snapshot_ts
     """, [default_model]):
         key = (r.get("platform") or "", r.get("ident") or "")
-        if key not in primary_refs:
-            primary_refs[key] = r
+        pri = int(r.get("ref_priority") or 0)
+        if key not in refs or pri < ref_priority[key]:
+            refs[key] = r
+            ref_priority[key] = pri
 
-    if not primary_refs:
+    if not refs:
         return 0
 
     # Find which (model, market) pairs are missing entirely.
@@ -736,7 +763,7 @@ async def backfill_missing_model_snapshots(
                 "SELECT platform, ident FROM forecast_snapshot WHERE model = ?", [model]
             ).fetchall()
         }
-        for mkey, ref in primary_refs.items():
+        for mkey, ref in refs.items():
             if mkey not in model_markets:
                 tasks.append((model, mkey, ref))
 
@@ -1078,6 +1105,20 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         b["calibrated_model_probability"] = round(cal_p, 4)
         history.append(b)
 
+    def _public_bets() -> List[Dict[str, Any]]:
+        """Public bet log: one row per market/model, preserving the earliest
+        point-in-time call. Metrics above still use every trajectory snapshot."""
+        by_market_model: Dict[Tuple[Any, Any, Any], Dict[str, Any]] = {}
+        for b in all_bets:
+            key = (b.get("platform"), b.get("ident"), b.get("model"))
+            cur = by_market_model.get(key)
+            if cur is None or (b.get("snapshot_ts") or "") < (cur.get("snapshot_ts") or ""):
+                by_market_model[key] = b
+        return sorted(
+            by_market_model.values(),
+            key=lambda b: (b.get("resolved_ts") or "", b.get("snapshot_ts") or ""),
+        )
+
     def _run(sizing, *, validated: bool = False, filter_fn=None, fade: bool = False) -> Optional[Dict[str, Any]]:
         """Run a paper-PnL simulation over all resolved bets.
 
@@ -1240,7 +1281,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         "half_kelly": _run(_half_kelly),
         "smart": _run(_half_kelly, filter_fn=_smart_filter),
         "yes_only": _run(lambda b: 1.0, filter_fn=lambda b: b["side"] == "YES"),
-        "bets": all_bets,
+        "bets": _public_bets(),
     }
 
 

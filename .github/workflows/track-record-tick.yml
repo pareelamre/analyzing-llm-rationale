@@ -33,7 +33,7 @@ jobs:
       - name: Record price points
         env:
           FORESEA_BASE_URL: https://foresea.ink
-          TRACK_MODELS: "gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,council,crowd-follow"
+          TRACK_MODELS: "council,gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,crowd-follow"
         run: python scripts/track_record_tick.py --price-only
 
       - name: Commit updated track record

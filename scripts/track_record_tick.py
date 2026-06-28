@@ -25,7 +25,7 @@ Env:
   TRACK_VARIANT     variant label            (default variant0_neutral_baseline)
   TRACK_TEMPERATURE temperature label        (default 0.0)
   PER_VENUE         new markets per venue     (default 3, clamped 1..5)
-  PREDICT_API_KEY   sent as X-API-Key if /predict is protected (optional)
+  SCADS_AI_API_KEY   model credential; stays server-side on Cloud Run
 """
 from __future__ import annotations
 
@@ -37,6 +37,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +95,7 @@ _PREDICT_TIMEOUT_S = 120
 _PREDICT_RETRIES = 3
 _predict_rate_lock = threading.Lock()
 _last_predict_ts: float = 0.0
+_predict_stats = Counter()
 
 
 def _post_predict(payload: dict) -> dict | None:
@@ -112,14 +114,19 @@ def _post_predict(payload: dict) -> dict | None:
     headers = {"Content-Type": "application/json"}
     if PREDICT_API_KEY:
         headers["X-API-Key"] = PREDICT_API_KEY
+    if TRACK_RECORD_TOKEN:
+        headers["X-Track-Token"] = TRACK_RECORD_TOKEN
     last_err = None
+    _predict_stats["attempts"] += 1
     for attempt in range(_PREDICT_RETRIES):
         req = urllib.request.Request(f"{BASE_URL}/predict", data=body, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=_PREDICT_TIMEOUT_S) as resp:
+                _predict_stats["successes"] += 1
                 return json.loads(resp.read())
         except urllib.error.HTTPError as exc:
             last_err = f"HTTP {exc.code}"
+            _predict_stats[f"http_{exc.code}"] += 1
             if exc.code == 429:
                 # Hard rate-limit hit — back off longer before retry.
                 time.sleep(30 * (attempt + 1))
@@ -129,6 +136,7 @@ def _post_predict(payload: dict) -> dict | None:
             last_err = str(exc)
         if attempt < _PREDICT_RETRIES - 1:
             time.sleep(2 ** attempt)
+    _predict_stats["failures"] += 1
     print(f"  predict failed: {last_err}", file=sys.stderr)
     return None
 
@@ -215,8 +223,31 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
 PRICE_ONLY = "--price-only" in sys.argv
 
 
+def _model_progress(store: DuckDBStore, model: str) -> dict:
+    row = store._con.execute(
+        """
+        SELECT
+            COUNT(*) AS snapshots,
+            COUNT(*) FILTER (WHERE resolved = true) AS resolved_snapshots,
+            MAX(snapshot_ts) AS latest_snapshot_ts,
+            MAX(resolved_ts) FILTER (WHERE resolved = true) AS latest_resolved_ts
+        FROM forecast_snapshot
+        WHERE model = ?
+        """,
+        [model],
+    ).fetchone()
+    return {
+        "snapshots": int(row[0] or 0),
+        "resolved_snapshots": int(row[1] or 0),
+        "latest_snapshot_ts": row[2],
+        "latest_resolved_ts": row[3],
+    }
+
+
 async def main() -> int:
     store = DuckDBStore(STORE_PATH)
+    primary_model = TRACK_MODELS[0]
+    before_primary = _model_progress(store, primary_model)
 
     newly_resolved = trl.resolve_open_snapshots(store, market_data)
     price_points = trl.record_price_points(store, market_data)
@@ -242,6 +273,7 @@ async def main() -> int:
         _mark_enrolled([f"{p}:{i}" for p, i in seeds])
 
     agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)
+    after_primary = _model_progress(store, primary_model)
 
     PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)
     PUBLIC_PATH.write_text(json.dumps(agg, indent=2, sort_keys=True) + "\n")
@@ -254,8 +286,48 @@ async def main() -> int:
         "n_markets_resolved": agg.get("n_markets_resolved"),
         "n_markets_open": agg.get("n_markets_open"),
         "n_snapshots_resolved": agg.get("n_snapshots_resolved"),
+        "predict_attempts": _predict_stats["attempts"],
+        "predict_successes": _predict_stats["successes"],
+        "predict_failures": _predict_stats["failures"],
+        "predict_http_401": _predict_stats["http_401"],
+        "primary_model": primary_model,
+        "primary_snapshots_before": before_primary["snapshots"],
+        "primary_snapshots_after": after_primary["snapshots"],
+        "primary_latest_snapshot_before": before_primary["latest_snapshot_ts"],
+        "primary_latest_snapshot_after": after_primary["latest_snapshot_ts"],
+        "primary_resolved_before": before_primary["resolved_snapshots"],
+        "primary_resolved_after": after_primary["resolved_snapshots"],
     }
     print(json.dumps(summary))
+    if not PRICE_ONLY:
+        if _predict_stats["http_401"]:
+            print(
+                "track-record forecast failed: /predict returned HTTP 401. "
+                "If API_KEY is unset on Cloud Run, /predict should accept "
+                "anonymous rate-limited calls; SCADS_AI_API_KEY stays server-side "
+                "for model access.",
+                file=sys.stderr,
+            )
+            return 1
+        if _predict_stats["attempts"] and not _predict_stats["successes"]:
+            print(
+                "track-record forecast failed: all /predict calls failed.",
+                file=sys.stderr,
+            )
+            return 1
+        primary_progressed = (
+            after_primary["snapshots"] > before_primary["snapshots"]
+            or after_primary["resolved_snapshots"] > before_primary["resolved_snapshots"]
+            or after_primary["latest_snapshot_ts"] != before_primary["latest_snapshot_ts"]
+            or after_primary["latest_resolved_ts"] != before_primary["latest_resolved_ts"]
+        )
+        if _predict_stats["successes"] and not primary_progressed:
+            print(
+                f"track-record forecast failed: /predict succeeded but primary "
+                f"model {primary_model!r} did not write or backfill any snapshots.",
+                file=sys.stderr,
+            )
+            return 1
     return 0
 
 

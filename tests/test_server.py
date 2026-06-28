@@ -91,7 +91,7 @@ class ServerTests(unittest.TestCase):
             "_require_auth",
             side_effect=fake_require_auth
         )
-        self._require_auth_patch.start()
+        self._require_auth_mock = self._require_auth_patch.start()
         _local_cache.clear()
         _rate_limiter._log.clear()
         _predict_rate_limiter._log.clear()
@@ -172,6 +172,24 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["confidence"], 0.7)
         self.assertEqual(payload["market_analysis"]["model_probability"], 0.7)
         self.assertIn("[Council debate]", payload["rationale"])
+        self.assertEqual(payload["model_key"], "council")
+
+    def test_predict_allows_anonymous_when_api_key_unset(self):
+        with mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "market_probability": 0.4,
+                    "market_outcome": "Yes",
+                    "attach_evidence": False,
+                    "chat_mode": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["market_analysis"]["model_probability"], 0.7)
+        self._require_auth_mock.assert_not_called()
 
     def test_predict_stream_chat_returns_sse_chunks(self):
         response = self.client.post(
@@ -605,21 +623,22 @@ class ServerTests(unittest.TestCase):
         response = self.client.post("/agent/analyze", json={"evidence_top_k": 3})
         self.assertEqual(response.status_code, 422)
 
-    def test_predict_requires_auth_when_not_mocked(self):
+    def test_predict_requires_auth_when_api_key_configured(self):
         self._require_auth_patch.stop()
         try:
-            response = self.client.post(
-                "/predict",
-                json={
-                    "question": "Will the Fed cut rates before July 31, 2026?",
-                    "variant": "variant0_neutral_baseline",
-                    "attach_evidence": False,
-                },
-            )
+            with mock.patch.object(server_module, "_REQUIRED_API_KEY", "secret"):
+                response = self.client.post(
+                    "/predict",
+                    json={
+                        "question": "Will the Fed cut rates before July 31, 2026?",
+                        "variant": "variant0_neutral_baseline",
+                        "attach_evidence": False,
+                    },
+                )
             self.assertEqual(response.status_code, 401)
             self.assertIn("Authentication required", response.json()["detail"])
         finally:
-            self._require_auth_patch.start()
+            self._require_auth_mock = self._require_auth_patch.start()
 
     def test_predict_rejects_short_standalone_question(self):
         response = self.client.post("/predict", json={"question": "why?", "attach_evidence": False})

@@ -469,6 +469,13 @@ def _require_auth(request: Request) -> dict:
         api_key = request.headers.get("X-API-Key")
         if api_key == _REQUIRED_API_KEY:
             return {"sub": "api-key-user", "email": "api@foresea.ink", "name": "API Key User"}
+    track_token = request.headers.get("X-Track-Token", "")
+    if _TRACK_RECORD_TOKEN and hmac.compare_digest(track_token, _TRACK_RECORD_TOKEN):
+        return {
+            "sub": "track-record-action",
+            "email": "track-record@foresea.ink",
+            "name": "Track Record Action",
+        }
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         return _decode_session(auth[7:])
@@ -476,6 +483,21 @@ def _require_auth(request: Request) -> dict:
         status_code=401,
         detail="Authentication required. Please sign in to use Foresea.",
     )
+
+
+def _optional_predict_claims(request: Request) -> Optional[dict]:
+    """Return auth claims for /predict when credentials are supplied.
+
+    Public forecast calls are allowed when no server API key is configured; they
+    remain rate-limited by IP. Signed-in/API-key calls still get claims so
+    personalised knowledge-base evidence and trusted rate-limit bypasses work.
+    """
+    has_auth = bool(request.headers.get("Authorization", "").startswith("Bearer "))
+    has_api_key = bool(request.headers.get("X-API-Key"))
+    has_track_token = bool(request.headers.get("X-Track-Token"))
+    if _REQUIRED_API_KEY or has_auth or has_api_key or has_track_token:
+        return _require_auth(request)
+    return None
 
 
 def _optional_user_id(request: Optional[Request]) -> Optional[str]:
@@ -3293,6 +3315,10 @@ def _check_rate_limit(request: Request) -> None:
     # and bypass the per-IP rate limit.
     if _REQUIRED_API_KEY and request.headers.get("X-API-Key", "") == _REQUIRED_API_KEY:
         return
+    if _TRACK_RECORD_TOKEN and hmac.compare_digest(
+        request.headers.get("X-Track-Token", ""), _TRACK_RECORD_TOKEN
+    ):
+        return
     ip = request.client.host if request.client else "unknown"
     if not _rate_limiter.is_allowed(ip):
         raise HTTPException(
@@ -3305,6 +3331,10 @@ def _check_rate_limit(request: Request) -> None:
 def _check_predict_rate_limit(request: Request) -> None:
     """Tighter per-IP limit for expensive LLM endpoints (/predict, /agent/analyze)."""
     if _REQUIRED_API_KEY and request.headers.get("X-API-Key", "") == _REQUIRED_API_KEY:
+        return
+    if _TRACK_RECORD_TOKEN and hmac.compare_digest(
+        request.headers.get("X-Track-Token", ""), _TRACK_RECORD_TOKEN
+    ):
         return
     ip = request.client.host if request.client else "unknown"
     if not _predict_rate_limiter.is_allowed(ip):
@@ -3641,6 +3671,8 @@ def _build_typed_response(
 
 def _model_key_for_request(req: "PredictRequest") -> str:
     model_label = (req.model or "").strip()
+    if model_label == "council":
+        return "council"
     if model_label and model_label in _SCADS_MODEL_ALLOWLIST:
         return model_label
     return req.openrouter_model or _state["model_key"]
@@ -5549,7 +5581,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     if request is not None:
         _check_rate_limit(request)
         _check_predict_rate_limit(request)
-        claims = _require_auth(request)
+        claims = _optional_predict_claims(request)
 
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
