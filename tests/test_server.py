@@ -430,15 +430,21 @@ class ServerTests(unittest.TestCase):
             "generated_at": "2026-06-28T23:51:20+00:00",
             "edge_board": [{"question": "Live edge?", "edge": 0.2}],
             "paper_pnl": {"flat": {"growth_curve": [100, 105]}},
+            "model": "council",
             "n_snapshots_resolved": 184,
+            "n_markets_resolved": 139,
             "n_markets_open": 1,
+            "resolved_log": [{"question": "Resolved edge?"}],
         }
         with mock.patch.object(server_module, "_read_live_track_record", return_value=live):
             response = self.client.get("/edge-board")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
+        self.assertEqual(payload["model"], "council")
         self.assertEqual(payload["edge_board"][0]["question"], "Live edge?")
         self.assertEqual(payload["paper_pnl"]["flat"]["growth_curve"], [100, 105])
+        self.assertEqual(payload["n_markets_resolved"], 139)
+        self.assertEqual(payload["resolved_log"][0]["question"], "Resolved edge?")
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])
 
