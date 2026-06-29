@@ -1971,10 +1971,14 @@ async def edge_board():
             "by_horizon": live.get("by_horizon", []),
             "lead_lag": live.get("lead_lag"),
             "paper_pnl": live.get("paper_pnl"),
+            "primary_paper_pnl": live.get("primary_paper_pnl"),
             "models_comparison": live.get("models_comparison", []),
             "resolved_log": live.get("resolved_log", []),
             "n_markets_open": live.get("n_markets_open", 0),
             "n_markets_resolved": live.get("n_markets_resolved", 0),
+            "primary_model": live.get("primary_model") or live.get("model"),
+            "primary_n_snapshots_resolved": live.get("primary_n_snapshots_resolved", 0),
+            "primary_n_markets_resolved": live.get("primary_n_markets_resolved", 0),
             "n_markets_tracked": live.get("n_markets_tracked", 0),
             "n_snapshots_resolved": live.get("n_snapshots_resolved", 0),
             "arbitrage_signals": live.get("arbitrage_signals", []),
@@ -3218,12 +3222,16 @@ class RadarResponse(BaseModel):
     edge_board: List[Dict[str, Any]] = Field(default_factory=list)
     models_comparison: List[Dict[str, Any]] = Field(default_factory=list)
     paper_pnl: Optional[Any] = None
+    primary_paper_pnl: Optional[Any] = None
     lead_lag: Optional[Any] = None
     calibration: Optional[Any] = None
     resolved_log: List[Dict[str, Any]] = Field(default_factory=list)
     freshness: Dict[str, Any] = Field(default_factory=dict)
     n_snapshots_resolved: int = 0
     n_markets_resolved: int = 0
+    primary_model: Optional[str] = None
+    primary_n_snapshots_resolved: int = 0
+    primary_n_markets_resolved: int = 0
     n_markets_open: int = 0
 
 
@@ -4131,11 +4139,15 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
         edge_board=rows[:limit],
         models_comparison=payload.get("models_comparison") or [],
         paper_pnl=payload.get("paper_pnl"),
+        primary_paper_pnl=payload.get("primary_paper_pnl"),
         lead_lag=payload.get("lead_lag"),
         calibration=payload.get("calibration"),
         resolved_log=payload.get("resolved_log") or [],
         n_snapshots_resolved=int(payload.get("n_snapshots_resolved") or 0),
         n_markets_resolved=int(payload.get("n_markets_resolved") or 0),
+        primary_model=payload.get("primary_model") or payload.get("model"),
+        primary_n_snapshots_resolved=int(payload.get("primary_n_snapshots_resolved") or 0),
+        primary_n_markets_resolved=int(payload.get("primary_n_markets_resolved") or 0),
         n_markets_open=int(payload.get("n_markets_open") or len(rows)),
         freshness=_track_record_freshness(payload),
     )

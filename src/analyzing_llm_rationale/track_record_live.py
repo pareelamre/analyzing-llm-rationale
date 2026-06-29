@@ -1818,25 +1818,30 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     open_rows = _drop_stale_open(open_rows)
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_rows}
 
-    # The public sections describe the primary model; the comparison spans all.
+    # The edge board itself is driven by the primary model, but public headline
+    # counts and the default equity curve cover every tracked LLM forecast. A
+    # "crowd-follow" row is a baseline, not an LLM forecast, so keep it out of
+    # headline counts/PnL while still showing it in models_comparison.
     # Snapshots predating the multi-model split have no `model` field → primary.
     resolved_primary = [r for r in resolved if (r.get("model") or model) == model]
+    resolved_llm = [r for r in resolved if (r.get("model") or model) != "crowd-follow"]
     open_primary = [r for r in open_rows if (r.get("model") or model) == model]
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_primary}
-    n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_primary})
+    n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_llm})
+    primary_n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_primary})
 
-    # Skill metrics use all resolved primary snapshots — sports included.
-    # The crowd-follow model benchmarks against LLM on sports specifically.
-    resolved_skill = resolved_primary
+    # Skill metrics use all resolved LLM snapshots — sports included.
+    # The crowd-follow model benchmarks against this LLM basket specifically.
+    resolved_skill = resolved_llm
 
     # Lead-time (how-early) calibration: resolved skill bucketed by forecast
     # horizon, with significance — the axis the edge board links against.
     by_horizon = []
     for label, _lo, _hi in _HORIZONS:
-        stats = _bucket_stats([r for r in resolved_primary if r.get("horizon") == label])
+        stats = _bucket_stats([r for r in resolved_skill if r.get("horizon") == label])
         if stats:
             stats["horizon"] = label
-            stats.update(_skill_ci([r for r in resolved_primary if r.get("horizon") == label]))
+            stats.update(_skill_ci([r for r in resolved_skill if r.get("horizon") == label]))
             by_horizon.append(stats)
 
     # Compute edge board early so the stat can reflect its actual length.
@@ -1858,17 +1863,20 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             "Skill vs market = market Brier − model Brier, reported by forecast "
             "horizon; long-horizon skill is the meaningful signal."
         ),
-        "n_snapshots_resolved": len(resolved_primary),
+        "n_snapshots_resolved": len(resolved_skill),
         "n_markets_resolved": n_markets_resolved,
+        "primary_model": model,
+        "primary_n_snapshots_resolved": len(resolved_primary),
+        "primary_n_markets_resolved": primary_n_markets_resolved,
         "n_markets_open": len(edge_board_result),
         "n_markets_tracked": len(open_idents),
     }
 
-    overall = _bucket_stats(resolved_primary)
+    overall = _bucket_stats(resolved_skill)
     # by_horizon computed above (with significance) so the edge board can link to it.
 
     # Keep only the latest snapshot for each unique question text (most recently resolved first)
-    resolved_sorted = sorted(resolved_primary, key=lambda x: x.get("resolved_ts") or "", reverse=True)
+    resolved_sorted = sorted(resolved_skill, key=lambda x: x.get("resolved_ts") or "", reverse=True)
     seen_questions = set()
     _log_rows = []
     for r in resolved_sorted:
@@ -1894,13 +1902,14 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             "predicted": "Yes" if _prob >= 0.5 else "No",
             "confidence": round(_prob, 3),
             "actual": "Yes" if _outcome == 1 else "No",
+            "model": _r.get("model") or model,
         })
 
     # Reliability diagram bins (10pp wide) for the calibration chart.
     _calib_bins: List[Dict[str, Any]] = []
     for _lo in (i / 10 for i in range(10)):
         _hi = _lo + 0.1
-        _bin = [r for r in resolved_primary if _lo <= float(r.get("model_probability") or 0) < _hi]
+        _bin = [r for r in resolved_skill if _lo <= float(r.get("model_probability") or 0) < _hi]
         if _bin:
             _calib_bins.append({
                 "avg_predicted": round(sum(float(r.get("model_probability") or 0) for r in _bin) / len(_bin), 3),
@@ -1965,7 +1974,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     # lucky resolutions. Empty / not-yet-significant until enough markets settle.
     by_domain: List[Dict[str, Any]] = []
     domain_rows: Dict[str, List[Dict[str, Any]]] = {}
-    for r in resolved_primary:
+    for r in resolved_skill:
         d = r.get("domain") or "other"
         domain_rows.setdefault(d, []).append(r)
     for domain, rows in domain_rows.items():
@@ -1981,7 +1990,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     # the model should beat it. Bucketed by market volume (USD) at forecast time.
     by_liquidity: List[Dict[str, Any]] = []
     for label, lo, hi in _LIQUIDITY_BUCKETS:
-        rows = [r for r in resolved_primary if lo <= float(r.get("market_volume") or 0.0) < hi]
+        rows = [r for r in resolved_skill if lo <= float(r.get("market_volume") or 0.0) < hi]
         stats = _bucket_stats(rows)
         if stats:
             stats["liquidity"] = label
@@ -2011,6 +2020,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
 
     payload.update({
         "overall": overall,
+        "primary_overall": _bucket_stats(resolved_primary),
         "by_horizon": by_horizon,
         "by_edge": by_edge_skill,
         "by_domain": by_domain,
@@ -2018,6 +2028,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "lead_lag": lead_lag(by_market_skill),
         "paper_pnl": {**(paper_pnl(resolved_skill, by_edge_skill) or {}),
                       "crowd_baseline": (_crowd_base := crowd_baseline_equity(resolved_skill))},
+        "primary_paper_pnl": paper_pnl(resolved_primary, edge_calibration(resolved_primary)),
         "edge_board": edge_board_result,
         "arbitrage_signals": build_arbitrage_board(open_primary, latest_price),
         "models_comparison": build_models_comparison(resolved, default_model=model, crowd_baseline=_crowd_base),

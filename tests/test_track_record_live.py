@@ -439,8 +439,10 @@ class TrajectoryTests(unittest.TestCase):
 
                 self.assertEqual(wrote, 2)
                 agg = trl.aggregate(store, model="council", variant="v", temperature=0.0)
-                self.assertEqual(agg["n_snapshots_resolved"], 1)
+                self.assertEqual(agg["n_snapshots_resolved"], 2)
                 self.assertEqual(agg["n_markets_resolved"], 1)
+                self.assertEqual(agg["primary_n_snapshots_resolved"], 1)
+                self.assertEqual(agg["primary_n_markets_resolved"], 1)
                 self.assertEqual(agg["overall"]["accuracy"], 1.0)
             finally:
                 store.close()
@@ -517,6 +519,51 @@ class FileStoreTests(unittest.TestCase):
             self.assertIsNotNone(readback)
             self.assertEqual(readback["overall"]["accuracy"], 1.0)
             self.assertEqual(readback["by_horizon"][0]["horizon"], "7-14d")
+
+    def test_aggregate_headline_counts_all_llm_forecasts_not_crowd_baseline(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "store.json"
+            store = FileStore(path)
+            rows = [
+                ("Kalshi", "A", "council", 0.7, 0.4, 1),
+                ("Kalshi", "A", "gpt-oss-120b", 0.65, 0.4, 1),
+                ("Kalshi", "B", "gpt-oss-120b", 0.3, 0.6, 0),
+                ("Kalshi", "B", "crowd-follow", 0.6, 0.6, 0),
+            ]
+            for platform, ident, model, model_p, market_p, outcome in rows:
+                snap = Entity(store.key(
+                    trl.SNAPSHOT_KIND,
+                    f"{platform}:{ident}:{model}:2026-06-05",
+                ))
+                snap.update(
+                    platform=platform,
+                    ident=ident,
+                    model=model,
+                    question=f"Will {ident} happen?",
+                    market_url=f"https://kalshi.com/markets/{ident}",
+                    snapshot_ts=datetime(2026, 6, 5, 12, tzinfo=timezone.utc),
+                    snapshot_date="2026-06-05",
+                    model_probability=model_p,
+                    market_probability=market_p,
+                    lead_time_days=10.0,
+                    horizon="7-14d",
+                    resolved=True,
+                    outcome=outcome,
+                    resolved_ts=datetime(2026, 6, 6, 12, tzinfo=timezone.utc),
+                    model_brier=trl.brier(model_p, outcome),
+                    market_brier=trl.brier(market_p, outcome),
+                    model_correct=(model_p >= 0.5) == (outcome == 1),
+                )
+                store.put(snap)
+
+            agg = trl.aggregate(store, model="council", variant="v", temperature=0.0)
+            self.assertEqual(agg["n_snapshots_resolved"], 3)
+            self.assertEqual(agg["n_markets_resolved"], 2)
+            self.assertEqual(agg["primary_model"], "council")
+            self.assertEqual(agg["primary_n_snapshots_resolved"], 1)
+            self.assertEqual(agg["primary_n_markets_resolved"], 1)
+            self.assertEqual(agg["paper_pnl"]["flat"]["n_bets"], 3)
+            self.assertEqual(agg["primary_paper_pnl"]["flat"]["n_bets"], 1)
 
 
 class CalibrationTests(unittest.TestCase):
