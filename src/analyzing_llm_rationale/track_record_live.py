@@ -57,6 +57,15 @@ def _sql_rows(con, sql: str, params: Optional[list] = None) -> List[Dict[str, An
         rows.append(row)
     return rows
 
+
+def _is_backfill_snapshot(row: Dict[str, Any]) -> bool:
+    key = row.get("key")
+    if key is None:
+        ent_key = getattr(row, "key", None)
+        key = getattr(ent_key, "id", None) or getattr(ent_key, "name", None)
+    return str(key or "").endswith("_backfill")
+
+
 SNAPSHOT_KIND = "ForecastSnapshot"
 PRICE_KIND = "MarketPricePoint"
 AGG_KIND = "TrackRecordLive"
@@ -696,12 +705,13 @@ async def backfill_missing_model_snapshots(
     evidence_top_k: int = 5,
     concurrency: int = 4,
 ) -> int:
-    """Retroactively forecast resolved markets for models that missed them.
+    """Retroactively forecast resolved markets for diagnostic comparisons.
 
     For each resolved market with any reference snapshot, calls forecast_fn for
-    missing tracked LLM/council models and writes a resolved snapshot so all
-    models are graded on the same market set. This heals gaps caused by a model
-    being temporarily disabled or /predict being temporarily unavailable."""
+    missing tracked LLM/council models. These snapshots are keyed with a
+    ``_backfill`` suffix and are excluded from the public real-time aggregate.
+    Production ticks should leave this disabled so the track record only scores
+    forecasts captured before resolution."""
     con = _sql_con(client)
     if con is None:
         return 0
@@ -1799,6 +1809,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         resolved = _sql_rows(con, """
             SELECT * FROM forecast_snapshot
             WHERE resolved = true AND outcome IS NOT NULL
+              AND key NOT LIKE '%_backfill'
             ORDER BY resolved_ts
         """)
         open_rows = _sql_rows(con, """
@@ -1821,6 +1832,8 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         resolved = []
         open_rows = []
         for e in client.query(kind=SNAPSHOT_KIND).fetch():
+            if _is_backfill_snapshot(e):
+                continue
             if e.get("resolved") and e.get("outcome") is not None:
                 resolved.append(dict(e))
             else:

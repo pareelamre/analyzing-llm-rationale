@@ -83,6 +83,13 @@ EXPIRY_SLOT_HOURS = int(
 # costs one /predict per (open market × model) — same load as today's daily pass.
 REFORECAST_EACH_TICK = (os.environ.get("REFORECAST_EACH_TICK", "1").strip().lower()
                         in ("1", "true", "yes", "on"))
+# Production public track record should only score forecasts captured before
+# resolution. Resolved-market backfill is kept as an explicit diagnostic tool,
+# but is excluded from the normal live board by default.
+ALLOW_RESOLVED_BACKFILL = (
+    os.environ.get("ALLOW_RESOLVED_BACKFILL", "0").strip().lower()
+    in ("1", "true", "yes", "on")
+)
 # How many LLM /predict calls may be in-flight simultaneously.
 # crowd-follow is instant (no LLM) and doesn't consume a slot.
 PREDICT_CONCURRENCY = int(os.environ.get("PREDICT_CONCURRENCY", "4"))
@@ -266,10 +273,11 @@ async def main() -> int:
             expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
             expiry_slot_hours=EXPIRY_SLOT_HOURS,
             concurrency=PREDICT_CONCURRENCY)
-        backfilled = await trl.backfill_missing_model_snapshots(
-            store, forecast_fn,
-            models=TRACK_MODELS, default_model=TRACK_MODELS[0],
-            concurrency=PREDICT_CONCURRENCY)
+        if ALLOW_RESOLVED_BACKFILL:
+            backfilled = await trl.backfill_missing_model_snapshots(
+                store, forecast_fn,
+                models=TRACK_MODELS, default_model=TRACK_MODELS[0],
+                concurrency=PREDICT_CONCURRENCY)
         _mark_enrolled([f"{p}:{i}" for p, i in seeds])
 
     agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)

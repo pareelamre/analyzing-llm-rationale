@@ -439,11 +439,11 @@ class TrajectoryTests(unittest.TestCase):
 
                 self.assertEqual(wrote, 2)
                 agg = trl.aggregate(store, model="council", variant="v", temperature=0.0)
-                self.assertEqual(agg["n_snapshots_resolved"], 1)
-                self.assertEqual(agg["n_markets_resolved"], 1)
-                self.assertEqual(agg["primary_n_snapshots_resolved"], 1)
-                self.assertEqual(agg["primary_n_markets_resolved"], 1)
-                self.assertEqual(agg["overall"]["accuracy"], 1.0)
+                self.assertEqual(agg["n_snapshots_resolved"], 0)
+                self.assertEqual(agg["n_markets_resolved"], 0)
+                self.assertEqual(agg["primary_n_snapshots_resolved"], 0)
+                self.assertEqual(agg["primary_n_markets_resolved"], 0)
+                self.assertIsNone(agg["overall"])
             finally:
                 store.close()
 
@@ -567,6 +567,43 @@ class FileStoreTests(unittest.TestCase):
             self.assertEqual(agg["primary_paper_pnl"]["flat"]["n_bets"], 1)
             comparison = {m["model"]: m for m in agg["models_comparison"]}
             self.assertEqual(comparison["crowd-follow"]["n_snapshots_resolved"], 2)
+
+    def test_aggregate_excludes_diagnostic_backfill_snapshots(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "store.json"
+            store = FileStore(path)
+            rows = [
+                ("Kalshi:TICK:gpt-oss-120b:2026-06-05", "gpt-oss-120b", 0.7),
+                ("Kalshi:TICK:kimi-k2.6:2026-06-05_backfill", "kimi-k2.6", 0.65),
+            ]
+            for key_id, model, model_p in rows:
+                snap = Entity(store.key(trl.SNAPSHOT_KIND, key_id))
+                snap.update(
+                    platform="Kalshi",
+                    ident="TICK",
+                    model=model,
+                    question="Will TICK happen?",
+                    market_url="https://kalshi.com/markets/TICK",
+                    snapshot_ts=datetime(2026, 6, 5, 12, tzinfo=timezone.utc),
+                    snapshot_date="2026-06-05",
+                    model_probability=model_p,
+                    market_probability=0.4,
+                    lead_time_days=10.0,
+                    horizon="7-14d",
+                    resolved=True,
+                    outcome=1,
+                    resolved_ts=datetime(2026, 6, 6, 12, tzinfo=timezone.utc),
+                    model_brier=trl.brier(model_p, 1),
+                    market_brier=trl.brier(0.4, 1),
+                    model_correct=True,
+                )
+                store.put(snap)
+
+            agg = trl.aggregate(store, model="gpt-oss-120b", variant="v", temperature=0.0)
+            self.assertEqual(agg["n_snapshots_resolved"], 1)
+            self.assertEqual(agg["paper_pnl"]["flat"]["n_bets"], 1)
+            comparison = {m["model"]: m for m in agg["models_comparison"]}
+            self.assertNotIn("kimi-k2.6", comparison)
 
 
 class CalibrationTests(unittest.TestCase):
