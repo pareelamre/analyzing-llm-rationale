@@ -421,7 +421,26 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["paper_pnl"]["flat"]["growth_curve"], [100, 112])
         self.assertEqual(payload["lead_lag"]["n_markets"], 12)
         self.assertEqual(payload["resolved_log"][0]["question"], "Resolved example?")
+        self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
+        self.assertIn("no-cache", response.headers["cache-control"])
         self.assertEqual(payload["markets"][0]["question"], "Will example happen?")
+
+    def test_edge_board_endpoint_includes_freshness_and_no_cache(self):
+        live = {
+            "generated_at": "2026-06-28T23:51:20+00:00",
+            "edge_board": [{"question": "Live edge?", "edge": 0.2}],
+            "paper_pnl": {"flat": {"growth_curve": [100, 105]}},
+            "n_snapshots_resolved": 184,
+            "n_markets_open": 1,
+        }
+        with mock.patch.object(server_module, "_read_live_track_record", return_value=live):
+            response = self.client.get("/edge-board")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["edge_board"][0]["question"], "Live edge?")
+        self.assertEqual(payload["paper_pnl"]["flat"]["growth_curve"], [100, 105])
+        self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
+        self.assertIn("no-cache", response.headers["cache-control"])
 
     def test_analytics_event_summary_counts_events(self):
         response = self.client.post(

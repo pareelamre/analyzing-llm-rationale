@@ -79,7 +79,8 @@ _TRACK_RECORD_LIVE_URL = os.environ.get(
     "TRACK_RECORD_LIVE_URL",
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/static/track_record_live.json",
 )
-_TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "120"))
+_TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "30"))
+_EDGE_BOARD_STALE_AFTER_S = int(os.environ.get("EDGE_BOARD_STALE_AFTER_S", "1800"))
 # Shared secret gating the evolution-loop bridge endpoints (pending-markets /
 # mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
 _TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
@@ -1033,7 +1034,17 @@ def _read_live_track_record() -> Optional[Dict[str, Any]]:
         return cached
     payload: Optional[Dict[str, Any]] = None
     try:
-        resp = requests.get(_TRACK_RECORD_LIVE_URL, timeout=6)
+        sep = "&" if "?" in _TRACK_RECORD_LIVE_URL else "?"
+        cache_busted_url = f"{_TRACK_RECORD_LIVE_URL}{sep}_={int(time.time() // max(_TRACK_RECORD_LIVE_TTL, 1))}"
+        resp = requests.get(
+            cache_busted_url,
+            timeout=6,
+            headers={
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "User-Agent": "Foresea/edge-board-live",
+            },
+        )
         if resp.status_code == 200:
             payload = resp.json()
     except Exception:
@@ -1048,6 +1059,26 @@ def _read_live_track_record() -> Optional[Dict[str, Any]]:
     if payload is not None:
         _cache_set(cache_key, payload, _TRACK_RECORD_LIVE_TTL)
     return payload
+
+
+def _track_record_freshness(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    generated_at = (payload or {}).get("generated_at")
+    age_s = None
+    if generated_at:
+        try:
+            dt = datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            age_s = max(0, int((datetime.now(timezone.utc) - dt).total_seconds()))
+        except Exception:
+            age_s = None
+    stale = age_s is None or age_s > _EDGE_BOARD_STALE_AFTER_S
+    return {
+        "generated_at": generated_at,
+        "age_seconds": age_s,
+        "stale": stale,
+        "stale_after_seconds": _EDGE_BOARD_STALE_AFTER_S,
+    }
 
 
 # ── Evolution-loop feedback: live calibration + model auto-selection ──────────
@@ -1898,14 +1929,16 @@ async def track_record():
     """
     live = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
     if live and live.get("n_snapshots_resolved"):
-        return JSONResponse(live, headers={"Cache-Control": "public, max-age=600"})
+        payload = dict(live)
+        payload["freshness"] = _track_record_freshness(payload)
+        return JSONResponse(payload, headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"})
     path = _STATIC_DIR / "track_record.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Track record not generated yet.")
     return FileResponse(
         str(path),
         media_type="application/json",
-        headers={"Cache-Control": "public, max-age=600"},
+        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
 
 
@@ -1927,9 +1960,11 @@ async def edge_board():
     """
     live = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
     live = live or {}
+    freshness = _track_record_freshness(live)
     return JSONResponse(
         {
             "generated_at": live.get("generated_at"),
+            "freshness": freshness,
             "edge_board": live.get("edge_board", []),
             "by_edge": live.get("by_edge", []),
             "by_horizon": live.get("by_horizon", []),
@@ -1941,7 +1976,7 @@ async def edge_board():
             "n_snapshots_resolved": live.get("n_snapshots_resolved", 0),
             "arbitrage_signals": live.get("arbitrage_signals", []),
         },
-        headers={"Cache-Control": "public, max-age=300"},
+        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
 
 
@@ -3183,6 +3218,7 @@ class RadarResponse(BaseModel):
     lead_lag: Optional[Any] = None
     calibration: Optional[Any] = None
     resolved_log: List[Dict[str, Any]] = Field(default_factory=list)
+    freshness: Dict[str, Any] = Field(default_factory=dict)
     n_snapshots_resolved: int = 0
     n_markets_resolved: int = 0
     n_markets_open: int = 0
@@ -4041,10 +4077,12 @@ def _radar_id(platform: str, market_url: Optional[str], question: str) -> str:
 
 
 def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
+    radar_cache_ttl = int(os.environ.get("RADAR_CACHE_TTL", "0"))
     cache_key = _cache_key("radar", limit)
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return RadarResponse(**cached)
+    if radar_cache_ttl > 0:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return RadarResponse(**cached)
     payload = _read_live_track_record() or {}
     rows = payload.get("edge_board") or []
     markets: List[RadarMarket] = []
@@ -4082,20 +4120,6 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
         ))
         if len(markets) >= limit:
             break
-    if not markets:
-        examples = [
-            ("Polymarket", "Will the Fed cut rates before September 30, 2026?", 0.54),
-            ("Kalshi", "Will the NASDAQ close higher at the end of the month?", 0.50),
-            ("Polymarket", "Will a major AI model be released this month?", 0.42),
-        ]
-        for platform, question, market_p in examples[:limit]:
-            markets.append(RadarMarket(
-                id=_radar_id(platform, None, question),
-                platform=platform,
-                question=question,
-                market_probability=market_p,
-                reason="Example market prompt for a quick Foresea analysis.",
-            ))
     response = RadarResponse(
         updated_at=str(payload.get("generated_at") or datetime.now(timezone.utc).isoformat()),
         markets=markets,
@@ -4110,8 +4134,9 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
         n_snapshots_resolved=int(payload.get("n_snapshots_resolved") or 0),
         n_markets_resolved=int(payload.get("n_markets_resolved") or 0),
         n_markets_open=int(payload.get("n_markets_open") or len(rows)),
+        freshness=_track_record_freshness(payload),
     )
-    _cache_set(cache_key, response.model_dump(mode="json"), int(os.environ.get("RADAR_CACHE_TTL", "300")))
+    _cache_set(cache_key, response.model_dump(mode="json"), radar_cache_ttl)
     return response
 
 
@@ -4543,7 +4568,7 @@ async def radar(limit: int = Query(12, ge=1, le=30)) -> JSONResponse:
     payload = await asyncio.get_running_loop().run_in_executor(None, _radar_from_track_record, limit)
     return JSONResponse(
         payload.model_dump(mode="json"),
-        headers={"Cache-Control": "public, max-age=60"},
+        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
 
 
