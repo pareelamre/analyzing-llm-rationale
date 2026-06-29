@@ -1299,6 +1299,69 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(delete_response.status_code, 200)
         self.assertEqual(self.client.get("/chat/conversations", headers=headers).json()["conversations"], [])
 
+    def test_chat_conversation_with_long_nested_rationale_does_not_error(self):
+        """Regression test: messages with a nested 'data' dict containing
+        long rationale/model_rationale/summary fields must not cause a
+        Datastore 400 'property longer than 1500 bytes' error.
+
+        The browser stores the full PredictResponse as msg.data, which can
+        include rationale strings well over 1500 bytes.  Previously, Datastore
+        would serialise 'data' as an embedded entity and index its sub-
+        properties by default, hitting the 1500-byte limit.
+        """
+        token = _issue_session("user-reg", "reg@example.com", "Reg User", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        long_rationale = "A" * 2000  # 2 000 bytes — well above the 1 500-byte Datastore index limit
+        conversation = {
+            "id": "conv_reg",
+            "title": "Regression: long nested rationale",
+            "createdAt": 1000,
+            "updatedAt": 2000,
+            "messages": [
+                {
+                    "id": "msg_user",
+                    "role": "user",
+                    "content": "Will inflation fall?",
+                    "createdAt": 1001,
+                },
+                {
+                    "id": "msg_assistant",
+                    "role": "assistant",
+                    "content": "Here is my forecast.",
+                    "createdAt": 1002,
+                    # The browser stores the full PredictResponse under 'data'.
+                    "data": {
+                        "rationale": long_rationale,
+                        "model_rationale": long_rationale,
+                        "market_analysis": {"summary": long_rationale},
+                        "confidence": 0.72,
+                        "predicted_answer": "Yes",
+                    },
+                    "variant": "variant0_neutral_baseline",
+                },
+            ],
+        }
+
+        save_response = self.client.put(
+            "/chat/conversations/conv_reg",
+            json=conversation,
+            headers=headers,
+        )
+        self.assertEqual(save_response.status_code, 200)
+
+        list_response = self.client.get("/chat/conversations", headers=headers)
+        self.assertEqual(list_response.status_code, 200)
+        saved_conv = list_response.json()["conversations"][0]
+        self.assertEqual(saved_conv["id"], "conv_reg")
+
+        # The nested 'data' dict must survive the round-trip unchanged.
+        assistant_msg = next(m for m in saved_conv["messages"] if m["role"] == "assistant")
+        self.assertEqual(assistant_msg["data"]["rationale"], long_rationale)
+        self.assertEqual(assistant_msg["data"]["model_rationale"], long_rationale)
+        self.assertEqual(assistant_msg["data"]["market_analysis"]["summary"], long_rationale)
+
+        self.client.delete("/chat/conversations/conv_reg", headers=headers)
+
     def test_chat_conversation_sync_requires_session(self):
         response = self.client.get("/chat/conversations")
         self.assertEqual(response.status_code, 401)

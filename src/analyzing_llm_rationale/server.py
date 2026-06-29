@@ -722,7 +722,14 @@ def _list_messages(user_id: str, conversation_id: str) -> List[Dict[str, Any]]:
     query = client.query(kind="Message", ancestor=_conversation_key(client, user_id, conversation_id))
     messages = []
     for entity in query.fetch(limit=500):
-        message = dict(entity)
+        if "_json" in entity:
+            try:
+                message = json.loads(entity["_json"])
+            except (ValueError, TypeError):
+                message = {k: v for k, v in entity.items() if k != "_json"}
+        else:
+            # Backwards-compatible: messages stored before the _json migration.
+            message = dict(entity)
         message["id"] = entity.key.name
         messages.append(message)
     messages.sort(key=lambda m: (m.get("createdAt") or 0, m.get("id") or ""))
@@ -762,14 +769,23 @@ def _put_conversation(user_id: str, conversation: Dict[str, Any]) -> Dict[str, A
         stale_keys = [existing_key for existing_key in existing_keys if existing_key not in message_keys]
         if stale_keys:
             client.delete_multi(stale_keys)
-        # Only index the short scalar fields used for ordering/identity;
-        # exclude everything else to stay under Datastore's 1500-byte limit.
+        # Store each message as a JSON blob so that nested dict values (e.g.
+        # the 'data' field containing rationale/model_rationale) are never
+        # serialised as Datastore embedded entities.  Embedded-entity
+        # sub-properties are indexed by default, which causes a 400 from
+        # Datastore when any sub-property exceeds 1 500 bytes.  A single JSON
+        # string excluded from indexes avoids that limit entirely.
         _MSG_INDEXED = frozenset({"id", "role", "createdAt", "updatedAt", "index"})
         message_entities = []
         for message, message_key in zip(messages, message_keys):
-            exclude = tuple(k for k in message if k not in _MSG_INDEXED)
-            message_entity = _ds.Entity(key=message_key, exclude_from_indexes=exclude)
-            message_entity.update(message)
+            message_entity = _ds.Entity(key=message_key, exclude_from_indexes=("_json",))
+            # Keep short scalar fields as indexed properties for ordering queries.
+            for field in _MSG_INDEXED:
+                if field in message:
+                    message_entity[field] = message[field]
+            # Full payload as a non-indexed JSON blob — no embedded-entity
+            # sub-properties, so no 1 500-byte limit applies.
+            message_entity["_json"] = json.dumps(message, default=str)
             message_entities.append(message_entity)
         if message_entities:
             client.put_multi(message_entities)
