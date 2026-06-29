@@ -3175,6 +3175,17 @@ class RadarMarket(BaseModel):
 class RadarResponse(BaseModel):
     updated_at: str
     markets: List[RadarMarket]
+    generated_at: Optional[str] = None
+    model: Optional[str] = None
+    edge_board: List[Dict[str, Any]] = Field(default_factory=list)
+    models_comparison: List[Dict[str, Any]] = Field(default_factory=list)
+    paper_pnl: Optional[Any] = None
+    lead_lag: Optional[Any] = None
+    calibration: Optional[Any] = None
+    resolved_log: List[Dict[str, Any]] = Field(default_factory=list)
+    n_snapshots_resolved: int = 0
+    n_markets_resolved: int = 0
+    n_markets_open: int = 0
 
 
 class SharedForecastRequest(BaseModel):
@@ -4088,6 +4099,17 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
     response = RadarResponse(
         updated_at=str(payload.get("generated_at") or datetime.now(timezone.utc).isoformat()),
         markets=markets,
+        generated_at=payload.get("generated_at"),
+        model=payload.get("model"),
+        edge_board=rows[:limit],
+        models_comparison=payload.get("models_comparison") or [],
+        paper_pnl=payload.get("paper_pnl"),
+        lead_lag=payload.get("lead_lag"),
+        calibration=payload.get("calibration"),
+        resolved_log=payload.get("resolved_log") or [],
+        n_snapshots_resolved=int(payload.get("n_snapshots_resolved") or 0),
+        n_markets_resolved=int(payload.get("n_markets_resolved") or 0),
+        n_markets_open=int(payload.get("n_markets_open") or len(rows)),
     )
     _cache_set(cache_key, response.model_dump(mode="json"), int(os.environ.get("RADAR_CACHE_TTL", "300")))
     return response

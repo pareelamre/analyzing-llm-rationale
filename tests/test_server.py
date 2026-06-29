@@ -379,6 +379,50 @@ class ServerTests(unittest.TestCase):
         self.assertGreaterEqual(len(payload["markets"]), 1)
         self.assertIn("question", payload["markets"][0])
 
+    def test_radar_endpoint_includes_live_edge_board_metadata(self):
+        live = {
+            "generated_at": "2026-06-28T23:51:20+00:00",
+            "model": "council",
+            "n_snapshots_resolved": 184,
+            "n_markets_resolved": 139,
+            "n_markets_open": 30,
+            "models_comparison": [{"model": "council", "n_snapshots_resolved": 184}],
+            "paper_pnl": {"flat": {"roi": 0.12, "growth_curve": [100, 112]}},
+            "lead_lag": {"n_markets": 12},
+            "calibration": {"bins": []},
+            "resolved_log": [{"question": "Resolved example?", "outcome": 1}],
+            "edge_board": [{
+                "platform": "Kalshi",
+                "question": "Will example happen?",
+                "market_url": "https://kalshi.com/markets/example",
+                "market_probability": 0.4,
+                "model_probability": 0.55,
+                "edge": 0.15,
+                "abs_edge": 0.15,
+                "side": "YES",
+                "domain": "macro",
+                "horizon": "30d+",
+            }],
+        }
+        with (
+            mock.patch.object(server_module, "_read_live_track_record", return_value=live),
+            mock.patch.object(server_module, "_cache_get", return_value=None),
+            mock.patch.object(server_module, "_cache_set"),
+        ):
+            response = self.client.get("/radar?limit=6")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["generated_at"], live["generated_at"])
+        self.assertEqual(payload["model"], "council")
+        self.assertEqual(payload["n_snapshots_resolved"], 184)
+        self.assertEqual(payload["n_markets_resolved"], 139)
+        self.assertEqual(len(payload["edge_board"]), 1)
+        self.assertEqual(payload["models_comparison"][0]["model"], "council")
+        self.assertEqual(payload["paper_pnl"]["flat"]["growth_curve"], [100, 112])
+        self.assertEqual(payload["lead_lag"]["n_markets"], 12)
+        self.assertEqual(payload["resolved_log"][0]["question"], "Resolved example?")
+        self.assertEqual(payload["markets"][0]["question"], "Will example happen?")
+
     def test_analytics_event_summary_counts_events(self):
         response = self.client.post(
             "/analytics/event",
