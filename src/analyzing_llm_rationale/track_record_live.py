@@ -1344,6 +1344,26 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
     }
 
 
+def _crowd_baseline_reference_rows(resolved: List[Dict[str, Any]], *,
+                                   default_model: str) -> List[Dict[str, Any]]:
+    """Use the largest single LLM cohort for the crowd-follow comparison row.
+
+    The headline/equity curve can aggregate all tracked LLM forecasts, but the
+    market-following baseline must stay comparable to one model's opportunity
+    set. Otherwise Council, GPT, Gemma, and Kimi duplicates inflate the baseline
+    count.
+    """
+    by_model: Dict[str, List[Dict[str, Any]]] = {}
+    for r in resolved:
+        mlabel = r.get("model") or default_model
+        if mlabel == "crowd-follow":
+            continue
+        by_model.setdefault(mlabel, []).append(r)
+    if not by_model:
+        return []
+    return max(by_model.items(), key=lambda item: (len(item[1]), item[0]))[1]
+
+
 def build_models_comparison(resolved: List[Dict[str, Any]], *,
                             default_model: str,
                             crowd_baseline: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -1351,7 +1371,8 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
     and hypothetical paper-trading ROI (flat + validated-only) — so gpt-oss-120b,
     Gemma, and Kimi are graded on the same markets. Ranked best-paper-edge first.
 
-    crowd_baseline: pre-computed result of crowd_baseline_equity(resolved_skill).
+    crowd_baseline: pre-computed result of crowd_baseline_equity() on the
+    largest single LLM cohort.
     When supplied, the crowd-follow row uses this data instead of its own snapshots
     so its numbers match the equity curve's crowd baseline line exactly."""
     by_model: Dict[str, List[Dict[str, Any]]] = {}
@@ -2017,6 +2038,8 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     by_market_skill: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
     for r in resolved_skill:
         by_market_skill.setdefault((r.get("platform"), r.get("ident")), []).append(r)
+    _crowd_ref_rows = _crowd_baseline_reference_rows(resolved, default_model=model)
+    _crowd_base = crowd_baseline_equity(_crowd_ref_rows)
 
     payload.update({
         "overall": overall,
@@ -2027,7 +2050,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "by_liquidity": by_liquidity,
         "lead_lag": lead_lag(by_market_skill),
         "paper_pnl": {**(paper_pnl(resolved_skill, by_edge_skill) or {}),
-                      "crowd_baseline": (_crowd_base := crowd_baseline_equity(resolved_skill))},
+                      "crowd_baseline": _crowd_base},
         "primary_paper_pnl": paper_pnl(resolved_primary, edge_calibration(resolved_primary)),
         "edge_board": edge_board_result,
         "arbitrage_signals": build_arbitrage_board(open_primary, latest_price),

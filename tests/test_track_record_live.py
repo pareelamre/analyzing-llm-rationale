@@ -563,7 +563,10 @@ class FileStoreTests(unittest.TestCase):
             self.assertEqual(agg["primary_n_snapshots_resolved"], 1)
             self.assertEqual(agg["primary_n_markets_resolved"], 1)
             self.assertEqual(agg["paper_pnl"]["flat"]["n_bets"], 3)
+            self.assertEqual(agg["paper_pnl"]["crowd_baseline"]["n_bets"], 2)
             self.assertEqual(agg["primary_paper_pnl"]["flat"]["n_bets"], 1)
+            comparison = {m["model"]: m for m in agg["models_comparison"]}
+            self.assertEqual(comparison["crowd-follow"]["n_snapshots_resolved"], 2)
 
 
 class CalibrationTests(unittest.TestCase):

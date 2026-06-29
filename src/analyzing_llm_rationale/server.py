@@ -1028,7 +1028,7 @@ def _read_live_track_record() -> Optional[Dict[str, Any]]:
     """
     import requests
 
-    cache_key = _cache_key("track_record_live")
+    cache_key = _cache_key("track_record_live", "v3")
     cached = _cache_get(cache_key)
     if cached is not None:
         return cached
