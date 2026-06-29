@@ -439,7 +439,7 @@ class TrajectoryTests(unittest.TestCase):
 
                 self.assertEqual(wrote, 2)
                 agg = trl.aggregate(store, model="council", variant="v", temperature=0.0)
-                self.assertEqual(agg["n_snapshots_resolved"], 2)
+                self.assertEqual(agg["n_snapshots_resolved"], 1)
                 self.assertEqual(agg["n_markets_resolved"], 1)
                 self.assertEqual(agg["primary_n_snapshots_resolved"], 1)
                 self.assertEqual(agg["primary_n_markets_resolved"], 1)
@@ -520,7 +520,7 @@ class FileStoreTests(unittest.TestCase):
             self.assertEqual(readback["overall"]["accuracy"], 1.0)
             self.assertEqual(readback["by_horizon"][0]["horizon"], "7-14d")
 
-    def test_aggregate_headline_counts_all_llm_forecasts_not_crowd_baseline(self):
+    def test_aggregate_headline_counts_comparable_llm_cohort_not_all_duplicates(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "store.json"
             store = FileStore(path)
@@ -557,12 +557,12 @@ class FileStoreTests(unittest.TestCase):
                 store.put(snap)
 
             agg = trl.aggregate(store, model="council", variant="v", temperature=0.0)
-            self.assertEqual(agg["n_snapshots_resolved"], 3)
+            self.assertEqual(agg["n_snapshots_resolved"], 2)
             self.assertEqual(agg["n_markets_resolved"], 2)
             self.assertEqual(agg["primary_model"], "council")
             self.assertEqual(agg["primary_n_snapshots_resolved"], 1)
             self.assertEqual(agg["primary_n_markets_resolved"], 1)
-            self.assertEqual(agg["paper_pnl"]["flat"]["n_bets"], 3)
+            self.assertEqual(agg["paper_pnl"]["flat"]["n_bets"], 2)
             self.assertEqual(agg["paper_pnl"]["crowd_baseline"]["n_bets"], 2)
             self.assertEqual(agg["primary_paper_pnl"]["flat"]["n_bets"], 1)
             comparison = {m["model"]: m for m in agg["models_comparison"]}

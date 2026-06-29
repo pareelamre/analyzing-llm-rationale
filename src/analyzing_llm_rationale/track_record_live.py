@@ -1840,20 +1840,19 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_rows}
 
     # The edge board itself is driven by the primary model, but public headline
-    # counts and the default equity curve cover every tracked LLM forecast. A
-    # "crowd-follow" row is a baseline, not an LLM forecast, so keep it out of
-    # headline counts/PnL while still showing it in models_comparison.
+    # counts and the default equity curve should not double-count the same
+    # resolved opportunities across Council, GPT, Gemma, and Kimi. Use the
+    # largest single tracked LLM cohort as the comparable headline universe.
     # Snapshots predating the multi-model split have no `model` field → primary.
     resolved_primary = [r for r in resolved if (r.get("model") or model) == model]
     resolved_llm = [r for r in resolved if (r.get("model") or model) != "crowd-follow"]
+    resolved_skill = _crowd_baseline_reference_rows(resolved, default_model=model) or resolved_llm
     open_primary = [r for r in open_rows if (r.get("model") or model) == model]
     open_idents = {(r.get("platform"), r.get("ident")) for r in open_primary}
-    n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_llm})
+    n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_skill})
     primary_n_markets_resolved = len({(r.get("platform"), r.get("ident")) for r in resolved_primary})
 
-    # Skill metrics use all resolved LLM snapshots — sports included.
-    # The crowd-follow model benchmarks against this LLM basket specifically.
-    resolved_skill = resolved_llm
+    # Skill metrics use this comparable cohort — sports included.
 
     # Lead-time (how-early) calibration: resolved skill bucketed by forecast
     # horizon, with significance — the axis the edge board links against.
