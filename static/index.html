@@ -3464,6 +3464,14 @@ async function _readJson(resp) {
   catch { return { detail: (txt || '').slice(0, 300).trim() || ('HTTP ' + resp.status) }; }
 }
 
+function _liveJsonFetch(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  return fetch(`${path}${sep}_=${Date.now()}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+  });
+}
+
 function _parseSseBlock(block) {
   let event = 'message';
   const dataLines = [];
@@ -4480,7 +4488,7 @@ async function loadTrackRecord() {
   const host = document.getElementById('trackBody');
   host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading track record…</p></div>';
   try {
-    const r = await fetch('/track-record');
+    const r = await _liveJsonFetch('/track-record');
     if (!r.ok) throw new Error('unavailable');
     const d = await _readJson(r);
     host.innerHTML = renderTrackRecord(d);
@@ -4602,7 +4610,7 @@ async function refreshEquityCurve() {
   const el = document.getElementById('eb-equity-svg');
   if (!el) return;
   try {
-    const r = await fetch('/edge-board');
+    const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) return;
     const d = await _readJson(r);
     const pnl = d.paper_pnl;
@@ -4935,7 +4943,7 @@ async function loadEdgeBoard() {
   const host = document.getElementById('edgeBody');
   host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading edge board…</p></div>';
   try {
-    const r = await fetch('/edge-board');
+    const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) throw new Error('unavailable');
     host.innerHTML = renderEdgeBoard(await _readJson(r));
     const eqDiv = document.getElementById('eb-equity-svg');
@@ -5055,7 +5063,7 @@ function _renderWatchTable() {
 
 async function loadLandingPanels() {
   try {
-    const r = await fetch('/radar?limit=6');
+    const r = await _liveJsonFetch('/radar?limit=6');
     if (!r.ok) return;
     const d = await _readJson(r);
     _renderLandingMarketTable((d.markets || []).slice(0, 3));
@@ -7184,7 +7192,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
   if (cmd === '/edge') {
     const typing = addTyping();
     try {
-      const r = await fetch('/edge-board');
+      const r = await _liveJsonFetch('/edge-board');
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       const board = d.edge_board || [];
@@ -7220,7 +7228,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
   if (cmd === '/track') {
     const typing = addTyping();
     try {
-      const r = await fetch('/track-record');
+      const r = await _liveJsonFetch('/track-record');
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       const ov = d.overall || {};

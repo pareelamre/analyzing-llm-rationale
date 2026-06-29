@@ -5,6 +5,7 @@ crowd-follow has zero edge by definition (model_prob = market_prob), so the stan
 paper_pnl code (which requires edge >= 0.05) filters all its bets out. Here we use
 min_edge=0 for all models so crowd-follow appears as the zero-expectancy baseline.
 """
+# ruff: noqa: E402,I001
 from __future__ import annotations
 
 import sys
@@ -27,12 +28,14 @@ OUT_PATH = ROOT / "analysis" / "equity_curves.png"
 
 # Tailwind-inspired palette
 COLORS = {
+    "council":             "#111827",   # gray-900
     "gpt-oss-120b":        "#3b82f6",   # blue-500
     "kimi-k2.6":           "#f97316",   # orange-500
     "gemma-4-31b-it":      "#10b981",   # emerald-500
     "crowd-follow":        "#94a3b8",   # slate-400  (baseline)
 }
 LABELS = {
+    "council":        "Council",
     "gpt-oss-120b":   "GPT-OSS-120B",
     "kimi-k2.6":      "Kimi K2.6",
     "gemma-4-31b-it": "Gemma 4-31B",
@@ -40,12 +43,13 @@ LABELS = {
 }
 # Linestyle per model — Kimi/Gemma may overlap, so use distinct dashes
 LINESTYLES = {
+    "council":        "-",
     "gpt-oss-120b":   "-",
     "kimi-k2.6":      (0, (4, 2)),   # long dash
     "gemma-4-31b-it": "-",
     "crowd-follow":   (0, (2, 2)),   # dotted
 }
-MODEL_ORDER = ["gpt-oss-120b", "kimi-k2.6", "gemma-4-31b-it", "crowd-follow"]
+MODEL_ORDER = ["council", "gpt-oss-120b", "gemma-4-31b-it", "kimi-k2.6", "crowd-follow"]
 
 
 def _edge(model_p: float, market_p: float) -> float:
@@ -61,9 +65,9 @@ def _bet_fee(platform: str | None, stake: float, p_side: float) -> float:
 
 
 def equity_curve(rows: list[dict], *, min_edge: float = 0.0) -> tuple[list[str], list[float]]:
-    """Cumulative flat-stake PnL over resolved snapshots, ordered by snapshot_ts."""
+    """Cumulative flat-stake PnL over resolved snapshots, ordered by resolution."""
     bets: list[tuple[str, float]] = []
-    for r in sorted(rows, key=lambda x: x.get("snapshot_ts") or ""):
+    for r in sorted(rows, key=lambda x: x.get("resolved_ts") or x.get("snapshot_ts") or ""):
         model_p = float(r["model_probability"])
         market_p = float(r["market_probability"])
         edge = _edge(model_p, market_p)
@@ -80,7 +84,7 @@ def equity_curve(rows: list[dict], *, min_edge: float = 0.0) -> tuple[list[str],
         payout = (1.0 - p_side) / p_side
         fee = _bet_fee(r.get("platform"), 1.0, p_side)
         profit = 1.0 * (payout if win else -1.0) - fee
-        ts = str(r.get("snapshot_ts") or "")[:10]
+        ts = str(r.get("resolved_ts") or r.get("snapshot_ts") or "")[:10]
         bets.append((ts, profit))
     dates = [b[0] for b in bets]
     curve = list(np.cumsum([b[1] for b in bets]))
@@ -92,8 +96,11 @@ def main() -> None:
     rows_raw = store._con.execute("""
         SELECT model, ident, snapshot_ts, model_probability, market_probability,
                outcome, platform, resolved_ts
-        FROM forecast_snapshot WHERE resolved = true
-        ORDER BY snapshot_ts
+        FROM forecast_snapshot
+        WHERE resolved = true
+          AND outcome IS NOT NULL
+          AND key NOT LIKE '%_backfill'
+        ORDER BY resolved_ts
     """).fetchall()
 
     by_model: dict[str, list[dict]] = defaultdict(list)
@@ -108,14 +115,15 @@ def main() -> None:
             "platform": platform,
             "resolved_ts": str(resolved_ts),
         }
-        by_model[model or "gpt-oss-120b"].append(rec)
+        by_model[model or "council"].append(rec)
 
-    # Reconstruct crowd-follow from gpt rows (same 43 markets, model_prob = market_prob)
-    gpt_rows = by_model.get("gpt-oss-120b", [])
-    by_model["crowd-follow"] = [
-        {**r, "model": "crowd-follow", "model_probability": r["market_probability"]}
-        for r in gpt_rows
-    ]
+    llm_groups = {m: rows for m, rows in by_model.items() if m != "crowd-follow"}
+    if llm_groups:
+        _label, reference_rows = max(llm_groups.items(), key=lambda item: (len(item[1]), item[0]))
+        by_model["crowd-follow"] = [
+            {**r, "model": "crowd-follow", "model_probability": r["market_probability"]}
+            for r in reference_rows
+        ]
 
     fig, ax = plt.subplots(figsize=(10, 5.5))
     fig.patch.set_facecolor("white")
@@ -130,10 +138,6 @@ def main() -> None:
     # Draw zero line
     ax.axhline(0, color="#94a3b8", linewidth=1.0, linestyle=":")
 
-    # Kimi and Gemma produce identical equity curves on this sample — nudge Kimi
-    # slightly upward so both lines are visible
-    Y_OFFSET = {"kimi-k2.6": 0.15}
-
     for model_key in MODEL_ORDER:
         rows = by_model.get(model_key, [])
         if not rows:
@@ -141,8 +145,7 @@ def main() -> None:
         dates, curve = equity_curve(rows, min_edge=0.0)
         if not curve:
             continue
-        offset = Y_OFFSET.get(model_key, 0.0)
-        curve_disp = [v + offset for v in curve]
+        curve_disp = curve
         color = COLORS[model_key]
         lw = 1.5 if model_key == "crowd-follow" else 2.2
         ls = LINESTYLES[model_key]
@@ -153,9 +156,8 @@ def main() -> None:
         final_true = curve[-1]
         final_disp = curve_disp[-1]
         sign = "+" if final_true >= 0 else ""
-        note = " (≈Gemma)" if model_key == "kimi-k2.6" else ""
         ax.annotate(
-            f"{LABELS[model_key]}{note}\n{sign}{final_true:.1f}u",
+            f"{LABELS[model_key]}\n{sign}{final_true:.1f}u",
             xy=(xs[-1], final_disp),
             xytext=(6, 0),
             textcoords="offset points",
