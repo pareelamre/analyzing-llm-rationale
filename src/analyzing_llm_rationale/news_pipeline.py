@@ -622,7 +622,7 @@ class NewsPipeline:
                     "maxrecords": min(max(1, limit), 250),
                     "sort": "HybridRel",
                 },
-                timeout=15,
+                timeout=(5, 15),
             )
             resp.raise_for_status()
             data = resp.json()

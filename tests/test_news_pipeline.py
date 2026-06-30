@@ -58,6 +58,7 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(articles[0]["summary"], "Fed officials discuss rate path")
         self.assertEqual(calls[0][1]["query"], "Federal Reserve rate cut")
         self.assertEqual(calls[0][1]["maxrecords"], 3)
+        self.assertEqual(calls[0][2], (5, 15))
 
     def test_fetch_google_news_uses_search_rss(self):
         calls = []
