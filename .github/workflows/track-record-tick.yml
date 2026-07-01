@@ -2,7 +2,7 @@ name: Track record price tick
 
 # Cheap 15-minute heartbeat: records price points, scores newly-resolved markets,
 # and refreshes the public aggregate. No LLM calls — always completes in < 10 min.
-# LLM forecast snapshots are handled by track-record-forecast.yml (every 6 h).
+# LLM forecast snapshots are handled by track-record-forecast.yml (hourly).
 
 on:
   schedule:

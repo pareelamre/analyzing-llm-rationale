@@ -156,6 +156,24 @@ class TrajectoryTests(unittest.TestCase):
         a = next(e for e in snaps if e.get("question") == "Will A happen?")
         self.assertAlmostEqual(a["model_probability"], 0.55)  # refreshed
 
+    def test_hourly_llm_snapshot_slots_when_configured(self):
+        far = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, 0, tzinfo=timezone.utc)):
+            self.assertEqual(asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m", per_venue=3,
+                short_horizon_reforecast_lead_days=90,
+                short_horizon_slot_hours=1)), 2)
+        with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, 1, tzinfo=timezone.utc)):
+            self.assertEqual(asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m", per_venue=3,
+                short_horizon_reforecast_lead_days=90,
+                short_horizon_slot_hours=1)), 2)
+        snaps = [k for k in self.client.store if k[0] == trl.SNAPSHOT_KIND]
+        self.assertEqual(len(snaps), 4)
+        self.assertTrue(any(":2026-06-03T00" in key[1] for key in snaps))
+        self.assertTrue(any(":2026-06-03T01" in key[1] for key in snaps))
+
     def test_hourly_price_points_store_liquidity_and_forecast_context_is_stateful(self):
         far = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)

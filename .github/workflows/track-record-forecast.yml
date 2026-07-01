@@ -1,12 +1,12 @@
 name: Track record forecast
 
-# Heavy 6-hourly pass: LLM forecast snapshots for all open markets across all
+# Heavy hourly pass: LLM forecast snapshots for all open markets across all
 # tracked models. Each run makes up to N_markets × N_models /predict calls.
 # Uses the shared concurrency group so it never races a price-tick commit.
 
 on:
   schedule:
-    - cron: "0 0,6,12,18 * * *"
+    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       reforecast_each_tick:
@@ -42,7 +42,7 @@ jobs:
           REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '1' }}
           PRICE_DRIFT_THRESHOLD: "0.10"
           SHORT_HORIZON_REFORECAST_LEAD_DAYS: "90"
-          SHORT_HORIZON_SLOT_HOURS: "6"
+          SHORT_HORIZON_SLOT_HOURS: "1"
           EXPIRY_REFORECAST_LEAD_DAYS: "3"
           EXPIRY_SLOT_HOURS: "1"
         run: python scripts/track_record_tick.py

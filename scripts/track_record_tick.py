@@ -8,8 +8,7 @@ removes the OOM/timeout class entirely: Cloud Run only *serves* the result.
 Each run:
   1. scores snapshots whose markets resolved since last time,
   2. appends a cheap hourly price point per open market,
-  3. takes LLM forecast snapshots on tracked-open + newly-discovered markets
-     (daily for slow markets; intraday slots for short-horizon markets)
+  3. takes hourly LLM forecast snapshots on tracked-open + newly-discovered markets
      (one HTTP call to ``/predict`` per market — inference stays server-side,
      so no model is held in this runner's memory),
   4. recomputes the public aggregate.
@@ -72,7 +71,7 @@ SHORT_HORIZON_REFORECAST_LEAD_DAYS = float(
     os.environ.get("SHORT_HORIZON_REFORECAST_LEAD_DAYS") or 90.0)
 SHORT_HORIZON_SLOT_HOURS = int(
     os.environ.get("SHORT_HORIZON_SLOT_HOURS")
-    or trl.SHORT_HORIZON_SLOT_HOURS)
+    or 1)
 EXPIRY_REFORECAST_LEAD_DAYS = float(
     os.environ.get("EXPIRY_REFORECAST_LEAD_DAYS") or trl.EXPIRY_REFORECAST_LEAD_DAYS)
 EXPIRY_SLOT_HOURS = int(
