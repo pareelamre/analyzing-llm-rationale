@@ -1,52 +1,52 @@
 {
-  "basis": -98.02,
+  "basis": -73.42,
   "calibration": {
-    "brier": 0.0066,
+    "brier": 0.0085,
     "coinflip_baseline": 0.25,
-    "contested_brier": 0.1707,
-    "contested_n": 177,
-    "directional_accuracy": 0.9912,
+    "contested_brier": 0.1774,
+    "contested_n": 207,
+    "directional_accuracy": 0.9883,
     "n": 6000,
     "reliability": [
       {
-        "empirical_rate": 0.0006,
-        "mean_model_p": 0.0032,
-        "n": 3106,
+        "empirical_rate": 0.0053,
+        "mean_model_p": 0.0038,
+        "n": 3009,
         "range": "0.0-0.2"
       },
       {
-        "empirical_rate": 0.24,
-        "mean_model_p": 0.3003,
-        "n": 50,
+        "empirical_rate": 0.2909,
+        "mean_model_p": 0.2976,
+        "n": 55,
         "range": "0.2-0.4"
       },
       {
-        "empirical_rate": 0.4419,
-        "mean_model_p": 0.5018,
-        "n": 43,
+        "empirical_rate": 0.5208,
+        "mean_model_p": 0.4919,
+        "n": 48,
         "range": "0.4-0.6"
       },
       {
-        "empirical_rate": 0.7843,
-        "mean_model_p": 0.7094,
-        "n": 51,
+        "empirical_rate": 0.7869,
+        "mean_model_p": 0.7022,
+        "n": 61,
         "range": "0.6-0.8"
       },
       {
-        "empirical_rate": 0.9967,
-        "mean_model_p": 0.9968,
-        "n": 2750,
+        "empirical_rate": 0.9986,
+        "mean_model_p": 0.9962,
+        "n": 2827,
         "range": "0.8-1.0"
       }
     ]
   },
-  "generated_at": "2026-07-01T06:16:13.835170+00:00",
+  "generated_at": "2026-07-01T23:42:40.606924+00:00",
   "instrument": "Kalshi KXBTCD (BTC >= strike at close)",
-  "n_open": 38,
+  "n_open": 41,
   "n_resolved": 6000,
   "note": "Real-instrument paper trades: model probability vs live Kalshi bid/ask, scored on the venue's own settlement. Net of spread + Kalshi fee; no slippage.",
   "paper_trades": {
-    "coverage_days": 13.04,
+    "coverage_days": 14.04,
     "equity_curve": [
       -0.5175,
       -1.271,
@@ -159,7 +159,12 @@
       4.6913,
       4.9669,
       5.1749,
-      5.3065
+      5.3065,
+      6.1476,
+      6.8021,
+      6.5805,
+      6.4111,
+      6.1791
     ],
     "equity_curve_ts": [
       1781726400000,
@@ -273,13 +278,18 @@
       1782853200000,
       1782853200000,
       1782853200000,
-      1782853200000
+      1782853200000,
+      1782889200000,
+      1782889200000,
+      1782889200000,
+      1782939600000,
+      1782939600000
     ],
-    "hit_rate": 0.5714,
+    "hit_rate": 0.5641,
     "max_drawdown": 4.0904,
-    "n_trades": 112,
-    "pnl_per_contract": 5.3065,
-    "roi": 0.0924,
-    "total_staked": 57.43
+    "n_trades": 117,
+    "pnl_per_contract": 6.1791,
+    "roi": 0.1056,
+    "total_staked": 58.5
   }
 }
