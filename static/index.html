@@ -4643,12 +4643,23 @@ async function refreshEquityCurve() {
       if (times.length === points.length) curve.times = times;
       return curve;
     };
-    const curves = [
+    const _alignCurves = curves => {
+      const starts = curves.map(c => c.times?.[0]).filter(t => Number.isFinite(t));
+      if (!starts.length) return curves;
+      const commonStart = Math.max(...starts);
+      return curves.map(c => {
+        if (!c.times?.length) return c;
+        const keep = c.times.map((t, i) => ({t, p: c.points[i]})).filter(x => x.t >= commonStart);
+        if (!keep.length || !keep[0].p) return null;
+        return {...c, times: keep.map(x => x.t), points: keep.map(x => (x.p / keep[0].p) * 100)};
+      }).filter(Boolean);
+    };
+    const curves = _alignCurves([
       _mk(pnl.smart,          '#10b981', '★ Smart'),
       _mk(pnl.half_kelly,     '#06b6d4', 'Half-Kelly'),
       _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
-    ].filter(Boolean);
+    ].filter(Boolean));
     el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : '';
     if (curves.length) _attachEquityHover(el);
     const ts = document.getElementById('eb-pnl-ts');
@@ -5468,7 +5479,7 @@ function renderEdgeBoard(d) {
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
-    const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. The curve compounds a $100 bankroll by reinvesting wins and resizing later bets after losses (${nBet} of ${nRes} resolved markets bet):</p>`;
+    const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. The curve compounds a $100 bankroll and is rebased so every visible strategy starts together (${nBet} of ${nRes} resolved markets bet):</p>`;
     const _normCurve = s => {
       // growth_curve is a compounded growth-of-$100 bankroll series. The card
       // ROI remains the simple non-compounded return on total stake.
@@ -5487,12 +5498,23 @@ function renderEdgeBoard(d) {
       if (times.length === points.length) curve.times = times;
       return curve;
     };
-    const curves = [
+    const _alignCurves = curves => {
+      const starts = curves.map(c => c.times?.[0]).filter(t => Number.isFinite(t));
+      if (!starts.length) return curves;
+      const commonStart = Math.max(...starts);
+      return curves.map(c => {
+        if (!c.times?.length) return c;
+        const keep = c.times.map((t, i) => ({t, p: c.points[i]})).filter(x => x.t >= commonStart);
+        if (!keep.length || !keep[0].p) return null;
+        return {...c, times: keep.map(x => x.t), points: keep.map(x => (x.p / keep[0].p) * 100)};
+      }).filter(Boolean);
+    };
+    const curves = _alignCurves([
       _mk(pnl.smart,          '#10b981', '★ Smart'),
       _mk(pnl.half_kelly,     '#06b6d4', 'Half-Kelly'),
       _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
-    ].filter(Boolean);
+    ].filter(Boolean));
     const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : ''}</div>`;
     // Per-sizing explainer: what each number means and what the gap between them signals.
     const _pnlExplainer = () => {
