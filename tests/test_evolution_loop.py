@@ -176,6 +176,15 @@ class FeedbackTests(unittest.TestCase):
                 mock.patch.object(server, "_read_live_track_record", return_value=live):
             self.assertIsNone(server._auto_selected_model())
 
+    def test_auto_select_requires_incumbent_model_history(self):
+        live = {"models_comparison": [
+            {"model": "council", "paper_roi_smart": 0.20},
+        ]}
+        with mock.patch.dict(server._state, {"model_key": "test-model"}), \
+                mock.patch.object(server, "_AUTO_SELECT_MODEL", True), \
+                mock.patch.object(server, "_read_live_track_record", return_value=live):
+            self.assertIsNone(server._auto_selected_model())
+
 
 if __name__ == "__main__":
     unittest.main()

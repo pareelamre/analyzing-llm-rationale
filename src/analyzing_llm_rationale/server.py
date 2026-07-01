@@ -1118,6 +1118,8 @@ def _auto_selected_model() -> Optional[str]:
         comp = (_read_live_track_record() or {}).get("models_comparison") or []
         default = _state.get("model_key")
         inc_roi = next((m.get("paper_roi_smart") for m in comp if m.get("model") == default), None)
+        if inc_roi is None:
+            return None
         best, best_roi = None, None
         for m in comp:
             label, roi = m.get("model"), m.get("paper_roi_smart")
@@ -1125,7 +1127,7 @@ def _auto_selected_model() -> Optional[str]:
                 best, best_roi = label, roi
         if not best or best == default:
             return None
-        if inc_roi is None or best_roi - inc_roi >= _MODEL_SWITCH_MARGIN:
+        if best_roi - inc_roi >= _MODEL_SWITCH_MARGIN:
             return best
         return None
     except Exception:
