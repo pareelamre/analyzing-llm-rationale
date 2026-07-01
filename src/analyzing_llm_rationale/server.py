@@ -139,9 +139,7 @@ def _strategy_filter_edge_entry(entry: dict, strategy: str) -> bool:
     entry_price = entry.get("entry_price", 0.5)
     abs_edge = entry.get("abs_edge", 0.0)
     domain = entry.get("domain", "")
-    if strategy == "mid_price_only":
-        return 0.30 <= entry_price <= 0.70
-    if strategy in ("smart", "edge_weighted"):
+    if strategy == "smart":
         if entry_price < 0.20 or entry_price > 0.80:
             return False
         if domain == "geopolitics" and abs_edge > 0.10:
@@ -149,18 +147,18 @@ def _strategy_filter_edge_entry(entry: dict, strategy: str) -> bool:
         if abs_edge > 0.40:
             return False
         return True
-    if strategy == "validated_only":
-        return bool((entry.get("track_record") or {}).get("skill_significant"))
-    if strategy == "fade_extreme":
-        return abs_edge >= 0.15
-    return True  # flat / yes_only / half_kelly — no extra filter beyond min_edge
+    return True  # flat / half_kelly / crowd_baseline — no extra filter beyond min_edge
 
 
 def _pick_best_strategy(paper_pnl: dict) -> tuple:
     """Return (name, data) of the highest-ROI strategy with at least 20 resolved bets."""
+    industry_grade = {"smart", "half_kelly", "flat", "crowd_baseline"}
     candidates = [
         (k, v) for k, v in paper_pnl.items()
-        if isinstance(v, dict) and v.get("roi") is not None and (v.get("n_bets") or 0) >= 20
+        if k in industry_grade
+        and isinstance(v, dict)
+        and v.get("roi") is not None
+        and (v.get("n_bets") or 0) >= 20
     ]
     if not candidates:
         return ("flat", paper_pnl.get("flat") or {})
@@ -1110,7 +1108,7 @@ def _calibrate_probability(p: Optional[float]) -> Optional[float]:
 
 
 def _auto_selected_model() -> Optional[str]:
-    """Best validated-paper-edge model from the live `models_comparison`, gated on
+    """Best Smart-strategy paper-edge model from the live `models_comparison`, gated on
     a margin over the configured default (anti-thrash). Returns an allowlisted
     label to forecast with, or None to keep the default. No-op until resolved data
     produces a significant per-model edge."""
@@ -1119,10 +1117,10 @@ def _auto_selected_model() -> Optional[str]:
     try:
         comp = (_read_live_track_record() or {}).get("models_comparison") or []
         default = _state.get("model_key")
-        inc_roi = next((m.get("paper_roi_validated") for m in comp if m.get("model") == default), None)
+        inc_roi = next((m.get("paper_roi_smart") for m in comp if m.get("model") == default), None)
         best, best_roi = None, None
         for m in comp:
-            label, roi = m.get("model"), m.get("paper_roi_validated")
+            label, roi = m.get("model"), m.get("paper_roi_smart")
             if label in _SCADS_MODEL_ALLOWLIST and roi is not None and (best_roi is None or roi > best_roi):
                 best, best_roi = label, roi
         if not best or best == default:

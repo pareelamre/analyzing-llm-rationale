@@ -1141,8 +1141,9 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             filter_fn: optional callable(bet_dict) -> bool, skip bet if False.
             fade: if True, bet the *opposite* side to the model's call.
         """
-        # Precount total capital deployed so the growth curve can compound correctly.
-        # Each bet's return is profit/pre_staked — its fraction of the starting bankroll.
+        # Precount planned exposure. The growth curve treats each nominal stake
+        # as a fraction of the current bankroll, so wins/losses affect the next
+        # bet size instead of being added to a static capital base.
         _pre_staked = 0.0
         for _b in all_bets:
             if validated and not _b["in_validated"]:
@@ -1159,6 +1160,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         curve: List[float] = []
         curve_ts: List[Any] = []
         growth_curve: List[float] = []
+        bankroll = 100.0
         for b in all_bets:
             if validated and not b["in_validated"]:
                 continue
@@ -1195,9 +1197,9 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             curve.append(round(cum, 4))
             curve_ts.append(b["resolved_ts"])
             if _pre_staked > 0:
-                # Growth of $100 deployed across all bets; the last point equals
-                # 100*(1+roi) so the chart endpoint matches the displayed ROI.
-                growth_curve.append(round(100.0 * (1.0 + cum / _pre_staked), 6))
+                stake_fraction = stake / _pre_staked
+                bankroll *= max(0.0, 1.0 + stake_fraction * (profit / stake))
+                growth_curve.append(round(bankroll, 6))
         if not n:
             return None
         return {
@@ -1210,18 +1212,13 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "equity_curve": curve[-60:],
             "equity_curve_ts": curve_ts[-60:],
             "growth_curve": growth_curve[-60:],
+            "compound_bankroll": round(bankroll, 6),
+            "compound_return": round((bankroll / 100.0) - 1.0, 4),
         }
 
     flat = _run(lambda b: 1.0)
     if flat is None:
         return None
-
-    # ── Filters ──────────────────────────────────────────────
-    def _mid_price_filter(b):
-        """Only bet when entry price is between 30¢ and 70¢."""
-        mkt_p = b["market_probability"]
-        p_side = mkt_p if b["side"] == "YES" else (1.0 - mkt_p)
-        return 0.30 <= p_side <= 0.70
 
     def _smart_filter(b):
         """Data-driven composite filter:
@@ -1271,26 +1268,14 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         # Clamp: no negative stakes, cap at $1 for comparability
         return max(0.0, min(half_kelly, 1.0))
 
-    def _calibrated_edge_weighted(b):
-        """Scale bet size by the walk-forward calibrated edge, capped at stake_cap."""
-        model_p = b["calibrated_model_probability"]
-        mkt_p = b["market_probability"]
-        cal_edge = abs(model_p - mkt_p)
-        return min(cal_edge, stake_cap)
-
     return {
         "min_edge": min_edge,
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; "
                       "Polymarket fee-free). Excludes slippage/liquidity unless configured. "
                       "Signal check, not live PnL.",
         "flat": flat,
-        "edge_weighted": _run(_calibrated_edge_weighted, filter_fn=_smart_filter),
-        "validated_only": _run(lambda b: 1.0, validated=True),
-        "mid_price_only": _run(lambda b: 1.0, filter_fn=_mid_price_filter),
-        "fade_extreme": _run(lambda b: 1.0, filter_fn=lambda b: b["edge"] >= 0.15, fade=True),
         "half_kelly": _run(_half_kelly),
         "smart": _run(_half_kelly, filter_fn=_smart_filter),
-        "yes_only": _run(lambda b: 1.0, filter_fn=lambda b: b["side"] == "YES"),
         "bets": _public_bets(),
     }
 
@@ -1308,6 +1293,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
     cum = 0.0
     curve: List[float] = []
     curve_ts: List[Any] = []
+    profits: List[float] = []
     staked = pnl = wins = 0.0
     n = 0
     for r in sorted(resolved, key=lambda x: x.get("resolved_ts") or _now()):
@@ -1328,6 +1314,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         wins += 1 if win else 0
         n += 1
         cum += profit
+        profits.append(profit)
         curve.append(round(cum, 4))
         ts = r.get("resolved_ts")
         if isinstance(ts, dict):
@@ -1337,11 +1324,12 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         curve_ts.append(ts)
     if not n:
         return None
-    # Growth curve: $100 deployed across all bets; the last point equals
-    # 100*(1+roi) so the chart endpoint matches the displayed ROI.
-    growth_curve: List[float] = (
-        [round(100.0 * (1.0 + c / staked), 6) for c in curve] if staked else []
-    )
+    growth_curve: List[float] = []
+    bankroll = 100.0
+    if staked:
+        for profit in profits:
+            bankroll *= max(0.0, 1.0 + (1.0 / staked) * profit)
+            growth_curve.append(round(bankroll, 6))
     return {
         "n_bets": n,
         "total_staked": round(staked, 4),
@@ -1351,6 +1339,8 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         "equity_curve": curve[-60:],
         "equity_curve_ts": curve_ts[-60:],
         "growth_curve": growth_curve[-60:],
+        "compound_bankroll": round(bankroll, 6),
+        "compound_return": round((bankroll / 100.0) - 1.0, 4),
     }
 
 
@@ -1400,7 +1390,7 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
                 "model_brier": None,
                 "skill_vs_market": 0.0,
                 "paper_roi": cb.get("roi"),
-                "paper_roi_validated": None,
+                "paper_roi_smart": None,
                 "paper_pnl": {"flat": cb},
                 "by_horizon": [],
             })
@@ -1423,11 +1413,11 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
             "model_brier": ov.get("model_brier"),
             "skill_vs_market": ov.get("skill_vs_market"),
             "paper_roi": ((pp or {}).get("flat") or {}).get("roi"),
-            "paper_roi_validated": ((pp or {}).get("validated_only") or {}).get("roi"),
+            "paper_roi_smart": ((pp or {}).get("smart") or {}).get("roi"),
             "paper_pnl": pp,
             "by_horizon": model_by_horizon,
         })
-    out.sort(key=lambda m: (m["paper_roi_validated"] if m["paper_roi_validated"] is not None else -9.0,
+    out.sort(key=lambda m: (m["paper_roi_smart"] if m["paper_roi_smart"] is not None else -9.0,
                             m["paper_roi"] if m["paper_roi"] is not None else -9.0,
                             m["skill_vs_market"] if m["skill_vs_market"] is not None else -9.0),
              reverse=True)

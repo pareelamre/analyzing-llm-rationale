@@ -4622,17 +4622,12 @@ async function refreshEquityCurve() {
     const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
     const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
     _upd('eb-pnl-flat-v',  _roiVal(pnl.flat));
-    _upd('eb-pnl-edge-v',  _roiVal(pnl.edge_weighted));
-    _upd('eb-pnl-val-v',   _roiVal(pnl.validated_only));
-    _upd('eb-pnl-mid-v',   _roiVal(pnl.mid_price_only));
-    _upd('eb-pnl-fade-v',  _roiVal(pnl.fade_extreme));
     _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
     _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
-    _upd('eb-pnl-yes-v',   _roiVal(pnl.yes_only));
     _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
     const _normCurve = s => {
-      // growth_curve is a growth-of-$100 series ending at 100*(1+roi), so the
-      // chart endpoint matches the ROI shown on the edge board.
+      // growth_curve is a compounded growth-of-$100 bankroll series. The card
+      // ROI remains the simple non-compounded return on total stake.
       if (s?.growth_curve?.length) return s.growth_curve.slice();
       if (!s?.equity_curve?.length) return null;
       const staked = s.total_staked || s.n_bets || 1;
@@ -4651,12 +4646,7 @@ async function refreshEquityCurve() {
     const curves = [
       _mk(pnl.smart,          '#10b981', '★ Smart'),
       _mk(pnl.half_kelly,     '#06b6d4', 'Half-Kelly'),
-      _mk(pnl.yes_only,       '#fbbf24', 'YES-Only'),
       _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
-      _mk(pnl.edge_weighted,  '#a78bfa', 'Edge-weighted'),
-      _mk(pnl.validated_only, '#34d399', 'Validated-only'),
-      _mk(pnl.mid_price_only, '#f59e0b', 'Mid-price only'),
-      _mk(pnl.fade_extreme,   '#ec4899', 'Fade extreme ⚗️', true),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
     el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : '';
@@ -5461,12 +5451,12 @@ function renderEdgeBoard(d) {
     </div>`;
   let compHtml;
   if (comp.length) {
-    compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Paper ROI</th><th>Validated</th></tr></thead><tbody>` +
+    compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Flat ROI</th><th>Smart ROI</th></tr></thead><tbody>` +
       comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
         return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
         `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
         `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td>` +
-        `<td>${enough ? _roiPct(m.paper_roi) : '·'}</td><td>${enough ? _roiPct(m.paper_roi_validated) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
+        `<td>${enough ? _roiPct(m.paper_roi) : '·'}</td><td>${enough ? _roiPct(m.paper_roi_smart) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
   } else {
     compHtml = `<p class="text-sm text-gray-500">Model comparison (gpt-oss-120b vs Gemma vs Kimi) fills in as forecasts resolve.</p>`;
   }
@@ -5478,10 +5468,10 @@ function renderEdgeBoard(d) {
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
-    const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. Three ways to size each bet (${nBet} of ${nRes} resolved markets bet):</p>`;
+    const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. The curve compounds a $100 bankroll by reinvesting wins and resizing later bets after losses (${nBet} of ${nRes} resolved markets bet):</p>`;
     const _normCurve = s => {
-      // growth_curve is a growth-of-$100 series ending at 100*(1+roi), so the
-      // chart endpoint matches the ROI shown on the edge board.
+      // growth_curve is a compounded growth-of-$100 bankroll series. The card
+      // ROI remains the simple non-compounded return on total stake.
       if (s?.growth_curve?.length) return s.growth_curve.slice();
       if (!s?.equity_curve?.length) return null;
       const staked = s.total_staked || s.n_bets || 1;
@@ -5500,26 +5490,16 @@ function renderEdgeBoard(d) {
     const curves = [
       _mk(pnl.smart,          '#10b981', '★ Smart'),
       _mk(pnl.half_kelly,     '#06b6d4', 'Half-Kelly'),
-      _mk(pnl.yes_only,       '#fbbf24', 'YES-Only'),
       _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
-      _mk(pnl.edge_weighted,  '#a78bfa', 'Edge-weighted'),
-      _mk(pnl.validated_only, '#34d399', 'Validated-only'),
-      _mk(pnl.mid_price_only, '#f59e0b', 'Mid-price only'),
-      _mk(pnl.fade_extreme,   '#ec4899', 'Fade extreme ⚗️', true),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
     const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : ''}</div>`;
     // Per-sizing explainer: what each number means and what the gap between them signals.
     const _pnlExplainer = () => {
-      const fl = pnl.flat, ew = pnl.edge_weighted, vo = pnl.validated_only, mid = pnl.mid_price_only, fade = pnl.fade_extreme, kelly = pnl.half_kelly, smart = pnl.smart, yes = pnl.yes_only, crowd = pnl.crowd_baseline;
+      const fl = pnl.flat, kelly = pnl.half_kelly, smart = pnl.smart, crowd = pnl.crowd_baseline;
       const hasFlat = fl && fl.n_bets >= EB_MIN_N;
-      const hasEw   = ew && ew.n_bets >= EB_MIN_N;
-      const hasVo   = vo && vo.n_bets >= EB_MIN_N;
-      const hasMid  = mid && mid.n_bets >= EB_MIN_N;
-      const hasFade = fade && fade.n_bets >= EB_MIN_N;
       const hasKelly = kelly && kelly.n_bets >= EB_MIN_N;
       const hasSmart = smart && smart.n_bets >= EB_MIN_N;
-      const hasYes   = yes && yes.n_bets >= EB_MIN_N;
       const hasCrowd = crowd && crowd.n_bets >= EB_MIN_N;
       const rows = [];
 
@@ -5532,72 +5512,6 @@ function renderEdgeBoard(d) {
           The model bet the same amount regardless of how confident it was or how far it sat from the market price.
           A ${sign} result here means the model's <em>directional calls</em> were ${verb} at the odds the market offered at the time of each forecast.
           Win rate was ${pct(fl.win_rate)}% (the model picked the right side on ${Math.round(fl.win_rate * fl.n_bets)} of ${fl.n_bets} bets).</div>
-        </div>`);
-      }
-
-      if (hasEw) {
-        const sign = ew.roi >= 0 ? 'positive' : 'negative';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#a78bfa"></span>
-          <div><strong>Edge-weighted ${_roiPct(ew.roi)}</strong> — stake scaled by the walk-forward calibrated model-vs-market gap (capped at 25¢) + Smart filters, ${ew.n_bets} bets.
-          Where the calibrated model probability disagrees with the crowd by a lot, it bets proportionally more (up to 25¢); where it nearly agrees, it stakes almost nothing.
-          Uses the same three evidence-based filters as the Smart strategy to screen out failure modes.</div>
-        </div>`);
-      }
-
-      if (hasFlat && hasEw) {
-        const gap = ew.roi - fl.roi;
-        const gapPct = Math.round(Math.abs(gap) * 100);
-        let interp;
-        if (gap < -0.05) {
-          interp = `Edge-weighting made things <strong>worse by ${gapPct}pp</strong>. This means the model's biggest disagreements with the market were its <em>least</em> accurate calls — precisely where the model was most confident it was right and the crowd was wrong, the crowd turned out to be more right. The direction call has signal; the magnitude of conviction does not (yet).`;
-        } else if (gap > 0.05) {
-          interp = `Edge-weighting <strong>improved ROI by ${gapPct}pp</strong> over flat staking. The largest model-market gaps were also the strongest calls, so increasing stake size on high-conviction disagreements added value beyond simply choosing the right side.`;
-        } else {
-          interp = `Edge-weighting made little difference (${gapPct}pp). Sizing up on larger disagreements didn't help or hurt meaningfully — the signal is in the direction, not the conviction size.`;
-        }
-        rows.push(`<div class="pnl-exp-row pnl-exp-gap">
-          <span class="pnl-exp-dot" style="background:#888"></span>
-          <div><strong>Flat vs edge-weighted gap</strong> — ${interp}</div>
-        </div>`);
-      }
-
-      if (hasVo) {
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#34d399"></span>
-          <div><strong>Validated-only ${_roiPct(vo.roi)}</strong> — flat stake, but only on calls in disagreement buckets whose resolved track record is <em>already statistically significant</em> (lower confidence bound &gt; 0).
-          This is the most conservative sizing: only bet where the model has already demonstrated real edge, not just lucky early results.
-          Currently ${vo.n_bets} bets qualify.</div>
-        </div>`);
-      } else if (vo) {
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#34d399"></span>
-          <div><strong>Validated-only — building</strong> — flat stake, but only on calls in disagreement buckets whose track record has cleared statistical significance.
-          No bucket has enough resolved data yet for the lower confidence interval to clear zero.
-          This fills in automatically as more markets resolve and a bucket's win-rate becomes hard to explain by luck alone.</div>
-        </div>`);
-      }
-
-      if (hasMid) {
-        const sign = mid.roi >= 0 ? 'positive' : 'negative';
-        const verb = mid.roi >= 0 ? 'profitable' : 'loss-making';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#f59e0b"></span>
-          <div><strong>Mid-price only ${_roiPct(mid.roi)}</strong> — flat stake, only betting when the entry price is between 30¢ and 70¢, ${mid.n_bets} bets.
-          This avoids high-priced asymmetric risk (where single losses wipe out multiple tiny payouts) and extreme long-shots.
-          A ${sign} result here shows the model's performance in uncertain, liquid territory.
-          Win rate was ${pct(mid.win_rate)}%.</div>
-        </div>`);
-      }
-
-      if (hasFade) {
-        const sign = fade.roi >= 0 ? 'positive' : 'negative';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#ec4899"></span>
-          <div><strong>Fade extreme ⚗️ ${_roiPct(fade.roi)}</strong> — <em>experimental / diagnostic</em>. Flat stake, counter-trading the model when it disagrees with the market by &ge; 15pp, ${fade.n_bets} bets.
-          This bets <em>against</em> the model on its highest-conviction calls. A ${sign} result here suggests the model ${sign === 'positive' ? 'may be overconfident on extreme calls' : 'is genuinely skilled even at extreme conviction levels'}.
-          <strong style="color:var(--text-dim)">⚠ Small sample, outlier-dominated</strong> — treat as a diagnostic tool, not a deployable strategy. Needs 50+ bets minimum before drawing conclusions.
-          Win rate was ${pct(fade.win_rate)}%.</div>
         </div>`);
       }
 
@@ -5625,17 +5539,6 @@ function renderEdgeBoard(d) {
         </div>`);
       }
 
-      if (hasYes) {
-        const sign = yes.roi >= 0 ? 'positive' : 'negative';
-        const verb = yes.roi >= 0 ? 'profitable' : 'loss-making';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#fbbf24"></span>
-          <div><strong>YES-Only Flat ${_roiPct(yes.roi)}</strong> — flat $1 stake, but only betting when the model predicts YES (buys YES contracts), ${yes.n_bets} bets.
-          A ${sign} result here shows the model's performance when forecasting *change* rather than status-quo.
-          Win rate was ${pct(yes.win_rate)}%.</div>
-        </div>`);
-      }
-
       if (hasCrowd) {
         const sign = crowd.roi >= 0 ? 'positive' : 'negative';
         const verb = crowd.roi >= 0 ? 'profitable' : 'loss-making';
@@ -5655,13 +5558,8 @@ function renderEdgeBoard(d) {
     pnlHtml = intro + `<div class="tr-stats">
       <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="★ Recommended · Calibrated Half-Kelly sizing + data-driven filters: 20¢-80¢ entries only, geo domain capped, edge < 40%."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">★ Smart</div>${_sub('Kelly + filters')}</div>
       <div class="tr-stat" title="Calibrated Half-Kelly criterion sizing. Bet size proportional to estimated edge / odds. Naturally sizes down on heavy favourites."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
-      <div class="tr-stat" title="Flat stake, but only when predicting YES. Highly accurate historically when forecasting change."><div class="v" id="eb-pnl-yes-v">${roi(pnl.yes_only)}</div><div class="k label">YES-Only Flat</div>${_sub('only YES calls')}</div>
       <div class="tr-stat" title="Equal stake on every call. Pure hit-rate at the odds paid — a winning favourite pays little, any loss costs the full stake."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
       <div class="tr-stat" title="Flat stake, always betting the crowd's own direction (zero edge baseline)."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">Crowd baseline</div>${_sub('agree with market')}</div>
-      <div class="tr-stat" title="Stake scales with walk-forward calibrated model-vs-market gap, capped at 25¢ + Smart filters."><div class="v" id="eb-pnl-edge-v">${roi(pnl.edge_weighted)}</div><div class="k label">Edge-weighted</div>${_sub('calibrated gap + filters')}</div>
-      <div class="tr-stat" title="Flat stake, but only when entry price is between 30¢ and 70¢ to avoid asymmetric payout risks."><div class="v" id="eb-pnl-mid-v">${roi(pnl.mid_price_only)}</div><div class="k label">Mid-price only</div>${_sub('30¢ to 70¢ entries')}</div>
-      <div class="tr-stat" title="⚗️ Experimental · Flat stake, counter-trading the model (betting opposite) when model-vs-market disagreement is >= 15pp. Small sample, outlier-dominated — treat as diagnostic, not a strategy."><div class="v" id="eb-pnl-fade-v">${roi(pnl.fade_extreme)}</div><div class="k label">Fade extreme ⚗️</div>${_sub('experimental · fade gaps >=15%')}</div>
-      <div class="tr-stat" title="Flat stake, but only on calls in disagreement buckets whose resolved skill is already statistically significant. Builds as more markets resolve."><div class="v" id="eb-pnl-val-v">${roi(pnl.validated_only)}</div><div class="k label">Validated-only</div>${_sub('only proven-edge calls')}</div>
     </div>${svgChart}${_pnlExplainer()}<p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(pnl.disclaimer || '')}</p>`;
   } else {
     pnlHtml = `<p class="text-sm text-gray-500">Hypothetical paper PnL — following the model's calls — starts once markets resolve. No fees/slippage; a signal check, not live trading.</p>`;
@@ -7235,7 +7133,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const pp = d.paper_pnl || {};
       const flat = pp.flat || {};
       const smart = pp.smart || {};
-      const best = [flat, smart, pp.edge_weighted, pp.mid_price_only]
+      const best = [smart, pp.half_kelly, flat, pp.crowd_baseline]
         .filter(s => s && s.roi != null).sort((a,b) => b.roi - a.roi)[0] || flat;
       const rows = (d.models_comparison || []).slice(0,5).map(m =>
         `<tr style="border-bottom:1px solid var(--border)">

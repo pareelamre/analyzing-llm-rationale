@@ -713,23 +713,29 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertAlmostEqual(pnl["flat"]["roi"], 1.0, places=3)   # (1-0.5)/0.5 per win
         self.assertGreater(pnl["flat"]["pnl"], 0)
         self.assertEqual(len(pnl["flat"]["equity_curve"]), 10)
-        self.assertIsNotNone(pnl["validated_only"])                 # 20pp+ bucket is significant
-        self.assertEqual(pnl["validated_only"]["n_bets"], 10)
+        self.assertEqual(
+            {"flat", "half_kelly", "smart"},
+            {k for k, v in pnl.items() if isinstance(v, dict) and "roi" in v},
+        )
 
-    def test_growth_curve_endpoint_matches_roi(self):
-        # The edge-board chart plots growth_curve; its last point must equal
-        # 100*(1+roi) so the line ends where the displayed ROI says it should.
-        # Regression guard: a compounded curve silently diverged from ROI.
+    def test_growth_curve_compounds_bankroll(self):
+        # The edge-board chart plots growth_curve as a compounded $100 bankroll:
+        # each nominal stake is a fraction of current bankroll, so winnings
+        # increase later bet sizes instead of being added to a static base.
         resolved = ([self._res(0.8, 0.5, 1) for _ in range(7)]
                     + [self._res(0.3, 0.5, 0) for _ in range(3)])
         pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
         for name, s in pnl.items():
             if not isinstance(s, dict) or not s.get("growth_curve"):
                 continue
-            roi = s["roi"]
             self.assertAlmostEqual(
-                s["growth_curve"][-1], 100.0 * (1.0 + roi), places=2,
-                msg=f"{name}: growth_curve endpoint != 100*(1+roi)")
+                s["growth_curve"][-1], s["compound_bankroll"], places=6,
+                msg=f"{name}: growth_curve endpoint != compound_bankroll")
+            self.assertAlmostEqual(
+                s["compound_return"], (s["compound_bankroll"] / 100.0) - 1.0,
+                places=4,
+                msg=f"{name}: compound_return does not match compound_bankroll")
+        self.assertGreater(pnl["flat"]["compound_return"], pnl["flat"]["roi"])
 
     def test_paper_pnl_is_net_of_kalshi_fees(self):
         # Same winning bet on Kalshi (price-based fee) vs Polymarket (fee-free):
@@ -807,12 +813,16 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertEqual(len(board), 1)
         self.assertEqual(board[0]["question"], "Q1")
 
-    def test_paper_pnl_validated_only_skips_unproven_buckets(self):
-        # Coin-flip disagreements -> bucket not significant -> validated_only empty.
+    def test_paper_pnl_only_exposes_industry_grade_strategies(self):
         resolved = ([self._res(0.8, 0.5, 1)] * 5) + ([self._res(0.8, 0.5, 0)] * 5)
         pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
         self.assertIsNotNone(pnl["flat"])
-        self.assertIsNone(pnl["validated_only"])
+        self.assertEqual(
+            {"flat", "half_kelly", "smart"},
+            {k for k, v in pnl.items() if isinstance(v, dict) and "roi" in v},
+        )
+        for removed in ("edge_weighted", "validated_only", "mid_price_only", "fade_extreme", "yes_only"):
+            self.assertNotIn(removed, pnl)
 
     def test_models_comparison_ranks_models_by_paper_edge(self):
         # gpt-oss disagrees and wins; gemma disagrees and loses -> gpt-oss ranks first.
