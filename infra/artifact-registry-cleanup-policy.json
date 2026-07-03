@@ -1,0 +1,25 @@
+[
+  {
+    "name": "delete-old-docker-images",
+    "action": {"type": "Delete"},
+    "condition": {
+      "tagState": "any",
+      "olderThan": "7d"
+    }
+  },
+  {
+    "name": "keep-recent-versions",
+    "action": {"type": "Keep"},
+    "mostRecentVersions": {
+      "keepCount": 5
+    }
+  },
+  {
+    "name": "keep-main-tag",
+    "action": {"type": "Keep"},
+    "condition": {
+      "tagState": "tagged",
+      "tagPrefixes": ["main"]
+    }
+  }
+]

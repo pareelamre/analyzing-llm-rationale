@@ -277,12 +277,59 @@ protected, set the GitHub secret `PREDICT_API_KEY`; no server-side
 `/track-record/tick` endpoint is required. `TRACK_RECORD_TOKEN` is optional and
 only enables the agent-enrolled market bridge.
 
+The default scheduled forecast job is deliberately cost-capped: it runs every 6
+hours, snapshots at most 2 markets per venue, and forecasts only
+`gpt-oss-120b` plus the no-LLM `crowd-follow` baseline. Use the manual workflow
+dispatch input `reforecast_each_tick=1` for a one-off full refresh instead of
+forcing every scheduled run to reforecast all open markets.
+
 Raise the Cloud Run throughput ceiling (no idle cost while `min-instances=0`):
 
 ```bash
 gcloud run services update analyzing-llm-rationale --region us-central1 \
   --max-instances 20 --concurrency 40 --memory 1Gi
 ```
+
+For the lowest-cost public deployment, keep the service on request-only CPU,
+scale to zero, and cap burst scale-out. This is the profile used by the deploy
+workflow:
+
+```bash
+gcloud run services update analyzing-llm-rationale \
+  --region us-central1 \
+  --project brave-drive-471109-d9 \
+  --cpu 1 \
+  --memory 512Mi \
+  --min-instances 0 \
+  --max-instances 3 \
+  --concurrency 20 \
+  --timeout 180 \
+  --cpu-throttling \
+  --no-cpu-boost
+```
+
+Market search runs in-process in the main API. The optional Go `marketd`
+microservice is build/test-only in GitHub Actions and is not deployed to Cloud
+Run by default.
+
+### Artifact Registry retention
+
+CI pushes commit-tagged Docker images to Artifact Registry on every deploy. Keep
+the `docker` repository cleanup policy active so old images do not accumulate:
+
+```bash
+gcloud artifacts repositories set-cleanup-policies docker \
+  --location us-central1 \
+  --project brave-drive-471109-d9 \
+  --policy infra/artifact-registry-cleanup-policy.json \
+  --no-dry-run
+```
+
+The policy deletes images older than 7 days, keeps the newest 5 versions per
+package, and always keeps the `main` tag.
+
+Docker builds run in GitHub Actions, not Cloud Build; no Cloud Build trigger or
+staging bucket is required for the normal deploy path.
 
 Once `max-instances > 1`, provision Memorystore for Redis (billable) and set
 `REDIS_URL` so rate limiting and caching stay correct across instances:
