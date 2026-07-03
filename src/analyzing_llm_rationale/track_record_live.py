@@ -357,6 +357,76 @@ def _fetch_current_quote(market_data, platform: str, ident: str) -> Optional[Dic
     return None
 
 
+def record_convergence_trades(store) -> int:
+    """Match resolved 7-14d snapshots with their ~3d price point and write ConvergenceTrade rows.
+
+    For each resolved snapshot originally taken at 7-14d lead time, find the
+    market price point closest to 3 days before resolution (the exit), compute
+    the directional PnL, and upsert a row into convergence_trade. Skips markets
+    with no price data near 3d out, and markets where model == market at entry.
+    Only runs on DuckDBStore (requires raw SQL join).
+    """
+    con = _sql_con(store)
+    if con is None:
+        return 0
+
+    rows = con.execute("""
+        SELECT fs.platform, fs.ident, fs.model, fs.question, fs.market_url,
+               fs.snapshot_ts, fs.lead_time_days,
+               fs.model_probability, fs.market_probability,
+               fs.outcome, fs.resolved_ts
+        FROM forecast_snapshot fs
+        LEFT JOIN convergence_trade ct
+            ON ct.key = fs.platform || ':' || fs.ident || ':' || fs.model
+        WHERE fs.horizon = '7-14d'
+          AND fs.resolved = TRUE
+          AND fs.outcome IS NOT NULL
+          AND ct.key IS NULL
+    """).fetchall()
+
+    written = 0
+    for row in rows:
+        (platform, ident, model, question, market_url,
+         snap_ts, lead_days, model_prob, market_prob,
+         outcome, resolved_ts) = row
+
+        exit_row = con.execute("""
+            SELECT ts, lead_time_days, market_probability
+            FROM market_price_point
+            WHERE ident = ?
+              AND lead_time_days BETWEEN 1.5 AND 5.0
+            ORDER BY ABS(lead_time_days - 3.0)
+            LIMIT 1
+        """, [ident]).fetchone()
+
+        if not exit_row:
+            continue
+
+        exit_ts, exit_lead, exit_price = exit_row
+        edge = (model_prob or 0.0) - (market_prob or 0.0)
+        if edge == 0:
+            continue
+
+        side = "YES" if edge > 0 else "NO"
+        pnl = (exit_price - market_prob) if side == "YES" else (market_prob - exit_price)
+
+        key = f"{platform}:{ident}:{model}"
+        con.execute("""
+            INSERT OR REPLACE INTO convergence_trade
+            (key, platform, ident, model, question, market_url,
+             entry_ts, entry_lead_days, entry_model_probability, entry_market_probability,
+             exit_ts, exit_lead_days, exit_market_probability,
+             outcome, resolved_ts, side, pnl_flat)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [key, platform, ident, model, question, market_url,
+              snap_ts, lead_days, model_prob, market_prob,
+              exit_ts, exit_lead, exit_price,
+              outcome, resolved_ts, side, pnl])
+        written += 1
+
+    return written
+
+
 def _open_idents(client) -> Dict[Tuple[str, str], Dict[str, Any]]:
     """Distinct (platform, ident) of markets we're tracking that haven't resolved."""
     con = _sql_con(client)
@@ -406,6 +476,7 @@ async def record_snapshots(
     expiry_reforecast_lead_days: float = EXPIRY_REFORECAST_LEAD_DAYS,
     expiry_slot_hours: int = EXPIRY_SLOT_HOURS,
     concurrency: int = 4,
+    convergence_per_venue: int = 0,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
     agent-enrolled ``seed_idents`` and newly-discovered markets, capturing the live
@@ -471,7 +542,33 @@ async def record_snapshots(
         targets.append(q)
         known.add((q.get("platform"), ident))
 
-    # 2b) Short-dated discovery: all models, no lead-time floor. Captures intraday
+    # 2b) Convergence-window discovery: targeted 7-14d pass with a higher limit.
+    #     These markets are the data-collection target for the convergence trade study.
+    if convergence_per_venue > 0:
+        known = {(q.get("platform"), _quote_ident(q)) for q in targets}
+        for lister in (market_data.list_polymarket, market_data.list_kalshi):
+            try:
+                kwargs: Dict[str, Any] = dict(
+                    limit=convergence_per_venue,
+                    min_close_days=7.0,
+                    max_close_days=14.0,
+                )
+                if lister is market_data.list_kalshi:
+                    kwargs["paginate"] = True
+                conv_markets = lister(**kwargs)[:convergence_per_venue]
+            except market_data.MarketDataError:
+                continue
+            for q in conv_markets:
+                ident = _quote_ident(q)
+                if (q.get("platform"), ident) in known or q.get("probability") is None:
+                    continue
+                lead = _lead_time_days(q.get("close_time"))
+                if lead is None or not (7.0 <= lead <= 14.0):
+                    continue
+                targets.append(q)
+                known.add((q.get("platform"), ident))
+
+    # 2c) Short-dated discovery: all models, no lead-time floor. Captures intraday
     #     and same-day markets that the standard discovery window skips.
     if "crowd-follow" in model_list:
         intraday: List[Dict[str, Any]] = []

@@ -135,6 +135,7 @@ class FileStore:
 
 _SNAPSHOT_TABLE = "forecast_snapshot"
 _PRICE_TABLE = "market_price_point"
+_CONVERGENCE_TABLE = "convergence_trade"
 
 # Columns and their DuckDB types for each table.
 _SNAPSHOT_COLS: Dict[str, str] = {
@@ -164,13 +165,27 @@ _PRICE_COLS: Dict[str, str] = {
     "last_trade_price": "DOUBLE",
 }
 
+_CONVERGENCE_COLS: Dict[str, str] = {
+    "key": "TEXT",                          # {platform}:{ident}:{model}
+    "platform": "TEXT", "ident": "TEXT", "model": "TEXT",
+    "question": "TEXT", "market_url": "TEXT",
+    "entry_ts": "TEXT", "entry_lead_days": "DOUBLE",
+    "entry_model_probability": "DOUBLE", "entry_market_probability": "DOUBLE",
+    "exit_ts": "TEXT", "exit_lead_days": "DOUBLE",
+    "exit_market_probability": "DOUBLE",
+    "outcome": "INTEGER", "resolved_ts": "TEXT",
+    "side": "TEXT",                         # YES or NO
+    "pnl_flat": "DOUBLE",                   # convergence PnL (flat unit stake)
+}
+
 _KIND_TABLE = {
     "ForecastSnapshot": (_SNAPSHOT_TABLE, _SNAPSHOT_COLS),
     "MarketPricePoint": (_PRICE_TABLE, _PRICE_COLS),
+    "ConvergenceTrade": (_CONVERGENCE_TABLE, _CONVERGENCE_COLS),
 }
 
 # Fields that hold datetime objects — serialised as ISO strings in DuckDB.
-_DT_FIELDS = {"snapshot_ts", "close_time", "resolved_ts", "ts"}
+_DT_FIELDS = {"snapshot_ts", "close_time", "resolved_ts", "ts", "entry_ts", "exit_ts"}
 
 
 def _to_db(v: Any, col: str) -> Any:
@@ -248,8 +263,11 @@ class DuckDBStore:
         self._init_schema()
 
     def _init_schema(self) -> None:
-        for table, cols in ((_SNAPSHOT_TABLE, _SNAPSHOT_COLS),
-                             (_PRICE_TABLE, _PRICE_COLS)):
+        for table, cols in ((t, c) for t, c in (
+                (_SNAPSHOT_TABLE, _SNAPSHOT_COLS),
+                (_PRICE_TABLE, _PRICE_COLS),
+                (_CONVERGENCE_TABLE, _CONVERGENCE_COLS),
+        )):
             col_defs = ", ".join(f"{c} {t}" for c, t in cols.items())
             self._con.execute(
                 f"CREATE TABLE IF NOT EXISTS {table} ({col_defs}, PRIMARY KEY (key))"

@@ -6,7 +6,7 @@ name: Track record forecast
 
 on:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       reforecast_each_tick:
@@ -38,6 +38,7 @@ jobs:
         env:
           FORESEA_BASE_URL: https://foresea.ink
           PER_VENUE: "2"
+          CONVERGENCE_PER_VENUE: "100"
           TRACK_MODELS: "gpt-oss-120b,crowd-follow"
           REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}
           PRICE_DRIFT_THRESHOLD: "0.10"

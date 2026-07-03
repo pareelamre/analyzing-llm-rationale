@@ -266,7 +266,7 @@ def list_polymarket(limit: int = 5, query: Optional[str] = None,
     insensitive). ``min_close_days``/``max_close_days`` optionally restrict to a
     resolution-horizon window (used by the live track record).
     """
-    limit = max(1, min(int(limit), 30))
+    limit = max(1, min(int(limit), 200))
     want = (query or "").strip().lower()
     cat = (category or "").strip().lower()
     # Search deeper when filtering, since matches may not be top-volume.
@@ -392,7 +392,8 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
                 min_close_days: Optional[float] = None,
                 max_close_days: Optional[float] = None,
                 contested_only: bool = True,
-                category: Optional[str] = None) -> List[Dict[str, Any]]:
+                category: Optional[str] = None,
+                paginate: bool = False) -> List[Dict[str, Any]]:
     """List open, priced Kalshi markets via the ``/events`` endpoint.
 
     The flat ``/markets?status=open`` listing is saturated by auto-generated
@@ -401,14 +402,27 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
     (plus the candidate sub-title for multi-outcome events). ``query`` filters by
     keyword; ``min_close_days``/``max_close_days`` restrict the resolution
     horizon. Results are sorted soonest-resolving first.
+    Set ``paginate=True`` to follow cursors up to 1000 events (used by the tick).
     """
-    limit = max(1, min(int(limit), 30))
+    limit = max(1, min(int(limit), 200))
     want = (query or "").strip().lower()
     cat = (category or "").strip().lower()
-    data = _get_json(KALSHI_EVENTS_URL, params={
-        "status": "open", "with_nested_markets": "true", "limit": 200,
-    })
-    events = data.get("events", []) if isinstance(data, dict) else []
+    events: List[Dict[str, Any]] = []
+    cursor: Optional[str] = None
+    while len(events) < (1000 if paginate else 200):
+        params: Dict[str, Any] = {
+            "status": "open", "with_nested_markets": "true", "limit": 200,
+        }
+        if cursor:
+            params["cursor"] = cursor
+        data = _get_json(KALSHI_EVENTS_URL, params=params)
+        if not isinstance(data, dict):
+            break
+        page = data.get("events") or []
+        events.extend(page)
+        cursor = data.get("cursor")
+        if not paginate or not cursor or len(page) < 200:
+            break
     quotes: List[Dict[str, Any]] = []
     for event in events:
         title = event.get("title") or ""

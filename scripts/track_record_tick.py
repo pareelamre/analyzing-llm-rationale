@@ -59,6 +59,9 @@ TRACK_MODELS = [m.strip() for m in os.environ.get(
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 TEMPERATURE = float(os.environ.get("TRACK_TEMPERATURE", "0.0") or 0.0)
 PER_VENUE = max(1, min(int(os.environ.get("PER_VENUE", "3") or 3), 5))
+# Dedicated convergence-window discovery: markets specifically at 7-14d lead time.
+# Higher limit than PER_VENUE since this is the target data-collection window.
+CONVERGENCE_PER_VENUE = max(0, int(os.environ.get("CONVERGENCE_PER_VENUE", "20") or 20))
 PREDICT_API_KEY = os.environ.get("PREDICT_API_KEY") or None
 # Gates the evolution-loop bridge (pending-markets / mark-enrolled). When unset,
 # the tick simply doesn't pull agent-enrolled seeds (discovery still runs).
@@ -257,6 +260,7 @@ async def main() -> int:
 
     newly_resolved = trl.resolve_open_snapshots(store, market_data)
     price_points = trl.record_price_points(store, market_data)
+    convergence_written = trl.record_convergence_trades(store)
 
     recorded = 0
     backfilled = 0
@@ -271,7 +275,8 @@ async def main() -> int:
             short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
             expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
             expiry_slot_hours=EXPIRY_SLOT_HOURS,
-            concurrency=PREDICT_CONCURRENCY)
+            concurrency=PREDICT_CONCURRENCY,
+            convergence_per_venue=CONVERGENCE_PER_VENUE)
         if ALLOW_RESOLVED_BACKFILL:
             backfilled = await trl.backfill_missing_model_snapshots(
                 store, forecast_fn,
@@ -290,6 +295,7 @@ async def main() -> int:
         "snapshots_backfilled": backfilled,
         "price_points_recorded": price_points,
         "snapshots_resolved": newly_resolved,
+        "convergence_trades_written": convergence_written,
         "n_markets_resolved": agg.get("n_markets_resolved"),
         "n_markets_open": agg.get("n_markets_open"),
         "n_snapshots_resolved": agg.get("n_snapshots_resolved"),
