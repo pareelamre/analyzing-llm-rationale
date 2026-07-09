@@ -11,6 +11,14 @@ models:
     local_model_name: Qwen/Qwen3-32B
     router_model_name: Qwen/Qwen3-32B
     access: open-weights
+  qwen3-32b-vllm:
+    result_label: Qwen3-32B-vLLM
+    provider: openai-compatible
+    local_model_name: Qwen/Qwen3-32B
+    router_model_name: Qwen/Qwen3-32B
+    api_base_url: http://localhost:8001/v1
+    api_key_env_var: VLLM_API_KEY
+    access: self-hosted
   llama-3.3-70b-instruct:
     result_label: Llama-3.3-70B-Instruct
     provider: openai-compatible

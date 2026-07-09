@@ -93,6 +93,7 @@ class RunConfig:
     model_label: str = ""
     provider_name: str = ""
     model_identifier: str = ""
+    provider_base_url: str = ""
     temperature_tag: str = ""
     run_metadata_path: Optional[Path] = None
     shard_count: int = 1
@@ -838,6 +839,7 @@ def build_run_metadata(
         "model_label": config.model_label,
         "provider": config.provider_name,
         "model_identifier": config.model_identifier,
+        "provider_base_url": config.provider_base_url,
         "temperature": config.temperature,
         "temperature_tag": config.temperature_tag,
         "max_tokens": config.max_tokens,

@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from analyzing_llm_rationale.cache_env import configure_workspace_cache_env
 
@@ -98,6 +99,23 @@ def uses_default_temperature_only(model_name: str, base_url: str) -> bool:
     return "api.openai.com" in base_url and model_name.startswith("gpt-5")
 
 
+def normalize_openai_chat_completions_url(base_url: str) -> str:
+    """Accept either an OpenAI-compatible /v1 base URL or the full chat endpoint."""
+    url = (base_url or "").strip()
+    if not url:
+        return url
+
+    parts = urlsplit(url)
+    path = parts.path.rstrip("/")
+    if path.endswith("/chat/completions"):
+        return urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
+    if path.endswith("/v1"):
+        return urlunsplit(
+            (parts.scheme, parts.netloc, f"{path}/chat/completions", parts.query, parts.fragment)
+        )
+    return url.rstrip("/")
+
+
 @dataclass
 class OpenAICompatibleProvider(ChatProvider):
     model_name: str
@@ -111,6 +129,7 @@ class OpenAICompatibleProvider(ChatProvider):
         if not self.api_key:
             raise ValueError(self.missing_api_key_message)
 
+        self.base_url = normalize_openai_chat_completions_url(self.base_url)
         self._requests = requests
         self._session = requests.Session()
 

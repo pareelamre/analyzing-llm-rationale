@@ -770,8 +770,10 @@ By default `/predict` runs on the server's hosted model. To use your own:
   `openai/gpt-4o`, `anthropic/claude-sonnet-4-5`). The request is proxied through
   OpenRouter.
 - **Via any OpenAI-compatible endpoint** — also pass `provider_base_url` (e.g.
-  `https://api.openai.com/v1/chat/completions`) with the matching `openrouter_model`
-  (here just the provider's model ID, e.g. `gpt-4o`) and your key.
+  `https://api.openai.com/v1` or `https://api.openai.com/v1/chat/completions`)
+  with the matching `openrouter_model` (here just the provider's model ID, e.g.
+  `gpt-4o`) and your key. Foresea normalizes `/v1` base URLs to
+  `/v1/chat/completions` internally.
 
 For safety, `provider_base_url` must be public HTTPS; loopback, private,
 link-local, and cloud-metadata hosts are rejected. In the web app, the sidebar's
@@ -788,6 +790,39 @@ curl -X POST https://foresea.ink/predict \
     "provider_base_url": "https://api.openai.com/v1/chat/completions"
   }'
 ```
+
+### Self-hosted vLLM
+
+SCADS AI already exposes Foresea's default models through an OpenAI-compatible
+hosted endpoint. Use vLLM only when you need direct control over checkpoint,
+quantization, throughput, or serving hardware.
+
+Start a local vLLM OpenAI-compatible server:
+
+```bash
+VLLM_API_KEY=token-abc123
+vllm serve Qwen/Qwen3-32B \
+  --host 0.0.0.0 \
+  --port 8001 \
+  --api-key "$VLLM_API_KEY" \
+  --generation-config vllm
+```
+
+Then point Foresea at the configured `qwen3-32b-vllm` model:
+
+```bash
+VLLM_API_KEY=token-abc123 PYTHONPATH=src analyze-llm-rationale smoke-test \
+  --model qwen3-32b-vllm
+
+VLLM_API_KEY=token-abc123 PYTHONPATH=src analyze-llm-rationale serve \
+  --model qwen3-32b-vllm \
+  --variant variant0_neutral_baseline \
+  --port 8080
+```
+
+For production, run Foresea and vLLM as separate services. Foresea's public
+bring-your-own endpoint still requires public HTTPS for `provider_base_url`;
+private or loopback vLLM URLs are intended for trusted server-side config.
 
 ### Binary request
 
@@ -1101,7 +1136,7 @@ Repo layout:
 Auditability:
 
 - Each run writes `run_metadata_<variant>.json` next to the results file.
-- Metadata includes provider, model key, resolved model identifier, temperature, output fields, and prompt SHA-256 hashes.
+- Metadata includes provider, normalized provider endpoint, model key, resolved model identifier, temperature, output fields, and prompt SHA-256 hashes.
 - Existing malformed results JSON now fails fast instead of being silently ignored.
 
 ## Quality checks

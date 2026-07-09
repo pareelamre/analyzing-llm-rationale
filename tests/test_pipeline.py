@@ -41,6 +41,7 @@ from analyzing_llm_rationale.providers import (  # noqa: E402
     OpenAICompatibleProvider,
     ProviderResponseError,
     ensure_prompt_fits_context,
+    normalize_openai_chat_completions_url,
     resolve_context_window,
     uses_default_temperature_only,
     uses_max_completion_tokens,
@@ -636,6 +637,20 @@ class PipelineTests(unittest.TestCase):
             ensure_prompt_fits_context(input_tokens=31000, max_tokens=2048, context_window=32000)
         ensure_prompt_fits_context(input_tokens=1000, max_tokens=512, context_window=32000)
 
+    def test_normalize_openai_chat_completions_url_accepts_v1_base(self):
+        self.assertEqual(
+            normalize_openai_chat_completions_url("http://localhost:8001/v1"),
+            "http://localhost:8001/v1/chat/completions",
+        )
+        self.assertEqual(
+            normalize_openai_chat_completions_url("https://llm.scads.ai/v1/"),
+            "https://llm.scads.ai/v1/chat/completions",
+        )
+        self.assertEqual(
+            normalize_openai_chat_completions_url("https://llm.scads.ai/v1/chat/completions/"),
+            "https://llm.scads.ai/v1/chat/completions",
+        )
+
     def test_openai_gpt5_uses_max_completion_tokens(self):
         class FakeResponse:
             status_code = 200
@@ -843,6 +858,7 @@ class PipelineTests(unittest.TestCase):
             metadata = load_json(metadata_path)
             self.assertEqual(metadata["status"], "completed")
             self.assertEqual(metadata["variant"], "variant_test")
+            self.assertEqual(metadata["provider_base_url"], "")
             self.assertEqual(metadata["summary"]["processed"], 1)
 
             verify_exit_code = cli_main(
@@ -909,6 +925,49 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(provider.api_key, "test-key")
             self.assertEqual(provider.model_name, "example/remote")
             self.assertEqual(provider.base_url, "https://llm.scads.ai/v1/chat/completions")
+
+    def test_build_provider_normalizes_vllm_v1_base_url(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            api_key_file = base / "vllm-key.txt"
+            api_key_file.write_text("test-key\n", encoding="utf-8")
+            models_config_path = base / "models.yaml"
+            models_config_path.write_text(
+                json.dumps(
+                    {
+                        "models": {
+                            "test-model": {
+                                "result_label": "TestModel",
+                                "provider": "openai-compatible",
+                                "local_model_name": "example/local",
+                                "router_model_name": "example/remote",
+                                "api_base_url": "http://localhost:8001/v1",
+                                "api_key_file": str(api_key_file),
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            args = Namespace(
+                provider=None,
+                model="test-model",
+                models_config=models_config_path,
+                local_model_name=None,
+                router_model_name=None,
+                model_label=None,
+                api_base_url=None,
+                api_key_env_var=None,
+                api_key_file=None,
+                device="cuda",
+                request_timeout_s=30.0,
+            )
+
+            provider = build_provider(args)
+
+            self.assertIsInstance(provider, OpenAICompatibleProvider)
+            self.assertEqual(provider.base_url, "http://localhost:8001/v1/chat/completions")
+            self.assertEqual(args.api_base_url, "http://localhost:8001/v1/chat/completions")
 
     def test_build_provider_clamps_request_timeout_from_model_config(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

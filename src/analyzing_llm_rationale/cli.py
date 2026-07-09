@@ -21,6 +21,7 @@ from analyzing_llm_rationale.providers import (
     LocalQwenProvider,
     OpenAICompatibleProvider,
     download_model_snapshot,
+    normalize_openai_chat_completions_url,
 )
 from analyzing_llm_rationale.validation import (
     SchemaValidationError,
@@ -339,6 +340,8 @@ def resolve_model_args(args: argparse.Namespace) -> argparse.Namespace:
         args.model_label = model.result_label
     if getattr(args, "api_base_url", None) is None:
         args.api_base_url = model.api_base_url
+    if getattr(args, "api_base_url", None):
+        args.api_base_url = normalize_openai_chat_completions_url(args.api_base_url)
     if getattr(args, "api_key_env_var", None) is None:
         args.api_key_env_var = model.api_key_env_var
     if getattr(args, "api_key_file", None) is None:
@@ -389,7 +392,9 @@ def build_provider(args: argparse.Namespace):
             model_name=args.router_model_name,
             api_key=api_key,
             request_timeout_s=effective_request_timeout_s,
-            base_url=args.api_base_url or "https://api.openai.com/v1/chat/completions",
+            base_url=normalize_openai_chat_completions_url(
+                args.api_base_url or "https://api.openai.com/v1/chat/completions"
+            ),
             missing_api_key_message=(
                 f"{args.api_key_env_var} must be set or {args.api_key_file} must exist for openai-compatible provider."
                 if args.api_key_env_var or args.api_key_file
@@ -400,7 +405,9 @@ def build_provider(args: argparse.Namespace):
         model_name=args.router_model_name,
         api_key=api_key,
         request_timeout_s=effective_request_timeout_s,
-        base_url=args.api_base_url or "https://router.huggingface.co/v1/chat/completions",
+        base_url=normalize_openai_chat_completions_url(
+            args.api_base_url or "https://router.huggingface.co/v1/chat/completions"
+        ),
     )
 
 
@@ -458,6 +465,7 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
         model_label=args.model_label,
         provider_name=args.provider,
         model_identifier=args.local_model_name if args.provider == "local-qwen" else args.router_model_name,
+        provider_base_url=args.api_base_url or "",
         temperature_tag=temperature_tag,
         run_metadata_path=run_metadata_path,
         shard_count=shard_count,
@@ -543,6 +551,9 @@ def download_model_command(args: argparse.Namespace) -> int:
 
 def smoke_test_command(args: argparse.Namespace) -> int:
     provider = build_provider(args)
+    if isinstance(provider, OpenAICompatibleProvider):
+        print(f"model={provider.model_name}")
+        print(f"endpoint={provider.base_url}")
     content = provider.chat_completion(
         messages=[
             {"role": "system", "content": "You are a concise assistant."},
