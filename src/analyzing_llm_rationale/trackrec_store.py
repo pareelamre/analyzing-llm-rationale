@@ -163,6 +163,7 @@ _PRICE_COLS: Dict[str, str] = {
     "market_bid": "DOUBLE", "market_ask": "DOUBLE",
     "market_volume": "DOUBLE", "market_liquidity": "DOUBLE",
     "last_trade_price": "DOUBLE",
+    "close_time": "TEXT", "lead_time_days": "DOUBLE",
 }
 
 _CONVERGENCE_COLS: Dict[str, str] = {
