@@ -1299,6 +1299,55 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(delete_response.status_code, 200)
         self.assertEqual(self.client.get("/chat/conversations", headers=headers).json()["conversations"], [])
 
+    def test_chat_conversation_preserves_long_fields_in_messages(self):
+        """Messages with fields longer than Datastore's 1500-byte index limit are
+        saved and retrieved correctly.  This exercises the JSON-blob (payload)
+        path that avoids storing long/nested values as indexed Datastore properties
+        (including list-valued fields whose array-element sub-properties Datastore
+        would otherwise index despite an outer exclude_from_indexes flag)."""
+        token = _issue_session("user-long", "long@example.com", "Long User", "")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        long_rationale = "R" * 2000
+        long_text = "T" * 2000
+        conversation = {
+            "id": "conv_long",
+            "title": "Long forecast",
+            "createdAt": 1000,
+            "updatedAt": 2000,
+            "messages": [
+                {
+                    "id": "msg_assistant",
+                    "role": "assistant",
+                    "content": "Forecast complete.",
+                    "rationale": long_rationale,
+                    "model_rationale": long_rationale,
+                    "summary": long_rationale,
+                    "evidence_sources": [{"text": long_text, "title": "Article"}],
+                    "createdAt": 1001,
+                }
+            ],
+        }
+
+        save_response = self.client.put(
+            "/chat/conversations/conv_long",
+            json=conversation,
+            headers=headers,
+        )
+        self.assertEqual(save_response.status_code, 200)
+
+        list_response = self.client.get("/chat/conversations", headers=headers)
+        self.assertEqual(list_response.status_code, 200)
+        saved_msgs = list_response.json()["conversations"][0]["messages"]
+        self.assertEqual(len(saved_msgs), 1)
+        msg = saved_msgs[0]
+        self.assertEqual(msg["rationale"], long_rationale)
+        self.assertEqual(msg["model_rationale"], long_rationale)
+        self.assertEqual(msg["summary"], long_rationale)
+        self.assertEqual(msg["evidence_sources"][0]["text"], long_text)
+
+        self.client.delete("/chat/conversations/conv_long", headers=headers)
+
     def test_chat_conversation_sync_requires_session(self):
         response = self.client.get("/chat/conversations")
         self.assertEqual(response.status_code, 401)

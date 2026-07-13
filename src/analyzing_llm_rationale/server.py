@@ -722,6 +722,9 @@ def _list_messages(user_id: str, conversation_id: str) -> List[Dict[str, Any]]:
     for entity in query.fetch(limit=500):
         message = dict(entity)
         message["id"] = entity.key.name
+        payload_str = message.pop("payload", None)
+        if payload_str:
+            message.update(json.loads(payload_str))
         messages.append(message)
     messages.sort(key=lambda m: (m.get("createdAt") or 0, m.get("id") or ""))
     return messages
@@ -760,14 +763,23 @@ def _put_conversation(user_id: str, conversation: Dict[str, Any]) -> Dict[str, A
         stale_keys = [existing_key for existing_key in existing_keys if existing_key not in message_keys]
         if stale_keys:
             client.delete_multi(stale_keys)
-        # Only index the short scalar fields used for ordering/identity;
-        # exclude everything else to stay under Datastore's 1500-byte limit.
+        # Only index the short scalar fields used for ordering/identity.
+        # Everything else is serialised into a single JSON string property
+        # ("payload") that is excluded from indexes.  Storing non-scalar
+        # values (lists, dicts) as separate Datastore properties and relying on
+        # exclude_from_indexes at the container level does NOT work for array
+        # properties: Datastore ignores the flag on array containers and
+        # indexes each element individually, causing InvalidArgument errors
+        # when any nested string exceeds the 1500-byte index limit.
         _MSG_INDEXED = frozenset({"id", "role", "createdAt", "updatedAt", "index"})
         message_entities = []
         for message, message_key in zip(messages, message_keys):
-            exclude = tuple(k for k in message if k not in _MSG_INDEXED)
-            message_entity = _ds.Entity(key=message_key, exclude_from_indexes=exclude)
-            message_entity.update(message)
+            indexed = {k: message[k] for k in _MSG_INDEXED if k in message}
+            rest = {k: v for k, v in message.items() if k not in _MSG_INDEXED}
+            message_entity = _ds.Entity(key=message_key, exclude_from_indexes=("payload",))
+            message_entity.update(indexed)
+            if rest:
+                message_entity["payload"] = json.dumps(rest, default=str)
             message_entities.append(message_entity)
         if message_entities:
             client.put_multi(message_entities)
