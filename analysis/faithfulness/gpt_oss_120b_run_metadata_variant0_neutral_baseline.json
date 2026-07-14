@@ -1,0 +1,38 @@
+{
+  "status": "completed",
+  "variant": "variant0_neutral_baseline",
+  "model_key": "gpt-oss-120b",
+  "model_label": "GPT-OSS-120B",
+  "provider": "openai-compatible",
+  "model_identifier": "openai/gpt-oss-120b",
+  "temperature": 0.25,
+  "temperature_tag": "temperature_025",
+  "max_tokens": 1024,
+  "max_attempts": 3,
+  "retry_base_sleep_s": 1.5,
+  "reprocess_null_only": false,
+  "drop_article_text": false,
+  "omit_evidence": false,
+  "cutoff_reference": "none",
+  "forecast_lead_days": null,
+  "input_path": "analysis/faithfulness/gpt_oss_120b_perturbation_input.json",
+  "output_path": "analysis/faithfulness/gpt_oss_120b_results_variant0_neutral_baseline.json",
+  "error_log_path": "analysis/faithfulness/gpt_oss_120b_errors_variant0_neutral_baseline.jsonl",
+  "system_prompt_path": "/data/horse/ws/paam844f-codabench-restored/paam844f-codabench-1777266844/analyzing-llm-rationale/prompts/system.txt",
+  "user_prompt_path": "/data/horse/ws/paam844f-codabench-restored/paam844f-codabench-1777266844/analyzing-llm-rationale/prompts/variant0_neutral_baseline.txt",
+  "output_fields": [
+    "predicted_answer",
+    "confidence",
+    "rationale"
+  ],
+  "input_record_count": 397,
+  "existing_result_count": 0,
+  "system_prompt_sha256": "49a9a48a3d6d398a6754ecfca14650d0166f3f4976a50b3a20158632e2179a08",
+  "user_prompt_sha256": "18ea307015646b84415733c59f286a8e784c48ea78e286499cc84d9537318e18",
+  "written_at": "2026-07-01T17:34:13",
+  "summary": {
+    "processed": 397,
+    "total_results": 397,
+    "null_predictions": 0
+  }
+}

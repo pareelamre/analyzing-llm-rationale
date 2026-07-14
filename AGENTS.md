@@ -55,6 +55,13 @@ python scripts/sql_analytics.py --ingest
 python flows/forecasting_flow.py --question-id 124
 ```
 
+## SLURM submission rule
+
+Submit SLURM jobs only from the `/data/horse/ws/...` workspace, not from `/home`.
+Use `--chdir` or run `sbatch` with the working directory set to the project path
+under `/data/horse/ws` so logs, outputs, and temporary files stay off the home
+quota.
+
 ## Project structure
 
 ```

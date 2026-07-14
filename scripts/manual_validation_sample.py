@@ -2,7 +2,7 @@
 """
 Third-judge validation sample for thesis Section on LLM-judge reliability.
 
-Samples 150 rationales (stratified correct/incorrect) from the Qwen2.5-7B
+Samples 100 rationales (stratified correct/incorrect) from the Qwen2.5-7B
 temperature_000 variant0 run, annotates them with GPT-OSS-120B using 5
 criteria that deliberately differ from the existing 6 (Gemma/Kimi):
 
@@ -16,7 +16,7 @@ criteria that deliberately differ from the existing 6 (Gemma/Kimi):
 Outputs
 -------
 analysis/manual_validation/
-  sample.jsonl                  — the 150 annotated records
+  sample.jsonl                  — the 100 annotated records
   agreement_stats.json          — Spearman ρ and Cohen κ tables
   agreement_report.md           — human-readable summary
 """
@@ -48,7 +48,7 @@ GEMMA_JUDGE_PATH = ROOT / "analysis" / "llm_judge_rationale_eval_gemma" / "gemma
 KIMI_JUDGE_PATH = ROOT / "analysis" / "llm_judge_rationale_eval_kimi" / "kimi-k2.5" / "Qwen2.5-7b-instruct__temperature_000.jsonl"
 OUTPUT_DIR = ROOT / "analysis" / "manual_validation"
 
-SAMPLE_N = 150
+SAMPLE_N = 100
 RANDOM_SEED = 42
 VARIANT = "variant0_neutral_baseline"
 JUDGE_MODEL = "gemma-4-31b-it"

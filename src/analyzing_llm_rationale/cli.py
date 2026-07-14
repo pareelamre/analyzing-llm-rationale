@@ -123,6 +123,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--reprocess-nulls", action="store_true")
     run_parser.add_argument("--drop-article-text", action="store_true")
     run_parser.add_argument(
+        "--omit-evidence",
+        action="store_true",
+        help="Omit news evidence from the prompt for no-evidence baseline runs.",
+    )
+    run_parser.add_argument(
         "--forecast-lead-days",
         type=int,
         default=None,
@@ -460,6 +465,7 @@ def resolve_run_config(args: argparse.Namespace) -> RunConfig:
         retry_base_sleep_s=args.retry_base_sleep_s,
         reprocess_null_only=args.reprocess_nulls,
         drop_article_text=args.drop_article_text,
+        omit_evidence=getattr(args, "omit_evidence", False),
         variant_name=variant.name,
         model_key=args.model,
         model_label=args.model_label,

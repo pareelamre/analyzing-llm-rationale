@@ -8,13 +8,12 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-
 ROOT = Path(__file__).resolve().parent.parent
 SRC_PATH = ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from analyzing_llm_rationale.cli import main as cli_main
+from analyzing_llm_rationale.cli import main as cli_main  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-fields", default=os.environ.get("OUTPUT_FIELDS"))
     parser.add_argument("--reprocess-nulls", action="store_true", default=os.environ.get("REPROCESS_NULLS", "0") == "1")
     parser.add_argument("--drop-article-text", action="store_true", default=os.environ.get("DROP_ARTICLE_TEXT", "0") == "1")
+    parser.add_argument("--omit-evidence", action="store_true", default=os.environ.get("OMIT_EVIDENCE", "0") == "1")
     parser.add_argument(
         "--cutoff-reference",
         default=os.environ.get("CUTOFF_REFERENCE", "none"),
@@ -105,6 +105,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         cli_args.append("--reprocess-nulls")
     if args.drop_article_text:
         cli_args.append("--drop-article-text")
+    if args.omit_evidence:
+        cli_args.append("--omit-evidence")
 
     return cli_main(cli_args)
 

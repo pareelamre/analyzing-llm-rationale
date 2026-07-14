@@ -11,7 +11,6 @@ from analyzing_llm_rationale.metrics import (
     accuracy,
     brier_score,
     ece,
-    iter_examples,
     load_targets,
     normalize_answer,
     normalize_confidence,
@@ -81,6 +80,91 @@ def parse_temperature(dirname: str) -> float:
     return float(raw)
 
 
+def iter_result_rows(payload: object) -> list[dict]:
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, dict)]
+    if isinstance(payload, dict):
+        rows = payload.get("results", [])
+        if isinstance(rows, list):
+            return [row for row in rows if isinstance(row, dict)]
+    return []
+
+
+def target_id(value: object) -> int | None:
+    try:
+        rid = int(value)
+    except (TypeError, ValueError):
+        return None
+    return rid
+
+
+def score_result_rows(
+    rows: list[dict],
+    targets: dict[int, int],
+    bins: int,
+) -> dict[str, float | int]:
+    rows_by_id: dict[int, dict] = {}
+    n_extra_rows = 0
+    for row in rows:
+        rid = target_id(row.get("id"))
+        if rid not in targets:
+            n_extra_rows += 1
+            continue
+        rows_by_id[rid] = row
+
+    examples: list[Example] = []
+    n_invalid = 0
+    for rid, row in rows_by_id.items():
+        answer = normalize_answer(row.get("predicted_answer"))
+        confidence = normalize_confidence(row.get("confidence"))
+        if answer is None or confidence is None:
+            n_invalid += 1
+            continue
+        examples.append(Example(answer, confidence, targets[rid]))
+
+    n_expected = len(targets)
+    n_valid = len(examples)
+    n_absent = n_expected - len(rows_by_id)
+    n_invalid_or_missing = n_invalid + n_absent
+    coverage = n_valid / n_expected if n_expected else float("nan")
+
+    conditional_accuracy = accuracy(examples) if examples else float("nan")
+    conditional_brier = brier_score(examples) if examples else float("nan")
+    conditional_ece = ece(examples, bins) if examples else float("nan")
+
+    # Invalid or absent forecasts are failures. For Brier, the worst possible
+    # binary score is 1.0, so malformed outputs receive that penalty.
+    valid_brier_total = sum((ex.p_yes - ex.target) ** 2 for ex in examples)
+    valid_correct_total = sum(ex.correct for ex in examples)
+    coverage_penalized_accuracy = valid_correct_total / n_expected if n_expected else float("nan")
+    coverage_penalized_brier = (
+        (valid_brier_total + n_invalid_or_missing) / n_expected
+        if n_expected
+        else float("nan")
+    )
+
+    return {
+        "n_expected": n_expected,
+        "n_valid": n_valid,
+        "n_scored": n_valid,
+        "n_invalid": n_invalid,
+        "n_absent": n_absent,
+        "n_missing": n_invalid_or_missing,
+        "n_invalid_or_missing": n_invalid_or_missing,
+        "n_extra_rows": n_extra_rows,
+        "coverage": coverage,
+        "conditional_accuracy": conditional_accuracy,
+        "conditional_brier_score": conditional_brier,
+        "conditional_ece": conditional_ece,
+        "coverage_penalized_accuracy": coverage_penalized_accuracy,
+        "coverage_penalized_brier_score": coverage_penalized_brier,
+        # Backward-compatible aliases: these remain valid-output conditional.
+        "accuracy": conditional_accuracy,
+        "brier_score": conditional_brier,
+        "ece": conditional_ece,
+    }
+
+
 def main() -> None:
     args = parse_args()
     targets = load_targets(args.dataset)
@@ -94,8 +178,8 @@ def main() -> None:
         for temp_dir in sorted(p for p in model_dir.iterdir() if p.is_dir()):
             for result_path in sorted(temp_dir.glob("results_variant*.json")):
                 payload = json.loads(result_path.read_text())
-                examples, missing = iter_examples(payload, targets)
-                if not examples:
+                metrics = score_result_rows(iter_result_rows(payload), targets, args.bins)
+                if metrics["n_valid"] == 0:
                     continue
 
                 rows_out.append(
@@ -104,11 +188,7 @@ def main() -> None:
                         "temperature_dir": temp_dir.name,
                         "temperature": parse_temperature(temp_dir.name),
                         "variant": parse_variant(result_path.name),
-                        "n_scored": len(examples),
-                        "n_missing": missing,
-                        "accuracy": accuracy(examples),
-                        "brier_score": brier_score(examples),
-                        "ece": ece(examples, args.bins),
+                        **metrics,
                     }
                 )
 
@@ -118,8 +198,20 @@ def main() -> None:
         "temperature_dir",
         "temperature",
         "variant",
+        "n_expected",
+        "n_valid",
         "n_scored",
+        "n_invalid",
+        "n_absent",
         "n_missing",
+        "n_invalid_or_missing",
+        "n_extra_rows",
+        "coverage",
+        "conditional_accuracy",
+        "conditional_brier_score",
+        "conditional_ece",
+        "coverage_penalized_accuracy",
+        "coverage_penalized_brier_score",
         "accuracy",
         "brier_score",
         "ece",

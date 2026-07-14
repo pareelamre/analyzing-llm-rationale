@@ -163,6 +163,9 @@ build_run_args() {
   if [[ "${DROP_ARTICLE_TEXT:-0}" == "1" ]]; then
     args_ref+=(--drop-article-text)
   fi
+  if [[ "${OMIT_EVIDENCE:-0}" == "1" ]]; then
+    args_ref+=(--omit-evidence)
+  fi
 
   # Ex-ante forecast-time cutoff sweep (results land in results/<model>/<temp>/lead_<NN>d/).
   if [[ -n "${CUTOFF_REFERENCE:-}" && "${CUTOFF_REFERENCE}" != "none" ]]; then
@@ -205,6 +208,7 @@ resolved_output_path() {
     MAX_ATTEMPTS="${MAX_ATTEMPTS}" \
     RETRY_BASE_SLEEP_S="${RETRY_BASE_SLEEP_S}" \
     DROP_ARTICLE_TEXT="${DROP_ARTICLE_TEXT:-0}" \
+    OMIT_EVIDENCE="${OMIT_EVIDENCE:-0}" \
     MODEL_LABEL="${MODEL_LABEL}" \
     LOCAL_MODEL_NAME="${LOCAL_MODEL_NAME}" \
     ROUTER_MODEL_NAME="${ROUTER_MODEL_NAME}" \
@@ -244,6 +248,7 @@ ns = SimpleNamespace(
     retry_base_sleep_s=float(os.environ["RETRY_BASE_SLEEP_S"]),
     reprocess_nulls=False,
     drop_article_text=os.environ.get("DROP_ARTICLE_TEXT", "0") == "1",
+    omit_evidence=os.environ.get("OMIT_EVIDENCE", "0") == "1",
     model_label=os.environ.get("MODEL_LABEL") or None,
     local_model_name=os.environ.get("LOCAL_MODEL_NAME") or None,
     router_model_name=os.environ.get("ROUTER_MODEL_NAME") or None,

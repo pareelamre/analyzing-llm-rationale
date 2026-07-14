@@ -13,6 +13,23 @@ Variant launchers:
 - `variant6.sh`
 - `variant7.sh`
 - `variant8.sh`
+- `variant10.sh`
+- `variant11.sh`
+- `variant12.sh`
+- `variant13.sh`
+- `variant14.sh`
+- `variant15.sh`
+- `variant16.sh`
+
+Control variants:
+
+- `variant10`: length-matched neutral rationale
+- `variant11`: generic detailed rationale
+- `variant12`: irrelevant-structure negative control
+- `variant13`: rationale-first ordering
+- `variant14`: temporal anchors plus credibility
+- `variant15`: neutral prediction without rationale
+- `variant16`: neutral prediction without evidence
 
 Shared helper:
 

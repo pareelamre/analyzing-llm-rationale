@@ -1,8 +1,8 @@
 # Manual Validation: Inter-Judge Agreement Report
 
-**Sample**: 150 rationales from Qwen2.5-7B, temperature=0, variant0_neutral_baseline
-  - Correct predictions: 75
-  - Incorrect predictions: 75
+**Sample**: 100 rationales from Qwen2.5-7B, temperature=0, variant0_neutral_baseline
+  - Correct predictions: 49
+  - Incorrect predictions: 51
 
 **Third judge**: Gemma-4-31B-it with 5 targeted criteria (criterion_alignment,
 evidence_consistency, hallucination, usefulness, probability_support).
@@ -17,28 +17,28 @@ informativeness, conciseness).
 
 | Criterion | n | Spearman ρ | Cohen κ | Mean |diff| | Mean A | Mean B |
 |-----------|---|-----------|---------|----------|--------|--------|
-| plausibility | 150 | 0.653 | 0.408 | 0.229 | 0.767 | 0.677 |
-| completeness | 150 | 0.714 | 0.431 | 0.245 | 0.750 | 0.549 |
-| source_consistency | 150 | 0.773 | 0.558 | 0.217 | 0.741 | 0.554 |
-| non_hallucination | 150 | 0.741 | 0.579 | 0.210 | 0.697 | 0.566 |
-| informativeness | 150 | 0.660 | 0.475 | 0.251 | 0.742 | 0.563 |
-| conciseness | 150 | 0.489 | nan | 0.144 | 0.983 | 0.839 |
+| plausibility | 100 | 0.633 | 0.419 | 0.232 | 0.735 | 0.679 |
+| completeness | 100 | 0.726 | 0.421 | 0.239 | 0.727 | 0.539 |
+| source_consistency | 100 | 0.780 | 0.662 | 0.208 | 0.717 | 0.542 |
+| non_hallucination | 100 | 0.746 | 0.624 | 0.203 | 0.689 | 0.554 |
+| informativeness | 100 | 0.664 | 0.429 | 0.243 | 0.716 | 0.559 |
+| conciseness | 100 | 0.448 | nan | 0.138 | 0.978 | 0.841 |
 
 ## Gemma-4-31B (third judge, 5 criteria) vs Gemma-4-31B (primary, 6 criteria)
 
 | Criterion | n | Spearman ρ | Cohen κ | Mean |diff| | Mean A | Mean B |
 |-----------|---|-----------|---------|----------|--------|--------|
-| hallucination ↔ non_hallucination | 150 | 0.593 | 0.309 | 0.397 | 0.337 | 0.697 |
-| evidence_consistency ↔ source_consistency | 150 | 0.493 | 0.253 | 0.367 | 0.453 | 0.741 |
-| usefulness ↔ informativeness | 150 | 0.480 | 0.295 | 0.363 | 0.443 | 0.742 |
+| hallucination ↔ non_hallucination | 100 | 0.609 | 0.301 | 0.409 | 0.296 | 0.689 |
+| evidence_consistency ↔ source_consistency | 100 | 0.434 | 0.227 | 0.396 | 0.415 | 0.717 |
+| usefulness ↔ informativeness | 100 | 0.433 | 0.267 | 0.386 | 0.398 | 0.716 |
 
 ## Gemma-4-31B (third judge, 5 criteria) vs Kimi-K2.5 (overlapping concepts)
 
 | Criterion | n | Spearman ρ | Cohen κ | Mean |diff| | Mean A | Mean B |
 |-----------|---|-----------|---------|----------|--------|--------|
-| hallucination ↔ non_hallucination | 150 | 0.508 | 0.284 | 0.373 | 0.337 | 0.566 |
-| evidence_consistency ↔ source_consistency | 150 | 0.429 | 0.267 | 0.361 | 0.453 | 0.554 |
-| usefulness ↔ informativeness | 150 | 0.342 | 0.262 | 0.362 | 0.443 | 0.563 |
+| hallucination ↔ non_hallucination | 100 | 0.564 | 0.313 | 0.362 | 0.296 | 0.554 |
+| evidence_consistency ↔ source_consistency | 100 | 0.398 | 0.168 | 0.383 | 0.415 | 0.542 |
+| usefulness ↔ informativeness | 100 | 0.282 | 0.150 | 0.385 | 0.398 | 0.559 |
 
 ---
 

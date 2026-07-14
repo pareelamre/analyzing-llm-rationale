@@ -156,8 +156,9 @@ ABSTRACT_BLOCK = Block(
 Large language models can produce plausible forecasting rationales, but it is
 unclear whether adding structure improves forecast quality. We evaluate 1,580
 resolved binary questions from Metaculus with three models
-(Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B), nine prompt variants, and
-six temperatures per model. We score 162 runs with strict accuracy, Brier
+(Qwen2.5-7B-Instruct, Qwen3-32B, and GPT-OSS-120B), a primary nine-variant
+prompt sweep, and additional causal-control prompts. We score the complete
+primary sweep with strict accuracy, Brier
 score, and Expected Calibration Error. Across the full sweep, the neutral
 baseline is the strongest overall setting on average, showing that extra
 rationale constraints often hurt both accuracy and calibration. Among
@@ -202,9 +203,13 @@ PAGE2 = Block(
     content="""
 ## Our Work
 We run a prompt-format ablation on 1,580 resolved binary Metaculus questions.
-The released runs cover three models (Qwen2.5-7B-Instruct, Qwen3-32B, and
-GPT-OSS-120B), nine prompt variants (V0-V8), and six temperature settings per
-model, yielding 162 model-variant-temperature evaluations.
+The released primary runs cover three models (Qwen2.5-7B-Instruct, Qwen3-32B,
+and GPT-OSS-120B), nine prompt variants (V0-V8), and six temperature settings
+per model, yielding 162 model-variant-temperature evaluations. The repository
+also defines extended control prompts (V10-V16) for length, generic-detail,
+irrelevant-structure, ordering, combined temporal-plus-credibility, and
+no-rationale/no-evidence ablations; these are treated as control analyses
+rather than as part of the balanced primary sweep.
 
 We report strict accuracy, Brier score (Brier, 1950), and ECE-10 (Guo et al.,
 2017). A small human study is retained only as exploratory appendix evidence
@@ -304,13 +309,23 @@ count summary. The revised experiments operate on the current released corpus
 and run logs.
 
 ## 3.1 Prompt Variants
-We evaluate nine prompt variants. V0 is a neutral baseline. V1 asks the model
-to restate the predicted event. V2 requests a key attribute (for example
-actor, quantity, or time). V3 asks for an explicit reasoning type. V4 asks the
-model to ground its rationale in evidence credibility. V5 requests key
-conditions. V6 requests short step-by-step reasoning. V7 asks for uncertainty
-language. V8 requests temporal anchors. Each variant changes one prompt
-dimension while preserving the same forecasting task and JSON schema.
+The balanced primary sweep evaluates nine prompt variants. V0 is a neutral
+baseline. V1 asks the model to restate the predicted event. V2 requests a key
+attribute (for example actor, quantity, or time). V3 asks for an explicit
+reasoning type. V4 asks the model to ground its rationale in evidence
+credibility. V5 requests key conditions. V6 requests short step-by-step
+reasoning. V7 asks for uncertainty language. V8 requests temporal anchors.
+
+The causal interpretation is intentionally cautious. These are prompt-format
+interventions, not isolated psychological mechanisms: variants also differ in
+length, specificity, output structure, and cognitive load. To probe those
+confounds, the released prompt config includes controls for length-matched
+neutral rationale (V10), generic detailed rationale (V11), irrelevant
+structure as a negative control (V12), rationale-first ordering (V13), combined
+temporal anchors plus credibility (V14), neutral no-rationale prediction
+(V15), and no-evidence neutral prediction (V16). These controls make the design
+more diagnostic, but only the balanced V0-V8 sweep supports the headline
+cross-model comparisons.
 
 ## 3.2 Experimental Setup
 The current paper reports three models from the released config set:
@@ -517,8 +532,10 @@ different prompt formats.
 ## 7 Conclusion and Future Work
 The current evidence supports a narrower conclusion than the draft: richer
 rationale formats do not reliably improve LLM forecasting, while temporal
-anchoring and credibility grounding are the most robust structured
-interventions in the present sweep. Future work should evaluate rationale
+anchoring and credibility grounding are the most robust structured prompts in
+the balanced sweep. These effects should be interpreted as prompt-format
+comparisons, not as clean causal estimates of a single rationale component.
+Future work should complete the extended control sweep, evaluate rationale
 content directly, add stronger statistical testing, preregister human studies,
 and test whether these prompt effects transfer beyond Metaculus.
 """,
@@ -743,8 +760,10 @@ default forecasting aids.
 The revised claims are backed by the released repo artifacts: prompt templates
 in Appendix A and prompts/, model identifiers in configs/models.yaml, run
 outputs in results/, and aggregated metrics in
-analysis/metrics_by_model_temperature_variant.csv. Each run also records
-metadata such as temperature tags and prompt hashes.
+analysis/metrics_by_model_temperature_variant.csv. That CSV reports valid-output
+conditional metrics and coverage-aware metrics that penalize malformed or absent
+forecasts as failures. Each run also records metadata such as temperature tags
+and prompt hashes.
 """,
 )
 

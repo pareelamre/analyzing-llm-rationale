@@ -1,137 +1,146 @@
 {
+  "sample_n": 100,
+  "n_correct": 49,
+  "n_incorrect": 51,
   "agreement": {
     "Gemma-4-31B vs Kimi-K2.5 (existing 6 criteria)": {
       "plausibility": {
-        "n": 150,
-        "spearman_rho": 0.6532,
-        "cohen_kappa": 0.4081,
-        "mean_abs_diff": 0.2287,
-        "mean_a": 0.7667,
-        "mean_b": 0.6767
+        "n": 100,
+        "spearman_rho": 0.633,
+        "cohen_kappa": 0.4186,
+        "mean_abs_diff": 0.2315,
+        "mean_a": 0.735,
+        "mean_b": 0.6795
       },
       "completeness": {
-        "n": 150,
-        "spearman_rho": 0.7143,
-        "cohen_kappa": 0.4308,
-        "mean_abs_diff": 0.2453,
-        "mean_a": 0.75,
-        "mean_b": 0.5487
+        "n": 100,
+        "spearman_rho": 0.7255,
+        "cohen_kappa": 0.4207,
+        "mean_abs_diff": 0.2395,
+        "mean_a": 0.727,
+        "mean_b": 0.5395
       },
       "source_consistency": {
-        "n": 150,
-        "spearman_rho": 0.7735,
-        "cohen_kappa": 0.5584,
-        "mean_abs_diff": 0.2173,
-        "mean_a": 0.7413,
-        "mean_b": 0.554
+        "n": 100,
+        "spearman_rho": 0.7802,
+        "cohen_kappa": 0.6622,
+        "mean_abs_diff": 0.208,
+        "mean_a": 0.717,
+        "mean_b": 0.542
       },
       "non_hallucination": {
-        "n": 150,
-        "spearman_rho": 0.7407,
-        "cohen_kappa": 0.579,
-        "mean_abs_diff": 0.2103,
-        "mean_a": 0.6967,
-        "mean_b": 0.5657
+        "n": 100,
+        "spearman_rho": 0.7463,
+        "cohen_kappa": 0.6237,
+        "mean_abs_diff": 0.203,
+        "mean_a": 0.689,
+        "mean_b": 0.554
       },
       "informativeness": {
-        "n": 150,
-        "spearman_rho": 0.6601,
-        "cohen_kappa": 0.4749,
-        "mean_abs_diff": 0.2507,
-        "mean_a": 0.742,
-        "mean_b": 0.5633
+        "n": 100,
+        "spearman_rho": 0.6638,
+        "cohen_kappa": 0.4292,
+        "mean_abs_diff": 0.243,
+        "mean_a": 0.716,
+        "mean_b": 0.559
       },
       "conciseness": {
-        "n": 150,
-        "spearman_rho": 0.4887,
+        "n": 100,
+        "spearman_rho": 0.448,
         "cohen_kappa": NaN,
-        "mean_abs_diff": 0.1443,
-        "mean_a": 0.9833,
-        "mean_b": 0.839
+        "mean_abs_diff": 0.1375,
+        "mean_a": 0.978,
+        "mean_b": 0.8405
       }
     },
     "Gemma-4-31B (third judge, 5 criteria) vs Gemma-4-31B (primary, 6 criteria)": {
       "hallucination \u2194 non_hallucination": {
-        "n": 150,
-        "spearman_rho": 0.5926,
-        "cohen_kappa": 0.3092,
-        "mean_abs_diff": 0.3973,
-        "mean_a": 0.3367,
-        "mean_b": 0.6967
+        "n": 100,
+        "spearman_rho": 0.6093,
+        "cohen_kappa": 0.3007,
+        "mean_abs_diff": 0.409,
+        "mean_a": 0.296,
+        "mean_b": 0.689
       },
       "evidence_consistency \u2194 source_consistency": {
-        "n": 150,
-        "spearman_rho": 0.4927,
-        "cohen_kappa": 0.2533,
-        "mean_abs_diff": 0.3667,
-        "mean_a": 0.4533,
-        "mean_b": 0.7413
+        "n": 100,
+        "spearman_rho": 0.4342,
+        "cohen_kappa": 0.2272,
+        "mean_abs_diff": 0.396,
+        "mean_a": 0.415,
+        "mean_b": 0.717
       },
       "usefulness \u2194 informativeness": {
-        "n": 150,
-        "spearman_rho": 0.4802,
-        "cohen_kappa": 0.2946,
-        "mean_abs_diff": 0.3627,
-        "mean_a": 0.4433,
-        "mean_b": 0.742
+        "n": 100,
+        "spearman_rho": 0.4329,
+        "cohen_kappa": 0.2673,
+        "mean_abs_diff": 0.386,
+        "mean_a": 0.398,
+        "mean_b": 0.716
       }
     },
     "Gemma-4-31B (third judge, 5 criteria) vs Kimi-K2.5 (overlapping concepts)": {
       "hallucination \u2194 non_hallucination": {
-        "n": 150,
-        "spearman_rho": 0.5078,
-        "cohen_kappa": 0.2839,
-        "mean_abs_diff": 0.373,
-        "mean_a": 0.3367,
-        "mean_b": 0.5657
-      },
-      "evidence_consistency \u2194 source_consistency": {
-        "n": 150,
-        "spearman_rho": 0.429,
-        "cohen_kappa": 0.2667,
-        "mean_abs_diff": 0.3613,
-        "mean_a": 0.4533,
+        "n": 100,
+        "spearman_rho": 0.5644,
+        "cohen_kappa": 0.313,
+        "mean_abs_diff": 0.362,
+        "mean_a": 0.296,
         "mean_b": 0.554
       },
+      "evidence_consistency \u2194 source_consistency": {
+        "n": 100,
+        "spearman_rho": 0.3979,
+        "cohen_kappa": 0.168,
+        "mean_abs_diff": 0.383,
+        "mean_a": 0.415,
+        "mean_b": 0.542
+      },
       "usefulness \u2194 informativeness": {
-        "n": 150,
-        "spearman_rho": 0.342,
-        "cohen_kappa": 0.2617,
-        "mean_abs_diff": 0.362,
-        "mean_a": 0.4433,
-        "mean_b": 0.5633
+        "n": 100,
+        "spearman_rho": 0.2821,
+        "cohen_kappa": 0.1502,
+        "mean_abs_diff": 0.385,
+        "mean_a": 0.398,
+        "mean_b": 0.559
       }
     }
   },
   "third_judge_by_outcome": {
     "criterion_alignment": {
-      "mean_correct": 0.6547,
-      "mean_incorrect": 0.4653,
-      "diff": 0.1893
+      "n_correct": 49,
+      "n_incorrect": 51,
+      "mean_correct": 0.6429,
+      "mean_incorrect": 0.4294,
+      "delta_correct_minus_incorrect": 0.2134
     },
     "evidence_consistency": {
-      "mean_correct": 0.5187,
-      "mean_incorrect": 0.388,
-      "diff": 0.1307
+      "n_correct": 49,
+      "n_incorrect": 51,
+      "mean_correct": 0.498,
+      "mean_incorrect": 0.3353,
+      "delta_correct_minus_incorrect": 0.1627
     },
     "hallucination": {
-      "mean_correct": 0.4227,
-      "mean_incorrect": 0.2507,
-      "diff": 0.172
+      "n_correct": 49,
+      "n_incorrect": 51,
+      "mean_correct": 0.4041,
+      "mean_incorrect": 0.1922,
+      "delta_correct_minus_incorrect": 0.2119
     },
     "usefulness": {
-      "mean_correct": 0.5013,
-      "mean_incorrect": 0.3853,
-      "diff": 0.116
+      "n_correct": 49,
+      "n_incorrect": 51,
+      "mean_correct": 0.4694,
+      "mean_incorrect": 0.3294,
+      "delta_correct_minus_incorrect": 0.14
     },
     "probability_support": {
-      "mean_correct": 0.4727,
-      "mean_incorrect": 0.352,
-      "diff": 0.1207
+      "n_correct": 49,
+      "n_incorrect": 51,
+      "mean_correct": 0.45,
+      "mean_incorrect": 0.3,
+      "delta_correct_minus_incorrect": 0.15
     }
-  },
-  "sample_n": 150,
-  "annotated_n": 150,
-  "n_correct": 75,
-  "n_incorrect": 75
+  }
 }

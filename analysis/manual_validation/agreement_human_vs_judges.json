@@ -1,0 +1,174 @@
+{
+  "n_human_scored": 100,
+  "sample_size": 100,
+  "sections": {
+    "human_vs_third_judge": {
+      "criterion_alignment": {
+        "n": 100,
+        "spearman_rho": 0.2203,
+        "cohen_kappa": 0.144,
+        "pct_agreement": 0.61,
+        "mean_abs_diff": 0.408,
+        "mean_a": 0.87,
+        "mean_b": 0.534
+      },
+      "evidence_consistency": {
+        "n": 100,
+        "spearman_rho": 0.1682,
+        "cohen_kappa": 0.1152,
+        "pct_agreement": 0.53,
+        "mean_abs_diff": 0.515,
+        "mean_a": 0.89,
+        "mean_b": 0.415
+      },
+      "hallucination": {
+        "n": 100,
+        "spearman_rho": 0.2044,
+        "cohen_kappa": 0.0813,
+        "pct_agreement": 0.39,
+        "mean_abs_diff": 0.614,
+        "mean_a": 0.91,
+        "mean_b": 0.296
+      },
+      "usefulness": {
+        "n": 100,
+        "spearman_rho": 0.1525,
+        "cohen_kappa": 0.1476,
+        "pct_agreement": 0.56,
+        "mean_abs_diff": 0.493,
+        "mean_a": 0.765,
+        "mean_b": 0.398
+      },
+      "probability_support": {
+        "n": 100,
+        "spearman_rho": 0.1697,
+        "cohen_kappa": 0.0826,
+        "pct_agreement": 0.5,
+        "mean_abs_diff": 0.5735,
+        "mean_a": 0.945,
+        "mean_b": 0.3735
+      }
+    },
+    "human_vs_gemma": {
+      "hallucination \u2194 non_hallucination": {
+        "n": 100,
+        "spearman_rho": 0.2291,
+        "cohen_kappa": 0.1771,
+        "pct_agreement": 0.71,
+        "mean_abs_diff": 0.287,
+        "mean_a": 0.91,
+        "mean_b": 0.689
+      },
+      "evidence_consistency \u2194 source_consistency": {
+        "n": 100,
+        "spearman_rho": 0.17,
+        "cohen_kappa": 0.1778,
+        "pct_agreement": 0.73,
+        "mean_abs_diff": 0.279,
+        "mean_a": 0.89,
+        "mean_b": 0.717
+      },
+      "usefulness \u2194 informativeness": {
+        "n": 100,
+        "spearman_rho": 0.1614,
+        "cohen_kappa": 0.2183,
+        "pct_agreement": 0.74,
+        "mean_abs_diff": 0.321,
+        "mean_a": 0.765,
+        "mean_b": 0.716
+      }
+    },
+    "human_vs_kimi": {
+      "hallucination \u2194 non_hallucination": {
+        "n": 100,
+        "spearman_rho": 0.2276,
+        "cohen_kappa": 0.0905,
+        "pct_agreement": 0.59,
+        "mean_abs_diff": 0.408,
+        "mean_a": 0.91,
+        "mean_b": 0.554
+      },
+      "evidence_consistency \u2194 source_consistency": {
+        "n": 100,
+        "spearman_rho": 0.1682,
+        "cohen_kappa": 0.0953,
+        "pct_agreement": 0.59,
+        "mean_abs_diff": 0.431,
+        "mean_a": 0.89,
+        "mean_b": 0.542
+      },
+      "usefulness \u2194 informativeness": {
+        "n": 100,
+        "spearman_rho": 0.2728,
+        "cohen_kappa": 0.1704,
+        "pct_agreement": 0.63,
+        "mean_abs_diff": 0.408,
+        "mean_a": 0.765,
+        "mean_b": 0.559
+      }
+    },
+    "gemma_vs_kimi": {
+      "plausibility": {
+        "n": 100,
+        "spearman_rho": 0.5983,
+        "cohen_kappa": 0.4186,
+        "pct_agreement": 0.8,
+        "mean_abs_diff": 0.2315,
+        "mean_a": 0.735,
+        "mean_b": 0.6795
+      },
+      "completeness": {
+        "n": 100,
+        "spearman_rho": 0.709,
+        "cohen_kappa": 0.4207,
+        "pct_agreement": 0.74,
+        "mean_abs_diff": 0.2395,
+        "mean_a": 0.727,
+        "mean_b": 0.5395
+      },
+      "source_consistency": {
+        "n": 100,
+        "spearman_rho": 0.754,
+        "cohen_kappa": 0.6622,
+        "pct_agreement": 0.84,
+        "mean_abs_diff": 0.208,
+        "mean_a": 0.717,
+        "mean_b": 0.542
+      },
+      "non_hallucination": {
+        "n": 100,
+        "spearman_rho": 0.7132,
+        "cohen_kappa": 0.6237,
+        "pct_agreement": 0.82,
+        "mean_abs_diff": 0.203,
+        "mean_a": 0.689,
+        "mean_b": 0.554
+      },
+      "informativeness": {
+        "n": 100,
+        "spearman_rho": 0.6481,
+        "cohen_kappa": 0.4292,
+        "pct_agreement": 0.75,
+        "mean_abs_diff": 0.243,
+        "mean_a": 0.716,
+        "mean_b": 0.559
+      },
+      "conciseness": {
+        "n": 100,
+        "spearman_rho": 0.185,
+        "cohen_kappa": NaN,
+        "pct_agreement": 1.0,
+        "mean_abs_diff": 0.1375,
+        "mean_a": 0.978,
+        "mean_b": 0.8405
+      }
+    }
+  },
+  "human_pass_rate": {
+    "criterion_alignment": 0.87,
+    "evidence_consistency": 0.89,
+    "hallucination": 0.91,
+    "usefulness": 0.77,
+    "probability_support": 0.95
+  }
+}

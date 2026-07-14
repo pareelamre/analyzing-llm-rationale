@@ -1,0 +1,5 @@
+baseline,n,accuracy,brier_score,confidence_ece,probability_ece,mean_p_yes,notes
+50% probability,1580,nan,0.25,0.0,0.14810126582278482,0.5,Uninformative probabilistic baseline; hard accuracy is undefined at exactly 50%.
+Global base rate,1580,0.6481012658227848,0.22806601506168217,3.3306690738754696e-15,3.219646771412954e-15,0.35189873417721196,Always predicts the benchmark Yes base rate.
+Category base rate (leave-one-out),1580,0.6474683544303798,0.22519497862108992,0.0409127483821097,0.040912748382109586,0.3459135259902936,Uses category-specific resolved frequencies excluding the current question.
+Category base rate (smoothed leave-one-out),1580,0.6481012658227848,0.22424578031285505,0.0244779396447502,0.02447793964474904,0.34698385732490583,Shrinks leave-one-out category rates toward the global base rate.
