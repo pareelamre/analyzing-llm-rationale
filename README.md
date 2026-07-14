@@ -2,10 +2,11 @@
 
 Conference artifact for studying how explicit rationale instructions affect LLM
 forecasting behavior on Metaculus-style binary forecasting questions. The codebase
-contains the prompt variants, batch inference runner, generated result tables, and
-plotting/analysis scripts used for the paper figures. The live Foresea API also
-supports prediction-market intelligence: typed forecasts, evidence retrieval,
-and model-vs-market edge analysis for binary and multiple-choice markets.
+contains 17 prompt variants, a batch inference runner, generated result tables,
+and plotting/analysis scripts used for the paper figures. The live Foresea API
+also supports prediction-market intelligence: typed forecasts, evidence
+retrieval, and model-vs-market edge analysis for binary and multiple-choice
+markets.
 
 ## Live API
 
@@ -283,6 +284,11 @@ hours, snapshots at most 2 markets per venue, and forecasts only
 dispatch input `reforecast_each_tick=1` for a one-off full refresh instead of
 forcing every scheduled run to reforecast all open markets.
 
+The homepage market desk uses `GET /radar`, which is derived from
+`static/track_record_live.json` and its `edge_board`. Radar highlights current
+model-vs-market gaps and keeps the first screen fast by reusing the committed
+track-record aggregate instead of scanning venues on every page load.
+
 Raise the Cloud Run throughput ceiling (no idle cost while `min-instances=0`):
 
 ```bash
@@ -361,9 +367,26 @@ evidence articles. It is built for resolvable forecasts, not general Q&A.
 - `GET /markets/kalshi`: fetch a live Kalshi quote (see below).
 - `POST /agent/analyze`: orchestrated end-to-end analysis of a live question (see below).
 - `GET /agent/scan`: scan a venue for mispriced markets, ranked by edge (see below).
+- `GET /radar`: homepage market desk built from the live track-record edge board.
+- `POST /analytics/event`: record product funnel events such as `forecast_completed`, `watchlist_add`, `share_created`, and `digest_sent`.
+- `GET /analytics/events/summary`: summarize product analytics separately from page visits.
+- `POST /forecasts/share`: create an explicit public forecast share page.
+- `GET /forecast/{share_id}`: render a shared forecast without exposing private chat history.
 - `GET /trading/accounts`: authenticated trading-readiness status, no secrets returned.
 - `POST /trading/preview`: authenticated dry-run order normalization.
 - `POST /trading/orders`: authenticated live order submission with explicit confirmation.
+
+### Web app runtime state
+
+Anonymous chats stay in browser `localStorage`. Signed-in users sync
+conversations through `/chat/conversations`, while watchlist tracking uses
+`FavoriteMarket` entities exposed through `/favorites` and `/favorites/prices`.
+The favorites digest runs from `.github/workflows/favorites-digest.yml` via
+`scripts/favorites_digest.py`.
+
+Forecast sharing is opt-in: clients call `POST /forecasts/share` to create a
+public `GET /forecast/{share_id}` page. Do not expose full private chat history
+in shared forecast views.
 
 ### Agent: automated intelligence layer
 
@@ -941,8 +964,10 @@ for source in prediction["evidence_sources"]:
 
 - `src/analyzing_llm_rationale/`: packaged inference, provider, validation, and CLI logic.
 - `configs/`: model and rationale-variant definitions.
-- `prompts/`: system prompt and the nine rationale-variant prompts.
-- `scripts/`: evaluation, recovery, SHAP, plotting, and utility scripts.
+- `prompts/`: system prompt plus the configured rationale, control, ablation,
+  and no-evidence prompt variants.
+- `scripts/`: evaluation, recovery, SHAP, perturbation, plotting, market-data,
+  and utility scripts.
 - `slurm/`: HPC launchers for the variant/temperature sweeps.
 - `results/`: model outputs and run metadata.
 - `analysis/`: aggregate metric tables and rationale-analysis outputs.
@@ -956,18 +981,40 @@ See `ARTIFACT_MANIFEST.md` for the submission checklist and file-level notes.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev,analysis]"
+python -m pip install -e ".[dev,serve,pipeline]"
 ```
 
-Use `.[dev]` for the core runner and tests only. Use `.[analysis]` when
-regenerating plots or SHAP analyses.
+Use `.[dev]` for linting and unit tests. Add `.[analysis]` when regenerating
+plots, metrics tables, or SHAP analyses. Add `.[trading]` for local exchange
+order preview/execution development.
+
+## Prompt Variants
+
+Configured variants live in `configs/variants.yaml` and map directly to prompt
+files under `prompts/`.
+
+- `variant0` is the neutral baseline.
+- `variant1` through `variant8` cover the original rationale attribute prompts.
+- `variant9` through `variant14` add scratchpad, length-matched, structural, and
+  combined temporal/credibility controls.
+- `variant15_neutral_no_rationale` and `variant16_no_evidence_neutral` support
+  ablations for rationale and evidence effects.
+
+When adding a variant, update `configs/variants.yaml`, add the prompt file, and
+run a bounded smoke test:
+
+```bash
+PYTHONPATH=src analyze-llm-rationale run-batch \
+  --variant <variant_name> \
+  --max-records 3
+```
 
 ## Quick Validation
 
 ```bash
 PYTHONPATH=src python -m analyzing_llm_rationale validate-dataset
 python -m unittest discover -s tests
-ruff check src tests scripts/*.py
+ruff check src tests
 ```
 
 `PYTHONPATH=src` is useful when the repository has not been installed yet or an
