@@ -1020,6 +1020,10 @@ ruff check src tests
 `PYTHONPATH=src` is useful when the repository has not been installed yet or an
 older user-local install shadows the working tree.
 
+Run the full suite with Python 3.10+ and the relevant extras installed. The
+server, RAG, tracking, and trading tests import optional dependencies from
+`serve`, `pipeline`, `analysis`, and `trading`.
+
 ## Primary Entry Point
 
 Run the variant 3 pipeline with the packaged CLI:
