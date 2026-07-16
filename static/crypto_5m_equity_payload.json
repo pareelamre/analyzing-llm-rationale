@@ -1,12 +1,12 @@
 {
   "coverage": {
-    "days": 58.49,
+    "days": 58.58,
     "first_row_time_ms": 1779128880000,
-    "last_row_time_ms": 1784182020000
+    "last_row_time_ms": 1784190540000
   },
   "curves": [
     {
-      "avg_pnl_per_trade": 0.053817,
+      "avg_pnl_per_trade": 0.05368,
       "by_symbol": {
         "BTCUSDT": {
           "hit_rate": 0.5544,
@@ -14,20 +14,20 @@
           "trades": 1867
         },
         "ETHUSDT": {
-          "hit_rate": 0.5537,
-          "pnl_per_contract": 116.5644,
-          "trades": 2178
+          "hit_rate": 0.5535,
+          "pnl_per_contract": 116.0642,
+          "trades": 2179
         }
       },
       "color": "#34d399",
       "first_trade_at": "2026-06-17T15:24:04.674274+00:00",
-      "hit_rate": 0.554,
+      "hit_rate": 0.5539,
       "key": "selector_btc_inverse_eth_fade",
       "label": "Recommended: BTC inverse + ETH fade",
-      "last_trade_at": "2026-07-15T23:28:33.233229+00:00",
+      "last_trade_at": "2026-07-16T10:26:49.472007+00:00",
       "max_drawdown": 20.5434,
-      "pnl_per_contract": 217.691,
-      "pnl_per_day": 3.743611,
+      "pnl_per_contract": 217.1908,
+      "pnl_per_day": 3.708859,
       "points": [
         0.4998,
         0.9996,
@@ -4073,9 +4073,10 @@
         218.1916,
         217.6914,
         217.1912,
-        217.691
+        217.691,
+        217.1908
       ],
-      "span_days": 58.15,
+      "span_days": 58.56,
       "times": [
         1779130680000,
         1779130920000,
@@ -8121,9 +8122,10 @@
         1784083800000,
         1784100240000,
         1784100240000,
-        1784154540000
+        1784154540000,
+        1784190540000
       ],
-      "trades": 4045
+      "trades": 4046
     },
     {
       "avg_pnl_per_trade": 0.037955,
@@ -15427,23 +15429,23 @@
       "trades": 1867
     },
     {
-      "avg_pnl_per_trade": 0.053519,
+      "avg_pnl_per_trade": 0.053265,
       "by_symbol": {
         "ETHUSDT": {
-          "hit_rate": 0.5537,
-          "pnl_per_contract": 116.5644,
-          "trades": 2178
+          "hit_rate": 0.5535,
+          "pnl_per_contract": 116.0642,
+          "trades": 2179
         }
       },
       "color": "#f59e0b",
       "first_trade_at": "2026-06-17T15:43:14.912582+00:00",
-      "hit_rate": 0.5537,
+      "hit_rate": 0.5535,
       "key": "eth_fade_mom_0015",
       "label": "ETH fade |5m mom| >=0.15%",
-      "last_trade_at": "2026-07-15T23:28:33.233229+00:00",
+      "last_trade_at": "2026-07-16T10:26:49.472007+00:00",
       "max_drawdown": 15.5198,
-      "pnl_per_contract": 116.5644,
-      "pnl_per_day": 2.004892,
+      "pnl_per_contract": 116.0642,
+      "pnl_per_day": 1.981971,
       "points": [
         0.4998,
         0.9996,
@@ -17622,9 +17624,10 @@
         117.065,
         116.5648,
         116.0646,
-        116.5644
+        116.5644,
+        116.0642
       ],
-      "span_days": 58.14,
+      "span_days": 58.56,
       "times": [
         1779130920000,
         1779131220000,
@@ -19803,23 +19806,24 @@
         1784043720000,
         1784059260000,
         1784100240000,
-        1784154540000
+        1784154540000,
+        1784190540000
       ],
-      "trades": 2178
+      "trades": 2179
     }
   ],
   "cutoff_start_time_ms": null,
   "db_path": "data/crypto_5m_signals.sqlite",
-  "generated_at": "2026-07-16T08:29:50.863986+00:00",
+  "generated_at": "2026-07-16T10:26:54.792450+00:00",
   "note": "Paper replay from live-collected 5-minute crypto rows. Uses 50c contract pricing in the collector; no slippage.",
   "recommendation": {
     "candidate": "selector_btc_inverse_eth_fade",
-    "hit_rate": 0.554,
-    "pnl_per_contract": 217.691,
+    "hit_rate": 0.5539,
+    "pnl_per_contract": 217.1908,
     "policy": "Main paper strategy: trade against very strong BTC model calls, fade sharp ETH 5-minute moves, and skip SOL until its rule is stable.",
     "status": "paper-positive",
-    "trades": 4045
+    "trades": 4046
   },
-  "resolved_rows": 25665,
+  "resolved_rows": 25668,
   "since_hours": 0.0
 }
