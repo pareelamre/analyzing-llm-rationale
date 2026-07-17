@@ -3685,7 +3685,12 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
 async function sendQuestion(options = {}) {
   const input = document.getElementById('questionInput');
   const question = String(options.question ?? input.value).trim();
-  if (!question || !activeId || activeRequest) return;
+  if (!question || activeRequest) return;
+  if (!isUserSignedIn()) {
+    _queueForecastAfterSignIn(question, _pendingMarketCtx);
+    return;
+  }
+  if (!activeId) return;
 
   _hideSlashPalette();
 
@@ -4312,8 +4317,7 @@ function submitLandingQuestion(event) {
 
 async function _streamLandingQuestion(question) {
   if (!isUserSignedIn()) {
-    _pendingQuestionAfterSignIn = question;
-    openAuthModal('login');
+    _queueForecastAfterSignIn(question);
     return;
   }
   _landingLastQuestion = question;
@@ -4399,12 +4403,18 @@ function _landingReset() {
 }
 
 function startForecast(question, ctx = null) {
+  const normalizedQuestion = String(question ?? '').trim();
+  if (!normalizedQuestion) return;
+  if (!isUserSignedIn()) {
+    _queueForecastAfterSignIn(normalizedQuestion, ctx);
+    return;
+  }
   _pendingMarketCtx = ctx || null;
   launchApp();
   if (!activeId || (getConv(activeId)?.messages || []).length > 0) {
     newConversation();
   }
-  fillExample(question);
+  fillExample(normalizedQuestion);
   sendQuestion();
 }
 function recordPageVisit() {
@@ -6714,7 +6724,6 @@ function _wlAnalyze(ref) {
   if (!f || !f.question) return;
   if (typeof closeWatchlistPage === 'function') closeWatchlistPage({ updateHistory: false });
   closeSidebar();
-  if (currentView !== 'app') launchApp();
   const ctx = {};
   if (f.market_probability != null) ctx.market_probability = f.market_probability;
   if (f.market_url)  ctx.market_url = f.market_url;
@@ -7276,9 +7285,45 @@ let _gClientId = null;
 let _ghClientId = null;
 let currentUser = null;
 let _pendingQuestionAfterSignIn = null;
+const _PENDING_FORECAST_KEY = 'foresea_pending_forecast';
 
 function isUserSignedIn() {
   return !!(currentUser || localStorage.getItem('foresea_session'));
+}
+
+function _savePendingForecastAfterSignIn(pending) {
+  try { sessionStorage.setItem(_PENDING_FORECAST_KEY, JSON.stringify(pending)); } catch {}
+}
+
+function _loadPendingForecastAfterSignIn() {
+  try {
+    const raw = sessionStorage.getItem(_PENDING_FORECAST_KEY);
+    if (!raw) return null;
+    const pending = JSON.parse(raw);
+    const question = String(pending?.question ?? '').trim();
+    if (!question) return null;
+    return { question, ctx: pending?.ctx || null };
+  } catch {
+    return null;
+  }
+}
+
+function _clearPendingForecastAfterSignIn() {
+  _pendingQuestionAfterSignIn = null;
+  try { sessionStorage.removeItem(_PENDING_FORECAST_KEY); } catch {}
+}
+
+function _queueForecastAfterSignIn(question, ctx = null) {
+  const normalizedQuestion = String(question ?? '').trim();
+  if (!normalizedQuestion) return false;
+  _pendingQuestionAfterSignIn = {
+    question: normalizedQuestion,
+    ctx: ctx || null,
+  };
+  _savePendingForecastAfterSignIn(_pendingQuestionAfterSignIn);
+  showLanding({ updateHistory: true });
+  openAuthModal('login');
+  return true;
 }
 
 // ── GitHub OAuth (authorization-code flow) ────────────────────────────────────
@@ -7320,7 +7365,7 @@ async function _maybeCompleteGitHubLogin() {
     const user = { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
     _saveSession(d.token, user);
     updateAuthUI(user);
-    closeAuthModal();
+    closeAuthModal({ clearPendingForecast: false });
     await _afterSignIn(user, 'github');
   } catch (e) { console.error('GitHub auth error:', e); }
 }
@@ -7346,16 +7391,10 @@ async function _afterSignIn(user, source = 'auth') {
   await syncConversationsAfterSignIn(user);
   await _syncFavoritesFromServer();
   
-  if (_pendingQuestionAfterSignIn) {
-    const question = _pendingQuestionAfterSignIn;
-    _pendingQuestionAfterSignIn = null;
-    launchApp();
-    const input = document.getElementById('questionInput');
-    if (input) {
-      input.value = question;
-      autoResize(input);
-    }
-    startForecast(question);
+  const pendingForecast = _pendingQuestionAfterSignIn || _loadPendingForecastAfterSignIn();
+  if (pendingForecast) {
+    _clearPendingForecastAfterSignIn();
+    startForecast(pendingForecast.question, pendingForecast.ctx || null);
   } else if (currentView === 'landing' || !currentView) {
     launchApp();
   }
@@ -7492,11 +7531,13 @@ function openAuthModal(mode) {
   setTimeout(() => document.getElementById('authEmail').focus(), 60);
 }
 
-function closeAuthModal() {
+function closeAuthModal(options = {}) {
+  const { clearPendingForecast = true } = options;
   const overlay = document.getElementById('authOverlay');
   overlay.classList.remove('show');
   overlay.setAttribute('aria-hidden', 'true');
   _authBusy = false;
+  if (clearPendingForecast) _clearPendingForecastAfterSignIn();
 }
 
 // ── Feedback modal ──────────────────────────────────────────────────────────
@@ -7598,7 +7639,7 @@ async function submitAuthForm(event) {
     };
     _saveSession(d.token, user);
     updateAuthUI(user);
-    closeAuthModal();
+    closeAuthModal({ clearPendingForecast: false });
     document.getElementById('authForm').reset();
     await _afterSignIn(user, _authMode === 'register' ? 'register' : 'password');
   } catch (e) {
@@ -7629,7 +7670,7 @@ async function handleGoogleCredential(response) {
     const user = { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
     _saveSession(d.token, user);
     updateAuthUI(user);
-    closeAuthModal();
+    closeAuthModal({ clearPendingForecast: false });
     await _afterSignIn(user, 'google');
   } catch (e) { console.error('Auth error:', e); }
 }
