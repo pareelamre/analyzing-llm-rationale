@@ -336,11 +336,12 @@ async def main() -> int:
         )
         if _predict_stats["successes"] and not primary_progressed:
             print(
-                f"track-record forecast failed: /predict succeeded but primary "
-                f"model {primary_model!r} did not write or backfill any snapshots.",
+                f"track-record forecast warning: /predict succeeded but primary "
+                f"model {primary_model!r} did not write or backfill any snapshots. "
+                "This can happen when successful forecasts are intentionally "
+                "skipped, for example because they returned no fresh evidence.",
                 file=sys.stderr,
             )
-            return 1
     return 0
 
 
