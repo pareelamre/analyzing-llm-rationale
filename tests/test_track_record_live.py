@@ -858,6 +858,25 @@ class EdgeAnalyticsTests(unittest.TestCase):
         comp = trl.build_models_comparison(rows, default_model="gpt-oss-120b")
         self.assertEqual(comp[0]["model"], "gpt-oss-120b")  # missing model -> primary
 
+    def test_models_comparison_uses_reference_market_count_for_crowd_baseline(self):
+        rows = [
+            dict(self._res(0.8, 0.5, 1), model="crowd-follow", platform="P", ident="m1"),
+            dict(self._res(0.7, 0.4, 1), model="crowd-follow", platform="P", ident="m2"),
+        ]
+        comp = trl.build_models_comparison(
+            rows,
+            default_model="gpt-oss-120b",
+            crowd_baseline={"n_bets": 6, "win_rate": 0.5, "roi": 0.1},
+            crowd_reference_rows=[
+                {"platform": "P", "ident": "m1"},
+                {"platform": "P", "ident": "m1"},
+                {"platform": "P", "ident": "m2"},
+            ],
+        )
+        self.assertEqual(comp[0]["model"], "crowd-follow")
+        self.assertEqual(comp[0]["n_snapshots_resolved"], 6)
+        self.assertEqual(comp[0]["n_markets_resolved"], 2)
+
     def test_edge_board_trade_direction_and_payout_odds(self):
         now = datetime.now(timezone.utc)
         rows = [

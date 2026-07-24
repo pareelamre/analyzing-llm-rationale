@@ -1463,10 +1463,11 @@ def _crowd_baseline_reference_rows(resolved: List[Dict[str, Any]], *,
 
 def build_models_comparison(resolved: List[Dict[str, Any]], *,
                             default_model: str,
-                            crowd_baseline: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                            crowd_baseline: Optional[Dict[str, Any]] = None,
+                            crowd_reference_rows: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
     """Per-model leaderboard over resolved snapshots: accuracy, skill-vs-market,
-    and hypothetical paper-trading ROI (flat + validated-only) — so gpt-oss-120b,
-    Gemma, and Kimi are graded on the same markets. Ranked best-paper-edge first.
+    and hypothetical paper-trading ROI (flat + validated-only). Ranked
+    best-paper-edge first.
 
     crowd_baseline: pre-computed result of crowd_baseline_equity() on the
     largest single LLM cohort.
@@ -1479,10 +1480,14 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
     for mlabel, rows in by_model.items():
         if mlabel == "crowd-follow" and crowd_baseline is not None:
             cb = crowd_baseline
+            crowd_market_count = len({
+                (r.get("platform"), r.get("ident"))
+                for r in (crowd_reference_rows or [])
+            }) or len({(r.get("platform"), r.get("ident")) for r in rows})
             out.append({
                 "model": mlabel,
                 "n_snapshots_resolved": cb.get("n_bets"),
-                "n_markets_resolved": cb.get("n_bets"),
+                "n_markets_resolved": crowd_market_count,
                 "accuracy": cb.get("win_rate"),
                 "model_brier": None,
                 "skill_vs_market": 0.0,
@@ -2153,7 +2158,12 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "primary_paper_pnl": paper_pnl(resolved_primary, edge_calibration(resolved_primary)),
         "edge_board": edge_board_result,
         "arbitrage_signals": build_arbitrage_board(open_primary, latest_price),
-        "models_comparison": build_models_comparison(resolved, default_model=model, crowd_baseline=_crowd_base),
+        "models_comparison": build_models_comparison(
+            resolved,
+            default_model=model,
+            crowd_baseline=_crowd_base,
+            crowd_reference_rows=_crowd_ref_rows,
+        ),
         "trajectories": trajectories,
         "resolved_log": resolved_log,
         "log_sample_size": len(resolved_log),
