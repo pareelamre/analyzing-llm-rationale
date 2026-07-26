@@ -102,6 +102,10 @@ PREDICT_CONCURRENCY = int(os.environ.get("PREDICT_CONCURRENCY", "4"))
 _PREDICT_MIN_INTERVAL_S = float(os.environ.get("PREDICT_MIN_INTERVAL_S", "1.0"))
 _PREDICT_TIMEOUT_S = 120
 _PREDICT_RETRIES = 3
+_SNAPSHOT_PASS_RETRIES = max(1, int(os.environ.get("TRACK_RECORD_SNAPSHOT_PASS_RETRIES", "3") or 3))
+_SNAPSHOT_PASS_RETRY_SLEEP_S = float(
+    os.environ.get("TRACK_RECORD_SNAPSHOT_PASS_RETRY_SLEEP_S", "30") or 30.0
+)
 _predict_rate_lock = threading.Lock()
 _last_predict_ts: float = 0.0
 _predict_stats = Counter()
@@ -253,6 +257,48 @@ def _model_progress(store: DuckDBStore, model: str) -> dict:
     }
 
 
+async def _record_snapshots_with_retries(
+    store: DuckDBStore,
+    *,
+    seeds: list[tuple[str, str]],
+) -> int:
+    """Retry the forecast pass when every /predict call fails transiently.
+
+    A short upstream outage should not turn the whole workflow red if a second
+    pass a minute later would succeed. We still fail the job after exhausting
+    the pass-level retries so prolonged outages remain visible.
+    """
+    recorded_total = 0
+    for attempt in range(1, _SNAPSHOT_PASS_RETRIES + 1):
+        attempts_before = _predict_stats["attempts"]
+        successes_before = _predict_stats["successes"]
+        recorded_total += await trl.record_snapshots(
+            store, market_data, forecast_fn,
+            models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE,
+            seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
+            reforecast_each_tick=REFORECAST_EACH_TICK,
+            short_horizon_reforecast_lead_days=SHORT_HORIZON_REFORECAST_LEAD_DAYS,
+            short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
+            expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
+            expiry_slot_hours=EXPIRY_SLOT_HOURS,
+            concurrency=PREDICT_CONCURRENCY,
+            convergence_per_venue=CONVERGENCE_PER_VENUE)
+        pass_attempts = _predict_stats["attempts"] - attempts_before
+        pass_successes = _predict_stats["successes"] - successes_before
+        if pass_successes > 0 or pass_attempts == 0:
+            return recorded_total
+        if attempt < _SNAPSHOT_PASS_RETRIES:
+            delay_s = _SNAPSHOT_PASS_RETRY_SLEEP_S * (2 ** (attempt - 1))
+            print(
+                f"track-record forecast warning: all /predict calls failed on "
+                f"pass {attempt}/{_SNAPSHOT_PASS_RETRIES}; retrying in "
+                f"{delay_s:.0f}s.",
+                file=sys.stderr,
+            )
+            await asyncio.sleep(delay_s)
+    return recorded_total
+
+
 async def main() -> int:
     store = DuckDBStore(STORE_PATH)
     primary_model = TRACK_MODELS[0]
@@ -266,17 +312,7 @@ async def main() -> int:
     backfilled = 0
     if not PRICE_ONLY:
         seeds = _get_pending_markets()
-        recorded = await trl.record_snapshots(
-            store, market_data, forecast_fn,
-            models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE,
-            seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
-            reforecast_each_tick=REFORECAST_EACH_TICK,
-            short_horizon_reforecast_lead_days=SHORT_HORIZON_REFORECAST_LEAD_DAYS,
-            short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
-            expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
-            expiry_slot_hours=EXPIRY_SLOT_HOURS,
-            concurrency=PREDICT_CONCURRENCY,
-            convergence_per_venue=CONVERGENCE_PER_VENUE)
+        recorded = await _record_snapshots_with_retries(store, seeds=seeds)
         if ALLOW_RESOLVED_BACKFILL:
             backfilled = await trl.backfill_missing_model_snapshots(
                 store, forecast_fn,
