@@ -382,6 +382,32 @@ class NewsPipelineSourceTests(unittest.TestCase):
 
         self.assertEqual({a["source_channel"] for a in selected}, {"gdelt", "stooq"})
 
+    def test_rank_relevance_floor_fails_open_to_lexical_match_when_dense_is_weak(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._use_embeddings = True
+        pipeline._embeddings = None
+        pipeline._embed_fn = lambda texts: [
+            [1.0, 0.0],
+            [0.1, 0.99],
+            [0.0, 1.0],
+        ]
+        pipeline._rerank_fn = None
+        pipeline._fetch_sources = ("google-news",)
+        pipeline._min_relevance = 0.25
+        articles = [
+            {"title": "Federal Reserve rate cut expected in 2026", "summary": "Fed may cut rates.", "source_channel": "google-news"},
+            {"title": "Unrelated sports headline", "summary": "A tennis result.", "source_channel": "google-news"},
+        ]
+
+        ranked = pipeline.rank("Will the Federal Reserve cut interest rates before December 31, 2026?", articles)
+        selected = pipeline.select_diverse_sources(ranked, top_k=5)
+
+        self.assertGreaterEqual(ranked[0]["lexical_relevance"], 0.25)
+        self.assertLess(ranked[0]["semantic_relevance"], 0.25)
+        self.assertGreaterEqual(ranked[0]["relevance"], 0.25)
+        self.assertEqual(len(selected), 1)
+        self.assertIn("Federal Reserve", selected[0]["title"])
+
     def test_rank_can_use_lightweight_lexical_scores(self):
         pipeline = NewsPipeline.__new__(NewsPipeline)
         pipeline._use_embeddings = False

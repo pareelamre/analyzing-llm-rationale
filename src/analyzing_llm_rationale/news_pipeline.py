@@ -1051,6 +1051,12 @@ class NewsPipeline:
             dense_rel = [max(0.0, min(1.0, float(_cosine_similarity(q_vec, d)))) for d in doc_vecs]
             has_dense = True
 
+        # Keep a lexical relevance signal even when dense embeddings are available.
+        # In production the evidence floor is used to suppress junk sources, but a
+        # weak or miscalibrated embedding model can otherwise zero out every
+        # article despite strong exact keyword/entity matches.
+        lexical_rel = [_lexical_relevance(question, t) for t in texts]
+
         # Lexical BM25 (the other half of hybrid retrieval).
         q_terms = _content_terms(question)
         bm25 = _bm25_scores(q_terms, [re.findall(r"[a-z0-9]+", t.lower()) for t in texts])
@@ -1084,7 +1090,11 @@ class NewsPipeline:
         for i, article in enumerate(articles):
             credibility = _source_credibility(article)
             article["source_credibility"] = round(credibility, 2)
-            article["relevance"] = round(dense_rel[i], 4)
+            article["semantic_relevance"] = round(dense_rel[i], 4)
+            article["lexical_relevance"] = round(lexical_rel[i], 4)
+            # Relevance floor should fail open to exact lexical matches rather than
+            # dropping all evidence when the embedding signal is weak.
+            article["relevance"] = round(max(dense_rel[i], lexical_rel[i]), 4)
             article["bm25"] = round(bm25[i], 4)
             if i in rerank_scores:
                 article["rerank_score"] = round(rerank_scores[i], 4)
