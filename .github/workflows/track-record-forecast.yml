@@ -49,6 +49,8 @@ jobs:
         run: python scripts/track_record_tick.py
 
       - name: Commit updated track record
+        env:
+          GIT_REBASE_KEEP_THEIRS: "data/track_record_store.duckdb,static/track_record_live.json"
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
