@@ -1933,63 +1933,32 @@
           </div>
         </div>
 
-        <!-- Real Live Calibration Stats Grid -->
-        <div style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02);">
+        <!-- Live calibration stats, refreshed from GET /track-record. -->
+        <div id="transparencyPerformancePanel" data-resolved-count="" style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02);">
           <h3 style="font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">Verified System Performance</h3>
           
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
             <div style="text-align: center; border-right: 1px solid var(--border); padding-right: 8px;">
-              <span style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">76.9%</span>
+              <span id="trustAccuracy" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">?</span>
               <span style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 500;">Model Accuracy</span>
             </div>
             <div style="text-align: center; border-right: 1px solid var(--border); padding-right: 8px;">
-              <span style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">234</span>
+              <span id="trustResolved" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">?</span>
               <span style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 500;">Scored Snapshots</span>
             </div>
             <div style="text-align: center;">
-              <span style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">0.197</span>
+              <span id="trustBrier" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">?</span>
               <span style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 500;">Model Brier Score</span>
             </div>
           </div>
 
           <h4 style="font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">Calibration Accuracy (Observed Rates vs Predicted)</h4>
           
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            <!-- 90-100% -->
-            <div style="display: grid; grid-template-columns: 80px 1fr 40px; align-items: center; font-size: 12px; color: var(--text);">
-              <span style="font-weight: 500;">90% - 100%</span>
-              <div style="height: 6px; background: var(--paper); border-radius: 3px; overflow: hidden; margin: 0 8px;">
-                <div style="height: 100%; width: 100%; background: #4f46e5; border-radius: 3px;"></div>
-              </div>
-              <span style="font-weight: 600; text-align: right;">100%</span>
-            </div>
-            <!-- 70-80% -->
-            <div style="display: grid; grid-template-columns: 80px 1fr 40px; align-items: center; font-size: 12px; color: var(--text);">
-              <span style="font-weight: 500;">70% - 80%</span>
-              <div style="height: 6px; background: var(--paper); border-radius: 3px; overflow: hidden; margin: 0 8px;">
-                <div style="height: 100%; width: 93.8%; background: #4f46e5; border-radius: 3px;"></div>
-              </div>
-              <span style="font-weight: 600; text-align: right;">93.8%</span>
-            </div>
-            <!-- 50-60% -->
-            <div style="display: grid; grid-template-columns: 80px 1fr 40px; align-items: center; font-size: 12px; color: var(--text);">
-              <span style="font-weight: 500;">50% - 60%</span>
-              <div style="height: 6px; background: var(--paper); border-radius: 3px; overflow: hidden; margin: 0 8px;">
-                <div style="height: 100%; width: 80.0%; background: #4f46e5; border-radius: 3px;"></div>
-              </div>
-              <span style="font-weight: 600; text-align: right;">80.0%</span>
-            </div>
-            <!-- 0-10% -->
-            <div style="display: grid; grid-template-columns: 80px 1fr 40px; align-items: center; font-size: 12px; color: var(--text);">
-              <span style="font-weight: 500;">0% - 10%</span>
-              <div style="height: 6px; background: var(--paper); border-radius: 3px; overflow: hidden; margin: 0 8px;">
-                <div style="height: 100%; width: 14.3%; background: #4f46e5; border-radius: 3px;"></div>
-              </div>
-              <span style="font-weight: 600; text-align: right;">14.3%</span>
-            </div>
+          <div id="trustCalibrationRows" aria-busy="true" style="display: flex; flex-direction: column; gap: 8px;">
+            <p style="font-size: 12px; color: var(--text-dim); margin: 0;">Loading resolved calibration?</p>
           </div>
-          <p style="font-size: 10.5px; color: var(--text-mute); margin-top: 14px; line-height: 1.3;">
-            * Calibration values computed from actual model outcomes in the resolved track record (`track_record_live.json`). Lower Brier score indicates better calibrated predictions.
+          <p id="trustPanelStatus" role="status" aria-live="polite" style="font-size: 10.5px; color: var(--text-mute); margin-top: 14px; line-height: 1.3;">
+            Loading the live resolved track record?
           </p>
         </div>
       </div>
@@ -4277,6 +4246,7 @@ function showLanding({ updateHistory = true } = {}) {
   document.getElementById('landingPage').classList.remove('hidden-view');
   document.body.style.overflow = 'auto';
   currentView = 'landing';
+  startTransparencyAutoRefresh();
   if (updateHistory) setHistoryState('landing');
 }
 function launchApp({ updateHistory = true } = {}) {
@@ -4287,6 +4257,7 @@ function launchApp({ updateHistory = true } = {}) {
   }
   const app = document.getElementById('appShell');
   document.getElementById('landingPage').classList.add('hidden-view');
+  stopTransparencyAutoRefresh();
   app.classList.remove('hidden-view');
   document.body.style.overflow = 'hidden';
   currentView = 'app';
@@ -5080,6 +5051,128 @@ async function loadLandingPanels() {
     _renderLandingMarketTable((d.markets || []).slice(0, 3));
   } catch (_) { /* leave placeholders */ }
 }
+
+const TRANSPARENCY_REFRESH_MS = 60_000;
+let _transparencyRefreshTimer = null;
+let _transparencyRefreshInFlight = null;
+let _transparencyLastResolved = null;
+
+function _transparencyCalibrationBin(bin) {
+  if (bin.bin) return String(bin.bin).replace(/-/g, '?');
+  const predicted = Number(bin.avg_predicted);
+  if (!Number.isFinite(predicted)) return '?';
+  const low = Math.min(90, Math.floor(predicted * 10) * 10);
+  return `${low}%?${low + 10}%`;
+}
+
+function _selectTransparencyCalibration(calibration) {
+  const valid = (calibration || []).filter(bin =>
+    Number.isFinite(Number(bin.avg_predicted)) &&
+    Number.isFinite(Number(bin.observed_yes_rate))
+  );
+  const targets = [0.95, 0.75, 0.55, 0.05];
+  const selected = [];
+  for (const target of targets) {
+    const nearest = valid
+      .filter(bin => !selected.includes(bin))
+      .sort((a, b) =>
+        Math.abs(Number(a.avg_predicted) - target) -
+        Math.abs(Number(b.avg_predicted) - target)
+      )[0];
+    if (nearest) selected.push(nearest);
+  }
+  return selected;
+}
+
+function _renderTransparencyPerformance(d) {
+  const ov = d.overall || {};
+  const accuracy = Number(ov.accuracy ?? d.accuracy);
+  const brier = Number(ov.model_brier ?? d.brier_score);
+  const resolved = Number(d.n_snapshots_resolved ?? d.n_resolved ?? ov.n);
+  if (![accuracy, brier, resolved].every(Number.isFinite)) {
+    throw new Error('track record summary is incomplete');
+  }
+
+  document.getElementById('trustAccuracy').textContent = `${(accuracy * 100).toFixed(1)}%`;
+  document.getElementById('trustResolved').textContent = Math.round(resolved).toLocaleString();
+  document.getElementById('trustBrier').textContent = brier.toFixed(3);
+
+  const panel = document.getElementById('transparencyPerformancePanel');
+  panel.dataset.resolvedCount = String(Math.round(resolved));
+
+  const calibration = _selectTransparencyCalibration(d.calibration);
+  const rows = document.getElementById('trustCalibrationRows');
+  rows.setAttribute('aria-busy', 'false');
+  rows.innerHTML = calibration.length ? calibration.map(bin => {
+    const observed = Math.max(0, Math.min(1, Number(bin.observed_yes_rate)));
+    const observedText = `${(observed * 100).toFixed(1)}%`;
+    const sample = Number(bin.n);
+    const title = Number.isFinite(sample) ? `Based on ${sample.toLocaleString()} resolved forecasts` : '';
+    return `<div title="${escAttr(title)}" style="display: grid; grid-template-columns: 80px 1fr 44px; align-items: center; font-size: 12px; color: var(--text);">
+      <span style="font-weight: 500;">${escHtml(_transparencyCalibrationBin(bin))}</span>
+      <div style="height: 6px; background: var(--paper); border-radius: 3px; overflow: hidden; margin: 0 8px;">
+        <div style="height: 100%; width: ${observed * 100}%; background: #4f46e5; border-radius: 3px;"></div>
+      </div>
+      <span style="font-weight: 600; text-align: right;">${observedText}</span>
+    </div>`;
+  }).join('') : '<p style="font-size: 12px; color: var(--text-dim); margin: 0;">Calibration builds as forecasts resolve.</p>';
+
+  const newlyResolved = _transparencyLastResolved === null
+    ? 0
+    : Math.max(0, Math.round(resolved) - _transparencyLastResolved);
+  _transparencyLastResolved = Math.round(resolved);
+  const generatedAt = d.generated_at ? new Date(d.generated_at) : null;
+  const updated = generatedAt && !Number.isNaN(generatedAt.getTime())
+    ? generatedAt.toLocaleString()
+    : 'just now';
+  document.getElementById('trustPanelStatus').textContent = newlyResolved
+    ? `${newlyResolved.toLocaleString()} new ${newlyResolved === 1 ? 'snapshot' : 'snapshots'} scored ? updated ${updated}.`
+    : `Live resolved track record ? updated ${updated} ? refreshes automatically.`;
+}
+
+async function refreshTransparencyPanel() {
+  if (_transparencyRefreshInFlight) return _transparencyRefreshInFlight;
+  _transparencyRefreshInFlight = (async () => {
+    const rows = document.getElementById('trustCalibrationRows');
+    try {
+      const r = await _liveJsonFetch('/track-record');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      _renderTransparencyPerformance(await _readJson(r));
+    } catch (_) {
+      if (!_transparencyLastResolved) {
+        rows?.setAttribute('aria-busy', 'false');
+        if (rows) rows.innerHTML = '<p style="font-size: 12px; color: var(--text-dim); margin: 0;">Live calibration is temporarily unavailable.</p>';
+      }
+      const status = document.getElementById('trustPanelStatus');
+      if (status) status.textContent = 'Live track record temporarily unavailable ? retrying automatically.';
+    } finally {
+      _transparencyRefreshInFlight = null;
+    }
+  })();
+  return _transparencyRefreshInFlight;
+}
+
+function stopTransparencyAutoRefresh() {
+  if (_transparencyRefreshTimer) {
+    clearInterval(_transparencyRefreshTimer);
+    _transparencyRefreshTimer = null;
+  }
+}
+
+function startTransparencyAutoRefresh() {
+  if (document.hidden) return;
+  refreshTransparencyPanel();
+  if (!_transparencyRefreshTimer) {
+    _transparencyRefreshTimer = setInterval(() => {
+      if (currentView === 'landing' && !document.hidden) refreshTransparencyPanel();
+    }, TRANSPARENCY_REFRESH_MS);
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopTransparencyAutoRefresh();
+  else if (currentView === 'landing') startTransparencyAutoRefresh();
+});
 
 function _renderLandingMarketTable(items) {
   const el = document.getElementById('landingMarketTable');
