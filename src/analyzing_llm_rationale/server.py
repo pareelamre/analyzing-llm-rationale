@@ -1283,9 +1283,16 @@ _agent_counter = _meter.create_counter(
 
 
 # Redirect middleware: send requests from run.app hosts to the custom domain
+def _should_redirect_run_app_hosts() -> bool:
+    environment = (os.environ.get("ENVIRONMENT") or "").strip().lower()
+    return environment in {"", "prod", "production"}
+
+
 @app.middleware("http")
 async def host_redirect_middleware(request: Request, call_next):
     host = (request.headers.get("host") or "").lower()
+    if not _should_redirect_run_app_hosts():
+        return await call_next(request)
     # Target domain can be overridden by env var CUSTOM_DOMAIN
     target_domain = os.environ.get("CUSTOM_DOMAIN", "foresea.ink").lower()
     # Redirect only run.app hosts (avoid loop when already on target domain)
