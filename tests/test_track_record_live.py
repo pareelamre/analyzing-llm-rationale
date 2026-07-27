@@ -130,6 +130,23 @@ class TrajectoryTests(unittest.TestCase):
         recorded = self._record(md, "2026-06-03")
         self.assertEqual(recorded, 0)
 
+    def test_closed_tracked_market_is_not_reforecast_or_price_tracked(self):
+        ref = datetime(2026, 6, 3, tzinfo=timezone.utc)
+        md = _fake_market_data((ref + timedelta(days=3)).isoformat())
+        with mock.patch.object(trl, "_now", return_value=ref):
+            self.assertEqual(asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m",
+                per_venue=1)), 2)
+
+        closed_at = ref + timedelta(days=1)
+        md._poly["close_time"] = closed_at.isoformat()
+        md._kalshi["close_time"] = closed_at.isoformat()
+        with mock.patch.object(trl, "_now", return_value=ref + timedelta(days=2)):
+            self.assertEqual(asyncio.run(trl.record_snapshots(
+                self.client, md, self.forecast_fn, default_model="m",
+                per_venue=0, reforecast_each_tick=True)), 0)
+            self.assertEqual(trl.record_price_points(self.client, md), 0)
+
     def test_one_snapshot_per_market_per_day(self):
         far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)

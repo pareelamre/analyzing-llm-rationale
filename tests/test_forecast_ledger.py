@@ -152,7 +152,37 @@ class ForecastLedgerTests(unittest.TestCase):
         resolved = ForecastLedger(self.store).resolved_forecasts()
         self.assertEqual(len(resolved), 1)
         self.assertTrue(resolved[0]["ledger_audit_grade"])
+        self.assertTrue(resolved[0]["ledger_forecast_before_close"])
         self.assertEqual(resolved[0]["ledger_audit_delay_seconds"], 3600.0)
+
+    def test_post_close_forecast_is_not_in_prospective_audit_cohort(self):
+        snapshot = self._snapshot(
+            snapshot_ts=self.forecasted_at + timedelta(days=30, hours=1),
+            resolved=False,
+        )
+        self.store.put(snapshot)
+        with mock.patch(
+            "analyzing_llm_rationale.forecast_ledger._now_utc",
+            return_value=self.forecasted_at + timedelta(days=30, hours=2),
+        ):
+            sync_snapshot_ledger(self.store)
+        event = next(self.store.query(kind="ForecastLedgerEvent").fetch())
+        self.assertEqual(event["ingest_state"], "post_close")
+
+        snapshot["resolved"] = True
+        snapshot["outcome"] = 1
+        snapshot["resolved_ts"] = self.forecasted_at + timedelta(days=31)
+        self.store.put(snapshot)
+        with mock.patch(
+            "analyzing_llm_rationale.forecast_ledger._now_utc",
+            return_value=self.forecasted_at + timedelta(days=31, hours=1),
+        ):
+            sync_snapshot_ledger(self.store)
+
+        resolved = ForecastLedger(self.store).resolved_forecasts()
+        self.assertEqual(len(resolved), 1)
+        self.assertFalse(resolved[0]["ledger_forecast_before_close"])
+        self.assertFalse(resolved[0]["ledger_audit_grade"])
 
     def test_forecast_rejects_evidence_from_the_future(self):
         snapshot = self._snapshot(resolved=False)

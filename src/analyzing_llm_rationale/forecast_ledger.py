@@ -174,6 +174,16 @@ class ForecastLedger:
     def record_forecast(self, snapshot: Mapping[str, Any], *, snapshot_key: str) -> bool:
         platform, ident = _market_key(snapshot.get("platform"), snapshot.get("ident"))
         forecasted_at = _iso_utc(snapshot.get("snapshot_ts"), field="snapshot_ts")
+        forecasted_dt = datetime.fromisoformat(forecasted_at)
+        close_time = (
+            _iso_utc(snapshot["close_time"], field="close_time")
+            if snapshot.get("close_time") is not None
+            else None
+        )
+        forecast_before_close = (
+            close_time is not None
+            and forecasted_dt < datetime.fromisoformat(close_time)
+        )
         model_probability = _probability(
             snapshot.get("model_probability"), field="model_probability"
         )
@@ -208,11 +218,7 @@ class ForecastLedger:
             "question": str(snapshot.get("question") or ""),
             "forecasted_at": forecasted_at,
             "evidence_as_of": evidence_as_of,
-            "close_time": (
-                _iso_utc(snapshot["close_time"], field="close_time")
-                if snapshot.get("close_time") is not None
-                else None
-            ),
+            "close_time": close_time,
             "domain": str(snapshot.get("domain") or "other"),
             "horizon": str(snapshot.get("horizon") or "unknown"),
             "model_probability": model_probability,
@@ -224,7 +230,15 @@ class ForecastLedger:
         return self._append(
             event_id=f"forecast:{forecast_id}",
             event=event,
-            ingest_state="resolved" if snapshot.get("resolved") else "open",
+            ingest_state=(
+                "resolved"
+                if snapshot.get("resolved")
+                else (
+                    "post_close"
+                    if close_time is not None and not forecast_before_close
+                    else "open"
+                )
+            ),
         )
 
     def record_resolution(
@@ -287,6 +301,15 @@ class ForecastLedger:
             resolution, resolution_entity = resolution_item
             ingested_at = _event_timestamp(forecast_entity.get("ingested_at"))
             forecasted_at = _iso_utc(forecast["forecasted_at"], field="forecasted_at")
+            close_time = forecast.get("close_time")
+            forecast_before_close = False
+            if close_time is not None:
+                forecast_before_close = (
+                    datetime.fromisoformat(forecasted_at)
+                    < datetime.fromisoformat(
+                        _iso_utc(close_time, field="close_time")
+                    )
+                )
             audit_delay_seconds = None
             audit_grade = False
             if ingested_at is not None:
@@ -300,6 +323,7 @@ class ForecastLedger:
                 audit_delay_seconds = delay
                 audit_grade = (
                     forecast_entity.get("ingest_state") == "open"
+                    and forecast_before_close
                     and ingested_dt <= resolved_dt
                     and 0.0 <= delay <= MAX_AUDIT_INGEST_DELAY_SECONDS
                 )
@@ -313,6 +337,7 @@ class ForecastLedger:
                     "resolution_ledger_ingested_at": _event_timestamp(
                         resolution_entity.get("ingested_at")
                     ),
+                    "ledger_forecast_before_close": forecast_before_close,
                     "ledger_audit_delay_seconds": audit_delay_seconds,
                     "ledger_audit_grade": audit_grade,
                 }

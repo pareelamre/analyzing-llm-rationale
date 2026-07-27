@@ -640,7 +640,9 @@ async def record_snapshots(
         if not ident:
             continue
         market_prob = quote.get("probability")
-        lead = _lead_time_days(quote.get("close_time"))
+        lead = _lead_time_days(quote.get("close_time"), ref=tick_now)
+        if lead is not None and lead <= 0:
+            continue
         slot = _snapshot_slot(
             lead,
             now=tick_now,
@@ -769,6 +771,9 @@ def record_price_points(client, market_data) -> int:
         quote = _fetch_current_quote(market_data, platform, ident)
         if not quote or quote.get("probability") is None:
             continue
+        lead = _lead_time_days(quote.get("close_time"), ref=now)
+        if lead is not None and lead <= 0:
+            continue
         key = client.key(PRICE_KIND, f"{platform}:{ident}:{hour_key}")
         if client.get(key) is not None:
             continue  # already recorded this market this hour
@@ -786,7 +791,7 @@ def record_price_points(client, market_data) -> int:
             ts=now,
             hour=hour_key,
             close_time=quote.get("close_time"),
-            lead_time_days=_lead_time_days(quote.get("close_time")),
+            lead_time_days=lead,
         )
         client.put(entity)
         recorded += 1
