@@ -440,15 +440,21 @@ class NewsPipeline:
         """General web search. Uses the first configured provider — preferring a
         self-hosted SearXNG, then Tavily, Serper, Brave — else a keyless
         DuckDuckGo fallback. Each provider fails open to an empty list."""
-        if getattr(self, "_searxng_url", None):
-            return self._web_searxng(query, limit)
-        if getattr(self, "_tavily_key", None):
-            return self._web_tavily(query, limit)
-        if getattr(self, "_serper_key", None):
-            return self._web_serper(query, limit)
-        if getattr(self, "_brave_key", None):
-            return self._web_brave(query, limit)
-        return self._web_duckduckgo(query, limit)
+        providers = (
+            ("_searxng_url", self._web_searxng),
+            ("_tavily_key", self._web_tavily),
+            ("_serper_key", self._web_serper),
+            ("_brave_key", self._web_brave),
+        )
+        for setting, provider in providers:
+            if getattr(self, setting, None):
+                articles = provider(query, limit)
+                if articles:
+                    return articles
+        articles = self._web_duckduckgo(query, limit)
+        if articles:
+            return articles
+        return self._web_ap_news(query, limit)
 
     @staticmethod
     def _domain(url: str) -> str:
@@ -533,48 +539,127 @@ class NewsPipeline:
         except Exception:
             return []
 
-    def _web_duckduckgo(self, query: str, limit: int = 10) -> List[dict]:
-        """Keyless best-effort fallback (HTML endpoint; may be rate-limited)."""
+    def _parse_duckduckgo_results(self, html: str, limit: int) -> List[dict]:
+        """Parse both the HTML and Lite result layouts."""
         try:
             from urllib.parse import parse_qs, unquote, urlparse
 
+            from bs4 import BeautifulSoup
+        except ImportError:
+            return []
+
+        soup = BeautifulSoup(html, "html.parser")
+        articles: List[dict] = []
+        seen_urls: set[str] = set()
+        for anchor in soup.select("a.result__a, a.result-link"):
+            href = anchor.get("href") or ""
+            if href.startswith("//"):
+                href = f"https:{href}"
+            if "uddg=" in href:
+                href = unquote(parse_qs(urlparse(href).query).get("uddg", [href])[0])
+            parsed = urlparse(href)
+            title = anchor.get_text(" ", strip=True)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or "duckduckgo.com" in parsed.netloc
+                or not title
+                or href in seen_urls
+            ):
+                continue
+
+            snippet = None
+            result = anchor.find_parent(class_="result")
+            if result is not None:
+                snippet = result.select_one(".result__snippet")
+            else:
+                row = anchor.find_parent("tr")
+                if row is not None:
+                    snippet_row = row.find_next_sibling("tr")
+                    if snippet_row is not None:
+                        snippet = snippet_row.select_one(".result-snippet")
+            text = snippet.get_text(" ", strip=True) if snippet else ""
+            articles.append({
+                "title": title, "url": href, "publish_date": "",
+                "text": text, "summary": text or title,
+                "source": self._domain(href), "source_channel": "web",
+            })
+            seen_urls.add(href)
+            if len(articles) >= limit:
+                break
+        return articles
+
+    def _web_duckduckgo(self, query: str, limit: int = 10) -> List[dict]:
+        """Keyless fallback with independent HTML and Lite endpoints."""
+        try:
             import requests
+        except ImportError:
+            return []
+
+        endpoints = (
+            "https://html.duckduckgo.com/html/",
+            "https://lite.duckduckgo.com/lite/",
+        )
+        for endpoint in endpoints:
+            try:
+                resp = requests.get(
+                    endpoint,
+                    params={"q": query},
+                    headers={"User-Agent": "Foresea/1.0"},
+                    timeout=15,
+                    allow_redirects=True,
+                )
+                resp.raise_for_status()
+                articles = self._parse_duckduckgo_results(resp.text, limit)
+                if articles:
+                    return articles
+            except Exception:
+                continue
+        return []
+
+    def _web_ap_news(self, query: str, limit: int = 10) -> List[dict]:
+        """Independent publisher-search fallback when search engines throttle."""
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+
             resp = requests.get(
-                "https://html.duckduckgo.com/html/",
+                "https://apnews.com/search",
                 params={"q": query},
                 headers={"User-Agent": "Foresea/1.0"},
                 timeout=15,
                 allow_redirects=True,
             )
             resp.raise_for_status()
-            try:
-                from bs4 import BeautifulSoup
-            except ImportError:
-                return []
             soup = BeautifulSoup(resp.text, "html.parser")
-            articles: List[dict] = []
-            for res in soup.select(".result"):
-                a = res.select_one("a.result__a")
-                if not a:
-                    continue
-                href = a.get("href") or ""
-                if "uddg=" in href:  # unwrap DuckDuckGo redirect
-                    href = unquote(parse_qs(urlparse(href).query).get("uddg", [href])[0])
-                title = a.get_text(" ", strip=True)
-                if not href or not title:
-                    continue
-                snippet = res.select_one(".result__snippet")
-                text = snippet.get_text(" ", strip=True) if snippet else ""
-                articles.append({
-                    "title": title, "url": href, "publish_date": "",
-                    "text": text, "summary": text or title,
-                    "source": self._domain(href), "source_channel": "web",
-                })
-                if len(articles) >= limit:
-                    break
-            return articles
         except Exception:
             return []
+
+        articles: List[dict] = []
+        result_limit = min(limit, 3)
+        seen_urls: set[str] = set()
+        for item in soup.select(".PageList-items-item"):
+            anchor = item.select_one(".PagePromo-title a[href]")
+            if anchor is None:
+                continue
+            title = anchor.get_text(" ", strip=True)
+            href = anchor.get("href") or ""
+            if not title or not href.startswith(("http://", "https://")) or href in seen_urls:
+                continue
+            description = item.select_one(".PagePromo-description")
+            text = description.get_text(" ", strip=True) if description else ""
+            relevance = _lexical_relevance(query, f"{title} {text}")
+            if relevance < max(0.35, getattr(self, "_min_relevance", 0.0)):
+                continue
+            articles.append({
+                "title": title, "url": href, "publish_date": "",
+                "text": text, "summary": text or title,
+                "source": "Associated Press", "source_channel": "web",
+            })
+            seen_urls.add(href)
+            if len(articles) >= result_limit:
+                break
+        return articles
 
     def _fetch_newsapi(self, query: str, page_size: int = 10) -> List[dict]:
         try:

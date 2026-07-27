@@ -239,6 +239,167 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["headers"], {"User-Agent": "Foresea/1.0"})
         self.assertTrue(calls[0][1]["allow_redirects"])
 
+    def test_duckduckgo_fallback_uses_lite_when_html_is_empty(self):
+        class FakeResp:
+            def __init__(self, text):
+                self.text = text
+
+            def raise_for_status(self):
+                return None
+
+        lite_html = (
+            "<table>"
+            "<tr><td>1.</td><td>"
+            '<a class="result-link" '
+            'href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fcabinet">'
+            "Cabinet departure report</a></td></tr>"
+            '<tr><td></td><td class="result-snippet">'
+            "A cabinet official resigned.</td></tr>"
+            "</table>"
+        )
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append(url)
+            return FakeResp("" if "html.duckduckgo.com" in url else lite_html)
+
+        original = sys.modules.get("requests")
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+        try:
+            pipeline = NewsPipeline.__new__(NewsPipeline)
+            articles = pipeline._web_duckduckgo("Trump Cabinet departure", limit=5)
+        finally:
+            if original is None:
+                sys.modules.pop("requests", None)
+            else:
+                sys.modules["requests"] = original
+
+        self.assertEqual(
+            calls,
+            [
+                "https://html.duckduckgo.com/html/",
+                "https://lite.duckduckgo.com/lite/",
+            ],
+        )
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["url"], "https://example.com/cabinet")
+        self.assertEqual(articles[0]["summary"], "A cabinet official resigned.")
+
+    def test_duckduckgo_fallback_uses_lite_when_html_request_fails(self):
+        class FakeResp:
+            text = (
+                '<a class="result-link" href="https://example.com/cabinet">'
+                "Cabinet departure report</a>"
+            )
+
+            def raise_for_status(self):
+                return None
+
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append(url)
+            if "html.duckduckgo.com" in url:
+                raise RuntimeError("primary endpoint timed out")
+            return FakeResp()
+
+        original = sys.modules.get("requests")
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+        try:
+            pipeline = NewsPipeline.__new__(NewsPipeline)
+            articles = pipeline._web_duckduckgo("Trump Cabinet departure", limit=5)
+        finally:
+            if original is None:
+                sys.modules.pop("requests", None)
+            else:
+                sys.modules["requests"] = original
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["title"], "Cabinet departure report")
+
+    def test_fetch_web_falls_back_when_configured_provider_is_empty(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._searxng_url = None
+        pipeline._tavily_key = "tvly-key"
+        pipeline._serper_key = None
+        pipeline._brave_key = None
+        pipeline._web_tavily = mock.Mock(return_value=[])
+        fallback = [{"title": "Fallback result"}]
+        pipeline._web_duckduckgo = mock.Mock(return_value=fallback)
+
+        articles = pipeline._fetch_web("Trump Cabinet departure", limit=5)
+
+        self.assertEqual(articles, fallback)
+        pipeline._web_tavily.assert_called_once_with("Trump Cabinet departure", 5)
+        pipeline._web_duckduckgo.assert_called_once_with("Trump Cabinet departure", 5)
+
+    def test_fetch_web_uses_ap_news_when_duckduckgo_is_empty(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._searxng_url = None
+        pipeline._tavily_key = None
+        pipeline._serper_key = None
+        pipeline._brave_key = None
+        pipeline._web_duckduckgo = mock.Mock(return_value=[])
+        fallback = [{"title": "Associated Press result"}]
+        pipeline._web_ap_news = mock.Mock(return_value=fallback)
+
+        articles = pipeline._fetch_web("Trump Cabinet departure", limit=5)
+
+        self.assertEqual(articles, fallback)
+        pipeline._web_ap_news.assert_called_once_with("Trump Cabinet departure", 5)
+
+    def test_ap_news_fallback_parses_search_results(self):
+        class FakeResp:
+            text = (
+                '<div class="PageList-items-item">'
+                '<div class="PagePromo">'
+                '<div class="PagePromo-title">'
+                '<a href="https://apnews.com/article/cabinet-departure">'
+                "Trump Cabinet departure reported</a></div>"
+                '<div class="PagePromo-description">'
+                "The secretary resigned from the Cabinet.</div>"
+                "</div></div>"
+                '<div class="PageList-items-item">'
+                '<div class="PagePromo">'
+                '<div class="PagePromo-title">'
+                '<a href="https://apnews.com/article/august-vote">'
+                "August referendum scheduled</a></div>"
+                '<div class="PagePromo-description">'
+                "Voters will decide on membership talks.</div>"
+                "</div></div>"
+            )
+
+            def raise_for_status(self):
+                return None
+
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append((url, kwargs))
+            return FakeResp()
+
+        original = sys.modules.get("requests")
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+        try:
+            pipeline = NewsPipeline.__new__(NewsPipeline)
+            articles = pipeline._web_ap_news("Trump Cabinet departure", limit=5)
+        finally:
+            if original is None:
+                sys.modules.pop("requests", None)
+            else:
+                sys.modules["requests"] = original
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["source"], "Associated Press")
+        self.assertEqual(
+            articles[0]["summary"],
+            "The secretary resigned from the Cabinet.",
+        )
+        self.assertNotIn("August referendum scheduled", str(articles))
+        self.assertLessEqual(len(articles), 3)
+        self.assertEqual(calls[0][1]["params"], {"q": "Trump Cabinet departure"})
+
     def test_fetch_web_prefers_searxng(self):
         class FakeResp:
             def raise_for_status(self):
