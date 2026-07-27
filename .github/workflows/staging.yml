@@ -85,8 +85,8 @@ jobs:
             --cpu-throttling \
             --no-cpu-boost \
             --update-secrets SCADS_AI_API_KEY=SCADS_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,SESSION_SECRET=SESSION_SECRET:latest \
-            --update-env-vars MODEL_DEVICE=cpu,ENVIRONMENT=staging,CUSTOM_DOMAIN=staging.foresea.invalid,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json \
-            --remove-env-vars MARKETD_URL \
+            --update-env-vars MODEL_DEVICE=cpu,ENVIRONMENT=staging,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json \
+            --remove-env-vars MARKETD_URL,CUSTOM_DOMAIN \
             --project "${GCP_PROJECT_ID}"
 
       - name: Resolve service URL
