@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import tempfile
+import threading
 import unittest
+import urllib.error
 from collections import Counter
 from pathlib import Path
 from unittest import mock
@@ -16,6 +18,33 @@ _SPEC.loader.exec_module(track_record_tick)
 
 
 class TrackRecordTickTests(unittest.TestCase):
+    def test_predict_circuit_skips_queued_calls_after_repeated_failures(self):
+        circuit = threading.Event()
+        with (
+            mock.patch.object(track_record_tick, "_predict_stats", Counter()),
+            mock.patch.object(track_record_tick, "_predict_circuit_open", circuit),
+            mock.patch.object(track_record_tick, "_predict_consecutive_failures", 0),
+            mock.patch.object(track_record_tick, "_PREDICT_FAILURE_CIRCUIT_THRESHOLD", 2),
+            mock.patch.object(track_record_tick, "_PREDICT_RETRIES", 1),
+            mock.patch.object(track_record_tick, "_PREDICT_MIN_INTERVAL_S", 0.0),
+            mock.patch.object(track_record_tick, "_last_predict_ts", 0.0),
+            mock.patch.object(
+                track_record_tick.urllib.request,
+                "urlopen",
+                side_effect=urllib.error.URLError("upstream unavailable"),
+            ) as urlopen_mock,
+        ):
+            self.assertIsNone(track_record_tick._post_predict({"question": "q1"}))
+            self.assertIsNone(track_record_tick._post_predict({"question": "q2"}))
+            self.assertTrue(circuit.is_set())
+            self.assertIsNone(track_record_tick._post_predict({"question": "queued"}))
+
+            self.assertEqual(urlopen_mock.call_count, 2)
+            self.assertEqual(track_record_tick._predict_stats["attempts"], 2)
+            self.assertEqual(track_record_tick._predict_stats["failures"], 2)
+            self.assertEqual(track_record_tick._predict_stats["circuit_opened"], 1)
+            self.assertEqual(track_record_tick._predict_stats["circuit_skipped"], 1)
+
     def test_main_uses_configured_primary_independent_of_model_order(self):
         progress = {
             "snapshots": 10,

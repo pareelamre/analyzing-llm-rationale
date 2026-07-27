@@ -24,6 +24,7 @@ concurrency:
 jobs:
   forecast:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -52,6 +53,11 @@ jobs:
           SHORT_HORIZON_SLOT_HOURS: "24"
           EXPIRY_REFORECAST_LEAD_DAYS: "3"
           EXPIRY_SLOT_HOURS: "6"
+          PREDICT_TIMEOUT_S: "90"
+          PREDICT_RETRIES: "1"
+          PREDICT_FAILURE_CIRCUIT_THRESHOLD: "4"
+          TRACK_RECORD_SNAPSHOT_PASS_RETRIES: "2"
+          TRACK_RECORD_SNAPSHOT_PASS_RETRY_SLEEP_S: "60"
         run: python scripts/track_record_tick.py
 
       - name: Commit updated track record

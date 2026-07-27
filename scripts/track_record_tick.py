@@ -120,8 +120,14 @@ PREDICT_CONCURRENCY = int(os.environ.get("PREDICT_CONCURRENCY", "4"))
 # comfortably under SCADS AI limits. Raise PREDICT_CONCURRENCY to go faster;
 # lower PREDICT_MIN_INTERVAL_S if the server proves tolerant.
 _PREDICT_MIN_INTERVAL_S = float(os.environ.get("PREDICT_MIN_INTERVAL_S", "1.0"))
-_PREDICT_TIMEOUT_S = 120
-_PREDICT_RETRIES = 3
+_PREDICT_TIMEOUT_S = max(
+    1.0, float(os.environ.get("PREDICT_TIMEOUT_S", "120") or 120)
+)
+_PREDICT_RETRIES = max(1, int(os.environ.get("PREDICT_RETRIES", "3") or 3))
+_PREDICT_FAILURE_CIRCUIT_THRESHOLD = max(
+    1,
+    int(os.environ.get("PREDICT_FAILURE_CIRCUIT_THRESHOLD", "8") or 8),
+)
 _SNAPSHOT_PASS_RETRIES = max(1, int(os.environ.get("TRACK_RECORD_SNAPSHOT_PASS_RETRIES", "3") or 3))
 _SNAPSHOT_PASS_RETRY_SLEEP_S = float(
     os.environ.get("TRACK_RECORD_SNAPSHOT_PASS_RETRY_SLEEP_S", "30") or 30.0
@@ -151,8 +157,18 @@ EVALUATION_POLICY = EvaluationPolicy(
     ),
 )
 _predict_rate_lock = threading.Lock()
+_predict_circuit_lock = threading.Lock()
+_predict_circuit_open = threading.Event()
 _last_predict_ts: float = 0.0
+_predict_consecutive_failures = 0
 _predict_stats = Counter()
+
+
+def _reset_predict_circuit() -> None:
+    global _predict_consecutive_failures
+    with _predict_circuit_lock:
+        _predict_consecutive_failures = 0
+        _predict_circuit_open.clear()
 
 
 def _post_predict(payload: dict) -> dict | None:
@@ -160,7 +176,11 @@ def _post_predict(payload: dict) -> dict | None:
 
     Multiple executor threads may call this concurrently; the lock guarantees
     the minimum inter-call interval is enforced globally across all threads."""
-    global _last_predict_ts
+    global _last_predict_ts, _predict_consecutive_failures
+    if _predict_circuit_open.is_set():
+        _predict_stats["circuit_skipped"] += 1
+        return None
+
     with _predict_rate_lock:
         elapsed = time.time() - _last_predict_ts
         if elapsed < _PREDICT_MIN_INTERVAL_S:
@@ -180,6 +200,8 @@ def _post_predict(payload: dict) -> dict | None:
         try:
             with urllib.request.urlopen(req, timeout=_PREDICT_TIMEOUT_S) as resp:
                 _predict_stats["successes"] += 1
+                with _predict_circuit_lock:
+                    _predict_consecutive_failures = 0
                 return json.loads(resp.read())
         except urllib.error.HTTPError as exc:
             last_err = f"HTTP {exc.code}"
@@ -194,7 +216,24 @@ def _post_predict(payload: dict) -> dict | None:
         if attempt < _PREDICT_RETRIES - 1:
             time.sleep(2 ** attempt)
     _predict_stats["failures"] += 1
+    circuit_opened = False
+    with _predict_circuit_lock:
+        _predict_consecutive_failures += 1
+        if (
+            _predict_consecutive_failures >= _PREDICT_FAILURE_CIRCUIT_THRESHOLD
+            and not _predict_circuit_open.is_set()
+        ):
+            _predict_circuit_open.set()
+            _predict_stats["circuit_opened"] += 1
+            circuit_opened = True
     print(f"  predict failed: {last_err}", file=sys.stderr)
+    if circuit_opened:
+        print(
+            "track-record forecast circuit opened after "
+            f"{_predict_consecutive_failures} consecutive failures; "
+            "skipping queued markets for this pass.",
+            file=sys.stderr,
+        )
     return None
 
 
@@ -335,6 +374,7 @@ async def _record_snapshots_with_retries(
     """
     recorded_total = 0
     for attempt in range(1, _SNAPSHOT_PASS_RETRIES + 1):
+        _reset_predict_circuit()
         attempts_before = _predict_stats["attempts"]
         successes_before = _predict_stats["successes"]
         recorded_total += await trl.record_snapshots(
@@ -419,6 +459,8 @@ async def main() -> int:
         "predict_successes": _predict_stats["successes"],
         "predict_failures": _predict_stats["failures"],
         "predict_http_401": _predict_stats["http_401"],
+        "predict_circuit_opened": _predict_stats["circuit_opened"],
+        "predict_circuit_skipped": _predict_stats["circuit_skipped"],
         "primary_model": primary_model,
         "primary_snapshots_before": before_primary["snapshots"],
         "primary_snapshots_after": after_primary["snapshots"],
