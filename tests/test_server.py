@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from fastapi.testclient import TestClient  # noqa: E402
 
 from analyzing_llm_rationale import server as server_module  # noqa: E402
+from analyzing_llm_rationale.providers import RetryableProviderError  # noqa: E402
 from analyzing_llm_rationale.server import (  # noqa: E402
     _cache_get,
     _cache_set,
@@ -65,6 +66,16 @@ class FakeEvidencePipeline:
                 "search_query": "Federal Reserve rate cut July 2026",
             }
         ]
+
+
+class FailingProvider:
+    def __init__(self, model_name="failing-model"):
+        self.model_name = model_name
+        self.calls = 0
+
+    def chat_completion(self, messages, temperature, max_tokens):
+        self.calls += 1
+        raise RetryableProviderError("upstream unavailable")
 
 
 class ServerTests(unittest.TestCase):
@@ -194,6 +205,134 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["market_analysis"]["model_probability"], 0.7)
         self.assertIn("[Council debate]", payload["rationale"])
         self.assertEqual(payload["model_key"], "council")
+        self.assertEqual(len(self.provider.calls), 1)
+
+    def test_council_provider_applies_member_timeout_to_scads_http(self):
+        with (
+            mock.patch.dict(os.environ, {"SCADS_AI_API_KEY": "test-key"}, clear=False),
+            mock.patch.object(
+                server_module,
+                "_SCADS_MODEL_ALLOWLIST",
+                {"test-model": "provider/test-model"},
+            ),
+            mock.patch.object(server_module, "_COUNCIL_MEMBER_TIMEOUT_S", 12.5),
+        ):
+            provider = server_module._council_provider("test-model")
+
+        self.assertEqual(provider.model_name, "provider/test-model")
+        self.assertEqual(provider.request_timeout_s, 12.5)
+        provider._session.close()
+
+    def test_predict_council_uses_healthy_member_when_peer_fails(self):
+        healthy = FakeProvider()
+        failing = FailingProvider()
+        providers = {"healthy": healthy, "failing": failing}
+        with (
+            mock.patch.object(
+                server_module,
+                "_SCADS_MODEL_ALLOWLIST",
+                {"healthy": {}, "failing": {}},
+            ),
+            mock.patch.object(
+                server_module,
+                "_council_provider",
+                side_effect=lambda label: providers[label],
+            ),
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the healthy council member complete?",
+                    "model": "council",
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["confidence"], 0.7)
+        self.assertEqual(len(healthy.calls), 1)
+        self.assertEqual(failing.calls, 1)
+
+    def test_predict_council_runs_debate_when_two_members_succeed(self):
+        first = FakeProvider()
+        second = FakeProvider()
+        providers = {"first": first, "second": second}
+        with (
+            mock.patch.object(
+                server_module,
+                "_SCADS_MODEL_ALLOWLIST",
+                {"first": {}, "second": {}},
+            ),
+            mock.patch.object(
+                server_module,
+                "_council_provider",
+                side_effect=lambda label: providers[label],
+            ),
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will two members complete both rounds?",
+                    "model": "council",
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(first.calls), 2)
+        self.assertEqual(len(second.calls), 2)
+
+    def test_predict_council_returns_503_when_all_members_fail(self):
+        failing = FailingProvider()
+        with (
+            mock.patch.object(
+                server_module,
+                "_SCADS_MODEL_ALLOWLIST",
+                {"failing": {}},
+            ),
+            mock.patch.object(server_module, "_council_provider", return_value=failing),
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will an unavailable council fail cleanly?",
+                    "model": "council",
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.headers["Retry-After"], "10")
+        self.assertNotIn("upstream unavailable", response.json()["detail"])
+        self.assertEqual(failing.calls, 1)
+
+    def test_predict_council_enforces_configured_quorum(self):
+        healthy = FakeProvider()
+        failing = FailingProvider()
+        providers = {"healthy": healthy, "failing": failing}
+        with (
+            mock.patch.object(
+                server_module,
+                "_SCADS_MODEL_ALLOWLIST",
+                {"healthy": {}, "failing": {}},
+            ),
+            mock.patch.object(server_module, "_COUNCIL_MIN_SUCCESSFUL_MEMBERS", 2),
+            mock.patch.object(
+                server_module,
+                "_council_provider",
+                side_effect=lambda label: providers[label],
+            ),
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will one member satisfy a two-member quorum?",
+                    "model": "council",
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 503)
 
     def test_predict_allows_anonymous_when_api_key_unset(self):
         with mock.patch.object(server_module, "_REQUIRED_API_KEY", None):

@@ -112,6 +112,13 @@ logger = logging.getLogger("foresea")
 _PROVIDER_MAX_RETRIES = int(os.environ.get("PROVIDER_MAX_RETRIES", "2"))      # attempts = retries + 1
 _PROVIDER_TIMEOUT_S = float(os.environ.get("PROVIDER_TIMEOUT_S", "90"))       # per-attempt wall-clock budget
 _PROVIDER_BACKOFF_BASE_S = float(os.environ.get("PROVIDER_BACKOFF_BASE_S", "0.5"))
+# Council members run concurrently, so retrying each member multiplies load
+# without improving quorum availability. Bound each member independently and
+# let the successful subset produce the forecast.
+_COUNCIL_MEMBER_TIMEOUT_S = float(os.environ.get("COUNCIL_MEMBER_TIMEOUT_S", "35"))
+_COUNCIL_MIN_SUCCESSFUL_MEMBERS = max(
+    1, int(os.environ.get("COUNCIL_MIN_SUCCESSFUL_MEMBERS", "1"))
+)
 # Reject oversized request bodies before they reach a handler. Generous enough
 # for PDF uploads on /extract, small enough to blunt memory-exhaustion abuse.
 _MAX_BODY_BYTES = int(os.environ.get("MAX_BODY_BYTES", str(12 * 1024 * 1024)))
@@ -1306,6 +1313,21 @@ _llm_calls = _meter.create_counter(
 _llm_errors = _meter.create_counter(
     "llm.errors", unit="1", description="LLM provider call failures"
 )
+_council_member_calls = _meter.create_counter(
+    "forecast.council.member.calls",
+    unit="1",
+    description="Council member calls by round and outcome",
+)
+_council_member_duration = _meter.create_histogram(
+    "forecast.council.member.duration",
+    unit="s",
+    description="Council member call latency",
+)
+_council_requests = _meter.create_counter(
+    "forecast.council.requests",
+    unit="1",
+    description="Council forecast requests by outcome",
+)
 _agent_counter = _meter.create_counter(
     "agent.requests", unit="1", description="Agent analyze requests"
 )
@@ -1464,7 +1486,16 @@ def _send_alert_email(subject: str, body: str) -> None:
         return
 
 
-async def _provider_chat(provider, messages, temperature, max_tokens) -> str:
+async def _provider_chat(
+    provider,
+    messages,
+    temperature,
+    max_tokens,
+    *,
+    timeout_s: Optional[float] = None,
+    max_retries: Optional[int] = None,
+    call_site: str = "predict",
+) -> str:
     """Run a blocking ``chat_completion`` in the default executor with a
     per-attempt timeout and bounded exponential backoff (+jitter) on transient
     failures.
@@ -1483,6 +1514,8 @@ async def _provider_chat(provider, messages, temperature, max_tokens) -> str:
 
     model_name = getattr(provider, "model_name", "unknown")
     provider_type = type(provider).__name__
+    effective_timeout_s = _PROVIDER_TIMEOUT_S if timeout_s is None else max(0.001, timeout_s)
+    effective_max_retries = _PROVIDER_MAX_RETRIES if max_retries is None else max(0, max_retries)
 
     with _tracer.start_as_current_span("llm.chat_completion") as span:
         span.set_attributes({
@@ -1490,11 +1523,16 @@ async def _provider_chat(provider, messages, temperature, max_tokens) -> str:
             "gen_ai.provider.name": provider_type,
             "gen_ai.request.temperature": temperature,
             "gen_ai.request.max_tokens": max_tokens,
+            "foresea.llm.call_site": call_site,
         })
-        _llm_calls.add(1, {"gen_ai.request.model": model_name, "gen_ai.provider.name": provider_type})
+        _llm_calls.add(1, {
+            "gen_ai.request.model": model_name,
+            "gen_ai.provider.name": provider_type,
+            "foresea.llm.call_site": call_site,
+        })
 
         loop = asyncio.get_running_loop()
-        attempts = max(1, _PROVIDER_MAX_RETRIES + 1)
+        attempts = effective_max_retries + 1
         last_exc: Optional[Exception] = None
         for attempt in range(attempts):
             try:
@@ -1503,11 +1541,12 @@ async def _provider_chat(provider, messages, temperature, max_tokens) -> str:
                         None,
                         lambda: provider.chat_completion(messages, temperature, max_tokens),
                     ),
-                    timeout=_PROVIDER_TIMEOUT_S,
+                    timeout=effective_timeout_s,
                 )
                 span.set_attribute("outcome", "success")
                 return result
-            except ContextLimitError:
+            except ContextLimitError as exc:
+                span.record_exception(exc)
                 span.set_status(Status(StatusCode.ERROR))
                 span.set_attribute("outcome", "context_limit")
                 _llm_errors.add(1, {"gen_ai.request.model": model_name, "error.type": "context_limit"})
@@ -5469,8 +5508,17 @@ async def rag_delete(request: Request, namespace: str = "kb", doc_id: Optional[s
 def _council_provider(label: str):
     """Return the LLM provider for a council-member model label."""
     if label == _state.get("model_key"):
+        if os.environ.get("SCADS_AI_API_KEY") and label in _SCADS_MODEL_ALLOWLIST:
+            return _scads_alt_provider(
+                label,
+                allow_default=True,
+                request_timeout_s=_COUNCIL_MEMBER_TIMEOUT_S,
+            )
         return _state.get("provider")
-    return _scads_alt_provider(label)
+    return _scads_alt_provider(
+        label,
+        request_timeout_s=_COUNCIL_MEMBER_TIMEOUT_S,
+    )
 
 
 async def _council_forecast(
@@ -5489,15 +5537,52 @@ async def _council_forecast(
     max_tokens = _state.get("max_tokens", 1024)
     council_models = list(_SCADS_MODEL_ALLOWLIST.keys())
 
-    async def _call(label: str, msgs: List[Dict]) -> tuple:
-        provider = _council_provider(label)
-        if provider is None:
-            return label, None
-        try:
-            content = await _provider_chat(provider, msgs, temperature, max_tokens)
-            return label, content
-        except Exception:
-            return label, None
+    async def _call(label: str, msgs: List[Dict], round_number: int) -> tuple:
+        from opentelemetry.trace import Status, StatusCode
+
+        started = time.perf_counter()
+        outcome = "error"
+        attributes = {
+            "forecast.council.member": label,
+            "forecast.council.round": round_number,
+        }
+        with _tracer.start_as_current_span("forecast.council.member") as span:
+            span.set_attributes(attributes)
+            try:
+                provider = _council_provider(label)
+                if provider is None:
+                    raise RuntimeError("council provider is unavailable")
+                content = await _provider_chat(
+                    provider,
+                    msgs,
+                    temperature,
+                    max_tokens,
+                    timeout_s=_COUNCIL_MEMBER_TIMEOUT_S,
+                    max_retries=0,
+                    call_site=f"council_round_{round_number}",
+                )
+                outcome = "success"
+                span.set_attribute("outcome", outcome)
+                return label, content
+            except Exception as exc:
+                outcome = "timeout" if isinstance(exc, asyncio.TimeoutError) else "error"
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                span.set_attribute("outcome", outcome)
+                logger.warning(
+                    "council member failed round=%d model=%s error=%s",
+                    round_number,
+                    label,
+                    type(exc).__name__,
+                )
+                return label, None
+            finally:
+                metric_attributes = {**attributes, "outcome": outcome}
+                _council_member_calls.add(1, metric_attributes)
+                _council_member_duration.record(
+                    time.perf_counter() - started,
+                    metric_attributes,
+                )
 
     def _extract_prob(content: Optional[str]) -> Optional[Dict]:
         if not content:
@@ -5509,41 +5594,60 @@ async def _council_forecast(
         if conf is None:
             return None
         answer = (parsed.get("predicted_answer") or "").strip().lower()
-        prob = float(conf) if answer in ("yes", "y") else 1.0 - float(conf)
+        if answer not in ("yes", "y", "no", "n"):
+            return None
+        try:
+            confidence = float(conf)
+        except (TypeError, ValueError):
+            return None
+        if not 0.0 <= confidence <= 1.0:
+            return None
+        prob = confidence if answer in ("yes", "y") else 1.0 - confidence
         return {
             "probability": max(0.01, min(0.99, prob)),
             "rationale": (parsed.get("rationale") or "")[:300],
         }
 
     # Round 1: independent forecasts ─────────────────────────────────────────
-    r1_raw = dict(await asyncio.gather(*[_call(m, messages) for m in council_models]))
+    r1_raw = dict(await asyncio.gather(*[_call(m, messages, 1) for m in council_models]))
     r1 = {m: _extract_prob(c) for m, c in r1_raw.items()}
     r1 = {m: v for m, v in r1.items() if v}
 
-    if not r1:
-        # All failed — fall back to primary model
-        content = r1_raw.get(_state.get("model_key", ""), "")
-        return _build_typed_response(req, _parse_json_dict(content or ""), content or "",
-                                     evidence_articles, evidence_error)
-
-    # Round 2: share perspectives, ask for revision ───────────────────────────
-    lines = ["Independent forecasters' initial estimates:\n"]
-    for label, v in r1.items():
-        pct = round(v["probability"] * 100)
-        snippet = v["rationale"].replace("\n", " ")
-        lines.append(f"• {label} ({pct}% YES): \"{snippet}\"")
-    lines.append(
-        "\nReview each estimate carefully. Flag stale evidence, past events "
-        "misread as ongoing, or reasoning errors you spot in ANY of the above. "
-        "Provide your REVISED probability in the same JSON format — update "
-        "substantially if you identify a clear error."
+    required_members = max(
+        1, min(_COUNCIL_MIN_SUCCESSFUL_MEMBERS, len(council_models))
     )
-    debate_msg: Dict[str, str] = {"role": "user", "content": "\n".join(lines)}
-    r2_messages = messages + [debate_msg]
+    if len(r1) < required_members:
+        from analyzing_llm_rationale.providers import RetryableProviderError
 
-    r2_raw = dict(await asyncio.gather(*[_call(m, r2_messages) for m in r1]))
-    r2 = {m: _extract_prob(c) for m, c in r2_raw.items()}
-    r2 = {m: v for m, v in r2.items() if v}
+        _council_requests.add(1, {"outcome": "insufficient_members"})
+        logger.error(
+            "council quorum unavailable successful=%d required=%d configured=%d",
+            len(r1),
+            required_members,
+            len(council_models),
+        )
+        raise RetryableProviderError("council quorum unavailable")
+
+    r2: Dict[str, Dict] = {}
+    if len(r1) >= 2:
+        # A second round is useful only when members can react to another model.
+        lines = ["Independent forecasters' initial estimates:\n"]
+        for label, v in r1.items():
+            pct = round(v["probability"] * 100)
+            snippet = v["rationale"].replace("\n", " ")
+            lines.append(f"• {label} ({pct}% YES): \"{snippet}\"")
+        lines.append(
+            "\nReview each estimate carefully. Flag stale evidence, past events "
+            "misread as ongoing, or reasoning errors you spot in ANY of the above. "
+            "Provide your REVISED probability in the same JSON format — update "
+            "substantially if you identify a clear error."
+        )
+        debate_msg: Dict[str, str] = {"role": "user", "content": "\n".join(lines)}
+        r2_messages = messages + [debate_msg]
+
+        r2_raw = dict(await asyncio.gather(*[_call(m, r2_messages, 2) for m in r1]))
+        r2 = {m: _extract_prob(c) for m, c in r2_raw.items()}
+        r2 = {m: v for m, v in r2.items() if v}
 
     # Consensus: median of revised probabilities (fall back to R1 if R2 missing)
     final = {**r1, **r2}
@@ -5574,6 +5678,7 @@ async def _council_forecast(
         "confidence": round(consensus_conf, 4),
         "rationale": rationale,
     }
+    _council_requests.add(1, {"outcome": "success"})
     req_binary = req.model_copy(update={"question_type": "binary"})
     return _build_typed_response(
         req_binary, synthetic, json.dumps(synthetic), evidence_articles, evidence_error
@@ -5719,7 +5824,14 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     messages, evidence_articles, evidence_error = await _prepare_predict_messages(req, rag_user_id)
 
     if req.model == "council":
-        response = await _council_forecast(messages, req, evidence_articles, evidence_error)
+        try:
+            response = await _council_forecast(messages, req, evidence_articles, evidence_error)
+        except Exception as exc:
+            _forecast_errors.add(1, {
+                "forecast.variant": req.variant or "unknown",
+                "error.type": type(exc).__name__,
+            })
+            raise _provider_http_error(exc) from exc
         await _finalize_predict_response(req, response, rag_user_id, predict_cache_key)
         return response
 
@@ -5986,18 +6098,35 @@ _SCADS_MODEL_ALLOWLIST = {
 }
 
 
-def _scads_alt_provider(model_label: str):
+def _scads_alt_provider(
+    model_label: str,
+    *,
+    allow_default: bool = False,
+    request_timeout_s: Optional[float] = None,
+):
     """Build a provider for an allowlisted alternate SCADS model using the server's
     own key. Returns None if the label is the server default or not allowlisted."""
     label = (model_label or "").strip()
-    if not label or label == _state.get("model_key") or label not in _SCADS_MODEL_ALLOWLIST:
+    if (
+        not label
+        or (label == _state.get("model_key") and not allow_default)
+        or label not in _SCADS_MODEL_ALLOWLIST
+    ):
         return None
     scads_key = os.environ.get("SCADS_AI_API_KEY")
     if not scads_key:
         raise HTTPException(status_code=503, detail="Alternate models are not configured on this server.")
     from analyzing_llm_rationale.providers import OpenAICompatibleProvider
     return OpenAICompatibleProvider(
-        model_name=_SCADS_MODEL_ALLOWLIST[label], api_key=scads_key, base_url=_SCADS_BASE_URL)
+        model_name=_SCADS_MODEL_ALLOWLIST[label],
+        api_key=scads_key,
+        base_url=_SCADS_BASE_URL,
+        request_timeout_s=(
+            max(0.001, request_timeout_s)
+            if request_timeout_s is not None
+            else 120.0
+        ),
+    )
 
 
 def _select_provider(
