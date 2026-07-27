@@ -3524,6 +3524,33 @@ def _evidence_sources(articles: List[Dict[str, Any]]) -> List[EvidenceSource]:
     return sources
 
 
+def _append_chat_source_attribution(response: PredictResponse) -> None:
+    """Guarantee visible source names even when the model cites article numbers."""
+    heading = "**Sources provided to the forecast**"
+    text = response.rationale or ""
+    if not response.evidence_sources or heading in text:
+        return
+
+    lines: List[str] = []
+    seen: set = set()
+    for item in response.evidence_sources:
+        source = re.sub(r"[\r\n*_`\[\]]+", " ", item.source or "").strip()
+        title = re.sub(r"[\r\n*_`\[\]]+", " ", item.title or "").strip()
+        key = source.lower()
+        if not source or key in seen:
+            continue
+        seen.add(key)
+        lines.append(f"- **{source}**: {title or 'Source used for evidence'}")
+        if len(lines) >= 3:
+            break
+    if not lines:
+        return
+
+    attributed = f"{text.rstrip()}\n\n{heading}\n" + "\n".join(lines)
+    response.rationale = attributed
+    response.model_rationale = attributed
+
+
 # ── Multi-type forecasting ────────────────────────────────────────────────────
 _TYPE_SCHEMAS = {
     "binary": (
@@ -5927,6 +5954,9 @@ async def _finalize_predict_response(
     predict_cache_key: Optional[str] = None,
 ) -> None:
     """Apply best-effort side effects shared by blocking and streaming forecasts."""
+    if req.chat_mode:
+        _append_chat_source_attribution(response)
+
     _forecast_counter.add(1, {
         "forecast.variant": req.variant or "unknown",
         "forecast.question_type": response.question_type or "unknown",

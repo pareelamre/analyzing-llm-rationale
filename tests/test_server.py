@@ -164,6 +164,23 @@ class ServerTests(unittest.TestCase):
         )
         self.assertIn("Central bank signals", self.provider.calls[0][1]["content"])
 
+    def test_chat_predict_appends_named_source_attribution(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "Will the Fed cut rates before July 31, 2026?",
+                "variant": "variant0_neutral_baseline",
+                "evidence_top_k": 3,
+                "chat_mode": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        rationale = response.json()["rationale"]
+        self.assertIn("**Sources provided to the forecast**", rationale)
+        self.assertIn("**Example News**", rationale)
+        self.assertIn("Central bank signals policy shift", rationale)
+
     def test_predict_marks_empty_evidence_and_does_not_cache_the_miss(self):
         empty_pipeline = mock.Mock()
         empty_pipeline.fetch_summarize_rank.return_value = []
