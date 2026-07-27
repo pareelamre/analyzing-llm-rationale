@@ -15,6 +15,8 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertNotIn("paper trading", renderer.lower())
         self.assertNotIn("paper roi", renderer.lower())
         self.assertIn("resolved forecast quality", renderer.lower())
+        self.assertIn("resolved strategy performance", renderer.lower())
+        self.assertIn('id="eb-equity-svg"', renderer)
 
 
 if __name__ == "__main__":

@@ -4615,6 +4615,48 @@ async function refreshEdgeForecasts() {
     const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) return;
     const d = await _readJson(r);
+    const pnl = d.paper_pnl;
+    if (pnl) {
+      const EB_MIN_N = 5;
+      const EB_SMALL_N = 30;
+      const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
+      const _smallN = n => `<span style="color:var(--text-dim);font-size:0.75em;opacity:0.7"> (small n)</span>`;
+      const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
+      const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
+      _upd('eb-pnl-flat-v', _roiVal(pnl.flat));
+      _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
+      _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
+      _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
+      const _normCurve = s => {
+        if (s?.growth_curve?.length) return s.growth_curve.slice();
+        if (!s?.equity_curve?.length) return null;
+        const staked = s.total_staked || s.n_bets || 1;
+        return s.equity_curve.map(v => 100 + (v / staked) * 100);
+      };
+      const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+      const _mk = (s, color, label, dash) => {
+        const points = _normCurve(s);
+        if (!points) return null;
+        const times = _times(s);
+        const curve = { points, color, label };
+        if (dash) curve.dash = true;
+        if (times.length === points.length) curve.times = times;
+        return curve;
+      };
+      const curves = [
+        _mk(pnl.smart, '#10b981', '★ Smart'),
+        _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
+        _mk(pnl.flat, '#60a5fa', 'Flat stake'),
+        _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
+      ].filter(Boolean);
+      const el = document.getElementById('eb-equity-svg');
+      if (el) {
+        el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : '';
+        if (curves.length) _attachEquityHover(el);
+      }
+      const ts = document.getElementById('eb-pnl-ts');
+      if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
+    }
     // Patch model probabilities from fresh board data (tick commits new forecasts every 15 min)
     const freshBoard = d.edge_board || [];
     if (freshBoard.length) {
@@ -4898,6 +4940,8 @@ async function loadEdgeBoard() {
     const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) throw new Error('unavailable');
     host.innerHTML = renderEdgeBoard(await _readJson(r));
+    const eqDiv = document.getElementById('eb-equity-svg');
+    if (eqDiv) _attachEquityHover(eqDiv);
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#edgeBody .tr-stat',
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
@@ -5395,7 +5439,7 @@ function renderEdgeBoard(d) {
   const board = d.edge_board || [], comp = d.models_comparison || [];
   _ebBoardData = board;
   _ebPage = 0;
-  const ll = d.lead_lag;
+  const pnl = d.paper_pnl, ll = d.lead_lag;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   // Never surface a degenerate metric (a 0% / −100% read off a handful of points).
   // Below EB_MIN_N samples a metric reads "building n=…" instead of a misleading zero.
@@ -5412,14 +5456,57 @@ function renderEdgeBoard(d) {
     </div>`;
   let compHtml;
   if (comp.length) {
-    compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>N</th><th>Accuracy</th><th>Brier</th><th>Skill vs mkt</th></tr></thead><tbody>` +
+    compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Flat ROI</th><th>Smart ROI</th></tr></thead><tbody>` +
       comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
         return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
         `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
-        `<td>${enough && m.model_brier != null ? Number(m.model_brier).toFixed(3) : '·'}</td>` +
-        `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
+        `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td>` +
+        `<td>${enough ? _roiPct(m.paper_roi) : '·'}</td><td>${enough ? _roiPct(m.paper_roi_smart) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
   } else {
     compHtml = `<p class="text-sm text-gray-500">Model comparison (gpt-oss-120b vs Gemma vs Kimi) fills in as forecasts resolve.</p>`;
+  }
+  let performanceHtml;
+  if (pnl && pnl.flat) {
+    const roi = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets')
+      : _build(s && s.n_bets);
+    const nBet = pnl.flat.n_bets || 0;
+    const nRes = d.n_snapshots_resolved || 0;
+    const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
+    const _normCurve = s => {
+      if (s?.growth_curve?.length) return s.growth_curve.slice();
+      if (!s?.equity_curve?.length) return null;
+      const staked = s.total_staked || s.n_bets || 1;
+      return s.equity_curve.map(v => 100 + (v / staked) * 100);
+    };
+    const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+    const _mk = (s, color, label, dash) => {
+      const points = _normCurve(s);
+      if (!points) return null;
+      const times = _times(s);
+      const curve = { points, color, label };
+      if (dash) curve.dash = true;
+      if (times.length === points.length) curve.times = times;
+      return curve;
+    };
+    const curves = [
+      _mk(pnl.smart, '#10b981', '★ Smart'),
+      _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
+      _mk(pnl.flat, '#60a5fa', 'Flat stake'),
+      _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
+    ].filter(Boolean);
+    const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : ''}</div>`;
+    performanceHtml = `
+      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $100 starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
+      <div class="tr-stats">
+        <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">★ Smart</div>${_sub('Kelly + filters')}</div>
+        <div class="tr-stat" title="Calibrated Half-Kelly sizing proportional to estimated edge and market odds."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
+        <div class="tr-stat" title="Equal stake on every resolved forecast."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
+        <div class="tr-stat" title="Equal stake following the market consensus as a zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">Crowd baseline</div>${_sub('agree with market')}</div>
+      </div>
+      ${svgChart}
+      <p class="text-xs text-gray-400" style="margin-top:8px">Historical simulation of forecasts saved before market close, net of venue trading fees. Excludes slippage and liquidity constraints; not actual trading results.</p>`;
+  } else {
+    performanceHtml = `<p class="text-sm text-gray-500">Strategy performance will appear as tracked markets resolve.</p>`;
   }
   const arbitrage = d.arbitrage_signals || [];
   let arbitrageHtml = '';
@@ -5486,6 +5573,7 @@ function renderEdgeBoard(d) {
     ${stats}
     <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
     <h4 class="eb-h">Model comparison · resolved forecast quality</h4>${compHtml}
+    <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift · does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live council forecasts · ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;
