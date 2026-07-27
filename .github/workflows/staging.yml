@@ -1,0 +1,111 @@
+name: Staging Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Git ref to deploy
+        required: false
+        default: main
+      service_name:
+        description: Cloud Run staging service name
+        required: false
+        default: analyzing-llm-rationale-staging
+
+env:
+  GCP_REGION: us-central1
+  GCP_PROJECT_ID: brave-drive-471109-d9
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      SERVICE_NAME: ${{ inputs.service_name || 'analyzing-llm-rationale-staging' }}
+      GIT_REF: ${{ inputs.git_ref || 'main' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.GIT_REF }}
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build image tag
+        id: image
+        shell: bash
+        run: |
+          REF_SLUG=$(echo "${GIT_REF}" | tr '/:@' '-' | tr -cd '[:alnum:]-')
+          echo "tag=${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/docker/${SERVICE_NAME}:staging-${REF_SLUG}-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: cpu
+          push: true
+          tags: ${{ steps.image.outputs.tag }}
+          provenance: false
+          sbom: false
+
+      - name: Deploy to Cloud Run staging
+        run: |
+          gcloud run deploy "${SERVICE_NAME}" \
+            --image "${{ steps.image.outputs.tag }}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8000 \
+            --timeout 180 \
+            --cpu 1 \
+            --memory 512Mi \
+            --min-instances 0 \
+            --max-instances 1 \
+            --concurrency 20 \
+            --cpu-throttling \
+            --no-cpu-boost \
+            --update-secrets SCADS_AI_API_KEY=SCADS_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,SESSION_SECRET=SESSION_SECRET:latest \
+            --update-env-vars MODEL_DEVICE=cpu,ENVIRONMENT=staging,CUSTOM_DOMAIN=staging.foresea.invalid,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json \
+            --remove-env-vars MARKETD_URL \
+            --project "${GCP_PROJECT_ID}"
+
+      - name: Resolve service URL
+        id: service
+        shell: bash
+        run: |
+          URL=$(gcloud run services describe "${SERVICE_NAME}" \
+            --region "${GCP_REGION}" \
+            --project "${GCP_PROJECT_ID}" \
+            --format='value(status.url)')
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "Staging URL: ${URL}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test staging
+        shell: bash
+        run: |
+          curl -fsS "${{ steps.service.outputs.url }}/health"
+          curl -fsS "${{ steps.service.outputs.url }}/edge-board" > edge-board.json
+          python - <<'PY'
+          import json
+          payload = json.load(open("edge-board.json", "r", encoding="utf-8"))
+          assert "freshness" in payload, "edge-board payload missing freshness"
+          assert "paper_pnl" in payload, "edge-board payload missing paper_pnl"
+          print("edge-board smoke test passed")
+          PY
