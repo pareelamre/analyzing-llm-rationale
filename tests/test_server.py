@@ -254,6 +254,24 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["model_key"], "council")
         self.assertEqual(len(self.provider.calls), 1)
 
+    def test_predict_stream_council_uses_council_orchestration(self):
+        with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": {}}):
+            response = self.client.post(
+                "/predict/stream",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "model": "council",
+                    "market_probability": 0.4,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("event: done", response.text)
+        self.assertIn('"model_key": "council"', response.text)
+        self.assertIn("[Council debate]", response.text)
+        self.assertNotIn("Streaming answer.", response.text)
+
     def test_council_provider_applies_member_timeout_to_scads_http(self):
         with (
             mock.patch.dict(os.environ, {"SCADS_AI_API_KEY": "test-key"}, clear=False),
@@ -1674,6 +1692,43 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(first.json(), second.json())
         # The model provider is invoked only once; the second call hits the cache.
         self.assertEqual(len(self.provider.calls), 1)
+
+    def test_predict_cache_isolated_by_requested_model(self):
+        payload = {
+            "question": "Will the Fed cut rates before November 30, 2026?",
+            "question_type": "binary",
+            "attach_evidence": False,
+            "chat_mode": False,
+        }
+        first = self.client.post("/predict", json=payload)
+        with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": {}}):
+            council = self.client.post("/predict", json={**payload, "model": "council"})
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(council.status_code, 200)
+        self.assertEqual(first.json()["model_key"], "test-model")
+        self.assertEqual(council.json()["model_key"], "council")
+        self.assertIn("[Council debate]", council.json()["rationale"])
+
+    def test_predict_cache_includes_resolution_criteria(self):
+        payload = {
+            "question": "Will Project Atlas launch in 2026?",
+            "question_type": "binary",
+            "attach_evidence": False,
+            "chat_mode": False,
+        }
+        first = self.client.post(
+            "/predict",
+            json={**payload, "resolution_criteria": "Resolve from the company announcement."},
+        )
+        second = self.client.post(
+            "/predict",
+            json={**payload, "resolution_criteria": "Resolve from the regulator filing."},
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(len(self.provider.calls), 2)
 
     def test_short_followup_skips_fresh_evidence(self):
         # A short follow-up in a thread should be answered from context, not a

@@ -724,7 +724,12 @@ class EdgeAnalyticsTests(unittest.TestCase):
         open_rows = [
             {"platform": "Polymarket", "ident": "A", "model_probability": 0.8,
              "market_probability": 0.5, "snapshot_ts": now, "question": "Q1",
-             "market_url": "u1", "horizon": "30d+", "lead_time_days": 40.0},
+             "market_url": "u1", "horizon": "30d+", "lead_time_days": 40.0,
+             "description": "Market description",
+             "resolution_criteria": "Official result",
+             "category": "Politics", "market_bid": 0.49, "market_ask": 0.51,
+             "market_volume": 1234.0, "market_liquidity": 567.0,
+             "close_time": now + timedelta(days=40)},
             {"platform": "Kalshi", "ident": "B", "model_probability": 0.52,
              "market_probability": 0.5, "snapshot_ts": now, "question": "Q2",
              "market_url": "u2", "horizon": "7-14d", "lead_time_days": 10.0},
@@ -738,6 +743,12 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertEqual(top["edge_bucket"], "20pp+")
         self.assertEqual(top["stance"], "model_above_market")
         self.assertTrue(top["track_record"]["skill_significant"])
+        self.assertEqual(top["forecasted_at"], now.isoformat())
+        self.assertEqual(top["description"], "Market description")
+        self.assertEqual(top["resolution_criteria"], "Official result")
+        self.assertEqual(top["categories"], ["Politics"])
+        self.assertEqual(top["market_bid"], 0.49)
+        self.assertEqual(top["resolve_time"], (now + timedelta(days=40)).isoformat())
         self.assertIsNone(board[1]["track_record"])  # 0-5pp gap has no calibration row
 
     def test_paper_pnl_positive_on_winning_edge(self):

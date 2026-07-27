@@ -305,6 +305,15 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
     res = await loop.run_in_executor(None, _post_predict, payload)
     if not res:
         return None
+    returned_model = str(res.get("model_key") or "").strip()
+    if model and returned_model != model:
+        _predict_stats["model_mismatches"] += 1
+        print(
+            f"  predict model mismatch: requested {model!r}, "
+            f"received {returned_model or '<missing>'!r}",
+            file=sys.stderr,
+        )
+        return None
     analysis = res.get("market_analysis")
     if not analysis or analysis.get("model_probability") is None:
         return None
@@ -461,6 +470,7 @@ async def main() -> int:
         "predict_http_401": _predict_stats["http_401"],
         "predict_circuit_opened": _predict_stats["circuit_opened"],
         "predict_circuit_skipped": _predict_stats["circuit_skipped"],
+        "predict_model_mismatches": _predict_stats["model_mismatches"],
         "primary_model": primary_model,
         "primary_snapshots_before": before_primary["snapshots"],
         "primary_snapshots_after": after_primary["snapshots"],
