@@ -6,6 +6,7 @@ import asyncio
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -86,6 +87,32 @@ class ProviderRetryUnitTests(unittest.TestCase):
         with self.assertRaises(ProviderResponseError):
             asyncio.run(_provider_chat(provider, [], 0.0, 64))
         self.assertEqual(provider.calls, 1)
+
+    def test_call_can_disable_retries(self):
+        provider = FlakyProvider(fail_times=99, error=RetryableProviderError("503"))
+        with self.assertRaises(RetryableProviderError):
+            asyncio.run(_provider_chat(provider, [], 0.0, 64, max_retries=0))
+        self.assertEqual(provider.calls, 1)
+
+    def test_call_can_override_timeout(self):
+        class SlowProvider:
+            model_name = "slow"
+
+            def chat_completion(self, messages, temperature, max_tokens):
+                time.sleep(0.05)
+                return "{}"
+
+        with self.assertRaises(asyncio.TimeoutError):
+            asyncio.run(
+                _provider_chat(
+                    SlowProvider(),
+                    [],
+                    0.0,
+                    64,
+                    timeout_s=0.01,
+                    max_retries=0,
+                )
+            )
 
 
 class ProviderErrorMappingTests(unittest.TestCase):
