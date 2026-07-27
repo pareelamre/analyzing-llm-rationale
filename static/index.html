@@ -1281,6 +1281,9 @@
       box-shadow: 0 2px 12px rgba(0,0,0,.09);
     }
     .input-box:focus-within { transform: translateY(-1px); }
+    .input-box #questionInput:focus-visible {
+      outline: none;
+    }
     #questionInput::placeholder { color: #8f8f8f; }
     .send-btn {
       width: 34px !important;
@@ -1301,9 +1304,8 @@
       background: #f9f9f9;
       transform: translateY(-1px);
     }
-    .live-pulse,
-    .live-pulse + span {
-      display: none;
+    .chat-live-status {
+      display: none !important;
     }
 
     /* Multiple-choice option bars */
@@ -2248,7 +2250,7 @@
     </button>
     <div class="flex-1 min-w-0 flex items-center gap-2">
       <button type="button" class="model-pill" title="Active model">
-        <span id="chatTitle" class="truncate max-w-[220px] sm:max-w-[360px]">Foresea</span>
+        <span id="chatTitle" class="truncate max-w-[220px] sm:max-w-[360px] lg:max-w-[640px]">Foresea</span>
         <span class="text-gray-400 text-sm">⌄</span>
       </button>
     </div>
@@ -2260,7 +2262,7 @@
       <a href="mailto:pareel.amre@gmail.com?subject=Foresea%20source%20code" class="topbar-link">Contact</a>
     </nav>
 
-    <div class="hidden sm:flex items-center gap-1.5 flex-shrink-0 border border-gray-200 rounded-full px-2 py-1">
+    <div class="chat-live-status" aria-hidden="true">
       <span class="live-pulse rounded-full inline-block" style="width:6px;height:6px;background:var(--accent)"></span>
       <span class="text-xs text-gray-500">Live</span>
     </div>
@@ -2823,7 +2825,7 @@ function renderMessages() {
 
 function makeUserBubble(text, msg = {}) {
   const div = document.createElement('div');
-  div.className = 'flex justify-end';
+  div.className = 'max-w-2xl mx-auto w-full flex justify-end';
   const id = msg.id || '';
   const isActive = activeRequest?.userMessageId === id;
   div.innerHTML = `
