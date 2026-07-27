@@ -486,12 +486,21 @@ def build_user_prompt(
                         age_note = f" [⚠ {age_days}d old]"
                         stale_indices.append(index)
 
-            parts.append(f"Article {index}{date_label}{age_note}: {json.dumps(item, ensure_ascii=False)}")
+            source = str(item.get("source") or "").strip()
+            title = str(item.get("title") or "").strip()
+            citation = ": ".join(value for value in (source, title) if value)
+            evidence_label = f"Evidence {index}"
+            if citation:
+                evidence_label += f" — {citation}"
+            parts.append(
+                f"{evidence_label}{date_label}{age_note}: "
+                f"{json.dumps(item, ensure_ascii=False)}"
+            )
 
         if stale_indices:
             idx_str = ", ".join(f"#{i}" for i in stale_indices)
             parts.append(
-                f"\n[TEMPORAL SANITY CHECK] Article(s) {idx_str} are 21+ days old. "
+                f"\n[TEMPORAL SANITY CHECK] Evidence item(s) {idx_str} are 21+ days old. "
                 "Events described in older articles may have already concluded, reversed, or been superseded. "
                 "Do NOT assume a past closure, shutdown, or event mentioned in a stale article is still ongoing. "
                 "Explicitly ask: is the condition described still true TODAY, or did it end after the article was written?"

@@ -77,6 +77,7 @@ class PipelineTests(unittest.TestCase):
                 {
                     "url": "https://example.com",
                     "title": "Example",
+                    "source": "Example News",
                     "authors": ["A"],
                     "publish_date": "2025-01-02",
                     "summary": "Summary",
@@ -100,6 +101,7 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("Question: Will event X happen?", prompt)
         self.assertIn("Current Time: 2026-06-05T12:00:00Z", prompt)
         self.assertIn("Evidence (newest first):", prompt)
+        self.assertIn("Evidence 1 — Example News: Example", prompt)
         self.assertIn('"summary_llm": "LLM summary"', prompt)
         self.assertNotIn("Full article text", prompt)
         self.assertNotIn("[question]", prompt)

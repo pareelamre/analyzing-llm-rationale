@@ -180,6 +180,12 @@ class ServerTests(unittest.TestCase):
         self.assertIn("**Sources provided to the forecast**", rationale)
         self.assertIn("**Example News**", rationale)
         self.assertIn("Central bank signals policy shift", rationale)
+        messages = self.provider.calls[0]
+        self.assertIn("Never refer to evidence only as", messages[0]["content"])
+        self.assertIn(
+            "Evidence 1 — Example News: Central bank signals policy shift",
+            messages[1]["content"],
+        )
 
     def test_predict_marks_empty_evidence_and_does_not_cache_the_miss(self):
         empty_pipeline = mock.Mock()
