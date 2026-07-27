@@ -32,11 +32,17 @@ jobs:
           python-version: "3.11"
 
       - name: Install deps
-        run: pip install --quiet requests duckdb
+        run: >-
+          pip install --quiet requests duckdb
+          opentelemetry-sdk
+          opentelemetry-exporter-otlp-proto-http
+          opentelemetry-instrumentation-logging
+          opentelemetry-instrumentation-requests
 
       - name: Advance live track record
         env:
           FORESEA_BASE_URL: https://foresea.ink
+          TRACK_MODEL: "council"
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
           TRACK_MODELS: "gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,council,crowd-follow"

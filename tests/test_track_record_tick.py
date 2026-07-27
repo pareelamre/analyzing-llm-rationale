@@ -16,6 +16,78 @@ _SPEC.loader.exec_module(track_record_tick)
 
 
 class TrackRecordTickTests(unittest.TestCase):
+    def test_main_uses_configured_primary_independent_of_model_order(self):
+        progress = {
+            "snapshots": 10,
+            "resolved_snapshots": 4,
+            "latest_snapshot_ts": "2026-07-18T21:08:23.295099+00:00",
+            "latest_resolved_ts": "2026-07-18T20:00:00+00:00",
+        }
+        aggregate = {
+            "n_markets_resolved": 210,
+            "n_markets_open": 39,
+            "n_snapshots_resolved": 1310,
+        }
+        store = mock.Mock()
+        with tempfile.TemporaryDirectory() as td:
+            public_path = Path(td) / "track_record_live.json"
+            with (
+                mock.patch.object(track_record_tick, "DuckDBStore", return_value=store),
+                mock.patch.object(track_record_tick, "PUBLIC_PATH", public_path),
+                mock.patch.object(track_record_tick, "PRICE_ONLY", True),
+                mock.patch.object(track_record_tick, "MODEL", "council"),
+                mock.patch.object(track_record_tick, "TRACK_MODELS", ["gpt-oss-120b", "council"]),
+                mock.patch.object(
+                    track_record_tick,
+                    "_model_progress",
+                    return_value=progress,
+                ) as progress_mock,
+                mock.patch.object(
+                    track_record_tick.trl,
+                    "resolve_open_snapshots",
+                    return_value=0,
+                ),
+                mock.patch.object(track_record_tick.trl, "record_price_points", return_value=0),
+                mock.patch.object(
+                    track_record_tick.trl,
+                    "record_convergence_trades",
+                    return_value=0,
+                ),
+                mock.patch.object(
+                    track_record_tick,
+                    "sync_snapshot_ledger",
+                    return_value={
+                        "snapshots_scanned": 10,
+                        "forecast_events_appended": 0,
+                        "resolution_events_appended": 0,
+                    },
+                ),
+                mock.patch.object(
+                    track_record_tick,
+                    "_evaluate_ledger",
+                    return_value={},
+                ) as evaluate_mock,
+                mock.patch.object(
+                    track_record_tick.trl,
+                    "aggregate",
+                    return_value=aggregate,
+                ) as aggregate_mock,
+            ):
+                rc = asyncio.run(track_record_tick.main())
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            [call.args[1] for call in progress_mock.call_args_list],
+            ["council", "council"],
+        )
+        evaluate_mock.assert_called_once_with(store, model="council")
+        aggregate_mock.assert_called_once_with(
+            store,
+            model="council",
+            variant=track_record_tick.VARIANT,
+            temperature=track_record_tick.TEMPERATURE,
+        )
+
     def test_main_retries_snapshot_pass_when_first_pass_has_only_failures(self):
         progress_before = {
             "snapshots": 10,
@@ -63,6 +135,16 @@ class TrackRecordTickTests(unittest.TestCase):
                 mock.patch.object(track_record_tick.trl, "resolve_open_snapshots", return_value=0),
                 mock.patch.object(track_record_tick.trl, "record_price_points", return_value=0),
                 mock.patch.object(track_record_tick.trl, "record_convergence_trades", return_value=0),
+                mock.patch.object(
+                    track_record_tick,
+                    "sync_snapshot_ledger",
+                    return_value={
+                        "snapshots_scanned": 10,
+                        "forecast_events_appended": 0,
+                        "resolution_events_appended": 0,
+                    },
+                ),
+                mock.patch.object(track_record_tick, "_evaluate_ledger", return_value={}),
                 mock.patch.object(track_record_tick.trl, "aggregate", return_value=aggregate),
                 mock.patch.object(track_record_tick.trl, "record_snapshots", new=fake_record_snapshots),
             ):
@@ -95,6 +177,16 @@ class TrackRecordTickTests(unittest.TestCase):
                 mock.patch.object(track_record_tick.trl, "resolve_open_snapshots", return_value=0),
                 mock.patch.object(track_record_tick.trl, "record_price_points", return_value=0),
                 mock.patch.object(track_record_tick.trl, "record_convergence_trades", return_value=0),
+                mock.patch.object(
+                    track_record_tick,
+                    "sync_snapshot_ledger",
+                    return_value={
+                        "snapshots_scanned": 10,
+                        "forecast_events_appended": 0,
+                        "resolution_events_appended": 0,
+                    },
+                ),
+                mock.patch.object(track_record_tick, "_evaluate_ledger", return_value={}),
                 mock.patch.object(track_record_tick.trl, "aggregate", return_value=aggregate),
                 mock.patch.object(track_record_tick.trl, "record_snapshots", new=mock.AsyncMock(return_value=0)),
             ):
@@ -126,6 +218,16 @@ class TrackRecordTickTests(unittest.TestCase):
                 mock.patch.object(track_record_tick.trl, "resolve_open_snapshots", return_value=0),
                 mock.patch.object(track_record_tick.trl, "record_price_points", return_value=0),
                 mock.patch.object(track_record_tick.trl, "record_convergence_trades", return_value=0),
+                mock.patch.object(
+                    track_record_tick,
+                    "sync_snapshot_ledger",
+                    return_value={
+                        "snapshots_scanned": 10,
+                        "forecast_events_appended": 0,
+                        "resolution_events_appended": 0,
+                    },
+                ),
+                mock.patch.object(track_record_tick, "_evaluate_ledger", return_value={}),
                 mock.patch.object(track_record_tick.trl, "aggregate", return_value=aggregate),
                 mock.patch.object(track_record_tick.trl, "record_snapshots", new=mock.AsyncMock(return_value=0)),
             ):

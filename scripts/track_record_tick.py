@@ -11,16 +11,17 @@ Each run:
   3. takes hourly LLM forecast snapshots on tracked-open + newly-discovered markets
      (one HTTP call to ``/predict`` per market — inference stays server-side,
      so no model is held in this runner's memory),
-  4. recomputes the public aggregate.
+  4. mirrors snapshots and resolutions into the append-only forecast ledger,
+  5. recomputes the public aggregate.
 
 Outputs (committed back to the repo by the workflow):
-  - ``data/track_record_store.json``   — full entity store (source of truth)
+  - ``data/track_record_store.duckdb``: snapshots plus immutable ledger events
   - ``static/track_record_live.json``  — the public aggregate served at
     ``GET /track-record`` once it has resolved forecasts.
 
 Env:
   FORESEA_BASE_URL  forecast endpoint base   (default https://foresea.ink)
-  TRACK_MODEL       model label for metadata (default gpt-oss-120b)
+  TRACK_MODEL       stable primary model for public metrics (default council)
   TRACK_VARIANT     variant label            (default variant0_neutral_baseline)
   TRACK_TEMPERATURE temperature label        (default 0.0)
   PER_VENUE         new markets per venue     (default 3, clamped 1..5)
@@ -44,18 +45,31 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import market_data  # noqa: E402
 from analyzing_llm_rationale import track_record_live as trl  # noqa: E402
+from analyzing_llm_rationale.forecast_evaluation import (  # noqa: E402
+    ResolvedForecast,
+    build_trades,
+    evaluation_report,
+    simulate_compounded_portfolio,
+)
+from analyzing_llm_rationale.forecast_ledger import (  # noqa: E402
+    ForecastLedger,
+    sync_snapshot_ledger,
+)
+from analyzing_llm_rationale.observability import init_observability  # noqa: E402
 from analyzing_llm_rationale.trackrec_store import DuckDBStore  # noqa: E402
 
 STORE_PATH = Path(os.environ.get("TRACK_STORE_PATH") or ROOT / "data" / "track_record_store.duckdb")
 PUBLIC_PATH = Path(os.environ.get("TRACK_PUBLIC_PATH") or ROOT / "static" / "track_record_live.json")
 
 BASE_URL = os.environ.get("FORESEA_BASE_URL", "https://foresea.ink").rstrip("/")
-MODEL = os.environ.get("TRACK_MODEL", "council")
+MODEL = os.environ.get("TRACK_MODEL", "council").strip()
 # Models to forecast each market with, for the paper-trading comparison. The
 # first is the primary (the public track record); the rest are graded alongside.
 # Each must be in the server's /predict allowlist.
 TRACK_MODELS = [m.strip() for m in os.environ.get(
     "TRACK_MODELS", "council,gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,crowd-follow").split(",") if m.strip()]
+if MODEL not in TRACK_MODELS:
+    raise RuntimeError(f"TRACK_MODEL {MODEL!r} must be included in TRACK_MODELS")
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 TEMPERATURE = float(os.environ.get("TRACK_TEMPERATURE", "0.0") or 0.0)
 PER_VENUE = max(1, min(int(os.environ.get("PER_VENUE", "3") or 3), 5))
@@ -257,6 +271,40 @@ def _model_progress(store: DuckDBStore, model: str) -> dict:
     }
 
 
+def _evaluate_ledger(store: DuckDBStore, *, model: str) -> dict:
+    rows = ForecastLedger(store).resolved_forecasts()
+    snapshot_mirror = [
+        ResolvedForecast.from_ledger(row)
+        for row in rows
+        if row.get("model") == model
+    ]
+    prospective_audit = [
+        ResolvedForecast.from_ledger(row)
+        for row in rows
+        if row.get("model") == model and row.get("ledger_audit_grade")
+    ]
+
+    def _cohort_summary(forecasts: list[ResolvedForecast]) -> dict:
+        report = evaluation_report(forecasts)
+        portfolio = simulate_compounded_portfolio(build_trades(forecasts))
+        return {
+            "resolved_forecasts": len(forecasts),
+            "model_brier": report["model_brier"],
+            "market_brier": report["market_brier"],
+            "skill_vs_market": report["skill_vs_market"],
+            "domain_probability_buckets": len(report["domain_probability_buckets"]),
+            "paper_trades": portfolio["n_trades"],
+            "paper_compound_return": portfolio["compound_return"],
+            "paper_max_drawdown": portfolio["max_drawdown"],
+        }
+
+    return {
+        "model": model,
+        "snapshot_mirror": _cohort_summary(snapshot_mirror),
+        "prospective_audit": _cohort_summary(prospective_audit),
+    }
+
+
 async def _record_snapshots_with_retries(
     store: DuckDBStore,
     *,
@@ -274,7 +322,7 @@ async def _record_snapshots_with_retries(
         successes_before = _predict_stats["successes"]
         recorded_total += await trl.record_snapshots(
             store, market_data, forecast_fn,
-            models=TRACK_MODELS, default_model=TRACK_MODELS[0], per_venue=PER_VENUE,
+            models=TRACK_MODELS, default_model=MODEL, per_venue=PER_VENUE,
             seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
             reforecast_each_tick=REFORECAST_EACH_TICK,
             short_horizon_reforecast_lead_days=SHORT_HORIZON_REFORECAST_LEAD_DAYS,
@@ -301,7 +349,7 @@ async def _record_snapshots_with_retries(
 
 async def main() -> int:
     store = DuckDBStore(STORE_PATH)
-    primary_model = TRACK_MODELS[0]
+    primary_model = MODEL
     before_primary = _model_progress(store, primary_model)
 
     newly_resolved = trl.resolve_open_snapshots(store, market_data)
@@ -316,11 +364,13 @@ async def main() -> int:
         if ALLOW_RESOLVED_BACKFILL:
             backfilled = await trl.backfill_missing_model_snapshots(
                 store, forecast_fn,
-                models=TRACK_MODELS, default_model=TRACK_MODELS[0],
+                models=TRACK_MODELS, default_model=MODEL,
                 concurrency=PREDICT_CONCURRENCY)
         _mark_enrolled([f"{p}:{i}" for p, i in seeds])
 
-    agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)
+    ledger_summary = sync_snapshot_ledger(store)
+    ledger_evaluation = _evaluate_ledger(store, model=primary_model)
+    agg = trl.aggregate(store, model=primary_model, variant=VARIANT, temperature=TEMPERATURE)
     after_primary = _model_progress(store, primary_model)
 
     PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -332,6 +382,10 @@ async def main() -> int:
         "price_points_recorded": price_points,
         "snapshots_resolved": newly_resolved,
         "convergence_trades_written": convergence_written,
+        "ledger_snapshots_scanned": ledger_summary["snapshots_scanned"],
+        "ledger_forecast_events_appended": ledger_summary["forecast_events_appended"],
+        "ledger_resolution_events_appended": ledger_summary["resolution_events_appended"],
+        "ledger_evaluation": ledger_evaluation,
         "n_markets_resolved": agg.get("n_markets_resolved"),
         "n_markets_open": agg.get("n_markets_open"),
         "n_snapshots_resolved": agg.get("n_snapshots_resolved"),
@@ -382,4 +436,5 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
+    init_observability()
     raise SystemExit(asyncio.run(main()))

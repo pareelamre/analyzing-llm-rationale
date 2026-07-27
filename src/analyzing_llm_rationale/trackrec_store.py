@@ -6,14 +6,15 @@ Two implementations with the same API (both mimic the minimal
 - ``FileStore``   — original JSON file (kept for migration / fallback)
 - ``DuckDBStore`` — DuckDB single-file database (default for new ticks)
 
-``DuckDBStore`` stores entities in two typed tables
-(``forecast_snapshot``, ``market_price_point``); the public aggregate
-(``static/track_record_live.json``) is written by the tick as before and
-served by Cloud Run unchanged.
+``DuckDBStore`` stores snapshots, price points, convergence trades, and
+append-only ledger events in typed tables. The public aggregate
+(``static/track_record_live.json``) is written by the tick as before and served
+by Cloud Run unchanged.
 """
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
@@ -121,6 +122,32 @@ class FileStore:
         if self.autosave:
             self.save()
 
+    def insert_immutable(self, entity: Entity) -> bool:
+        """Insert an entity without replacing an existing key."""
+        item_key = (entity.key.kind, entity.key.id)
+        if item_key in self._data:
+            return False
+        self._data[item_key] = entity
+        if self.autosave:
+            self.save()
+        return True
+
+    @contextmanager
+    def transaction(self):
+        """Batch writes into one file save while preserving the store API."""
+        autosave = self.autosave
+        self.autosave = False
+        try:
+            yield
+        except Exception:
+            self.load()
+            raise
+        else:
+            if autosave:
+                self.save()
+        finally:
+            self.autosave = autosave
+
     def query(self, kind: str) -> _Query:
         return _Query(self, kind)
 
@@ -136,6 +163,7 @@ class FileStore:
 _SNAPSHOT_TABLE = "forecast_snapshot"
 _PRICE_TABLE = "market_price_point"
 _CONVERGENCE_TABLE = "convergence_trade"
+_LEDGER_EVENT_TABLE = "forecast_ledger_event"
 
 # Columns and their DuckDB types for each table.
 _SNAPSHOT_COLS: Dict[str, str] = {
@@ -179,14 +207,32 @@ _CONVERGENCE_COLS: Dict[str, str] = {
     "pnl_flat": "DOUBLE",                   # convergence PnL (flat unit stake)
 }
 
+_LEDGER_EVENT_COLS: Dict[str, str] = {
+    "key": "TEXT",
+    "event_type": "TEXT",
+    "forecast_id": "TEXT",
+    "platform": "TEXT",
+    "ident": "TEXT",
+    "model": "TEXT",
+    "event_ts": "TEXT",
+    "ingested_at": "TEXT",
+    "ingest_state": "TEXT",
+    "payload_sha256": "TEXT",
+    "payload": "TEXT",
+}
+
 _KIND_TABLE = {
     "ForecastSnapshot": (_SNAPSHOT_TABLE, _SNAPSHOT_COLS),
     "MarketPricePoint": (_PRICE_TABLE, _PRICE_COLS),
     "ConvergenceTrade": (_CONVERGENCE_TABLE, _CONVERGENCE_COLS),
+    "ForecastLedgerEvent": (_LEDGER_EVENT_TABLE, _LEDGER_EVENT_COLS),
 }
 
 # Fields that hold datetime objects — serialised as ISO strings in DuckDB.
-_DT_FIELDS = {"snapshot_ts", "close_time", "resolved_ts", "ts", "entry_ts", "exit_ts"}
+_DT_FIELDS = {
+    "snapshot_ts", "close_time", "resolved_ts", "ts", "entry_ts", "exit_ts",
+    "event_ts", "ingested_at",
+}
 
 
 def _to_db(v: Any, col: str) -> Any:
@@ -212,7 +258,7 @@ def _from_db(v: Any, col: str) -> Any:
             return datetime.fromisoformat(v)
         except ValueError:
             return v
-    if col == "entities" and isinstance(v, str):
+    if col in {"entities", "payload"} and isinstance(v, str):
         try:
             return json.loads(v)
         except (ValueError, TypeError):
@@ -268,6 +314,7 @@ class DuckDBStore:
                 (_SNAPSHOT_TABLE, _SNAPSHOT_COLS),
                 (_PRICE_TABLE, _PRICE_COLS),
                 (_CONVERGENCE_TABLE, _CONVERGENCE_COLS),
+                (_LEDGER_EVENT_TABLE, _LEDGER_EVENT_COLS),
         )):
             col_defs = ", ".join(f"{c} {t}" for c, t in cols.items())
             self._con.execute(
@@ -318,6 +365,38 @@ class DuckDBStore:
             f"INSERT OR REPLACE INTO {table} ({col_str}) VALUES ({placeholders})",
             list(row.values()),
         )
+
+    def insert_immutable(self, entity: Entity) -> bool:
+        """Atomically insert an entity, returning False when its key exists."""
+        info = _KIND_TABLE.get(entity.key.kind)
+        if info is None:
+            return False
+        table, cols = info
+        row: Dict[str, Any] = {"key": entity.key.id}
+        for col in cols:
+            if col == "key":
+                continue
+            row[col] = _to_db(entity.get(col), col)
+        col_str = ", ".join(row.keys())
+        placeholders = ", ".join("?" for _ in row)
+        inserted = self._con.execute(
+            f"INSERT INTO {table} ({col_str}) VALUES ({placeholders}) "
+            "ON CONFLICT DO NOTHING RETURNING key",
+            list(row.values()),
+        ).fetchone()
+        return inserted is not None
+
+    @contextmanager
+    def transaction(self):
+        """Commit a group of writes atomically."""
+        self._con.execute("BEGIN TRANSACTION")
+        try:
+            yield
+        except Exception:
+            self._con.execute("ROLLBACK")
+            raise
+        else:
+            self._con.execute("COMMIT")
 
     def query(self, kind: str) -> _DuckQuery:
         return _DuckQuery(self, kind)

@@ -32,7 +32,7 @@ def superlog_headers(token: str) -> dict[str, str]:
 _INITIALIZED = False
 
 
-def init_observability(app: "FastAPI") -> None:
+def init_observability(app: "FastAPI | None" = None) -> None:
     global _INITIALIZED
     if _INITIALIZED:
         return
@@ -99,9 +99,10 @@ def init_observability(app: "FastAPI") -> None:
     otlp_handler.addFilter(_SuppressOtelInternal())
     logging.getLogger().addHandler(otlp_handler)
 
-    # FastAPI auto-instrumentation (HTTP spans, status codes, route templates)
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    FastAPIInstrumentor.instrument_app(app)
+    if app is not None:
+        # FastAPI auto-instrumentation (HTTP spans, status codes, route templates)
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        FastAPIInstrumentor.instrument_app(app)
 
     # Outbound HTTP auto-instrumentation (provider calls via requests.Session)
     from opentelemetry.instrumentation.requests import RequestsInstrumentor
