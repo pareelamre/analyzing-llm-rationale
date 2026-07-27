@@ -539,9 +539,9 @@ class NewsPipeline:
             from urllib.parse import parse_qs, unquote, urlparse
 
             import requests
-            resp = requests.post(
+            resp = requests.get(
                 "https://html.duckduckgo.com/html/",
-                data={"q": query},
+                params={"q": query},
                 headers={"User-Agent": "Mozilla/5.0 (compatible; foresea/1.0)"},
                 timeout=15,
             )

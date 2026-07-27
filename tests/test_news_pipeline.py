@@ -203,6 +203,40 @@ class NewsPipelineSourceTests(unittest.TestCase):
         )
         self.assertEqual(articles, [article])
 
+    def test_duckduckgo_fallback_uses_get(self):
+        class FakeResp:
+            text = (
+                '<div class="result">'
+                '<a class="result__a" href="https://example.com/cabinet">'
+                "Cabinet departure report</a>"
+                '<div class="result__snippet">A cabinet official resigned.</div>'
+                "</div>"
+            )
+
+            def raise_for_status(self):
+                return None
+
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append((url, kwargs))
+            return FakeResp()
+
+        original = sys.modules.get("requests")
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+        try:
+            pipeline = NewsPipeline.__new__(NewsPipeline)
+            articles = pipeline._web_duckduckgo("Trump Cabinet departure", limit=5)
+        finally:
+            if original is None:
+                sys.modules.pop("requests", None)
+            else:
+                sys.modules["requests"] = original
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["title"], "Cabinet departure report")
+        self.assertEqual(calls[0][1]["params"], {"q": "Trump Cabinet departure"})
+
     def test_fetch_web_prefers_searxng(self):
         class FakeResp:
             def raise_for_status(self):
