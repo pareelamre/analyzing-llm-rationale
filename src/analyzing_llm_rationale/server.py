@@ -5381,7 +5381,14 @@ _MARKETD_URL = (os.environ.get("MARKETD_URL") or "").rstrip("/")
 
 
 def _marketd_token(audience: str) -> Optional[str]:
-    """Mint a Cloud Run identity token for the authenticated call to marketd."""
+    """Mint a Cloud Run identity token for the authenticated call to marketd.
+
+    K_SERVICE is set by the Cloud Run runtime.  Outside Cloud Run (local dev,
+    CI) there is no metadata server, so skip the probe entirely rather than
+    letting google-auth time out against http://169.254.169.254/.
+    """
+    if not os.environ.get("K_SERVICE"):
+        return None
     try:
         import google.auth.transport.requests as _greq
         import google.oauth2.id_token as _idt
