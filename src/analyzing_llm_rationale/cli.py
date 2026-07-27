@@ -665,7 +665,6 @@ def serve_command(args: argparse.Namespace) -> int:
     _state["evidence_pipeline"] = None
     if not args.disable_evidence:
         try:
-            from analyzing_llm_rationale import rag
             from analyzing_llm_rationale.news_pipeline import NewsPipeline
 
             base_url = args.api_base_url or args._resolved_model_config.api_base_url or "https://llm.scads.ai/v1"
@@ -680,13 +679,8 @@ def serve_command(args: argparse.Namespace) -> int:
                 fetch_sources=args.evidence_source or ("web", "gdelt", "google-news"),
                 summarize_articles=False,
                 use_embeddings=False,
-                # Hybrid retrieval: dense semantic (shared mounted embedder, one
-                # instance — no OOM) fused with BM25, then cross-encoder reranking
-                # (tiny TinyBERT from the same mount; falls back to hybrid if absent).
-                embed_fn=rag.embed,
-                rerank_fn=(rag.rerank if os.environ.get("EVIDENCE_RERANK", "1") == "1" else None),
-                # Drop topically-irrelevant sources (memes, unrelated PDFs) so they
-                # can't ground or be cited by a forecast. Cosine scale; tunable.
+                # Serving uses deterministic lexical/BM25 ranking. Loading the
+                # sentence-transformer here can exhaust a 512 MiB Cloud Run instance.
                 min_relevance=float(os.environ.get("EVIDENCE_MIN_RELEVANCE", "0.25")),
             )
         except Exception as exc:

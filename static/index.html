@@ -3331,9 +3331,16 @@ async function triggerExplainShift(btn, platform, ident) {
 // Clickable source feed rendered at the bottom of an answer so the reader can
 // open the underlying articles. Prefers the article title, falls back to the
 // publisher name; the whole chip links to the article URL when we have one.
-function sourceFeedHtml(sources) {
+function sourceFeedHtml(sources, evidenceError = '') {
   const list = (sources || []).filter(s => s && (s.url || s.title || s.source));
-  if (!list.length) return '';
+  if (!list.length) {
+    if (!evidenceError) return '';
+    return `
+      <div class="mt-4 pt-3 border-t border-gray-200">
+        <p class="label mb-1">Evidence status</p>
+        <p class="text-xs text-amber-800 leading-relaxed">${escHtml(evidenceError)} This forecast is evidence-limited.</p>
+      </div>`;
+  }
   const chips = list.map(s => {
     const label = s.title || s.source || s.url;
     const sub = s.title && s.source ? `<span class="source-chip-src">${escHtml(s.source)}</span>` : '';
@@ -3364,7 +3371,7 @@ function makeAIBubble(data, variant) {
     div.innerHTML = `
       <div class="msg-ai p-4 sm:p-5">
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
-        ${sourceFeedHtml(sources)}
+        ${sourceFeedHtml(sources, data.evidence_error)}
       </div>`;
     return div;
   }
@@ -3422,7 +3429,7 @@ function makeAIBubble(data, variant) {
       `;
   }
 
-  const sourcesHtml = sourceFeedHtml(sources);
+  const sourcesHtml = sourceFeedHtml(sources, data.evidence_error);
 
   const typeTag = qtype !== 'binary' ? ' · ' + qtype.replace(/_/g, ' ') : '';
   const marketLensHtml = makeMarketLens(data);
@@ -3599,6 +3606,8 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   let bubble = null;
   let contentEl = null;
   let text = '';
+  let streamedEvidenceSources = [];
+  let streamedEvidenceError = '';
   const removeTyping = () => {
     if (!typingRemoved) {
       typingEl.remove();
@@ -3624,7 +3633,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     scrollBottom();
   };
   const finish = report => {
-    const data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
+    const data = _agentReportData(report);
     appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     const finalNode = makeAIBubble(data, variant);
     if (bubble) bubble.replaceWith(finalNode);
@@ -3650,6 +3659,8 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
       if (!block.trim()) continue;
       const { event, data } = _parseSseBlock(block);
       if (event === 'meta') {
+        if (Array.isArray(data.evidence_sources)) streamedEvidenceSources = data.evidence_sources;
+        if (data.evidence_error) streamedEvidenceError = data.evidence_error;
         if (data.status === 'resolving') setProgress('Resolving the market');
         else if (data.status === 'forecasting') setProgress('Gathering evidence');
         else if (data.status === 'streaming') setProgress('Forecasting');
@@ -3669,7 +3680,13 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     }
   }
   if (text) {
-    const data = { question_type: 'chat', rationale: text, model_key: 'agent' };
+    const data = {
+      question_type: 'chat',
+      rationale: text,
+      model_key: 'agent',
+      evidence_sources: streamedEvidenceSources,
+      evidence_error: streamedEvidenceError,
+    };
     appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     return { ok: true };
   }
@@ -3853,7 +3870,7 @@ async function sendQuestion(options = {}) {
       const report = await _readJson(resp);
       typingEl.remove();
       if (!resp.ok) { addError(report.detail || 'Agent error'); return; }
-      data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
+      data = _agentReportData(report);
     } else {
       const streamed = await streamPredict(body, variant, activeId, typingEl, request.controller.signal);
       if (streamed.ok) return;
@@ -6849,6 +6866,17 @@ async function deleteKbDoc(docId) {
 
 // Format an /agent/analyze report conversationally (Perplexity/Comet-style):
 // a natural-language read with the numbers woven in and clickable sources.
+function _agentReportData(report) {
+  const d = report || {};
+  return {
+    question_type: 'chat',
+    rationale: _agentReportToMarkdown(d),
+    model_key: 'agent',
+    evidence_sources: d.evidence_sources || [],
+    evidence_error: d.evidence_error || '',
+  };
+}
+
 function _agentReportToMarkdown(d) {
   const pct = x => (x == null ? '—' : Math.round(x * 100) + '%');
   const out = d.outcome || 'Yes';

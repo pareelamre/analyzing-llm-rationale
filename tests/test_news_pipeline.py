@@ -4,6 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -178,6 +179,29 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(articles[0]["url"], "https://ex.com/cpi")
         self.assertIn("api.tavily.com", calls[0][0])
         self.assertEqual(calls[0][1]["api_key"], "tvly-key")
+
+    def test_fetch_uses_keyless_web_fallback_without_provider_credentials(self):
+        pipeline = NewsPipeline(
+            api_key=None,
+            use_query_planner=False,
+            summarize_articles=False,
+            use_embeddings=False,
+            fetch_sources=("web",),
+        )
+        article = {
+            "title": "Cabinet departure report",
+            "url": "https://example.com/cabinet",
+            "source_channel": "web",
+        }
+        pipeline._fetch_web = mock.Mock(return_value=[article])
+
+        articles = pipeline.fetch("Trump Cabinet departure", top_k=5)
+
+        pipeline._fetch_web.assert_called_once_with(
+            "Trump Cabinet departure",
+            limit=10,
+        )
+        self.assertEqual(articles, [article])
 
     def test_fetch_web_prefers_searxng(self):
         class FakeResp:
@@ -473,6 +497,50 @@ class NewsPipelineSourceTests(unittest.TestCase):
         )
         self.assertEqual(len(articles), 2)
         self.assertEqual(articles[0]["search_query"], "Federal Reserve rate cut September 2026")
+
+    def test_fetch_summarize_rank_retries_when_initial_candidates_are_filtered(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._summarize_articles = False
+        question = "Will any member of Trump's Cabinet leave before August 2026?"
+        initial_query = "Trump Cabinet August 2026"
+        fallback_query = _keyword_search_query(question)
+        calls = []
+
+        def fake_fetch(query, top_k):
+            calls.append((query, top_k))
+            if query == initial_query:
+                return [{"title": "Unrelated sports result", "url": "https://example.com/sport"}]
+            return [
+                {
+                    "title": "Trump Cabinet departure",
+                    "url": "https://example.com/cabinet",
+                }
+            ]
+
+        def fake_rank(_question, articles):
+            return [
+                {
+                    **article,
+                    "relevance": 0.9 if "Cabinet departure" in article["title"] else 0.0,
+                }
+                for article in articles
+            ]
+
+        pipeline.plan_search_queries = lambda _question: [initial_query]
+        pipeline.fetch = fake_fetch
+        pipeline.rank = fake_rank
+        pipeline.select_diverse_sources = lambda ranked, top_k: [
+            article for article in ranked if article["relevance"] >= 0.25
+        ][:top_k]
+
+        articles = pipeline.fetch_summarize_rank(question, top_k=3)
+
+        self.assertEqual(
+            calls,
+            [(initial_query, 5), (fallback_query, 10)],
+        )
+        self.assertEqual([article["title"] for article in articles], ["Trump Cabinet departure"])
+        self.assertEqual(articles[0]["search_query"], fallback_query)
 
     def test_keyword_search_query_removes_forecast_filler(self):
         query = _keyword_search_query(
