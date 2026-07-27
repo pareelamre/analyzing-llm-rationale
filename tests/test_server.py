@@ -153,6 +153,27 @@ class ServerTests(unittest.TestCase):
         )
         self.assertIn("Central bank signals", self.provider.calls[0][1]["content"])
 
+    def test_run_app_host_redirects_by_default(self):
+        response = self.client.get(
+            "/health",
+            headers={"host": "analyzing-llm-rationale-hy7gvnvt4a-uc.a.run.app"},
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response.headers["location"], "https://foresea.ink/health")
+
+    def test_run_app_host_does_not_redirect_in_staging(self):
+        with mock.patch.dict(os.environ, {"ENVIRONMENT": "staging"}, clear=False):
+            response = self.client.get(
+                "/health",
+                headers={"host": "analyzing-llm-rationale-staging-hy7gvnvt4a-uc.a.run.app"},
+                follow_redirects=False,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
     def test_predict_council_returns_structured_probability(self):
         with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": {}}):
             response = self.client.post(
