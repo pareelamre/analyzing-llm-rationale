@@ -190,7 +190,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(empty_pipeline.fetch_summarize_rank.call_count, 2)
         system_message = self.provider.calls[0][0]["content"]
         self.assertIn("Evidence status: no relevant live sources were retrieved", system_message)
-        self.assertIn("Do not say there is no breaking news", system_message)
+        self.assertIn("This is a retrieval failure, not evidence about the event", system_message)
+        self.assertIn('Do not say or imply "no current reporting"', system_message)
+        self.assertIn("label supplied pricing as **Market context**", system_message)
 
     def test_run_app_host_redirects_by_default(self):
         response = self.client.get(

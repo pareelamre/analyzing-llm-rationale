@@ -3954,9 +3954,12 @@ async def _prepare_predict_messages(
         if not evidence_articles and evidence_error:
             system_prompt += (
                 "\n\nEvidence status: no relevant live sources were retrieved. "
-                "Explicitly label the answer as evidence-limited. Do not say there is "
-                "no breaking news, no current reporting, or no pending event. Base the "
-                "estimate only on the supplied market context, deadline, and base rates."
+                "Start by explicitly labeling the answer as evidence-limited. This is a "
+                "retrieval failure, not evidence about the event. Do not say or imply "
+                "\"no current reporting\", \"no specific information\", \"no evidence "
+                "of\", \"nothing suggests\", or similar. Do not include an **Evidence "
+                "used** section; label supplied pricing as **Market context** instead. "
+                "Base the estimate only on that market context, deadline, and base rates."
             )
         if _detect_trading_intent(req.question):
             try:

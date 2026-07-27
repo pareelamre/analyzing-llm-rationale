@@ -23,8 +23,8 @@ STOOQ_RSS_FEEDS = (
 
 # Stooq (Polish stock-market RSS) is not in the defaults — it was query-agnostic
 # and leaked irrelevant headlines into evidence. It stays available if explicitly
-# configured. `web` is real web search, active when a provider is configured:
-# TAVILY_API_KEY, SERPER_API_KEY, BRAVE_API_KEY, or SEARXNG_URL.
+# configured. `web` prefers a configured provider (Tavily, Serper, Brave, or
+# SearXNG) and otherwise uses the existing keyless DuckDuckGo fallback.
 DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "rss", "open-meteo")
 SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "newsapi", "rss", "stooq", "fred", "open-meteo")
 HIGH_CREDIBILITY_SOURCES = {
@@ -401,11 +401,7 @@ class NewsPipeline:
         articles: List[dict] = []
         per_source_limit = max(top_k, 10)
 
-        web_configured = any((
-            getattr(self, "_tavily_key", None), getattr(self, "_serper_key", None),
-            getattr(self, "_brave_key", None), getattr(self, "_searxng_url", None),
-        ))
-        if "web" in self._fetch_sources and web_configured:
+        if "web" in self._fetch_sources:
             articles.extend(self._fetch_web(query, limit=per_source_limit))
 
         if self._newsapi_key and "newsapi" in self._fetch_sources:

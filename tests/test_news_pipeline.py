@@ -4,6 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -178,6 +179,29 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(articles[0]["url"], "https://ex.com/cpi")
         self.assertIn("api.tavily.com", calls[0][0])
         self.assertEqual(calls[0][1]["api_key"], "tvly-key")
+
+    def test_fetch_uses_keyless_web_fallback_without_provider_credentials(self):
+        pipeline = NewsPipeline(
+            api_key=None,
+            use_query_planner=False,
+            summarize_articles=False,
+            use_embeddings=False,
+            fetch_sources=("web",),
+        )
+        article = {
+            "title": "Cabinet departure report",
+            "url": "https://example.com/cabinet",
+            "source_channel": "web",
+        }
+        pipeline._fetch_web = mock.Mock(return_value=[article])
+
+        articles = pipeline.fetch("Trump Cabinet departure", top_k=5)
+
+        pipeline._fetch_web.assert_called_once_with(
+            "Trump Cabinet departure",
+            limit=10,
+        )
+        self.assertEqual(articles, [article])
 
     def test_fetch_web_prefers_searxng(self):
         class FakeResp:
