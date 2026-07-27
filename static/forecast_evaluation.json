@@ -28,6 +28,33 @@
           "n": 1,
           "outcome_rate": 0.0,
           "upper": 0.4
+        },
+        {
+          "bucket": "0.6-0.7",
+          "calibration_gap": 0.31499999999999995,
+          "lower": 0.6,
+          "mean_probability": 0.685,
+          "n": 1,
+          "outcome_rate": 1.0,
+          "upper": 0.7
+        },
+        {
+          "bucket": "0.7-0.8",
+          "calibration_gap": 0.235,
+          "lower": 0.7,
+          "mean_probability": 0.765,
+          "n": 1,
+          "outcome_rate": 1.0,
+          "upper": 0.8
+        },
+        {
+          "bucket": "0.8-0.9",
+          "calibration_gap": 0.18500000000000005,
+          "lower": 0.8,
+          "mean_probability": 0.815,
+          "n": 1,
+          "outcome_rate": 1.0,
+          "upper": 0.9
         }
       ],
       "domain_probability_buckets": [
@@ -68,6 +95,42 @@
           "shrunk_outcome_rate": 0.0
         },
         {
+          "bucket": "0.6-0.7",
+          "domain": "other",
+          "domain_n": 3,
+          "eligible_for_domain_model": false,
+          "global_outcome_rate": 1.0,
+          "mean_probability": 0.685,
+          "n": 1,
+          "prior_strength": 20.0,
+          "raw_outcome_rate": 1.0,
+          "shrunk_outcome_rate": 1.0
+        },
+        {
+          "bucket": "0.7-0.8",
+          "domain": "other",
+          "domain_n": 3,
+          "eligible_for_domain_model": false,
+          "global_outcome_rate": 1.0,
+          "mean_probability": 0.765,
+          "n": 1,
+          "prior_strength": 20.0,
+          "raw_outcome_rate": 1.0,
+          "shrunk_outcome_rate": 1.0
+        },
+        {
+          "bucket": "0.8-0.9",
+          "domain": "other",
+          "domain_n": 3,
+          "eligible_for_domain_model": false,
+          "global_outcome_rate": 1.0,
+          "mean_probability": 0.815,
+          "n": 1,
+          "prior_strength": 20.0,
+          "raw_outcome_rate": 1.0,
+          "shrunk_outcome_rate": 1.0
+        },
+        {
           "bucket": "0.0-0.1",
           "domain": "science",
           "domain_n": 2,
@@ -80,20 +143,20 @@
           "shrunk_outcome_rate": 0.0
         }
       ],
-      "log_loss": 0.15843287820708965,
-      "market_brier": 0.0287231,
+      "log_loss": 0.20536843033152943,
+      "market_brier": 0.0415363125,
       "market_clustered_skill_interval": {
         "confidence_level": 0.95,
-        "lower": -0.01269099999999998,
-        "mean_skill": -0.0042874999999999944,
+        "lower": -0.008460666666666655,
+        "mean_skill": -0.0028583333333333295,
         "method": "normal_interval_over_market_mean_brier_differences",
-        "n_forecasts": 5,
-        "n_markets": 2,
-        "standard_error": 0.004287499999999993,
-        "upper": 0.004115999999999991,
+        "n_forecasts": 8,
+        "n_markets": 3,
+        "standard_error": 0.002858333333333329,
+        "upper": 0.002743999999999995,
         "z_score": 1.96
       },
-      "model_brier": 0.0338681,
+      "model_brier": 0.04475193749999999,
       "portfolio": {
         "compound_return": 0.0,
         "equity_curve": [],
@@ -108,9 +171,9 @@
       },
       "promotion_eligible_source": true,
       "provenance": "prospective_audit",
-      "resolved_forecasts": 5,
-      "resolved_markets": 2,
-      "skill_vs_market": -0.005144999999999997
+      "resolved_forecasts": 8,
+      "resolved_markets": 3,
+      "skill_vs_market": -0.003215624999999993
     },
     "snapshot_mirror": {
       "calibration": [
@@ -170,29 +233,29 @@
         },
         {
           "bucket": "0.6-0.7",
-          "calibration_gap": 0.06838709677419341,
+          "calibration_gap": 0.07609374999999985,
           "lower": 0.6,
-          "mean_probability": 0.6412903225806453,
-          "n": 31,
-          "outcome_rate": 0.7096774193548387,
+          "mean_probability": 0.6426562500000002,
+          "n": 32,
+          "outcome_rate": 0.71875,
           "upper": 0.7
         },
         {
           "bucket": "0.7-0.8",
-          "calibration_gap": 0.10914893617021293,
+          "calibration_gap": 0.11177083333333349,
           "lower": 0.7,
-          "mean_probability": 0.7419148936170211,
-          "n": 47,
-          "outcome_rate": 0.851063829787234,
+          "mean_probability": 0.7423958333333331,
+          "n": 48,
+          "outcome_rate": 0.8541666666666666,
           "upper": 0.8
         },
         {
           "bucket": "0.8-0.9",
-          "calibration_gap": -0.2118181818181818,
+          "calibration_gap": -0.20014705882352934,
           "lower": 0.8,
-          "mean_probability": 0.8481818181818181,
-          "n": 33,
-          "outcome_rate": 0.6363636363636364,
+          "mean_probability": 0.8472058823529411,
+          "n": 34,
+          "outcome_rate": 0.6470588235294118,
           "upper": 0.9
         },
         {
@@ -283,24 +346,24 @@
           "domain": "crypto",
           "domain_n": 24,
           "eligible_for_domain_model": false,
-          "global_outcome_rate": 0.7096774193548387,
+          "global_outcome_rate": 0.71875,
           "mean_probability": 0.6425000000000001,
           "n": 2,
           "prior_strength": 20.0,
           "raw_outcome_rate": 1.0,
-          "shrunk_outcome_rate": 0.7360703812316717
+          "shrunk_outcome_rate": 0.7443181818181818
         },
         {
           "bucket": "0.8-0.9",
           "domain": "crypto",
           "domain_n": 24,
           "eligible_for_domain_model": false,
-          "global_outcome_rate": 0.6363636363636364,
+          "global_outcome_rate": 0.6470588235294118,
           "mean_probability": 0.83,
           "n": 2,
           "prior_strength": 20.0,
           "raw_outcome_rate": 1.0,
-          "shrunk_outcome_rate": 0.6694214876033058
+          "shrunk_outcome_rate": 0.679144385026738
         },
         {
           "bucket": "0.9-1.0",
@@ -343,36 +406,36 @@
           "domain": "elections",
           "domain_n": 43,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.7096774193548387,
+          "global_outcome_rate": 0.71875,
           "mean_probability": 0.6,
           "n": 1,
           "prior_strength": 20.0,
           "raw_outcome_rate": 1.0,
-          "shrunk_outcome_rate": 0.7235023041474655
+          "shrunk_outcome_rate": 0.7321428571428571
         },
         {
           "bucket": "0.7-0.8",
           "domain": "elections",
           "domain_n": 43,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.851063829787234,
+          "global_outcome_rate": 0.8541666666666666,
           "mean_probability": 0.72,
           "n": 4,
           "prior_strength": 20.0,
           "raw_outcome_rate": 1.0,
-          "shrunk_outcome_rate": 0.875886524822695
+          "shrunk_outcome_rate": 0.8784722222222222
         },
         {
           "bucket": "0.8-0.9",
           "domain": "elections",
           "domain_n": 43,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.6363636363636364,
+          "global_outcome_rate": 0.6470588235294118,
           "mean_probability": 0.8709999999999999,
           "n": 5,
           "prior_strength": 20.0,
           "raw_outcome_rate": 1.0,
-          "shrunk_outcome_rate": 0.7090909090909091
+          "shrunk_outcome_rate": 0.7176470588235294
         },
         {
           "bucket": "0.9-1.0",
@@ -439,12 +502,12 @@
           "domain": "geopolitics",
           "domain_n": 91,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.6363636363636364,
+          "global_outcome_rate": 0.6470588235294118,
           "mean_probability": 0.805,
           "n": 1,
           "prior_strength": 20.0,
           "raw_outcome_rate": 1.0,
-          "shrunk_outcome_rate": 0.6536796536796536
+          "shrunk_outcome_rate": 0.6638655462184874
         },
         {
           "bucket": "0.9-1.0",
@@ -461,7 +524,7 @@
         {
           "bucket": "0.0-0.1",
           "domain": "other",
-          "domain_n": 401,
+          "domain_n": 404,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.03768115942028986,
           "mean_probability": 0.04089444444444435,
@@ -473,7 +536,7 @@
         {
           "bucket": "0.1-0.2",
           "domain": "other",
-          "domain_n": 401,
+          "domain_n": 404,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.26717557251908397,
           "mean_probability": 0.14869090909090915,
@@ -485,7 +548,7 @@
         {
           "bucket": "0.2-0.3",
           "domain": "other",
-          "domain_n": 401,
+          "domain_n": 404,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.0784313725490196,
           "mean_probability": 0.25169166666666665,
@@ -497,7 +560,7 @@
         {
           "bucket": "0.3-0.4",
           "domain": "other",
-          "domain_n": 401,
+          "domain_n": 404,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.21951219512195122,
           "mean_probability": 0.3364761904761903,
@@ -509,7 +572,7 @@
         {
           "bucket": "0.4-0.5",
           "domain": "other",
-          "domain_n": 401,
+          "domain_n": 404,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.6610169491525424,
           "mean_probability": 0.4586830188679243,
@@ -521,7 +584,7 @@
         {
           "bucket": "0.5-0.6",
           "domain": "other",
-          "domain_n": 401,
+          "domain_n": 404,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.6904761904761905,
           "mean_probability": 0.5498749999999999,
@@ -533,43 +596,43 @@
         {
           "bucket": "0.6-0.7",
           "domain": "other",
-          "domain_n": 401,
+          "domain_n": 404,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.7096774193548387,
-          "mean_probability": 0.6426785714285715,
-          "n": 28,
+          "global_outcome_rate": 0.71875,
+          "mean_probability": 0.6441379310344829,
+          "n": 29,
           "prior_strength": 20.0,
-          "raw_outcome_rate": 0.6785714285714286,
-          "shrunk_outcome_rate": 0.6915322580645161
+          "raw_outcome_rate": 0.6896551724137931,
+          "shrunk_outcome_rate": 0.701530612244898
         },
         {
           "bucket": "0.7-0.8",
           "domain": "other",
-          "domain_n": 401,
+          "domain_n": 404,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.851063829787234,
-          "mean_probability": 0.7439534883720927,
-          "n": 43,
+          "global_outcome_rate": 0.8541666666666666,
+          "mean_probability": 0.7444318181818179,
+          "n": 44,
           "prior_strength": 20.0,
-          "raw_outcome_rate": 0.8372093023255814,
-          "shrunk_outcome_rate": 0.8416075650118203
+          "raw_outcome_rate": 0.8409090909090909,
+          "shrunk_outcome_rate": 0.8450520833333333
         },
         {
           "bucket": "0.8-0.9",
           "domain": "other",
-          "domain_n": 401,
+          "domain_n": 404,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.6363636363636364,
-          "mean_probability": 0.8467999999999999,
-          "n": 25,
+          "global_outcome_rate": 0.6470588235294118,
+          "mean_probability": 0.845576923076923,
+          "n": 26,
           "prior_strength": 20.0,
-          "raw_outcome_rate": 0.52,
-          "shrunk_outcome_rate": 0.5717171717171717
+          "raw_outcome_rate": 0.5384615384615384,
+          "shrunk_outcome_rate": 0.5856777493606138
         },
         {
           "bucket": "0.9-1.0",
           "domain": "other",
-          "domain_n": 401,
+          "domain_n": 404,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.9615384615384616,
           "mean_probability": 0.98085,
@@ -687,20 +750,20 @@
           "shrunk_outcome_rate": 0.9692307692307692
         }
       ],
-      "log_loss": 0.3881667720727098,
-      "market_brier": 0.11735264505709156,
+      "log_loss": 0.387791062773786,
+      "market_brier": 0.1171569768712577,
       "market_clustered_skill_interval": {
         "confidence_level": 0.95,
-        "lower": -0.02361749442756761,
-        "mean_skill": -0.00936821443849859,
+        "lower": -0.02351445139357923,
+        "mean_skill": -0.0093273052051427,
         "method": "normal_interval_over_market_mean_brier_differences",
-        "n_forecasts": 832,
-        "n_markets": 228,
-        "standard_error": 0.0072700408107495,
-        "upper": 0.00488106555057043,
+        "n_forecasts": 835,
+        "n_markets": 229,
+        "standard_error": 0.007238339892059453,
+        "upper": 0.004859840983293827,
         "z_score": 1.96
       },
-      "model_brier": 0.12364249407452023,
+      "model_brier": 0.12342422762874351,
       "portfolio": {
         "compound_return": -0.08196738733821196,
         "equity_curve": [
@@ -1180,12 +1243,12 @@
       },
       "promotion_eligible_source": false,
       "provenance": "snapshot_mirror",
-      "resolved_forecasts": 832,
-      "resolved_markets": 228,
-      "skill_vs_market": -0.00628984901742867
+      "resolved_forecasts": 835,
+      "resolved_markets": 229,
+      "skill_vs_market": -0.006267250757485812
     }
   },
-  "generated_at": "2026-07-27T18:06:06.387487+00:00",
+  "generated_at": "2026-07-27T18:15:58.220067+00:00",
   "methodology": {
     "diagnostic_cohort": "snapshot_mirror",
     "execution": "executable bid/ask side with fees and capped total exposure",
@@ -1219,7 +1282,7 @@
         "required": 30
       },
       "minimum_resolved_markets": {
-        "actual": 2,
+        "actual": 3,
         "comparison": "greater_than_or_equal",
         "passed": false,
         "required": 100
@@ -1231,7 +1294,7 @@
         "required": 0.0
       },
       "positive_skill_lower_bound": {
-        "actual": -0.01269099999999998,
+        "actual": -0.008460666666666655,
         "comparison": "greater_than",
         "passed": false,
         "required": 0.0
