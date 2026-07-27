@@ -51,6 +51,9 @@ from analyzing_llm_rationale import (
     server_security,
     venue_mcp,
 )
+from analyzing_llm_rationale import (
+    live_track_record as live_track_record_support,
+)
 from analyzing_llm_rationale.observability import init_observability
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
@@ -201,6 +204,11 @@ def _edge_board_order_context(trl: dict) -> str:
         "\nAll figures are paper/hypothetical. Entry prices are live at last tick."
     )
     return "\n".join(lines)
+
+
+_strategy_filter_edge_entry = live_track_record_support.strategy_filter_edge_entry
+_pick_best_strategy = live_track_record_support.pick_best_strategy
+_edge_board_order_context = live_track_record_support.edge_board_order_context
 
 
 _DESCRIPTION = """
@@ -421,8 +429,6 @@ def _exchange_github_code(code: str, redirect_uri: Optional[str]) -> dict:
         "name": user.get("name") or user.get("login") or "",
         "picture": user.get("avatar_url") or "",
     }
-
-
 def _issue_session(sub: str, email: str, name: str, picture: str) -> str:
     """Sign and return a JWT session token."""
     import jwt as _jwt
@@ -1080,6 +1086,22 @@ def _track_record_freshness(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]
 
 
 # ── Evolution-loop feedback: live calibration + model auto-selection ──────────
+_LIVE_TRACK_RECORD_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_TRACK_RECORD_LIVE_URL,
+        ttl_seconds=_TRACK_RECORD_LIVE_TTL,
+        stale_after_seconds=_EDGE_BOARD_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "track_record_live.json",
+    ),
+    logger=logger,
+)
+_read_live_track_record = _LIVE_TRACK_RECORD_READER.read
+_track_record_freshness = _LIVE_TRACK_RECORD_READER.freshness
+
+
 _AUTO_SELECT_MODEL = os.environ.get("AUTO_SELECT_MODEL", "1").lower() not in {"0", "false", "no"}
 _MODEL_SWITCH_MARGIN = float(os.environ.get("MODEL_SWITCH_MARGIN", "0.02"))
 
