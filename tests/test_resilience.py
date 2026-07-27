@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 os.environ["ANALYTICS_DB"] = str(Path(tempfile.gettempdir()) / "foresea_test_resilience.duckdb")
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fastapi.testclient import TestClient  # noqa: E402
