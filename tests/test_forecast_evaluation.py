@@ -9,6 +9,7 @@ from analyzing_llm_rationale.forecast_evaluation import (
     build_trades,
     domain_probability_buckets,
     evaluation_report,
+    market_clustered_brier_skill_interval,
     simulate_compounded_portfolio,
 )
 
@@ -100,6 +101,39 @@ class ForecastEvaluationTests(unittest.TestCase):
         self.assertAlmostEqual(by_domain["economics"]["shrunk_outcome_rate"], 0.625)
         self.assertFalse(by_domain["economics"]["eligible_for_domain_model"])
         self.assertTrue(by_domain["politics"]["eligible_for_domain_model"])
+
+    def test_skill_interval_clusters_revisions_by_market(self):
+        forecasts = [
+            _forecast(
+                "a-early",
+                market_id="a",
+                model_probability=0.8,
+                market_probability=0.5,
+                outcome=1,
+            ),
+            _forecast(
+                "a-late",
+                market_id="a",
+                model_probability=0.8,
+                market_probability=0.5,
+                outcome=1,
+                forecasted_at=BASE_TIME + timedelta(hours=1),
+            ),
+            _forecast(
+                "b",
+                market_id="b",
+                model_probability=0.2,
+                market_probability=0.5,
+                outcome=0,
+            ),
+        ]
+
+        interval = market_clustered_brier_skill_interval(forecasts)
+
+        self.assertEqual(interval["n_forecasts"], 3)
+        self.assertEqual(interval["n_markets"], 2)
+        self.assertAlmostEqual(interval["mean_skill"], 0.21)
+        self.assertAlmostEqual(interval["lower"], 0.21)
 
     def test_trade_builder_uses_executable_ask_and_bid(self):
         forecasts = [

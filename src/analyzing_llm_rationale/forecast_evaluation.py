@@ -123,6 +123,53 @@ def brier_score(forecasts: Sequence[ResolvedForecast], *, market: bool = False) 
     return sum((getattr(row, field) - row.outcome) ** 2 for row in forecasts) / len(forecasts)
 
 
+def market_clustered_brier_skill_interval(
+    forecasts: Sequence[ResolvedForecast],
+    *,
+    z_score: float = 1.96,
+) -> dict[str, Any]:
+    """Estimate Brier skill uncertainty with markets as independent units."""
+    if z_score <= 0.0:
+        raise ValueError("z_score must be positive")
+
+    by_market: dict[tuple[str, str], list[float]] = {}
+    for row in forecasts:
+        model_error = (row.model_probability - row.outcome) ** 2
+        market_error = (row.market_probability - row.outcome) ** 2
+        by_market.setdefault((row.platform, row.market_id), []).append(
+            market_error - model_error
+        )
+
+    market_skill = [
+        sum(values) / len(values)
+        for _market, values in sorted(by_market.items())
+    ]
+    n_markets = len(market_skill)
+    mean_skill = sum(market_skill) / n_markets if n_markets else None
+    standard_error = None
+    lower = None
+    upper = None
+    if n_markets >= 2 and mean_skill is not None:
+        variance = sum((value - mean_skill) ** 2 for value in market_skill) / (
+            n_markets - 1
+        )
+        standard_error = math.sqrt(variance / n_markets)
+        lower = mean_skill - z_score * standard_error
+        upper = mean_skill + z_score * standard_error
+
+    return {
+        "n_forecasts": len(forecasts),
+        "n_markets": n_markets,
+        "mean_skill": mean_skill,
+        "standard_error": standard_error,
+        "lower": lower,
+        "upper": upper,
+        "confidence_level": 0.95 if math.isclose(z_score, 1.96) else None,
+        "z_score": z_score,
+        "method": "normal_interval_over_market_mean_brier_differences",
+    }
+
+
 def log_loss(forecasts: Sequence[ResolvedForecast], *, epsilon: float = 1e-12) -> float | None:
     if not forecasts:
         return None
@@ -227,6 +274,9 @@ def evaluation_report(
             market_brier - model_brier
             if market_brier is not None and model_brier is not None
             else None
+        ),
+        "market_clustered_skill_interval": market_clustered_brier_skill_interval(
+            forecasts
         ),
         "log_loss": log_loss(forecasts),
         "calibration": reliability_buckets(forecasts, bins=bins),

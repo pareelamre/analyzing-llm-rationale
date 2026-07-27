@@ -953,6 +953,64 @@ class ServerTests(unittest.TestCase):
         r = self.client.post("/track-record/tick")
         self.assertIn(r.status_code, (404, 405))
 
+    def test_internal_forecast_evaluation_is_token_gated(self):
+        import analyzing_llm_rationale.server as srv
+
+        report = {
+            "schema_version": 1,
+            "generated_at": "2026-07-27T05:00:00+00:00",
+            "model": "council",
+            "cohorts": {
+                "prospective_audit": {
+                    "resolved_markets": 0,
+                }
+            },
+            "promotion": {
+                "status": "collecting",
+                "eligible": False,
+            },
+        }
+        with (
+            mock.patch.object(srv, "_TRACK_RECORD_TOKEN", "tok"),
+            mock.patch.object(
+                srv,
+                "_read_forecast_evaluation",
+                return_value=report,
+            ),
+        ):
+            unauthorized = self.client.get("/internal/forecast-evaluation")
+            authorized = self.client.get(
+                "/internal/forecast-evaluation",
+                headers={"X-Track-Token": "tok"},
+            )
+
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(authorized.status_code, 200)
+        self.assertEqual(authorized.json()["promotion"]["status"], "collecting")
+        self.assertIn("private", authorized.headers["cache-control"])
+        self.assertNotIn(
+            "/internal/forecast-evaluation",
+            self.client.get("/openapi.json").json()["paths"],
+        )
+
+    def test_internal_forecast_evaluation_returns_404_before_generation(self):
+        import analyzing_llm_rationale.server as srv
+
+        with (
+            mock.patch.object(srv, "_TRACK_RECORD_TOKEN", "tok"),
+            mock.patch.object(
+                srv,
+                "_read_forecast_evaluation",
+                return_value=None,
+            ),
+        ):
+            response = self.client.get(
+                "/internal/forecast-evaluation",
+                headers={"X-Track-Token": "tok"},
+            )
+
+        self.assertEqual(response.status_code, 404)
+
     def test_track_record_serves_backtest_when_no_resolved_live(self):
         import analyzing_llm_rationale.server as srv
         # No resolved live forecasts → fall back to the static backtest.

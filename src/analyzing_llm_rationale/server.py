@@ -84,6 +84,17 @@ _TRACK_RECORD_LIVE_URL = os.environ.get(
 )
 _TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "30"))
 _EDGE_BOARD_STALE_AFTER_S = int(os.environ.get("EDGE_BOARD_STALE_AFTER_S", "1800"))
+_FORECAST_EVALUATION_URL = os.environ.get(
+    "FORECAST_EVALUATION_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/forecast_evaluation.json",
+)
+_FORECAST_EVALUATION_TTL = int(
+    os.environ.get("FORECAST_EVALUATION_TTL", "60")
+)
+_FORECAST_EVALUATION_STALE_AFTER_S = int(
+    os.environ.get("FORECAST_EVALUATION_STALE_AFTER_S", "1800")
+)
 # Shared secret gating the evolution-loop bridge endpoints (pending-markets /
 # mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
 _TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
@@ -1100,6 +1111,24 @@ _LIVE_TRACK_RECORD_READER = live_track_record_support.LiveTrackRecordReader(
 )
 _read_live_track_record = _LIVE_TRACK_RECORD_READER.read
 _track_record_freshness = _LIVE_TRACK_RECORD_READER.freshness
+_FORECAST_EVALUATION_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_FORECAST_EVALUATION_URL,
+        ttl_seconds=_FORECAST_EVALUATION_TTL,
+        stale_after_seconds=_FORECAST_EVALUATION_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "forecast_evaluation.json",
+        cache_namespace="forecast_evaluation",
+        cache_version="v1",
+        resource_label="forecast evaluation report",
+        user_agent="Foresea/forecast-evaluation",
+    ),
+    logger=logger,
+)
+_read_forecast_evaluation = _FORECAST_EVALUATION_READER.read
+_forecast_evaluation_freshness = _FORECAST_EVALUATION_READER.freshness
 
 
 _AUTO_SELECT_MODEL = os.environ.get("AUTO_SELECT_MODEL", "1").lower() not in {"0", "false", "no"}
@@ -1279,6 +1308,11 @@ _llm_errors = _meter.create_counter(
 )
 _agent_counter = _meter.create_counter(
     "agent.requests", unit="1", description="Agent analyze requests"
+)
+_forecast_evaluation_reads = _meter.create_counter(
+    "forecast_evaluation.reads",
+    unit="1",
+    description="Internal forecast evaluation report reads",
 )
 
 
@@ -2292,6 +2326,70 @@ def _require_track_token(request: Optional[Request]) -> None:
     token = request.headers.get("x-track-token") if request is not None else None
     if not token or not hmac.compare_digest(token, _TRACK_RECORD_TOKEN):
         raise HTTPException(status_code=401, detail="Invalid or missing X-Track-Token.")
+
+
+@app.get(
+    "/internal/forecast-evaluation",
+    tags=["System"],
+    summary="Internal prospective forecast evaluation",
+    include_in_schema=False,
+)
+async def internal_forecast_evaluation(
+    request: Request = None,
+) -> Dict[str, Any]:
+    """Return the immutable-ledger evaluation and explicit promotion gates."""
+    _require_track_token(request)
+    with _tracer.start_as_current_span("forecast_evaluation.read") as span:
+        try:
+            report = await asyncio.get_running_loop().run_in_executor(
+                None,
+                _read_forecast_evaluation,
+            )
+            if report is None:
+                span.set_attribute("outcome", "not_found")
+                _forecast_evaluation_reads.add(1, {"outcome": "not_found"})
+                raise HTTPException(
+                    status_code=404,
+                    detail="Forecast evaluation report has not been generated yet.",
+                )
+            payload = dict(report)
+            payload["freshness"] = _forecast_evaluation_freshness(payload)
+            promotion = payload.get("promotion") or {}
+            prospective = (payload.get("cohorts") or {}).get(
+                "prospective_audit"
+            ) or {}
+            promotion_status = str(promotion.get("status") or "unknown")
+            span.set_attributes(
+                {
+                    "outcome": "success",
+                    "report.model": str(payload.get("model") or "unknown"),
+                    "promotion.status": promotion_status,
+                    "prospective.resolved_markets": int(
+                        prospective.get("resolved_markets") or 0
+                    ),
+                }
+            )
+            _forecast_evaluation_reads.add(
+                1,
+                {"outcome": "success", "promotion_status": promotion_status},
+            )
+            return JSONResponse(
+                payload,
+                headers={
+                    "Cache-Control": "private, no-cache, max-age=0, must-revalidate"
+                },
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            from opentelemetry.trace import Status, StatusCode
+
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "failure")
+            _forecast_evaluation_reads.add(1, {"outcome": "failure"})
+            logger.exception("internal forecast evaluation read failed")
+            raise
 
 
 @app.get("/track-record/pending-markets", tags=["System"], summary="Agent-enrolled markets awaiting tracking")

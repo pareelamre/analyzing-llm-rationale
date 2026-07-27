@@ -31,9 +31,15 @@ class TrackRecordTickTests(unittest.TestCase):
         store = mock.Mock()
         with tempfile.TemporaryDirectory() as td:
             public_path = Path(td) / "track_record_live.json"
+            evaluation_path = Path(td) / "forecast_evaluation.json"
             with (
                 mock.patch.object(track_record_tick, "DuckDBStore", return_value=store),
                 mock.patch.object(track_record_tick, "PUBLIC_PATH", public_path),
+                mock.patch.object(
+                    track_record_tick,
+                    "EVALUATION_PATH",
+                    evaluation_path,
+                ),
                 mock.patch.object(track_record_tick, "PRICE_ONLY", True),
                 mock.patch.object(track_record_tick, "MODEL", "council"),
                 mock.patch.object(track_record_tick, "TRACK_MODELS", ["gpt-oss-120b", "council"]),
@@ -74,6 +80,7 @@ class TrackRecordTickTests(unittest.TestCase):
                 ) as aggregate_mock,
             ):
                 rc = asyncio.run(track_record_tick.main())
+            self.assertTrue(evaluation_path.exists())
 
         self.assertEqual(rc, 0)
         self.assertEqual(
@@ -122,9 +129,15 @@ class TrackRecordTickTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             public_path = Path(td) / "track_record_live.json"
+            evaluation_path = Path(td) / "forecast_evaluation.json"
             with (
                 mock.patch.object(track_record_tick, "DuckDBStore", return_value=mock.Mock()),
                 mock.patch.object(track_record_tick, "PUBLIC_PATH", public_path),
+                mock.patch.object(
+                    track_record_tick,
+                    "EVALUATION_PATH",
+                    evaluation_path,
+                ),
                 mock.patch.object(track_record_tick, "PRICE_ONLY", False),
                 mock.patch.object(track_record_tick, "_predict_stats", Counter()),
                 mock.patch.object(track_record_tick, "_SNAPSHOT_PASS_RETRIES", 2),
@@ -166,9 +179,15 @@ class TrackRecordTickTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as td:
             public_path = Path(td) / "track_record_live.json"
+            evaluation_path = Path(td) / "forecast_evaluation.json"
             with (
                 mock.patch.object(track_record_tick, "DuckDBStore", return_value=mock.Mock()),
                 mock.patch.object(track_record_tick, "PUBLIC_PATH", public_path),
+                mock.patch.object(
+                    track_record_tick,
+                    "EVALUATION_PATH",
+                    evaluation_path,
+                ),
                 mock.patch.object(track_record_tick, "PRICE_ONLY", False),
                 mock.patch.object(track_record_tick, "_predict_stats", Counter({"attempts": 3, "successes": 3})),
                 mock.patch.object(track_record_tick, "_model_progress", side_effect=[progress, progress]),
@@ -207,9 +226,15 @@ class TrackRecordTickTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as td:
             public_path = Path(td) / "track_record_live.json"
+            evaluation_path = Path(td) / "forecast_evaluation.json"
             with (
                 mock.patch.object(track_record_tick, "DuckDBStore", return_value=mock.Mock()),
                 mock.patch.object(track_record_tick, "PUBLIC_PATH", public_path),
+                mock.patch.object(
+                    track_record_tick,
+                    "EVALUATION_PATH",
+                    evaluation_path,
+                ),
                 mock.patch.object(track_record_tick, "PRICE_ONLY", False),
                 mock.patch.object(track_record_tick, "_predict_stats", Counter({"attempts": 1, "http_401": 1})),
                 mock.patch.object(track_record_tick, "_model_progress", side_effect=[progress, progress]),

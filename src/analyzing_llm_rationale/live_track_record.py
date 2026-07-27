@@ -24,6 +24,8 @@ class LiveTrackRecordConfig:
     bundled_path: Path
     cache_namespace: str = "track_record_live"
     cache_version: str = "v3"
+    resource_label: str = "live track record"
+    user_agent: str = "Foresea/edge-board-live"
 
 
 class LiveTrackRecordReader:
@@ -74,14 +76,14 @@ class LiveTrackRecordReader:
                 headers={
                     "Cache-Control": "no-cache",
                     "Pragma": "no-cache",
-                    "User-Agent": "Foresea/edge-board-live",
+                    "User-Agent": self._config.user_agent,
                 },
             )
             if getattr(resp, "status_code", None) == 200:
                 payload = resp.json()
         except Exception:
             self._logger.warning(
-                "live track record fetch failed; trying bundled copy",
+                f"{self._config.resource_label} fetch failed; trying bundled copy",
                 exc_info=True,
             )
 
@@ -124,7 +126,10 @@ class LiveTrackRecordReader:
         try:
             return json.loads(bundled.read_text())
         except Exception:
-            self._logger.warning("bundled live track record unreadable", exc_info=True)
+            self._logger.warning(
+                f"bundled {self._config.resource_label} unreadable",
+                exc_info=True,
+            )
             return None
 
 

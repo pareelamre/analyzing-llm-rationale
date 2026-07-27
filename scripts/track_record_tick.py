@@ -18,6 +18,8 @@ Outputs (committed back to the repo by the workflow):
   - ``data/track_record_store.duckdb``: snapshots plus immutable ledger events
   - ``static/track_record_live.json``  — the public aggregate served at
     ``GET /track-record`` once it has resolved forecasts.
+  - ``static/forecast_evaluation.json``: the provenance-separated internal
+    evaluation report and strategy promotion gates.
 
 Env:
   FORESEA_BASE_URL  forecast endpoint base   (default https://foresea.ink)
@@ -45,11 +47,11 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import market_data  # noqa: E402
 from analyzing_llm_rationale import track_record_live as trl  # noqa: E402
-from analyzing_llm_rationale.forecast_evaluation import (  # noqa: E402
-    ResolvedForecast,
-    build_trades,
-    evaluation_report,
-    simulate_compounded_portfolio,
+from analyzing_llm_rationale.forecast_evaluation import ResolvedForecast  # noqa: E402
+from analyzing_llm_rationale.forecast_evaluation_report import (  # noqa: E402
+    EvaluationPolicy,
+    build_evaluation_artifact,
+    compact_evaluation_summary,
 )
 from analyzing_llm_rationale.forecast_ledger import (  # noqa: E402
     ForecastLedger,
@@ -60,6 +62,10 @@ from analyzing_llm_rationale.trackrec_store import DuckDBStore  # noqa: E402
 
 STORE_PATH = Path(os.environ.get("TRACK_STORE_PATH") or ROOT / "data" / "track_record_store.duckdb")
 PUBLIC_PATH = Path(os.environ.get("TRACK_PUBLIC_PATH") or ROOT / "static" / "track_record_live.json")
+EVALUATION_PATH = Path(
+    os.environ.get("TRACK_EVALUATION_PATH")
+    or ROOT / "static" / "forecast_evaluation.json"
+)
 
 BASE_URL = os.environ.get("FORESEA_BASE_URL", "https://foresea.ink").rstrip("/")
 MODEL = os.environ.get("TRACK_MODEL", "council").strip()
@@ -119,6 +125,30 @@ _PREDICT_RETRIES = 3
 _SNAPSHOT_PASS_RETRIES = max(1, int(os.environ.get("TRACK_RECORD_SNAPSHOT_PASS_RETRIES", "3") or 3))
 _SNAPSHOT_PASS_RETRY_SLEEP_S = float(
     os.environ.get("TRACK_RECORD_SNAPSHOT_PASS_RETRY_SLEEP_S", "30") or 30.0
+)
+EVALUATION_POLICY = EvaluationPolicy(
+    min_resolved_markets=max(
+        1, int(os.environ.get("EVALUATION_MIN_RESOLVED_MARKETS", "100") or 100)
+    ),
+    min_paper_trades=max(
+        1, int(os.environ.get("EVALUATION_MIN_PAPER_TRADES", "30") or 30)
+    ),
+    min_skill_lower_bound=float(
+        os.environ.get("EVALUATION_MIN_SKILL_LOWER_BOUND", "0.0") or 0.0
+    ),
+    max_drawdown=float(
+        os.environ.get("EVALUATION_MAX_DRAWDOWN", "0.20") or 0.20
+    ),
+    min_edge=float(os.environ.get("EVALUATION_MIN_EDGE", "0.05") or 0.05),
+    requested_fraction=float(
+        os.environ.get("EVALUATION_REQUESTED_FRACTION", "0.02") or 0.02
+    ),
+    fee_fraction=float(
+        os.environ.get("EVALUATION_FEE_FRACTION", "0.01") or 0.01
+    ),
+    max_total_exposure=float(
+        os.environ.get("EVALUATION_MAX_TOTAL_EXPOSURE", "0.25") or 0.25
+    ),
 )
 _predict_rate_lock = threading.Lock()
 _last_predict_ts: float = 0.0
@@ -284,25 +314,12 @@ def _evaluate_ledger(store: DuckDBStore, *, model: str) -> dict:
         if row.get("model") == model and row.get("ledger_audit_grade")
     ]
 
-    def _cohort_summary(forecasts: list[ResolvedForecast]) -> dict:
-        report = evaluation_report(forecasts)
-        portfolio = simulate_compounded_portfolio(build_trades(forecasts))
-        return {
-            "resolved_forecasts": len(forecasts),
-            "model_brier": report["model_brier"],
-            "market_brier": report["market_brier"],
-            "skill_vs_market": report["skill_vs_market"],
-            "domain_probability_buckets": len(report["domain_probability_buckets"]),
-            "paper_trades": portfolio["n_trades"],
-            "paper_compound_return": portfolio["compound_return"],
-            "paper_max_drawdown": portfolio["max_drawdown"],
-        }
-
-    return {
-        "model": model,
-        "snapshot_mirror": _cohort_summary(snapshot_mirror),
-        "prospective_audit": _cohort_summary(prospective_audit),
-    }
+    return build_evaluation_artifact(
+        model=model,
+        snapshot_mirror=snapshot_mirror,
+        prospective_audit=prospective_audit,
+        policy=EVALUATION_POLICY,
+    )
 
 
 async def _record_snapshots_with_retries(
@@ -370,11 +387,20 @@ async def main() -> int:
 
     ledger_summary = sync_snapshot_ledger(store)
     ledger_evaluation = _evaluate_ledger(store, model=primary_model)
+    ledger_evaluation_summary = (
+        compact_evaluation_summary(ledger_evaluation)
+        if ledger_evaluation
+        else {}
+    )
     agg = trl.aggregate(store, model=primary_model, variant=VARIANT, temperature=TEMPERATURE)
     after_primary = _model_progress(store, primary_model)
 
     PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)
     PUBLIC_PATH.write_text(json.dumps(agg, indent=2, sort_keys=True) + "\n")
+    EVALUATION_PATH.parent.mkdir(parents=True, exist_ok=True)
+    EVALUATION_PATH.write_text(
+        json.dumps(ledger_evaluation, indent=2, sort_keys=True) + "\n"
+    )
 
     summary = {
         "snapshots_recorded": recorded,
@@ -385,7 +411,7 @@ async def main() -> int:
         "ledger_snapshots_scanned": ledger_summary["snapshots_scanned"],
         "ledger_forecast_events_appended": ledger_summary["forecast_events_appended"],
         "ledger_resolution_events_appended": ledger_summary["resolution_events_appended"],
-        "ledger_evaluation": ledger_evaluation,
+        "ledger_evaluation": ledger_evaluation_summary,
         "n_markets_resolved": agg.get("n_markets_resolved"),
         "n_markets_open": agg.get("n_markets_open"),
         "n_snapshots_resolved": agg.get("n_snapshots_resolved"),
