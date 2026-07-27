@@ -944,12 +944,6 @@
     .eb-table th { text-align: left; color: var(--text-dim); font-weight: 500; padding: 6px 10px; border-bottom: 1px solid #ececec; white-space: nowrap; }
     .eb-table td { padding: 8px 10px; border-bottom: 1px solid var(--paper); vertical-align: top; }
     .eb-calib-row { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-dim); padding: 4px 0; }
-    .pnl-explainer { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
-    .pnl-exp-title { font-size: 12px; font-weight: 600; color: var(--text-dim); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 10px; }
-    .pnl-exp-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; padding: 10px 12px; border-radius: 8px; background: var(--description-bg); font-size: 13px; color: var(--text-dim); line-height: 1.6; }
-    .pnl-exp-row strong { color: var(--ink); }
-    .pnl-exp-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; }
-    .pnl-exp-gap { margin-bottom: 10px; }
     .eb-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--paper); color: var(--text-dim); white-space: nowrap; }
     .eb-badge.eb-sig { background: #e7f6ee; color: #0a7a4a; }
     .eb-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; justify-content: center; }
@@ -4522,7 +4516,7 @@ async function loadTrackRecord() {
 }
 let edgeLoaded = false;
 let _edgePriceTimer = null;
-let _ebEquityTimer = null;
+let _ebForecastTimer = null;
 let _crypto5mTimer = null;
 let _crypto5mLastGen = null;
 let _lastEquityCurves = null;
@@ -4616,53 +4610,53 @@ function _leadSkillBadge(tr) {
   return `<span class="eb-badge ${state.proven ? 'eb-sig' : ''}">${state.label}</span>`;
 }
 
-async function refreshEquityCurve() {
-  const el = document.getElementById('eb-equity-svg');
-  if (!el) return;
+async function refreshEdgeForecasts() {
   try {
     const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) return;
     const d = await _readJson(r);
     const pnl = d.paper_pnl;
-    if (!pnl) return;
-    const EB_MIN_N = 5;
-    const EB_SMALL_N = 30;
-    const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
-    const _smallN = n => `<span style="color:var(--text-dim);font-size:0.75em;opacity:0.7"> (small n)</span>`;
-    const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
-    const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
-    _upd('eb-pnl-flat-v',  _roiVal(pnl.flat));
-    _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
-    _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
-    _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
-    const _normCurve = s => {
-      // growth_curve is a compounded growth-of-$100 bankroll series. The card
-      // ROI remains the simple non-compounded return on total stake.
-      if (s?.growth_curve?.length) return s.growth_curve.slice();
-      if (!s?.equity_curve?.length) return null;
-      const staked = s.total_staked || s.n_bets || 1;
-      return s.equity_curve.map(v => 100 + (v / staked) * 100);
-    };
-    const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
-    const _mk = (s, color, label, dash) => {
-      const points = _normCurve(s);
-      if (!points) return null;
-      const times = _times(s);
-      const curve = { points, color, label };
-      if (dash) curve.dash = true;
-      if (times.length === points.length) curve.times = times;
-      return curve;
-    };
-    const curves = [
-      _mk(pnl.smart,          '#10b981', '★ Smart'),
-      _mk(pnl.half_kelly,     '#06b6d4', 'Half-Kelly'),
-      _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
-      _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
-    ].filter(Boolean);
-    el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : '';
-    if (curves.length) _attachEquityHover(el);
-    const ts = document.getElementById('eb-pnl-ts');
-    if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
+    if (pnl) {
+      const EB_MIN_N = 5;
+      const EB_SMALL_N = 30;
+      const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
+      const _smallN = n => `<span style="color:var(--text-dim);font-size:0.75em;opacity:0.7"> (small n)</span>`;
+      const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
+      const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
+      _upd('eb-pnl-flat-v', _roiVal(pnl.flat));
+      _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
+      _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
+      _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
+      const _normCurve = s => {
+        if (s?.growth_curve?.length) return s.growth_curve.slice();
+        if (!s?.equity_curve?.length) return null;
+        const staked = s.total_staked || s.n_bets || 1;
+        return s.equity_curve.map(v => 100 + (v / staked) * 100);
+      };
+      const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+      const _mk = (s, color, label, dash) => {
+        const points = _normCurve(s);
+        if (!points) return null;
+        const times = _times(s);
+        const curve = { points, color, label };
+        if (dash) curve.dash = true;
+        if (times.length === points.length) curve.times = times;
+        return curve;
+      };
+      const curves = [
+        _mk(pnl.smart, '#10b981', '★ Smart'),
+        _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
+        _mk(pnl.flat, '#60a5fa', 'Flat stake'),
+        _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
+      ].filter(Boolean);
+      const el = document.getElementById('eb-equity-svg');
+      if (el) {
+        el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : '';
+        if (curves.length) _attachEquityHover(el);
+      }
+      const ts = document.getElementById('eb-pnl-ts');
+      if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
+    }
     // Patch model probabilities from fresh board data (tick commits new forecasts every 15 min)
     const freshBoard = d.edge_board || [];
     if (freshBoard.length) {
@@ -4882,7 +4876,7 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   refreshEdgePrices();
   loadCrypto5mEquity();
   _edgePriceTimer = setInterval(refreshEdgePrices, 60000);
-  _ebEquityTimer = setInterval(refreshEquityCurve, 2 * 60 * 1000);
+  _ebForecastTimer = setInterval(refreshEdgeForecasts, 2 * 60 * 1000);
   _crypto5mTimer = setInterval(loadCrypto5mEquity, 30 * 1000);
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
@@ -4897,8 +4891,8 @@ async function openForecastDrift() {
 function closeEdgeBoard({ updateHistory = true } = {}) {
   clearInterval(_edgePriceTimer);
   _edgePriceTimer = null;
-  clearInterval(_ebEquityTimer);
-  _ebEquityTimer = null;
+  clearInterval(_ebForecastTimer);
+  _ebForecastTimer = null;
   clearInterval(_crypto5mTimer);
   _crypto5mTimer = null;
   const ov = document.getElementById('edgeOverlay');
@@ -5455,7 +5449,8 @@ function renderEdgeBoard(d) {
     ? pct(1 - ll.market_converged_to_model_pct) + '%' : _build(ll && ll.n_markets);
   const stats = `
     <div class="tr-stats">
-      <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div>${d.n_markets_tracked ? `<div class="k" style="font-size:11px;color:var(--text-dim)">tracking ${d.n_markets_tracked}</div>` : ''}</div>
+      <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div></div>
+      <div class="tr-stat"><div class="v">${(d.n_markets_tracked || 0)}</div><div class="k label">Markets tracked</div></div>
       <div class="tr-stat"><div class="v">${(d.n_snapshots_resolved || 0)}</div><div class="k label">Resolved forecasts</div></div>
       <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Council follows market</div></div>
     </div>`;
@@ -5470,18 +5465,14 @@ function renderEdgeBoard(d) {
   } else {
     compHtml = `<p class="text-sm text-gray-500">Model comparison (gpt-oss-120b vs Gemma vs Kimi) fills in as forecasts resolve.</p>`;
   }
-  let pnlHtml;
+  let performanceHtml;
   if (pnl && pnl.flat) {
-    // Every resolved forecast is bet (no minimum edge), so n_bets tracks resolutions.
     const roi = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets')
       : _build(s && s.n_bets);
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
-    const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. The curve compounds a $100 bankroll using each strategy's actual bet history (${nBet} of ${nRes} resolved markets bet):</p>`;
     const _normCurve = s => {
-      // growth_curve is a compounded growth-of-$100 bankroll series. The card
-      // ROI remains the simple non-compounded return on total stake.
       if (s?.growth_curve?.length) return s.growth_curve.slice();
       if (!s?.equity_curve?.length) return null;
       const staked = s.total_staked || s.n_bets || 1;
@@ -5498,81 +5489,24 @@ function renderEdgeBoard(d) {
       return curve;
     };
     const curves = [
-      _mk(pnl.smart,          '#10b981', '★ Smart'),
-      _mk(pnl.half_kelly,     '#06b6d4', 'Half-Kelly'),
-      _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
+      _mk(pnl.smart, '#10b981', '★ Smart'),
+      _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
+      _mk(pnl.flat, '#60a5fa', 'Flat stake'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
     ].filter(Boolean);
     const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : ''}</div>`;
-    // Per-sizing explainer: what each number means and what the gap between them signals.
-    const _pnlExplainer = () => {
-      const fl = pnl.flat, kelly = pnl.half_kelly, smart = pnl.smart, crowd = pnl.crowd_baseline;
-      const hasFlat = fl && fl.n_bets >= EB_MIN_N;
-      const hasKelly = kelly && kelly.n_bets >= EB_MIN_N;
-      const hasSmart = smart && smart.n_bets >= EB_MIN_N;
-      const hasCrowd = crowd && crowd.n_bets >= EB_MIN_N;
-      const rows = [];
-
-      if (hasFlat) {
-        const sign = fl.roi >= 0 ? 'positive' : 'negative';
-        const verb = fl.roi >= 0 ? 'profitable' : 'loss-making';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#60a5fa"></span>
-          <div><strong>Flat stake ${_roiPct(fl.roi)}</strong> — equal $1 on every call, ${fl.n_bets} bets.
-          The model bet the same amount regardless of how confident it was or how far it sat from the market price.
-          A ${sign} result here means the model's <em>directional calls</em> were ${verb} at the odds the market offered at the time of each forecast.
-          Win rate was ${pct(fl.win_rate)}% (the model picked the right side on ${Math.round(fl.win_rate * fl.n_bets)} of ${fl.n_bets} bets).</div>
-        </div>`);
-      }
-
-      if (hasKelly) {
-        const sign = kelly.roi >= 0 ? 'positive' : 'negative';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#06b6d4"></span>
-          <div><strong>Half-Kelly ${_roiPct(kelly.roi)}</strong> — stake sized by the Kelly criterion (halved for safety), ${kelly.n_bets} bets.
-          Kelly sizes each bet as a fraction of bankroll proportional to the model's walk-forward calibrated edge divided by the payout odds.
-          This naturally bets small on heavy favourites (tiny payouts) and larger where the model sees value at fair odds.
-          Total staked: $${kelly.total_staked.toFixed(1)} across ${kelly.n_bets} bets. Win rate was ${pct(kelly.win_rate)}%.</div>
-        </div>`);
-      }
-
-      if (hasSmart) {
-        const sign = smart.roi >= 0 ? 'positive' : 'negative';
-        const verb = smart.roi >= 0 ? 'profitable' : 'loss-making';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#10b981"></span>
-          <div><strong>★ Smart ${_roiPct(smart.roi)}</strong> — data-driven composite: walk-forward calibrated Half-Kelly sizing plus a proprietary set of evidence-based filters, ${smart.n_bets} qualifying bets.
-          The filters were derived by studying where the model's edge estimates historically broke down, and only let through bets clear of those known failure modes.
-          Sizing uses calibrated Half-Kelly to bet proportional to estimated edge.
-          A ${sign} result here shows whether the model is ${verb} <em>after removing its known failure modes</em>.
-          Win rate was ${pct(smart.win_rate)}%.</div>
-        </div>`);
-      }
-
-      if (hasCrowd) {
-        const sign = crowd.roi >= 0 ? 'positive' : 'negative';
-        const verb = crowd.roi >= 0 ? 'profitable' : 'loss-making';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#94a3b8"></span>
-          <div><strong>Crowd baseline ${_roiPct(crowd.roi)}</strong> — flat $1 stake, always betting the crowd's own direction (model probability = market probability), ${crowd.n_bets} bets.
-          This represents the zero-edge baseline (always buying whichever outcome the market consensus already favors).
-          Use this to evaluate the excess return of the model's disagreement signals over the crowd consensus.
-          Win rate was ${pct(crowd.win_rate)}%.</div>
-        </div>`);
-      }
-
-      if (!rows.length) return '';
-      return `<div class="pnl-explainer"><h5 class="pnl-exp-title">What these numbers mean</h5>${rows.join('')}</div>`;
-    };
-
-    pnlHtml = intro + `<div class="tr-stats">
-      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="★ Recommended · Calibrated Half-Kelly sizing plus a proprietary set of data-driven filters tuned to the model's known failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">★ Smart</div>${_sub('Kelly + filters')}</div>
-      <div class="tr-stat" title="Calibrated Half-Kelly criterion sizing. Bet size proportional to estimated edge / odds. Naturally sizes down on heavy favourites."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
-      <div class="tr-stat" title="Equal stake on every call. Pure hit-rate at the odds paid — a winning favourite pays little, any loss costs the full stake."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
-      <div class="tr-stat" title="Flat stake, always betting the crowd's own direction (zero edge baseline)."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">Crowd baseline</div>${_sub('agree with market')}</div>
-    </div>${svgChart}${_pnlExplainer()}<p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(pnl.disclaimer || '')}</p>`;
+    performanceHtml = `
+      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $100 starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
+      <div class="tr-stats">
+        <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">★ Smart</div>${_sub('Kelly + filters')}</div>
+        <div class="tr-stat" title="Calibrated Half-Kelly sizing proportional to estimated edge and market odds."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
+        <div class="tr-stat" title="Equal stake on every resolved forecast."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
+        <div class="tr-stat" title="Equal stake following the market consensus as a zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">Crowd baseline</div>${_sub('agree with market')}</div>
+      </div>
+      ${svgChart}
+      <p class="text-xs text-gray-400" style="margin-top:8px">Historical simulation of forecasts saved before market close, net of venue trading fees. Excludes slippage and liquidity constraints; not actual trading results.</p>`;
   } else {
-    pnlHtml = `<p class="text-sm text-gray-500">Hypothetical paper PnL — following the model's calls — starts once markets resolve. No fees/slippage; a signal check, not live trading.</p>`;
+    performanceHtml = `<p class="text-sm text-gray-500">Strategy performance will appear as tracked markets resolve.</p>`;
   }
   const arbitrage = d.arbitrage_signals || [];
   let arbitrageHtml = '';
@@ -5635,11 +5569,11 @@ function renderEdgeBoard(d) {
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced — and our track record of being right about it</h3>
-    <p class="tr-method">Live council-vs-market gaps, ranked. Calibration, lead/lag and paper PnL come from resolved saved forecasts only — hypothetical, no fees or slippage. ${gen ? 'Updated ' + gen + '.' : ''}</p>
+    <p class="tr-method">Live council-vs-market gaps, ranked. Accuracy, calibration, and lead-time skill are calculated from resolved forecasts saved before each market closed. ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${stats}
     <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
-    <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
-    <h4 class="eb-h">Hypothetical paper PnL · following the model's calls <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${pnlHtml}
+    <h4 class="eb-h">Model comparison · resolved forecast quality</h4>${compHtml}
+    <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift · does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live council forecasts · ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;
