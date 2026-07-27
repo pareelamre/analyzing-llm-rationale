@@ -542,8 +542,9 @@ class NewsPipeline:
             resp = requests.get(
                 "https://html.duckduckgo.com/html/",
                 params={"q": query},
-                headers={"User-Agent": "Mozilla/5.0 (compatible; foresea/1.0)"},
+                headers={"User-Agent": "Foresea/1.0"},
                 timeout=15,
+                allow_redirects=True,
             )
             resp.raise_for_status()
             try:
