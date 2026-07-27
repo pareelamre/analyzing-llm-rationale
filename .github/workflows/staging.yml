@@ -1,6 +1,9 @@
 name: Staging Deploy
 
 on:
+  push:
+    branches:
+      - staging
   workflow_dispatch:
     inputs:
       git_ref:
