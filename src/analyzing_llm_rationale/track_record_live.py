@@ -200,6 +200,16 @@ def _parse_dt(value: Any) -> Optional[datetime]:
         return None
 
 
+def _iso_ts(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return value.get("__dt__")
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
 def _lead_time_days(close_time: Any, ref: Optional[datetime] = None) -> Optional[float]:
     close = _parse_dt(close_time)
     if close is None:
@@ -1589,9 +1599,18 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "platform": platform,
             "ident": ident,
             "market_url": r.get("market_url"),
+            "forecasted_at": _iso_ts(r.get("snapshot_ts")),
+            "description": r.get("description"),
+            "resolution_criteria": r.get("resolution_criteria"),
+            "categories": [r.get("category")] if r.get("category") else [],
             "domain": r.get("domain") or "other",
             "horizon": r.get("horizon"),
             "lead_days": round(current_lead, 1) if current_lead is not None else None,
+            "resolve_time": _iso_ts(r.get("close_time")),
+            "market_bid": r.get("market_bid"),
+            "market_ask": r.get("market_ask"),
+            "market_volume": r.get("market_volume"),
+            "market_liquidity": r.get("market_liquidity"),
             "model_probability": round(model_p, 3),
             "market_probability": round(market_p, 3),
             "edge": round(signed, 3),

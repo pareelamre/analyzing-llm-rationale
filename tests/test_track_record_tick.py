@@ -18,6 +18,31 @@ _SPEC.loader.exec_module(track_record_tick)
 
 
 class TrackRecordTickTests(unittest.TestCase):
+    def test_forecast_fn_rejects_response_from_a_different_model(self):
+        quote = {
+            "question": "Will the test event happen?",
+            "platform": "Polymarket",
+            "market_url": "https://polymarket.com/event/test",
+            "probability": 0.4,
+        }
+        response = {
+            "model_key": "gpt-oss-120b",
+            "market_analysis": {
+                "model_probability": 0.7,
+                "market_probability": 0.4,
+            },
+        }
+        with (
+            mock.patch.object(track_record_tick, "_post_predict", return_value=response),
+            mock.patch.object(track_record_tick, "_predict_stats", Counter()) as stats,
+        ):
+            result = asyncio.run(
+                track_record_tick.forecast_fn(quote, 3, model="council")
+            )
+
+        self.assertIsNone(result)
+        self.assertEqual(stats["model_mismatches"], 1)
+
     def test_predict_circuit_skips_queued_calls_after_repeated_failures(self):
         circuit = threading.Event()
         with (

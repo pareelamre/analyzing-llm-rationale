@@ -5859,20 +5859,16 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
             "predict",
             {
                 "prompt_date": prompt_date,
-                "question": req.question,
-                "description": req.description,
-                "variant": req.variant,
-                "question_type": req.question_type,
-                "options": req.options,
-                "chat_mode": req.chat_mode,
-                "attach_evidence": req.attach_evidence,
-                "evidence_top_k": req.evidence_top_k,
-                "news_articles": [a.model_dump() for a in req.news_articles],
-                "market_platform": req.market_platform,
-                "market_url": req.market_url,
-                "market_outcome": req.market_outcome,
-                "market_probability": req.market_probability,
-                "model_key": _state.get("model_key"),
+                # Cache the complete prompt-affecting request. In particular,
+                # ``model`` must be part of the identity: the track-record job
+                # submits the same market to several models, and sharing a key
+                # can return one model's response as "council".
+                "request": req.model_dump(
+                    mode="json",
+                    exclude={"openrouter_api_key"},
+                ),
+                "served_model_key": _model_key_for_request(req),
+                "server_model_key": _state.get("model_key"),
                 "temperature": _state.get("temperature"),
             },
         )
@@ -6040,7 +6036,8 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             messages, evidence_articles, evidence_error = await _prepare_predict_messages(
                 req, rag_user_id
             )
-            provider, temperature, max_tokens = _select_predict_provider(req)
+            if req.model != "council":
+                provider, temperature, max_tokens = _select_predict_provider(req)
         except HTTPException as exc:
             yield _sse_event("error", {"status_code": exc.status_code, "detail": exc.detail})
             return
@@ -6060,6 +6057,28 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             "evidence_articles": [a.model_dump(mode="json") for a in _news_articles(evidence_articles)],
             "evidence_error": evidence_error,
         })
+
+        # Council forecasts are an orchestration path, not a stream-capable
+        # provider. Selecting a provider here silently ran the server default
+        # while labelling the response "council".
+        if req.model == "council":
+            try:
+                response = await _council_forecast(
+                    messages,
+                    req,
+                    evidence_articles,
+                    evidence_error,
+                )
+                await _finalize_predict_response(req, response, rag_user_id)
+            except Exception as exc:
+                http_exc = _provider_http_error(exc)
+                yield _sse_event("error", {
+                    "status_code": http_exc.status_code,
+                    "detail": http_exc.detail,
+                })
+                return
+            yield _sse_event("done", {"response": response.model_dump(mode="json")})
+            return
 
         chunks: List[str] = []
         try:
