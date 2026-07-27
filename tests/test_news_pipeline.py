@@ -236,6 +236,8 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(len(articles), 1)
         self.assertEqual(articles[0]["title"], "Cabinet departure report")
         self.assertEqual(calls[0][1]["params"], {"q": "Trump Cabinet departure"})
+        self.assertEqual(calls[0][1]["headers"], {"User-Agent": "Foresea/1.0"})
+        self.assertTrue(calls[0][1]["allow_redirects"])
 
     def test_fetch_web_prefers_searxng(self):
         class FakeResp:
