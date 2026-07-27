@@ -136,7 +136,10 @@ _CHAT_SYSTEM_PROMPT = (
     "uncertainty. Treat the provided Current Time as today's date/time for temporal "
     "phrases and deadlines. If the question implies a probability, express it in prose "
     "(e.g., \"around 60%\") and, when a market price is given, briefly note whether "
-    "you lean above or below it. "
+    "you lean above or below it. When evidence summaries are provided, include a short "
+    "**Evidence used** section naming one to three provided sources and the concrete "
+    "facts that affected your estimate. Never invent a source or claim that you checked "
+    "current reporting when no evidence was retrieved. "
     "Whenever you give a probability estimate, append a machine-readable tag on its own "
     "line at the very end of your response: [p:0.XX] where 0.XX is your estimate as a "
     "decimal (e.g. [p:0.65]). Omit the tag if you give no probability. "
@@ -3113,6 +3116,7 @@ class AgentReport(BaseModel):
     question_type: str = "binary"
     thesis: str = ""
     evidence_sources: List["EvidenceSource"] = Field(default_factory=list)
+    evidence_error: Optional[str] = None
     skills: List[AgentSkillResult] = Field(default_factory=list)
     grounding: Optional[str] = Field(None, description="Track-record self-calibration note applied to the forecast.")
     tool_transcript: List[Dict[str, Any]] = Field(default_factory=list, description="Tool calls + observations when the tool loop ran.")
@@ -3893,13 +3897,17 @@ async def _prepare_predict_messages(
                         None,
                         lambda: evidence_pipeline.fetch_summarize_rank(req.question, top_k=top_k),
                     )
-                    _cache_set(evidence_cache_key, evidence_articles, _EVIDENCE_CACHE_TTL)
+                    if evidence_articles:
+                        _cache_set(
+                            evidence_cache_key,
+                            evidence_articles,
+                            _EVIDENCE_CACHE_TTL,
+                        )
                 except Exception as exc:
                     evidence_articles = []
                     evidence_error = f"Evidence retrieval failed: {exc}"
 
     evidence_articles = [_clean_article(a) for a in evidence_articles]
-
     # Personalised retrieval: prepend the signed-in user's knowledge-base hits.
     if rag_user_id:
         try:
@@ -3922,6 +3930,20 @@ async def _prepare_predict_messages(
         except Exception:
             pass
 
+    if (
+        req.attach_evidence
+        and not short_followup
+        and not evidence_articles
+        and evidence_error is None
+    ):
+        evidence_error = (
+            "No relevant live evidence sources were found after retrying retrieval."
+        )
+        logger.warning(
+            "Evidence retrieval returned no relevant sources for question=%r",
+            req.question,
+        )
+
     record["news_articles"] = evidence_articles
 
     if req.chat_mode:
@@ -3929,6 +3951,13 @@ async def _prepare_predict_messages(
         # model replies in natural language. Pass an empty template so the user
         # prompt is just the question + evidence/market context, no JSON suffix.
         system_prompt = _CHAT_SYSTEM_PROMPT
+        if not evidence_articles and evidence_error:
+            system_prompt += (
+                "\n\nEvidence status: no relevant live sources were retrieved. "
+                "Explicitly label the answer as evidence-limited. Do not say there is "
+                "no breaking news, no current reporting, or no pending event. Base the "
+                "estimate only on the supplied market context, deadline, and base rates."
+            )
         if _detect_trading_intent(req.question):
             try:
                 trl = _read_live_track_record()
@@ -6366,6 +6395,7 @@ async def _agent_report_from_prediction(
         question_type=result.question_type,
         thesis=result.model_rationale or result.rationale or "",
         evidence_sources=result.evidence_sources,
+        evidence_error=result.evidence_error,
         skills=list(skill_results),
         grounding=grounding_note,
     )
@@ -6536,7 +6566,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                     market_probability=(a.market_probability if a else mp),
                     edge=(a.edge if a else None), stance=(a.stance if a else None),
                     thesis=r.model_rationale or r.rationale or "", question_type=r.question_type,
-                    evidence_sources=list(r.evidence_sources))
+                    evidence_sources=list(r.evidence_sources),
+                    evidence_error=r.evidence_error)
         msg = f"Forecast: {r.predicted_answer} (confidence {r.confidence})."
         if a and a.edge is not None:
             msg += (f" Model {round((a.model_probability or 0) * 100)}% vs market "
@@ -6649,6 +6680,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         # recommendation — so use the forecast's own rationale to stay consistent.
         thesis=(last.get("thesis") if backstopped and last.get("thesis") else res.get("answer", "")),
         evidence_sources=last.get("evidence_sources", []),
+        evidence_error=last.get("evidence_error"),
         grounding=grounding_note, tool_transcript=res.get("transcript", []),
     )
     # Evolution loop: enrol the analysed market into the live track record (pointer only).

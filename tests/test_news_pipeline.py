@@ -474,6 +474,50 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(len(articles), 2)
         self.assertEqual(articles[0]["search_query"], "Federal Reserve rate cut September 2026")
 
+    def test_fetch_summarize_rank_retries_when_initial_candidates_are_filtered(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._summarize_articles = False
+        question = "Will any member of Trump's Cabinet leave before August 2026?"
+        initial_query = "Trump Cabinet August 2026"
+        fallback_query = _keyword_search_query(question)
+        calls = []
+
+        def fake_fetch(query, top_k):
+            calls.append((query, top_k))
+            if query == initial_query:
+                return [{"title": "Unrelated sports result", "url": "https://example.com/sport"}]
+            return [
+                {
+                    "title": "Trump Cabinet departure",
+                    "url": "https://example.com/cabinet",
+                }
+            ]
+
+        def fake_rank(_question, articles):
+            return [
+                {
+                    **article,
+                    "relevance": 0.9 if "Cabinet departure" in article["title"] else 0.0,
+                }
+                for article in articles
+            ]
+
+        pipeline.plan_search_queries = lambda _question: [initial_query]
+        pipeline.fetch = fake_fetch
+        pipeline.rank = fake_rank
+        pipeline.select_diverse_sources = lambda ranked, top_k: [
+            article for article in ranked if article["relevance"] >= 0.25
+        ][:top_k]
+
+        articles = pipeline.fetch_summarize_rank(question, top_k=3)
+
+        self.assertEqual(
+            calls,
+            [(initial_query, 5), (fallback_query, 10)],
+        )
+        self.assertEqual([article["title"] for article in articles], ["Trump Cabinet departure"])
+        self.assertEqual(articles[0]["search_query"], fallback_query)
+
     def test_keyword_search_query_removes_forecast_filler(self):
         query = _keyword_search_query(
             "Will the Federal Reserve cut US interest rates before July 31, 2026?"

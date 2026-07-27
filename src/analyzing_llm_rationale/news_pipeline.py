@@ -1143,19 +1143,32 @@ class NewsPipeline:
         """Full pipeline: fetch → summarize → rank → return top_k."""
         search_queries = self.plan_search_queries(question)
         raw: List[dict] = []
-        for search_query in search_queries:
-            for article in self.fetch(search_query, top_k=max(top_k, 5)):
+
+        def fetch_query(search_query: str, limit: int) -> None:
+            for article in self.fetch(search_query, top_k=limit):
                 article.setdefault("search_query", search_query)
                 raw.append(article)
-        if not raw:
-            fallback_query = _keyword_search_query(question)
-            if fallback_query not in search_queries:
-                for article in self.fetch(fallback_query, top_k=top_k * 2):
-                    article.setdefault("search_query", fallback_query)
-                    raw.append(article)
+
+        for search_query in search_queries:
+            fetch_query(search_query, max(top_k, 5))
         for article in raw:
             if self._summarize_articles:
                 article["summary"] = self.summarize(article)
             article.setdefault("search_query", search_queries[0])
         ranked = self.rank(question, raw)
-        return self.select_diverse_sources(ranked, top_k)
+        selected = self.select_diverse_sources(ranked, top_k)
+        if selected:
+            return selected
+
+        # Broad searches can return candidates that are all filtered as irrelevant.
+        # Retry with forecasting-specific keywords rather than silently returning none.
+        fallback_query = _keyword_search_query(question)
+        if fallback_query not in search_queries:
+            previous_count = len(raw)
+            fetch_query(fallback_query, max(top_k * 2, 10))
+            for article in raw[previous_count:]:
+                if self._summarize_articles:
+                    article["summary"] = self.summarize(article)
+            ranked = self.rank(question, raw)
+            selected = self.select_diverse_sources(ranked, top_k)
+        return selected
