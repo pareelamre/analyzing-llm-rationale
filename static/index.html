@@ -3511,7 +3511,7 @@ function sourceFeedHtml(sources, evidenceError = '') {
     </div>`;
 }
 
-function makeAIBubble(data, variant) {
+function makeAIBubble(data, variant, options = {}) {
   if (variant && !data.variant) data.variant = variant;
   const qtype = data.question_type || 'binary';
   const rationale = data.rationale || '';
@@ -3589,7 +3589,7 @@ function makeAIBubble(data, variant) {
 
   const typeTag = qtype !== 'binary' ? ' · ' + qtype.replace(/_/g, ' ') : '';
   const marketLensHtml = makeMarketLens(data);
-  const actionsHtml = forecastActionsHtml(data);
+  const actionsHtml = options.includeActions === false ? '' : forecastActionsHtml(data);
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
   div._forecastData = data;
@@ -3600,7 +3600,7 @@ function makeAIBubble(data, variant) {
       ${rationale ? `
         <div class="pt-2">
           <p class="label mb-1">Forecast thesis</p>
-          <p class="text-[15px] text-gray-700 leading-relaxed">${escHtml(rationale)}</p>
+          <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         </div>` : ''}
       ${sourcesHtml}
       ${actionsHtml}
@@ -4717,6 +4717,15 @@ function submitLandingQuestion(event) {
   _streamLandingQuestion(question);
 }
 
+function _landingForecastHtml(data, fallbackText = '') {
+  const response = { ...(data || {}) };
+  const rationale = response.rationale || response.model_rationale || fallbackText || 'No response.';
+  response.rationale = rationale;
+  const bubble = makeAIBubble(response, response.variant, { includeActions: false });
+  return bubble.querySelector('.msg-ai')?.innerHTML
+    || renderMarkdown(_chatText(rationale));
+}
+
 async function _streamLandingQuestion(question) {
   if (!isUserSignedIn()) {
     _queueForecastAfterSignIn(question);
@@ -4760,8 +4769,8 @@ async function _streamLandingQuestion(question) {
           contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>';
         } else if (event === 'done') {
           _landingLastData = data.response;
-          const finalText = data.response?.rationale || data.response?.model_rationale || text || 'No response.';
-          contentEl.innerHTML = renderMarkdown(_chatText(finalText));
+          contentEl.innerHTML = _landingForecastHtml(data.response, text);
+          enhanceCard(contentEl);
           actionsEl.style.display = 'flex';
           btn.disabled = false;
           return;
@@ -4783,7 +4792,8 @@ async function _streamLandingQuestion(question) {
       });
       const d = await _readJson(r);
       _landingLastData = d;
-      contentEl.innerHTML = renderMarkdown(d.rationale || d.model_rationale || 'No response.');
+      contentEl.innerHTML = _landingForecastHtml(d);
+      enhanceCard(contentEl);
       actionsEl.style.display = 'flex';
     } catch (_2) {
       contentEl.innerHTML = '<span style="color:#c33">Could not reach Foresea. Please try again.</span>';
@@ -7766,6 +7776,8 @@ async function runScan(platform, query, customLabel) {
 // ── Auth ─────────────────────────────────────────────────────────────────────
 let _gClientId = null;
 let _ghClientId = null;
+let _authConfigPromise = null;
+let _googleIdentityLoadStarted = false;
 let currentUser = null;
 let _pendingQuestionAfterSignIn = null;
 const _PENDING_FORECAST_KEY = 'foresea_pending_forecast';
@@ -8000,17 +8012,58 @@ function setAuthMode(mode) {
 
 function toggleAuthMode() { setAuthMode(_authMode === 'login' ? 'register' : 'login'); }
 
+function _syncAuthProviderVisibility() {
+  const hasGoogle = !!_gClientId;
+  const hasGitHub = !!_ghClientId;
+  document.getElementById('authSocial').hidden = !(hasGoogle || hasGitHub);
+  document.getElementById('authGoogleSection').hidden = !hasGoogle;
+  document.getElementById('githubBtn').hidden = !hasGitHub;
+  if (hasGoogle && window.google?.accounts?.id &&
+      document.getElementById('authOverlay').classList.contains('show')) {
+    requestAnimationFrame(() => renderGoogleButton('modalGsiWrap'));
+  }
+}
+
+function _loadGoogleIdentityServices() {
+  if (!_gClientId || window.google?.accounts?.id || _googleIdentityLoadStarted) return;
+  _googleIdentityLoadStarted = true;
+  const script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.onload = () => {
+    google.accounts.id.initialize({
+      client_id: _gClientId,
+      callback: handleGoogleCredential,
+      auto_select: false,
+    });
+    _syncAuthProviderVisibility();
+  };
+  script.onerror = () => { _googleIdentityLoadStarted = false; };
+  document.head.appendChild(script);
+}
+
+function _ensureAuthProviders() {
+  if (_authConfigPromise) return _authConfigPromise;
+  _authConfigPromise = fetch('/auth/config')
+    .then(r => r.ok ? r.json() : {})
+    .catch(() => ({}))
+    .then(cfg => {
+      _ghClientId = cfg.github_client_id || null;
+      _gClientId = cfg.google_client_id || null;
+      _syncAuthProviderVisibility();
+      _loadGoogleIdentityServices();
+      return cfg;
+    });
+  return _authConfigPromise;
+}
+
 function openAuthModal(mode) {
   setAuthMode(mode || 'login');
   _showAuthError('');
   const overlay = document.getElementById('authOverlay');
   overlay.classList.add('show');
   overlay.setAttribute('aria-hidden', 'false');
-  document.getElementById('authSocial').hidden = !(_gClientId || _ghClientId);
-  document.getElementById('authGoogleSection').hidden = !_gClientId;
-  document.getElementById('githubBtn').hidden = !_ghClientId;
-  // Render after layout so the button width matches the modal.
-  if (_gClientId) requestAnimationFrame(() => renderGoogleButton('modalGsiWrap'));
+  _syncAuthProviderVisibility();
+  _ensureAuthProviders();
   setTimeout(() => document.getElementById('authEmail').focus(), 60);
 }
 
@@ -8196,6 +8249,10 @@ function signOut() {
 }
 
 async function initAuth() {
+  // Start provider discovery immediately so a landing-page forecast can show
+  // Google and GitHub even when the sign-in modal opens during initial load.
+  const authProvidersReady = _ensureAuthProviders();
+
   // 1. Restore any existing session
   const user = await _verifySession();
   if (user) {
@@ -8210,32 +8267,8 @@ async function initAuth() {
   // 2. Complete a GitHub OAuth round-trip if we just returned from GitHub.
   await _maybeCompleteGitHubLogin();
 
-  // 3. Fetch public OAuth client IDs (Google + GitHub, independent of each other).
-  let cfg = {};
-  try {
-    const r = await fetch('/auth/config');
-    if (r.ok) cfg = await r.json();
-  } catch { return; }
-  _ghClientId = cfg.github_client_id || null;
-  if (!cfg.google_client_id) return;
-  _gClientId = cfg.google_client_id;
-
-  // 4. Load GIS so the modal's "Continue with Google" button can render on demand.
-  const script = document.createElement('script');
-  script.src = 'https://accounts.google.com/gsi/client';
-  script.onload = () => {
-    google.accounts.id.initialize({
-      client_id: _gClientId,
-      callback: handleGoogleCredential,
-      auto_select: false,
-    });
-    // If the modal is already open (rare), render the button now.
-    if (document.getElementById('authOverlay').classList.contains('show')) {
-      document.getElementById('authGoogleSection').hidden = false;
-      renderGoogleButton('modalGsiWrap');
-    }
-  };
-  document.head.appendChild(script);
+  // 3. Provider discovery runs in parallel with session restoration.
+  await authProvidersReady;
 }
 
 // Close the auth modal on Escape.
