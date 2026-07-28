@@ -22,6 +22,7 @@ class LiveTrackRecordConfig:
     ttl_seconds: int
     stale_after_seconds: int
     bundled_path: Path
+    request_timeout_seconds: int = 20
     cache_namespace: str = "track_record_live"
     cache_version: str = "v3"
     resource_label: str = "live track record"
@@ -72,7 +73,7 @@ class LiveTrackRecordReader:
             cache_busted_url = f"{self._config.live_url}{sep}_={int(self._time() // ttl)}"
             resp = self._requests_get(
                 cache_busted_url,
-                timeout=6,
+                timeout=max(self._config.request_timeout_seconds, 1),
                 headers={
                     "Cache-Control": "no-cache",
                     "Pragma": "no-cache",

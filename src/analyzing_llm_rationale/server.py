@@ -84,6 +84,7 @@ _TRACK_RECORD_LIVE_URL = os.environ.get(
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/static/track_record_live.json",
 )
 _TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "30"))
+_TRACK_RECORD_LIVE_TIMEOUT = int(os.environ.get("TRACK_RECORD_LIVE_TIMEOUT", "20"))
 _EDGE_BOARD_STALE_AFTER_S = int(os.environ.get("EDGE_BOARD_STALE_AFTER_S", "1800"))
 _FORECAST_EVALUATION_URL = os.environ.get(
     "FORECAST_EVALUATION_URL",
@@ -92,6 +93,9 @@ _FORECAST_EVALUATION_URL = os.environ.get(
 )
 _FORECAST_EVALUATION_TTL = int(
     os.environ.get("FORECAST_EVALUATION_TTL", "60")
+)
+_FORECAST_EVALUATION_TIMEOUT = int(
+    os.environ.get("FORECAST_EVALUATION_TIMEOUT", str(_TRACK_RECORD_LIVE_TIMEOUT))
 )
 _FORECAST_EVALUATION_STALE_AFTER_S = int(
     os.environ.get("FORECAST_EVALUATION_STALE_AFTER_S", "1800")
@@ -1119,6 +1123,7 @@ _LIVE_TRACK_RECORD_READER = live_track_record_support.LiveTrackRecordReader(
         ttl_seconds=_TRACK_RECORD_LIVE_TTL,
         stale_after_seconds=_EDGE_BOARD_STALE_AFTER_S,
         bundled_path=_STATIC_DIR / "track_record_live.json",
+        request_timeout_seconds=_TRACK_RECORD_LIVE_TIMEOUT,
     ),
     logger=logger,
 )
@@ -1133,6 +1138,7 @@ _FORECAST_EVALUATION_READER = live_track_record_support.LiveTrackRecordReader(
         ttl_seconds=_FORECAST_EVALUATION_TTL,
         stale_after_seconds=_FORECAST_EVALUATION_STALE_AFTER_S,
         bundled_path=_STATIC_DIR / "forecast_evaluation.json",
+        request_timeout_seconds=_FORECAST_EVALUATION_TIMEOUT,
         cache_namespace="forecast_evaluation",
         cache_version="v1",
         resource_label="forecast evaluation report",

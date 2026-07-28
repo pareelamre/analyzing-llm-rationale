@@ -66,6 +66,44 @@ class LiveTrackRecordTests(unittest.TestCase):
         self.assertEqual(cache["track_record_live:v3"][1], 30)
         self.assertEqual(logger.messages[0][0], "live track record fetch failed; trying bundled copy")
 
+    def test_reader_uses_configured_remote_timeout(self):
+        seen = {}
+
+        def _requests_get(url, **kwargs):
+            seen["url"] = url
+            seen["timeout"] = kwargs.get("timeout")
+
+            class _Response:
+                status_code = 200
+
+                @staticmethod
+                def json():
+                    return {"generated_at": "2026-07-27T10:00:00+00:00"}
+
+            return _Response()
+
+        reader = LiveTrackRecordReader(
+            cache_key=lambda namespace, version: f"{namespace}:{version}",
+            cache_get=lambda key: None,
+            cache_set=lambda key, value, ttl: None,
+            config=LiveTrackRecordConfig(
+                live_url="https://example.test/track_record_live.json",
+                ttl_seconds=30,
+                stale_after_seconds=1800,
+                bundled_path=Path("unused.json"),
+                request_timeout_seconds=25,
+            ),
+            logger=_FakeLogger(),
+            requests_get=_requests_get,
+            time_fn=lambda: 90,
+        )
+
+        payload = reader.read()
+
+        self.assertEqual(payload["generated_at"], "2026-07-27T10:00:00+00:00")
+        self.assertEqual(seen["timeout"], 25)
+        self.assertIn("_=3", seen["url"])
+
     def test_freshness_uses_configured_staleness_window(self):
         reader = LiveTrackRecordReader(
             cache_key=lambda namespace, version: f"{namespace}:{version}",
