@@ -1286,9 +1286,51 @@
     }
     #questionInput::placeholder { color: #8f8f8f; }
     .send-btn {
-      width: 34px !important;
-      height: 34px !important;
+      width: 40px !important;
+      height: 40px !important;
       background: #111;
+      display: grid !important;
+      flex: 0 0 40px;
+      line-height: 1;
+      padding: 0;
+      place-items: center;
+    }
+    .send-btn-stop-icon {
+      background: currentColor;
+      border-radius: 1px;
+      display: block;
+      height: 8px;
+      width: 8px;
+    }
+    .ui-icon {
+      display: inline-block;
+      fill: none;
+      flex: 0 0 auto;
+      height: 1em;
+      overflow: visible;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.8;
+      vertical-align: -0.125em;
+      width: 1em;
+    }
+    .ui-icon-fill {
+      fill: currentColor;
+      stroke: none;
+    }
+    .ui-icon-label {
+      align-items: center;
+      display: inline-flex;
+      gap: .38em;
+    }
+    .send-btn-icon { height: 18px; width: 18px; }
+    .side-nav-ico .ui-icon { height: 15px; width: 15px; }
+    .feedback-star .ui-icon { height: 24px; width: 24px; }
+    .feedback-star.active .ui-icon,
+    .feedback-star:hover .ui-icon,
+    .fav-star.on .ui-icon {
+      fill: currentColor;
     }
     .attach-btn {
       width: 34px;
@@ -1388,7 +1430,7 @@
     .model-form-actions { display: flex; gap: 8px; }
     .model-save { flex: 1; background: var(--ink); color: #fff; border: 0; border-radius: 999px; padding: 8px; font-size: 12px; font-weight: 500; cursor: pointer; }
     .model-save:hover { background: #000; }
-    .fav-star { background: transparent; border: 0; cursor: pointer; font-size: 15px; line-height: 1; color: #cbd5e1; padding: 0; transition: color var(--dur-med), transform var(--dur-med); }
+    .fav-star { align-items: center; background: transparent; border: 0; cursor: pointer; display: inline-flex; font-size: 15px; justify-content: center; line-height: 1; color: #cbd5e1; padding: 0; transition: color var(--dur-med), transform var(--dur-med); }
     .fav-star:hover { transform: scale(1.18); color: #f59e0b; }
     .fav-star.on { color: #f59e0b; }
     /* Kite-style watchlist rail */
@@ -1407,7 +1449,7 @@
     .wl-sub { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
     .wl-quote { text-align: right; white-space: nowrap; }
     .wl-price { font-size: 13px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
-    .wl-chg { font-size: 10px; font-variant-numeric: tabular-nums; }
+    .wl-chg { align-items: center; display: inline-flex; font-size: 10px; font-variant-numeric: tabular-nums; gap: 2px; }
     .wl-up { color: #15803d; }
     .wl-down { color: #dc2626; }
     .wl-flat { color: var(--text-dim); }
@@ -1448,7 +1490,7 @@
     .wlm-q a { color: inherit; text-decoration: none; }
     .wlm-q a:hover { text-decoration: underline; }
     .wlm-odds { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .wlm-add { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--ink); font-size: 16px; line-height: 1; cursor: pointer; flex-shrink: 0; }
+    .wlm-add { align-items: center; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--ink); display: inline-flex; font-size: 16px; justify-content: center; line-height: 1; cursor: pointer; flex-shrink: 0; }
     .wlm-add:hover { background: #15803d; color: #fff; border-color: #15803d; }
     .wlm-add.added { background: #dcfce7; color: #15803d; border-color: #bbf7d0; cursor: default; }
     .model-cancel { flex: 1; background: transparent; color: var(--text-dim); border: 1px solid var(--border-2); border-radius: 999px; padding: 8px; font-size: 12px; cursor: pointer; }
@@ -1723,6 +1765,29 @@
 </head>
 <body>
 
+<svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+  <defs>
+    <symbol id="ui-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="ui-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="ui-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="ui-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+    <symbol id="ui-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5m6-6-6 6 6 6"/></symbol>
+    <symbol id="ui-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="ui-external" viewBox="0 0 24 24"><path d="M14 5h5v5m0-5-9 9"/><path d="M19 13v6H5V5h6"/></symbol>
+    <symbol id="ui-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="ui-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></symbol>
+    <symbol id="ui-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5H5v11h3"/></symbol>
+    <symbol id="ui-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M6.1 8a7 7 0 0 1 11.7-1L20 12M4 12l2.2 5a7 7 0 0 0 11.7-1"/></symbol>
+    <symbol id="ui-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></symbol>
+    <symbol id="ui-alert" viewBox="0 0 24 24"><path d="M12 4 3 20h18L12 4Z"/><path d="M12 9v5m0 3h.01"/></symbol>
+    <symbol id="ui-chart" viewBox="0 0 24 24"><path d="M4 19V5m0 14h16"/><path d="m7 15 4-4 3 2 5-6"/></symbol>
+    <symbol id="ui-edge" viewBox="0 0 24 24"><path d="M4 18 10 6l4 12 3-7 3 7"/><path d="M4 18h16"/></symbol>
+    <symbol id="ui-triangle-up" viewBox="0 0 24 24"><path d="m12 6 7 12H5L12 6Z"/></symbol>
+    <symbol id="ui-triangle-down" viewBox="0 0 24 24"><path d="m12 18-7-12h14l-7 12Z"/></symbol>
+    <symbol id="ui-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  </defs>
+</svg>
+
 <div class="grain"></div>
 
 <!-- ── Landing ── -->
@@ -1777,7 +1842,7 @@
         <div id="landingAnswer" class="landing-answer" aria-live="polite" style="max-width: 100%;">
           <div class="landing-answer-content chat-md" id="landingAnswerContent"></div>
           <div class="landing-answer-actions" id="landingAnswerActions" style="display:none">
-            <button class="landing-answer-btn primary" onclick="_landingOpenInApp()">Continue in app →</button>
+            <button class="landing-answer-btn primary ui-icon-label" onclick="_landingOpenInApp()">Continue in app <svg class="ui-icon" aria-hidden="true"><use href="#ui-arrow-right"></use></svg></button>
             <button class="landing-answer-btn" onclick="_landingReset()">Ask another</button>
           </div>
         </div>
@@ -1928,7 +1993,7 @@
             We evaluate the forecast calibration: if we group all predictions where we estimated a 75% probability, about 75% of those events should occur. We track these results transparently in our public database and track record sheets.
           </p>
           <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-            <button type="button" class="hero-action primary" onclick="openTrackRecord()">View Detailed Track Record →</button>
+            <button type="button" class="hero-action primary ui-icon-label" onclick="openTrackRecord()">View Detailed Track Record <svg class="ui-icon" aria-hidden="true"><use href="#ui-arrow-right"></use></svg></button>
             <a href="mailto:pareel.amre@gmail.com?subject=Foresea%20source%20code" class="hero-action" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
               <span>Get in touch</span>
             </a>
@@ -1982,7 +2047,7 @@
       <span class="brand text-base">Foresea</span>
     </button>
     <div class="flex items-center gap-1">
-      <button class="menu-btn sidebar-icon-btn" onclick="closeSidebar()" title="Close" aria-label="Close navigation">✕</button>
+      <button class="menu-btn sidebar-icon-btn" onclick="closeSidebar()" title="Close" aria-label="Close navigation"><svg class="ui-icon" aria-hidden="true"><use href="#ui-x"></use></svg></button>
     </div>
   </div>
 
@@ -1991,13 +2056,13 @@
   <!-- Primary navigation -->
   <nav class="side-nav" aria-label="Sections">
     <button type="button" class="side-nav-link" onclick="openEdgeBoard()">
-      <span class="side-nav-ico">⚗️</span>Edge board
+      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-edge"></use></svg></span>Edge board
     </button>
     <button type="button" class="side-nav-link" onclick="openTrackRecord()">
-      <span class="side-nav-ico">📈</span>Track record
+      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-chart"></use></svg></span>Track record
     </button>
     <button type="button" class="side-nav-link" onclick="openWatchlist()">
-      <span class="side-nav-ico">☆</span>Watchlist
+      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-star"></use></svg></span>Watchlist
     </button>
   </nav>
 
@@ -2059,7 +2124,7 @@
       <div class="config-group">
         <p class="label" style="margin:0 0 2px">Model</p>
         <div id="modelList" class="model-list"></div>
-        <button type="button" id="addModelBtn" class="model-add-btn" onclick="startAddModel()">+ Add a model</button>
+        <button type="button" id="addModelBtn" class="model-add-btn ui-icon-label" onclick="startAddModel()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-plus"></use></svg>Add a model</button>
         <div id="modelForm" class="model-form" hidden>
           <div>
             <label class="label block mb-1" for="mfName">Name</label>
@@ -2122,7 +2187,7 @@
           </label>
         </div>
         <div id="skillList" class="model-list"></div>
-        <button type="button" id="addSkillBtn" class="model-add-btn" onclick="startAddSkill()">+ Add a skill</button>
+        <button type="button" id="addSkillBtn" class="model-add-btn ui-icon-label" onclick="startAddSkill()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-plus"></use></svg>Add a skill</button>
         <div id="skillForm" class="model-form" hidden>
           <div>
             <label class="label block mb-1" for="sfName">Name</label>
@@ -2158,8 +2223,8 @@
 
       <!-- API docs -->
       <div class="pt-2 border-t border-gray-200">
-        <a href="/agents" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">Agent integration ↗</a><br />
-        <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">API docs ↗</a>
+        <a href="/agents" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs ui-icon-label">Agent integration <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></a><br />
+        <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs ui-icon-label">API docs <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></a>
       </div>
     </div>
   </details>
@@ -2211,7 +2276,7 @@
         </div>
       </details>
       <div id="venueErr" class="model-form-error" hidden></div>
-      <button type="button" class="model-add-btn" onclick="openTradeModal()">Place an order ↗</button>
+      <button type="button" class="model-add-btn ui-icon-label" onclick="openTradeModal()">Place an order <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></button>
     </div>
   </details>
 
@@ -2251,7 +2316,7 @@
     <div class="flex-1 min-w-0 flex items-center gap-2">
       <button type="button" class="model-pill" title="Active model">
         <span id="chatTitle" class="truncate max-w-[220px] sm:max-w-[360px] lg:max-w-[640px]">Foresea</span>
-        <span class="text-gray-400 text-sm">⌄</span>
+        <svg class="ui-icon text-gray-400 text-sm" aria-hidden="true"><use href="#ui-chevron-down"></use></svg>
       </button>
     </div>
     <nav class="hidden md:flex items-center gap-4 flex-shrink-0" aria-label="App navigation">
@@ -2295,7 +2360,7 @@
           </svg>
         </button>
         <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="handleSendButton()" title="Send" aria-label="Send">
-          ↑
+          <svg class="ui-icon send-btn-icon" aria-hidden="true"><use href="#ui-arrow-up"></use></svg>
         </button>
       </div>
       <!-- Attach panel -->
@@ -2327,7 +2392,7 @@
 <!-- ── Feedback modal ── -->
 <div id="feedbackOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle" aria-hidden="true" onclick="if(event.target===this)closeFeedback()">
   <div class="auth-card glass" style="position:relative;max-width:420px">
-    <button type="button" class="auth-close" onclick="closeFeedback()" aria-label="Close">✕</button>
+    <button type="button" class="auth-close" onclick="closeFeedback()" aria-label="Close"><svg class="ui-icon" aria-hidden="true"><use href="#ui-x"></use></svg></button>
     <span class="auth-brand">
       <span class="logo-dot"></span>
       <span class="brand text-lg">Feedback</span>
@@ -2335,11 +2400,11 @@
     <p class="auth-sub" style="margin-top:6px">What's working? What's broken? We read everything.</p>
     <div style="margin-top:14px">
       <div id="feedbackStars" style="display:flex;gap:8px;margin-bottom:14px" role="group" aria-label="Rating">
-        <span class="feedback-star" data-v="1" onclick="setFeedbackRating(1)" title="1 star">★</span>
-        <span class="feedback-star" data-v="2" onclick="setFeedbackRating(2)" title="2 stars">★</span>
-        <span class="feedback-star" data-v="3" onclick="setFeedbackRating(3)" title="3 stars">★</span>
-        <span class="feedback-star" data-v="4" onclick="setFeedbackRating(4)" title="4 stars">★</span>
-        <span class="feedback-star" data-v="5" onclick="setFeedbackRating(5)" title="5 stars">★</span>
+        <span class="feedback-star" data-v="1" onclick="setFeedbackRating(1)" title="1 star"><svg class="ui-icon" aria-hidden="true"><use href="#ui-star"></use></svg></span>
+        <span class="feedback-star" data-v="2" onclick="setFeedbackRating(2)" title="2 stars"><svg class="ui-icon" aria-hidden="true"><use href="#ui-star"></use></svg></span>
+        <span class="feedback-star" data-v="3" onclick="setFeedbackRating(3)" title="3 stars"><svg class="ui-icon" aria-hidden="true"><use href="#ui-star"></use></svg></span>
+        <span class="feedback-star" data-v="4" onclick="setFeedbackRating(4)" title="4 stars"><svg class="ui-icon" aria-hidden="true"><use href="#ui-star"></use></svg></span>
+        <span class="feedback-star" data-v="5" onclick="setFeedbackRating(5)" title="5 stars"><svg class="ui-icon" aria-hidden="true"><use href="#ui-star"></use></svg></span>
       </div>
       <textarea id="feedbackMsg" rows="4" placeholder="Your feedback…" style="width:100%;box-sizing:border-box;background:var(--surface-alt,#1a1a1f);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;resize:vertical;font-family:inherit"></textarea>
       <input id="feedbackEmail" type="email" placeholder="Email (optional — for a reply)" style="width:100%;box-sizing:border-box;background:var(--surface-alt,#1a1a1f);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-size:14px;margin-top:8px;font-family:inherit" />
@@ -2352,7 +2417,7 @@
 <!-- ── Trade modal (place an order on your own connected account) ── -->
 <div id="tradeOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="tradeTitle" aria-hidden="true" onclick="if(event.target===this)closeTradeModal()">
   <div class="auth-card glass" style="position:relative;max-width:440px">
-    <button type="button" class="auth-close" onclick="closeTradeModal()" aria-label="Close">✕</button>
+    <button type="button" class="auth-close" onclick="closeTradeModal()" aria-label="Close"><svg class="ui-icon" aria-hidden="true"><use href="#ui-x"></use></svg></button>
     <span class="auth-brand"><span class="logo-dot"></span><span class="brand text-lg" id="tradeTitle">Place an order</span></span>
     <p class="auth-sub" style="margin-top:6px">Signs with the exchange account you connected. Preview first — real orders need a typed confirmation.</p>
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
@@ -2388,7 +2453,7 @@
 <!-- ── Auth modal ── -->
 <div id="authOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-hidden="true" onclick="if(event.target===this)closeAuthModal()">
   <div class="auth-card" style="position:relative">
-    <button type="button" class="auth-close" onclick="closeAuthModal()" aria-label="Close">✕</button>
+    <button type="button" class="auth-close" onclick="closeAuthModal()" aria-label="Close"><svg class="ui-icon" aria-hidden="true"><use href="#ui-x"></use></svg></button>
     <div style="display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 28px;">
       <span class="auth-brand" style="margin-bottom: 12px; margin-right: 0;">
         <span class="logo-dot" style="width: 24px; height: 24px;"></span>
@@ -2483,6 +2548,12 @@
 
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
+function uiIcon(name, className = '') {
+  if (!/^[a-z-]+$/.test(name) || !/^[a-z0-9 _-]*$/i.test(className)) return '';
+  const classes = className ? `ui-icon ${className}` : 'ui-icon';
+  return `<svg class="${classes}" aria-hidden="true" focusable="false"><use href="#ui-${name}"></use></svg>`;
+}
+
 const STORAGE_KEY = 'forecasting_ai_convs';
 const VARIANT_DESCS = {
   variant0_neutral_baseline:       'Neutral control — no extra framing',
@@ -2749,7 +2820,7 @@ function renderSidebar() {
     return `
       <div class="conv-item${active}" onclick="activateConv('${id}')">
         <span class="conv-title">${escHtml(c.title)}</span>
-        <span class="conv-delete" onclick="deleteConv('${id}', event)" title="Delete">×</span>
+        <span class="conv-delete" onclick="deleteConv('${id}', event)" title="Delete">${uiIcon('x')}</span>
       </div>`;
   }).join('');
 }
@@ -2832,10 +2903,10 @@ function makeUserBubble(text, msg = {}) {
     <div class="prompt-wrap" data-message-id="${escAttr(id)}">
       <div class="msg-user text-sm leading-relaxed">${escHtml(text)}</div>
       <div class="prompt-actions" aria-label="Prompt actions">
-        <button class="prompt-action" type="button" onclick="editPrompt('${escAttr(id)}')" title="Edit prompt" aria-label="Edit prompt">✎</button>
-        <button class="prompt-action" type="button" onclick="copyPrompt('${escAttr(id)}')" title="Copy prompt" aria-label="Copy prompt">⧉</button>
-        ${isActive ? '<button class="prompt-action" type="button" onclick="stopGeneration()" title="Stop response" aria-label="Stop response">■</button>' : ''}
-        <button class="prompt-action" type="button" onclick="resendPrompt('${escAttr(id)}')" title="Resend prompt" aria-label="Resend prompt">↻</button>
+        <button class="prompt-action" type="button" onclick="editPrompt('${escAttr(id)}')" title="Edit prompt" aria-label="Edit prompt">${uiIcon('edit')}</button>
+        <button class="prompt-action" type="button" onclick="copyPrompt('${escAttr(id)}')" title="Copy prompt" aria-label="Copy prompt">${uiIcon('copy')}</button>
+        ${isActive ? '<button class="prompt-action" type="button" onclick="stopGeneration()" title="Stop response" aria-label="Stop response"><span class="send-btn-stop-icon" aria-hidden="true"></span></button>' : ''}
+        <button class="prompt-action" type="button" onclick="resendPrompt('${escAttr(id)}')" title="Resend prompt" aria-label="Resend prompt">${uiIcon('refresh')}</button>
       </div>
     </div>`;
   return div;
@@ -2883,7 +2954,9 @@ function setSendingState(isSending) {
   const btn = document.getElementById('sendBtn');
   if (!btn) return;
   btn.disabled = false;
-  btn.textContent = isSending ? '■' : '↑';
+  btn.innerHTML = isSending
+    ? '<span class="send-btn-stop-icon" aria-hidden="true"></span>'
+    : uiIcon('arrow-up', 'send-btn-icon');
   btn.title = isSending ? 'Stop' : 'Send';
   btn.setAttribute('aria-label', isSending ? 'Stop response' : 'Send');
 }
@@ -3123,7 +3196,7 @@ function forecastFavoritePayload(data) {
 function forecastActionsHtml(data) {
   const fav = forecastFavoritePayload(data);
   return `<div class="market-actions pt-2">` +
-    `<button type="button" class="market-action" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"forecast_card",platform:${JSON.stringify(fav.platform || '')}})'>☆ Track</button>` +
+    `<button type="button" class="market-action ui-icon-label" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"forecast_card",platform:${JSON.stringify(fav.platform || '')}})'>${uiIcon('star')} Track</button>` +
     `<button type="button" class="market-action" onclick='shareForecastFromButton(this);trackEvent("share_clicked",{source:"forecast_card"})'>Share</button>` +
     `</div>`;
 }
@@ -3951,7 +4024,7 @@ function addAgentProgress(steps) {
 function addError(msg) {
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
-  div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">⚠ ${escHtml(msg)}</div>`;
+  div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">${uiIcon('alert')} ${escHtml(msg)}</div>`;
   document.getElementById('messages').appendChild(div);
   scrollBottom();
 }
@@ -4638,7 +4711,7 @@ async function refreshEdgeForecasts() {
         return curve;
       };
       const curves = [
-        _mk(pnl.smart, '#10b981', '★ Smart'),
+        _mk(pnl.smart, '#10b981', 'Smart'),
         _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
         _mk(pnl.flat, '#60a5fa', 'Flat stake'),
         _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
@@ -4807,7 +4880,7 @@ async function loadCrypto5mEquity() {
     const cBrier = cal.contested_brier;
     const baseline = cal.coinflip_baseline || 0.25;
     const basis = d.basis;
-    const method = `<p class="tr-method" style="margin-top:0">Real Kalshi <strong>BTC ≥ strike at close</strong> markets (KXBTCD). Model probability (lognormal from BTC spot + realized vol) is scored against the venue's own settlement over already-settled markets${basis != null ? `, after correcting the Binance→Kalshi index basis (${basis >= 0 ? '+' : ''}$${Math.round(basis)})` : ''}. This replaces the earlier synthetic 50¢ curves, which assumed an instrument that doesn't trade.</p>`;
+    const method = `<p class="tr-method" style="margin-top:0">Real Kalshi <strong>BTC ≥ strike at close</strong> markets (KXBTCD). Model probability (lognormal from BTC spot + realized vol) is scored against the venue's own settlement over already-settled markets${basis != null ? `, after correcting the Binance-to-Kalshi index basis (${basis >= 0 ? '+' : ''}$${Math.round(basis)})` : ''}. This replaces the earlier synthetic 50¢ curves, which assumed an instrument that doesn't trade.</p>`;
     if (conN < 30) {
       host.innerHTML = method +
         `<div class="tr-stat" style="margin-top:10px"><div class="v" style="font-size:16px">Building calibration</div>` +
@@ -5006,7 +5079,7 @@ function renderWatchlistPage() {
   ).join('');
   host.innerHTML = `<div class="tr-inner" id="watchPageBody">
     <h3 class="eb-h" style="margin-top:0">Browse markets</h3>
-    <p class="tr-method" style="margin-top:0">Polymarket &amp; Kalshi questions — pick a category or search, then tap ＋ to add.</p>
+    <p class="tr-method" style="margin-top:0">Polymarket &amp; Kalshi questions — pick a category or search, then tap ${uiIcon('plus')} to add.</p>
     <input id="wlmSearch" class="wlm-search" placeholder="Search questions — e.g. Fed, election, Bitcoin…"
            autocomplete="off" oninput="onMarketSearch()" />
     <div class="wlm-cats">${catTabs}</div>
@@ -5042,7 +5115,7 @@ function _renderWatchTable() {
       <td style="white-space:nowrap">
         <button type="button" class="wl-act buy" onclick='_wlTrade(${keyJson})'>Trade</button>
         <button type="button" class="wl-act" onclick='_wlAnalyze(${keyJson})'>Analyze</button>
-        <button type="button" class="wl-act" onclick='_wlRemove(${keyJson})'>✕</button>
+        <button type="button" class="wl-act" aria-label="Remove" onclick='_wlRemove(${keyJson})'>${uiIcon('x')}</button>
       </td></tr>`;
   }).join('');
   wrap.innerHTML = `<div class="md-table-wrap"><table class="eb-table">
@@ -5224,7 +5297,7 @@ function _renderLandingMarketTable(items) {
       : escHtml(q);
     html += `<div class="market-question-cell">${qTarget}<div class="market-actions">` +
       `<button type="button" class="market-action" onclick='startForecast(${JSON.stringify(e.question || '').replace(/'/g, "&#39;")}, ${JSON.stringify(ctx).replace(/'/g, "&#39;")});trackEvent("radar_ask_clicked",{platform:${JSON.stringify(e.platform || '')}})'>Ask</button>` +
-      `<button type="button" class="market-action" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"radar",platform:${JSON.stringify(e.platform || '')}})'>☆ Track</button>` +
+      `<button type="button" class="market-action ui-icon-label" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"radar",platform:${JSON.stringify(e.platform || '')}})'>${uiIcon('star')} Track</button>` +
       `</div></div>` +
       `<div>${mkt || '—'}${mkt ? '%' : ''}</div><div>${mdl == null ? '—' : mdl + '%'}</div>` +
       `<div><span class="market-gap ${dir}">${escHtml(label)}</span></div>`;
@@ -5522,14 +5595,14 @@ function _renderBoardPage(board, page) {
       ? (e.lead_days >= 1 ? Math.round(e.lead_days) + 'd' : '<1d') + ' ahead'
       : (e.lead_bucket || '—');
     const extLink = e.market_url
-      ? `<a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" class="eb-ext-link" title="Open on ${escHtml(e.platform||'market')}">↗</a>`
+      ? `<a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" class="eb-ext-link" title="Open on ${escHtml(e.platform||'market')}">${uiIcon('external')}</a>`
       : '';
     const qIdent = escAttr(e.ident || e.market_url || '');
     const trade = _formatEdgeSignal(e);
     const favKey = (e.platform && e.ident) ? `${String(e.platform).toLowerCase()}:${e.ident}` : '';
     const star = favKey
       ? `<button type="button" class="fav-star ${_isFav(favKey) ? 'on' : ''}" title="Watch this market"
-           onclick='toggleFavorite(${JSON.stringify({ key: favKey, question: e.question || '', platform: e.platform || '', ident: e.ident || '', market_url: e.market_url || '', model_probability: e.model_probability ?? null, market_probability: e.market_probability ?? null }).replace(/'/g, "&#39;")}, this)'>${_isFav(favKey) ? '★' : '☆'}</button>`
+           onclick='toggleFavorite(${JSON.stringify({ key: favKey, question: e.question || '', platform: e.platform || '', ident: e.ident || '', market_url: e.market_url || '', model_probability: e.model_probability ?? null, market_probability: e.market_probability ?? null }).replace(/'/g, "&#39;")}, this)'>${uiIcon('star')}</button>`
       : '';
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}" data-lead-skill="${_leadSkillState(tr).key}" data-lead-n="${tr && tr.n != null ? escAttr(String(tr.n)) : ''}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
@@ -5544,11 +5617,11 @@ function _renderBoardPage(board, page) {
   let pagination = '';
   if (pages > 1) {
     const prev = page > 0
-      ? `<button class="eb-page-btn" onclick="_ebGoPage(${page - 1})">← Prev</button>`
-      : `<button class="eb-page-btn" disabled>← Prev</button>`;
+      ? `<button class="eb-page-btn ui-icon-label" onclick="_ebGoPage(${page - 1})">${uiIcon('arrow-left')} Prev</button>`
+      : `<button class="eb-page-btn ui-icon-label" disabled>${uiIcon('arrow-left')} Prev</button>`;
     const next = page < pages - 1
-      ? `<button class="eb-page-btn" onclick="_ebGoPage(${page + 1})">Next →</button>`
-      : `<button class="eb-page-btn" disabled>Next →</button>`;
+      ? `<button class="eb-page-btn ui-icon-label" onclick="_ebGoPage(${page + 1})">Next ${uiIcon('arrow-right')}</button>`
+      : `<button class="eb-page-btn ui-icon-label" disabled>Next ${uiIcon('arrow-right')}</button>`;
     pagination = `<div class="eb-pagination">${prev}<span class="eb-page-info">${page + 1} / ${pages}</span>${next}</div>`;
   }
   return tableHtml + pagination;
@@ -5608,7 +5681,7 @@ function renderEdgeBoard(d) {
       return curve;
     };
     const curves = [
-      _mk(pnl.smart, '#10b981', '★ Smart'),
+      _mk(pnl.smart, '#10b981', 'Smart'),
       _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
       _mk(pnl.flat, '#60a5fa', 'Flat stake'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
@@ -5617,7 +5690,7 @@ function renderEdgeBoard(d) {
     performanceHtml = `
       <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $100 starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
       <div class="tr-stats">
-        <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">★ Smart</div>${_sub('Kelly + filters')}</div>
+      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label ui-icon-label">${uiIcon('star')} Smart</div>${_sub('Kelly + filters')}</div>
         <div class="tr-stat" title="Calibrated Half-Kelly sizing proportional to estimated edge and market odds."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
         <div class="tr-stat" title="Equal stake on every resolved forecast."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
         <div class="tr-stat" title="Equal stake following the market consensus as a zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">Crowd baseline</div>${_sub('agree with market')}</div>
@@ -5904,7 +5977,7 @@ function _renderChips() {
     <span class="attach-chip" title="${escHtml(a.title)}">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       <span>${escHtml(a.title.length > 22 ? a.title.slice(0, 20) + '…' : a.title)}</span>
-      <span class="attach-chip-remove" onclick="removeAttachment(${i})" title="Remove">×</span>
+      <span class="attach-chip-remove" onclick="removeAttachment(${i})" title="Remove">${uiIcon('x')}</span>
     </span>`).join('');
 }
 
@@ -6032,8 +6105,8 @@ function renderModelList() {
         </div>
         <span class="model-badge">${badge}</span>
         <div class="model-actions">
-          <button type="button" class="model-icon-btn" title="Edit" onclick="event.stopPropagation();editModel('${m.id}')">✎</button>
-          <button type="button" class="model-icon-btn" title="Remove" onclick="event.stopPropagation();deleteModel('${m.id}')">✕</button>
+          <button type="button" class="model-icon-btn" title="Edit" onclick="event.stopPropagation();editModel('${m.id}')">${uiIcon('edit')}</button>
+          <button type="button" class="model-icon-btn" title="Remove" onclick="event.stopPropagation();deleteModel('${m.id}')">${uiIcon('x')}</button>
         </div>
       </div>`);
   });
@@ -6235,7 +6308,7 @@ function renderVenueStatus() {
     const on = _venueConnected(platform);
     if (on) connected++;
     if (!chip) return;
-    chip.textContent = on ? 'Connected ✓' : 'Not connected';
+    chip.innerHTML = on ? `Connected ${uiIcon('check')}` : 'Not connected';
     chip.style.background = on ? '#dcfce7' : '#eee';
     chip.style.color = on ? '#15803d' : '#777';
   });
@@ -6359,7 +6432,7 @@ function _validTradeInputs(body) {
   if (!(body.quantity > 0)) { _trError('Enter a quantity.'); return false; }
   if (body.platform === 'kalshi' && !body.ticker) { _trError('Enter a Kalshi ticker.'); return false; }
   if (body.platform === 'polymarket' && !body.token_id && !body.slug) { _trError('Enter a token id or slug.'); return false; }
-  if (!_venueConnected(body.platform)) { _trError(`Connect your ${body.platform} account first (sidebar → Connect exchange).`); return false; }
+  if (!_venueConnected(body.platform)) { _trError(`Connect your ${body.platform} account first from Connect exchange in the sidebar.`); return false; }
   return true;
 }
 
@@ -6407,7 +6480,7 @@ async function submitTrade() {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { _trError(d.detail || 'Order failed.'); return; }
     document.getElementById('trPreview').innerHTML =
-      `<div style="padding:8px 10px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;color:#15803d">Order submitted ✓</div>`;
+      `<div class="ui-icon-label" style="padding:8px 10px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;color:#15803d">Order submitted ${uiIcon('check')}</div>`;
     document.getElementById('trConfirmRow').hidden = true;
   } catch (e) {
     _trError('Could not reach Foresea: ' + e.message);
@@ -6444,7 +6517,7 @@ async function toggleFavorite(fav, btn) {
     delete store[fav.key];
   }
   _saveFavorites(store);
-  if (btn) { btn.classList.toggle('on', on); btn.textContent = on ? '★' : '☆'; }
+  if (btn) { btn.classList.toggle('on', on); btn.innerHTML = uiIcon('star'); }
   trackEvent(on ? 'watchlist_add' : 'watchlist_remove', {
     platform: fav.platform || '',
     source: 'toggle',
@@ -6493,7 +6566,7 @@ function _refreshEdgeStars() {
     if (!m) return;
     const on = _isFav(m[1]);
     btn.classList.toggle('on', on);
-    btn.textContent = on ? '★' : '☆';
+    btn.innerHTML = uiIcon('star');
   });
 }
 
@@ -6512,7 +6585,11 @@ function _wlChange(q, fav) {
 function _chgHtml(chgPts) {
   if (chgPts == null) return '<span class="wl-chg wl-flat">—</span>';
   const cls = chgPts > 0.05 ? 'wl-up' : chgPts < -0.05 ? 'wl-down' : 'wl-flat';
-  const arrow = chgPts > 0.05 ? '▲' : chgPts < -0.05 ? '▼' : '·';
+  const arrow = chgPts > 0.05
+    ? uiIcon('triangle-up', 'ui-icon-fill')
+    : chgPts < -0.05
+      ? uiIcon('triangle-down', 'ui-icon-fill')
+      : uiIcon('minus');
   return `<span class="wl-chg ${cls}">${arrow}${Math.abs(chgPts).toFixed(1)}</span>`;
 }
 // Yes/No odds the way prediction markets show them — Yes green, No red.
@@ -6562,7 +6639,7 @@ function renderWatchlist() {
       <div class="wl-actions">
         <button type="button" class="wl-act buy" title="Trade" onclick='_wlTrade(${keyJson})'>Trade</button>
         <button type="button" class="wl-act" title="Analyze" onclick='_wlAnalyze(${keyJson})'>Analyze</button>
-        <button type="button" class="wl-act" title="Remove" onclick='_wlRemove(${keyJson})'>✕</button>
+        <button type="button" class="wl-act" title="Remove" aria-label="Remove" onclick='_wlRemove(${keyJson})'>${uiIcon('x')}</button>
       </div>
     </div>`;
   }).join('');
@@ -6657,7 +6734,7 @@ function _renderMarketResults(results) {
         <div class="wlm-venue">${escHtml(m.platform || '')}</div></div>
       <div class="wlm-odds">${_yesNoHtml(m.probability)}</div>
       <button type="button" class="wlm-add ${added ? 'added' : ''}" title="${added ? 'In watchlist' : 'Add to watchlist'}"
-        onclick='addMarket(${mJson}, this)'>${added ? '✓' : '+'}</button>
+        onclick='addMarket(${mJson}, this)'>${uiIcon(added ? 'check' : 'plus')}</button>
     </div>`;
   }).join('');
 }
@@ -6670,7 +6747,7 @@ async function addMarket(m, btn) {
     key, question: m.question || '', platform: m.platform || '', ident: m.ident,
     market_url: m.market_url || '', market_probability: m.probability ?? null, model_probability: null,
   }, null);
-  if (btn) { btn.classList.add('added'); btn.textContent = '✓'; btn.title = 'In watchlist'; }
+  if (btn) { btn.classList.add('added'); btn.innerHTML = uiIcon('check'); btn.title = 'In watchlist'; }
   _renderWatchTable();   // refresh the watched table without resetting the search
   refreshWatchlist();
   _forecastFavorite(key, m.question || '', m.probability ?? null, m.platform || '', m.market_url || '');
@@ -6759,7 +6836,7 @@ function _maybeStandaloneWatchlist() {
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
   const btn = document.getElementById('watchCloseBtn');
-  if (btn) { btn.textContent = '← Open Foresea'; btn.onclick = () => { window.location.href = '/'; }; }
+  if (btn) { btn.innerHTML = `${uiIcon('arrow-left')} Open Foresea`; btn.classList.add('ui-icon-label'); btn.onclick = () => { window.location.href = '/'; }; }
   renderWatchlistPage();
   _syncFavoritesFromServer().then(() => { renderWatchlistPage(); refreshWatchlist(); });
   _wlStartPolling();
@@ -6788,9 +6865,9 @@ function _wlRemove(ref) {
   toggleFavorite({ key: ref.key }, null);
   renderWatchlist();
   if (document.getElementById('watchPageBody')) _renderWatchTable();
-  // Reset the add-browser button (✓ → +) if this market is listed there.
+  // Reset the add-browser button to its add state if this market is listed there.
   const addBtn = document.querySelector(`.wlm-row[data-key="${CSS.escape(ref.key)}"] .wlm-add`);
-  if (addBtn) { addBtn.classList.remove('added'); addBtn.textContent = '+'; addBtn.title = 'Add to watchlist'; }
+  if (addBtn) { addBtn.classList.remove('added'); addBtn.innerHTML = uiIcon('plus'); addBtn.title = 'Add to watchlist'; }
 }
 
 function _wlStartPolling() {
@@ -6840,8 +6917,8 @@ function renderSkillList() {
         <div class="model-sub">${escHtml(s.instruction)}</div>
       </div>
       <div class="model-actions">
-        <button type="button" class="model-icon-btn" title="Edit" onclick="editSkill('${s.id}')">✎</button>
-        <button type="button" class="model-icon-btn" title="Remove" onclick="deleteSkill('${s.id}')">✕</button>
+        <button type="button" class="model-icon-btn" title="Edit" onclick="editSkill('${s.id}')">${uiIcon('edit')}</button>
+        <button type="button" class="model-icon-btn" title="Remove" onclick="deleteSkill('${s.id}')">${uiIcon('x')}</button>
       </div>
     </div>`).join('');
 }
@@ -6934,7 +7011,7 @@ function renderKbList(docs) {
         <div class="model-sub">${doc.chunks} chunk${doc.chunks === 1 ? '' : 's'}${doc.url ? ' · ' + escHtml(doc.url) : ''}</div>
       </div>
       <div class="model-actions">
-        <button type="button" class="model-icon-btn" title="Remove" onclick="deleteKbDoc('${escAttr(doc.doc_id || '')}')">✕</button>
+        <button type="button" class="model-icon-btn" title="Remove" onclick="deleteKbDoc('${escAttr(doc.doc_id || '')}')">${uiIcon('x')}</button>
       </div>
     </div>`).join('');
 }
@@ -7148,7 +7225,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
   const _appendError = (msg) => {
     const div = document.createElement('div');
     div.className = 'max-w-2xl mx-auto w-full';
-    div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">⚠ ${escHtml(msg)}</div>`;
+    div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">${uiIcon('alert')} ${escHtml(msg)}</div>`;
     messagesEl.appendChild(div);
     scrollBottom();
   };
@@ -7170,14 +7247,14 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const board = d.edge_board || [];
       if (!board.length) { typing.remove(); _appendInline('<p>No live edge board entries found.</p>'); return true; }
       const rows = board.slice(0, 15).map(e => {
-        const proven = (e.track_record || {}).skill_significant ? '✓' : '';
+        const proven = (e.track_record || {}).skill_significant ? uiIcon('check') : '';
         const edgePct = Math.round((e.abs_edge || 0) * 100);
         const mktPct  = Math.round((e.market_probability || 0) * 100);
         const modPct  = Math.round((e.model_probability  || 0) * 100);
         return `<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:6px 10px 6px 0"><a href="${escHtml(e.market_url||'#')}" target="_blank" style="color:var(--accent);text-decoration:none">${escHtml((e.question||'').slice(0,60))}${(e.question||'').length>60?'…':''}</a><br><span style="font-size:11px;color:var(--text-mute)">${escHtml(e.platform||'')} · ${escHtml(e.horizon||'')}</span></td>
           <td style="padding:6px 4px;text-align:center"><span class="${e.side==='YES'?'yes-badge':'no-badge'}" style="font-size:12px;padding:2px 8px">${escHtml(e.side||'?')}</span></td>
-          <td style="padding:6px 4px;text-align:right;font-size:13px">${mktPct}% → ${modPct}%</td>
+          <td style="padding:6px 4px;text-align:right;font-size:13px">${mktPct}% ${uiIcon('arrow-right')} ${modPct}%</td>
           <td style="padding:6px 0 6px 8px;text-align:right;font-size:13px;color:var(--accent);font-weight:600">${edgePct}pp ${proven}</td>
         </tr>`;
       }).join('');
@@ -7187,12 +7264,12 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           <thead><tr style="border-bottom:2px solid var(--border)">
             <th style="padding:4px 10px 4px 0;text-align:left;font-weight:600;color:var(--text-dim)">Market</th>
             <th style="padding:4px;color:var(--text-dim)">Side</th>
-            <th style="padding:4px;text-align:right;color:var(--text-dim)">Mkt → Model</th>
+            <th style="padding:4px;text-align:right;color:var(--text-dim)">Mkt ${uiIcon('arrow-right')} Model</th>
             <th style="padding:4px 0 4px 8px;text-align:right;color:var(--text-dim)">Edge</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">✓ = statistically proven edge bucket. Entry prices from last tick.</p>`);
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">${uiIcon('check')} = statistically proven edge bucket. Entry prices from last tick.</p>`);
     } catch(e) { typing.remove(); _appendError('Could not load edge board: ' + e.message); }
     return true;
   }
@@ -7242,7 +7319,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>` : ''}
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. <a href="#track-app" style="color:var(--accent)" onclick="showView('track-app')">Full track record →</a></p>`);
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. <a href="#track-app" class="ui-icon-label" style="color:var(--accent)" onclick="showView('track-app')">Full track record ${uiIcon('arrow-right')}</a></p>`);
     } catch(e) { typing.remove(); _appendError('Could not load track record: ' + e.message); }
     return true;
   }
