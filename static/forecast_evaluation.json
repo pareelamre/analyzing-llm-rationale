@@ -4,28 +4,28 @@
       "calibration": [
         {
           "bucket": "0.0-0.1",
-          "calibration_gap": -0.030687500000000006,
+          "calibration_gap": -0.03034375000000001,
           "lower": 0.0,
-          "mean_probability": 0.030687500000000006,
-          "n": 8,
+          "mean_probability": 0.03034375000000001,
+          "n": 16,
           "outcome_rate": 0.0,
           "upper": 0.1
         },
         {
           "bucket": "0.1-0.2",
-          "calibration_gap": -0.185,
+          "calibration_gap": -0.16277777777777777,
           "lower": 0.1,
-          "mean_probability": 0.185,
-          "n": 4,
+          "mean_probability": 0.16277777777777777,
+          "n": 9,
           "outcome_rate": 0.0,
           "upper": 0.2
         },
         {
           "bucket": "0.2-0.3",
-          "calibration_gap": -0.28,
+          "calibration_gap": -0.28750000000000003,
           "lower": 0.2,
-          "mean_probability": 0.28,
-          "n": 1,
+          "mean_probability": 0.28750000000000003,
+          "n": 2,
           "outcome_rate": 0.0,
           "upper": 0.3
         },
@@ -85,10 +85,10 @@
         },
         {
           "bucket": "0.9-1.0",
-          "calibration_gap": 0.010000000000000009,
+          "calibration_gap": 0.040000000000000036,
           "lower": 0.9,
-          "mean_probability": 0.99,
-          "n": 1,
+          "mean_probability": 0.96,
+          "n": 4,
           "outcome_rate": 1.0,
           "upper": 1.0
         }
@@ -97,11 +97,11 @@
         {
           "bucket": "0.0-0.1",
           "domain": "crypto",
-          "domain_n": 3,
+          "domain_n": 10,
           "eligible_for_domain_model": false,
           "global_outcome_rate": 0.0,
-          "mean_probability": 0.06000000000000005,
-          "n": 1,
+          "mean_probability": 0.050000000000000044,
+          "n": 2,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
           "shrunk_outcome_rate": 0.0
@@ -109,10 +109,22 @@
         {
           "bucket": "0.1-0.2",
           "domain": "crypto",
-          "domain_n": 3,
+          "domain_n": 10,
           "eligible_for_domain_model": false,
           "global_outcome_rate": 0.0,
-          "mean_probability": 0.18999999999999995,
+          "mean_probability": 0.155,
+          "n": 3,
+          "prior_strength": 20.0,
+          "raw_outcome_rate": 0.0,
+          "shrunk_outcome_rate": 0.0
+        },
+        {
+          "bucket": "0.2-0.3",
+          "domain": "crypto",
+          "domain_n": 10,
+          "eligible_for_domain_model": false,
+          "global_outcome_rate": 0.0,
+          "mean_probability": 0.29500000000000004,
           "n": 1,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
@@ -121,7 +133,7 @@
         {
           "bucket": "0.3-0.4",
           "domain": "crypto",
-          "domain_n": 3,
+          "domain_n": 10,
           "eligible_for_domain_model": false,
           "global_outcome_rate": 0.0,
           "mean_probability": 0.35,
@@ -131,13 +143,25 @@
           "shrunk_outcome_rate": 0.0
         },
         {
+          "bucket": "0.9-1.0",
+          "domain": "crypto",
+          "domain_n": 10,
+          "eligible_for_domain_model": false,
+          "global_outcome_rate": 1.0,
+          "mean_probability": 0.9499999999999998,
+          "n": 3,
+          "prior_strength": 20.0,
+          "raw_outcome_rate": 1.0,
+          "shrunk_outcome_rate": 1.0
+        },
+        {
           "bucket": "0.0-0.1",
           "domain": "other",
-          "domain_n": 20,
-          "eligible_for_domain_model": false,
+          "domain_n": 30,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.0,
-          "mean_probability": 0.020100000000000007,
-          "n": 5,
+          "mean_probability": 0.025041666666666674,
+          "n": 12,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
           "shrunk_outcome_rate": 0.0
@@ -145,11 +169,11 @@
         {
           "bucket": "0.1-0.2",
           "domain": "other",
-          "domain_n": 20,
-          "eligible_for_domain_model": false,
+          "domain_n": 30,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.0,
-          "mean_probability": 0.18333333333333335,
-          "n": 3,
+          "mean_probability": 0.16666666666666666,
+          "n": 6,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
           "shrunk_outcome_rate": 0.0
@@ -157,8 +181,8 @@
         {
           "bucket": "0.2-0.3",
           "domain": "other",
-          "domain_n": 20,
-          "eligible_for_domain_model": false,
+          "domain_n": 30,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.0,
           "mean_probability": 0.28,
           "n": 1,
@@ -169,8 +193,8 @@
         {
           "bucket": "0.4-0.5",
           "domain": "other",
-          "domain_n": 20,
-          "eligible_for_domain_model": false,
+          "domain_n": 30,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.6666666666666666,
           "mean_probability": 0.4533333333333333,
           "n": 3,
@@ -181,8 +205,8 @@
         {
           "bucket": "0.5-0.6",
           "domain": "other",
-          "domain_n": 20,
-          "eligible_for_domain_model": false,
+          "domain_n": 30,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.0,
           "mean_probability": 0.575,
           "n": 2,
@@ -193,8 +217,8 @@
         {
           "bucket": "0.6-0.7",
           "domain": "other",
-          "domain_n": 20,
-          "eligible_for_domain_model": false,
+          "domain_n": 30,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 1.0,
           "mean_probability": 0.685,
           "n": 1,
@@ -205,8 +229,8 @@
         {
           "bucket": "0.7-0.8",
           "domain": "other",
-          "domain_n": 20,
-          "eligible_for_domain_model": false,
+          "domain_n": 30,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.6666666666666666,
           "mean_probability": 0.7316666666666668,
           "n": 3,
@@ -217,8 +241,8 @@
         {
           "bucket": "0.8-0.9",
           "domain": "other",
-          "domain_n": 20,
-          "eligible_for_domain_model": false,
+          "domain_n": 30,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 1.0,
           "mean_probability": 0.815,
           "n": 1,
@@ -229,8 +253,8 @@
         {
           "bucket": "0.9-1.0",
           "domain": "other",
-          "domain_n": 20,
-          "eligible_for_domain_model": false,
+          "domain_n": 30,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 1.0,
           "mean_probability": 0.99,
           "n": 1,
@@ -251,20 +275,20 @@
           "shrunk_outcome_rate": 0.0
         }
       ],
-      "log_loss": 0.32969345776925385,
-      "market_brier": 0.0992044,
+      "log_loss": 0.2327742244626637,
+      "market_brier": 0.06401811309523808,
       "market_clustered_skill_interval": {
         "confidence_level": 0.95,
-        "lower": -0.0068196209038386794,
-        "mean_skill": -0.00281016796875001,
+        "lower": -0.004673033000074335,
+        "mean_skill": -0.0019661637152777853,
         "method": "normal_interval_over_market_mean_brier_differences",
-        "n_forecasts": 25,
-        "n_markets": 8,
-        "standard_error": 0.00204563925259626,
-        "upper": 0.0011992849663386598,
+        "n_forecasts": 42,
+        "n_markets": 12,
+        "standard_error": 0.0013810557575492596,
+        "upper": 0.0007407055695187637,
         "z_score": 1.96
       },
-      "model_brier": 0.10491063,
+      "model_brier": 0.06753489880952383,
       "portfolio": {
         "compound_return": 0.0,
         "equity_curve": [],
@@ -279,37 +303,37 @@
       },
       "promotion_eligible_source": true,
       "provenance": "prospective_audit",
-      "resolved_forecasts": 25,
-      "resolved_markets": 8,
-      "skill_vs_market": -0.005706230000000007
+      "resolved_forecasts": 42,
+      "resolved_markets": 12,
+      "skill_vs_market": -0.00351678571428575
     },
     "snapshot_mirror": {
       "calibration": [
         {
           "bucket": "0.0-0.1",
-          "calibration_gap": -0.0034499999999999392,
+          "calibration_gap": -0.0040432960893854175,
           "lower": 0.0,
-          "mean_probability": 0.04059285714285708,
-          "n": 350,
-          "outcome_rate": 0.037142857142857144,
+          "mean_probability": 0.040356145251396594,
+          "n": 358,
+          "outcome_rate": 0.036312849162011177,
           "upper": 0.1
         },
         {
           "bucket": "0.1-0.2",
-          "calibration_gap": 0.11257835820895526,
+          "calibration_gap": 0.10331294964028781,
           "lower": 0.1,
-          "mean_probability": 0.148615671641791,
-          "n": 134,
-          "outcome_rate": 0.26119402985074625,
+          "mean_probability": 0.14848561151079132,
+          "n": 139,
+          "outcome_rate": 0.2517985611510791,
           "upper": 0.2
         },
         {
           "bucket": "0.2-0.3",
-          "calibration_gap": -0.17194999999999996,
+          "calibration_gap": -0.17427169811320753,
           "lower": 0.2,
-          "mean_probability": 0.2488730769230769,
-          "n": 52,
-          "outcome_rate": 0.07692307692307693,
+          "mean_probability": 0.24974339622641506,
+          "n": 53,
+          "outcome_rate": 0.07547169811320754,
           "upper": 0.3
         },
         {
@@ -368,11 +392,11 @@
         },
         {
           "bucket": "0.9-1.0",
-          "calibration_gap": -0.007858490566037712,
+          "calibration_gap": -0.004758928571428456,
           "lower": 0.9,
-          "mean_probability": 0.970122641509434,
-          "n": 53,
-          "outcome_rate": 0.9622641509433962,
+          "mean_probability": 0.9690446428571428,
+          "n": 56,
+          "outcome_rate": 0.9642857142857143,
           "upper": 1.0
         }
       ],
@@ -380,44 +404,44 @@
         {
           "bucket": "0.0-0.1",
           "domain": "crypto",
-          "domain_n": 24,
-          "eligible_for_domain_model": false,
-          "global_outcome_rate": 0.037142857142857144,
-          "mean_probability": 0.07250000000000001,
-          "n": 4,
+          "domain_n": 31,
+          "eligible_for_domain_model": true,
+          "global_outcome_rate": 0.036312849162011177,
+          "mean_probability": 0.06600000000000002,
+          "n": 5,
           "prior_strength": 20.0,
-          "raw_outcome_rate": 0.25,
-          "shrunk_outcome_rate": 0.07261904761904762
+          "raw_outcome_rate": 0.2,
+          "shrunk_outcome_rate": 0.06905027932960894
         },
         {
           "bucket": "0.1-0.2",
           "domain": "crypto",
-          "domain_n": 24,
-          "eligible_for_domain_model": false,
-          "global_outcome_rate": 0.26119402985074625,
-          "mean_probability": 0.16249999999999998,
-          "n": 4,
+          "domain_n": 31,
+          "eligible_for_domain_model": true,
+          "global_outcome_rate": 0.2517985611510791,
+          "mean_probability": 0.15416666666666665,
+          "n": 6,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
-          "shrunk_outcome_rate": 0.21766169154228854
+          "shrunk_outcome_rate": 0.19369120088544547
         },
         {
           "bucket": "0.2-0.3",
           "domain": "crypto",
-          "domain_n": 24,
-          "eligible_for_domain_model": false,
-          "global_outcome_rate": 0.07692307692307693,
-          "mean_probability": 0.235,
-          "n": 1,
+          "domain_n": 31,
+          "eligible_for_domain_model": true,
+          "global_outcome_rate": 0.07547169811320754,
+          "mean_probability": 0.265,
+          "n": 2,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
-          "shrunk_outcome_rate": 0.07326007326007326
+          "shrunk_outcome_rate": 0.06861063464837049
         },
         {
           "bucket": "0.3-0.4",
           "domain": "crypto",
-          "domain_n": 24,
-          "eligible_for_domain_model": false,
+          "domain_n": 31,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.21951219512195122,
           "mean_probability": 0.3475,
           "n": 2,
@@ -428,8 +452,8 @@
         {
           "bucket": "0.4-0.5",
           "domain": "crypto",
-          "domain_n": 24,
-          "eligible_for_domain_model": false,
+          "domain_n": 31,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.6612903225806451,
           "mean_probability": 0.43,
           "n": 6,
@@ -440,8 +464,8 @@
         {
           "bucket": "0.5-0.6",
           "domain": "crypto",
-          "domain_n": 24,
-          "eligible_for_domain_model": false,
+          "domain_n": 31,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.6590909090909091,
           "mean_probability": 0.58,
           "n": 1,
@@ -452,8 +476,8 @@
         {
           "bucket": "0.6-0.7",
           "domain": "crypto",
-          "domain_n": 24,
-          "eligible_for_domain_model": false,
+          "domain_n": 31,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.71875,
           "mean_probability": 0.6425000000000001,
           "n": 2,
@@ -464,8 +488,8 @@
         {
           "bucket": "0.8-0.9",
           "domain": "crypto",
-          "domain_n": 24,
-          "eligible_for_domain_model": false,
+          "domain_n": 31,
+          "eligible_for_domain_model": true,
           "global_outcome_rate": 0.6470588235294118,
           "mean_probability": 0.83,
           "n": 2,
@@ -476,38 +500,38 @@
         {
           "bucket": "0.9-1.0",
           "domain": "crypto",
-          "domain_n": 24,
-          "eligible_for_domain_model": false,
-          "global_outcome_rate": 0.9622641509433962,
-          "mean_probability": 0.985,
-          "n": 2,
+          "domain_n": 31,
+          "eligible_for_domain_model": true,
+          "global_outcome_rate": 0.9642857142857143,
+          "mean_probability": 0.9639999999999999,
+          "n": 5,
           "prior_strength": 20.0,
           "raw_outcome_rate": 1.0,
-          "shrunk_outcome_rate": 0.9656946826758147
+          "shrunk_outcome_rate": 0.9714285714285714
         },
         {
           "bucket": "0.0-0.1",
           "domain": "elections",
           "domain_n": 43,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.037142857142857144,
+          "global_outcome_rate": 0.036312849162011177,
           "mean_probability": 0.010000000000000009,
           "n": 3,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
-          "shrunk_outcome_rate": 0.03229813664596273
+          "shrunk_outcome_rate": 0.03157639057566189
         },
         {
           "bucket": "0.1-0.2",
           "domain": "elections",
           "domain_n": 43,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.26119402985074625,
+          "global_outcome_rate": 0.2517985611510791,
           "mean_probability": 0.14333333333333334,
           "n": 6,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.3333333333333333,
-          "shrunk_outcome_rate": 0.27784156142365096
+          "shrunk_outcome_rate": 0.27061427780852243
         },
         {
           "bucket": "0.6-0.7",
@@ -550,48 +574,48 @@
           "domain": "elections",
           "domain_n": 43,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.9622641509433962,
+          "global_outcome_rate": 0.9642857142857143,
           "mean_probability": 0.9593333333333333,
           "n": 24,
           "prior_strength": 20.0,
           "raw_outcome_rate": 1.0,
-          "shrunk_outcome_rate": 0.9828473413379073
+          "shrunk_outcome_rate": 0.9837662337662337
         },
         {
           "bucket": "0.0-0.1",
           "domain": "entertainment",
           "domain_n": 34,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.037142857142857144,
+          "global_outcome_rate": 0.036312849162011177,
           "mean_probability": 0.0123529411764706,
           "n": 34,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
-          "shrunk_outcome_rate": 0.013756613756613757
+          "shrunk_outcome_rate": 0.013449203393337472
         },
         {
           "bucket": "0.0-0.1",
           "domain": "geopolitics",
           "domain_n": 91,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.037142857142857144,
+          "global_outcome_rate": 0.036312849162011177,
           "mean_probability": 0.02311688311688313,
           "n": 77,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.012987012987012988,
-          "shrunk_outcome_rate": 0.01796759941089838
+          "shrunk_outcome_rate": 0.017796463744744574
         },
         {
           "bucket": "0.2-0.3",
           "domain": "geopolitics",
           "domain_n": 91,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.07692307692307693,
+          "global_outcome_rate": 0.07547169811320754,
           "mean_probability": 0.28,
           "n": 1,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
-          "shrunk_outcome_rate": 0.07326007326007326
+          "shrunk_outcome_rate": 0.07187780772686432
         },
         {
           "bucket": "0.3-0.4",
@@ -622,53 +646,53 @@
           "domain": "geopolitics",
           "domain_n": 91,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.9622641509433962,
+          "global_outcome_rate": 0.9642857142857143,
           "mean_probability": 0.9819000000000001,
           "n": 10,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.9,
-          "shrunk_outcome_rate": 0.941509433962264
+          "shrunk_outcome_rate": 0.9428571428571428
         },
         {
           "bucket": "0.0-0.1",
           "domain": "other",
-          "domain_n": 421,
+          "domain_n": 431,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.037142857142857144,
-          "mean_probability": 0.039799999999999905,
-          "n": 95,
+          "global_outcome_rate": 0.036312849162011177,
+          "mean_probability": 0.03902941176470579,
+          "n": 102,
           "prior_strength": 20.0,
-          "raw_outcome_rate": 0.042105263157894736,
-          "shrunk_outcome_rate": 0.04124223602484472
+          "raw_outcome_rate": 0.0392156862745098,
+          "shrunk_outcome_rate": 0.03873981133803462
         },
         {
           "bucket": "0.1-0.2",
           "domain": "other",
-          "domain_n": 421,
+          "domain_n": 431,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.26119402985074625,
-          "mean_probability": 0.1504827586206897,
-          "n": 58,
+          "global_outcome_rate": 0.2517985611510791,
+          "mean_probability": 0.15045901639344267,
+          "n": 61,
           "prior_strength": 20.0,
-          "raw_outcome_rate": 0.15517241379310345,
-          "shrunk_outcome_rate": 0.1823574435514734
+          "raw_outcome_rate": 0.14754098360655737,
+          "shrunk_outcome_rate": 0.17328359534594548
         },
         {
           "bucket": "0.2-0.3",
           "domain": "other",
-          "domain_n": 421,
+          "domain_n": 431,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.07692307692307693,
+          "global_outcome_rate": 0.07547169811320754,
           "mean_probability": 0.2524567567567567,
           "n": 37,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.10810810810810811,
-          "shrunk_outcome_rate": 0.09716599190283401
+          "shrunk_outcome_rate": 0.09665673618007281
         },
         {
           "bucket": "0.3-0.4",
           "domain": "other",
-          "domain_n": 421,
+          "domain_n": 431,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.21951219512195122,
           "mean_probability": 0.3364761904761903,
@@ -680,7 +704,7 @@
         {
           "bucket": "0.4-0.5",
           "domain": "other",
-          "domain_n": 421,
+          "domain_n": 431,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.6612903225806451,
           "mean_probability": 0.45839642857142826,
@@ -692,7 +716,7 @@
         {
           "bucket": "0.5-0.6",
           "domain": "other",
-          "domain_n": 421,
+          "domain_n": 431,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.6590909090909091,
           "mean_probability": 0.5510714285714284,
@@ -704,7 +728,7 @@
         {
           "bucket": "0.6-0.7",
           "domain": "other",
-          "domain_n": 421,
+          "domain_n": 431,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.71875,
           "mean_probability": 0.6441379310344829,
@@ -716,7 +740,7 @@
         {
           "bucket": "0.7-0.8",
           "domain": "other",
-          "domain_n": 421,
+          "domain_n": 431,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.84,
           "mean_probability": 0.7431521739130432,
@@ -728,7 +752,7 @@
         {
           "bucket": "0.8-0.9",
           "domain": "other",
-          "domain_n": 421,
+          "domain_n": 431,
           "eligible_for_domain_model": true,
           "global_outcome_rate": 0.6470588235294118,
           "mean_probability": 0.845576923076923,
@@ -740,62 +764,62 @@
         {
           "bucket": "0.9-1.0",
           "domain": "other",
-          "domain_n": 421,
+          "domain_n": 431,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.9622641509433962,
+          "global_outcome_rate": 0.9642857142857143,
           "mean_probability": 0.9816818181818182,
           "n": 11,
           "prior_strength": 20.0,
           "raw_outcome_rate": 1.0,
-          "shrunk_outcome_rate": 0.9756542909312234
+          "shrunk_outcome_rate": 0.9769585253456221
         },
         {
           "bucket": "0.0-0.1",
           "domain": "science",
           "domain_n": 3,
           "eligible_for_domain_model": false,
-          "global_outcome_rate": 0.037142857142857144,
+          "global_outcome_rate": 0.036312849162011177,
           "mean_probability": 0.031666666666666655,
           "n": 3,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
-          "shrunk_outcome_rate": 0.03229813664596273
+          "shrunk_outcome_rate": 0.03157639057566189
         },
         {
           "bucket": "0.0-0.1",
           "domain": "sports",
           "domain_n": 212,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.037142857142857144,
+          "global_outcome_rate": 0.036312849162011177,
           "mean_probability": 0.06540434782608692,
           "n": 115,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.06086956521739131,
-          "shrunk_outcome_rate": 0.05735449735449735
+          "shrunk_outcome_rate": 0.05723153320918684
         },
         {
           "bucket": "0.1-0.2",
           "domain": "sports",
           "domain_n": 212,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.26119402985074625,
+          "global_outcome_rate": 0.2517985611510791,
           "mean_probability": 0.14661363636363636,
           "n": 66,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.36363636363636365,
-          "shrunk_outcome_rate": 0.33981256508156893
+          "shrunk_outcome_rate": 0.3376275723607161
         },
         {
           "bucket": "0.2-0.3",
           "domain": "sports",
           "domain_n": 212,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.07692307692307693,
+          "global_outcome_rate": 0.07547169811320754,
           "mean_probability": 0.23734615384615385,
           "n": 13,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
-          "shrunk_outcome_rate": 0.046620046620046623
+          "shrunk_outcome_rate": 0.045740423098913664
         },
         {
           "bucket": "0.3-0.4",
@@ -826,52 +850,52 @@
           "domain": "sports",
           "domain_n": 212,
           "eligible_for_domain_model": true,
-          "global_outcome_rate": 0.9622641509433962,
+          "global_outcome_rate": 0.9642857142857143,
           "mean_probability": 0.945,
           "n": 1,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
-          "shrunk_outcome_rate": 0.9164420485175201
+          "shrunk_outcome_rate": 0.9183673469387754
         },
         {
           "bucket": "0.0-0.1",
           "domain": "technology",
           "domain_n": 24,
           "eligible_for_domain_model": false,
-          "global_outcome_rate": 0.037142857142857144,
+          "global_outcome_rate": 0.036312849162011177,
           "mean_probability": 0.015263157894736855,
           "n": 19,
           "prior_strength": 20.0,
           "raw_outcome_rate": 0.0,
-          "shrunk_outcome_rate": 0.01904761904761905
+          "shrunk_outcome_rate": 0.0186219739292365
         },
         {
           "bucket": "0.9-1.0",
           "domain": "technology",
           "domain_n": 24,
           "eligible_for_domain_model": false,
-          "global_outcome_rate": 0.9622641509433962,
+          "global_outcome_rate": 0.9642857142857143,
           "mean_probability": 0.9720000000000001,
           "n": 5,
           "prior_strength": 20.0,
           "raw_outcome_rate": 1.0,
-          "shrunk_outcome_rate": 0.9698113207547169
+          "shrunk_outcome_rate": 0.9714285714285714
         }
       ],
-      "log_loss": 0.3877992094104348,
-      "market_brier": 0.11734025256748845,
+      "log_loss": 0.38197825937962127,
+      "market_brier": 0.11528486298906805,
       "market_clustered_skill_interval": {
         "confidence_level": 0.95,
-        "lower": -0.02307178638801862,
-        "mean_skill": -0.009187432631314864,
+        "lower": -0.022688987378734995,
+        "mean_skill": -0.00903769687630677,
         "method": "normal_interval_over_market_mean_brier_differences",
-        "n_forecasts": 852,
-        "n_markets": 234,
-        "standard_error": 0.007083853957501917,
-        "upper": 0.0046969211253888934,
+        "n_forecasts": 869,
+        "n_markets": 238,
+        "standard_error": 0.006964944133891952,
+        "upper": 0.004613593626121456,
         "z_score": 1.96
       },
-      "model_brier": 0.12361969521126862,
+      "model_brier": 0.12144727309551308,
       "portfolio": {
         "compound_return": -0.08196738733821196,
         "equity_curve": [
@@ -1351,12 +1375,12 @@
       },
       "promotion_eligible_source": false,
       "provenance": "snapshot_mirror",
-      "resolved_forecasts": 852,
-      "resolved_markets": 234,
-      "skill_vs_market": -0.006279442643780164
+      "resolved_forecasts": 869,
+      "resolved_markets": 238,
+      "skill_vs_market": -0.0061624101064450265
     }
   },
-  "generated_at": "2026-07-28T18:25:03.510421+00:00",
+  "generated_at": "2026-07-28T18:31:32.149536+00:00",
   "methodology": {
     "diagnostic_cohort": "snapshot_mirror",
     "execution": "executable bid/ask side with fees and capped total exposure",
@@ -1390,7 +1414,7 @@
         "required": 30
       },
       "minimum_resolved_markets": {
-        "actual": 8,
+        "actual": 12,
         "comparison": "greater_than_or_equal",
         "passed": false,
         "required": 100
@@ -1402,7 +1426,7 @@
         "required": 0.0
       },
       "positive_skill_lower_bound": {
-        "actual": -0.0068196209038386794,
+        "actual": -0.004673033000074335,
         "comparison": "greater_than",
         "passed": false,
         "required": 0.0
