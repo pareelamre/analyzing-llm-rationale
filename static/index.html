@@ -175,6 +175,109 @@
       30% { transform: translateY(-6px); opacity: 1; }
     }
 
+    /* Forecast activity: an honest, low-noise wait state driven by SSE phases. */
+    .forecast-wait {
+      width: min(100%, 560px);
+      padding: 9px 2px 7px;
+      color: var(--ink);
+    }
+    .forecast-wait-head {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      gap: 11px;
+      align-items: center;
+    }
+    .forecast-wait-mark {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+    }
+    .forecast-wait-orbit {
+      position: absolute;
+      inset: 2px;
+      border: 1px solid var(--border-2);
+      border-top-color: var(--accent);
+      border-right-color: var(--accent);
+      border-radius: 50%;
+      animation: forecast-orbit 1.5s linear infinite;
+    }
+    .forecast-wait-core {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 5px rgba(31, 95, 91, .08);
+      animation: forecast-breathe 1.8s ease-in-out infinite;
+    }
+    .forecast-wait-copy { min-width: 0; }
+    .forecast-wait-title {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.25;
+      color: var(--ink);
+    }
+    .forecast-wait-detail {
+      display: block;
+      margin-top: 3px;
+      font-size: 12px;
+      line-height: 1.35;
+      color: var(--text-dim);
+    }
+    .forecast-wait-elapsed {
+      min-width: 31px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      color: var(--text-mute);
+    }
+    .forecast-wait-scan {
+      position: relative;
+      height: 2px;
+      margin: 11px 0 0 39px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--border);
+    }
+    .forecast-wait-scan::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 34%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      animation: forecast-scan 1.9s var(--ease-soft) infinite;
+    }
+    .forecast-wait[data-state="streaming"] .forecast-wait-orbit {
+      border-color: var(--border-2);
+      border-bottom-color: var(--signal);
+      border-left-color: var(--signal);
+      animation-duration: .9s;
+    }
+    .forecast-wait[data-state="streaming"] .forecast-wait-core {
+      background: var(--signal);
+    }
+    .forecast-wait[data-state="fallback"] .forecast-wait-orbit {
+      border-color: var(--border-2);
+      border-bottom-color: #a16207;
+    }
+    @keyframes forecast-orbit { to { transform: rotate(360deg); } }
+    @keyframes forecast-breathe {
+      0%, 100% { transform: scale(.86); opacity: .72; }
+      50% { transform: scale(1.08); opacity: 1; }
+    }
+    @keyframes forecast-scan {
+      from { transform: translateX(-110%); }
+      to { transform: translateX(400%); }
+    }
+    .forecast-stopped {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-mute);
+    }
+
     .scrollable { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
     .scrollable::-webkit-scrollbar { width: 5px; }
     .scrollable::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 5px; }
@@ -2780,6 +2883,7 @@ function updateConversationSteer(value) {
 
 function deleteConv(id, e) {
   e.stopPropagation();
+  if (activeRequest?.convId === id) stopGeneration();
   delete store.conversations[id];
   saveStore();
   deleteRemoteConversation(id).catch(err => console.warn('Chat delete sync failed:', err));
@@ -2797,6 +2901,7 @@ function sortedIds() {
 
 function appendMessage(convId, msg) {
   const conv = getConv(convId);
+  if (!conv) return null;
   msg = normaliseMessage(msg);
   conv.messages.push(msg);
   conv.updatedAt = Date.now();
@@ -2905,7 +3010,7 @@ function makeUserBubble(text, msg = {}) {
       <div class="prompt-actions" aria-label="Prompt actions">
         <button class="prompt-action" type="button" onclick="editPrompt('${escAttr(id)}')" title="Edit prompt" aria-label="Edit prompt">${uiIcon('edit')}</button>
         <button class="prompt-action" type="button" onclick="copyPrompt('${escAttr(id)}')" title="Copy prompt" aria-label="Copy prompt">${uiIcon('copy')}</button>
-        ${isActive ? '<button class="prompt-action" type="button" onclick="stopGeneration()" title="Stop response" aria-label="Stop response"><span class="send-btn-stop-icon" aria-hidden="true"></span></button>' : ''}
+        ${isActive ? '<button class="prompt-action" data-action="stop" type="button" onclick="stopGeneration()" title="Stop response" aria-label="Stop response"><span class="send-btn-stop-icon" aria-hidden="true"></span></button>' : ''}
         <button class="prompt-action" type="button" onclick="resendPrompt('${escAttr(id)}')" title="Resend prompt" aria-label="Resend prompt">${uiIcon('refresh')}</button>
       </div>
     </div>`;
@@ -2950,6 +3055,12 @@ function resendPrompt(messageId) {
   sendQuestion({ question: msg.content || '' });
 }
 
+function settlePromptActions(messageId) {
+  if (!messageId) return;
+  const prompt = document.querySelector(`.prompt-wrap[data-message-id="${CSS.escape(messageId)}"]`);
+  prompt?.querySelector('[data-action="stop"]')?.remove();
+}
+
 function setSendingState(isSending) {
   const btn = document.getElementById('sendBtn');
   if (!btn) return;
@@ -2963,6 +3074,7 @@ function setSendingState(isSending) {
 
 function stopGeneration() {
   if (!activeRequest) return;
+  activeRequest.cancelStream?.();
   activeRequest.controller.abort();
 }
 
@@ -3532,12 +3644,19 @@ function _parseSseBlock(block) {
 }
 
 async function streamPredict(body, variant, convId, typingEl, signal) {
-  const resp = await fetch('/predict/stream', {
-    method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify(body),
-    signal,
-  });
+  let resp;
+  try {
+    resp = await fetch('/predict/stream', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (err) {
+    if (err?.name === 'AbortError') throw err;
+    typingEl._setForecastProgress?.('fallback');
+    return { ok: false, fallback: true, detail: err?.message || 'Stream unavailable' };
+  }
   if (!resp.ok || !resp.body) return { ok: false, fallback: true };
 
   const messagesEl = document.getElementById('messages');
@@ -3545,15 +3664,21 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   let bubble = null;
   let contentEl = null;
   let text = '';
+  let settled = false;
+  let releaseStream = () => {};
   const removeTyping = () => {
     if (!typingRemoved) {
       typingEl.remove();
       typingRemoved = true;
     }
   };
-  const ensureBubble = () => {
-    if (bubble) return;
+  const settleTyping = outcome => {
+    typingEl._finishForecastWait?.(outcome);
     removeTyping();
+  };
+  const ensureBubble = () => {
+    if (bubble || activeId !== convId) return;
+    settleTyping('first_token');
     bubble = document.createElement('div');
     bubble.className = 'max-w-2xl mx-auto w-full';
     bubble.innerHTML = `
@@ -3563,9 +3688,12 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
     contentEl = bubble.querySelector('.chat-md');
     messagesEl.appendChild(bubble);
     animateIn(bubble);
-    scrollBottom();
+    scrollBottom({ force: false });
   };
-  const finish = (finalData) => {
+  const finish = (finalData, outcome = 'completed') => {
+    if (settled) return;
+    settled = true;
+    releaseStream();
     const data = finalData || {
       question_type: 'chat',
       rationale: text,
@@ -3573,54 +3701,105 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
     };
     data.question = body.question || data.question || '';
     if (data.question_type !== 'chat') data.market_context = buildMarketContext(body.question, data);
-    trackEvent('forecast_completed', {
-      question_type: data.question_type || 'unknown',
-      has_market_price: !!(body.market_probability != null || data.market_analysis?.market_probability != null),
-      platform: body.market_platform || data.market_analysis?.platform || '',
-      model: data.model_key || body.openrouter_model || body.model || '',
-      streamed: true,
-    });
-    appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    if (outcome === 'completed') {
+      trackEvent('forecast_completed', {
+        question_type: data.question_type || 'unknown',
+        has_market_price: !!(body.market_probability != null || data.market_analysis?.market_probability != null),
+        platform: body.market_platform || data.market_analysis?.platform || '',
+        model: data.model_key || body.openrouter_model || body.model || '',
+        streamed: true,
+      });
+    } else {
+      data.generation_stopped = true;
+      trackEvent(
+        outcome === 'cancelled' ? 'forecast_stopped' : 'forecast_interrupted',
+        { surface: 'chat', had_partial_response: !!text }
+      );
+    }
+    const saved = appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    if (!saved || activeId !== convId) {
+      settleTyping(outcome);
+      return;
+    }
     const finalNode = makeAIBubble(data, variant);
+    if (outcome !== 'completed') {
+      const endLabel = outcome === 'cancelled'
+        ? 'Response stopped'
+        : 'Connection interrupted; partial response kept';
+      finalNode.querySelector('.msg-ai')?.insertAdjacentHTML(
+        'beforeend',
+        `<div class="forecast-stopped">${endLabel}</div>`
+      );
+    }
     if (bubble) bubble.replaceWith(finalNode);
     else {
-      removeTyping();
+      settleTyping(outcome);
       messagesEl.appendChild(finalNode);
     }
     animateIn(finalNode);
     enhanceCard(finalNode);
-    scrollBottom();
+    scrollBottom({ force: false });
   };
 
   const reader = resp.body.getReader();
+  let streamCancelled = signal.aborted;
+  const cancelStream = () => {
+    streamCancelled = true;
+    reader.cancel().catch(() => {});
+  };
+  if (activeRequest?.controller?.signal === signal) activeRequest.cancelStream = cancelStream;
+  releaseStream = () => {
+    if (activeRequest?.cancelStream === cancelStream) delete activeRequest.cancelStream;
+  };
+  if (signal.aborted) cancelStream();
   const decoder = new TextDecoder();
   let buffer = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const blocks = buffer.split(/\r?\n\r?\n/);
-    buffer = blocks.pop() || '';
-    for (const block of blocks) {
-      if (!block.trim()) continue;
-      const { event, data } = _parseSseBlock(block);
-      if (event === 'meta' && data.status === 'streaming') {
-        // Evidence fetched — model is about to start generating
-        const lbl = typingEl.querySelector('#typingLabel');
-        if (lbl) lbl.textContent = 'Forecasting…';
-      } else if (event === 'delta') {
-        ensureBubble();
-        text += data.text || '';
-        contentEl.innerHTML = renderMarkdown(_chatText(text));
-        scrollBottom();
-      } else if (event === 'done') {
-        finish(data.response);
-        return { ok: true };
-      } else if (event === 'error') {
-        removeTyping();
-        return { ok: false, fallback: false, detail: data.detail || 'Streaming error' };
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || '';
+      for (const block of blocks) {
+        if (!block.trim()) continue;
+        const { event, data } = _parseSseBlock(block);
+        if (event === 'meta') {
+          typingEl._setForecastProgress?.(data.status, data);
+        } else if (event === 'delta') {
+          text += data.text || '';
+          ensureBubble();
+          if (contentEl) contentEl.innerHTML = renderMarkdown(_chatText(text));
+          scrollBottom({ force: false });
+        } else if (event === 'done') {
+          finish(data.response);
+          return { ok: true };
+        } else if (event === 'error') {
+          releaseStream();
+          settleTyping('error');
+          return { ok: false, fallback: false, detail: data.detail || 'Streaming error' };
+        }
       }
     }
+  } catch (err) {
+    releaseStream();
+    if (err?.name === 'AbortError') {
+      if (text) finish(null, 'cancelled');
+      else settleTyping('cancelled');
+      return { ok: true, stopped: true };
+    }
+    if (text) {
+      finish(null, 'interrupted');
+      return { ok: true, interrupted: true };
+    }
+    typingEl._setForecastProgress?.('fallback');
+    return { ok: false, fallback: true, detail: err?.message || 'Stream interrupted' };
+  }
+  if (streamCancelled || signal.aborted) {
+    releaseStream();
+    if (text) finish(null, 'cancelled');
+    else settleTyping('cancelled');
+    return { ok: true, stopped: true };
   }
   if (buffer.trim()) {
     const { event, data } = _parseSseBlock(buffer);
@@ -3629,20 +3808,28 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
       return { ok: true };
     }
   }
+  releaseStream();
   if (text) {
     finish(null);
     return { ok: true };
   }
+  typingEl._setForecastProgress?.('fallback');
   return { ok: false, fallback: true };
 }
 
 async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) {
-  const resp = await fetch('/agent/analyze/stream', {
-    method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify(agentBody),
-    signal,
-  });
+  let resp;
+  try {
+    resp = await fetch('/agent/analyze/stream', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(agentBody),
+      signal,
+    });
+  } catch (err) {
+    if (err?.name === 'AbortError') throw err;
+    return { ok: false, fallback: true, detail: err?.message || 'Agent stream unavailable' };
+  }
   if (!resp.ok || !resp.body) return { ok: false, fallback: true };
 
   const messagesEl = document.getElementById('messages');
@@ -3650,6 +3837,8 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   let bubble = null;
   let contentEl = null;
   let text = '';
+  let settled = false;
+  let releaseStream = () => {};
   let streamedEvidenceSources = [];
   let streamedEvidenceError = '';
   const removeTyping = () => {
@@ -3661,9 +3850,10 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   const setProgress = label => {
     const lbl = typingEl.querySelector('#typingLabel') || typingEl.querySelector('.agent-progress-title');
     if (lbl && label) lbl.textContent = label;
+    typingEl._setAgentProgress?.(label);
   };
   const ensureBubble = () => {
-    if (bubble) return;
+    if (bubble || activeId !== convId) return;
     removeTyping();
     bubble = document.createElement('div');
     bubble.className = 'max-w-2xl mx-auto w-full';
@@ -3674,12 +3864,51 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     contentEl = bubble.querySelector('.chat-md');
     messagesEl.appendChild(bubble);
     animateIn(bubble);
-    scrollBottom();
+    scrollBottom({ force: false });
   };
-  const finish = report => {
-    const data = _agentReportData(report);
-    appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+  const finish = (report, outcome = 'completed') => {
+    if (settled) return;
+    settled = true;
+    releaseStream();
+    const data = outcome === 'completed'
+      ? _agentReportData(report)
+      : {
+          question_type: 'chat',
+          rationale: text,
+          model_key: 'agent',
+          evidence_sources: streamedEvidenceSources,
+          evidence_error: streamedEvidenceError,
+          generation_stopped: true,
+        };
+    if (outcome === 'completed') {
+      trackEvent('forecast_completed', {
+        question_type: 'chat',
+        has_market_price: agentBody.market_probability != null,
+        platform: agentBody.platform || '',
+        model: agentBody.openrouter_model || 'agent',
+        streamed: true,
+      });
+    } else {
+      trackEvent(
+        outcome === 'cancelled' ? 'forecast_stopped' : 'forecast_interrupted',
+        { surface: 'agent_chat', had_partial_response: !!text }
+      );
+    }
+    const saved = appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    if (!saved || activeId !== convId) {
+      removeTyping();
+      return;
+    }
     const finalNode = makeAIBubble(data, variant);
+    if (outcome !== 'completed') {
+      const endLabel = outcome === 'cancelled'
+        ? 'Response stopped'
+        : 'Connection interrupted; partial response kept';
+      finalNode.querySelector('.msg-ai')?.insertAdjacentHTML(
+        'beforeend',
+        `<div class="forecast-stopped">${endLabel}</div>`
+      );
+    }
     if (bubble) bubble.replaceWith(finalNode);
     else {
       removeTyping();
@@ -3687,51 +3916,76 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     }
     animateIn(finalNode);
     enhanceCard(finalNode);
-    scrollBottom();
+    scrollBottom({ force: false });
   };
 
   const reader = resp.body.getReader();
+  let streamCancelled = signal.aborted;
+  const cancelStream = () => {
+    streamCancelled = true;
+    reader.cancel().catch(() => {});
+  };
+  if (activeRequest?.controller?.signal === signal) activeRequest.cancelStream = cancelStream;
+  releaseStream = () => {
+    if (activeRequest?.cancelStream === cancelStream) delete activeRequest.cancelStream;
+  };
+  if (signal.aborted) cancelStream();
   const decoder = new TextDecoder();
   let buffer = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const blocks = buffer.split(/\r?\n\r?\n/);
-    buffer = blocks.pop() || '';
-    for (const block of blocks) {
-      if (!block.trim()) continue;
-      const { event, data } = _parseSseBlock(block);
-      if (event === 'meta') {
-        if (Array.isArray(data.evidence_sources)) streamedEvidenceSources = data.evidence_sources;
-        if (data.evidence_error) streamedEvidenceError = data.evidence_error;
-        if (data.status === 'resolving') setProgress('Resolving the market');
-        else if (data.status === 'forecasting') setProgress('Gathering evidence');
-        else if (data.status === 'streaming') setProgress('Forecasting');
-        else if (data.status === 'skills') setProgress('Running your skills');
-      } else if (event === 'delta') {
-        ensureBubble();
-        text += data.text || '';
-        contentEl.innerHTML = renderMarkdown(_chatText(text));
-        scrollBottom();
-      } else if (event === 'done') {
-        finish(data.report);
-        return { ok: true };
-      } else if (event === 'error') {
-        removeTyping();
-        return { ok: false, fallback: false, detail: data.detail || 'Agent streaming error' };
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || '';
+      for (const block of blocks) {
+        if (!block.trim()) continue;
+        const { event, data } = _parseSseBlock(block);
+        if (event === 'meta') {
+          if (Array.isArray(data.evidence_sources)) streamedEvidenceSources = data.evidence_sources;
+          if (data.evidence_error) streamedEvidenceError = data.evidence_error;
+          if (data.status === 'resolving') setProgress('Resolving the market');
+          else if (data.status === 'forecasting') setProgress('Gathering evidence');
+          else if (data.status === 'streaming') setProgress('Forecasting');
+          else if (data.status === 'skills') setProgress('Running your skills');
+        } else if (event === 'delta') {
+          text += data.text || '';
+          ensureBubble();
+          if (contentEl) contentEl.innerHTML = renderMarkdown(_chatText(text));
+          scrollBottom({ force: false });
+        } else if (event === 'done') {
+          finish(data.report);
+          return { ok: true };
+        } else if (event === 'error') {
+          releaseStream();
+          removeTyping();
+          return { ok: false, fallback: false, detail: data.detail || 'Agent streaming error' };
+        }
       }
     }
+  } catch (err) {
+    releaseStream();
+    if (err?.name === 'AbortError') {
+      if (text) finish(null, 'cancelled');
+      else removeTyping();
+      return { ok: true, stopped: true };
+    }
+    if (text) {
+      finish(null, 'interrupted');
+      return { ok: true, interrupted: true };
+    }
+    return { ok: false, fallback: true, detail: err?.message || 'Agent stream interrupted' };
   }
+  if (streamCancelled || signal.aborted) {
+    releaseStream();
+    if (text) finish(null, 'cancelled');
+    else removeTyping();
+    return { ok: true, stopped: true };
+  }
+  releaseStream();
   if (text) {
-    const data = {
-      question_type: 'chat',
-      rationale: text,
-      model_key: 'agent',
-      evidence_sources: streamedEvidenceSources,
-      evidence_error: streamedEvidenceError,
-    };
-    appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    finish(null, 'interrupted');
     return { ok: true };
   }
   return { ok: false, fallback: true };
@@ -3818,7 +4072,7 @@ async function sendQuestion(options = {}) {
         ...(_loadSkills().length ? ['Running your skills'] : []),
         'Recommending',
       ])
-    : addTyping();
+    : addTyping({ kind: 'forecast', surface: 'chat' });
 
   try {
     const activeModel = getActiveModelConfig();
@@ -3902,11 +4156,11 @@ async function sendQuestion(options = {}) {
         }
         if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
       }
-      const streamed = await streamAgentAnalyze(agentBody, variant, activeId, typingEl, request.controller.signal);
+      const streamed = await streamAgentAnalyze(agentBody, variant, request.convId, typingEl, request.controller.signal);
       if (streamed.ok) return;
       if (!streamed.fallback) {
         typingEl.remove();
-        addError(streamed.detail || 'Agent streaming error');
+        addError(streamed.detail || 'Agent streaming error', request.convId);
         return;
       }
       const resp = await fetch('/agent/analyze', {
@@ -3917,16 +4171,18 @@ async function sendQuestion(options = {}) {
       });
       const report = await _readJson(resp);
       typingEl.remove();
-      if (!resp.ok) { addError(report.detail || 'Agent error'); return; }
+      if (!resp.ok) { addError(report.detail || 'Agent error', request.convId); return; }
       data = _agentReportData(report);
     } else {
-      const streamed = await streamPredict(body, variant, activeId, typingEl, request.controller.signal);
+      const streamed = await streamPredict(body, variant, request.convId, typingEl, request.controller.signal);
       if (streamed.ok) return;
       if (!streamed.fallback) {
+        typingEl._finishForecastWait?.('error');
         typingEl.remove();
-        addError(streamed.detail || 'Streaming error');
+        addError(streamed.detail || 'Streaming error', request.convId);
         return;
       }
+      typingEl._setForecastProgress?.('fallback');
       // Streaming failed (network/server) — fall back to blocking request
       const resp = await fetch('/predict', {
         method: 'POST',
@@ -3935,8 +4191,9 @@ async function sendQuestion(options = {}) {
         signal: request.controller.signal,
       });
       data = await _readJson(resp);
+      typingEl._finishForecastWait?.(resp.ok ? 'completed' : 'error');
       typingEl.remove();
-      if (!resp.ok) { addError(data.detail || 'Server error'); return; }
+      if (!resp.ok) { addError(data.detail || 'Server error', request.convId); return; }
       data.question = question;
       data.market_context = buildMarketContext(question, data);
     }
@@ -3947,81 +4204,165 @@ async function sendQuestion(options = {}) {
       model: data.model_key || body.openrouter_model || body.model || '',
       streamed: false,
     });
-    appendMessage(activeId, { role: 'assistant', data, variant, content: data.rationale || '' });
-    const aiNode = makeAIBubble(data, variant);
-    document.getElementById('messages').appendChild(aiNode);
-    animateIn(aiNode);
-    enhanceCard(aiNode);
-    scrollBottom();
+    const saved = appendMessage(request.convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    if (saved && activeId === request.convId) {
+      const aiNode = makeAIBubble(data, variant);
+      document.getElementById('messages').appendChild(aiNode);
+      animateIn(aiNode);
+      enhanceCard(aiNode);
+      scrollBottom({ force: false });
+    }
   } catch (err) {
+    typingEl._finishForecastWait?.(err?.name === 'AbortError' ? 'cancelled' : 'error');
     typingEl.remove();
     if (err?.name === 'AbortError') return;
-    addError('Network error: ' + err.message);
+    addError('Network error: ' + err.message, request.convId);
   } finally {
     if (activeRequest === request) {
       activeRequest = null;
       setSendingState(false);
-      renderMessages();
+      settlePromptActions(request.userMessageId);
     }
-    input.focus();
+    if (activeId === request.convId) input.focus();
   }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function scrollBottom() {
+let _scrollFrame = 0;
+function scrollBottom({ force = true } = {}) {
   const el = document.getElementById('messages');
-  el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  if (!el) return;
+  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
+  if (!force && !nearBottom) return;
+  cancelAnimationFrame(_scrollFrame);
+  _scrollFrame = requestAnimationFrame(() => {
+    el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
+  });
 }
-function addTyping() {
+
+function _waitDurationBucket(elapsedMs) {
+  if (elapsedMs < 5000) return 'under_5s';
+  if (elapsedMs < 15000) return '5_15s';
+  if (elapsedMs < 30000) return '15_30s';
+  if (elapsedMs < 60000) return '30_60s';
+  return 'over_60s';
+}
+
+function addTyping({ kind = 'lookup', surface = 'chat' } = {}) {
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
-  div.innerHTML = `<div class="msg-ai inline-flex items-center gap-3 px-5 py-4">
-    <div class="typing"><span></span><span></span><span></span></div>
-    <span id="typingLabel" style="font-size:13px;color:var(--text-dim)">Gathering evidence…</span>
+  const isForecast = kind === 'forecast';
+  div.innerHTML = `<div class="msg-ai forecast-wait" data-state="preparing" role="status" aria-live="polite" aria-atomic="true">
+    <div class="forecast-wait-head">
+      <span class="forecast-wait-mark" aria-hidden="true">
+        <span class="forecast-wait-orbit"></span>
+        <span class="forecast-wait-core"></span>
+      </span>
+      <span class="forecast-wait-copy">
+        <span id="typingLabel" class="forecast-wait-title">${isForecast ? 'Researching the market' : 'Loading market data'}</span>
+        <span class="forecast-wait-detail">${isForecast ? 'Gathering current evidence and checking the resolution target.' : 'Fetching the latest available information.'}</span>
+      </span>
+      <span class="forecast-wait-elapsed" aria-hidden="true">0s</span>
+    </div>
+    <div class="forecast-wait-scan" aria-hidden="true"></div>
   </div>`;
   document.getElementById('messages').appendChild(div);
   scrollBottom();
-  // Advance the label through phases so the user knows something is happening
+
+  const root = div.querySelector('.forecast-wait');
   const label = div.querySelector('#typingLabel');
-  const phases = ['Gathering evidence…', 'Forecasting…', 'Almost there…'];
-  let phase = 0;
-  const timer = setInterval(() => {
-    phase++;
-    if (phase < phases.length && label) label.textContent = phases[phase];
-    else clearInterval(timer);
-  }, 6000);
-  div._clearTypingTimer = () => clearInterval(timer);
+  const detail = div.querySelector('.forecast-wait-detail');
+  const elapsed = div.querySelector('.forecast-wait-elapsed');
+  const startedAt = performance.now();
+  let state = 'preparing';
+  let finished = false;
+  const timers = [];
+
+  timers.push(setInterval(() => {
+    if (elapsed) elapsed.textContent = `${Math.max(0, Math.floor((performance.now() - startedAt) / 1000))}s`;
+  }, 1000));
+  if (isForecast) {
+    timers.push(setTimeout(() => {
+      if (state !== 'preparing' || finished) return;
+      label.textContent = 'Research is still running';
+      detail.textContent = 'Deep research can take a little longer. You can stop at any time.';
+    }, 12000));
+  }
+  const clearTimers = () => timers.forEach(timer => {
+    clearInterval(timer);
+    clearTimeout(timer);
+  });
+
+  div._setForecastProgress = (nextState, metadata = {}) => {
+    if (finished) return;
+    const next = nextState || state;
+    if (next === 'preparing') {
+      label.textContent = 'Researching the market';
+      detail.textContent = 'Gathering current evidence and checking the resolution target.';
+    } else if (next === 'streaming') {
+      const sourceCount = Array.isArray(metadata.evidence_sources) ? metadata.evidence_sources.length : 0;
+      label.textContent = 'Writing the forecast';
+      detail.textContent = metadata.evidence_error
+        ? 'Live evidence is limited; the response will say so.'
+        : sourceCount
+          ? `Evidence ready from ${sourceCount} source${sourceCount === 1 ? '' : 's'}.`
+          : 'Research is complete. Building the answer now.';
+    } else if (next === 'fallback') {
+      label.textContent = 'Finishing the forecast';
+      detail.textContent = 'Live updates paused; a reliable fallback is still running.';
+    }
+    if (root) root.dataset.state = next;
+    if (isForecast && next !== state) trackEvent('forecast_wait_phase', { surface, phase: next });
+    state = next;
+  };
+  div._finishForecastWait = outcome => {
+    if (finished) return;
+    finished = true;
+    clearTimers();
+    if (isForecast) {
+      trackEvent('forecast_wait_finished', {
+        surface,
+        outcome: outcome || 'removed',
+        duration_bucket: _waitDurationBucket(performance.now() - startedAt),
+      });
+    }
+  };
+  if (isForecast) trackEvent('forecast_wait_started', { surface });
+
   const origRemove = div.remove.bind(div);
-  div.remove = () => { clearInterval(timer); origRemove(); };
+  div.remove = () => {
+    div._finishForecastWait?.('removed');
+    origRemove();
+  };
   return div;
 }
 
-// ChatGPT-style agent run trace: shows the pipeline steps lighting up while the
-// (non-streaming) agent request is in flight. Self-clears when removed.
+// Agent steps advance only when the streaming endpoint reports a real phase.
 function addAgentProgress(steps) {
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
-  div.innerHTML = `<div class="msg-ai agent-run p-4 sm:p-5">
-    <div class="agent-run-head"><span class="agent-spinner"></span> Agent working…</div>
+  div.innerHTML = `<div class="msg-ai agent-run p-4 sm:p-5" role="status" aria-live="polite" aria-atomic="true">
+    <div class="agent-run-head"><span class="agent-spinner"></span><span class="agent-progress-title">Agent working...</span></div>
     <div class="agent-steps">${steps.map(s => `
       <div class="agent-step"><span class="agent-dot"></span><span>${escHtml(s)}</span></div>`).join('')}</div>
   </div>`;
   document.getElementById('messages').appendChild(div);
   scrollBottom();
   const stepEls = [...div.querySelectorAll('.agent-step')];
-  let i = 0;
-  const advance = () => {
-    if (i > 0 && stepEls[i - 1]) { stepEls[i - 1].classList.remove('active'); stepEls[i - 1].classList.add('done'); }
-    if (stepEls[i]) { stepEls[i].classList.add('active'); i++; }
+  div._setAgentProgress = label => {
+    const target = stepEls.findIndex(node => node.textContent.trim() === String(label || '').trim());
+    if (target < 0) return;
+    stepEls.forEach((node, index) => {
+      node.classList.toggle('done', index < target);
+      node.classList.toggle('active', index === target);
+    });
   };
-  advance();
-  const timer = setInterval(() => {
-    if (!document.body.contains(div)) { clearInterval(timer); return; }  // removed -> stop
-    if (i < stepEls.length) advance();
-  }, 1100);
+  if (stepEls.length) div._setAgentProgress(steps[0]);
   return div;
 }
-function addError(msg) {
+
+function addError(msg, convId = activeId) {
+  if (convId !== activeId) return;
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
   div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">${uiIcon('alert')} ${escHtml(msg)}</div>`;
