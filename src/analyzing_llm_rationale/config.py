@@ -26,6 +26,7 @@ class ModelConfig:
     api_key_file: str | None = None
     max_tokens_cap: int | None = None
     request_timeout_cap_s: float | None = None
+    forecasting_enabled: bool = True
 
 
 def load_yaml(path: Path) -> Dict[str, object]:
@@ -76,6 +77,7 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
         api_key_file = payload.get("api_key_file")
         max_tokens_cap = payload.get("max_tokens_cap")
         request_timeout_cap_s = payload.get("request_timeout_cap_s")
+        forecasting_enabled = payload.get("forecasting_enabled", True)
         if not all(isinstance(value, str) for value in (result_label, provider, local_model_name, router_model_name)):
             raise ValueError(
                 f"Model '{name}' must define string result_label, provider, local_model_name, and router_model_name"
@@ -94,6 +96,8 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             raise ValueError(f"Model '{name}' request_timeout_cap_s must be numeric when provided")
         if isinstance(request_timeout_cap_s, (int, float)) and request_timeout_cap_s <= 0:
             raise ValueError(f"Model '{name}' request_timeout_cap_s must be positive when provided")
+        if not isinstance(forecasting_enabled, bool):
+            raise ValueError(f"Model '{name}' forecasting_enabled must be boolean when provided")
         models[name] = ModelConfig(
             name=name,
             result_label=result_label,
@@ -107,8 +111,30 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             request_timeout_cap_s=(
                 float(request_timeout_cap_s) if request_timeout_cap_s is not None else None
             ),
+            forecasting_enabled=forecasting_enabled,
         )
     return models
+
+
+def scads_hosted_model_allowlist(path: Path) -> Dict[str, str]:
+    """Configured SCADS-hosted model labels mapped to provider model names."""
+    models = load_model_configs(path)
+    out: Dict[str, str] = {}
+    for name, cfg in models.items():
+        if (
+            cfg.provider == "openai-compatible"
+            and cfg.forecasting_enabled
+            and cfg.api_key_env_var == "SCADS_AI_API_KEY"
+            and cfg.api_base_url
+            and "llm.scads.ai" in cfg.api_base_url
+        ):
+            out[name] = cfg.router_model_name
+    return out
+
+
+def scads_track_model_labels(path: Path) -> Tuple[str, ...]:
+    """Default non-synthetic model labels for the track-record comparison board."""
+    return tuple(scads_hosted_model_allowlist(path).keys())
 
 
 def temperature_to_tag(temperature: float) -> str:

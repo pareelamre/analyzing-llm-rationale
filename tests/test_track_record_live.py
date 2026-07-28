@@ -112,6 +112,13 @@ class TrajectoryTests(unittest.TestCase):
         self.assertEqual(trl._horizon_label(0.5), "<1d")
         self.assertEqual(trl._horizon_label(8.0), "7-14d")
 
+    def test_snapshot_slot_can_use_15_minute_cycles(self):
+        now = datetime(2026, 6, 3, 12, 37, 42, tzinfo=timezone.utc)
+        self.assertEqual(
+            trl._snapshot_slot(10.0, now=now, slot_minutes=15),
+            "2026-06-03T12:30",
+        )
+
     def test_seed_idents_enroll_market_without_discovery(self):
         far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)
@@ -639,6 +646,63 @@ class FileStoreTests(unittest.TestCase):
             self.assertEqual(agg["paper_pnl"]["flat"]["n_bets"], 1)
             comparison = {m["model"]: m for m in agg["models_comparison"]}
             self.assertNotIn("kimi-k2.6", comparison)
+
+    def test_aggregate_tracks_mark_to_market_account_with_bid_liquidation(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "store.json"
+            store = FileStore(path)
+            now = datetime(2026, 7, 1, 12, tzinfo=timezone.utc)
+            snap = Entity(store.key(trl.SNAPSHOT_KIND, "Kalshi:KXTEST:council:2026-07-01T12:00"))
+            snap.update(
+                platform="Kalshi",
+                ident="KXTEST",
+                model="council",
+                question="Will KXTEST happen?",
+                market_url="https://kalshi.com/markets/KXTEST",
+                snapshot_ts=now,
+                snapshot_date="2026-07-01",
+                model_probability=0.7,
+                market_probability=0.6,
+                market_bid=0.58,
+                market_ask=0.62,
+                lead_time_days=10.0,
+                horizon="7-14d",
+                resolved=False,
+                close_time=(now + timedelta(days=10)).isoformat(),
+            )
+            store.put(snap)
+            price = Entity(store.key(trl.PRICE_KIND, "Kalshi:KXTEST:2026-07-01T13"))
+            price.update(
+                platform="Kalshi",
+                ident="KXTEST",
+                market_url="https://kalshi.com/markets/KXTEST",
+                ts=now + timedelta(hours=1),
+                hour="2026-07-01T13",
+                market_probability=0.54,
+                market_bid=0.50,
+                market_ask=0.56,
+            )
+            store.put(price)
+
+            agg = trl.aggregate(
+                store,
+                model="council",
+                variant="v",
+                temperature=0.0,
+                cycle_minutes=15,
+                tracked_models=["council", "deepseek-v3"],
+            )
+
+            account = agg["mark_to_market_account"]
+            accounts = {row["model"]: row for row in agg["mark_to_market_by_model"]}
+            self.assertEqual(account["value_method"], "mark_to_market_bid_liquidation")
+            self.assertEqual(account["n_trades"], 1)
+            self.assertEqual(account["liquidation_value"], 0.5)
+            self.assertEqual(account["account_value"], 9999.88)
+            self.assertEqual(agg["mark_to_market_cycle_minutes"], 15)
+            self.assertEqual(accounts["council"]["account_value"], 9999.88)
+            self.assertEqual(accounts["deepseek-v3"]["account"]["account_value"], 10000.0)
+            self.assertEqual(accounts["deepseek-v3"]["n_trades"], 0)
 
 
 class CalibrationTests(unittest.TestCase):

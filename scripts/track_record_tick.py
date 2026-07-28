@@ -51,6 +51,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import market_data  # noqa: E402
 from analyzing_llm_rationale import track_record_live as trl  # noqa: E402
+from analyzing_llm_rationale.config import scads_track_model_labels  # noqa: E402
 from analyzing_llm_rationale.forecast_evaluation import ResolvedForecast  # noqa: E402
 from analyzing_llm_rationale.forecast_evaluation_report import (  # noqa: E402
     EvaluationPolicy,
@@ -82,11 +83,15 @@ EVALUATION_PATH = Path(
 
 BASE_URL = os.environ.get("FORESEA_BASE_URL", "https://foresea.ink").rstrip("/")
 MODEL = os.environ.get("TRACK_MODEL", "council").strip()
+SCADS_TRACK_MODELS = scads_track_model_labels(ROOT / "configs" / "models.yaml")
+DEFAULT_TRACK_MODELS = ("council", *SCADS_TRACK_MODELS, "crowd-follow")
 # Models to forecast each market with, for the paper-trading comparison. The
 # first is the primary (the public track record); the rest are graded alongside.
 # Each must be in the server's /predict allowlist.
 TRACK_MODELS = [m.strip() for m in os.environ.get(
-    "TRACK_MODELS", "council,gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,crowd-follow").split(",") if m.strip()]
+    "TRACK_MODELS",
+    ",".join(DEFAULT_TRACK_MODELS),
+).split(",") if m.strip()]
 if MODEL not in TRACK_MODELS:
     raise RuntimeError(f"TRACK_MODEL {MODEL!r} must be included in TRACK_MODELS")
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -112,6 +117,8 @@ EXPIRY_REFORECAST_LEAD_DAYS = float(
     os.environ.get("EXPIRY_REFORECAST_LEAD_DAYS") or trl.EXPIRY_REFORECAST_LEAD_DAYS)
 EXPIRY_SLOT_HOURS = int(
     os.environ.get("EXPIRY_SLOT_HOURS") or trl.EXPIRY_SLOT_HOURS)
+CYCLE_INTERVAL_MINUTES = max(1, int(os.environ.get("CYCLE_INTERVAL_MINUTES", "15") or 15))
+SNAPSHOT_SLOT_MINUTES = int(os.environ.get("SNAPSHOT_SLOT_MINUTES", "0") or 0) or None
 # Re-run the LLM forecast for every tracked-open market on every tick (not just
 # the daily first pass / price-drift), so the edge board always reflects the
 # model's current opinion and matches live /predict. Default on. Each tick then
@@ -502,6 +509,7 @@ async def _record_snapshots_with_retries(
             short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
             expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
             expiry_slot_hours=EXPIRY_SLOT_HOURS,
+            snapshot_slot_minutes=SNAPSHOT_SLOT_MINUTES,
             concurrency=PREDICT_CONCURRENCY,
             convergence_per_venue=CONVERGENCE_PER_VENUE)
         pass_attempts = _predict_stats["attempts"] - attempts_before
@@ -548,7 +556,14 @@ async def main() -> int:
         if ledger_evaluation
         else {}
     )
-    agg = trl.aggregate(store, model=primary_model, variant=VARIANT, temperature=TEMPERATURE)
+    agg = trl.aggregate(
+        store,
+        model=primary_model,
+        variant=VARIANT,
+        temperature=TEMPERATURE,
+        cycle_minutes=CYCLE_INTERVAL_MINUTES,
+        tracked_models=TRACK_MODELS,
+    )
     after_primary = _model_progress(store, primary_model)
 
     PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)
