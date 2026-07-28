@@ -52,6 +52,13 @@ class MarketDataTests(unittest.TestCase):
             "slug": "will-x",
             "outcomes": '["Yes", "No"]',
             "outcomePrices": '["0.62", "0.38"]',
+            "description": "Resolves Yes only if X occurs before the deadline.",
+            "resolutionSource": "https://example.com/rules",
+            "newsArticles": [{
+                "headline": "X moves closer",
+                "link": "https://news.example/x",
+                "publisher": "Example News",
+            }],
         }]
         capture = []
         sys.modules["requests"] = _fake_requests(payload, capture=capture)
@@ -63,6 +70,12 @@ class MarketDataTests(unittest.TestCase):
         self.assertAlmostEqual(quote["probability"], 0.62)
         self.assertEqual(quote["market_url"], "https://polymarket.com/market/will-x")
         self.assertEqual(len(quote["outcomes"]), 2)
+        self.assertEqual(
+            quote["resolution_criteria"],
+            "Resolves Yes only if X occurs before the deadline.",
+        )
+        self.assertEqual(quote["resolution_source"], "https://example.com/rules")
+        self.assertEqual(quote["venue_news_articles"][0]["title"], "X moves closer")
         self.assertEqual(capture[0][1]["slug"], "will-x")
 
     def test_polymarket_requires_identifier(self):
@@ -75,8 +88,19 @@ class MarketDataTests(unittest.TestCase):
             fetch_polymarket(slug="missing")
 
     def test_kalshi_reads_dollar_price(self):
-        payload = {"market": {"ticker": "KXTEST", "title": "Will Y?", "last_price_dollars": "0.42"}}
-        sys.modules["requests"] = _fake_requests(payload)
+        market_payload = {"market": {
+            "ticker": "KXTEST",
+            "title": "Will Y?",
+            "last_price_dollars": "0.42",
+            "rules_primary": "Y must be confirmed by the official source.",
+            "rules_secondary": "The deadline is 5 PM Eastern.",
+            "articles": [{
+                "title": "Official update on Y",
+                "url": "https://news.example/y",
+                "source": "Kalshi News",
+            }],
+        }}
+        sys.modules["requests"] = _fake_requests(market_payload)
 
         quote = fetch_kalshi("kxtest")
 
@@ -86,6 +110,46 @@ class MarketDataTests(unittest.TestCase):
         # Web URL is rooted on the (lowercase) series ticker, not the event ticker.
         self.assertEqual(quote["market_url"], "https://kalshi.com/markets/kxtest")
         self.assertAlmostEqual(quote["outcomes"][1]["probability"], 0.58)
+        self.assertEqual(
+            quote["resolution_criteria"],
+            "Y must be confirmed by the official source. The deadline is 5 PM Eastern.",
+        )
+        self.assertEqual(
+            quote["venue_news_articles"][0]["title"],
+            "Official update on Y",
+        )
+
+    def test_kalshi_merges_event_level_articles(self):
+        payloads = [
+            {"market": {
+                "ticker": "KXTEST-YES",
+                "event_ticker": "KXTEST",
+                "title": "Will Y?",
+                "last_price_dollars": "0.42",
+                "rules_primary": "Official confirmation controls.",
+            }},
+            {"event": {
+                "event_ticker": "KXTEST",
+                "news": [{
+                    "headline": "Event-level update",
+                    "link": "https://news.example/event-update",
+                }],
+            }},
+        ]
+
+        class SequencedRequests:
+            @staticmethod
+            def get(url, params=None, headers=None, timeout=None):
+                return FakeResponse(payloads.pop(0))
+
+        sys.modules["requests"] = SequencedRequests()
+
+        quote = fetch_kalshi("KXTEST-YES")
+
+        self.assertEqual(
+            quote["venue_news_articles"][0]["title"],
+            "Event-level update",
+        )
 
     def test_kalshi_url_uses_series_ticker_not_event_ticker(self):
         payload = {"market": {
@@ -107,6 +171,21 @@ class MarketDataTests(unittest.TestCase):
         quote = fetch_kalshi("KXT")
 
         self.assertAlmostEqual(quote["probability"], 0.45)
+
+    def test_kalshi_prefers_current_book_over_stale_last_trade(self):
+        payload = {"market": {
+            "ticker": "KXTHIN",
+            "title": "Thin market",
+            "last_price_dollars": "0.95",
+            "yes_bid_dollars": "0.07",
+            "yes_ask_dollars": "0.16",
+        }}
+        sys.modules["requests"] = _fake_requests(payload)
+
+        quote = fetch_kalshi("KXTHIN")
+
+        self.assertAlmostEqual(quote["probability"], 0.115)
+        self.assertAlmostEqual(quote["last_trade_price"], 0.95)
 
     def test_kalshi_requires_ticker(self):
         with self.assertRaises(MarketDataError):

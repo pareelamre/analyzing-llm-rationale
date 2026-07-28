@@ -478,7 +478,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("event: done", body)
         self.assertIn('"model_probability": 0.7', body)
 
-    def test_predict_uses_supplied_articles_without_fetching(self):
+    def test_predict_merges_supplied_venue_articles_with_fresh_news(self):
         response = self.client.post(
             "/predict",
             json={
@@ -495,7 +495,14 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["evidence_articles"][0]["title"], "Supplied evidence")
-        self.assertEqual(self.evidence_pipeline.calls, [])
+        self.assertEqual(
+            payload["evidence_articles"][1]["title"],
+            "Central bank signals policy shift",
+        )
+        self.assertEqual(
+            self.evidence_pipeline.calls,
+            [("Will event X happen?", 5)],
+        )
 
     def test_predict_strips_html_from_returned_evidence(self):
         response = self.client.post(

@@ -231,6 +231,13 @@ def brier(prob: float, outcome: int) -> float:
     return (float(prob) - float(outcome)) ** 2
 
 
+def _optional_float(value: Any) -> Optional[float]:
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _get_price_history(client, ident: str, limit: int = 8) -> List[Dict[str, Any]]:
     """Return recent market context points (newest first), fail-open to []."""
     try:
@@ -365,6 +372,27 @@ def _fetch_current_quote(market_data, platform: str, ident: str) -> Optional[Dic
     except market_data.MarketDataError:
         return None
     return None
+
+
+def _refresh_quote_context(market_data, quote: Dict[str, Any]) -> Dict[str, Any]:
+    """Hydrate a listing result from the venue's detail endpoint.
+
+    Listing payloads can omit long rule text or related articles. Every newly
+    discovered question gets one detail fetch before it is fanned out to models,
+    keeping rules/news identical across council members and avoiding one venue
+    request per model.
+    """
+    refreshed = _fetch_current_quote(
+        market_data,
+        str(quote.get("platform") or ""),
+        _quote_ident(quote),
+    )
+    if not refreshed:
+        return quote
+    merged = {**quote, **refreshed}
+    if not refreshed.get("category") and quote.get("category"):
+        merged["category"] = quote["category"]
+    return merged
 
 
 def record_convergence_trades(store) -> int:
@@ -549,7 +577,7 @@ async def record_snapshots(
         lead = _lead_time_days(q.get("close_time"))
         if lead is not None and not (min_discovery_lead_days <= lead <= max_discovery_lead_days):
             continue  # outside the useful resolution window
-        targets.append(q)
+        targets.append(_refresh_quote_context(market_data, q))
         known.add((q.get("platform"), ident))
 
     # 2b) Convergence-window discovery: targeted 7-14d pass with a higher limit.
@@ -575,7 +603,7 @@ async def record_snapshots(
                 lead = _lead_time_days(q.get("close_time"))
                 if lead is None or not (7.0 <= lead <= 14.0):
                     continue
-                targets.append(q)
+                targets.append(_refresh_quote_context(market_data, q))
                 known.add((q.get("platform"), ident))
 
     # 2c) Short-dated discovery: all models, no lead-time floor. Captures intraday
@@ -598,7 +626,7 @@ async def record_snapshots(
             lead = _lead_time_days(q.get("close_time"))
             if lead is None or lead < 0:
                 continue  # already past close
-            targets.append(q)
+            targets.append(_refresh_quote_context(market_data, q))
             known.add((q.get("platform"), ident))
 
     import asyncio as _asyncio
@@ -632,6 +660,9 @@ async def record_snapshots(
             market_volume=quote.get("volume"),
             market_liquidity=quote.get("liquidity"),
             evidence_count=scored.get("evidence_count"),
+            venue_news_count=scored.get("venue_news_count"),
+            rules_present=scored.get("rules_present"),
+            context_complete=scored.get("context_complete"),
             resolved=False,
             outcome=None,
             drift_reforecast=existing is not None,
@@ -902,6 +933,7 @@ async def backfill_missing_model_snapshots(
             try:
                 quote = {
                     "platform": ref.get("platform"),
+                    "ident": ref.get("ident"),
                     "question": ref.get("question"),
                     "description": ref.get("description"),
                     "resolution_criteria": ref.get("resolution_criteria"),
@@ -959,6 +991,9 @@ async def backfill_missing_model_snapshots(
             market_volume=ref.get("market_volume"),
             market_liquidity=ref.get("market_liquidity"),
             evidence_count=scored.get("evidence_count"),
+            venue_news_count=scored.get("venue_news_count"),
+            rules_present=scored.get("rules_present"),
+            context_complete=scored.get("context_complete"),
             resolved=True,
             outcome=outcome,
             resolved_ts=ref.get("resolved_ts"),
@@ -1582,6 +1617,56 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
         signed = model_p - market_p
         if abs(signed) < min_abs_edge:
             continue
+        forecast_market_p = _optional_float(r.get("market_probability"))
+        crowd_move = (
+            market_p - forecast_market_p
+            if forecast_market_p is not None
+            else None
+        )
+        snapshot_dt = _parse_dt(r.get("snapshot_ts"))
+        forecast_age_hours = (
+            max(0.0, (_now() - snapshot_dt).total_seconds() / 3600.0)
+            if snapshot_dt is not None
+            else None
+        )
+        huge_gap = abs(signed) >= 0.20
+        rules_present = bool(
+            str(r.get("resolution_criteria") or "").strip()
+            or r.get("rules_present")
+        )
+        evidence_count = int(_optional_float(r.get("evidence_count")) or 0)
+        venue_news_count = int(_optional_float(r.get("venue_news_count")) or 0)
+        context_complete = bool(
+            r.get("context_complete")
+            or (rules_present and evidence_count > 0)
+        )
+        thin_market = max(
+            _optional_float(r.get("market_volume")) or 0.0,
+            _optional_float(r.get("market_liquidity")) or 0.0,
+        ) < 1000.0
+        review_reasons: List[str] = []
+        if huge_gap and crowd_move is not None and abs(crowd_move) >= 0.10:
+            review_reasons.append("crowd_moved_since_forecast")
+        if huge_gap and (model_p <= 0.10 or model_p >= 0.90):
+            review_reasons.append("extreme_model_probability")
+        if huge_gap and thin_market:
+            review_reasons.append("thin_market")
+        if huge_gap and not rules_present:
+            review_reasons.append("missing_market_rules")
+        if huge_gap and evidence_count == 0:
+            review_reasons.append("missing_news_context")
+        if not huge_gap:
+            discrepancy_status = "normal"
+        elif "crowd_moved_since_forecast" in review_reasons:
+            discrepancy_status = "stale_forecast"
+        elif not context_complete:
+            discrepancy_status = "context_incomplete"
+        elif "thin_market" in review_reasons:
+            discrepancy_status = "thin_market"
+        elif "extreme_model_probability" in review_reasons:
+            discrepancy_status = "extreme_forecast"
+        else:
+            discrepancy_status = "genuine_candidate"
         label = _edge_label(abs(signed))
         tr = by_edge.get(label)
         # Primary link: resolved skill of forecasts made at a similar lead time —
@@ -1611,10 +1696,30 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "market_ask": r.get("market_ask"),
             "market_volume": r.get("market_volume"),
             "market_liquidity": r.get("market_liquidity"),
+            "evidence_count": evidence_count,
+            "venue_news_count": venue_news_count,
+            "rules_present": rules_present,
+            "context_complete": context_complete,
             "model_probability": round(model_p, 3),
             "market_probability": round(market_p, 3),
+            "forecast_market_probability": (
+                round(forecast_market_p, 3)
+                if forecast_market_p is not None
+                else None
+            ),
+            "crowd_move_since_forecast": (
+                round(crowd_move, 3) if crowd_move is not None else None
+            ),
+            "forecast_age_hours": (
+                round(forecast_age_hours, 1)
+                if forecast_age_hours is not None
+                else None
+            ),
             "edge": round(signed, 3),
             "abs_edge": round(abs(signed), 3),
+            "needs_discrepancy_review": huge_gap,
+            "discrepancy_status": discrepancy_status,
+            "review_reasons": review_reasons,
             "stance": ("model_above_market" if signed > 0
                        else "model_below_market" if signed < 0 else "agree"),
             "side": side,
@@ -1998,6 +2103,14 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     _res_skill_early = [r for r in resolved if (r.get("model") or model) == model]
     by_edge_early = edge_calibration(_res_skill_early)
     edge_board_result = build_edge_board(open_primary, latest_price, by_edge_early, by_horizon)
+    discrepancy_rows = [
+        row for row in edge_board_result
+        if row.get("needs_discrepancy_review")
+    ]
+    discrepancy_counts: Dict[str, int] = {}
+    for row in discrepancy_rows:
+        status = str(row.get("discrepancy_status") or "unknown")
+        discrepancy_counts[status] = discrepancy_counts.get(status, 0) + 1
 
     payload: Dict[str, Any] = {
         "source": "live",
@@ -2181,6 +2294,15 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
                       "crowd_baseline": _crowd_base},
         "primary_paper_pnl": paper_pnl(resolved_primary, edge_calibration(resolved_primary)),
         "edge_board": edge_board_result,
+        "discrepancy_monitor": {
+            "huge_gap_threshold": 0.20,
+            "n_huge_gaps": len(discrepancy_rows),
+            "by_status": discrepancy_counts,
+            "market_keys": [
+                f"{row.get('platform')}:{row.get('ident')}"
+                for row in discrepancy_rows
+            ],
+        },
         "arbitrage_signals": build_arbitrage_board(open_primary, latest_price),
         "models_comparison": build_models_comparison(
             resolved,

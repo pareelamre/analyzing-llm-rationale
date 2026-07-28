@@ -6,6 +6,9 @@ Rules:
 1. Use the provided Question, Resolution Criteria, Description, Evidence Summaries, and Current Time.
 2. You may draw on general world knowledge to supplement the evidence.
 3. Treat the provided Current Time as today's date. Use it to interpret temporal phrases.
+3a. Enforce the Resolution Criteria's observation window and exclusions. Unless
+the rules explicitly say the contract is retroactive, events before
+publish_time/created_time do not qualify, and named exclusions never qualify.
 4. Work through the structured reasoning steps requested before outputting your final JSON.
 5. Output the scratchpad reasoning as free text, then end with a valid JSON block.
 6. In the final JSON, confidence must be a number between 0 and 1. Set it equal to your step-7 final probability.

@@ -106,6 +106,21 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("Full article text", prompt)
         self.assertNotIn("[question]", prompt)
 
+    def test_build_user_prompt_marks_pre_market_articles_as_background(self):
+        record = self.sample_record()
+        record["publish_time"] = "2025-05-22T17:52:05Z"
+        record["news_articles"][0]["publish_date"] = "2025-04-20T12:00:00Z"
+
+        prompt = build_user_prompt(
+            record,
+            user_prompt_template="[question]\nReturn JSON.",
+            article_detail="summary",
+        )
+
+        self.assertIn("Contract Window Check:", prompt)
+        self.assertIn("PRE-MARKET: background only, not a qualifying event", prompt)
+        self.assertIn("[CONTRACT WINDOW CHECK] Article(s) #1 predate", prompt)
+
     def test_build_user_prompt_can_omit_evidence(self):
         record = self.sample_record()
         record["current_time"] = "2026-06-05T12:00:00Z"
