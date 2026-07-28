@@ -6103,6 +6103,9 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         })
         raise _provider_http_error(exc) from exc
 
+    if content is None:
+        content = ""
+
     parsed = _parse_json_dict(content)
     if req.chat_mode:
         text = content.strip()
