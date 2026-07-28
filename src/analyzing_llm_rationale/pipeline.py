@@ -306,10 +306,14 @@ def build_user_prompt(
     if publish_time:
         parts.append(f"Publish Time: {publish_time}")
         parts.append(
-            "Contract Window Check: Unless the Resolution Criteria explicitly make "
-            "this market retroactive, an event announced or completed before Publish "
-            "Time is background context only and cannot itself satisfy the contract. "
-            "Apply every named exclusion literally."
+            f"Normalized Contract Window: The observation window starts exactly at "
+            f"{publish_time}. Unless the Resolution Criteria explicitly make this "
+            "market retroactive, only a qualifying announcement or occurrence on or "
+            "after that timestamp can satisfy the contract. An article's publication "
+            "or repost date is not the event date. Evidence must explicitly establish "
+            "that the underlying event happened inside the window; an ambiguous, "
+            "approximate, or missing event date cannot establish that the contract "
+            "already resolved Yes. Apply every named exclusion literally."
         )
     if not cutoff_mode:
         if resolve_time:

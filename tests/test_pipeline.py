@@ -117,7 +117,9 @@ class PipelineTests(unittest.TestCase):
             article_detail="summary",
         )
 
-        self.assertIn("Contract Window Check:", prompt)
+        self.assertIn("Normalized Contract Window:", prompt)
+        self.assertIn("publication or repost date is not the event date", prompt)
+        self.assertIn("ambiguous, approximate, or missing event date", prompt)
         self.assertIn("PRE-MARKET: background only, not a qualifying event", prompt)
         self.assertIn("[CONTRACT WINDOW CHECK] Article(s) #1 predate", prompt)
 
