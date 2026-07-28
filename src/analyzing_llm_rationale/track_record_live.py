@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from analyzing_llm_rationale import trackrec_store as _ds
+from analyzing_llm_rationale.accounting import simulate_mark_to_market_account
 from analyzing_llm_rationale.entity_tagger import tag_question
 
 # ── DuckDB SQL helpers ────────────────────────────────────────────────────────
@@ -112,7 +113,8 @@ def _snapshot_slot(lead_days: Optional[float],
                    short_lead_days: float = SHORT_HORIZON_REFORECAST_LEAD_DAYS,
                    short_slot_hours: int = SHORT_HORIZON_SLOT_HOURS,
                    expiry_lead_days: float = EXPIRY_REFORECAST_LEAD_DAYS,
-                   expiry_slot_hours: int = EXPIRY_SLOT_HOURS) -> str:
+                   expiry_slot_hours: int = EXPIRY_SLOT_HOURS,
+                   slot_minutes: Optional[int] = None) -> str:
     """Storage slot for a forecast snapshot.
 
     Three tiers by days-to-resolution:
@@ -121,6 +123,16 @@ def _snapshot_slot(lead_days: Optional[float],
       ≤ expiry_lead_days       → one slot per expiry_slot_hours (default 1h)
     """
     now = now or _now()
+    if slot_minutes and slot_minutes > 0:
+        total = now.hour * 60 + now.minute
+        floored = (total // slot_minutes) * slot_minutes
+        hour, minute = divmod(floored, 60)
+        return now.replace(
+            hour=hour,
+            minute=minute,
+            second=0,
+            microsecond=0,
+        ).strftime("%Y-%m-%dT%H:%M")
     if lead_days is None or lead_days > short_lead_days or short_slot_hours <= 0:
         return now.strftime("%Y-%m-%d")
     slot_h = (expiry_slot_hours if (lead_days <= expiry_lead_days and expiry_slot_hours > 0)
@@ -513,6 +525,7 @@ async def record_snapshots(
     short_horizon_slot_hours: int = SHORT_HORIZON_SLOT_HOURS,
     expiry_reforecast_lead_days: float = EXPIRY_REFORECAST_LEAD_DAYS,
     expiry_slot_hours: int = EXPIRY_SLOT_HOURS,
+    snapshot_slot_minutes: Optional[int] = None,
     concurrency: int = 4,
     convergence_per_venue: int = 0,
 ) -> int:
@@ -691,6 +704,7 @@ async def record_snapshots(
             short_slot_hours=short_horizon_slot_hours,
             expiry_lead_days=expiry_reforecast_lead_days,
             expiry_slot_hours=expiry_slot_hours,
+            slot_minutes=snapshot_slot_minutes,
         )
         for model in model_list:
             key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{slot}")
@@ -1577,6 +1591,45 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
     return out
 
 
+def build_mark_to_market_accounts(
+    open_rows: List[Dict[str, Any]],
+    latest_quotes: Dict[Any, Dict[str, Any]],
+    *,
+    default_model: str,
+    tracked_models: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Bid-liquidation benchmark accounts for every active tracked model."""
+    by_model: Dict[str, List[Dict[str, Any]]] = {}
+    for row in open_rows:
+        label = str(row.get("model") or default_model)
+        by_model.setdefault(label, []).append(row)
+    for label in tracked_models or []:
+        if label:
+            by_model.setdefault(str(label), [])
+
+    accounts: List[Dict[str, Any]] = []
+    for label, rows in by_model.items():
+        account = simulate_mark_to_market_account(rows, latest_quotes=latest_quotes)
+        accounts.append({
+            "model": label,
+            "account": account,
+            "account_value": account.get("account_value"),
+            "return": account.get("return"),
+            "n_trades": account.get("n_trades"),
+            "n_open_positions": account.get("n_open_positions"),
+            "n_illiquid_positions": account.get("n_illiquid_positions"),
+        })
+    accounts.sort(
+        key=lambda item: (
+            int((item.get("n_trades") or 0) > 0),
+            item.get("account_value") is not None,
+            float(item.get("account_value") or 0.0),
+        ),
+        reverse=True,
+    )
+    return accounts
+
+
 def build_edge_board(open_rows: List[Dict[str, Any]],
                      latest_price: Dict[str, float],
                      edge_calib: List[Dict[str, Any]],
@@ -2022,7 +2075,9 @@ def build_arbitrage_board(open_rows: List[Dict[str, Any]], latest_price: Dict[st
 
 
 def aggregate(client, *, model: str, variant: str, temperature: float,
-              trajectory_samples: int = 8) -> Dict[str, Any]:
+              trajectory_samples: int = 8,
+              cycle_minutes: Optional[int] = None,
+              tracked_models: Optional[List[str]] = None) -> Dict[str, Any]:
     """Recompute the public aggregate (overall + by-horizon) and persist it."""
 
     con = _sql_con(client)
@@ -2049,6 +2104,26 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             """).fetchall()
             if r[0] and r[1] is not None
         }
+        latest_quotes: Dict[Tuple[str, str], Dict[str, Any]] = {
+            (r[0] or "", r[1] or ""): {
+                "platform": r[0],
+                "ident": r[1],
+                "market_probability": r[2],
+                "market_bid": r[3],
+                "market_ask": r[4],
+                "ts": r[5],
+            }
+            for r in con.execute("""
+                SELECT platform, ident,
+                       arg_max(market_probability, ts),
+                       arg_max(market_bid, ts),
+                       arg_max(market_ask, ts),
+                       max(ts)
+                FROM market_price_point
+                GROUP BY platform, ident
+            """).fetchall()
+            if r[1]
+        }
     else:
         # ORM fallback (FileStore / Datastore)
         resolved = []
@@ -2061,6 +2136,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             else:
                 open_rows.append(dict(e))
         latest_price = {}
+        latest_quotes = {}
         _latest_price_ts: Dict[str, Any] = {}
         for p in client.query(kind=PRICE_KIND).fetch():
             ident = p.get("ident")
@@ -2068,6 +2144,14 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             if ident not in _latest_price_ts or ts > _latest_price_ts[ident]:
                 _latest_price_ts[ident] = ts
                 latest_price[ident] = float(p.get("market_probability") or 0.0)
+                latest_quotes[(p.get("platform") or "", ident or "")] = {
+                    "platform": p.get("platform"),
+                    "ident": ident,
+                    "market_probability": p.get("market_probability"),
+                    "market_bid": p.get("market_bid"),
+                    "market_ask": p.get("market_ask"),
+                    "ts": ts,
+                }
 
     # Drop stale open snapshots (not re-forecast recently) so orphaned readings
     # from an old ident don't surface on the edge board as live disagreements.
@@ -2104,6 +2188,16 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     _res_skill_early = [r for r in resolved if (r.get("model") or model) == model]
     by_edge_early = edge_calibration(_res_skill_early)
     edge_board_result = build_edge_board(open_primary, latest_price, by_edge_early, by_horizon)
+    mark_to_market_by_model = build_mark_to_market_accounts(
+        open_rows,
+        latest_quotes,
+        default_model=model,
+        tracked_models=tracked_models,
+    )
+    primary_mark_to_market = next(
+        (row.get("account") for row in mark_to_market_by_model if row.get("model") == model),
+        None,
+    )
     discrepancy_rows = [
         row for row in edge_board_result
         if row.get("needs_discrepancy_review")
@@ -2294,6 +2388,9 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "paper_pnl": {**(paper_pnl(resolved_skill, by_edge_skill) or {}),
                       "crowd_baseline": _crowd_base},
         "primary_paper_pnl": paper_pnl(resolved_primary, edge_calibration(resolved_primary)),
+        "mark_to_market_account": primary_mark_to_market,
+        "mark_to_market_by_model": mark_to_market_by_model,
+        "mark_to_market_cycle_minutes": cycle_minutes,
         "edge_board": edge_board_result,
         "discrepancy_monitor": {
             "huge_gap_threshold": 0.20,

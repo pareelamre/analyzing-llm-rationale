@@ -6,7 +6,7 @@ name: Track record forecast
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       reforecast_each_tick:
@@ -46,10 +46,9 @@ jobs:
           TRACK_MODEL: "council"
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
-          # Run the public primary first. Per-model circuit breakers then ensure
-          # a broken comparison model cannot starve council refreshes.
-          TRACK_MODELS: "council,gpt-oss-120b,gemma-4-31b-it,kimi-k2.6,crowd-follow"
-          REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}
+          REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '1' }}
+          CYCLE_INTERVAL_MINUTES: "15"
+          SNAPSHOT_SLOT_MINUTES: "15"
           PRICE_DRIFT_THRESHOLD: "0.10"
           SHORT_HORIZON_REFORECAST_LEAD_DAYS: "90"
           SHORT_HORIZON_SLOT_HOURS: "24"

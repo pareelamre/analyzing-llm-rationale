@@ -5048,6 +5048,32 @@ function _leadSkillBadge(tr) {
   return `<span class="eb-badge ${state.proven ? 'eb-sig' : ''}">${state.label}</span>`;
 }
 
+const _MTM_MODEL_COLORS = {
+  'council': '#10b981',
+  'scads-alias-code': '#db2777',
+  'scads-alias-ha': '#0f766e',
+  'scads-alias-reasoning': '#7c3aed',
+  'scads-alias-huge': '#2563eb',
+  'scads-alias-huge-no-thinking': '#0891b2',
+  'llama-3.1-8b-instruct': '#38bdf8',
+  'llama-3.3-70b-instruct': '#60a5fa',
+  'llama-4-scout-17b-16e-instruct': '#06b6d4',
+  'deepseek-v3': '#f59e0b',
+  'gpt-oss-120b': '#a78bfa',
+  'gemma-4-31b-it': '#f97316',
+  'kimi-k2.5': '#ef4444',
+  'kimi-k2.6': '#ec4899',
+  'kimi-k2.7-code': '#f43f5e',
+  'minimax-m3': '#22c55e',
+  'qwen3-coder-30b-a3b-instruct': '#14b8a6',
+  'glm-5.2-fp8': '#eab308',
+  'crowd-follow': '#94a3b8',
+};
+function _mtmModelColor(model, i = 0) {
+  const palette = ['#10b981', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa', '#06b6d4', '#f97316', '#84cc16', '#14b8a6', '#db2777', '#eab308', '#94a3b8'];
+  return _MTM_MODEL_COLORS[model] || palette[i % palette.length];
+}
+
 async function refreshEdgeForecasts() {
   try {
     const r = await _liveJsonFetch('/edge-board');
@@ -5055,6 +5081,58 @@ async function refreshEdgeForecasts() {
     const d = await _readJson(r);
     const pnl = d.paper_pnl;
     const comp = d.models_comparison || [];
+    const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
+    const _usd = v => Number.isFinite(Number(v))
+      ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+      : 'building';
+    if (mtmModels.length) {
+      const curves = mtmModels.map((m, i) => {
+        const account = m.account || {};
+        const values = (account.value_curve || []).map(p => Number(p.account_value)).filter(Number.isFinite);
+        if (Number.isFinite(Number(account.account_value))) values.push(Number(account.account_value));
+        if (!values.length) return null;
+        const times = (account.value_curve || []).map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
+        const label = _ebModelLabel(m.model);
+        const value = account.account_value ?? m.account_value;
+        const ret = account.return ?? m.return;
+        const curve = {
+          points: values,
+          color: _mtmModelColor(m.model, i),
+          label,
+          head: _ebModelHead(m.model),
+          headTitle: `${label} mark-to-market ${_usd(value)} ${ret == null ? '' : _roiPct(ret)}`.trim(),
+        };
+        if (times.length === values.length) curve.times = times;
+        return curve;
+      }).filter(Boolean);
+      const mtmSvg = document.getElementById('eb-mtm-svg');
+      if (mtmSvg) mtmSvg.innerHTML = curves.length ? _equitySvg(curves, 760, 180, {asPct: false, yPrefix: '$'}) : '';
+      const mtmBody = document.getElementById('eb-mtm-table-body');
+      if (mtmBody) {
+        mtmBody.innerHTML = mtmModels.map((m, i) => {
+          const account = m.account || {};
+          const value = account.account_value ?? m.account_value;
+          const ret = account.return ?? m.return;
+          const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
+          return `<tr class="eb-row">
+            <td><b>${i + 1}</b></td>
+            <td><b>${escHtml(m.model || '')}</b></td>
+            <td>${_usd(value)}</td>
+            <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
+            <td>${account.n_trades ?? m.n_trades ?? 0}</td>
+            <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
+            <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
+          </tr>`;
+        }).join('');
+      }
+      const mtmPrimary = document.getElementById('eb-mtm-primary-v');
+      if (mtmPrimary) mtmPrimary.textContent = _usd(d.mark_to_market_account && d.mark_to_market_account.account_value);
+    }
+    const modelCompSvg = document.getElementById('eb-model-comparison-svg');
+    if (modelCompSvg) {
+      const modelCurves = _ebModelCurves(comp, 5, 9);
+      modelCompSvg.innerHTML = modelCurves.length ? _equitySvg(modelCurves, 760, 180, {asPct: false, yPrefix: '$'}) : '';
+    }
     if (pnl) {
       const EB_MIN_N = 5;
       const EB_SMALL_N = 30;
@@ -5082,20 +5160,15 @@ async function refreshEdgeForecasts() {
         if (times.length === points.length) curve.times = times;
         return curve;
       };
-      const modelCurves = _ebModelCurves(comp, EB_MIN_N, 5);
-      const hasCrowdCurve = modelCurves.some(c => c.isCrowdBaseline);
       const strategyCurves = [
         _mk(pnl.smart, '#10b981', 'Smart ROI'),
         _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
         _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
       ].filter(Boolean);
-      const curves = modelCurves.length
-        ? [...modelCurves, _mk(pnl.smart, '#10b981', 'Smart ROI'), ...(hasCrowdCurve ? [] : [_mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true)])].filter(Boolean)
-        : strategyCurves;
       const el = document.getElementById('eb-equity-svg');
       if (el) {
-        el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : '';
-        if (curves.length) _attachEquityHover(el);
+        el.innerHTML = strategyCurves.length ? _equitySvg(strategyCurves, 680, 160, {asPct: false, yPrefix: '$'}) : '';
+        if (strategyCurves.length) _attachEquityHover(el);
       }
       const ts = document.getElementById('eb-pnl-ts');
       if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
@@ -5697,9 +5770,21 @@ function _ebModelLabel(model) {
   const raw = String(model || '').trim();
   if (!raw) return 'Model';
   if (raw === 'crowd-follow') return 'crowd-follow baseline';
+  if (raw === 'scads-alias-code') return 'SCADS Code';
+  if (raw === 'scads-alias-ha') return 'SCADS HA';
+  if (raw === 'scads-alias-reasoning') return 'SCADS Reasoning';
+  if (raw === 'scads-alias-huge') return 'SCADS Huge';
+  if (raw === 'scads-alias-huge-no-thinking') return 'SCADS Huge no-think';
+  if (raw === 'llama-3.1-8b-instruct') return 'Llama 3.1 8B';
+  if (raw === 'llama-3.3-70b-instruct') return 'Llama 3.3 70B';
   if (raw === 'gpt-oss-120b') return 'GPT OSS 120B';
   if (raw === 'gemma-4-31b-it') return 'Gemma 4 31B IT';
+  if (raw === 'minimax-m3') return 'MiniMax M3';
+  if (raw === 'qwen3-coder-30b-a3b-instruct') return 'Qwen3 Coder 30B';
+  if (raw === 'glm-5.2-fp8') return 'GLM 5.2';
+  if (raw === 'kimi-k2.5') return 'Kimi K2.5';
   if (raw === 'kimi-k2.6') return 'Kimi K2.6';
+  if (raw === 'kimi-k2.7-code') return 'Kimi K2.7 Code';
   if (raw === 'council') return 'Council';
   return raw.split(/[-_]/g).filter(Boolean).map(w => w[0]?.toUpperCase() + w.slice(1)).join(' ');
 }
@@ -5707,15 +5792,30 @@ function _ebModelLabel(model) {
 function _ebModelHead(model) {
   const raw = String(model || '').toLowerCase();
   if (raw === 'crowd-follow') return 'MKT';
+  if (raw === 'scads-alias-code') return 'COD';
+  if (raw === 'scads-alias-ha') return 'HA';
+  if (raw === 'scads-alias-reasoning') return 'RSN';
+  if (raw === 'scads-alias-huge') return 'HUG';
+  if (raw === 'scads-alias-huge-no-thinking') return 'HNT';
+  if (raw.includes('llama-3.1')) return 'L31';
+  if (raw.includes('llama-3.3')) return 'L33';
   if (raw.includes('gpt')) return 'GPT';
-  if (raw.includes('gemma')) return 'G';
-  if (raw.includes('kimi')) return 'K';
+  if (raw.includes('gemma')) return 'GEM';
+  if (raw.includes('minimax')) return 'MM';
+  if (raw.includes('qwen3-coder')) return 'Q3C';
+  if (raw.includes('glm')) return 'GLM';
+  if (raw.includes('kimi-k2.7')) return 'K27';
+  if (raw.includes('kimi-k2.6')) return 'K26';
+  if (raw.includes('kimi-k2.5')) return 'K25';
+  if (raw.includes('kimi')) return 'KIM';
   if (raw.includes('council')) return 'C';
   return (String(model || 'AI').match(/[a-z0-9]/i)?.[0] || 'AI').toUpperCase();
 }
 
 function _ebModelColor(model, index = 0) {
-  if (String(model || '').toLowerCase() === 'crowd-follow') return '#94a3b8';
+  const raw = String(model || '').toLowerCase();
+  if (_MTM_MODEL_COLORS[raw]) return _MTM_MODEL_COLORS[raw];
+  if (raw === 'crowd-follow') return '#94a3b8';
   return EB_MODEL_COLORS[index % EB_MODEL_COLORS.length];
 }
 
@@ -5787,7 +5887,7 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
   const lo = Math.min(EB_STARTING_BANKROLL, ...allPts);
   const hi = Math.max(EB_STARTING_BANKROLL, ...allPts);
   const range = hi - lo || 1;
-  const padL = 46, padR = 8, padT = 8, padB = hasTimes ? 32 : 20;
+  const padL = 60, padR = 34, padT = 26, padB = hasTimes ? 40 : 26;
   const cW = W - padL - padR, cH = H - padT - padB;
   let tMin = 0, tMax = 1;
   if (hasTimes) {
@@ -5831,16 +5931,27 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
     const y = toY(c.points[i]);
     const label = escHtml(String(c.head).slice(0, 4));
     const title = escHtml(c.headTitle || c.label || '');
-    return `<g class="eq-head" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><title>${title}</title><circle r="10.5" fill="#fff" stroke="${c.color}" stroke-width="1.5"/><text y="3.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="${c.color}">${label}</text></g>`;
+    const rawLabel = String(c.head);
+    const r = rawLabel.length > 3 ? 12 : 11;
+    const fs = rawLabel.length > 3 ? 6.5 : 7.2;
+    return `<g class="eq-head" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><title>${title}</title><circle r="${r}" fill="#fff" stroke="${c.color}" stroke-width="1.5"/><text y="3.2" text-anchor="middle" font-size="${fs}" font-weight="700" fill="${c.color}">${label}</text></g>`;
   }).join('');
-  const legendY = hasTimes ? H + 8 : H - 6;
+  const maxLabelLen = Math.max(8, ...curves.map(c => String(c.label || '').length));
+  const legendItemW = Math.max(150, Math.min(205, 42 + maxLabelLen * 5.5));
+  const legendCols = Math.max(1, Math.floor((W - padL - padR) / legendItemW));
+  const legendRows = Math.ceil(curves.length / legendCols);
+  const legendRowH = 17;
+  const legendStartY = H + 14;
   const legend = curves.map((c, i) => {
+    const col = i % legendCols, row = Math.floor(i / legendCols);
+    const x0 = padL + col * legendItemW;
+    const y0 = legendStartY + row * legendRowH;
     const swatch = c.dash
-      ? `<line x1="${padL + i * 110}" y1="${legendY}" x2="${padL + i * 110 + 14}" y2="${legendY}" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="4,2" opacity="0.8"/>`
-      : `<circle cx="${padL + i * 110 + 7}" cy="${legendY}" r="3.5" fill="${c.color}"/>`;
-    return swatch + `<text x="${padL + i * 110 + 17}" y="${legendY + 4}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
+      ? `<line x1="${x0}" y1="${y0}" x2="${x0 + 14}" y2="${y0}" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="4,2" opacity="0.8"/>`
+      : `<circle cx="${x0 + 7}" cy="${y0}" r="3.5" fill="${c.color}"/>`;
+    return swatch + `<text x="${x0 + 17}" y="${y0 + 4}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
   }).join('');
-  const svgH = H + (hasTimes ? 14 : 0);
+  const svgH = H + 20 + legendRows * legendRowH;
   _lastEquityCurves = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan };
   const chartLabel = `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">Growth of $10,000 (reinvested)</text>`;
   return `<svg class="eq-svg" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
@@ -6096,11 +6207,17 @@ function renderEdgeBoard(d) {
   _ebBoardData = board;
   _ebPage = 0;
   const pnl = d.paper_pnl, ll = d.lead_lag;
+  const mtm = d.mark_to_market_account || null;
+  const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
+  const mtmCycleMinutes = d.mark_to_market_cycle_minutes || 15;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   // Never surface a degenerate metric (a 0% / −100% read off a handful of points).
   // Below EB_MIN_N samples a metric reads "building n=…" instead of a misleading zero.
   const EB_MIN_N = 5;
   const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
+  const _usd = v => Number.isFinite(Number(v))
+    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+    : 'building';
   const modelFollowsMkt = (ll && ll.n_markets >= EB_MIN_N && ll.market_converged_to_model_pct != null)
     ? pct(1 - ll.market_converged_to_model_pct) + '%' : _build(ll && ll.n_markets);
   const stats = `
@@ -6112,8 +6229,12 @@ function renderEdgeBoard(d) {
     </div>`;
   let compHtml;
   if (comp.length) {
-    const crowdRoi = (pnl.crowd_baseline || {}).roi;
-    compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Smart ROI</th><th>vs crowd</th></tr></thead><tbody>` +
+    const crowdRoi = ((pnl || {}).crowd_baseline || {}).roi;
+    const compCurves = _ebModelCurves(comp, EB_MIN_N, 9);
+    const compChart = compCurves.length
+      ? `<div id="eb-model-comparison-svg">${_equitySvg(compCurves, 760, 180, {asPct: false, yPrefix: '$'})}</div>`
+      : '';
+    compHtml = `${compChart}<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Smart ROI</th><th>vs crowd</th></tr></thead><tbody>` +
       comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
         const modelSmartRoi = m.paper_roi_smart != null ? m.paper_roi_smart : (m.model === 'crowd-follow' ? m.paper_roi : null);
         const roiDelta = modelSmartRoi != null && crowdRoi != null ? modelSmartRoi - crowdRoi : null;
@@ -6122,7 +6243,60 @@ function renderEdgeBoard(d) {
         `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td>` +
         `<td>${enough ? _roiPct(modelSmartRoi) : '·'}</td><td>${enough ? _roiDeltaPct(roiDelta) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
   } else {
-    compHtml = `<p class="text-sm text-gray-500">Model comparison (gpt-oss-120b vs Gemma vs Kimi) fills in as forecasts resolve.</p>`;
+    compHtml = `<p class="text-sm text-gray-500">Model comparison across SCADS-hosted models fills in as forecasts resolve.</p>`;
+  }
+  let mtmHtml;
+  if (mtmModels.length) {
+    const curves = mtmModels.map((m, i) => {
+      const account = m.account || {};
+      const values = (account.value_curve || []).map(p => Number(p.account_value)).filter(Number.isFinite);
+      if (Number.isFinite(Number(account.account_value))) values.push(Number(account.account_value));
+      if (!values.length) return null;
+      const times = (account.value_curve || []).map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
+      const label = _ebModelLabel(m.model);
+      const value = account.account_value ?? m.account_value;
+      const ret = account.return ?? m.return;
+      const curve = {
+        points: values,
+        color: _mtmModelColor(m.model, i),
+        label,
+        head: _ebModelHead(m.model),
+        headTitle: `${label} mark-to-market ${_usd(value)} ${ret == null ? '' : _roiPct(ret)}`.trim(),
+      };
+      if (times.length === values.length) curve.times = times;
+      return curve;
+    }).filter(Boolean);
+    const rows = mtmModels.map((m, i) => {
+      const account = m.account || {};
+      const value = account.account_value ?? m.account_value;
+      const ret = account.return ?? m.return;
+      const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
+      return `<tr class="eb-row">
+        <td><b>${i + 1}</b></td>
+        <td><b>${escHtml(m.model || '')}</b></td>
+        <td>${_usd(value)}</td>
+        <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
+        <td>${account.n_trades ?? m.n_trades ?? 0}</td>
+        <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
+        <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
+      </tr>`;
+    }).join('');
+    mtmHtml = `
+      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">15-minute cycle benchmark account. Open YES/NO positions are marked to bid-side liquidation prices; Kalshi exits are modeled by buying the opposite side and netting reciprocal pairs.</p>
+      <div class="tr-stats">
+        <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05)">
+          <div class="v" id="eb-mtm-primary-v">${_usd(mtm && mtm.account_value)}</div>
+          <div class="k label">Council account value</div>
+          <div class="k" style="font-size:11px;color:var(--text-dim)">cash + bid liquidation</div>
+        </div>
+        <div class="tr-stat"><div class="v">${mtmCycleMinutes}m</div><div class="k label">Cycle</div><div class="k" style="font-size:11px;color:var(--text-dim)">forecast cadence</div></div>
+        <div class="tr-stat"><div class="v">${mtm?.n_open_positions || 0}</div><div class="k label">Open positions</div><div class="k" style="font-size:11px;color:var(--text-dim)">primary model</div></div>
+        <div class="tr-stat"><div class="v">${mtmModels.length}</div><div class="k label">Models tracked</div><div class="k" style="font-size:11px;color:var(--text-dim)">SCADS + baseline</div></div>
+      </div>
+      <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 180, {asPct: false, yPrefix: '$'}) : ''}</div>
+      <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
+  } else {
+    mtmHtml = `<p class="text-sm text-gray-500">Mark-to-market account values will appear after the next 15-minute forecast cycle records open positions.</p>`;
   }
   let performanceHtml;
   if (pnl && pnl.flat) {
@@ -6145,26 +6319,21 @@ function renderEdgeBoard(d) {
       if (times.length === points.length) curve.times = times;
       return curve;
     };
-    const modelCurves = _ebModelCurves(comp, EB_MIN_N, 5);
-    const hasCrowdCurve = modelCurves.some(c => c.isCrowdBaseline);
     const strategyCurves = [
       _mk(pnl.smart, '#10b981', 'Smart ROI'),
       _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
     ].filter(Boolean);
-    const curves = modelCurves.length
-      ? [...modelCurves, _mk(pnl.smart, '#10b981', 'Smart ROI'), ...(hasCrowdCurve ? [] : [_mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true)])].filter(Boolean)
-      : strategyCurves;
-    const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : ''}</div>`;
+    const svgChart = `<div id="eb-equity-svg">${strategyCurves.length ? _equitySvg(strategyCurves, 680, 160, {asPct: false, yPrefix: '$'}) : ''}</div>`;
     performanceHtml = `
       <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $${EB_STARTING_BANKROLL.toLocaleString()} starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
+      ${svgChart}
       <div class="tr-stats">
       <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label ui-icon-label">${uiIcon('star')} Smart ROI</div>${_sub('Kelly + filters')}</div>
         <div class="tr-stat" title="Calibrated Half-Kelly sizing proportional to estimated edge and market odds."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
         <div class="tr-stat" title="Smart ROI minus the crowd-follow baseline over the same resolved cohort."><div class="v" id="eb-pnl-edge-v">${smartVsCrowd != null ? _roiDeltaPct(smartVsCrowd) : _build(pnl.smart && pnl.smart.n_bets)}</div><div class="k label">vs crowd-follow</div>${_sub('excess return')}</div>
         <div class="tr-stat" title="Always betting the crowd's own direction as the zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">crowd-follow baseline</div>${_sub('agree with market')}</div>
       </div>
-      ${svgChart}
       <p class="text-xs text-gray-400" style="margin-top:8px">Historical simulation of forecasts saved before market close, net of venue trading fees. Excludes slippage and liquidity constraints; not actual trading results.</p>`;
   } else {
     performanceHtml = `<p class="text-sm text-gray-500">Strategy performance will appear as tracked markets resolve.</p>`;
@@ -6234,6 +6403,7 @@ function renderEdgeBoard(d) {
     ${stats}
     <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
     <h4 class="eb-h">Model comparison · resolved forecast quality</h4>${compHtml}
+    <h4 class="eb-h">Mark-to-market account · bid-side liquidation value</h4>${mtmHtml}
     <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift · does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live council forecasts · ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}

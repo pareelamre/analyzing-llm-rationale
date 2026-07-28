@@ -20,6 +20,8 @@ from analyzing_llm_rationale.cli import main as cli_main
 from analyzing_llm_rationale.config import (  # noqa: E402
     load_model_configs,
     load_variant_configs,
+    scads_hosted_model_allowlist,
+    scads_track_model_labels,
     temperature_to_tag,
 )
 from analyzing_llm_rationale.pipeline import (  # noqa: E402
@@ -563,6 +565,13 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(models["gpt-5"].api_base_url, "https://api.openai.com/v1/chat/completions")
         self.assertEqual(models["gpt-5"].api_key_env_var, "OPENAI_API_KEY")
         self.assertEqual(models["gpt-5"].api_key_file, "OPEN_AI_API_KEY.txt")
+        scads_models = scads_hosted_model_allowlist(repo_root / "configs" / "models.yaml")
+        self.assertIn("scads-alias-code", scads_models)
+        self.assertIn("scads-alias-reasoning", scads_models)
+        self.assertIn("kimi-k2.7-code", scads_track_model_labels(repo_root / "configs" / "models.yaml"))
+        self.assertNotIn("deepseek-v3", scads_models)
+        self.assertFalse(models["deepseek-v3"].forecasting_enabled)
+        self.assertNotIn("gpt-5", scads_models)
         self.assertEqual(temperature_to_tag(0.7), "temperature_07")
 
     def test_resolve_run_config_builds_output_path_from_variant_model_and_temperature(self):

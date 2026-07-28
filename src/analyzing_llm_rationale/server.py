@@ -54,6 +54,7 @@ from analyzing_llm_rationale import (
 from analyzing_llm_rationale import (
     live_track_record as live_track_record_support,
 )
+from analyzing_llm_rationale.config import scads_hosted_model_allowlist
 from analyzing_llm_rationale.observability import init_observability
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
@@ -2089,6 +2090,9 @@ async def edge_board():
             "lead_lag": live.get("lead_lag"),
             "paper_pnl": live.get("paper_pnl"),
             "primary_paper_pnl": live.get("primary_paper_pnl"),
+            "mark_to_market_account": live.get("mark_to_market_account"),
+            "mark_to_market_by_model": live.get("mark_to_market_by_model", []),
+            "mark_to_market_cycle_minutes": live.get("mark_to_market_cycle_minutes"),
             "models_comparison": live.get("models_comparison", []),
             "resolved_log": live.get("resolved_log", []),
             "n_markets_open": live.get("n_markets_open", 0),
@@ -2780,7 +2784,8 @@ class PredictRequest(BaseModel):
         max_length=64,
         description=(
             "Optional alternate server-hosted model to forecast with, from the "
-            "allowlist (`gpt-oss-120b`, `gemma-4-31b-it`, `kimi-k2.6`). Uses the "
+            "SCADS allowlist (for example `gpt-oss-120b`, `scads-alias-reasoning`, "
+            "`kimi-k2.7-code`). Uses the "
             "server's own key — no BYOK needed. Powers the multi-model paper-trading "
             "comparison."
         ),
@@ -3454,6 +3459,9 @@ class RadarResponse(BaseModel):
     models_comparison: List[Dict[str, Any]] = Field(default_factory=list)
     paper_pnl: Optional[Any] = None
     primary_paper_pnl: Optional[Any] = None
+    mark_to_market_account: Optional[Any] = None
+    mark_to_market_by_model: List[Dict[str, Any]] = Field(default_factory=list)
+    mark_to_market_cycle_minutes: Optional[int] = None
     lead_lag: Optional[Any] = None
     calibration: Optional[Any] = None
     resolved_log: List[Dict[str, Any]] = Field(default_factory=list)
@@ -4550,6 +4558,9 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
         models_comparison=payload.get("models_comparison") or [],
         paper_pnl=payload.get("paper_pnl"),
         primary_paper_pnl=payload.get("primary_paper_pnl"),
+        mark_to_market_account=payload.get("mark_to_market_account"),
+        mark_to_market_by_model=payload.get("mark_to_market_by_model") or [],
+        mark_to_market_cycle_minutes=payload.get("mark_to_market_cycle_minutes"),
         lead_lag=payload.get("lead_lag"),
         calibration=payload.get("calibration"),
         resolved_log=payload.get("resolved_log") or [],
@@ -6357,11 +6368,16 @@ _AGENT_SKILL_SYSTEM = (
 # Alternate server-hosted SCADS models the public API may forecast with (using
 # the server's own key) — for the multi-model paper-trading comparison.
 _SCADS_BASE_URL = os.environ.get("SCADS_BASE_URL", "https://llm.scads.ai/v1/chat/completions")
-_SCADS_MODEL_ALLOWLIST = {
-    "gpt-oss-120b": "openai/gpt-oss-120b",
-    "gemma-4-31b-it": "google/gemma-4-31B-it",
-    "kimi-k2.6": "moonshotai/Kimi-K2.6",
-}
+try:
+    _SCADS_MODEL_ALLOWLIST = scads_hosted_model_allowlist(_REPO_ROOT / "configs" / "models.yaml")
+except Exception as exc:  # pragma: no cover - defensive production fallback.
+    logger.warning("failed to load SCADS model allowlist from config: %s", exc)
+    _SCADS_MODEL_ALLOWLIST = {
+        "gpt-oss-120b": "openai/gpt-oss-120b",
+        "gemma-4-31b-it": "google/gemma-4-31B-it",
+        "scads-alias-reasoning": "alias-reasoning",
+        "kimi-k2.7-code": "moonshotai/Kimi-K2.7-Code",
+    }
 
 
 def _scads_alt_provider(

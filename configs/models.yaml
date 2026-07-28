@@ -29,11 +29,112 @@ models:
     api_key_file: SCADS_AI_API_KEY.txt
     request_timeout_cap_s: 90
     access: hosted
+  llama-3.1-8b-instruct:
+    result_label: Llama-3.1-8B-Instruct
+    provider: openai-compatible
+    local_model_name: meta-llama/Llama-3.1-8B-Instruct
+    router_model_name: meta-llama/Llama-3.1-8B-Instruct
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
   llama-4-scout-17b-16e-instruct:
     result_label: Llama-4-Scout-17B-16E-Instruct
     provider: openai-compatible
     local_model_name: meta-llama/Llama-4-Scout-17B-16E-Instruct
     router_model_name: meta-llama/Llama-4-Scout-17B-16E-Instruct
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+    forecasting_enabled: false
+  scads-alias-code:
+    result_label: SCADS Alias Code
+    provider: openai-compatible
+    local_model_name: alias-code
+    router_model_name: alias-code
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+  scads-alias-ha:
+    result_label: SCADS Alias HA
+    provider: openai-compatible
+    local_model_name: alias-ha
+    router_model_name: alias-ha
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+  scads-alias-reasoning:
+    result_label: SCADS Alias Reasoning
+    provider: openai-compatible
+    local_model_name: alias-reasoning
+    router_model_name: alias-reasoning
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+  scads-alias-huge:
+    result_label: SCADS Alias Huge
+    provider: openai-compatible
+    local_model_name: alias-huge
+    router_model_name: alias-huge
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+  scads-alias-huge-no-thinking:
+    result_label: SCADS Alias Huge No Thinking
+    provider: openai-compatible
+    local_model_name: alias-huge-no-thinking
+    router_model_name: alias-huge-no-thinking
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+  qwen3-vl-8b-instruct:
+    result_label: Qwen3-VL-8B-Instruct
+    provider: openai-compatible
+    local_model_name: Qwen/Qwen3-VL-8B-Instruct
+    router_model_name: Qwen/Qwen3-VL-8B-Instruct
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+    forecasting_enabled: false
+  qwen3-coder-30b-a3b-instruct:
+    result_label: Qwen3-Coder-30B-A3B-Instruct
+    provider: openai-compatible
+    local_model_name: Qwen/Qwen3-Coder-30B-A3B-Instruct
+    router_model_name: Qwen/Qwen3-Coder-30B-A3B-Instruct
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+  minimax-m3:
+    result_label: MiniMax-M3
+    provider: openai-compatible
+    local_model_name: MiniMaxAI/MiniMax-M3-MXFP8
+    router_model_name: MiniMaxAI/MiniMax-M3-MXFP8
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+  kimi-k2.7-code:
+    result_label: Kimi-K2.7-Code
+    provider: openai-compatible
+    local_model_name: moonshotai/Kimi-K2.7-Code
+    router_model_name: moonshotai/Kimi-K2.7-Code
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+  glm-5.2-fp8:
+    result_label: GLM-5.2-FP8
+    provider: openai-compatible
+    local_model_name: zai-org/GLM-5.2-FP8
+    router_model_name: zai-org/GLM-5.2-FP8
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -56,6 +157,7 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    forecasting_enabled: false
   gpt-5:
     result_label: GPT-5
     provider: openai-compatible
@@ -92,6 +194,7 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    forecasting_enabled: false
   kimi-k2.6:
     result_label: Kimi-K2.6
     provider: openai-compatible
@@ -101,3 +204,4 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    forecasting_enabled: false

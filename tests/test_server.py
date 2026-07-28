@@ -725,6 +725,9 @@ class ServerTests(unittest.TestCase):
             "generated_at": "2026-06-28T23:51:20+00:00",
             "edge_board": [{"question": "Live edge?", "edge": 0.2}],
             "paper_pnl": {"flat": {"growth_curve": [100, 105]}},
+            "mark_to_market_account": {"account_value": 9999.47, "n_open_positions": 8},
+            "mark_to_market_by_model": [{"model": "council", "account_value": 9999.47}],
+            "mark_to_market_cycle_minutes": 15,
             "model": "council",
             "n_snapshots_resolved": 184,
             "n_markets_resolved": 139,
@@ -738,10 +741,22 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["model"], "council")
         self.assertEqual(payload["edge_board"][0]["question"], "Live edge?")
         self.assertEqual(payload["paper_pnl"]["flat"]["growth_curve"], [100, 105])
+        self.assertEqual(payload["mark_to_market_account"]["account_value"], 9999.47)
+        self.assertEqual(payload["mark_to_market_by_model"][0]["model"], "council")
+        self.assertEqual(payload["mark_to_market_cycle_minutes"], 15)
         self.assertEqual(payload["n_markets_resolved"], 139)
         self.assertEqual(payload["resolved_log"][0]["question"], "Resolved edge?")
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])
+
+    def test_scads_allowlist_includes_board_models(self):
+        from analyzing_llm_rationale.config import scads_hosted_model_allowlist
+
+        expected = scads_hosted_model_allowlist(server_module._REPO_ROOT / "configs" / "models.yaml")
+        self.assertEqual(server_module._SCADS_MODEL_ALLOWLIST, expected)
+        self.assertIn("scads-alias-reasoning", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertIn("kimi-k2.7-code", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertNotIn("deepseek-v3", server_module._SCADS_MODEL_ALLOWLIST)
 
     def test_analytics_event_summary_counts_events(self):
         response = self.client.post(

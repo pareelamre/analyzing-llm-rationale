@@ -17,6 +17,35 @@ _SPEC.loader.exec_module(track_record_tick)
 
 
 class TrackRecordTickTests(unittest.TestCase):
+    def test_forecast_workflow_runs_15_minute_cycles_and_uses_configured_scads_models(self):
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "track-record-forecast.yml"
+        ).read_text()
+        self.assertIn('cron: "*/15 * * * *"', workflow)
+        self.assertIn('CYCLE_INTERVAL_MINUTES: "15"', workflow)
+        self.assertIn('SNAPSHOT_SLOT_MINUTES: "15"', workflow)
+        self.assertNotIn("TRACK_MODELS:", workflow)
+        for model in (
+            "scads-alias-code",
+            "scads-alias-ha",
+            "scads-alias-reasoning",
+            "scads-alias-huge",
+            "scads-alias-huge-no-thinking",
+            "llama-3.1-8b-instruct",
+            "llama-3.3-70b-instruct",
+            "gpt-oss-120b",
+            "gemma-4-31b-it",
+            "minimax-m3",
+            "kimi-k2.7-code",
+            "qwen3-coder-30b-a3b-instruct",
+            "glm-5.2-fp8",
+            "crowd-follow",
+        ):
+            self.assertIn(model, track_record_tick.TRACK_MODELS)
+        self.assertNotIn("deepseek-v3", track_record_tick.TRACK_MODELS)
+        self.assertNotIn("kimi-k2.6", track_record_tick.TRACK_MODELS)
+
     def test_forecast_fn_delivers_rules_and_venue_news_context(self):
         quote = {
             "question": "Will the test event happen?",
@@ -259,6 +288,8 @@ class TrackRecordTickTests(unittest.TestCase):
             model="council",
             variant=track_record_tick.VARIANT,
             temperature=track_record_tick.TEMPERATURE,
+            cycle_minutes=track_record_tick.CYCLE_INTERVAL_MINUTES,
+            tracked_models=["gpt-oss-120b", "council"],
         )
 
     def test_main_retries_snapshot_pass_when_first_pass_has_only_failures(self):
