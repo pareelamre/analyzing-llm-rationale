@@ -1609,7 +1609,9 @@ def build_mark_to_market_accounts(
 
     accounts: List[Dict[str, Any]] = []
     for label, rows in by_model.items():
-        account = simulate_mark_to_market_account(rows, latest_quotes=latest_quotes)
+        account = _public_mark_to_market_account(
+            simulate_mark_to_market_account(rows, latest_quotes=latest_quotes)
+        )
         accounts.append({
             "model": label,
             "account": account,
@@ -1628,6 +1630,68 @@ def build_mark_to_market_accounts(
         reverse=True,
     )
     return accounts
+
+
+_MTM_PUBLIC_ACCOUNT_FIELDS = (
+    "ts",
+    "value_method",
+    "starting_cash",
+    "cash",
+    "liquidation_value",
+    "account_value",
+    "return",
+    "unrealized_pnl",
+    "realized_pnl",
+    "fees_paid",
+    "n_trades",
+    "n_open_positions",
+    "n_illiquid_positions",
+    "notes",
+)
+_MTM_PUBLIC_CURVE_FIELDS = (
+    "ts",
+    "value_method",
+    "cash",
+    "liquidation_value",
+    "account_value",
+    "unrealized_pnl",
+    "realized_pnl",
+    "fees_paid",
+    "trade_status",
+)
+
+
+def _public_mark_to_market_account(account: Dict[str, Any]) -> Dict[str, Any]:
+    """Compact MTM account payload for public JSON and chart rendering."""
+
+    def _position_count(snapshot: Dict[str, Any], key: str) -> int:
+        positions = snapshot.get(key)
+        if isinstance(positions, list):
+            return len(positions)
+        return int(snapshot.get(f"n_{key}") or 0)
+
+    public = {
+        key: account.get(key)
+        for key in _MTM_PUBLIC_ACCOUNT_FIELDS
+        if key in account
+    }
+    public.setdefault("n_open_positions", _position_count(account, "open_positions"))
+    public.setdefault("n_illiquid_positions", _position_count(account, "illiquid_positions"))
+
+    curve = []
+    for point in account.get("value_curve") or []:
+        if not isinstance(point, dict):
+            continue
+        item = {
+            key: point.get(key)
+            for key in _MTM_PUBLIC_CURVE_FIELDS
+            if key in point
+        }
+        item["n_open_positions"] = _position_count(point, "open_positions")
+        item["n_illiquid_positions"] = _position_count(point, "illiquid_positions")
+        curve.append(item)
+    public["value_curve"] = curve
+    return public
 
 
 def build_edge_board(open_rows: List[Dict[str, Any]],
