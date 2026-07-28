@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import tempfile
-import threading
 import unittest
 import urllib.error
 from collections import Counter
@@ -18,6 +17,53 @@ _SPEC.loader.exec_module(track_record_tick)
 
 
 class TrackRecordTickTests(unittest.TestCase):
+    def test_forecast_fn_delivers_rules_and_venue_news_context(self):
+        quote = {
+            "question": "Will the test event happen?",
+            "platform": "Kalshi",
+            "ident": "TEST-26",
+            "market_url": "https://kalshi.com/markets/TEST-26",
+            "probability": 0.4,
+            "resolution_criteria": "Resolves Yes only if the official filing is published.",
+            "resolution_source": "https://example.gov/filings",
+            "venue_news_articles": [
+                {
+                    "title": "Venue-linked filing update",
+                    "url": "https://example.com/update",
+                    "source": "Kalshi",
+                }
+            ],
+        }
+        response = {
+            "model_key": "council",
+            "market_analysis": {
+                "model_probability": 0.55,
+                "market_probability": 0.4,
+            },
+            "evidence_sources": [
+                {"title": "Venue-linked filing update", "url": "https://example.com/update"},
+                {"title": "Fresh external report", "url": "https://example.org/report"},
+            ],
+        }
+        with mock.patch.object(
+            track_record_tick,
+            "_post_predict",
+            return_value=response,
+        ) as post_predict:
+            result = asyncio.run(
+                track_record_tick.forecast_fn(quote, 3, model="council")
+            )
+
+        payload = post_predict.call_args.args[0]
+        self.assertEqual(payload["resolution_criteria"], quote["resolution_criteria"])
+        self.assertEqual(payload["market_resolution_source"], quote["resolution_source"])
+        self.assertEqual(payload["news_articles"], quote["venue_news_articles"])
+        self.assertTrue(payload["attach_evidence"])
+        self.assertEqual(result["evidence_count"], 2)
+        self.assertEqual(result["venue_news_count"], 1)
+        self.assertTrue(result["rules_present"])
+        self.assertTrue(result["context_complete"])
+
     def test_forecast_fn_rejects_response_from_a_different_model(self):
         quote = {
             "question": "Will the test event happen?",
@@ -43,12 +89,19 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(stats["model_mismatches"], 1)
 
-    def test_predict_circuit_skips_queued_calls_after_repeated_failures(self):
-        circuit = threading.Event()
+    def test_predict_circuit_isolates_repeated_failures_to_one_model(self):
         with (
             mock.patch.object(track_record_tick, "_predict_stats", Counter()),
-            mock.patch.object(track_record_tick, "_predict_circuit_open", circuit),
-            mock.patch.object(track_record_tick, "_predict_consecutive_failures", 0),
+            mock.patch.object(
+                track_record_tick,
+                "_predict_circuit_open_models",
+                set(),
+            ) as open_models,
+            mock.patch.object(
+                track_record_tick,
+                "_predict_consecutive_failures",
+                Counter(),
+            ),
             mock.patch.object(track_record_tick, "_PREDICT_FAILURE_CIRCUIT_THRESHOLD", 2),
             mock.patch.object(track_record_tick, "_PREDICT_RETRIES", 1),
             mock.patch.object(track_record_tick, "_PREDICT_MIN_INTERVAL_S", 0.0),
@@ -59,16 +112,75 @@ class TrackRecordTickTests(unittest.TestCase):
                 side_effect=urllib.error.URLError("upstream unavailable"),
             ) as urlopen_mock,
         ):
-            self.assertIsNone(track_record_tick._post_predict({"question": "q1"}))
-            self.assertIsNone(track_record_tick._post_predict({"question": "q2"}))
-            self.assertTrue(circuit.is_set())
-            self.assertIsNone(track_record_tick._post_predict({"question": "queued"}))
+            kimi = {"question": "q1", "model": "kimi-k2.6"}
+            council = {"question": "q2", "model": "council"}
+            self.assertIsNone(track_record_tick._post_predict(kimi))
+            self.assertIsNone(track_record_tick._post_predict(kimi))
+            self.assertEqual(open_models, {"kimi-k2.6"})
+            self.assertIsNone(track_record_tick._post_predict(kimi))
+            self.assertIsNone(track_record_tick._post_predict(council))
 
-            self.assertEqual(urlopen_mock.call_count, 2)
-            self.assertEqual(track_record_tick._predict_stats["attempts"], 2)
-            self.assertEqual(track_record_tick._predict_stats["failures"], 2)
+            self.assertEqual(urlopen_mock.call_count, 3)
+            self.assertEqual(track_record_tick._predict_stats["attempts"], 3)
+            self.assertEqual(track_record_tick._predict_stats["failures"], 3)
             self.assertEqual(track_record_tick._predict_stats["circuit_opened"], 1)
             self.assertEqual(track_record_tick._predict_stats["circuit_skipped"], 1)
+            self.assertEqual(
+                track_record_tick._predict_stats["failure_model:kimi-k2.6"],
+                2,
+            )
+            self.assertEqual(
+                track_record_tick._predict_stats["failure_model:council"],
+                1,
+            )
+
+    def test_http_error_detail_is_logged_and_attributed_to_model(self):
+        error = urllib.error.HTTPError(
+            url="https://foresea.ink/predict",
+            code=502,
+            msg="Bad Gateway",
+            hdrs=None,
+            fp=mock.Mock(
+                read=mock.Mock(
+                    return_value=b'{"detail":"council quorum unavailable"}'
+                )
+            ),
+        )
+        with (
+            mock.patch.object(track_record_tick, "_predict_stats", Counter()) as stats,
+            mock.patch.object(
+                track_record_tick,
+                "_predict_circuit_open_models",
+                set(),
+            ),
+            mock.patch.object(
+                track_record_tick,
+                "_predict_consecutive_failures",
+                Counter(),
+            ),
+            mock.patch.object(track_record_tick, "_PREDICT_RETRIES", 1),
+            mock.patch.object(track_record_tick, "_PREDICT_MIN_INTERVAL_S", 0.0),
+            mock.patch.object(track_record_tick, "_last_predict_ts", 0.0),
+            mock.patch.object(
+                track_record_tick.urllib.request,
+                "urlopen",
+                side_effect=error,
+            ),
+            mock.patch("builtins.print") as print_mock,
+        ):
+            result = track_record_tick._post_predict(
+                {"question": "q", "model": "council"}
+            )
+
+        self.assertIsNone(result)
+        self.assertEqual(stats["failure_model:council"], 1)
+        self.assertTrue(
+            any(
+                "council quorum unavailable" in str(call)
+                and "model=council" in str(call)
+                for call in print_mock.call_args_list
+            )
+        )
 
     def test_main_uses_configured_primary_independent_of_model_order(self):
         progress = {

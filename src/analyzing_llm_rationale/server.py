@@ -1341,6 +1341,11 @@ _forecast_evaluation_reads = _meter.create_counter(
     unit="1",
     description="Internal forecast evaluation report reads",
 )
+_forecast_context_packages = _meter.create_counter(
+    "forecast.context.packages",
+    unit="1",
+    description="Forecast context packages by completeness",
+)
 
 
 # Redirect middleware: send requests from run.app hosts to the custom domain
@@ -2600,8 +2605,8 @@ class PredictRequest(BaseModel):
     )
     resolution_criteria: str = Field(
         "",
-        max_length=2000,
-        description="Exact conditions or measurement source used to resolve the forecast.",
+        max_length=12000,
+        description="Full venue conditions and measurement source used to resolve the forecast.",
     )
     categories: List[str] = Field(
         default_factory=list,
@@ -2612,8 +2617,8 @@ class PredictRequest(BaseModel):
         default_factory=list,
         max_length=20,
         description=(
-            "Pre-fetched news articles to use as evidence. "
-            "If empty and the evidence pipeline is configured, articles are fetched automatically."
+            "Pre-fetched venue or caller news articles to preserve as evidence. "
+            "When `attach_evidence` is true, fresh retrieved news is merged with them."
         ),
     )
     variant: str = Field(
@@ -2627,7 +2632,7 @@ class PredictRequest(BaseModel):
     )
     attach_evidence: bool = Field(
         True,
-        description="If `true` and `news_articles` is empty, fetch live evidence automatically.",
+        description="If `true`, fetch live evidence and merge it with any supplied articles.",
     )
     evidence_top_k: int = Field(
         5,
@@ -3486,6 +3491,30 @@ def _clean_article(article: Dict[str, Any]) -> Dict[str, Any]:
     return cleaned
 
 
+def _merge_evidence_articles(
+    supplied: List[Dict[str, Any]],
+    retrieved: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Keep venue/caller context first, then append fresh news without duplicates."""
+    merged: List[Dict[str, Any]] = []
+    seen = set()
+    for article in [*supplied, *retrieved]:
+        if not isinstance(article, dict):
+            continue
+        key = (
+            str(article.get("url") or "").strip().lower()
+            or "|".join((
+                str(article.get("source") or "").strip().lower(),
+                str(article.get("title") or "").strip().lower(),
+            ))
+        )
+        if key == "|" or key in seen:
+            continue
+        seen.add(key)
+        merged.append(article)
+    return merged[:20]
+
+
 def _news_articles(articles: List[Dict[str, Any]]) -> List["NewsArticle"]:
     """Build NewsArticle models, skipping/repairing any that fail validation so
     one malformed source never 500s the whole response."""
@@ -3853,6 +3882,7 @@ def _fetch_live_odds(
     return None
 
 
+@_tracer.start_as_current_span("forecast.context_prepare")
 async def _prepare_predict_messages(
     req: "PredictRequest",
     rag_user_id: Optional[str],
@@ -3881,6 +3911,10 @@ async def _prepare_predict_messages(
                     record["market_url"] = quote.get("market_url")
                 if not record.get("market_outcome"):
                     record["market_outcome"] = quote.get("outcome")
+                if not record.get("description") and quote.get("description"):
+                    record["description"] = quote.get("description")
+                if not record.get("resolution_criteria") and quote.get("resolution_criteria"):
+                    record["resolution_criteria"] = quote.get("resolution_criteria")
                 # Market microstructure signals — populate only when not already supplied.
                 if record.get("market_volume") is None and quote.get("volume") is not None:
                     record["market_volume"] = float(quote["volume"])
@@ -3902,7 +3936,9 @@ async def _prepare_predict_messages(
                         record[f"market_{fld}"] = quote[fld]
         except Exception:
             pass
-    evidence_articles = [article.model_dump() for article in req.news_articles]
+    supplied_articles = [article.model_dump() for article in req.news_articles]
+    retrieved_articles: List[Dict[str, Any]] = []
+    evidence_articles = list(supplied_articles)
     evidence_error = None
 
     # A short follow-up in an ongoing thread ("WE is 90+", "why?") makes a poor
@@ -3911,7 +3947,7 @@ async def _prepare_predict_messages(
     # (even mid-thread) still retrieve.
     short_followup = bool(req.history) and len(req.question.split()) <= 6
 
-    if req.attach_evidence and not evidence_articles and not short_followup:
+    if req.attach_evidence and not short_followup:
         evidence_pipeline = _state.get("evidence_pipeline")
         if evidence_pipeline is None:
             evidence_error = "Evidence pipeline is not configured on this server."
@@ -3919,23 +3955,24 @@ async def _prepare_predict_messages(
             top_k = max(1, min(req.evidence_top_k, 10))
             loop = asyncio.get_running_loop()
             evidence_cache_key = _cache_key("evidence", req.question, top_k)
-            evidence_articles = _cache_get(evidence_cache_key)
-            if evidence_articles is None:
+            retrieved_articles = _cache_get(evidence_cache_key)
+            if retrieved_articles is None:
                 try:
-                    evidence_articles = await loop.run_in_executor(
+                    retrieved_articles = await loop.run_in_executor(
                         None,
                         lambda: evidence_pipeline.fetch_summarize_rank(req.question, top_k=top_k),
                     )
-                    if evidence_articles:
+                    if retrieved_articles:
                         _cache_set(
                             evidence_cache_key,
-                            evidence_articles,
+                            retrieved_articles,
                             _EVIDENCE_CACHE_TTL,
                         )
                 except Exception as exc:
-                    evidence_articles = []
+                    retrieved_articles = []
                     evidence_error = f"Evidence retrieval failed: {exc}"
 
+    evidence_articles = _merge_evidence_articles(supplied_articles, retrieved_articles)
     evidence_articles = [_clean_article(a) for a in evidence_articles]
     # Personalised retrieval: prepend the signed-in user's knowledge-base hits.
     if rag_user_id:
@@ -3971,6 +4008,33 @@ async def _prepare_predict_messages(
         logger.warning(
             "Evidence retrieval returned no relevant sources for question=%r",
             req.question,
+        )
+
+    rules_present = bool(str(record.get("resolution_criteria") or "").strip())
+    platform = str(record.get("market_platform") or "none").strip().lower() or "none"
+    context_outcome = (
+        "complete" if rules_present and evidence_articles
+        else "missing_rules" if not rules_present
+        else "missing_evidence"
+    )
+    span = otel_trace.get_current_span()
+    span.set_attributes({
+        "market.platform": platform,
+        "forecast.context.rules_present": rules_present,
+        "forecast.context.supplied_articles": len(supplied_articles),
+        "forecast.context.retrieved_articles": len(retrieved_articles),
+        "forecast.context.total_articles": len(evidence_articles),
+        "forecast.context.outcome": context_outcome,
+    })
+    _forecast_context_packages.add(1, {
+        "market.platform": platform,
+        "rules_present": str(rules_present).lower(),
+        "outcome": context_outcome,
+    })
+    if platform != "none" and not rules_present:
+        logger.warning(
+            "forecast context is missing venue rules platform=%s",
+            platform,
         )
 
     record["news_articles"] = evidence_articles

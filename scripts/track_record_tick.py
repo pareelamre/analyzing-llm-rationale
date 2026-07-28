@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
 import threading
@@ -41,6 +42,9 @@ import urllib.error
 import urllib.request
 from collections import Counter
 from pathlib import Path
+
+from opentelemetry import metrics as otel_metrics
+from opentelemetry import trace as otel_trace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -59,6 +63,15 @@ from analyzing_llm_rationale.forecast_ledger import (  # noqa: E402
 )
 from analyzing_llm_rationale.observability import init_observability  # noqa: E402
 from analyzing_llm_rationale.trackrec_store import DuckDBStore  # noqa: E402
+
+logger = logging.getLogger("foresea.track_record")
+_context_tracer = otel_trace.get_tracer("foresea.track_record")
+_context_meter = otel_metrics.get_meter("foresea.track_record")
+_context_packages = _context_meter.create_counter(
+    "forecast.context.packages",
+    unit="1",
+    description="Track-record forecast context packages by completeness",
+)
 
 STORE_PATH = Path(os.environ.get("TRACK_STORE_PATH") or ROOT / "data" / "track_record_store.duckdb")
 PUBLIC_PATH = Path(os.environ.get("TRACK_PUBLIC_PATH") or ROOT / "static" / "track_record_live.json")
@@ -158,17 +171,38 @@ EVALUATION_POLICY = EvaluationPolicy(
 )
 _predict_rate_lock = threading.Lock()
 _predict_circuit_lock = threading.Lock()
-_predict_circuit_open = threading.Event()
 _last_predict_ts: float = 0.0
-_predict_consecutive_failures = 0
+_predict_consecutive_failures: Counter = Counter()
+_predict_circuit_open_models: set[str] = set()
 _predict_stats = Counter()
 
 
 def _reset_predict_circuit() -> None:
-    global _predict_consecutive_failures
     with _predict_circuit_lock:
-        _predict_consecutive_failures = 0
-        _predict_circuit_open.clear()
+        _predict_consecutive_failures.clear()
+        _predict_circuit_open_models.clear()
+
+
+def _predict_model_label(payload: dict) -> str:
+    return str(payload.get("model") or MODEL or "default").strip() or "default"
+
+
+def _http_error_detail(exc: urllib.error.HTTPError) -> str:
+    """Return a bounded provider error detail without making logging itself fail."""
+    try:
+        raw = exc.read(2048).decode("utf-8", errors="replace").strip()
+    except Exception:  # noqa: BLE001
+        return ""
+    if not raw:
+        return ""
+    try:
+        payload = json.loads(raw)
+        detail = payload.get("detail") if isinstance(payload, dict) else None
+        if detail:
+            return str(detail)[:500]
+    except (TypeError, ValueError):
+        pass
+    return raw[:500]
 
 
 def _post_predict(payload: dict) -> dict | None:
@@ -176,10 +210,13 @@ def _post_predict(payload: dict) -> dict | None:
 
     Multiple executor threads may call this concurrently; the lock guarantees
     the minimum inter-call interval is enforced globally across all threads."""
-    global _last_predict_ts, _predict_consecutive_failures
-    if _predict_circuit_open.is_set():
-        _predict_stats["circuit_skipped"] += 1
-        return None
+    global _last_predict_ts
+    model_label = _predict_model_label(payload)
+    with _predict_circuit_lock:
+        if model_label in _predict_circuit_open_models:
+            _predict_stats["circuit_skipped"] += 1
+            _predict_stats[f"circuit_skipped_model:{model_label}"] += 1
+            return None
 
     with _predict_rate_lock:
         elapsed = time.time() - _last_predict_ts
@@ -200,11 +237,13 @@ def _post_predict(payload: dict) -> dict | None:
         try:
             with urllib.request.urlopen(req, timeout=_PREDICT_TIMEOUT_S) as resp:
                 _predict_stats["successes"] += 1
+                _predict_stats[f"success_model:{model_label}"] += 1
                 with _predict_circuit_lock:
-                    _predict_consecutive_failures = 0
+                    _predict_consecutive_failures[model_label] = 0
                 return json.loads(resp.read())
         except urllib.error.HTTPError as exc:
-            last_err = f"HTTP {exc.code}"
+            detail = _http_error_detail(exc)
+            last_err = f"HTTP {exc.code}" + (f": {detail}" if detail else "")
             _predict_stats[f"http_{exc.code}"] += 1
             if exc.code == 429:
                 # Hard rate-limit hit — back off longer before retry.
@@ -216,22 +255,25 @@ def _post_predict(payload: dict) -> dict | None:
         if attempt < _PREDICT_RETRIES - 1:
             time.sleep(2 ** attempt)
     _predict_stats["failures"] += 1
+    _predict_stats[f"failure_model:{model_label}"] += 1
     circuit_opened = False
     with _predict_circuit_lock:
-        _predict_consecutive_failures += 1
+        _predict_consecutive_failures[model_label] += 1
         if (
-            _predict_consecutive_failures >= _PREDICT_FAILURE_CIRCUIT_THRESHOLD
-            and not _predict_circuit_open.is_set()
+            _predict_consecutive_failures[model_label]
+            >= _PREDICT_FAILURE_CIRCUIT_THRESHOLD
+            and model_label not in _predict_circuit_open_models
         ):
-            _predict_circuit_open.set()
+            _predict_circuit_open_models.add(model_label)
             _predict_stats["circuit_opened"] += 1
+            _predict_stats[f"circuit_opened_model:{model_label}"] += 1
             circuit_opened = True
-    print(f"  predict failed: {last_err}", file=sys.stderr)
+    print(f"  predict failed [model={model_label}]: {last_err}", file=sys.stderr)
     if circuit_opened:
         print(
-            "track-record forecast circuit opened after "
-            f"{_predict_consecutive_failures} consecutive failures; "
-            "skipping queued markets for this pass.",
+            f"track-record forecast circuit opened for {model_label!r} after "
+            f"{_predict_consecutive_failures[model_label]} consecutive failures; "
+            "skipping only that model's queued markets for this pass.",
             file=sys.stderr,
         )
     return None
@@ -269,15 +311,38 @@ def _mark_enrolled(idents: list[str]) -> None:
         print(f"  mark-enrolled failed: {exc}", file=sys.stderr)
 
 
+@_context_tracer.start_as_current_span("forecast.context_deliver")
 async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None) -> dict | None:
     """Forecast one market via /predict with a chosen model; mirror
     server._track_record_forecast. ``model`` selects an allowlisted server-hosted
     model (server's own key) for the paper-trading comparison."""
     categories = [quote["category"]] if quote.get("category") else []
+    platform = str(quote.get("platform") or "unknown").strip().lower()
+    ident = str(quote.get("ident") or "").strip()
+    resolution_criteria = str(quote.get("resolution_criteria") or "").strip()
+    venue_articles = [
+        article for article in (quote.get("venue_news_articles") or [])
+        if isinstance(article, dict)
+    ]
+    span = otel_trace.get_current_span()
+    span.set_attributes({
+        "market.platform": platform,
+        "market.id": ident,
+        "forecast.model": model or MODEL,
+        "forecast.context.rules_present": bool(resolution_criteria),
+        "forecast.context.venue_articles": len(venue_articles),
+    })
+    if not resolution_criteria:
+        logger.warning(
+            "track-record forecast missing market rules platform=%s ident=%s",
+            platform,
+            ident,
+        )
     payload = {
         "question": quote["question"],
         "description": quote.get("description") or "",
-        "resolution_criteria": quote.get("resolution_criteria") or "",
+        "resolution_criteria": resolution_criteria,
+        "news_articles": venue_articles,
         # Force the structured forecast template. Without this the server's
         # always-on chat mode answers conversationally (question_type="chat",
         # no market_analysis) and every LLM snapshot is silently dropped.
@@ -285,17 +350,25 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         "attach_evidence": True,
         "evidence_top_k": evidence_top_k,
         "market_platform": quote.get("platform"),
+        "market_ident": quote.get("ident"),
         "market_url": quote.get("market_url"),
         "market_outcome": quote.get("outcome"),
         "market_probability": quote.get("probability"),
+        "market_resolution_source": quote.get("resolution_source"),
+        "market_no_sub_title": quote.get("no_sub_title"),
+        "market_expected_expiration_time": quote.get("expected_expiration_time"),
+        "market_floor_strike": quote.get("floor_strike"),
+        "market_cap_strike": quote.get("cap_strike"),
         "resolve_time": quote.get("close_time"),
         "publish_time": quote.get("created_time"),
         "categories": categories,
         "market_volume": quote.get("volume"),
         "market_liquidity": quote.get("liquidity"),
         "market_price_change_24h": quote.get("price_change_24h"),
+        "market_price_change_7d": quote.get("price_change_7d"),
         "market_bid": quote.get("yes_bid"),
         "market_ask": quote.get("yes_ask"),
+        "market_last_trade_price": quote.get("last_trade_price"),
         "market_price_history": quote.get("market_price_history") or quote.get("price_history") or [],
         "forecast_history": quote.get("forecast_history") or [],
     }
@@ -304,6 +377,12 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
     loop = asyncio.get_running_loop()
     res = await loop.run_in_executor(None, _post_predict, payload)
     if not res:
+        span.set_attribute("forecast.context.outcome", "delivery_failed")
+        _context_packages.add(1, {
+            "market.platform": platform,
+            "rules_present": str(bool(resolution_criteria)).lower(),
+            "outcome": "delivery_failed",
+        })
         return None
     returned_model = str(res.get("model_key") or "").strip()
     if model and returned_model != model:
@@ -313,14 +392,42 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
             f"received {returned_model or '<missing>'!r}",
             file=sys.stderr,
         )
+        span.set_attribute("forecast.context.outcome", "model_mismatch")
+        _context_packages.add(1, {
+            "market.platform": platform,
+            "rules_present": str(bool(resolution_criteria)).lower(),
+            "outcome": "model_mismatch",
+        })
         return None
     analysis = res.get("market_analysis")
     if not analysis or analysis.get("model_probability") is None:
+        span.set_attribute("forecast.context.outcome", "invalid_response")
+        _context_packages.add(1, {
+            "market.platform": platform,
+            "rules_present": str(bool(resolution_criteria)).lower(),
+            "outcome": "invalid_response",
+        })
         return None
+    evidence_count = len(res.get("evidence_sources") or [])
+    context_complete = bool(resolution_criteria) and evidence_count > 0
+    context_outcome = "complete" if context_complete else "incomplete"
+    span.set_attributes({
+        "forecast.context.evidence_articles": evidence_count,
+        "forecast.context.complete": context_complete,
+        "forecast.context.outcome": context_outcome,
+    })
+    _context_packages.add(1, {
+        "market.platform": platform,
+        "rules_present": str(bool(resolution_criteria)).lower(),
+        "outcome": context_outcome,
+    })
     return {
         "model_probability": analysis["model_probability"],
         "market_probability": analysis.get("market_probability"),
-        "evidence_count": len(res.get("evidence_sources") or []),
+        "evidence_count": evidence_count,
+        "venue_news_count": len(venue_articles),
+        "rules_present": bool(resolution_criteria),
+        "context_complete": context_complete,
         "rationale": res.get("model_rationale") or res.get("rationale") or "",
     }
 
@@ -470,6 +577,12 @@ async def main() -> int:
         "predict_http_401": _predict_stats["http_401"],
         "predict_circuit_opened": _predict_stats["circuit_opened"],
         "predict_circuit_skipped": _predict_stats["circuit_skipped"],
+        "predict_failures_by_model": {
+            key.removeprefix("failure_model:"): value
+            for key, value in sorted(_predict_stats.items())
+            if key.startswith("failure_model:")
+        },
+        "predict_circuit_open_models": sorted(_predict_circuit_open_models),
         "predict_model_mismatches": _predict_stats["model_mismatches"],
         "primary_model": primary_model,
         "primary_snapshots_before": before_primary["snapshots"],

@@ -72,6 +72,74 @@ def _to_float(value: Any) -> Optional[float]:
         return None
 
 
+def _venue_news_articles(payload: Dict[str, Any], platform: str) -> List[Dict[str, Any]]:
+    """Normalize any venue-supplied article objects without inventing sources.
+
+    Neither venue guarantees an article collection in every market response, but
+    both evolve their public payloads. Preserve recognized article collections
+    when present so the forecasting API can merge them with its live news search.
+    """
+    articles: List[Dict[str, Any]] = []
+    containers = [payload]
+    containers.extend(
+        item for item in (payload.get("events") or [])
+        if isinstance(item, dict)
+    )
+    for container in containers:
+        for field in ("news", "news_articles", "newsArticles", "articles", "relatedArticles"):
+            values = container.get(field)
+            if isinstance(values, dict):
+                values = values.get("items") or values.get("articles") or []
+            if not isinstance(values, list):
+                continue
+            for item in values:
+                if not isinstance(item, dict):
+                    continue
+                title = item.get("title") or item.get("headline")
+                url = item.get("url") or item.get("link")
+                summary = item.get("summary") or item.get("description")
+                if not any((title, url, summary)):
+                    continue
+                articles.append({
+                    "title": str(title) if title else None,
+                    "url": str(url) if url else None,
+                    "summary": str(summary) if summary else None,
+                    "source": str(item.get("source") or item.get("publisher") or platform),
+                    "publish_date": item.get("publish_date")
+                    or item.get("publishedAt")
+                    or item.get("published_at"),
+                })
+    deduped: List[Dict[str, Any]] = []
+    seen = set()
+    for article in articles:
+        key = (
+            (article.get("url") or "").strip().lower()
+            or (article.get("title") or "").strip().lower()
+        )
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(article)
+    return deduped[:20]
+
+
+def _polymarket_rules(market: Dict[str, Any]) -> Optional[str]:
+    parts: List[str] = []
+    for value in (
+        market.get("rules"),
+        market.get("description"),
+        *[
+            event.get("description")
+            for event in (market.get("events") or [])
+            if isinstance(event, dict)
+        ],
+    ):
+        text = str(value or "").strip()
+        if text and text not in parts:
+            parts.append(text)
+    return "\n\n".join(parts) or None
+
+
 def _within_close_window(close_time: Any, min_days: Optional[float], max_days: Optional[float]) -> bool:
     """Whether a market's resolution time falls in [min_days, max_days] from now.
 
@@ -119,6 +187,12 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
     ]
     outcome, probability = _primary_outcome(options)
     slug = market.get("slug") or ""
+    description = (market.get("description") or "").strip() or None
+    event_sources = [
+        str(event.get("resolutionSource") or "").strip()
+        for event in (market.get("events") or [])
+        if isinstance(event, dict) and event.get("resolutionSource")
+    ]
     return {
         "platform": "Polymarket",
         "question": market.get("question") or market.get("title") or "",
@@ -129,7 +203,8 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "outcomes": options,
         "close_time": market.get("endDate") or market.get("endDateIso"),
         "created_time": market.get("startDate") or market.get("createdAt"),
-        "description": (market.get("description") or "").strip() or None,
+        "description": description,
+        "resolution_criteria": _polymarket_rules(market),
         "volume": _to_float(market.get("volume24hr") or market.get("volume")),
         "liquidity": _to_float(market.get("liquidity") or market.get("liquidityNum")),
         "price_change_24h": _to_float(
@@ -141,7 +216,13 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "yes_ask": _to_float(market.get("bestAsk")),
         "last_trade_price": _to_float(market.get("lastTradePrice") or market.get("last_trade_price")),
         "price_change_7d": _to_float(market.get("oneWeekPriceChange") or market.get("weekPriceChange")),
-        "resolution_source": (market.get("resolverUrl") or market.get("resolutionSource") or "").strip() or None,
+        "resolution_source": (
+            market.get("resolverUrl")
+            or market.get("resolutionSource")
+            or (event_sources[0] if event_sources else "")
+            or ""
+        ).strip() or None,
+        "venue_news_articles": _venue_news_articles(market, "Polymarket"),
         "category": market.get("category"),
     }
 
@@ -322,16 +403,23 @@ def _kalshi_series_ticker(market: Dict[str, Any]) -> str:
 
 def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
     ticker = (market.get("ticker") or "").strip().upper()
-    # Kalshi prices are in the *_dollars fields (0..1). Prefer last trade, else
-    # bid/ask midpoint. (The legacy cents fields last_price/yes_bid/yes_ask were
-    # removed from the API.)
+    # Kalshi prices are in the *_dollars fields (0..1). Use the current
+    # actionable book midpoint before last trade: a thin contract's last print
+    # can be days old and create a fake council-vs-crowd discrepancy even though
+    # today's bid/ask agrees with the council.
     last = _to_float(market.get("last_price_dollars"))
     yes_bid = _to_float(market.get("yes_bid_dollars"))
     yes_ask = _to_float(market.get("yes_ask_dollars"))
-    if last is not None and 0.0 < last < 1.0:
-        probability = last
-    elif yes_bid is not None and yes_ask is not None and (yes_bid > 0.0 or yes_ask < 1.0):
+    valid_book = (
+        yes_bid is not None
+        and yes_ask is not None
+        and 0.0 <= yes_bid <= yes_ask <= 1.0
+        and (yes_bid > 0.0 or yes_ask < 1.0)
+    )
+    if valid_book:
         probability = (yes_bid + yes_ask) / 2.0
+    elif last is not None and 0.0 < last < 1.0:
+        probability = last
     elif yes_bid is not None and yes_bid > 0.0:
         probability = yes_bid
     else:
@@ -368,6 +456,7 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
             (market.get("rules_primary") or "").strip(),
             (market.get("rules_secondary") or "").strip(),
         ])) or None,
+        "venue_news_articles": _venue_news_articles(market, "Kalshi"),
         "no_sub_title": (market.get("no_sub_title") or "").strip() or None,
         "expected_expiration_time": market.get("expected_expiration_time"),
         "floor_strike": market.get("floor_strike"),
@@ -385,6 +474,17 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     market = data.get("market") if isinstance(data, dict) else None
     if not market:
         raise MarketDataError("Kalshi market not found.")
+    event_ticker = str(market.get("event_ticker") or "").strip()
+    if event_ticker:
+        try:
+            event_data = _get_json(f"{KALSHI_EVENTS_URL}/{event_ticker}")
+            event = event_data.get("event") if isinstance(event_data, dict) else None
+            if isinstance(event, dict):
+                market = {**market, "events": [event]}
+        except MarketDataError:
+            # The market detail still contains the canonical contract rules.
+            # Event-level article enrichment is best effort.
+            pass
     return _kalshi_quote(market)
 
 
@@ -430,7 +530,7 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
         for market in event.get("markets", []) or []:
             if market.get("mve_collection_ticker"):
                 continue  # skip multi-leg parlay markets
-            quote = _kalshi_quote(market)
+            quote = _kalshi_quote({**market, "events": [event]})
             prob = quote["probability"]
             if prob is None:
                 continue

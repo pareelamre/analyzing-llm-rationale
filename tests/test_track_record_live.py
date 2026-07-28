@@ -930,6 +930,59 @@ class EdgeAnalyticsTests(unittest.TestCase):
         board = trl.build_edge_board(rows, {"A": 0.50}, [])
         self.assertEqual(board[0]["market_probability"], 0.5)
         self.assertEqual(board[0]["edge"], 0.3)
+        self.assertEqual(board[0]["forecast_market_probability"], 0.79)
+        self.assertEqual(board[0]["crowd_move_since_forecast"], -0.29)
+        self.assertTrue(board[0]["needs_discrepancy_review"])
+        self.assertEqual(board[0]["discrepancy_status"], "stale_forecast")
+        self.assertIn("crowd_moved_since_forecast", board[0]["review_reasons"])
+
+    def test_edge_board_does_not_call_gap_genuine_without_rules_and_news(self):
+        now = datetime.now(timezone.utc)
+        rows = [{
+            "platform": "Polymarket",
+            "ident": "A",
+            "model_probability": 0.8,
+            "market_probability": 0.5,
+            "snapshot_ts": now,
+            "question": "Q",
+            "market_url": "u",
+            "horizon": "30d+",
+            "lead_time_days": 40.0,
+            "market_volume": 10000,
+        }]
+
+        board = trl.build_edge_board(rows, {"A": 0.5}, [])
+
+        self.assertEqual(board[0]["discrepancy_status"], "context_incomplete")
+        self.assertFalse(board[0]["context_complete"])
+        self.assertIn("missing_market_rules", board[0]["review_reasons"])
+        self.assertIn("missing_news_context", board[0]["review_reasons"])
+
+    def test_edge_board_marks_context_complete_gap_as_genuine_candidate(self):
+        now = datetime.now(timezone.utc)
+        rows = [{
+            "platform": "Kalshi",
+            "ident": "A",
+            "model_probability": 0.8,
+            "market_probability": 0.5,
+            "snapshot_ts": now,
+            "question": "Q",
+            "market_url": "u",
+            "horizon": "30d+",
+            "lead_time_days": 40.0,
+            "market_volume": 10000,
+            "resolution_criteria": "Official result controls.",
+            "evidence_count": 3,
+            "venue_news_count": 1,
+        }]
+
+        board = trl.build_edge_board(rows, {"A": 0.5}, [])
+
+        self.assertEqual(board[0]["discrepancy_status"], "genuine_candidate")
+        self.assertTrue(board[0]["rules_present"])
+        self.assertTrue(board[0]["context_complete"])
+        self.assertEqual(board[0]["evidence_count"], 3)
+        self.assertEqual(board[0]["venue_news_count"], 1)
 
     def test_is_similar_question(self):
         q1 = "Will the Federal Reserve cut interest rates in September 2026?"

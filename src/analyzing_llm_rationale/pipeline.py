@@ -305,6 +305,12 @@ def build_user_prompt(
         parts.append(f"Created Time: {created_time}")
     if publish_time:
         parts.append(f"Publish Time: {publish_time}")
+        parts.append(
+            "Contract Window Check: Unless the Resolution Criteria explicitly make "
+            "this market retroactive, an event announced or completed before Publish "
+            "Time is background context only and cannot itself satisfy the contract. "
+            "Apply every named exclusion literally."
+        )
     if not cutoff_mode:
         if resolve_time:
             parts.append(f"Resolve Time: {resolve_time}")
@@ -471,6 +477,8 @@ def build_user_prompt(
 
     summary_items = extract_summary_items(record, article_detail=article_detail, cutoff_ts=cutoff_ts)
     stale_indices: List[int] = []
+    premarket_indices: List[int] = []
+    market_start_dt = parse_iso_datetime(str(publish_time or created_time or ""))
     if summary_items:
         for index, item in enumerate(summary_items, start=1):
             pub = item.get("publish_date") or ""
@@ -485,6 +493,9 @@ def build_user_prompt(
                     if age_days >= 21:
                         age_note = f" [⚠ {age_days}d old]"
                         stale_indices.append(index)
+                    if market_start_dt is not None and pub_dt < market_start_dt:
+                        age_note += " [PRE-MARKET: background only, not a qualifying event]"
+                        premarket_indices.append(index)
 
             source = str(item.get("source") or "").strip()
             title = str(item.get("title") or "").strip()
@@ -504,6 +515,15 @@ def build_user_prompt(
                 "Events described in older articles may have already concluded, reversed, or been superseded. "
                 "Do NOT assume a past closure, shutdown, or event mentioned in a stale article is still ongoing. "
                 "Explicitly ask: is the condition described still true TODAY, or did it end after the article was written?"
+            )
+        if premarket_indices:
+            idx_str = ", ".join(f"#{i}" for i in premarket_indices)
+            parts.append(
+                f"\n[CONTRACT WINDOW CHECK] Article(s) {idx_str} predate this "
+                "market's publish/creation time. Keep them for base rates and "
+                "background, but do not count those earlier events as satisfying "
+                "the current contract unless the Resolution Criteria explicitly "
+                "state that the market is retroactive."
             )
     else:
         parts.append("(none)")
