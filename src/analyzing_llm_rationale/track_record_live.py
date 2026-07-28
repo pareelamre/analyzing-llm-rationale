@@ -1397,6 +1397,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         growth_curve_ts: List[Any] = []
         bankroll = _COMPOUND_STARTING_BANKROLL
         for _idx, b in enumerate(_scoped_bets):
+
             stake = sizing(b)
             if stake <= 0.0:
                 continue
@@ -1583,6 +1584,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
             if idx != first_idx.get((b["platform"], b["ident"])):
                 continue
             bankroll *= max(0.0, 1.0 + (1.0 / dedup_staked) * b["profit"])
+
             growth_curve.append(round(bankroll, 6))
             growth_curve_ts.append(b["ts"])
     return {
