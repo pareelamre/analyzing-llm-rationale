@@ -1346,6 +1346,11 @@ _forecast_context_packages = _meter.create_counter(
     unit="1",
     description="Forecast context packages by completeness",
 )
+_market_context_counter = _meter.create_counter(
+    "market.context_enrichments",
+    unit="1",
+    description="Prediction-market context enrichment outcomes",
+)
 
 
 # Redirect middleware: send requests from run.app hosts to the custom domain
@@ -2970,11 +2975,36 @@ class MarketOption(BaseModel):
 class MarketQuote(BaseModel):
     """A live prediction-market quote, normalised for use with `/predict`."""
     platform: str = Field(..., description="Venue: 'Polymarket' or 'Kalshi'.")
+    ident: Optional[str] = Field(None, description="Venue market identifier.")
     question: str = Field("", description="Market question/title.")
     market_url: str = Field("", description="Canonical market URL.")
+    description: Optional[str] = Field(None, description="Venue-provided background context.")
+    resolution_criteria: Optional[str] = Field(
+        None,
+        description="Complete venue rules used to resolve the market.",
+    )
+    venue_news_articles: List[NewsArticle] = Field(
+        default_factory=list,
+        description="Articles supplied by the prediction-market venue.",
+    )
     outcome: str = Field("", description="Primary outcome (prefers 'Yes').")
     probability: Optional[float] = Field(None, description="Market-implied probability for `outcome` (0..1).")
     outcomes: List[MarketOption] = Field(default_factory=list, description="All outcomes with their probabilities.")
+    close_time: Optional[str] = None
+    created_time: Optional[str] = None
+    volume: Optional[float] = None
+    liquidity: Optional[float] = None
+    price_change_24h: Optional[float] = None
+    price_change_7d: Optional[float] = None
+    yes_bid: Optional[float] = None
+    yes_ask: Optional[float] = None
+    last_trade_price: Optional[float] = None
+    resolution_source: Optional[str] = None
+    no_sub_title: Optional[str] = None
+    expected_expiration_time: Optional[str] = None
+    floor_strike: Optional[Any] = None
+    cap_strike: Optional[Any] = None
+    category: Optional[str] = None
 
 
 class VenueCredentials(BaseModel):
@@ -3087,10 +3117,30 @@ class AgentAnalyzeRequest(BaseModel):
     """Ask the analysis agent to work a live question end-to-end."""
     question: Optional[str] = Field(None, max_length=2000, description="Market question. Optional if a market identifier is given.")
     platform: Optional[str] = Field(None, max_length=40, description="'polymarket' or 'kalshi' to fetch a live price.")
+    market_platform: Optional[str] = Field(
+        None,
+        max_length=40,
+        description="Prediction-market venue supplied by the forecasting UI.",
+    )
+    market_ident: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="Polymarket slug or Kalshi ticker supplied by the forecasting UI.",
+    )
+    market_url: Optional[str] = Field(None, max_length=2000)
     slug: Optional[str] = Field(None, max_length=200, description="Polymarket market slug.")
     market_id: Optional[str] = Field(None, max_length=80, description="Polymarket numeric market id.")
     ticker: Optional[str] = Field(None, max_length=80, description="Kalshi market ticker.")
+    description: str = Field("", max_length=4000)
+    resolution_criteria: str = Field("", max_length=12000)
+    categories: List[str] = Field(default_factory=list, max_length=20)
+    news_articles: List[NewsArticle] = Field(default_factory=list, max_length=20)
     market_probability: Optional[float] = Field(None, description="Override market price (0..1 or 0..100) when not fetching.")
+    market_bid: Optional[float] = None
+    market_ask: Optional[float] = None
+    market_volume: Optional[float] = None
+    market_liquidity: Optional[float] = None
+    resolve_time: Optional[str] = Field(None, max_length=50)
     variant: str = Field("variant0_neutral_baseline", max_length=64)
     evidence_top_k: int = Field(5, ge=1, le=10)
     skills: List[AgentSkill] = Field(default_factory=list, max_length=5, description="Up to 5 custom skills to run.")
@@ -3378,9 +3428,13 @@ class FavoriteList(BaseModel):
 
 class RadarMarket(BaseModel):
     id: str
+    ident: Optional[str] = None
     platform: str = ""
     question: str
     market_url: Optional[str] = None
+    description: Optional[str] = None
+    resolution_criteria: Optional[str] = None
+    categories: List[str] = Field(default_factory=list)
     market_probability: Optional[float] = None
     model_probability: Optional[float] = None
     edge: Optional[float] = None
@@ -3872,14 +3926,56 @@ def _fetch_live_odds(
         tail = url.rstrip("/").split("/")[-1]
         if "polymarket" in url.lower():
             plat, ident = "polymarket", tail
-    try:
-        if "poly" in plat and ident:
-            return _md.fetch_polymarket(slug=ident)
-        if "kalshi" in plat and ident:
-            return _md.fetch_kalshi(ident)
-    except Exception:
-        return None
+    if "poly" in plat and ident:
+        return _md.fetch_polymarket(slug=ident)
+    if "kalshi" in plat and ident:
+        return _md.fetch_kalshi(ident)
     return None
+
+
+async def _fetch_market_context(
+    platform: Optional[str],
+    ident: Optional[str],
+    market_url: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    """Best-effort venue metadata fetch for rules, context, and live pricing."""
+    venue = (platform or "").strip().lower() or "unknown"
+    with _tracer.start_as_current_span("market.enrich_context") as span:
+        span.set_attribute("market.venue", venue)
+        try:
+            quote = await asyncio.get_running_loop().run_in_executor(
+                None,
+                _fetch_live_odds,
+                platform,
+                ident,
+                market_url,
+            )
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(
+                otel_trace.Status(otel_trace.StatusCode.ERROR, type(exc).__name__)
+            )
+            _market_context_counter.add(
+                1,
+                {"market.venue": venue, "outcome": "failure"},
+            )
+            logger.warning(
+                "market context enrichment failed venue=%s error=%s",
+                venue,
+                type(exc).__name__,
+            )
+            return None
+
+        outcome = "success" if quote else "skipped"
+        span.set_attribute(
+            "market.rules.available",
+            bool(quote and quote.get("resolution_criteria")),
+        )
+        _market_context_counter.add(
+            1,
+            {"market.venue": venue, "outcome": outcome},
+        )
+        return quote
 
 
 @_tracer.start_as_current_span("forecast.context_prepare")
@@ -3891,20 +3987,23 @@ async def _prepare_predict_messages(
     system_prompt = _state["system_prompt"]
 
     record = req.model_dump()
-    # Live odds in context (besides news): when a real market is referenced but no
-    # price was supplied, fetch the current quote so the model sees the crowd's
-    # estimate as one signal. Best-effort and off the critical path on failure.
-    if record.get("market_probability") is None and (
+    quote: Optional[Dict[str, Any]] = None
+    # Enrich identifiable markets whenever either live odds or venue rules are
+    # missing. Best-effort and off the critical path on provider failure.
+    if (
         record.get("market_url") or (record.get("market_platform") and record.get("market_ident"))
+    ) and (
+        record.get("market_probability") is None
+        or not record.get("resolution_criteria")
+        or not record.get("news_articles")
     ):
         try:
-            loop = asyncio.get_running_loop()
-            quote = await loop.run_in_executor(
-                None, _fetch_live_odds,
+            quote = await _fetch_market_context(
                 record.get("market_platform"), record.get("market_ident"), record.get("market_url"),
             )
-            if quote and quote.get("probability") is not None:
-                record["market_probability"] = float(quote["probability"])
+            if quote:
+                if record.get("market_probability") is None and quote.get("probability") is not None:
+                    record["market_probability"] = float(quote["probability"])
                 if not record.get("market_platform"):
                     record["market_platform"] = quote.get("platform")
                 if not record.get("market_url"):
@@ -3915,6 +4014,8 @@ async def _prepare_predict_messages(
                     record["description"] = quote.get("description")
                 if not record.get("resolution_criteria") and quote.get("resolution_criteria"):
                     record["resolution_criteria"] = quote.get("resolution_criteria")
+                if not record.get("resolve_time") and quote.get("close_time"):
+                    record["resolve_time"] = quote["close_time"]
                 # Market microstructure signals — populate only when not already supplied.
                 if record.get("market_volume") is None and quote.get("volume") is not None:
                     record["market_volume"] = float(quote["volume"])
@@ -3936,10 +4037,21 @@ async def _prepare_predict_messages(
                         record[f"market_{fld}"] = quote[fld]
         except Exception:
             pass
-    supplied_articles = [article.model_dump() for article in req.news_articles]
+    venue_articles = (
+        quote.get("venue_news_articles") or []
+        if quote
+        else []
+    )
+    caller_articles = [article.model_dump() for article in req.news_articles]
+    supplied_articles = _merge_evidence_articles(venue_articles, caller_articles)
     retrieved_articles: List[Dict[str, Any]] = []
     evidence_articles = list(supplied_articles)
     evidence_error = None
+    evidence_question = (
+        str(quote.get("question") or "").strip()
+        if quote
+        else ""
+    ) or req.question
 
     # A short follow-up in an ongoing thread ("WE is 90+", "why?") makes a poor
     # search query and derails on literal matches, so answer it from the
@@ -3954,13 +4066,16 @@ async def _prepare_predict_messages(
         else:
             top_k = max(1, min(req.evidence_top_k, 10))
             loop = asyncio.get_running_loop()
-            evidence_cache_key = _cache_key("evidence", req.question, top_k)
+            evidence_cache_key = _cache_key("evidence", evidence_question, top_k)
             retrieved_articles = _cache_get(evidence_cache_key)
             if retrieved_articles is None:
                 try:
                     retrieved_articles = await loop.run_in_executor(
                         None,
-                        lambda: evidence_pipeline.fetch_summarize_rank(req.question, top_k=top_k),
+                        lambda: evidence_pipeline.fetch_summarize_rank(
+                            evidence_question,
+                            top_k=top_k,
+                        ),
                     )
                     if retrieved_articles:
                         _cache_set(
@@ -4408,9 +4523,13 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
             reason = "Live market with a model-vs-market gap."
         markets.append(RadarMarket(
             id=ident,
+            ident=row.get("ident"),
             platform=platform,
             question=question[:500],
             market_url=market_url,
+            description=row.get("description"),
+            resolution_criteria=row.get("resolution_criteria"),
+            categories=row.get("categories") or [],
             market_probability=row.get("market_probability"),
             model_probability=row.get("model_probability"),
             edge=edge,
@@ -6371,11 +6490,16 @@ async def _resolve_agent_question(
 ) -> tuple[str, Optional[MarketQuote], Optional[str], List[str]]:
     pipeline: List[str] = []
     quote: Optional[MarketQuote] = None
-    venue = (req.platform or "").strip().lower()
+    venue = (req.platform or req.market_platform or "").strip().lower()
     slug, market_id, ticker = req.slug, req.market_id, req.ticker
+    if req.market_ident:
+        if "poly" in venue and not (slug or market_id):
+            slug = req.market_ident
+        elif "kalshi" in venue and not ticker:
+            ticker = req.market_ident
     from_url = False
     if not (venue and (slug or market_id or ticker)):
-        parsed = _parse_market_url(req.question or "")
+        parsed = _parse_market_url(req.market_url or req.question or "")
         if parsed:
             venue, kind, ident = parsed
             slug = ident if kind == "slug" else None
@@ -6423,15 +6547,36 @@ def _agent_prediction_request(
         }]
     return PredictRequest(
         question=question,
+        description=(
+            req.description
+            or (quote.description if quote and quote.description else "")
+        ),
+        resolution_criteria=(
+            req.resolution_criteria
+            or (quote.resolution_criteria if quote and quote.resolution_criteria else "")
+        ),
+        categories=req.categories,
+        news_articles=[
+            *(quote.venue_news_articles if quote else []),
+            *req.news_articles,
+        ],
         attach_evidence=True,
         evidence_top_k=req.evidence_top_k,
         variant=req.variant,
         history=history,
         conversation_steer=req.conversation_steer,
-        market_platform=(quote.platform if quote else req.platform),
-        market_url=(quote.market_url if quote else None),
+        market_platform=(quote.platform if quote else (req.platform or req.market_platform)),
+        market_ident=(quote.ident if quote else req.market_ident),
+        market_url=(quote.market_url if quote else req.market_url),
         market_outcome=(quote.outcome if quote else None),
         market_probability=(quote.probability if quote else req.market_probability),
+        market_bid=(quote.yes_bid if quote and quote.yes_bid is not None else req.market_bid),
+        market_ask=(quote.yes_ask if quote and quote.yes_ask is not None else req.market_ask),
+        market_volume=(quote.volume if quote and quote.volume is not None else req.market_volume),
+        market_liquidity=(
+            quote.liquidity if quote and quote.liquidity is not None else req.market_liquidity
+        ),
+        resolve_time=(quote.close_time if quote and quote.close_time else req.resolve_time),
         openrouter_api_key=req.openrouter_api_key,
         openrouter_model=req.openrouter_model,
         provider_base_url=req.provider_base_url,
@@ -6672,12 +6817,10 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     async def _tool_forecast(args):
         q = str(args.get("question") or question)
         mp = args.get("market_probability")
-        r = await predict(PredictRequest(
-            question=q, attach_evidence=True, evidence_top_k=req.evidence_top_k, variant=req.variant,
-            market_probability=mp, openrouter_api_key=req.openrouter_api_key,
-            openrouter_model=req.openrouter_model, provider_base_url=req.provider_base_url,
-            chat_mode=False),
-            kb_user_id=_optional_user_id(request))
+        pred_req = _agent_prediction_request(req, q, quote, grounding_note)
+        if mp is not None:
+            pred_req = pred_req.model_copy(update={"market_probability": mp})
+        r = await predict(pred_req, kb_user_id=_optional_user_id(request))
         a = r.market_analysis
         last.update(answer=r.predicted_answer, confidence=r.confidence,
                     model_probability=(a.model_probability if a else r.confidence),
@@ -6876,9 +7019,14 @@ async def agent_scan(
         try:
             res = await predict(PredictRequest(
                 question=quote["question"],
+                description=quote.get("description") or "",
+                resolution_criteria=quote.get("resolution_criteria") or "",
+                categories=[quote["category"]] if quote.get("category") else [],
+                news_articles=_news_articles(quote.get("venue_news_articles") or []),
                 attach_evidence=True,
                 evidence_top_k=evidence_top_k,
                 market_platform=quote.get("platform"),
+                market_ident=quote.get("ident"),
                 market_url=quote.get("market_url"),
                 market_outcome=quote.get("outcome"),
                 market_probability=quote.get("probability"),

@@ -187,10 +187,18 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
     ]
     outcome, probability = _primary_outcome(options)
     slug = market.get("slug") or ""
-    description = (market.get("description") or "").strip() or None
+    events = market.get("events") or []
+    event = events[0] if events and isinstance(events[0], dict) else {}
+    event_metadata = event.get("eventMetadata") or {}
+    description = (
+        event_metadata.get("context_description")
+        or event.get("description")
+        or market.get("description")
+        or ""
+    ).strip() or None
     event_sources = [
         str(event.get("resolutionSource") or "").strip()
-        for event in (market.get("events") or [])
+        for event in events
         if isinstance(event, dict) and event.get("resolutionSource")
     ]
     return {
@@ -401,7 +409,14 @@ def _kalshi_series_ticker(market: Dict[str, Any]) -> str:
     return series.lower()
 
 
-def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
+def _kalshi_quote(
+    market: Dict[str, Any],
+    event: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    events = market.get("events") or []
+    event = event or (
+        events[0] if events and isinstance(events[0], dict) else {}
+    )
     ticker = (market.get("ticker") or "").strip().upper()
     # Kalshi prices are in the *_dollars fields (0..1). Use the current
     # actionable book midpoint before last trade: a thin contract's last print
@@ -426,6 +441,20 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         probability = None
     probability = round(probability, 4) if probability is not None else None
     no_probability = round(1.0 - probability, 4) if probability is not None else None
+    settlement_sources = [
+        source for source in (event.get("settlement_sources") or [])
+        if isinstance(source, dict)
+    ]
+    source_labels = [
+        " — ".join(
+            value for value in (
+                str(source.get("name") or "").strip(),
+                str(source.get("url") or "").strip(),
+            )
+            if value
+        )
+        for source in settlement_sources
+    ]
     return {
         "platform": "Kalshi",
         "question": market.get("title") or market.get("yes_sub_title") or market.get("subtitle") or ticker,
@@ -440,6 +469,7 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         ],
         "close_time": market.get("close_time"),
         "created_time": market.get("created_time") or market.get("open_time"),
+        "description": (event.get("sub_title") or "").strip() or None,
         "volume": _to_float(market.get("volume_24h_fp") or market.get("volume")),
         "liquidity": _to_float(market.get("open_interest") or market.get("liquidity")),
         "price_change_24h": _to_float(
@@ -451,7 +481,7 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "yes_ask": yes_ask,
         "last_trade_price": last if last is not None else None,
         "price_change_7d": None,  # not in Kalshi API
-        "resolution_source": "Kalshi",
+        "resolution_source": "; ".join(source_labels) or "Kalshi",
         "resolution_criteria": " ".join(filter(None, [
             (market.get("rules_primary") or "").strip(),
             (market.get("rules_secondary") or "").strip(),
@@ -530,7 +560,7 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
         for market in event.get("markets", []) or []:
             if market.get("mve_collection_ticker"):
                 continue  # skip multi-leg parlay markets
-            quote = _kalshi_quote({**market, "events": [event]})
+            quote = _kalshi_quote(market, event)
             prob = quote["probability"]
             if prob is None:
                 continue

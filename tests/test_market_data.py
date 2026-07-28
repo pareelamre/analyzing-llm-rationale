@@ -59,6 +59,10 @@ class MarketDataTests(unittest.TestCase):
                 "link": "https://news.example/x",
                 "publisher": "Example News",
             }],
+            "events": [{
+                "description": "Background on X.",
+                "eventMetadata": {"context_description": "Latest context about X."},
+            }],
         }]
         capture = []
         sys.modules["requests"] = _fake_requests(payload, capture=capture)
@@ -70,12 +74,14 @@ class MarketDataTests(unittest.TestCase):
         self.assertAlmostEqual(quote["probability"], 0.62)
         self.assertEqual(quote["market_url"], "https://polymarket.com/market/will-x")
         self.assertEqual(len(quote["outcomes"]), 2)
-        self.assertEqual(
-            quote["resolution_criteria"],
+        self.assertIn(
             "Resolves Yes only if X occurs before the deadline.",
+            quote["resolution_criteria"],
         )
+        self.assertIn("Background on X.", quote["resolution_criteria"])
         self.assertEqual(quote["resolution_source"], "https://example.com/rules")
         self.assertEqual(quote["venue_news_articles"][0]["title"], "X moves closer")
+        self.assertEqual(quote["description"], "Latest context about X.")
         self.assertEqual(capture[0][1]["slug"], "will-x")
 
     def test_polymarket_requires_identifier(self):
@@ -203,9 +209,13 @@ class MarketDataTests(unittest.TestCase):
         self.assertAlmostEqual(quotes[0]["probability"], 0.3)
 
     def test_list_kalshi_via_events_skips_unpriced_and_mve(self):
-        payload = {"events": [{"title": "Event One", "markets": [
+        payload = {"events": [{"title": "Event One",
+            "sub_title": "Event background.",
+            "settlement_sources": [{"name": "Official source", "url": "https://official.example"}],
+            "markets": [
             {"ticker": "T1", "title": "One", "last_price_dollars": "0.60",
-             "close_time": "2026-12-01T00:00:00Z"},
+             "close_time": "2026-12-01T00:00:00Z",
+             "rules_primary": "Resolves Yes when the official source reports one."},
             {"ticker": "T2", "title": "Two", "last_price_dollars": None,
              "yes_bid_dollars": None, "yes_ask_dollars": None},
             {"ticker": "T3", "title": "Parlay", "last_price_dollars": "0.50",
@@ -216,6 +226,11 @@ class MarketDataTests(unittest.TestCase):
         # Unpriced (T2) and MVE parlay (T3) dropped; only the real priced binary kept.
         self.assertEqual([q["question"] for q in quotes], ["Event One"])
         self.assertAlmostEqual(quotes[0]["probability"], 0.6)
+        self.assertEqual(
+            quotes[0]["resolution_criteria"],
+            "Resolves Yes when the official source reports one.",
+        )
+        self.assertIn("https://official.example", quotes[0]["resolution_source"])
 
     def test_list_polymarket_keyword_filter(self):
         payload = [
