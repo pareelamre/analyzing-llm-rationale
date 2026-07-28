@@ -64,10 +64,29 @@ class ChatUiTests(unittest.TestCase):
             "_syncAuthProviderVisibility();\n  _ensureAuthProviders();",
             self.index_html,
         )
-        self.assertIn(
-            "document.getElementById('githubBtn').hidden = !hasGitHub;",
-            self.index_html,
-        )
+        self.assertIn('id="googleFallbackBtn"', self.index_html)
+        self.assertIn("githubBtn.disabled = !_ghClientId;", self.index_html)
+        self.assertIn("Google sign-in is not configured on this server.", self.index_html)
+
+    def test_track_chat_uses_smart_roi_against_crowd_baseline(self) -> None:
+        self.assertIn("_trackCurve(smart, '#10b981', 'Smart ROI')", self.index_html)
+        self.assertIn("_trackCurve(crowd, '#94a3b8', 'crowd-follow baseline', true)", self.index_html)
+        self.assertIn(">Smart ROI</div>", self.index_html)
+        self.assertIn(">vs crowd-follow</div>", self.index_html)
+        self.assertIn("crowd-follow is the zero-edge baseline", self.index_html)
+        self.assertNotIn("Best paper ROI", self.index_html)
+
+    def test_edge_board_uses_smart_roi_with_crowd_baseline(self) -> None:
+        self.assertIn("const strategy = isCrowd ? (m.paper_pnl || {}).flat : ((m.paper_pnl || {}).smart", self.index_html)
+        self.assertIn("function _roiDeltaPct(x)", self.index_html)
+        self.assertIn("Smart ROI minus the crowd-follow baseline", self.index_html)
+        self.assertIn("_roiDeltaPct(smartVsCrowd)", self.index_html)
+        self.assertIn('id="eb-pnl-edge-v"', self.index_html)
+        self.assertIn(">vs crowd-follow</div>", self.index_html)
+        self.assertIn(">crowd-follow baseline</div>", self.index_html)
+        self.assertIn("<th>Smart ROI</th><th>vs crowd</th>", self.index_html)
+        self.assertNotIn('id="eb-pnl-flat-v"', self.index_html)
+        self.assertNotIn("<th>Flat ROI</th>", self.index_html)
 
 
 if __name__ == "__main__":

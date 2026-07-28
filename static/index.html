@@ -1754,23 +1754,39 @@
     }
 
     /* Clean Google button — single pill outline, full width, no double border */
-    .auth-google { display: flex; justify-content: center; min-height: 42px; }
-    .auth-google .gsi-wrap {
-      border-radius: 999px;
-      overflow: hidden;
-    }
-    .auth-github {
+    .auth-provider {
       display: flex; align-items: center; justify-content: center; gap: 8px;
       width: 100%; margin-top: 10px;
       background: #ffffff; color: var(--ink);
       border: 1px solid var(--border-2); border-radius: 999px;
       padding: 10px 16px; font-size: 14px; font-weight: 500; cursor: pointer;
-      transition: background var(--dur-med), border-color var(--dur-med), transform var(--dur-fast);
+      transition: background var(--dur-med), border-color var(--dur-med), transform var(--dur-fast), opacity var(--dur-med);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
     }
-    .auth-github:hover { background: var(--panel); border-color: var(--text-mute); }
-    .auth-github:active { transform: translateY(1px); }
-    .auth-github svg { width: 18px; height: 18px; fill: var(--ink); }
+    .auth-provider:hover:not(:disabled) { background: var(--panel); border-color: var(--text-mute); }
+    .auth-provider:active:not(:disabled) { transform: translateY(1px); }
+    .auth-provider:disabled {
+      cursor: not-allowed;
+      opacity: .58;
+      background: #f8fafc;
+      color: var(--text-dim);
+    }
+    .auth-provider svg { width: 18px; height: 18px; fill: currentColor; }
+    .auth-google { display: flex; justify-content: center; min-height: 42px; }
+    .auth-google .gsi-wrap {
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .auth-google-fallback { margin-top: 0; }
+    .auth-google-mark {
+      display: inline-grid; place-items: center;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      color: #4285f4;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1;
+    }
 
     .auth-divider {
       display: flex; align-items: center; gap: 12px;
@@ -2567,10 +2583,14 @@
     </div>
 
     <div id="authSocial" hidden>
+      <button type="button" id="googleFallbackBtn" class="auth-provider auth-google-fallback" onclick="startGoogleLogin()">
+        <span class="auth-google-mark" aria-hidden="true">G</span>
+        Continue with Google
+      </button>
       <div id="authGoogleSection" class="auth-google" hidden>
         <div id="modalGsiWrap" class="gsi-wrap" aria-label="Continue with Google"></div>
       </div>
-      <button type="button" id="githubBtn" class="auth-github" hidden onclick="startGitHubLogin()">
+      <button type="button" id="githubBtn" class="auth-provider auth-github" hidden onclick="startGitHubLogin()">
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         Continue with GitHub
       </button>
@@ -5034,24 +5054,25 @@ async function refreshEdgeForecasts() {
     if (!r.ok) return;
     const d = await _readJson(r);
     const pnl = d.paper_pnl;
+    const comp = d.models_comparison || [];
     if (pnl) {
       const EB_MIN_N = 5;
       const EB_SMALL_N = 30;
       const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
       const _smallN = n => `<span style="color:var(--text-dim);font-size:0.75em;opacity:0.7"> (small n)</span>`;
       const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
+      const _roiDeltaVal = (a, b) => (a && b && a.n_bets >= EB_MIN_N && b.n_bets >= EB_MIN_N && a.roi != null && b.roi != null)
+        ? _roiDeltaPct(a.roi - b.roi)
+        : _build(a && a.n_bets);
       const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
-      _upd('eb-pnl-flat-v', _roiVal(pnl.flat));
       _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
       _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
       _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
+      _upd('eb-pnl-edge-v', _roiDeltaVal(pnl.smart, pnl.crowd_baseline));
       const _normCurve = s => {
-        if (s?.growth_curve?.length) return s.growth_curve.slice();
-        if (!s?.equity_curve?.length) return null;
-        const staked = s.total_staked || s.n_bets || 1;
-        return s.equity_curve.map(v => 100 + (v / staked) * 100);
+        return _ebPnlCurve(s);
       };
-      const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+      const _times = s => _ebCurveTimes(s);
       const _mk = (s, color, label, dash) => {
         const points = _normCurve(s);
         if (!points) return null;
@@ -5061,12 +5082,16 @@ async function refreshEdgeForecasts() {
         if (times.length === points.length) curve.times = times;
         return curve;
       };
-      const curves = [
-        _mk(pnl.smart, '#10b981', 'Smart'),
+      const modelCurves = _ebModelCurves(comp, EB_MIN_N, 5);
+      const hasCrowdCurve = modelCurves.some(c => c.isCrowdBaseline);
+      const strategyCurves = [
+        _mk(pnl.smart, '#10b981', 'Smart ROI'),
         _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
-        _mk(pnl.flat, '#60a5fa', 'Flat stake'),
-        _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
+        _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
       ].filter(Boolean);
+      const curves = modelCurves.length
+        ? [...modelCurves, _mk(pnl.smart, '#10b981', 'Smart ROI'), ...(hasCrowdCurve ? [] : [_mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true)])].filter(Boolean)
+        : strategyCurves;
       const el = document.getElementById('eb-equity-svg');
       if (el) {
         el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : '';
@@ -5663,6 +5688,85 @@ function _slugKey(text) {
 function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
 function _roiPct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + pct(x) + '%'; }
 
+function _roiDeltaPct(x) { return x == null ? 'â€”' : (x >= 0 ? '+' : '') + (x * 100).toFixed(1).replace(/\.0$/, '') + 'pp'; }
+
+const EB_STARTING_BANKROLL = 10000;
+const EB_MODEL_COLORS = ['#6366f1', '#f59e0b', '#14b8a6', '#ef4444', '#8b5cf6', '#0ea5e9'];
+
+function _ebModelLabel(model) {
+  const raw = String(model || '').trim();
+  if (!raw) return 'Model';
+  if (raw === 'crowd-follow') return 'crowd-follow baseline';
+  if (raw === 'gpt-oss-120b') return 'GPT OSS 120B';
+  if (raw === 'gemma-4-31b-it') return 'Gemma 4 31B IT';
+  if (raw === 'kimi-k2.6') return 'Kimi K2.6';
+  if (raw === 'council') return 'Council';
+  return raw.split(/[-_]/g).filter(Boolean).map(w => w[0]?.toUpperCase() + w.slice(1)).join(' ');
+}
+
+function _ebModelHead(model) {
+  const raw = String(model || '').toLowerCase();
+  if (raw === 'crowd-follow') return 'MKT';
+  if (raw.includes('gpt')) return 'GPT';
+  if (raw.includes('gemma')) return 'G';
+  if (raw.includes('kimi')) return 'K';
+  if (raw.includes('council')) return 'C';
+  return (String(model || 'AI').match(/[a-z0-9]/i)?.[0] || 'AI').toUpperCase();
+}
+
+function _ebModelColor(model, index = 0) {
+  if (String(model || '').toLowerCase() === 'crowd-follow') return '#94a3b8';
+  return EB_MODEL_COLORS[index % EB_MODEL_COLORS.length];
+}
+
+function _ebNormalizeBankrollCurve(s) {
+  const curve = s?.growth_curve;
+  if (!Array.isArray(curve) || !curve.length) return null;
+  const first = Number(curve[0]);
+  if (!Number.isFinite(first)) return null;
+  if (first < 1000) return curve.map(v => Number(v) * (EB_STARTING_BANKROLL / 100));
+  return curve.map(Number);
+}
+
+function _ebPnlCurve(s) {
+  const growthCurve = _ebNormalizeBankrollCurve(s);
+  if (growthCurve) return growthCurve;
+  if (!s?.equity_curve?.length) return null;
+  const staked = s.total_staked || s.n_bets || 1;
+  return s.equity_curve.map(v => EB_STARTING_BANKROLL + (v / staked) * EB_STARTING_BANKROLL);
+}
+
+function _ebCurveTimes(s) {
+  return (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+}
+
+function _ebModelCurves(models, minBets = 5, limit = 6) {
+  return (models || [])
+    .map((m, index) => {
+      const model = m.model || `model-${index + 1}`;
+      const isCrowd = String(model).toLowerCase() === 'crowd-follow';
+      const strategy = isCrowd ? (m.paper_pnl || {}).flat : ((m.paper_pnl || {}).smart || (m.paper_pnl || {}).flat);
+      const points = _ebPnlCurve(strategy);
+      if (!points || (strategy?.n_bets || 0) < minBets) return null;
+      const times = _ebCurveTimes(strategy);
+      const label = _ebModelLabel(model);
+      const curve = {
+        points,
+        color: _ebModelColor(model, index),
+        label,
+        head: _ebModelHead(model),
+        headTitle: `${label} ${isCrowd ? 'crowd-follow' : 'Smart ROI'} ${_roiPct(strategy.roi)} · ${strategy.n_bets || 0} bets`,
+        opacity: 0.86,
+        isCrowdBaseline: isCrowd,
+      };
+      if (isCrowd) curve.dash = true;
+      if (times.length === points.length) curve.times = times;
+      return curve;
+    })
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
 const _EB_PAGE_SIZE = 10;
 let _ebPage = 0;
 let _ebBoardData = [];
@@ -5675,13 +5779,13 @@ function _ebGoPage(n) {
 
 function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}) {
   // curves = [{points: float[], color: string, label: string}, ...]
-  // points = growth-of-$100 value (starts at $100, compounds each bet's return).
+  // points = growth-of-$10,000 value, compounding each bet's return.
   const allPts = curves.flatMap(c => c.points);
   if (!allPts.length) return '';
   const hasTimes = curves.every(c => Array.isArray(c.times) && c.times.length === c.points.length);
   const n = Math.max(...curves.map(c => c.points.length));
-  const lo = Math.min(100, ...allPts);
-  const hi = Math.max(100, ...allPts);
+  const lo = Math.min(EB_STARTING_BANKROLL, ...allPts);
+  const hi = Math.max(EB_STARTING_BANKROLL, ...allPts);
   const range = hi - lo || 1;
   const padL = 46, padR = 8, padT = 8, padB = hasTimes ? 32 : 20;
   const cW = W - padL - padR, cH = H - padT - padB;
@@ -5696,12 +5800,12 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
     ? padL + ((t - tMin) / tSpan) * cW
     : padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
   const toY = v => padT + cH - ((v - lo) / range) * cH;
-  const baselineY = toY(100).toFixed(1);
-  // Y-axis: show $100 baseline plus lo/hi
-  const yLabels = [...new Set([lo, 100, hi])].filter(v => v === 100 || v !== 100);
+  const baselineY = toY(EB_STARTING_BANKROLL).toFixed(1);
+  // Y-axis: show the starting bankroll baseline plus lo/hi.
+  const yLabels = [...new Set([lo, EB_STARTING_BANKROLL, hi])];
   const yAxisHtml = yLabels.map(v => {
-    const labelStr = '$' + v.toFixed(v >= 100 ? 0 : 1);
-    return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="${v === 100 ? '#94a3b8' : '#888'}">${labelStr}</text>`;
+    const labelStr = '$' + v.toLocaleString(undefined, { maximumFractionDigits: v >= 1000 ? 0 : 1 });
+    return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="${v === EB_STARTING_BANKROLL ? '#94a3b8' : '#888'}">${labelStr}</text>`;
   }).join('');
   let xAxisHtml = '';
   if (hasTimes) {
@@ -5712,13 +5816,22 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
       xAxisHtml += `<text x="${x.toFixed(1)}" y="${(padT + cH + 12).toFixed(1)}" font-size="8.5" text-anchor="${anchor}" fill="#888">${escHtml(_fmtEquityDate(t, withTime))}</text>`;
     }
   }
-  // $100 baseline
+  // Starting bankroll baseline.
   const baseline = `<line x1="${padL}" y1="${baselineY}" x2="${padL + cW}" y2="${baselineY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>`;
   const paths = curves.map(c => {
     if (!c.points.length) return '';
     const pts = c.points.map((v, i) => `${toX(i, c.times && c.times[i]).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
     const dashAttr = c.dash ? ' stroke-dasharray="5,3" stroke-width="1.4" opacity="0.75"' : ' stroke-width="1.8"';
     return `<polyline points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>`;
+  }).join('');
+  const heads = curves.map(c => {
+    if (!c.head || !c.points.length) return '';
+    const i = c.points.length - 1;
+    const x = toX(i, c.times && c.times[i]);
+    const y = toY(c.points[i]);
+    const label = escHtml(String(c.head).slice(0, 4));
+    const title = escHtml(c.headTitle || c.label || '');
+    return `<g class="eq-head" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><title>${title}</title><circle r="10.5" fill="#fff" stroke="${c.color}" stroke-width="1.5"/><text y="3.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="${c.color}">${label}</text></g>`;
   }).join('');
   const legendY = hasTimes ? H + 8 : H - 6;
   const legend = curves.map((c, i) => {
@@ -5729,9 +5842,9 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
   }).join('');
   const svgH = H + (hasTimes ? 14 : 0);
   _lastEquityCurves = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan };
-  const chartLabel = `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">Growth of $100 (reinvested)</text>`;
+  const chartLabel = `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">Growth of $10,000 (reinvested)</text>`;
   return `<svg class="eq-svg" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
-    ${chartLabel}${yAxisHtml}${xAxisHtml}${baseline}${paths}${legend}
+    ${chartLabel}${yAxisHtml}${xAxisHtml}${baseline}${paths}${heads}${legend}
   </svg>`;
 }
 
@@ -5999,12 +6112,15 @@ function renderEdgeBoard(d) {
     </div>`;
   let compHtml;
   if (comp.length) {
-    compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Flat ROI</th><th>Smart ROI</th></tr></thead><tbody>` +
+    const crowdRoi = (pnl.crowd_baseline || {}).roi;
+    compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Smart ROI</th><th>vs crowd</th></tr></thead><tbody>` +
       comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
+        const modelSmartRoi = m.paper_roi_smart != null ? m.paper_roi_smart : (m.model === 'crowd-follow' ? m.paper_roi : null);
+        const roiDelta = modelSmartRoi != null && crowdRoi != null ? modelSmartRoi - crowdRoi : null;
         return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
         `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
         `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td>` +
-        `<td>${enough ? _roiPct(m.paper_roi) : '·'}</td><td>${enough ? _roiPct(m.paper_roi_smart) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
+        `<td>${enough ? _roiPct(modelSmartRoi) : '·'}</td><td>${enough ? _roiDeltaPct(roiDelta) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
   } else {
     compHtml = `<p class="text-sm text-gray-500">Model comparison (gpt-oss-120b vs Gemma vs Kimi) fills in as forecasts resolve.</p>`;
   }
@@ -6014,14 +6130,12 @@ function renderEdgeBoard(d) {
       : _build(s && s.n_bets);
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
+    const smartVsCrowd = (pnl.smart?.roi != null && pnl.crowd_baseline?.roi != null) ? pnl.smart.roi - pnl.crowd_baseline.roi : null;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const _normCurve = s => {
-      if (s?.growth_curve?.length) return s.growth_curve.slice();
-      if (!s?.equity_curve?.length) return null;
-      const staked = s.total_staked || s.n_bets || 1;
-      return s.equity_curve.map(v => 100 + (v / staked) * 100);
+      return _ebPnlCurve(s);
     };
-    const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+    const _times = s => _ebCurveTimes(s);
     const _mk = (s, color, label, dash) => {
       const points = _normCurve(s);
       if (!points) return null;
@@ -6031,20 +6145,24 @@ function renderEdgeBoard(d) {
       if (times.length === points.length) curve.times = times;
       return curve;
     };
-    const curves = [
-      _mk(pnl.smart, '#10b981', 'Smart'),
+    const modelCurves = _ebModelCurves(comp, EB_MIN_N, 5);
+    const hasCrowdCurve = modelCurves.some(c => c.isCrowdBaseline);
+    const strategyCurves = [
+      _mk(pnl.smart, '#10b981', 'Smart ROI'),
       _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
-      _mk(pnl.flat, '#60a5fa', 'Flat stake'),
-      _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
+      _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
     ].filter(Boolean);
+    const curves = modelCurves.length
+      ? [...modelCurves, _mk(pnl.smart, '#10b981', 'Smart ROI'), ...(hasCrowdCurve ? [] : [_mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true)])].filter(Boolean)
+      : strategyCurves;
     const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : ''}</div>`;
     performanceHtml = `
-      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $100 starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
+      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $${EB_STARTING_BANKROLL.toLocaleString()} starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
       <div class="tr-stats">
-      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label ui-icon-label">${uiIcon('star')} Smart</div>${_sub('Kelly + filters')}</div>
+      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label ui-icon-label">${uiIcon('star')} Smart ROI</div>${_sub('Kelly + filters')}</div>
         <div class="tr-stat" title="Calibrated Half-Kelly sizing proportional to estimated edge and market odds."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
-        <div class="tr-stat" title="Equal stake on every resolved forecast."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
-        <div class="tr-stat" title="Equal stake following the market consensus as a zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">Crowd baseline</div>${_sub('agree with market')}</div>
+        <div class="tr-stat" title="Smart ROI minus the crowd-follow baseline over the same resolved cohort."><div class="v" id="eb-pnl-edge-v">${smartVsCrowd != null ? _roiDeltaPct(smartVsCrowd) : _build(pnl.smart && pnl.smart.n_bets)}</div><div class="k label">vs crowd-follow</div>${_sub('excess return')}</div>
+        <div class="tr-stat" title="Always betting the crowd's own direction as the zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">crowd-follow baseline</div>${_sub('agree with market')}</div>
       </div>
       ${svgChart}
       <p class="text-xs text-gray-400" style="margin-top:8px">Historical simulation of forecasts saved before market close, net of venue trading fees. Excludes slippage and liquidity constraints; not actual trading results.</p>`;
@@ -7636,21 +7754,37 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const d = await r.json();
       const ov = d.overall || {};
       const pp = d.paper_pnl || {};
-      const flat = pp.flat || {};
       const smart = pp.smart || {};
-      const best = [smart, pp.half_kelly, flat, pp.crowd_baseline]
-        .filter(s => s && s.roi != null).sort((a,b) => b.roi - a.roi)[0] || flat;
+      const crowd = pp.crowd_baseline || {};
+      const smartDelta = smart.roi != null && crowd.roi != null ? smart.roi - crowd.roi : null;
+      const _trackCurve = (s, color, label, dash) => {
+        const points = _ebPnlCurve(s);
+        if (!points) return null;
+        const times = _ebCurveTimes(s);
+        const curve = { points, color, label };
+        if (dash) curve.dash = true;
+        if (times.length === points.length) curve.times = times;
+        return curve;
+      };
+      const trackCurves = [
+        _trackCurve(smart, '#10b981', 'Smart ROI'),
+        _trackCurve(crowd, '#94a3b8', 'crowd-follow baseline', true),
+      ].filter(Boolean);
+      const trackChart = trackCurves.length
+        ? `<div style="margin:0 0 12px">${_equitySvg(trackCurves, 460, 112, {asPct:false, yPrefix:'$'})}</div>`
+        : '';
       const rows = (d.models_comparison || []).slice(0,5).map(m =>
         `<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:5px 10px 5px 0;font-family:monospace;font-size:12px">${escHtml(m.model||'?')}</td>
           <td style="padding:5px 4px;text-align:right">${m.brier!=null?m.brier.toFixed(3):'—'}</td>
-          <td style="padding:5px 0 5px 8px;text-align:right;color:${(m.paper_roi||0)>=0?'var(--accent)':'#e55'}">${m.paper_roi!=null?(m.paper_roi>=0?'+':'')+(m.paper_roi*100).toFixed(1)+'%':'—'}</td>
+          <td style="padding:5px 0 5px 8px;text-align:right;color:${(m.paper_roi_smart ?? m.paper_roi ?? 0)>=0?'var(--accent)':'#e55'}">${m.paper_roi_smart!=null?(m.paper_roi_smart>=0?'+':'')+(m.paper_roi_smart*100).toFixed(1)+'%':(m.model==='crowd-follow'&&m.paper_roi!=null?(m.paper_roi>=0?'+':'')+(m.paper_roi*100).toFixed(1)+'%':'—')}</td>
         </tr>`
       ).join('');
       typing.remove();
       _appendInline(`
         <p style="margin-bottom:10px"><strong>Track record</strong></p>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+        ${trackChart}
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
           <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
             <div style="font-size:22px;font-weight:700;color:var(--ink)">${ov.n_resolved||0}</div>
             <div style="font-size:12px;color:var(--text-dim)">Resolved</div>
@@ -7660,8 +7794,12 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
             <div style="font-size:12px;color:var(--text-dim)">Brier score</div>
           </div>
           <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:22px;font-weight:700;color:${(best.roi||0)>=0?'var(--accent)':'#e55'}">${best.roi!=null?(best.roi>=0?'+':'')+(best.roi*100).toFixed(1)+'%':'—'}</div>
-            <div style="font-size:12px;color:var(--text-dim)">Best paper ROI</div>
+            <div style="font-size:22px;font-weight:700;color:${(smart.roi||0)>=0?'var(--accent)':'#e55'}">${smart.roi!=null?(smart.roi>=0?'+':'')+(smart.roi*100).toFixed(1)+'%':'—'}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Smart ROI</div>
+          </div>
+          <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:${(smartDelta||0)>=0?'var(--accent)':'#e55'}">${smartDelta!=null?_roiDeltaPct(smartDelta):'—'}</div>
+            <div style="font-size:12px;color:var(--text-dim)">vs crowd-follow</div>
           </div>
         </div>
         ${rows ? `<p style="margin-bottom:6px;font-size:13px;color:var(--text-dim);font-weight:600">Models</p>
@@ -7669,11 +7807,11 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           <thead><tr style="border-bottom:2px solid var(--border)">
             <th style="padding:4px 10px 4px 0;text-align:left;color:var(--text-dim)">Model</th>
             <th style="padding:4px;text-align:right;color:var(--text-dim)">Brier</th>
-            <th style="padding:4px 0 4px 8px;text-align:right;color:var(--text-dim)">Paper ROI</th>
+            <th style="padding:4px 0 4px 8px;text-align:right;color:var(--text-dim)">Smart ROI</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>` : ''}
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. <a href="#track-app" class="ui-icon-label" style="color:var(--accent)" onclick="showView('track-app')">Full track record ${uiIcon('arrow-right')}</a></p>`);
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. Smart ROI uses the filtered strategy; crowd-follow is the zero-edge baseline. <a href="#track-app" class="ui-icon-label" style="color:var(--accent)" onclick="showView('track-app')">Full track record ${uiIcon('arrow-right')}</a></p>`);
     } catch(e) { typing.remove(); _appendError('Could not load track record: ' + e.message); }
     return true;
   }
@@ -7827,8 +7965,21 @@ function _queueForecastAfterSignIn(question, ctx = null) {
 // ── GitHub OAuth (authorization-code flow) ────────────────────────────────────
 function _githubRedirectUri() { return location.origin + location.pathname; }
 
+function _authProviderUnavailable(provider) {
+  _showAuthError(provider + ' sign-in is not configured on this server.');
+}
+
+function startGoogleLogin() {
+  if (!_gClientId) { _authProviderUnavailable('Google'); return; }
+  if (!window.google?.accounts?.id) {
+    _showAuthError('Google sign-in is still loading. Try again in a moment.');
+    return;
+  }
+  _syncAuthProviderVisibility();
+}
+
 function startGitHubLogin() {
-  if (!_ghClientId) return;
+  if (!_ghClientId) { _authProviderUnavailable('GitHub'); return; }
   const state = (window.crypto?.randomUUID?.() || String(Math.random())).replace(/-/g, '');
   try { localStorage.setItem('gh_oauth_state', state); } catch {}
   const params = new URLSearchParams({
@@ -8016,12 +8167,30 @@ function setAuthMode(mode) {
 function toggleAuthMode() { setAuthMode(_authMode === 'login' ? 'register' : 'login'); }
 
 function _syncAuthProviderVisibility() {
-  const hasGoogle = !!_gClientId;
-  const hasGitHub = !!_ghClientId;
-  document.getElementById('authSocial').hidden = !(hasGoogle || hasGitHub);
-  document.getElementById('authGoogleSection').hidden = !hasGoogle;
-  document.getElementById('githubBtn').hidden = !hasGitHub;
-  if (hasGoogle && window.google?.accounts?.id &&
+  const googleReady = !!(_gClientId && window.google?.accounts?.id);
+  const social = document.getElementById('authSocial');
+  const googleSection = document.getElementById('authGoogleSection');
+  const googleFallback = document.getElementById('googleFallbackBtn');
+  const githubBtn = document.getElementById('githubBtn');
+  if (social) social.hidden = false;
+  if (googleSection) googleSection.hidden = !googleReady;
+  if (googleFallback) {
+    googleFallback.hidden = googleReady;
+    googleFallback.disabled = !_gClientId || !googleReady;
+    googleFallback.title = _gClientId
+      ? 'Google sign-in is loading.'
+      : 'Google sign-in is not configured on this server.';
+    googleFallback.setAttribute('aria-disabled', String(googleFallback.disabled));
+  }
+  if (githubBtn) {
+    githubBtn.hidden = false;
+    githubBtn.disabled = !_ghClientId;
+    githubBtn.title = _ghClientId
+      ? 'Continue with GitHub'
+      : 'GitHub sign-in is not configured on this server.';
+    githubBtn.setAttribute('aria-disabled', String(!_ghClientId));
+  }
+  if (googleReady &&
       document.getElementById('authOverlay').classList.contains('show')) {
     requestAnimationFrame(() => renderGoogleButton('modalGsiWrap'));
   }
