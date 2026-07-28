@@ -765,7 +765,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         )
 
     def test_growth_curve_compounds_bankroll(self):
-        # The edge-board chart plots growth_curve as a compounded $100 bankroll:
+        # The edge-board chart plots growth_curve as a compounded $10,000 bankroll:
         # each nominal stake is a fraction of current bankroll, so winnings
         # increase later bet sizes instead of being added to a static base.
         resolved = ([self._res(0.8, 0.5, 1) for _ in range(7)]
@@ -778,9 +778,10 @@ class EdgeAnalyticsTests(unittest.TestCase):
                 s["growth_curve"][-1], s["compound_bankroll"], places=6,
                 msg=f"{name}: growth_curve endpoint != compound_bankroll")
             self.assertAlmostEqual(
-                s["compound_return"], (s["compound_bankroll"] / 100.0) - 1.0,
+                s["compound_return"], (s["compound_bankroll"] / trl._COMPOUND_STARTING_BANKROLL) - 1.0,
                 places=4,
                 msg=f"{name}: compound_return does not match compound_bankroll")
+            self.assertGreater(s["growth_curve"][0], trl._COMPOUND_STARTING_BANKROLL)
         self.assertGreater(pnl["flat"]["compound_return"], pnl["flat"]["roi"])
 
     def test_paper_pnl_is_net_of_kalshi_fees(self):

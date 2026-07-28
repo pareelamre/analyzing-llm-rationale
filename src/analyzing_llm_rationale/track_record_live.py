@@ -1047,6 +1047,7 @@ _EDGE_BUCKETS = [
 # made (lead time / horizon), not edge size — so every forecast counts, and the
 # board/lead-lag/PnL stratify by lead time rather than filtering by |model − market|.
 _EDGE_MIN = 0.0
+_COMPOUND_STARTING_BANKROLL = 10_000.0
 
 # Trading costs deducted per paper bet so ROI is net-of-fees (the "real" ROI).
 # Kalshi charges a price-dependent taker fee ≈ coeff·contracts·p·(1−p); since a
@@ -1307,7 +1308,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         curve: List[float] = []
         curve_ts: List[Any] = []
         growth_curve: List[float] = []
-        bankroll = 100.0
+        bankroll = _COMPOUND_STARTING_BANKROLL
         for b in all_bets:
             if validated and not b["in_validated"]:
                 continue
@@ -1360,7 +1361,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "equity_curve_ts": curve_ts,
             "growth_curve": growth_curve,
             "compound_bankroll": round(bankroll, 6),
-            "compound_return": round((bankroll / 100.0) - 1.0, 4),
+            "compound_return": round((bankroll / _COMPOUND_STARTING_BANKROLL) - 1.0, 4),
         }
 
     flat = _run(lambda b: 1.0)
@@ -1472,7 +1473,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
     if not n:
         return None
     growth_curve: List[float] = []
-    bankroll = 100.0
+    bankroll = _COMPOUND_STARTING_BANKROLL
     if staked:
         for profit in profits:
             bankroll *= max(0.0, 1.0 + (1.0 / staked) * profit)
@@ -1487,7 +1488,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         "equity_curve_ts": curve_ts,
         "growth_curve": growth_curve,
         "compound_bankroll": round(bankroll, 6),
-        "compound_return": round((bankroll / 100.0) - 1.0, 4),
+        "compound_return": round((bankroll / _COMPOUND_STARTING_BANKROLL) - 1.0, 4),
     }
 
 
