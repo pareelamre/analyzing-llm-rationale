@@ -36,6 +36,10 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("_equitySvg(curves, 760, 180", index)
         self.assertIn('id="eb-model-comparison-svg"', index)
         self.assertIn("d.mark_to_market_by_model", index)
+        self.assertIn("data-eq-id", index)
+        self.assertIn("const _equityChartStates = new Map()", index)
+        self.assertIn("_attachEdgeBoardChartHovers(host)", index)
+        self.assertIn("'#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'", index)
 
 
 if __name__ == "__main__":

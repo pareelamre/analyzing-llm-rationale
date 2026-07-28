@@ -4958,6 +4958,8 @@ let _ebForecastTimer = null;
 let _crypto5mTimer = null;
 let _crypto5mLastGen = null;
 let _lastEquityCurves = null;
+let _equityChartSeq = 0;
+const _equityChartStates = new Map();
 let _lastCrypto5mCurves = null;
 let _pendingMarketCtx = null;
 
@@ -5106,7 +5108,10 @@ async function refreshEdgeForecasts() {
         return curve;
       }).filter(Boolean);
       const mtmSvg = document.getElementById('eb-mtm-svg');
-      if (mtmSvg) mtmSvg.innerHTML = curves.length ? _equitySvg(curves, 760, 180, {asPct: false, yPrefix: '$'}) : '';
+      if (mtmSvg) {
+        mtmSvg.innerHTML = curves.length ? _equitySvg(curves, 760, 180, {asPct: false, yPrefix: '$'}) : '';
+        if (curves.length) _attachEquityHover(mtmSvg);
+      }
       const mtmBody = document.getElementById('eb-mtm-table-body');
       if (mtmBody) {
         mtmBody.innerHTML = mtmModels.map((m, i) => {
@@ -5132,6 +5137,7 @@ async function refreshEdgeForecasts() {
     if (modelCompSvg) {
       const modelCurves = _ebModelCurves(comp, 5, 9);
       modelCompSvg.innerHTML = modelCurves.length ? _equitySvg(modelCurves, 760, 180, {asPct: false, yPrefix: '$'}) : '';
+      if (modelCurves.length) _attachEquityHover(modelCompSvg);
     }
     if (pnl) {
       const EB_MIN_N = 5;
@@ -5457,8 +5463,7 @@ async function loadEdgeBoard() {
     const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) throw new Error('unavailable');
     host.innerHTML = renderEdgeBoard(await _readJson(r));
-    const eqDiv = document.getElementById('eb-equity-svg');
-    if (eqDiv) _attachEquityHover(eqDiv);
+    _attachEdgeBoardChartHovers(host);
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#edgeBody .tr-stat',
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
@@ -5952,17 +5957,21 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
     return swatch + `<text x="${x0 + 17}" y="${y0 + 4}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
   }).join('');
   const svgH = H + 20 + legendRows * legendRowH;
-  _lastEquityCurves = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan };
+  const chartId = `eq-${++_equityChartSeq}`;
+  const eqState = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan, asPct, yPrefix };
+  _lastEquityCurves = eqState;
+  _equityChartStates.set(chartId, eqState);
   const chartLabel = `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">Growth of $10,000 (reinvested)</text>`;
-  return `<svg class="eq-svg" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
+  return `<svg class="eq-svg" data-eq-id="${chartId}" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
     ${chartLabel}${yAxisHtml}${xAxisHtml}${baseline}${paths}${heads}${legend}
   </svg>`;
 }
 
 function _attachEquityHover(container) {
   const svg = container.querySelector('.eq-svg');
-  if (!svg || !_lastEquityCurves) return;
-  const eq = _lastEquityCurves;
+  const chartId = svg ? svg.getAttribute('data-eq-id') : null;
+  const eq = (chartId && _equityChartStates.get(chartId)) || _lastEquityCurves;
+  if (!svg || !eq) return;
 
   let tip = container.querySelector('.eq-tip');
   if (!tip) {
@@ -6038,7 +6047,8 @@ function _attachEquityHover(container) {
       const y = eq.padT + eq.cH - ((v - eq.lo) / eq.range) * eq.cH;
       dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
       dots[ci].style.display = '';
-      return `<span style="color:${c.color}">${c.label}: $${v.toFixed(2)}</span>`;
+      const value = eq.asPct ? `${(v * 100).toFixed(1)}%` : `${eq.yPrefix || '$'}${v.toFixed(2)}`;
+      return `<span style="color:${c.color}">${c.label}: ${value}</span>`;
     }).filter(Boolean);
     tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>` + lines.join('<br>');
     tip.style.display = 'block';
@@ -6055,6 +6065,13 @@ function _attachEquityHover(container) {
   svg._eqLeave = hide;
   svg.addEventListener('mousemove', onMove);
   svg.addEventListener('mouseleave', hide);
+}
+
+function _attachEdgeBoardChartHovers(root = document) {
+  ['#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'].forEach(sel => {
+    const el = root.querySelector(sel);
+    if (el) _attachEquityHover(el);
+  });
 }
 
 function _attachCrypto5mHover(container) {
