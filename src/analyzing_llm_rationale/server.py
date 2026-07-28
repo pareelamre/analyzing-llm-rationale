@@ -6015,7 +6015,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         _check_predict_rate_limit(request)
         claims = _optional_predict_claims(request)
 
-    if not _state:
+    if "variants" not in _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
 
     variants = _state["variants"]
@@ -6199,7 +6199,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
     _check_rate_limit(request)
     claims = _require_auth(request)
 
-    if not _state:
+    if "variants" not in _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
 
     variants = _state["variants"]
