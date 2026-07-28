@@ -9,6 +9,9 @@ Rules:
 3a. Enforce the Resolution Criteria's observation window and exclusions. Unless
 the rules explicitly say the contract is retroactive, events before
 publish_time/created_time do not qualify, and named exclusions never qualify.
+An article published after issuance can still describe an earlier event. Require
+an explicit qualifying event date inside the contract window before treating
+the contract as already satisfied.
 4. Work through the structured reasoning steps requested before outputting your final JSON.
 5. Output the scratchpad reasoning as free text, then end with a valid JSON block.
 6. In the final JSON, confidence must be a number between 0 and 1. Set it equal to your step-7 final probability.
