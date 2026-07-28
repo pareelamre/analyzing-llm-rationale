@@ -3501,7 +3501,7 @@ function sourceFeedHtml(sources, evidenceError = '') {
     const label = s.title || s.source || s.url;
     const sub = s.title && s.source ? `<span class="source-chip-src">${escHtml(s.source)}</span>` : '';
     return s.url
-      ? `<a href="${escHtml(s.url)}" target="_blank" rel="noopener" class="source-chip hover:opacity-80" title="${escAttr(s.title || s.source || '')}">${escHtml(label)}${sub}</a>`
+      ? `<a href="${escAttr(s.url)}" target="_blank" rel="noopener" class="source-chip hover:opacity-80" title="${escAttr(s.title || s.source || '')}">${escHtml(label)}${sub}</a>`
       : `<span class="source-chip">${escHtml(label)}</span>`;
   }).join('');
   return `
@@ -7401,14 +7401,15 @@ function _agentReportData(report) {
   const d = report || {};
   return {
     question_type: 'chat',
-    rationale: _agentReportToMarkdown(d),
+    rationale: _agentReportToMarkdown(d, { includeSources: false }),
     model_key: 'agent',
     evidence_sources: d.evidence_sources || [],
     evidence_error: d.evidence_error || '',
   };
 }
 
-function _agentReportToMarkdown(d) {
+function _agentReportToMarkdown(d, options = {}) {
+  const includeSources = options.includeSources !== false;
   const pct = x => (x == null ? '—' : Math.round(x * 100) + '%');
   const out = d.outcome || 'Yes';
   let md = '';
@@ -7436,6 +7437,7 @@ function _agentReportToMarkdown(d) {
 
   if (d.grounding) md += `\n\n> _${d.grounding.replace(/\n/g, ' ')}_`;
 
+  if (includeSources) {
   // Clickable, de-duplicated source citations.
   const seen = new Set();
   const links = [];
@@ -7448,6 +7450,7 @@ function _agentReportToMarkdown(d) {
     md += `\n\n---\n*Sources:* ${links.join(' · ')}`;
   } else {
     md += `\n\n*I couldn't pull solid sources on this one, so I'm low-confidence. Paste an article or link (the 📎 button) and I'll factor it in, or sharpen the question — e.g. add the exact threshold and date.*`;
+  }
   }
   return md;
 }
