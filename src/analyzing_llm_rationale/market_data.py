@@ -119,6 +119,15 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
     ]
     outcome, probability = _primary_outcome(options)
     slug = market.get("slug") or ""
+    events = market.get("events") or []
+    event = events[0] if events and isinstance(events[0], dict) else {}
+    event_metadata = event.get("eventMetadata") or {}
+    market_rules = (market.get("description") or "").strip() or None
+    venue_context = (
+        event_metadata.get("context_description")
+        or event.get("description")
+        or ""
+    ).strip() or None
     return {
         "platform": "Polymarket",
         "question": market.get("question") or market.get("title") or "",
@@ -129,7 +138,10 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "outcomes": options,
         "close_time": market.get("endDate") or market.get("endDateIso"),
         "created_time": market.get("startDate") or market.get("createdAt"),
-        "description": (market.get("description") or "").strip() or None,
+        # Polymarket stores the contract's resolution rules in ``description``.
+        # Keep those separate from event-level background context.
+        "description": venue_context,
+        "resolution_criteria": market_rules,
         "volume": _to_float(market.get("volume24hr") or market.get("volume")),
         "liquidity": _to_float(market.get("liquidity") or market.get("liquidityNum")),
         "price_change_24h": _to_float(
@@ -141,7 +153,12 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "yes_ask": _to_float(market.get("bestAsk")),
         "last_trade_price": _to_float(market.get("lastTradePrice") or market.get("last_trade_price")),
         "price_change_7d": _to_float(market.get("oneWeekPriceChange") or market.get("weekPriceChange")),
-        "resolution_source": (market.get("resolverUrl") or market.get("resolutionSource") or "").strip() or None,
+        "resolution_source": (
+            market.get("resolverUrl")
+            or market.get("resolutionSource")
+            or event.get("resolutionSource")
+            or ""
+        ).strip() or None,
         "category": market.get("category"),
     }
 
@@ -320,7 +337,11 @@ def _kalshi_series_ticker(market: Dict[str, Any]) -> str:
     return series.lower()
 
 
-def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
+def _kalshi_quote(
+    market: Dict[str, Any],
+    event: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    event = event or {}
     ticker = (market.get("ticker") or "").strip().upper()
     # Kalshi prices are in the *_dollars fields (0..1). Prefer last trade, else
     # bid/ask midpoint. (The legacy cents fields last_price/yes_bid/yes_ask were
@@ -338,6 +359,20 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         probability = None
     probability = round(probability, 4) if probability is not None else None
     no_probability = round(1.0 - probability, 4) if probability is not None else None
+    settlement_sources = [
+        source for source in (event.get("settlement_sources") or [])
+        if isinstance(source, dict)
+    ]
+    source_labels = [
+        " ? ".join(
+            value for value in (
+                str(source.get("name") or "").strip(),
+                str(source.get("url") or "").strip(),
+            )
+            if value
+        )
+        for source in settlement_sources
+    ]
     return {
         "platform": "Kalshi",
         "question": market.get("title") or market.get("yes_sub_title") or market.get("subtitle") or ticker,
@@ -352,6 +387,7 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         ],
         "close_time": market.get("close_time"),
         "created_time": market.get("created_time") or market.get("open_time"),
+        "description": (event.get("sub_title") or "").strip() or None,
         "volume": _to_float(market.get("volume_24h_fp") or market.get("volume")),
         "liquidity": _to_float(market.get("open_interest") or market.get("liquidity")),
         "price_change_24h": _to_float(
@@ -363,7 +399,7 @@ def _kalshi_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         "yes_ask": yes_ask,
         "last_trade_price": last if last is not None else None,
         "price_change_7d": None,  # not in Kalshi API
-        "resolution_source": "Kalshi",
+        "resolution_source": "; ".join(source_labels) or "Kalshi",
         "resolution_criteria": " ".join(filter(None, [
             (market.get("rules_primary") or "").strip(),
             (market.get("rules_secondary") or "").strip(),
@@ -430,7 +466,7 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
         for market in event.get("markets", []) or []:
             if market.get("mve_collection_ticker"):
                 continue  # skip multi-leg parlay markets
-            quote = _kalshi_quote(market)
+            quote = _kalshi_quote(market, event)
             prob = quote["probability"]
             if prob is None:
                 continue

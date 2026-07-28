@@ -3777,6 +3777,7 @@ async function sendQuestion(options = {}) {
       if (mCtx.market_probability != null) body.market_probability = mCtx.market_probability;
       if (mCtx.market_url)                 body.market_url = mCtx.market_url;
       if (mCtx.market_platform)            body.market_platform = mCtx.market_platform;
+      if (mCtx.market_ident)               body.market_ident = mCtx.market_ident;
       if (mCtx.market_bid != null)         body.market_bid = mCtx.market_bid;
       if (mCtx.market_ask != null)         body.market_ask = mCtx.market_ask;
       if (mCtx.market_volume != null)      body.market_volume = mCtx.market_volume;
@@ -3795,7 +3796,8 @@ async function sendQuestion(options = {}) {
         if (platform) body.market_platform = platform;
       }
     }
-    if (_attachments.length) body.news_articles = [..._attachments];
+    const attachedEvidence = [..._attachments];
+    if (attachedEvidence.length) body.news_articles = attachedEvidence;
     if (activeModel) {
       body.openrouter_model = activeModel.model;
       if (activeModel.provider === 'ollama') {
@@ -3821,10 +3823,12 @@ async function sendQuestion(options = {}) {
         builtin_skills: true,    // base-rate / scenario / red-team / key-drivers toolkit
         ground_in_record: true,  // condition on the model's own live calibration
       };
+      if (attachedEvidence.length) agentBody.news_articles = attachedEvidence;
       if (mCtx) {
         if (mCtx.market_probability != null) agentBody.market_probability = mCtx.market_probability;
         if (mCtx.market_url)                 agentBody.market_url = mCtx.market_url;
-        if (mCtx.market_platform)            agentBody.market_platform = mCtx.market_platform;
+        if (mCtx.market_platform)            agentBody.platform = mCtx.market_platform;
+        if (mCtx.market_ident)               agentBody.market_ident = mCtx.market_ident;
         if (mCtx.market_bid != null)         agentBody.market_bid = mCtx.market_bid;
         if (mCtx.market_ask != null)         agentBody.market_ask = mCtx.market_ask;
         if (mCtx.market_volume != null)      agentBody.market_volume = mCtx.market_volume;
@@ -4926,6 +4930,7 @@ function _ebAskQuestion(ident) {
   if (entry.market_probability != null) ctx.market_probability = entry.market_probability;
   if (entry.market_url)                 ctx.market_url = entry.market_url;
   if (entry.platform)                   ctx.market_platform = entry.platform;
+  if (entry.ident)                      ctx.market_ident = entry.ident;
   if (entry.market_bid != null)         ctx.market_bid = entry.market_bid;
   if (entry.market_ask != null)         ctx.market_ask = entry.market_ask;
   if (entry.market_volume != null)      ctx.market_volume = entry.market_volume;
@@ -5092,8 +5097,10 @@ function _renderLandingMarketTable(items) {
       market_probability: e.market_probability ?? null,
       market_url: e.market_url || '',
       market_platform: e.platform || '',
-      description: e.reason || '',
-      categories: e.category ? [e.category] : [],
+      market_ident: e.ident || '',
+      description: e.description || e.reason || '',
+      resolution_criteria: e.resolution_criteria || '',
+      categories: e.categories?.length ? e.categories : (e.category ? [e.category] : []),
       model: 'council',
     };
     const fav = {
@@ -6728,6 +6735,7 @@ function _wlAnalyze(ref) {
   if (f.market_probability != null) ctx.market_probability = f.market_probability;
   if (f.market_url)  ctx.market_url = f.market_url;
   if (f.platform)    ctx.market_platform = f.platform;
+  if (f.ident)       ctx.market_ident = f.ident;
   startForecast(f.question, Object.keys(ctx).length ? ctx : null);
 }
 function _wlRemove(ref) {

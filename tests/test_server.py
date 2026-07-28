@@ -361,6 +361,46 @@ class ServerTests(unittest.TestCase):
     def test_markets_polymarket_requires_identifier(self):
         self.assertEqual(self.client.get("/markets/polymarket").status_code, 422)
 
+    def test_predict_enriches_supplied_market_price_with_rules_and_market_news_query(self):
+        import analyzing_llm_rationale.market_data as md
+
+        quote = {
+            "platform": "Polymarket",
+            "ident": "will-x",
+            "question": "Will X happen before December 31, 2026?",
+            "market_url": "https://polymarket.com/market/will-x",
+            "description": "Polymarket's current event background.",
+            "resolution_criteria": "Resolves Yes only if the official source confirms X.",
+            "outcome": "Yes",
+            "probability": 0.61,
+            "outcomes": [],
+        }
+        with mock.patch.object(
+            md,
+            "fetch_polymarket",
+            lambda slug=None, market_id=None: quote,
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Please analyze this market.",
+                    "market_platform": "Polymarket",
+                    "market_url": quote["market_url"],
+                    "market_probability": 0.60,
+                    "evidence_top_k": 2,
+                    "chat_mode": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Polymarket's current event background.", prompt)
+        self.assertIn("Resolves Yes only if the official source confirms X.", prompt)
+        self.assertEqual(
+            self.evidence_pipeline.calls,
+            [("Will X happen before December 31, 2026?", 2)],
+        )
+
     def test_markets_kalshi_not_found_maps_to_404(self):
         import analyzing_llm_rationale.market_data as md
 
@@ -393,8 +433,12 @@ class ServerTests(unittest.TestCase):
             "resolved_log": [{"question": "Resolved example?", "outcome": 1}],
             "edge_board": [{
                 "platform": "Kalshi",
+                "ident": "KXEXAMPLE",
                 "question": "Will example happen?",
                 "market_url": "https://kalshi.com/markets/example",
+                "description": "Venue background.",
+                "resolution_criteria": "Official rules.",
+                "categories": ["Economics"],
                 "market_probability": 0.4,
                 "model_probability": 0.55,
                 "edge": 0.15,
@@ -417,6 +461,8 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["n_snapshots_resolved"], 184)
         self.assertEqual(payload["n_markets_resolved"], 139)
         self.assertEqual(len(payload["edge_board"]), 1)
+        self.assertEqual(payload["markets"][0]["ident"], "KXEXAMPLE")
+        self.assertEqual(payload["markets"][0]["resolution_criteria"], "Official rules.")
         self.assertEqual(payload["models_comparison"][0]["model"], "council")
         self.assertEqual(payload["paper_pnl"]["flat"]["growth_curve"], [100, 112])
         self.assertEqual(payload["lead_lag"]["n_markets"], 12)
@@ -668,8 +714,11 @@ class ServerTests(unittest.TestCase):
 
         quote = {
             "platform": "Polymarket",
+            "ident": "fed",
             "question": "Will the Fed cut rates before September 30, 2026?",
             "market_url": "https://polymarket.com/market/fed",
+            "description": "Latest venue context.",
+            "resolution_criteria": "Resolve from the official FOMC announcement.",
             "outcome": "Yes",
             "probability": 0.40,
             "outcomes": [{"label": "Yes", "probability": 0.40}, {"label": "No", "probability": 0.60}],
@@ -687,6 +736,34 @@ class ServerTests(unittest.TestCase):
         self.assertAlmostEqual(report["model_probability"], 0.70)
         self.assertAlmostEqual(report["edge"], 0.30)
         self.assertEqual(report["recommendation"], "buy_yes")
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Latest venue context.", prompt)
+        self.assertIn("Resolve from the official FOMC announcement.", prompt)
+
+    def test_agent_analyze_preserves_ui_rules_and_supplied_articles(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will Project Atlas launch before December 31, 2026?",
+                "market_platform": "Kalshi",
+                "market_probability": 0.45,
+                "description": "The venue's background for Project Atlas.",
+                "resolution_criteria": "Resolve from the company's launch announcement.",
+                "categories": ["Technology"],
+                "news_articles": [{
+                    "title": "Atlas enters final testing",
+                    "source": "Example News",
+                    "summary": "The project entered its final testing phase.",
+                }],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("The venue's background for Project Atlas.", prompt)
+        self.assertIn("Resolve from the company's launch announcement.", prompt)
+        self.assertIn("Atlas enters final testing", prompt)
+        self.assertEqual(self.evidence_pipeline.calls, [])
 
     def test_agent_analyze_requires_question_or_market(self):
         response = self.client.post("/agent/analyze", json={"evidence_top_k": 3})
