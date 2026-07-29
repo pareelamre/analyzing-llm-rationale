@@ -31,11 +31,18 @@ tool_calls = meter.create_counter("benchmark_tools.calls", unit="1")
 tool_duration = meter.create_histogram("benchmark_tools.duration", unit="s")
 trade_actions = meter.create_counter("benchmark_tools.place_trade.actions", unit="1")
 note_actions = meter.create_counter("benchmark_tools.manage_notes.actions", unit="1")
+risk_guard_checks = meter.create_counter("benchmark_tools.risk_guard.checks", unit="1")
+risk_guard_rejections = meter.create_counter("benchmark_tools.risk_guard.rejections", unit="1")
 
 BLACKLISTED_WEB_DOMAINS = ("coinmarketcap.com",)
 MAX_NOTES_PER_AGENT = 50
 MAX_NOTE_CHARS = 1200
 WEB_SEARCH_TIMEOUT_S = 120
+DEFAULT_AGENT_ACCOUNT_VALUE = 10_000.0
+DEFAULT_CONCENTRATION_LIMIT = 0.15
+DEFAULT_PER_CYCLE_SPEND_LIMIT = 500.0
+DEFAULT_CYCLE_MINUTES = 15
+KALSHI_FEE_COEFFICIENT = 0.07
 
 
 @dataclass(frozen=True)
@@ -43,6 +50,14 @@ class ToolContext:
     agent_id: str
     user_id: Optional[str] = None
     model: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class RiskGuardPolicy:
+    account_value: float
+    concentration_limit: float
+    per_cycle_spend_limit: float
+    cycle_id: str
 
 
 def _now() -> str:
@@ -63,7 +78,9 @@ def _notes_path() -> Path:
 
 def _ledger_path() -> Optional[Path]:
     raw = os.environ.get("FORESEA_AGENT_TOOL_LEDGER_PATH")
-    return Path(raw) if raw else None
+    if raw:
+        return Path(raw)
+    return Path(os.environ.get("TMPDIR", "/tmp")) / "foresea_agent_tool_ledger.jsonl"
 
 
 def _load_notes(path: Optional[Path] = None) -> Dict[str, List[Dict[str, Any]]]:
@@ -129,6 +146,203 @@ def _clean_ticker(value: Any) -> str:
     return ticker
 
 
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw in (None, ""):
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be numeric") from exc
+    if value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return value
+
+
+def _current_cycle_id() -> str:
+    explicit = str(os.environ.get("FORESEA_AGENT_CYCLE_ID") or "").strip()
+    if explicit:
+        return explicit[:120]
+    minutes = int(_env_float("FORESEA_AGENT_CYCLE_MINUTES", DEFAULT_CYCLE_MINUTES) or DEFAULT_CYCLE_MINUTES)
+    if minutes <= 0:
+        raise ValueError("FORESEA_AGENT_CYCLE_MINUTES must be greater than 0")
+    now = datetime.now(timezone.utc)
+    slot = int(now.timestamp()) // (minutes * 60)
+    return f"{minutes}m:{slot}"
+
+
+def _risk_guard_policy() -> RiskGuardPolicy:
+    account_value = _env_float("FORESEA_AGENT_ACCOUNT_VALUE", DEFAULT_AGENT_ACCOUNT_VALUE)
+    if account_value <= 0:
+        raise ValueError("FORESEA_AGENT_ACCOUNT_VALUE must be greater than 0")
+    concentration_limit = _env_float("FORESEA_AGENT_CONCENTRATION_LIMIT", DEFAULT_CONCENTRATION_LIMIT)
+    if not 0 < concentration_limit <= 1:
+        raise ValueError("FORESEA_AGENT_CONCENTRATION_LIMIT must be between 0 and 1")
+    per_cycle_spend_limit = _env_float(
+        "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT",
+        DEFAULT_PER_CYCLE_SPEND_LIMIT,
+    )
+    return RiskGuardPolicy(
+        account_value=account_value,
+        concentration_limit=concentration_limit,
+        per_cycle_spend_limit=per_cycle_spend_limit,
+        cycle_id=_current_cycle_id(),
+    )
+
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    if value in (None, ""):
+        return default
+    return float(value)
+
+
+def _kalshi_fee(price: float, quantity: float) -> float:
+    return max(0.0, KALSHI_FEE_COEFFICIENT * quantity * price * (1.0 - price))
+
+
+def _order_fee(args: Mapping[str, Any], normalized: Mapping[str, Any]) -> float:
+    for source in (args, normalized):
+        for key in ("fee", "estimated_fee", "kalshi_fee"):
+            if source.get(key) not in (None, ""):
+                fee = float(source[key])
+                if fee < 0:
+                    raise ValueError("fee must be non-negative")
+                return fee
+    return _kalshi_fee(
+        _as_float(normalized.get("price")),
+        _as_float(normalized.get("quantity")),
+    )
+
+
+def _iter_ledger_events() -> Iterable[Dict[str, Any]]:
+    path = _ledger_path()
+    if path is None or not path.exists():
+        return []
+    events: List[Dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    logger.warning("skipping malformed agent trade ledger line")
+                    continue
+                if isinstance(event, dict):
+                    events.append(event)
+    except Exception:
+        logger.warning("agent trade ledger could not be read; starting empty", exc_info=True)
+    return events
+
+
+def _market_cost_basis(account: Any, ticker: str) -> float:
+    return sum(
+        float(pos.cost_basis)
+        for pos in account.open_positions()
+        if str(pos.platform).lower() == "kalshi" and str(pos.ident).upper() == ticker
+    )
+
+
+def _load_guard_account(agent_id: str, policy: RiskGuardPolicy) -> tuple[Any, float]:
+    from analyzing_llm_rationale.accounting import PredictionMarketAccount
+
+    account = PredictionMarketAccount(starting_cash=policy.account_value)
+    cycle_spend = 0.0
+    for event in _iter_ledger_events():
+        if event.get("tool") != "place_trade":
+            continue
+        if _bounded_agent_id(str(event.get("agent_id") or "")) != agent_id:
+            continue
+        if event.get("rejected") or event.get("ok") is False:
+            continue
+        if str(event.get("platform") or "kalshi").lower() != "kalshi":
+            continue
+        ticker = str(event.get("ticker") or "").upper()
+        side = str(event.get("side") or "").lower()
+        if not ticker or side not in {"yes", "no"}:
+            continue
+        try:
+            quantity = _as_float(event.get("quantity"))
+            price = _as_float(event.get("price"))
+            fee = _as_float(event.get("fee"), _kalshi_fee(price, quantity))
+            fill = account.buy(
+                platform="kalshi",
+                ident=ticker,
+                side=side,
+                quantity=quantity,
+                price=price,
+                fee=fee,
+                ts=event.get("ts"),
+            )
+        except Exception:
+            logger.warning("skipping invalid agent trade ledger event", exc_info=True)
+            continue
+        if str(event.get("cycle_id") or "") == policy.cycle_id:
+            cycle_spend += _as_float(event.get("cash_required"), max(0.0, -fill.cash_delta))
+    return account, cycle_spend
+
+
+def _check_trade_guards(
+    *,
+    args: Mapping[str, Any],
+    normalized: Mapping[str, Any],
+    agent_id: str,
+    ticker: str,
+    side: str,
+) -> tuple[bool, Dict[str, Any]]:
+    policy = _risk_guard_policy()
+    account, cycle_spend_before = _load_guard_account(agent_id, policy)
+    price = _as_float(normalized.get("price"))
+    quantity = _as_float(normalized.get("quantity"))
+    fee = _order_fee(args, normalized)
+    cash_before = float(account.cash)
+    fill = account.buy(
+        platform="kalshi",
+        ident=ticker,
+        side=side,
+        quantity=quantity,
+        price=price,
+        fee=fee,
+    )
+    market_cost_basis_after = _market_cost_basis(account, ticker)
+    concentration_cap = policy.account_value * policy.concentration_limit
+    cash_required = max(0.0, -float(fill.cash_delta))
+    cycle_spend_after = cycle_spend_before + cash_required
+    reasons: List[str] = []
+    if market_cost_basis_after > concentration_cap + 1e-9:
+        reasons.append("concentration_limit")
+    if cash_required > cash_before + 1e-9:
+        reasons.append("solvency")
+    if cycle_spend_after > policy.per_cycle_spend_limit + 1e-9:
+        reasons.append("per_cycle_spend")
+
+    detail = {
+        "allowed": not reasons,
+        "reasons": reasons,
+        "account_value": round(policy.account_value, 6),
+        "cash_before": round(cash_before, 6),
+        "concentration_limit": policy.concentration_limit,
+        "concentration_cap": round(concentration_cap, 6),
+        "market_cost_basis_after": round(market_cost_basis_after, 6),
+        "per_cycle_spend_limit": round(policy.per_cycle_spend_limit, 6),
+        "cycle_id": policy.cycle_id,
+        "cycle_spend_before": round(cycle_spend_before, 6),
+        "cycle_spend_after": round(cycle_spend_after, 6),
+        "notional": round(price * quantity, 6),
+        "fee": round(fee, 6),
+        "netting_payout": round(float(fill.realized_pairs), 6),
+        "cash_required": round(cash_required, 6),
+        "cash_delta": round(float(fill.cash_delta), 6),
+    }
+    outcome = "allowed" if detail["allowed"] else "rejected"
+    risk_guard_checks.add(1, {"outcome": outcome})
+    if reasons:
+        risk_guard_rejections.add(1, {"reason": reasons[0]})
+    return detail["allowed"], detail
+
+
 def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     """Place a Kalshi trade through the benchmark tool surface.
 
@@ -167,20 +381,76 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             if mode not in {"shadow", "live"}:
                 raise ValueError("FORESEA_AGENT_PLACE_TRADE_MODE must be 'shadow' or 'live'")
 
+            preview = trading.preview_order(order)
+            normalized = preview.get("normalized_order") or {}
+            allowed, guard = _check_trade_guards(
+                args=args,
+                normalized=normalized,
+                agent_id=agent_id,
+                ticker=ticker,
+                side=side,
+            )
+            if not allowed:
+                event = {
+                    "ts": _now(),
+                    "agent_id": agent_id,
+                    "tool": tool,
+                    "ok": False,
+                    "rejected": True,
+                    "rejection_reasons": guard["reasons"],
+                    "mode": mode,
+                    "submitted": False,
+                    "platform": "kalshi",
+                    "ticker": ticker,
+                    "side": side,
+                    "price": normalized.get("price"),
+                    "quantity": normalized.get("quantity"),
+                    "client_order_id": normalized.get("exchange_order", {}).get("client_order_id"),
+                    "cycle_id": guard["cycle_id"],
+                    "notional": guard["notional"],
+                    "fee": guard["fee"],
+                    "netting_payout": guard["netting_payout"],
+                    "cash_required": guard["cash_required"],
+                    "cash_delta": guard["cash_delta"],
+                    "risk_guard": guard,
+                }
+                _record_ledger(event)
+                span.set_attributes({
+                    "outcome": "rejected",
+                    "risk_guard.allowed": False,
+                    "risk_guard.reason": guard["reasons"][0] if guard["reasons"] else "unknown",
+                    "trade.mode": mode,
+                    "trade.submitted": False,
+                })
+                _finish_tool(tool, start, "rejected")
+                return {
+                    "ok": False,
+                    "tool": tool,
+                    "rejected": True,
+                    "reason": guard["reasons"][0] if guard["reasons"] else "risk_guard",
+                    "message": "Trade rejected by benchmark risk guards before execution.",
+                    "mode": mode,
+                    "submitted": False,
+                    "normalized_order": normalized,
+                    "risk_guard": guard,
+                    "warnings": preview.get("warnings", []),
+                }
+
             if mode == "live":
                 order.update({"execute": True, "confirmation": trading.CONFIRMATION_PHRASE})
                 result = trading.place_order(order, user_id=f"agent:{agent_id}")
                 submitted = True
                 normalized = result.get("normalized_order") or {}
             else:
-                result = trading.preview_order(order)
+                result = preview
                 submitted = False
-                normalized = result.get("normalized_order") or {}
 
             event = {
                 "ts": _now(),
                 "agent_id": agent_id,
                 "tool": tool,
+                "ok": True,
+                "rejected": False,
                 "mode": mode,
                 "submitted": submitted,
                 "platform": "kalshi",
@@ -189,11 +459,19 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "price": normalized.get("price"),
                 "quantity": normalized.get("quantity"),
                 "client_order_id": normalized.get("exchange_order", {}).get("client_order_id"),
+                "cycle_id": guard["cycle_id"],
+                "notional": guard["notional"],
+                "fee": guard["fee"],
+                "netting_payout": guard["netting_payout"],
+                "cash_required": guard["cash_required"],
+                "cash_delta": guard["cash_delta"],
+                "risk_guard": guard,
             }
             _record_ledger(event)
             trade_actions.add(1, {"mode": mode, "submitted": str(submitted).lower()})
             span.set_attributes({
                 "outcome": "success",
+                "risk_guard.allowed": True,
                 "trade.mode": mode,
                 "trade.submitted": submitted,
             })
@@ -209,6 +487,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     else "Shadow Kalshi trade recorded; no exchange order was submitted."
                 ),
                 "normalized_order": normalized,
+                "risk_guard": guard,
                 "warnings": result.get("warnings", []),
             }
         except Exception as exc:
