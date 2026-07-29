@@ -25,6 +25,9 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn('cron: "*/15 * * * *"', workflow)
         self.assertIn('CYCLE_INTERVAL_MINUTES: "15"', workflow)
         self.assertIn('SNAPSHOT_SLOT_MINUTES: "15"', workflow)
+        self.assertIn('TRACK_RECORD_PREDICT_MODE: "local"', workflow)
+        self.assertIn("SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}", workflow)
+        self.assertIn('pip install --quiet -e ".[serve,pipeline]"', workflow)
         self.assertNotIn("TRACK_MODELS:", workflow)
         for model in (
             "scads-alias-code",
@@ -162,6 +165,56 @@ class TrackRecordTickTests(unittest.TestCase):
                 track_record_tick._predict_stats["failure_model:council"],
                 1,
             )
+
+    def test_local_predict_mode_uses_in_process_prediction_without_cloud_run_http(self):
+        response = {
+            "model_key": "council",
+            "market_analysis": {
+                "model_probability": 0.58,
+                "market_probability": 0.5,
+            },
+        }
+        with (
+            mock.patch.object(track_record_tick, "_predict_stats", Counter()) as stats,
+            mock.patch.object(track_record_tick, "PREDICT_MODE", "local"),
+            mock.patch.object(track_record_tick, "_PREDICT_RETRIES", 1),
+            mock.patch.object(track_record_tick, "_PREDICT_MIN_INTERVAL_S", 0.0),
+            mock.patch.object(track_record_tick, "_last_predict_ts", 0.0),
+            mock.patch.object(track_record_tick, "_local_predict", return_value=response) as local_mock,
+            mock.patch.object(track_record_tick.urllib.request, "urlopen") as urlopen_mock,
+        ):
+            result = track_record_tick._post_predict(
+                {"question": "Will the test event happen?", "model": "council"}
+            )
+
+        self.assertEqual(result, response)
+        local_mock.assert_called_once()
+        urlopen_mock.assert_not_called()
+        self.assertEqual(stats["attempts"], 1)
+        self.assertEqual(stats["successes"], 1)
+        self.assertEqual(stats["success_model:council"], 1)
+
+    def test_local_predict_http_exception_is_counted_by_status_code(self):
+        class LocalHTTPError(Exception):
+            status_code = 503
+            detail = "Alternate models are not configured on this runner."
+
+        with (
+            mock.patch.object(track_record_tick, "_predict_stats", Counter()) as stats,
+            mock.patch.object(track_record_tick, "PREDICT_MODE", "local"),
+            mock.patch.object(track_record_tick, "_PREDICT_RETRIES", 1),
+            mock.patch.object(track_record_tick, "_PREDICT_MIN_INTERVAL_S", 0.0),
+            mock.patch.object(track_record_tick, "_last_predict_ts", 0.0),
+            mock.patch.object(track_record_tick, "_local_predict", side_effect=LocalHTTPError()),
+        ):
+            result = track_record_tick._post_predict(
+                {"question": "Will the test event happen?", "model": "council"}
+            )
+
+        self.assertIsNone(result)
+        self.assertEqual(stats["http_503"], 1)
+        self.assertEqual(stats["failures"], 1)
+        self.assertEqual(stats["failure_model:council"], 1)
 
     def test_http_error_detail_is_logged_and_attributed_to_model(self):
         error = urllib.error.HTTPError(

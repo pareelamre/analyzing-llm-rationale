@@ -27,7 +27,9 @@ Env:
   TRACK_VARIANT     variant label            (default variant0_neutral_baseline)
   TRACK_TEMPERATURE temperature label        (default 0.0)
   PER_VENUE         new markets per venue     (default 3, clamped 1..5)
-  SCADS_AI_API_KEY   model credential; stays server-side on Cloud Run
+  TRACK_RECORD_PREDICT_MODE  remote|local     (default remote)
+  SCADS_AI_API_KEY   model credential; used by Cloud Run in remote mode and by
+                    GitHub Actions in local mode
 """
 from __future__ import annotations
 
@@ -42,6 +44,7 @@ import urllib.error
 import urllib.request
 from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
 
 from opentelemetry import metrics as otel_metrics
 from opentelemetry import trace as otel_trace
@@ -72,6 +75,11 @@ _context_packages = _context_meter.create_counter(
     "forecast.context.packages",
     unit="1",
     description="Track-record forecast context packages by completeness",
+)
+_predict_calls = _context_meter.create_counter(
+    "track_record.predict.calls",
+    unit="1",
+    description="Track-record prediction calls by dispatch mode and outcome",
 )
 
 STORE_PATH = Path(os.environ.get("TRACK_STORE_PATH") or ROOT / "data" / "track_record_store.duckdb")
@@ -144,6 +152,13 @@ _PREDICT_TIMEOUT_S = max(
     1.0, float(os.environ.get("PREDICT_TIMEOUT_S", "120") or 120)
 )
 _PREDICT_RETRIES = max(1, int(os.environ.get("PREDICT_RETRIES", "3") or 3))
+PREDICT_MODE = os.environ.get("TRACK_RECORD_PREDICT_MODE", "remote").strip().lower()
+_LOCAL_PREDICT_MODES = {"local", "direct", "github"}
+LOCAL_PREDICT_MODEL = os.environ.get("TRACK_RECORD_LOCAL_MODEL", "gpt-oss-120b").strip()
+LOCAL_PREDICT_DISABLE_EVIDENCE = (
+    os.environ.get("TRACK_RECORD_LOCAL_DISABLE_EVIDENCE", "0").strip().lower()
+    in ("1", "true", "yes", "on")
+)
 _PREDICT_FAILURE_CIRCUIT_THRESHOLD = max(
     1,
     int(os.environ.get("PREDICT_FAILURE_CIRCUIT_THRESHOLD", "8") or 8),
@@ -182,6 +197,20 @@ _last_predict_ts: float = 0.0
 _predict_consecutive_failures: Counter = Counter()
 _predict_circuit_open_models: set[str] = set()
 _predict_stats = Counter()
+_local_predict_lock = threading.Lock()
+_local_predict_ready = False
+
+
+def _predict_mode() -> str:
+    return "local" if PREDICT_MODE in _LOCAL_PREDICT_MODES else "remote"
+
+
+def _record_predict_call(model_label: str, outcome: str) -> None:
+    _predict_calls.add(1, {
+        "forecast.model": model_label,
+        "predict.mode": _predict_mode(),
+        "outcome": outcome,
+    })
 
 
 def _reset_predict_circuit() -> None:
@@ -212,8 +241,68 @@ def _http_error_detail(exc: urllib.error.HTTPError) -> str:
     return raw[:500]
 
 
+def _init_local_predict() -> None:
+    """Initialise server prediction state inside the GitHub runner process."""
+    global _local_predict_ready
+    if _local_predict_ready:
+        return
+    with _local_predict_lock:
+        if _local_predict_ready:
+            return
+        from analyzing_llm_rationale.cli import init_server_state
+
+        init_server_state(SimpleNamespace(
+            model=LOCAL_PREDICT_MODEL,
+            variant=VARIANT,
+            variants_config=ROOT / "configs" / "variants.yaml",
+            models_config=ROOT / "configs" / "models.yaml",
+            temperature=TEMPERATURE,
+            max_tokens=int(os.environ.get("MAX_TOKENS", "2048")),
+            provider=None,
+            local_model_name=None,
+            router_model_name=None,
+            api_base_url=None,
+            api_key_env_var=None,
+            api_key_file=None,
+            device=os.environ.get("MODEL_DEVICE", "cpu"),
+            request_timeout_s=_PREDICT_TIMEOUT_S,
+            model_label=None,
+            disable_evidence=LOCAL_PREDICT_DISABLE_EVIDENCE,
+            newsapi_key_env_var="NEWSAPI_KEY",
+            evidence_source=None,
+            disable_query_planner=True,
+        ))
+        _local_predict_ready = True
+        print(
+            "track-record direct predict initialized "
+            f"model={LOCAL_PREDICT_MODEL} evidence_disabled={LOCAL_PREDICT_DISABLE_EVIDENCE}"
+        )
+
+
+@_context_tracer.start_as_current_span("track_record.predict.local")
+def _local_predict(payload: dict) -> dict:
+    """Run the same prediction code in-process instead of posting to Cloud Run."""
+    _init_local_predict()
+    from analyzing_llm_rationale.server import PredictRequest, predict
+
+    span = otel_trace.get_current_span()
+    span.set_attributes({
+        "forecast.model": _predict_model_label(payload),
+        "predict.mode": "local",
+    })
+    response = asyncio.run(predict(PredictRequest(**payload), request=None))
+    return response.model_dump(mode="json")
+
+
+def _remote_predict(payload: dict, headers: dict[str, str]) -> dict:
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(f"{BASE_URL}/predict", data=body, headers=headers)
+    with urllib.request.urlopen(req, timeout=_PREDICT_TIMEOUT_S) as resp:
+        return json.loads(resp.read())
+
+
 def _post_predict(payload: dict) -> dict | None:
-    """POST /predict with thread-safe rate-limit pacing + retries.
+    """Run /predict with thread-safe rate-limit pacing + retries.
 
     Multiple executor threads may call this concurrently; the lock guarantees
     the minimum inter-call interval is enforced globally across all threads."""
@@ -231,7 +320,6 @@ def _post_predict(payload: dict) -> dict | None:
             time.sleep(_PREDICT_MIN_INTERVAL_S - elapsed)
         _last_predict_ts = time.time()
 
-    body = json.dumps(payload).encode()
     headers = {"Content-Type": "application/json"}
     if PREDICT_API_KEY:
         headers["X-API-Key"] = PREDICT_API_KEY
@@ -240,14 +328,18 @@ def _post_predict(payload: dict) -> dict | None:
     last_err = None
     _predict_stats["attempts"] += 1
     for attempt in range(_PREDICT_RETRIES):
-        req = urllib.request.Request(f"{BASE_URL}/predict", data=body, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=_PREDICT_TIMEOUT_S) as resp:
-                _predict_stats["successes"] += 1
-                _predict_stats[f"success_model:{model_label}"] += 1
-                with _predict_circuit_lock:
-                    _predict_consecutive_failures[model_label] = 0
-                return json.loads(resp.read())
+            result = (
+                _local_predict(payload)
+                if PREDICT_MODE in _LOCAL_PREDICT_MODES
+                else _remote_predict(payload, headers)
+            )
+            _predict_stats["successes"] += 1
+            _predict_stats[f"success_model:{model_label}"] += 1
+            _record_predict_call(model_label, "success")
+            with _predict_circuit_lock:
+                _predict_consecutive_failures[model_label] = 0
+            return result
         except urllib.error.HTTPError as exc:
             detail = _http_error_detail(exc)
             last_err = f"HTTP {exc.code}" + (f": {detail}" if detail else "")
@@ -259,10 +351,23 @@ def _post_predict(payload: dict) -> dict | None:
                 break
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last_err = str(exc)
+        except Exception as exc:  # noqa: BLE001
+            status_code = getattr(exc, "status_code", None)
+            if status_code:
+                detail = getattr(exc, "detail", "")
+                last_err = f"HTTP {status_code}" + (f": {detail}" if detail else "")
+                _predict_stats[f"http_{status_code}"] += 1
+                if int(status_code) == 429:
+                    time.sleep(30 * (attempt + 1))
+                elif int(status_code) < 500:
+                    break
+            else:
+                last_err = f"{type(exc).__name__}: {exc}"
         if attempt < _PREDICT_RETRIES - 1:
             time.sleep(2 ** attempt)
     _predict_stats["failures"] += 1
     _predict_stats[f"failure_model:{model_label}"] += 1
+    _record_predict_call(model_label, "failure")
     circuit_opened = False
     with _predict_circuit_lock:
         _predict_consecutive_failures[model_label] += 1
@@ -529,6 +634,7 @@ async def _record_snapshots_with_retries(
 
 
 async def main() -> int:
+    print(f"track-record predict mode: {_predict_mode()}")
     store = DuckDBStore(STORE_PATH)
     primary_model = MODEL
     before_primary = _model_progress(store, primary_model)
@@ -587,6 +693,7 @@ async def main() -> int:
         "n_markets_open": agg.get("n_markets_open"),
         "n_snapshots_resolved": agg.get("n_snapshots_resolved"),
         "predict_attempts": _predict_stats["attempts"],
+        "predict_mode": _predict_mode(),
         "predict_successes": _predict_stats["successes"],
         "predict_failures": _predict_stats["failures"],
         "predict_http_401": _predict_stats["http_401"],
@@ -611,10 +718,9 @@ async def main() -> int:
     if not PRICE_ONLY:
         if _predict_stats["http_401"]:
             print(
-                "track-record forecast failed: /predict returned HTTP 401. "
-                "If API_KEY is unset on Cloud Run, /predict should accept "
-                "anonymous rate-limited calls; SCADS_AI_API_KEY stays server-side "
-                "for model access.",
+                "track-record forecast failed: predict returned HTTP 401. "
+                "Remote mode needs the Cloud Run auth headers; local mode needs "
+                "SCADS_AI_API_KEY configured as a GitHub Actions secret.",
                 file=sys.stderr,
             )
             return 1
