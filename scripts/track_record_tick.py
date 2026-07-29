@@ -113,6 +113,9 @@ PREDICT_API_KEY = os.environ.get("PREDICT_API_KEY") or None
 # Gates the evolution-loop bridge (pending-markets / mark-enrolled). When unset,
 # the tick simply doesn't pull agent-enrolled seeds (discovery still runs).
 TRACK_RECORD_TOKEN = os.environ.get("TRACK_RECORD_TOKEN") or None
+TRACK_RECORD_EVIDENCE_DETAIL = os.environ.get("TRACK_RECORD_EVIDENCE_DETAIL", "summary").strip().lower()
+if TRACK_RECORD_EVIDENCE_DETAIL not in {"summary", "full"}:
+    raise RuntimeError("TRACK_RECORD_EVIDENCE_DETAIL must be 'summary' or 'full'")
 # Re-forecast a market if its live price has moved more than this many pp since
 # today's snapshot. Prevents stale model probability from being paired with a
 # current price on the edge board. Set to 1.0 to disable drift re-forecasting.
@@ -337,7 +340,22 @@ def _local_predict(payload: dict) -> dict:
         "forecast.model": _predict_model_label(payload),
         "predict.mode": "local",
     })
-    response = asyncio.run(predict(PredictRequest(**payload), request=None))
+    try:
+        response = asyncio.run(predict(PredictRequest(**payload), request=None))
+    except Exception as exc:
+        cause_parts: list[str] = []
+        cause = getattr(exc, "__cause__", None)
+        while cause is not None and len(cause_parts) < 3:
+            cause_parts.append(f"{type(cause).__name__}: {cause}")
+            cause = getattr(cause, "__cause__", None)
+        if cause_parts:
+            print(
+                "  local predict cause "
+                f"[model={_predict_model_label(payload)}]: "
+                + " <- ".join(cause_parts),
+                file=sys.stderr,
+            )
+        raise
     return response.model_dump(mode="json")
 
 
@@ -528,6 +546,7 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
         "chat_mode": False,
         "attach_evidence": True,
         "evidence_top_k": evidence_top_k,
+        "evidence_detail": TRACK_RECORD_EVIDENCE_DETAIL,
         "market_platform": quote.get("platform"),
         "market_ident": quote.get("ident"),
         "market_url": quote.get("market_url"),
