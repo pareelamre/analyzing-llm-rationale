@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from analyzing_llm_rationale import trackrec_store as _ds
-from analyzing_llm_rationale.accounting import simulate_mark_to_market_account
+from analyzing_llm_rationale.accounting import simulate_shadow_mark_to_market_account
 from analyzing_llm_rationale.entity_tagger import tag_question
 
 # ── DuckDB SQL helpers ────────────────────────────────────────────────────────
@@ -1592,15 +1592,15 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
 
 
 def build_mark_to_market_accounts(
-    open_rows: List[Dict[str, Any]],
+    rows: List[Dict[str, Any]],
     latest_quotes: Dict[Any, Dict[str, Any]],
     *,
     default_model: str,
     tracked_models: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Bid-liquidation benchmark accounts for every active tracked model."""
+    """Bid-liquidation shadow strategy ledgers for every active tracked model."""
     by_model: Dict[str, List[Dict[str, Any]]] = {}
-    for row in open_rows:
+    for row in rows:
         label = str(row.get("model") or default_model)
         by_model.setdefault(label, []).append(row)
     for label in tracked_models or []:
@@ -1610,7 +1610,11 @@ def build_mark_to_market_accounts(
     accounts: List[Dict[str, Any]] = []
     for label, rows in by_model.items():
         account = _public_mark_to_market_account(
-            simulate_mark_to_market_account(rows, latest_quotes=latest_quotes)
+            simulate_shadow_mark_to_market_account(
+                rows,
+                latest_quotes=latest_quotes,
+                fee_fn=_bet_fee,
+            )
         )
         accounts.append({
             "model": label,
@@ -1618,6 +1622,7 @@ def build_mark_to_market_accounts(
             "account_value": account.get("account_value"),
             "return": account.get("return"),
             "n_trades": account.get("n_trades"),
+            "n_settlements": account.get("n_settlements"),
             "n_open_positions": account.get("n_open_positions"),
             "n_illiquid_positions": account.get("n_illiquid_positions"),
         })
@@ -1634,6 +1639,7 @@ def build_mark_to_market_accounts(
 
 _MTM_PUBLIC_ACCOUNT_FIELDS = (
     "ts",
+    "strategy",
     "value_method",
     "starting_cash",
     "cash",
@@ -1644,8 +1650,11 @@ _MTM_PUBLIC_ACCOUNT_FIELDS = (
     "realized_pnl",
     "fees_paid",
     "n_trades",
+    "n_settlements",
     "n_open_positions",
     "n_illiquid_positions",
+    "n_skipped_no_edge",
+    "n_skipped_unexecutable",
     "notes",
 )
 _MTM_PUBLIC_CURVE_FIELDS = (
@@ -1657,6 +1666,7 @@ _MTM_PUBLIC_CURVE_FIELDS = (
     "unrealized_pnl",
     "realized_pnl",
     "fees_paid",
+    "event_type",
     "trade_status",
 )
 
@@ -2252,8 +2262,9 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     _res_skill_early = [r for r in resolved if (r.get("model") or model) == model]
     by_edge_early = edge_calibration(_res_skill_early)
     edge_board_result = build_edge_board(open_primary, latest_price, by_edge_early, by_horizon)
+    mark_to_market_rows_all = resolved + open_rows
     mark_to_market_by_model = build_mark_to_market_accounts(
-        open_rows,
+        mark_to_market_rows_all,
         latest_quotes,
         default_model=model,
         tracked_models=tracked_models,

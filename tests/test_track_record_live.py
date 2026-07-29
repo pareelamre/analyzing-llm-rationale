@@ -88,8 +88,9 @@ class TrajectoryTests(unittest.TestCase):
         self.client = FakeClient()
         fake_ds = types.ModuleType("google.cloud.datastore")
         fake_ds.Entity = FakeEntity
-        self._p = mock.patch.dict(sys.modules, {"google.cloud.datastore": fake_ds})
-        self._p.start()
+        self._missing = object()
+        self._orig_datastore = sys.modules.get("google.cloud.datastore", self._missing)
+        sys.modules["google.cloud.datastore"] = fake_ds
         self.model_probs = {"Will A happen?": 0.70, "Will B happen?": 0.30}
 
         async def forecast_fn(quote, top_k, model=None):
@@ -99,7 +100,10 @@ class TrajectoryTests(unittest.TestCase):
         self.forecast_fn = forecast_fn
 
     def tearDown(self):
-        self._p.stop()
+        if self._orig_datastore is self._missing:
+            sys.modules.pop("google.cloud.datastore", None)
+        else:
+            sys.modules["google.cloud.datastore"] = self._orig_datastore
 
     def _record(self, md, day):
         now = datetime.fromisoformat(day).replace(tzinfo=timezone.utc)
@@ -696,18 +700,61 @@ class FileStoreTests(unittest.TestCase):
             account = agg["mark_to_market_account"]
             accounts = {row["model"]: row for row in agg["mark_to_market_by_model"]}
             self.assertEqual(account["value_method"], "mark_to_market_bid_liquidation")
+            self.assertEqual(account["strategy"], "edge_shadow_ledger")
             self.assertEqual(account["n_trades"], 1)
             self.assertEqual(account["liquidation_value"], 0.5)
-            self.assertEqual(account["account_value"], 9999.88)
+            self.assertEqual(account["account_value"], 9999.863508)
             self.assertEqual(account["n_open_positions"], 1)
             self.assertIn("value_curve", account)
             self.assertNotIn("open_positions", account)
             self.assertNotIn("trades", account)
             self.assertNotIn("open_positions", account["value_curve"][0])
             self.assertEqual(agg["mark_to_market_cycle_minutes"], 15)
-            self.assertEqual(accounts["council"]["account_value"], 9999.88)
+            self.assertEqual(accounts["council"]["account_value"], 9999.863508)
             self.assertEqual(accounts["deepseek-v3"]["account"]["account_value"], 10000.0)
             self.assertEqual(accounts["deepseek-v3"]["n_trades"], 0)
+
+    def test_aggregate_mark_to_market_settles_resolved_snapshots_into_cash(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "store.json"
+            store = FileStore(path)
+            snap_ts = datetime(2026, 7, 1, 12, tzinfo=timezone.utc)
+            resolved_ts = datetime(2026, 7, 5, 12, tzinfo=timezone.utc)
+            snap = Entity(store.key(trl.SNAPSHOT_KIND, "Polymarket:slug-a:council:2026-07-01"))
+            snap.update(
+                platform="Polymarket",
+                ident="slug-a",
+                model="council",
+                question="Will A happen?",
+                market_url="https://polymarket.com/market/slug-a",
+                snapshot_ts=snap_ts,
+                snapshot_date="2026-07-01",
+                model_probability=0.7,
+                market_probability=0.6,
+                market_bid=0.58,
+                market_ask=0.62,
+                lead_time_days=4.0,
+                horizon="3-7d",
+                resolved=True,
+                outcome=1,
+                resolved_ts=resolved_ts,
+                close_time=resolved_ts.isoformat(),
+                model_brier=trl.brier(0.7, 1),
+                market_brier=trl.brier(0.6, 1),
+                model_correct=True,
+            )
+            store.put(snap)
+
+            agg = trl.aggregate(store, model="council", variant="v", temperature=0.0)
+            account = agg["mark_to_market_account"]
+
+            self.assertEqual(account["strategy"], "edge_shadow_ledger")
+            self.assertEqual(account["n_trades"], 1)
+            self.assertEqual(account["n_settlements"], 1)
+            self.assertEqual(account["n_open_positions"], 0)
+            self.assertEqual(account["liquidation_value"], 0)
+            self.assertEqual(account["account_value"], 10000.38)
+            self.assertEqual(account["realized_pnl"], 0.38)
 
 
 class CalibrationTests(unittest.TestCase):

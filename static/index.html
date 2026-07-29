@@ -6299,7 +6299,7 @@ function renderEdgeBoard(d) {
       </tr>`;
     }).join('');
     mtmHtml = `
-      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">15-minute cycle benchmark account. Open YES/NO positions are marked to bid-side liquidation prices; Kalshi exits are modeled by buying the opposite side and netting reciprocal pairs.</p>
+      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Shadow benchmark account refreshed on ${mtmCycleMinutes}-minute cycles. Trades are inferred from model-vs-market edge, resolved markets settle into cash, and open YES/NO positions are marked to bid-side liquidation prices. No benchmark orders are submitted to an exchange.</p>
       <div class="tr-stats">
         <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05)">
           <div class="v" id="eb-mtm-primary-v">${_usd(mtm && mtm.account_value)}</div>
@@ -6313,7 +6313,7 @@ function renderEdgeBoard(d) {
       <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 180, {asPct: false, yPrefix: '$'}) : ''}</div>
       <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
   } else {
-    mtmHtml = `<p class="text-sm text-gray-500">Mark-to-market account values will appear after the next 15-minute forecast cycle records open positions.</p>`;
+    mtmHtml = `<p class="text-sm text-gray-500">Shadow mark-to-market account values will appear after strategy snapshots are available.</p>`;
   }
   let performanceHtml;
   if (pnl && pnl.flat) {
@@ -6420,7 +6420,7 @@ function renderEdgeBoard(d) {
     ${stats}
     <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
     <h4 class="eb-h">Model comparison · resolved forecast quality</h4>${compHtml}
-    <h4 class="eb-h">Mark-to-market account · bid-side liquidation value</h4>${mtmHtml}
+    <h4 class="eb-h">Shadow mark-to-market account · bid-side liquidation value</h4>${mtmHtml}
     <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift · does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live council forecasts · ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
