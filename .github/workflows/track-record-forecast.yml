@@ -13,6 +13,14 @@ on:
         description: "Force re-forecast all open markets regardless of slot (1=yes, 0=no)"
         required: false
         default: "0"
+      model_shard_count:
+        description: "Number of rotating model shards"
+        required: false
+        default: "4"
+      model_shard_index:
+        description: "0-based model shard to run; blank rotates from the 15-minute slot"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -59,6 +67,10 @@ jobs:
           TRACK_RECORD_PREDICT_MODE: "local"
           TRACK_RECORD_LOCAL_MODEL: "gpt-oss-120b"
           TRACK_MODEL: "council"
+          TRACK_MODEL_SHARD_COUNT: ${{ github.event.inputs.model_shard_count || '4' }}
+          TRACK_MODEL_SHARD_INDEX: ${{ github.event.inputs.model_shard_index || '' }}
+          TRACK_MODEL_SHARD_ALWAYS: "crowd-follow"
+          TRACK_MODEL_SHARD_SLOT_MINUTES: "15"
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
           REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '1' }}
