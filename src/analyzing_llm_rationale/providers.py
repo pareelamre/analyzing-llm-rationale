@@ -195,7 +195,7 @@ class OpenAICompatibleProvider(ChatProvider):
         try:
             return response.json()["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError, ValueError) as exc:
-            raise ProviderResponseError(f"Malformed provider response: {exc}") from exc
+            raise RetryableProviderError(f"Malformed provider response: {exc}") from exc
 
     def stream_chat_completion(
         self,
@@ -300,7 +300,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         try:
             return response.json()["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError, ValueError) as exc:
-            raise ProviderResponseError(f"Malformed OpenRouter response: {exc}") from exc
+            raise RetryableProviderError(f"Malformed OpenRouter response: {exc}") from exc
 
 
 @dataclass

@@ -42,6 +42,7 @@ from analyzing_llm_rationale.providers import (  # noqa: E402
     LocalQwenProvider,
     OpenAICompatibleProvider,
     ProviderResponseError,
+    RetryableProviderError,
     ensure_prompt_fits_context,
     normalize_openai_chat_completions_url,
     resolve_context_window,
@@ -728,6 +729,29 @@ class PipelineTests(unittest.TestCase):
             provider.chat_completion(
                 messages=[{"role": "user", "content": "test"}],
                 temperature=0.25,
+                max_tokens=64,
+            )
+
+    def test_openai_compatible_malformed_provider_envelope_is_retryable(self):
+        class FakeResponse:
+            status_code = 200
+            text = '{"not_choices":[]}'
+
+            @staticmethod
+            def json():
+                return {"not_choices": []}
+
+        provider = OpenAICompatibleProvider(
+            model_name="openai/gpt-oss-120b",
+            api_key="test-key",
+            base_url="https://llm.scads.ai/v1/chat/completions",
+        )
+        provider._session = SimpleNamespace(post=lambda *args, **kwargs: FakeResponse())
+
+        with self.assertRaises(RetryableProviderError):
+            provider.chat_completion(
+                messages=[{"role": "user", "content": "test"}],
+                temperature=0.0,
                 max_tokens=64,
             )
 
