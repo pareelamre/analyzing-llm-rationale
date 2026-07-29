@@ -699,6 +699,7 @@ class ServerTests(unittest.TestCase):
         }
         with (
             mock.patch.object(server_module, "_read_live_track_record", return_value=live),
+            mock.patch.object(server_module, "_read_mark_to_market_record", return_value=None),
             mock.patch.object(server_module, "_cache_get", return_value=None),
             mock.patch.object(server_module, "_cache_set"),
         ):
@@ -734,7 +735,10 @@ class ServerTests(unittest.TestCase):
             "n_markets_open": 1,
             "resolved_log": [{"question": "Resolved edge?"}],
         }
-        with mock.patch.object(server_module, "_read_live_track_record", return_value=live):
+        with (
+            mock.patch.object(server_module, "_read_live_track_record", return_value=live),
+            mock.patch.object(server_module, "_read_mark_to_market_record", return_value=None),
+        ):
             response = self.client.get("/edge-board")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -748,6 +752,38 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["resolved_log"][0]["question"], "Resolved edge?")
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])
+
+    def test_edge_board_endpoint_merges_independent_mtm_artifact(self):
+        resolved = {
+            "generated_at": "2026-06-28T23:00:00+00:00",
+            "models_comparison": [{"model": "council"}],
+            "paper_pnl": {"flat": {"growth_curve": [100, 101]}},
+            "n_snapshots_resolved": 184,
+            "n_markets_resolved": 139,
+            "resolved_log": [{"question": "Resolved edge?"}],
+        }
+        mtm = {
+            "generated_at": "2026-06-28T23:15:00+00:00",
+            "edge_board": [{"question": "Fresh MTM edge?", "edge": 0.2}],
+            "mark_to_market_account": {"account_value": 9999.47, "n_open_positions": 8},
+            "mark_to_market_by_model": [{"model": "council", "account_value": 9999.47}],
+            "mark_to_market_cycle_minutes": 15,
+            "n_markets_open": 1,
+            "n_markets_tracked": 8,
+        }
+        with (
+            mock.patch.object(server_module, "_read_live_track_record", return_value=resolved),
+            mock.patch.object(server_module, "_read_mark_to_market_record", return_value=mtm),
+        ):
+            response = self.client.get("/edge-board")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["generated_at"], mtm["generated_at"])
+        self.assertEqual(payload["freshness"]["generated_at"], mtm["generated_at"])
+        self.assertEqual(payload["edge_board"][0]["question"], "Fresh MTM edge?")
+        self.assertEqual(payload["mark_to_market_account"]["account_value"], 9999.47)
+        self.assertEqual(payload["models_comparison"][0]["model"], "council")
+        self.assertEqual(payload["resolved_log"][0]["question"], "Resolved edge?")
 
     def test_scads_allowlist_includes_board_models(self):
         from analyzing_llm_rationale.config import scads_hosted_model_allowlist
@@ -1363,7 +1399,10 @@ class ServerTests(unittest.TestCase):
             "by_edge": [{"edge_bucket": "20pp+", "skill_vs_market": 0.05, "skill_significant": True}],
             "lead_lag": {"market_converged_to_model_pct": 0.7},
         }
-        with mock.patch.object(srv, "_read_live_track_record", return_value=live):
+        with (
+            mock.patch.object(srv, "_read_live_track_record", return_value=live),
+            mock.patch.object(srv, "_read_mark_to_market_record", return_value=None),
+        ):
             r = self.client.get("/edge-board")
         self.assertEqual(r.status_code, 200)
         body = r.json()
@@ -1373,7 +1412,10 @@ class ServerTests(unittest.TestCase):
 
     def test_edge_board_empty_when_no_live_file(self):
         import analyzing_llm_rationale.server as srv
-        with mock.patch.object(srv, "_read_live_track_record", return_value=None):
+        with (
+            mock.patch.object(srv, "_read_live_track_record", return_value=None),
+            mock.patch.object(srv, "_read_mark_to_market_record", return_value=None),
+        ):
             r = self.client.get("/edge-board")
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["edge_board"], [])

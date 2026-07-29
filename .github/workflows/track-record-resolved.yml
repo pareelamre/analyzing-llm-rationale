@@ -1,25 +1,25 @@
-name: Track record MTM tick
+name: Track record resolved quality
 
-# Cheap 15-minute heartbeat: records price points, scores newly-resolved markets,
-# and refreshes the public aggregate. No LLM calls — always completes in < 10 min.
-# LLM forecast snapshots are handled by track-record-forecast.yml (hourly).
+# Cheap resolved-quality pass: score newly resolved markets, sync the immutable
+# ledger, and publish the resolved forecast-quality aggregate. No LLM calls and
+# no mark-to-market artifact writes.
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "7 * * * *"
   workflow_dispatch: {}
 
 permissions:
   contents: write
 
 concurrency:
-  group: track-record-mtm
+  group: track-record-resolved
   cancel-in-progress: false
 
 jobs:
-  price-tick:
+  resolved-quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -35,23 +35,23 @@ jobs:
           opentelemetry-instrumentation-logging
           opentelemetry-instrumentation-requests
 
-      - name: Record price points and publish MTM
+      - name: Score resolved forecasts
         env:
           FORESEA_BASE_URL: https://foresea.ink
           TRACK_MODEL: "council"
           CYCLE_INTERVAL_MINUTES: "15"
-        run: python scripts/track_record_tick.py --mtm-only
+        run: python scripts/track_record_tick.py --resolved-only
 
-      - name: Commit updated MTM artifact
+      - name: Commit resolved-quality artifacts
         env:
-          GIT_REBASE_KEEP_THEIRS: "data/track_record_store.duckdb,static/mark_to_market_live.json"
+          GIT_REBASE_KEEP_THEIRS: "data/track_record_store.duckdb,static/track_record_live.json,static/forecast_evaluation.json"
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/track_record_store.duckdb static/mark_to_market_live.json
+          git add data/track_record_store.duckdb static/track_record_live.json static/forecast_evaluation.json
           if git diff --cached --quiet; then
-            echo "No MTM changes to commit."
+            echo "No resolved-quality changes to commit."
             exit 0
           fi
-          git commit -m "track record: mtm tick [skip ci]"
+          git commit -m "track record: resolved quality [skip ci]"
           bash .github/scripts/push_with_rebase_retry.sh origin main
