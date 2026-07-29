@@ -1009,6 +1009,38 @@ class ServerTests(unittest.TestCase):
         self.assertIn("forecast", report["pipeline"])           # backstop forecast ran
         self.assertAlmostEqual(report["model_probability"], 0.7)  # populated, not null
 
+    def test_agent_analyze_benchmark_tool_loop_exposes_only_benchmark_tools(self):
+        self.provider.response = {
+            "thought": "remember this",
+            "action": "manage_notes",
+            "args": {"action": "add", "text": "Track Fed dates."},
+        }
+        with tempfile.TemporaryDirectory() as td, mock.patch.dict(
+            os.environ,
+            {"FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json")},
+            clear=False,
+        ):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Will the Fed cut rates tomorrow?",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                    "max_tool_steps": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        report = response.json()
+        self.assertEqual(report["pipeline"], ["tool_loop", "benchmark_tools"])
+        self.assertEqual(report["tool_transcript"][0]["action"], "manage_notes")
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertIn("place_trade(", system_prompt)
+        self.assertIn("web_search(", system_prompt)
+        self.assertIn("manage_notes(", system_prompt)
+        self.assertNotIn("forecast(", system_prompt)
+        self.assertNotIn("scan_markets(", system_prompt)
+
     def test_agent_analyze_fetches_market_and_recommends(self):
         import analyzing_llm_rationale.market_data as md
 

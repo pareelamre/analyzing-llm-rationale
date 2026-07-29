@@ -44,6 +44,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from analyzing_llm_rationale import (
     agent_capabilities,
+    benchmark_tools,
     crypto_5m,
     crypto_kalshi,
     pr_agent,
@@ -3237,6 +3238,7 @@ class AgentAnalyzeRequest(BaseModel):
     builtin_skills: bool = Field(False, description="Also run the built-in forecasting toolkit (base rate, scenario decomposition, red team, key drivers).")
     ground_in_record: bool = Field(False, description="Condition the forecast on the model's own live track-record calibration.")
     tool_loop: bool = Field(False, description="Use a ReAct tool-using loop (model plans + calls tools) instead of the fixed pipeline.")
+    benchmark_tools: bool = Field(False, description="When tool_loop=true, expose only benchmark tools: place_trade, web_search, manage_notes.")
     max_tool_steps: int = Field(5, ge=1, le=8, description="Max tool calls in the loop.")
     history: List[Dict[str, str]] = Field(default_factory=list, max_length=24, description="Prior conversation turns for follow-up context.")
     conversation_steer: str = Field("", max_length=1000, description="Optional per-conversation steering instruction.")
@@ -6914,6 +6916,33 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     )
     loop = asyncio.get_running_loop()
     last: Dict[str, Any] = {}
+    agent_id = str(req.openrouter_model or _state.get("model_key") or "agent")
+    tool_ctx = benchmark_tools.ToolContext(
+        agent_id=agent_id,
+        user_id=_optional_user_id(request),
+        model=agent_id,
+    )
+
+    async def _tool_place_trade(args):
+        return benchmark_tools.observation(
+            await loop.run_in_executor(
+                None,
+                lambda: benchmark_tools.place_trade(args, tool_ctx),
+            )
+        )
+
+    async def _tool_web_search(args):
+        return benchmark_tools.observation(
+            await loop.run_in_executor(None, lambda: benchmark_tools.web_search(args))
+        )
+
+    async def _tool_manage_notes(args):
+        return benchmark_tools.observation(
+            await loop.run_in_executor(
+                None,
+                lambda: benchmark_tools.manage_notes(args, tool_ctx),
+            )
+        )
 
     async def _tool_forecast(args):
         q = str(args.get("question") or question)
@@ -6976,21 +7005,36 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         agg = await loop.run_in_executor(None, _read_live_track_record)
         return agent_capabilities.build_grounding_note(agg) or "No resolved forecasts yet."
 
-    tools = {"forecast": _tool_forecast, "get_market": _tool_get_market,
-             "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,
-             "track_record": _tool_track_record}
-    specs = [
-        {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
-        {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
-        {"name": "search_evidence", "args": "query", "description": "Retrieve recent news headlines relevant to a query."},
-        {"name": "scan_markets", "args": "platform, query?", "description": "List live markets on a venue (optionally filtered by keyword)."},
-        {"name": "track_record", "args": "", "description": "Get the model's own live calibration / skill-vs-market."},
+    benchmark_tool_map = {
+        "place_trade": _tool_place_trade,
+        "web_search": _tool_web_search,
+        "manage_notes": _tool_manage_notes,
+    }
+    benchmark_specs = [
+        {"name": "place_trade", "args": "ticker, side, price, quantity", "description": "Buy YES or NO contracts on Kalshi. There is no sell tool; exiting is represented by buying the opposite side. Defaults to shadow mode unless live trading is explicitly enabled."},
+        {"name": "web_search", "args": "query", "description": "Research market events with OpenAI web search. CoinMarketCap and other blacklisted domains are excluded from results."},
+        {"name": "manage_notes", "args": "action, id?, text?, query?, tags?", "description": "Store, search, edit, list, or delete persistent notes. Max 50 notes per agent, 1200 characters each."},
     ]
+    if req.benchmark_tools:
+        tools = dict(benchmark_tool_map)
+        specs = list(benchmark_specs)
+    else:
+        tools = {"forecast": _tool_forecast, "get_market": _tool_get_market,
+                 "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,
+                 "track_record": _tool_track_record, **benchmark_tool_map}
+        specs = [
+            {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
+            {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
+            {"name": "search_evidence", "args": "query", "description": "Retrieve recent news headlines relevant to a query."},
+            {"name": "scan_markets", "args": "platform, query?", "description": "List live markets on a venue (optionally filtered by keyword)."},
+            {"name": "track_record", "args": "", "description": "Get the model's own live calibration / skill-vs-market."},
+            *benchmark_specs,
+        ]
 
     # Optional: proxy the venues' own MCP tools (orderbook/depth/etc.) when
     # POLYMARKET_MCP_URL / KALSHI_MCP_URL are set. Additive + best-effort; venue
     # output is untrusted context (Foresea's forecast stays the source of truth).
-    if venue_mcp.configured_venues():
+    if not req.benchmark_tools and venue_mcp.configured_venues():
         try:
             for _ns, _meta in (await venue_mcp.discover_tools()).items():
                 tools[_ns] = venue_mcp.make_tool_fn(_meta["url"], _meta["name"])
@@ -7010,13 +7054,20 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             "without having called `forecast` for it. For example, after finding a "
             "market with scan_markets/get_market, call forecast with that market's "
             "question and its market_probability, then base your answer on that result.")
+    if req.benchmark_tools:
+        rule = (
+            "Benchmark mode: you have exactly three tools: `place_trade`, `web_search`, "
+            "and `manage_notes`. Use `place_trade` for Kalshi trade decisions. There is "
+            "no sell tool; exit by buying the opposite side. Use `web_search` for current "
+            "evidence and `manage_notes` for memory across cycles."
+        )
     backstopped = False
     try:
         res = await agent_capabilities.run_tool_loop(
             q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule)
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
-        if not last:
+        if not last and not req.benchmark_tools:
             backstopped = True
             await _tool_forecast({"question": question,
                                   "market_probability": (quote.probability if quote else req.market_probability)})
@@ -7026,7 +7077,11 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     outcome = (quote.outcome if quote else None) or "Yes"
     edge = last.get("edge")
     recommendation, detail = _agent_recommendation(edge, outcome)
-    pipeline = ["tool_loop"] + (["forecast"] if last else [])
+    pipeline = ["tool_loop"]
+    if req.benchmark_tools:
+        pipeline.append("benchmark_tools")
+    if last:
+        pipeline.append("forecast")
     if grounding_note:
         pipeline.insert(0, "ground_in_record")
     report = AgentReport(
