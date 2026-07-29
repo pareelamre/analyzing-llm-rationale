@@ -740,6 +740,11 @@ class FileStoreTests(unittest.TestCase):
             self.assertEqual(accounts["council"]["account_value"], 9999.863508)
             self.assertEqual(accounts["deepseek-v3"]["account"]["account_value"], 10000.0)
             self.assertEqual(accounts["deepseek-v3"]["n_trades"], 0)
+            self.assertIn("market-follow", accounts)
+            self.assertTrue(accounts["market-follow"]["baseline"])
+            self.assertEqual(accounts["market-follow"]["account"]["strategy"], "market_follow_baseline")
+            self.assertEqual(accounts["market-follow"]["n_trades"], 1)
+            self.assertEqual(accounts["market-follow"]["account_value"], 9999.863508)
 
     def test_aggregate_mark_to_market_settles_resolved_snapshots_into_cash(self):
         with tempfile.TemporaryDirectory() as td:
