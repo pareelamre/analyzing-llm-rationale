@@ -42,6 +42,7 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("track-record-forecast", workflow)
         self.assertIn("python scripts/track_record_tick.py --snapshot-only", workflow)
         self.assertIn("git add data/track_record_store.duckdb", workflow)
+        self.assertIn("pull-requests: write", workflow)
         self.assertNotIn("static/track_record_live.json static/forecast_evaluation.json", workflow)
         self.assertNotIn("TRACK_MODELS:", workflow)
         for model in (
@@ -77,13 +78,26 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("track-record-mtm", mtm_workflow)
         self.assertIn("python scripts/track_record_tick.py --mtm-only", mtm_workflow)
         self.assertIn("static/mark_to_market_live.json", mtm_workflow)
+        self.assertIn("pull-requests: write", mtm_workflow)
         self.assertNotIn("static/forecast_evaluation.json", mtm_workflow)
 
         self.assertIn('cron: "7 * * * *"', resolved_workflow)
         self.assertIn("track-record-resolved", resolved_workflow)
         self.assertIn("python scripts/track_record_tick.py --resolved-only", resolved_workflow)
         self.assertIn("static/track_record_live.json static/forecast_evaluation.json", resolved_workflow)
+        self.assertIn("pull-requests: write", resolved_workflow)
         self.assertNotIn("static/mark_to_market_live.json", resolved_workflow)
+
+    def test_artifact_publish_helper_falls_back_to_pull_request(self):
+        helper = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "scripts" / "push_with_rebase_retry.sh"
+        ).read_text()
+
+        self.assertIn("publish_through_pr", helper)
+        self.assertIn("gh pr create", helper)
+        self.assertIn("gh pr merge", helper)
+        self.assertIn("git push --force-with-lease", helper)
 
     def test_public_payloads_split_mtm_from_resolved_quality(self):
         aggregate = {
