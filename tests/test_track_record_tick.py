@@ -30,6 +30,11 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("Verify forecast secrets", workflow)
         self.assertIn("SCADS_AI_API_KEY must be configured", workflow)
         self.assertIn('pip install --quiet -e ".[serve,pipeline]"', workflow)
+        self.assertIn('PREDICT_CONCURRENCY: "2"', workflow)
+        self.assertIn('PREDICT_MIN_INTERVAL_S: "4.0"', workflow)
+        self.assertIn('PREDICT_RETRIES: "4"', workflow)
+        self.assertIn('PROVIDER_MAX_RETRIES: "3"', workflow)
+        self.assertIn('PROVIDER_TIMEOUT_S: "180"', workflow)
         self.assertNotIn("TRACK_MODELS:", workflow)
         for model in (
             "scads-alias-code",
@@ -195,6 +200,41 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertEqual(stats["attempts"], 1)
         self.assertEqual(stats["successes"], 1)
         self.assertEqual(stats["success_model:council"], 1)
+
+    def test_local_predict_retries_transient_http_exception_then_succeeds(self):
+        class LocalHTTPError(Exception):
+            status_code = 503
+            detail = "temporarily unavailable"
+            headers = {"Retry-After": "7"}
+
+        response = {
+            "model_key": "council",
+            "market_analysis": {"model_probability": 0.58},
+        }
+        with (
+            mock.patch.object(track_record_tick, "_predict_stats", Counter()) as stats,
+            mock.patch.object(track_record_tick, "PREDICT_MODE", "local"),
+            mock.patch.object(track_record_tick, "_PREDICT_RETRIES", 2),
+            mock.patch.object(track_record_tick, "_PREDICT_MIN_INTERVAL_S", 0.0),
+            mock.patch.object(track_record_tick, "_PREDICT_RETRY_JITTER_FRACTION", 0.0),
+            mock.patch.object(track_record_tick, "_last_predict_ts", 0.0),
+            mock.patch.object(
+                track_record_tick,
+                "_local_predict",
+                side_effect=[LocalHTTPError(), response],
+            ) as local_mock,
+            mock.patch.object(track_record_tick.time, "sleep") as sleep_mock,
+        ):
+            result = track_record_tick._post_predict(
+                {"question": "Will the test event happen?", "model": "council"}
+            )
+
+        self.assertEqual(result, response)
+        self.assertEqual(local_mock.call_count, 2)
+        sleep_mock.assert_called_once_with(7.0)
+        self.assertEqual(stats["http_503"], 1)
+        self.assertEqual(stats["retry_sleeps"], 1)
+        self.assertEqual(stats["successes"], 1)
 
     def test_local_predict_http_exception_is_counted_by_status_code(self):
         class LocalHTTPError(Exception):

@@ -37,6 +37,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import sys
 import threading
 import time
@@ -152,6 +153,15 @@ _PREDICT_TIMEOUT_S = max(
     1.0, float(os.environ.get("PREDICT_TIMEOUT_S", "120") or 120)
 )
 _PREDICT_RETRIES = max(1, int(os.environ.get("PREDICT_RETRIES", "3") or 3))
+_PREDICT_RETRY_BACKOFF_BASE_S = max(
+    0.0, float(os.environ.get("PREDICT_RETRY_BACKOFF_BASE_S", "5") or 5.0)
+)
+_PREDICT_RETRY_BACKOFF_MAX_S = max(
+    0.0, float(os.environ.get("PREDICT_RETRY_BACKOFF_MAX_S", "120") or 120.0)
+)
+_PREDICT_RETRY_JITTER_FRACTION = max(
+    0.0, float(os.environ.get("PREDICT_RETRY_JITTER_FRACTION", "0.25") or 0.25)
+)
 PREDICT_MODE = os.environ.get("TRACK_RECORD_PREDICT_MODE", "remote").strip().lower()
 _LOCAL_PREDICT_MODES = {"local", "direct", "github"}
 LOCAL_PREDICT_MODEL = os.environ.get("TRACK_RECORD_LOCAL_MODEL", "gpt-oss-120b").strip()
@@ -245,6 +255,39 @@ def _http_error_detail(exc: urllib.error.HTTPError) -> str:
     return raw[:500]
 
 
+def _retry_after_seconds(headers: object | None) -> float | None:
+    if not headers:
+        return None
+    try:
+        value = headers.get("Retry-After")  # type: ignore[attr-defined]
+    except AttributeError:
+        return None
+    if value is None:
+        return None
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _predict_retry_delay(
+    attempt: int,
+    *,
+    status_code: int | None = None,
+    retry_after_s: float | None = None,
+) -> float:
+    if retry_after_s is not None:
+        base = retry_after_s
+    elif status_code == 429:
+        base = max(30.0 * (attempt + 1), _PREDICT_RETRY_BACKOFF_BASE_S)
+    else:
+        base = _PREDICT_RETRY_BACKOFF_BASE_S * (2 ** attempt)
+    delay = min(base, _PREDICT_RETRY_BACKOFF_MAX_S) if _PREDICT_RETRY_BACKOFF_MAX_S else base
+    if _PREDICT_RETRY_JITTER_FRACTION:
+        delay += random.uniform(0.0, delay * _PREDICT_RETRY_JITTER_FRACTION)
+    return delay
+
+
 def _init_local_predict() -> None:
     """Initialise server prediction state inside the GitHub runner process."""
     global _local_predict_ready
@@ -332,6 +375,7 @@ def _post_predict(payload: dict) -> dict | None:
     last_err = None
     _predict_stats["attempts"] += 1
     for attempt in range(_PREDICT_RETRIES):
+        retry_delay_s: float | None = None
         try:
             result = (
                 _local_predict(payload)
@@ -350,25 +394,44 @@ def _post_predict(payload: dict) -> dict | None:
             _predict_stats[f"http_{exc.code}"] += 1
             if exc.code == 429:
                 # Hard rate-limit hit — back off longer before retry.
-                time.sleep(30 * (attempt + 1))
+                retry_delay_s = _predict_retry_delay(
+                    attempt,
+                    status_code=exc.code,
+                    retry_after_s=_retry_after_seconds(exc.headers),
+                )
             elif exc.code < 500:
                 break
+            else:
+                retry_delay_s = _predict_retry_delay(
+                    attempt,
+                    status_code=exc.code,
+                    retry_after_s=_retry_after_seconds(exc.headers),
+                )
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last_err = str(exc)
+            retry_delay_s = _predict_retry_delay(attempt)
         except Exception as exc:  # noqa: BLE001
             status_code = getattr(exc, "status_code", None)
             if status_code:
                 detail = getattr(exc, "detail", "")
                 last_err = f"HTTP {status_code}" + (f": {detail}" if detail else "")
-                _predict_stats[f"http_{status_code}"] += 1
-                if int(status_code) == 429:
-                    time.sleep(30 * (attempt + 1))
-                elif int(status_code) < 500:
+                status_int = int(status_code)
+                _predict_stats[f"http_{status_int}"] += 1
+                if status_int < 500 and status_int != 429:
                     break
+                retry_delay_s = _predict_retry_delay(
+                    attempt,
+                    status_code=status_int,
+                    retry_after_s=_retry_after_seconds(getattr(exc, "headers", None)),
+                )
             else:
                 last_err = f"{type(exc).__name__}: {exc}"
+                retry_delay_s = _predict_retry_delay(attempt)
         if attempt < _PREDICT_RETRIES - 1:
-            time.sleep(2 ** attempt)
+            delay = retry_delay_s if retry_delay_s is not None else _predict_retry_delay(attempt)
+            _predict_stats["retry_sleeps"] += 1
+            _predict_stats[f"retry_sleep_model:{model_label}"] += 1
+            time.sleep(delay)
     _predict_stats["failures"] += 1
     _predict_stats[f"failure_model:{model_label}"] += 1
     _record_predict_call(model_label, "failure")
@@ -707,6 +770,7 @@ async def main() -> int:
         "predict_mode": _predict_mode(),
         "predict_successes": _predict_stats["successes"],
         "predict_failures": _predict_stats["failures"],
+        "predict_retry_sleeps": _predict_stats["retry_sleeps"],
         "predict_http_401": _predict_stats["http_401"],
         "predict_circuit_opened": _predict_stats["circuit_opened"],
         "predict_circuit_skipped": _predict_stats["circuit_skipped"],
