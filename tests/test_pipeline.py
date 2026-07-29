@@ -755,6 +755,29 @@ class PipelineTests(unittest.TestCase):
                 max_tokens=64,
             )
 
+    def test_openai_compatible_null_message_content_is_retryable(self):
+        class FakeResponse:
+            status_code = 200
+            text = '{"choices":[{"message":{"content":null}}]}'
+
+            @staticmethod
+            def json():
+                return {"choices": [{"message": {"content": None}}]}
+
+        provider = OpenAICompatibleProvider(
+            model_name="openai/gpt-oss-120b",
+            api_key="test-key",
+            base_url="https://llm.scads.ai/v1/chat/completions",
+        )
+        provider._session = SimpleNamespace(post=lambda *args, **kwargs: FakeResponse())
+
+        with self.assertRaises(RetryableProviderError):
+            provider.chat_completion(
+                messages=[{"role": "user", "content": "test"}],
+                temperature=0.0,
+                max_tokens=64,
+            )
+
     def test_local_qwen_greedy_run_neutralizes_sampling_defaults(self):
         class FakeTensor:
             def __init__(self, values):
