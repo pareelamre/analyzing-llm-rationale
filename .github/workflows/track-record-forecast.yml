@@ -41,6 +41,15 @@ jobs:
           opentelemetry-instrumentation-logging
           opentelemetry-instrumentation-requests
 
+      - name: Verify forecast secrets
+        env:
+          SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
+        run: |
+          if [ -z "$SCADS_AI_API_KEY" ]; then
+            echo "::error::SCADS_AI_API_KEY must be configured as a GitHub Actions secret for GitHub-hosted forecasts."
+            exit 1
+          fi
+
       - name: Advance live track record
         env:
           FORESEA_BASE_URL: https://foresea.ink

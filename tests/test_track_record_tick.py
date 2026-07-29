@@ -27,6 +27,8 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn('SNAPSHOT_SLOT_MINUTES: "15"', workflow)
         self.assertIn('TRACK_RECORD_PREDICT_MODE: "local"', workflow)
         self.assertIn("SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}", workflow)
+        self.assertIn("Verify forecast secrets", workflow)
+        self.assertIn("SCADS_AI_API_KEY must be configured", workflow)
         self.assertIn('pip install --quiet -e ".[serve,pipeline]"', workflow)
         self.assertNotIn("TRACK_MODELS:", workflow)
         for model in (
@@ -215,6 +217,22 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertEqual(stats["http_503"], 1)
         self.assertEqual(stats["failures"], 1)
         self.assertEqual(stats["failure_model:council"], 1)
+
+    def test_main_fails_fast_when_local_predict_secret_is_missing(self):
+        with (
+            mock.patch.object(track_record_tick, "PRICE_ONLY", False),
+            mock.patch.object(track_record_tick, "PREDICT_MODE", "local"),
+            mock.patch.object(
+                track_record_tick,
+                "_local_predict_credentials_available",
+                return_value=False,
+            ),
+            mock.patch.object(track_record_tick, "DuckDBStore") as store_mock,
+        ):
+            rc = asyncio.run(track_record_tick.main())
+
+        self.assertEqual(rc, 1)
+        store_mock.assert_not_called()
 
     def test_http_error_detail_is_logged_and_attributed_to_model(self):
         error = urllib.error.HTTPError(

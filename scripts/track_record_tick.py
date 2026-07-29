@@ -205,6 +205,10 @@ def _predict_mode() -> str:
     return "local" if PREDICT_MODE in _LOCAL_PREDICT_MODES else "remote"
 
 
+def _local_predict_credentials_available() -> bool:
+    return bool(os.environ.get("SCADS_AI_API_KEY") or (ROOT / "SCADS_AI_API_KEY.txt").exists())
+
+
 def _record_predict_call(model_label: str, outcome: str) -> None:
     _predict_calls.add(1, {
         "forecast.model": model_label,
@@ -635,6 +639,13 @@ async def _record_snapshots_with_retries(
 
 async def main() -> int:
     print(f"track-record predict mode: {_predict_mode()}")
+    if not PRICE_ONLY and _predict_mode() == "local" and not _local_predict_credentials_available():
+        print(
+            "track-record forecast failed: TRACK_RECORD_PREDICT_MODE=local requires "
+            "SCADS_AI_API_KEY as a GitHub Actions secret before model forecasts can run.",
+            file=sys.stderr,
+        )
+        return 1
     store = DuckDBStore(STORE_PATH)
     primary_model = MODEL
     before_primary = _model_progress(store, primary_model)
