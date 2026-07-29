@@ -126,6 +126,11 @@ class OpenAICompatibleProvider(ChatProvider):
     def __post_init__(self) -> None:
         import requests
 
+        # Strip a leading UTF-8 BOM (\ufeff) that can appear when the API key
+        # is pasted from a BOM-encoded file or secret store.  Python's
+        # http.client requires headers to be latin-1 encodable, so a BOM at
+        # position 0 of the key causes UnicodeEncodeError on every request.
+        self.api_key = self.api_key.lstrip("\ufeff").strip()
         if not self.api_key:
             raise ValueError(self.missing_api_key_message)
 

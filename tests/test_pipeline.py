@@ -718,6 +718,17 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("max_tokens", captured["json"])
         self.assertNotIn("temperature", captured["json"])
 
+    def test_openai_compatible_provider_strips_bom_from_api_key(self):
+        provider = OpenAICompatibleProvider(
+            model_name="gpt-oss-120b",
+            api_key="\ufeffsk-realkey",
+            base_url="https://llm.scads.ai/v1/chat/completions",
+        )
+        self.assertEqual(provider.api_key, "sk-realkey")
+        auth = provider._headers()["Authorization"]
+        self.assertNotIn("\ufeff", auth)
+        self.assertEqual(auth, "Bearer sk-realkey")
+
     def test_openai_gpt5_rejects_non_default_temperature(self):
         provider = OpenAICompatibleProvider(
             model_name="gpt-5",
