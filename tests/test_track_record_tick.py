@@ -26,6 +26,12 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn('CYCLE_INTERVAL_MINUTES: "15"', workflow)
         self.assertIn('SNAPSHOT_SLOT_MINUTES: "15"', workflow)
         self.assertIn('TRACK_RECORD_PREDICT_MODE: "local"', workflow)
+        self.assertIn("model_shard_count", workflow)
+        self.assertIn("model_shard_index", workflow)
+        self.assertIn("TRACK_MODEL_SHARD_COUNT:", workflow)
+        self.assertIn("TRACK_MODEL_SHARD_INDEX:", workflow)
+        self.assertIn('TRACK_MODEL_SHARD_ALWAYS: "crowd-follow"', workflow)
+        self.assertIn('TRACK_MODEL_SHARD_SLOT_MINUTES: "15"', workflow)
         self.assertIn("SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}", workflow)
         self.assertIn("Verify forecast secrets", workflow)
         self.assertIn("SCADS_AI_API_KEY must be configured", workflow)
@@ -64,6 +70,73 @@ class TrackRecordTickTests(unittest.TestCase):
             self.assertIn(model, track_record_tick.TRACK_MODELS)
         self.assertNotIn("deepseek-v3", track_record_tick.TRACK_MODELS)
         self.assertNotIn("kimi-k2.6", track_record_tick.TRACK_MODELS)
+
+    def test_model_sharding_rotates_models_and_keeps_always_models(self):
+        models = [
+            "council",
+            "scads-alias-code",
+            "scads-alias-ha",
+            "scads-alias-reasoning",
+            "gpt-oss-120b",
+            "crowd-follow",
+        ]
+
+        self.assertEqual(
+            track_record_tick._select_model_shard(
+                models,
+                count=3,
+                index=0,
+                always=["crowd-follow"],
+            ),
+            ["council", "scads-alias-reasoning", "crowd-follow"],
+        )
+        self.assertEqual(
+            track_record_tick._select_model_shard(
+                models,
+                count=3,
+                index=1,
+                always=["crowd-follow"],
+            ),
+            ["scads-alias-code", "gpt-oss-120b", "crowd-follow"],
+        )
+        self.assertEqual(
+            track_record_tick._select_model_shard(
+                models,
+                count=1,
+                index=0,
+                always=["crowd-follow"],
+            ),
+            models,
+        )
+
+    def test_auto_model_shard_index_uses_forecast_slot(self):
+        self.assertEqual(
+            track_record_tick._resolve_model_shard_index(
+                count=4,
+                raw_index="",
+                slot_minutes=15,
+                now_s=0,
+            ),
+            0,
+        )
+        self.assertEqual(
+            track_record_tick._resolve_model_shard_index(
+                count=4,
+                raw_index=None,
+                slot_minutes=15,
+                now_s=45 * 60,
+            ),
+            3,
+        )
+        self.assertEqual(
+            track_record_tick._resolve_model_shard_index(
+                count=4,
+                raw_index="2",
+                slot_minutes=15,
+                now_s=0,
+            ),
+            2,
+        )
 
     def test_mtm_and_resolved_workflows_publish_independent_artifacts(self):
         root = Path(__file__).resolve().parents[1]

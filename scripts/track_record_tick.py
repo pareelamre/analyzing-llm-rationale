@@ -49,6 +49,7 @@ from types import SimpleNamespace
 
 from opentelemetry import metrics as otel_metrics
 from opentelemetry import trace as otel_trace
+from opentelemetry.trace import Status, StatusCode
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -82,6 +83,11 @@ _predict_calls = _context_meter.create_counter(
     unit="1",
     description="Track-record prediction calls by dispatch mode and outcome",
 )
+_forecast_shard_runs = _context_meter.create_counter(
+    "track_record.forecast.shard_runs",
+    unit="1",
+    description="Track-record forecast shard runs by outcome",
+)
 
 STORE_PATH = Path(os.environ.get("TRACK_STORE_PATH") or ROOT / "data" / "track_record_store.duckdb")
 PUBLIC_PATH = Path(os.environ.get("TRACK_PUBLIC_PATH") or ROOT / "static" / "track_record_live.json")
@@ -98,15 +104,86 @@ BASE_URL = os.environ.get("FORESEA_BASE_URL", "https://foresea.ink").rstrip("/")
 MODEL = os.environ.get("TRACK_MODEL", "council").strip()
 SCADS_TRACK_MODELS = scads_track_model_labels(ROOT / "configs" / "models.yaml")
 DEFAULT_TRACK_MODELS = ("council", *SCADS_TRACK_MODELS, "crowd-follow")
+
+
+def _csv_list(value: str | None) -> list[str]:
+    return [item.strip() for item in (value or "").split(",") if item.strip()]
+
+
+def _resolve_model_shard_index(
+    *,
+    count: int,
+    raw_index: str | None,
+    slot_minutes: int,
+    now_s: float | None = None,
+) -> int:
+    if count <= 1:
+        return 0
+    if raw_index is not None and raw_index.strip():
+        index = int(raw_index)
+        if index < 0 or index >= count:
+            raise RuntimeError(
+                f"TRACK_MODEL_SHARD_INDEX must be between 0 and {count - 1}"
+            )
+        return index
+    slot_s = max(1, slot_minutes) * 60
+    return int((now_s if now_s is not None else time.time()) // slot_s) % count
+
+
+def _select_model_shard(
+    models: list[str],
+    *,
+    count: int,
+    index: int,
+    always: list[str] | None = None,
+) -> list[str]:
+    if count <= 1:
+        return list(models)
+    always_set = set(always or [])
+    selected: list[str] = []
+    shardable = [model for model in models if model not in always_set]
+    selected.extend(
+        model
+        for position, model in enumerate(shardable)
+        if position % count == index
+    )
+    selected.extend(
+        model
+        for model in models
+        if model in always_set and model not in selected
+    )
+    return selected
+
+
 # Models to forecast each market with, for the paper-trading comparison. The
 # first is the primary (the public track record); the rest are graded alongside.
 # Each must be in the server's /predict allowlist.
-TRACK_MODELS = [m.strip() for m in os.environ.get(
+ALL_TRACK_MODELS = _csv_list(os.environ.get(
     "TRACK_MODELS",
     ",".join(DEFAULT_TRACK_MODELS),
-).split(",") if m.strip()]
-if MODEL not in TRACK_MODELS:
+))
+if MODEL not in ALL_TRACK_MODELS:
     raise RuntimeError(f"TRACK_MODEL {MODEL!r} must be included in TRACK_MODELS")
+TRACK_MODEL_SHARD_COUNT = max(
+    1, int(os.environ.get("TRACK_MODEL_SHARD_COUNT", "1") or 1)
+)
+TRACK_MODEL_SHARD_SLOT_MINUTES = max(
+    1, int(os.environ.get("TRACK_MODEL_SHARD_SLOT_MINUTES", "15") or 15)
+)
+TRACK_MODEL_SHARD_INDEX = _resolve_model_shard_index(
+    count=TRACK_MODEL_SHARD_COUNT,
+    raw_index=os.environ.get("TRACK_MODEL_SHARD_INDEX"),
+    slot_minutes=TRACK_MODEL_SHARD_SLOT_MINUTES,
+)
+TRACK_MODEL_SHARD_ALWAYS = _csv_list(
+    os.environ.get("TRACK_MODEL_SHARD_ALWAYS", "crowd-follow")
+)
+TRACK_MODELS = _select_model_shard(
+    ALL_TRACK_MODELS,
+    count=TRACK_MODEL_SHARD_COUNT,
+    index=TRACK_MODEL_SHARD_INDEX,
+    always=TRACK_MODEL_SHARD_ALWAYS,
+)
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 TEMPERATURE = float(os.environ.get("TRACK_TEMPERATURE", "0.0") or 0.0)
 PER_VENUE = max(1, min(int(os.environ.get("PER_VENUE", "3") or 3), 5))
@@ -742,37 +819,78 @@ async def _record_snapshots_with_retries(
     pass a minute later would succeed. We still fail the job after exhausting
     the pass-level retries so prolonged outages remain visible.
     """
-    recorded_total = 0
-    for attempt in range(1, _SNAPSHOT_PASS_RETRIES + 1):
-        _reset_predict_circuit()
-        attempts_before = _predict_stats["attempts"]
-        successes_before = _predict_stats["successes"]
-        recorded_total += await trl.record_snapshots(
-            store, market_data, forecast_fn,
-            models=TRACK_MODELS, default_model=MODEL, per_venue=PER_VENUE,
-            seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
-            reforecast_each_tick=REFORECAST_EACH_TICK,
-            short_horizon_reforecast_lead_days=SHORT_HORIZON_REFORECAST_LEAD_DAYS,
-            short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
-            expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
-            expiry_slot_hours=EXPIRY_SLOT_HOURS,
-            snapshot_slot_minutes=SNAPSHOT_SLOT_MINUTES,
-            concurrency=PREDICT_CONCURRENCY,
-            convergence_per_venue=CONVERGENCE_PER_VENUE)
-        pass_attempts = _predict_stats["attempts"] - attempts_before
-        pass_successes = _predict_stats["successes"] - successes_before
-        if pass_successes > 0 or pass_attempts == 0:
+    with _context_tracer.start_as_current_span("track_record.forecast_shard") as span:
+        span.set_attributes({
+            "forecast.shard.count": TRACK_MODEL_SHARD_COUNT,
+            "forecast.shard.index": TRACK_MODEL_SHARD_INDEX,
+            "forecast.models.count": len(TRACK_MODELS),
+            "forecast.models": ",".join(TRACK_MODELS),
+            "forecast.seeds.count": len(seeds),
+        })
+        recorded_total = 0
+        try:
+            for attempt in range(1, _SNAPSHOT_PASS_RETRIES + 1):
+                _reset_predict_circuit()
+                attempts_before = _predict_stats["attempts"]
+                successes_before = _predict_stats["successes"]
+                recorded_total += await trl.record_snapshots(
+                    store, market_data, forecast_fn,
+                    models=TRACK_MODELS, default_model=MODEL, per_venue=PER_VENUE,
+                    seed_idents=seeds, price_drift_threshold=PRICE_DRIFT_THRESHOLD,
+                    reforecast_each_tick=REFORECAST_EACH_TICK,
+                    short_horizon_reforecast_lead_days=SHORT_HORIZON_REFORECAST_LEAD_DAYS,
+                    short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
+                    expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
+                    expiry_slot_hours=EXPIRY_SLOT_HOURS,
+                    snapshot_slot_minutes=SNAPSHOT_SLOT_MINUTES,
+                    concurrency=PREDICT_CONCURRENCY,
+                    convergence_per_venue=CONVERGENCE_PER_VENUE)
+                pass_attempts = _predict_stats["attempts"] - attempts_before
+                pass_successes = _predict_stats["successes"] - successes_before
+                if pass_successes > 0 or pass_attempts == 0:
+                    span.set_attributes({
+                        "outcome": "success",
+                        "forecast.snapshots.recorded": recorded_total,
+                        "predict.calls.attempted": _predict_stats["attempts"],
+                        "predict.calls.succeeded": _predict_stats["successes"],
+                    })
+                    _forecast_shard_runs.add(1, {
+                        "outcome": "success",
+                        "forecast.shard.count": str(TRACK_MODEL_SHARD_COUNT),
+                        "forecast.shard.index": str(TRACK_MODEL_SHARD_INDEX),
+                    })
+                    return recorded_total
+                if attempt < _SNAPSHOT_PASS_RETRIES:
+                    delay_s = _SNAPSHOT_PASS_RETRY_SLEEP_S * (2 ** (attempt - 1))
+                    print(
+                        f"track-record forecast warning: all /predict calls failed on "
+                        f"pass {attempt}/{_SNAPSHOT_PASS_RETRIES}; retrying in "
+                        f"{delay_s:.0f}s.",
+                        file=sys.stderr,
+                    )
+                    await asyncio.sleep(delay_s)
+            span.set_attributes({
+                "outcome": "exhausted",
+                "forecast.snapshots.recorded": recorded_total,
+                "predict.calls.attempted": _predict_stats["attempts"],
+                "predict.calls.succeeded": _predict_stats["successes"],
+            })
+            _forecast_shard_runs.add(1, {
+                "outcome": "exhausted",
+                "forecast.shard.count": str(TRACK_MODEL_SHARD_COUNT),
+                "forecast.shard.index": str(TRACK_MODEL_SHARD_INDEX),
+            })
             return recorded_total
-        if attempt < _SNAPSHOT_PASS_RETRIES:
-            delay_s = _SNAPSHOT_PASS_RETRY_SLEEP_S * (2 ** (attempt - 1))
-            print(
-                f"track-record forecast warning: all /predict calls failed on "
-                f"pass {attempt}/{_SNAPSHOT_PASS_RETRIES}; retrying in "
-                f"{delay_s:.0f}s.",
-                file=sys.stderr,
-            )
-            await asyncio.sleep(delay_s)
-    return recorded_total
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "failure")
+            _forecast_shard_runs.add(1, {
+                "outcome": "failure",
+                "forecast.shard.count": str(TRACK_MODEL_SHARD_COUNT),
+                "forecast.shard.index": str(TRACK_MODEL_SHARD_INDEX),
+            })
+            raise
 
 
 async def main() -> int:
@@ -899,6 +1017,10 @@ async def main() -> int:
         },
         "predict_circuit_open_models": sorted(_predict_circuit_open_models),
         "predict_model_mismatches": _predict_stats["model_mismatches"],
+        "track_models": TRACK_MODELS,
+        "track_model_shard_count": TRACK_MODEL_SHARD_COUNT,
+        "track_model_shard_index": TRACK_MODEL_SHARD_INDEX,
+        "track_model_shard_always": TRACK_MODEL_SHARD_ALWAYS,
         "mode": (
             "snapshot-only" if SNAPSHOT_ONLY else
             "mtm-only" if MARK_TO_MARKET_ONLY else
