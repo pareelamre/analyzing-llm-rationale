@@ -22,6 +22,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY }}
 
       - uses: actions/setup-python@v5
         with:
@@ -48,6 +50,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
           git add data/track_record_store.duckdb static/mark_to_market_live.json
           if git diff --cached --quiet; then
             echo "No MTM changes to commit."
