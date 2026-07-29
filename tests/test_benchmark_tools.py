@@ -86,10 +86,13 @@ class BenchmarkToolTests(unittest.TestCase):
     def test_place_trade_defaults_to_shadow_kalshi_buy(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
-        result = benchmark_tools.place_trade(
-            {"ticker": "KXTEST", "side": "yes", "price": 0.42, "quantity": 2},
-            ctx,
-        )
+        with tempfile.TemporaryDirectory() as td:
+            env = {"FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl")}
+            with mock.patch.dict(os.environ, env, clear=False):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXTEST", "side": "yes", "price": 0.42, "quantity": 2},
+                    ctx,
+                )
 
         self.assertTrue(result["ok"])
         self.assertFalse(result["submitted"])
@@ -97,6 +100,118 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(result["normalized_order"]["platform"], "kalshi")
         self.assertEqual(result["normalized_order"]["action"], "buy")
         self.assertEqual(result["normalized_order"]["outcome"], "yes")
+        self.assertTrue(result["risk_guard"]["allowed"])
+
+    def test_place_trade_rejects_single_market_concentration_over_15_percent(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "0.15",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                first = benchmark_tools.place_trade(
+                    {"ticker": "KXCONC", "side": "yes", "price": 0.10, "quantity": 100},
+                    ctx,
+                )
+                second = benchmark_tools.place_trade(
+                    {"ticker": "KXCONC", "side": "yes", "price": 0.10, "quantity": 60},
+                    ctx,
+                )
+
+        self.assertTrue(first["ok"])
+        self.assertFalse(second["ok"])
+        self.assertTrue(second["rejected"])
+        self.assertEqual(second["reason"], "concentration_limit")
+        self.assertEqual(second["risk_guard"]["concentration_cap"], 15.0)
+        self.assertEqual(second["risk_guard"]["market_cost_basis_after"], 16.0)
+
+    def test_place_trade_rejects_orders_that_are_insolvent_after_fees(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "10",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXSOLV", "side": "yes", "price": 0.95, "quantity": 10.5},
+                    ctx,
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["rejected"])
+        self.assertEqual(result["reason"], "solvency")
+        self.assertGreater(result["risk_guard"]["cash_required"], result["risk_guard"]["cash_before"])
+
+    def test_place_trade_netting_payout_counts_for_solvency(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "10",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                opened = benchmark_tools.place_trade(
+                    {"ticker": "KXNET", "side": "yes", "price": 0.40, "quantity": 10},
+                    ctx,
+                )
+                closed = benchmark_tools.place_trade(
+                    {"ticker": "KXNET", "side": "no", "price": 0.59, "quantity": 10},
+                    ctx,
+                )
+
+        self.assertTrue(opened["ok"])
+        self.assertTrue(closed["ok"])
+        self.assertEqual(closed["risk_guard"]["netting_payout"], 10.0)
+        self.assertEqual(closed["risk_guard"]["cash_required"], 0.0)
+        self.assertEqual(closed["risk_guard"]["market_cost_basis_after"], 0.0)
+
+    def test_place_trade_rejects_per_cycle_spend_over_limit(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "0.9",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                first = benchmark_tools.place_trade(
+                    {"ticker": "KXCYCLE1", "side": "yes", "price": 0.40, "quantity": 2},
+                    ctx,
+                )
+                second = benchmark_tools.place_trade(
+                    {"ticker": "KXCYCLE2", "side": "yes", "price": 0.10, "quantity": 1},
+                    ctx,
+                )
+
+        self.assertTrue(first["ok"])
+        self.assertFalse(second["ok"])
+        self.assertTrue(second["rejected"])
+        self.assertEqual(second["reason"], "per_cycle_spend")
+        self.assertGreater(
+            second["risk_guard"]["cycle_spend_after"],
+            second["risk_guard"]["per_cycle_spend_limit"],
+        )
 
 
 if __name__ == "__main__":
