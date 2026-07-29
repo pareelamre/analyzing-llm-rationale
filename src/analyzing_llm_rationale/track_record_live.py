@@ -26,6 +26,7 @@ Store kinds:
 """
 from __future__ import annotations
 
+import hashlib
 import json as _json
 import os
 from datetime import datetime, timezone
@@ -200,6 +201,32 @@ def _quote_ident(quote: Dict[str, Any]) -> str:
     if ident and "kalshi" in platform.lower():
         return ident
     return ident_from_url(platform, quote.get("market_url", "")) or ident
+
+
+def _target_shard_index(quote: Dict[str, Any], count: int) -> int:
+    if count <= 1:
+        return 0
+    platform = str(quote.get("platform") or "").strip().lower()
+    ident = str(_quote_ident(quote)).strip()
+    digest = hashlib.sha256(f"{platform}:{ident}".encode("utf-8")).hexdigest()
+    return int(digest[:12], 16) % count
+
+
+def _select_target_shard(
+    targets: List[Dict[str, Any]],
+    *,
+    count: int,
+    index: int,
+    max_targets: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    if count > 1:
+        targets = [
+            quote for quote in targets
+            if _target_shard_index(quote, count) == index
+        ]
+    if max_targets is not None and max_targets > 0:
+        targets = targets[:max_targets]
+    return targets
 
 
 def _parse_dt(value: Any) -> Optional[datetime]:
@@ -531,6 +558,9 @@ async def record_snapshots(
     snapshot_slot_minutes: Optional[int] = None,
     concurrency: int = 4,
     convergence_per_venue: int = 0,
+    target_shard_count: int = 1,
+    target_shard_index: int = 0,
+    max_targets: Optional[int] = None,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
     agent-enrolled ``seed_idents`` and newly-discovered markets, capturing the live
@@ -644,6 +674,13 @@ async def record_snapshots(
                 continue  # already past close
             targets.append(_refresh_quote_context(market_data, q))
             known.add((q.get("platform"), ident))
+
+    targets = _select_target_shard(
+        targets,
+        count=target_shard_count,
+        index=target_shard_index,
+        max_targets=max_targets,
+    )
 
     import asyncio as _asyncio
 

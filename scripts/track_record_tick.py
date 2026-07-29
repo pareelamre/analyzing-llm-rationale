@@ -184,6 +184,20 @@ TRACK_MODELS = _select_model_shard(
     index=TRACK_MODEL_SHARD_INDEX,
     always=TRACK_MODEL_SHARD_ALWAYS,
 )
+TRACK_TARGET_SHARD_COUNT = max(
+    1, int(os.environ.get("TRACK_TARGET_SHARD_COUNT", "1") or 1)
+)
+TRACK_TARGET_SHARD_SLOT_MINUTES = max(
+    1, int(os.environ.get("TRACK_TARGET_SHARD_SLOT_MINUTES", "15") or 15)
+)
+TRACK_TARGET_SHARD_INDEX = _resolve_model_shard_index(
+    count=TRACK_TARGET_SHARD_COUNT,
+    raw_index=os.environ.get("TRACK_TARGET_SHARD_INDEX"),
+    slot_minutes=TRACK_TARGET_SHARD_SLOT_MINUTES,
+)
+TRACK_FORECAST_MAX_TARGETS = int(os.environ.get("TRACK_FORECAST_MAX_TARGETS", "0") or 0)
+if TRACK_FORECAST_MAX_TARGETS <= 0:
+    TRACK_FORECAST_MAX_TARGETS = None
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 TEMPERATURE = float(os.environ.get("TRACK_TEMPERATURE", "0.0") or 0.0)
 PER_VENUE = max(1, min(int(os.environ.get("PER_VENUE", "3") or 3), 5))
@@ -826,6 +840,9 @@ async def _record_snapshots_with_retries(
             "forecast.models.count": len(TRACK_MODELS),
             "forecast.models": ",".join(TRACK_MODELS),
             "forecast.seeds.count": len(seeds),
+            "forecast.target_shard.count": TRACK_TARGET_SHARD_COUNT,
+            "forecast.target_shard.index": TRACK_TARGET_SHARD_INDEX,
+            "forecast.targets.max": TRACK_FORECAST_MAX_TARGETS or 0,
         })
         recorded_total = 0
         try:
@@ -844,7 +861,10 @@ async def _record_snapshots_with_retries(
                     expiry_slot_hours=EXPIRY_SLOT_HOURS,
                     snapshot_slot_minutes=SNAPSHOT_SLOT_MINUTES,
                     concurrency=PREDICT_CONCURRENCY,
-                    convergence_per_venue=CONVERGENCE_PER_VENUE)
+                    convergence_per_venue=CONVERGENCE_PER_VENUE,
+                    target_shard_count=TRACK_TARGET_SHARD_COUNT,
+                    target_shard_index=TRACK_TARGET_SHARD_INDEX,
+                    max_targets=TRACK_FORECAST_MAX_TARGETS)
                 pass_attempts = _predict_stats["attempts"] - attempts_before
                 pass_successes = _predict_stats["successes"] - successes_before
                 if pass_successes > 0 or pass_attempts == 0:
@@ -1021,6 +1041,9 @@ async def main() -> int:
         "track_model_shard_count": TRACK_MODEL_SHARD_COUNT,
         "track_model_shard_index": TRACK_MODEL_SHARD_INDEX,
         "track_model_shard_always": TRACK_MODEL_SHARD_ALWAYS,
+        "track_target_shard_count": TRACK_TARGET_SHARD_COUNT,
+        "track_target_shard_index": TRACK_TARGET_SHARD_INDEX,
+        "track_forecast_max_targets": TRACK_FORECAST_MAX_TARGETS,
         "mode": (
             "snapshot-only" if SNAPSHOT_ONLY else
             "mtm-only" if MARK_TO_MARKET_ONLY else

@@ -28,10 +28,17 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn('TRACK_RECORD_PREDICT_MODE: "local"', workflow)
         self.assertIn("model_shard_count", workflow)
         self.assertIn("model_shard_index", workflow)
+        self.assertIn("target_shard_count", workflow)
+        self.assertIn("target_shard_index", workflow)
+        self.assertIn("max_targets", workflow)
         self.assertIn("TRACK_MODEL_SHARD_COUNT:", workflow)
         self.assertIn("TRACK_MODEL_SHARD_INDEX:", workflow)
         self.assertIn('TRACK_MODEL_SHARD_ALWAYS: "crowd-follow"', workflow)
         self.assertIn('TRACK_MODEL_SHARD_SLOT_MINUTES: "15"', workflow)
+        self.assertIn("TRACK_TARGET_SHARD_COUNT:", workflow)
+        self.assertIn("TRACK_TARGET_SHARD_INDEX:", workflow)
+        self.assertIn('TRACK_TARGET_SHARD_SLOT_MINUTES: "15"', workflow)
+        self.assertIn("TRACK_FORECAST_MAX_TARGETS:", workflow)
         self.assertIn("SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}", workflow)
         self.assertIn("Verify forecast secrets", workflow)
         self.assertIn("SCADS_AI_API_KEY must be configured", workflow)
@@ -625,6 +632,31 @@ class TrackRecordTickTests(unittest.TestCase):
                 rc = asyncio.run(track_record_tick.main())
         self.assertEqual(rc, 0)
         self.assertEqual(fake_record_snapshots.calls, 2)
+
+    def test_snapshot_pass_uses_configured_target_shard_bounds(self):
+        async_mock = mock.AsyncMock(return_value=1)
+        with (
+            mock.patch.object(track_record_tick.trl, "record_snapshots", async_mock),
+            mock.patch.object(track_record_tick, "_SNAPSHOT_PASS_RETRIES", 1),
+            mock.patch.object(track_record_tick, "_predict_stats", Counter({"attempts": 1, "successes": 1})),
+            mock.patch.multiple(
+                track_record_tick,
+                TRACK_TARGET_SHARD_COUNT=4,
+                TRACK_TARGET_SHARD_INDEX=2,
+                TRACK_FORECAST_MAX_TARGETS=15,
+            ),
+        ):
+            recorded = asyncio.run(
+                track_record_tick._record_snapshots_with_retries(
+                    mock.Mock(),
+                    seeds=[],
+                )
+            )
+
+        self.assertEqual(recorded, 1)
+        self.assertEqual(async_mock.call_args.kwargs["target_shard_count"], 4)
+        self.assertEqual(async_mock.call_args.kwargs["target_shard_index"], 2)
+        self.assertEqual(async_mock.call_args.kwargs["max_targets"], 15)
 
     def test_main_warns_instead_of_failing_when_primary_model_does_not_progress(self):
         progress = {

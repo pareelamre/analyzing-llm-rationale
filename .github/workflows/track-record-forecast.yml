@@ -21,6 +21,18 @@ on:
         description: "0-based model shard to run; blank rotates from the 15-minute slot"
         required: false
         default: ""
+      target_shard_count:
+        description: "Number of rotating market/target shards"
+        required: false
+        default: "4"
+      target_shard_index:
+        description: "0-based target shard to run; blank rotates from the 15-minute slot"
+        required: false
+        default: ""
+      max_targets:
+        description: "Maximum markets to forecast in this run"
+        required: false
+        default: "15"
 
 permissions:
   contents: write
@@ -71,6 +83,10 @@ jobs:
           TRACK_MODEL_SHARD_INDEX: ${{ github.event.inputs.model_shard_index || '' }}
           TRACK_MODEL_SHARD_ALWAYS: "crowd-follow"
           TRACK_MODEL_SHARD_SLOT_MINUTES: "15"
+          TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '4' }}
+          TRACK_TARGET_SHARD_INDEX: ${{ github.event.inputs.target_shard_index || '' }}
+          TRACK_TARGET_SHARD_SLOT_MINUTES: "15"
+          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '15' }}
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
           REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '1' }}
