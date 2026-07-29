@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -87,7 +88,10 @@ class BenchmarkToolTests(unittest.TestCase):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
         with tempfile.TemporaryDirectory() as td:
-            env = {"FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl")}
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
             with mock.patch.dict(os.environ, env, clear=False):
                 result = benchmark_tools.place_trade(
                     {"ticker": "KXTEST", "side": "yes", "price": 0.42, "quantity": 2},
@@ -108,6 +112,7 @@ class BenchmarkToolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             env = {
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "0.15",
                 "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
@@ -137,6 +142,7 @@ class BenchmarkToolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             env = {
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "10",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
                 "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
@@ -160,6 +166,7 @@ class BenchmarkToolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             env = {
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "10",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
                 "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
@@ -181,6 +188,7 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(closed["risk_guard"]["netting_payout"], 10.0)
         self.assertEqual(closed["risk_guard"]["cash_required"], 0.0)
         self.assertEqual(closed["risk_guard"]["market_cost_basis_after"], 0.0)
+        self.assertEqual(closed["account"]["n_open_positions"], 0)
 
     def test_place_trade_rejects_per_cycle_spend_over_limit(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
@@ -188,6 +196,7 @@ class BenchmarkToolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             env = {
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
                 "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "0.9",
@@ -212,6 +221,113 @@ class BenchmarkToolTests(unittest.TestCase):
             second["risk_guard"]["cycle_spend_after"],
             second["risk_guard"]["per_cycle_spend_limit"],
         )
+
+    def test_place_trade_updates_weighted_average_entry_in_positions_table(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                first = benchmark_tools.place_trade(
+                    {"ticker": "KXAVG", "side": "yes", "price": 0.60, "quantity": 10},
+                    ctx,
+                )
+                second = benchmark_tools.place_trade(
+                    {"ticker": "KXAVG", "side": "yes", "price": 0.70, "quantity": 5},
+                    ctx,
+                )
+            conn = sqlite3.connect(db_path)
+            try:
+                pos = conn.execute(
+                    """
+                    SELECT quantity, cost_basis, avg_entry_price
+                    FROM agent_positions
+                    WHERE agent_id = 'model-a' AND ticker = 'KXAVG' AND side = 'yes'
+                    """
+                ).fetchone()
+                actions = conn.execute("SELECT COUNT(*) FROM agent_actions").fetchone()[0]
+            finally:
+                conn.close()
+
+        self.assertTrue(first["ok"])
+        self.assertTrue(second["ok"])
+        self.assertIsNotNone(pos)
+        self.assertAlmostEqual(pos[0], 15.0)
+        self.assertAlmostEqual(pos[1], 9.5)
+        self.assertAlmostEqual(pos[2], 9.5 / 15.0)
+        self.assertEqual(actions, 2)
+
+    def test_place_trade_settles_open_positions_before_new_cycle(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            base_env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_SETTLEMENT_FEE_RATE": "0.014",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+
+            def resolve(ticker):
+                return 1 if ticker == "KXSETTLE" else None
+
+            with (
+                mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-1"}, clear=False),
+                mock.patch("analyzing_llm_rationale.market_data.resolve_kalshi", side_effect=resolve),
+            ):
+                opened = benchmark_tools.place_trade(
+                    {"ticker": "KXSETTLE", "side": "yes", "price": 0.40, "quantity": 10},
+                    ctx,
+                )
+
+            with (
+                mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-2"}, clear=False),
+                mock.patch("analyzing_llm_rationale.market_data.resolve_kalshi", side_effect=resolve),
+            ):
+                after_settlement = benchmark_tools.place_trade(
+                    {"ticker": "KXOTHER", "side": "yes", "price": 0.10, "quantity": 1},
+                    ctx,
+                )
+
+            conn = sqlite3.connect(db_path)
+            try:
+                settlement = conn.execute(
+                    """
+                    SELECT payout, settlement_fee, realized_pnl
+                    FROM agent_actions
+                    WHERE action_type = 'settlement' AND ticker = 'KXSETTLE'
+                    """
+                ).fetchone()
+                remaining = conn.execute(
+                    """
+                    SELECT COUNT(*) FROM agent_positions
+                    WHERE ticker = 'KXSETTLE'
+                    """
+                ).fetchone()[0]
+            finally:
+                conn.close()
+
+        self.assertTrue(opened["ok"])
+        self.assertTrue(after_settlement["ok"])
+        self.assertEqual(after_settlement["risk_guard"]["settlements_before_trade"][0]["ticker"], "KXSETTLE")
+        self.assertIsNotNone(settlement)
+        self.assertAlmostEqual(settlement[0], 10.0)
+        self.assertAlmostEqual(settlement[1], 0.14)
+        self.assertAlmostEqual(settlement[2], 5.86)
+        self.assertEqual(remaining, 0)
 
 
 if __name__ == "__main__":

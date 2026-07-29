@@ -11,8 +11,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,6 +35,7 @@ trade_actions = meter.create_counter("benchmark_tools.place_trade.actions", unit
 note_actions = meter.create_counter("benchmark_tools.manage_notes.actions", unit="1")
 risk_guard_checks = meter.create_counter("benchmark_tools.risk_guard.checks", unit="1")
 risk_guard_rejections = meter.create_counter("benchmark_tools.risk_guard.rejections", unit="1")
+settlement_actions = meter.create_counter("benchmark_tools.settlements", unit="1")
 
 BLACKLISTED_WEB_DOMAINS = ("coinmarketcap.com",)
 MAX_NOTES_PER_AGENT = 50
@@ -43,6 +46,7 @@ DEFAULT_CONCENTRATION_LIMIT = 0.15
 DEFAULT_PER_CYCLE_SPEND_LIMIT = 500.0
 DEFAULT_CYCLE_MINUTES = 15
 KALSHI_FEE_COEFFICIENT = 0.07
+DEFAULT_SETTLEMENT_FEE_RATE = 0.014
 
 
 @dataclass(frozen=True)
@@ -81,6 +85,13 @@ def _ledger_path() -> Optional[Path]:
     if raw:
         return Path(raw)
     return Path(os.environ.get("TMPDIR", "/tmp")) / "foresea_agent_tool_ledger.jsonl"
+
+
+def _account_db_path() -> Path:
+    raw = os.environ.get("FORESEA_AGENT_ACCOUNT_DB_PATH")
+    if raw:
+        return Path(raw)
+    return Path(os.environ.get("TMPDIR", "/tmp")) / "foresea_agent_accounts.sqlite"
 
 
 def _load_notes(path: Optional[Path] = None) -> Dict[str, List[Dict[str, Any]]]:
@@ -200,6 +211,10 @@ def _kalshi_fee(price: float, quantity: float) -> float:
     return max(0.0, KALSHI_FEE_COEFFICIENT * quantity * price * (1.0 - price))
 
 
+def _settlement_fee_rate() -> float:
+    return _env_float("FORESEA_AGENT_SETTLEMENT_FEE_RATE", DEFAULT_SETTLEMENT_FEE_RATE)
+
+
 def _order_fee(args: Mapping[str, Any], normalized: Mapping[str, Any]) -> float:
     for source in (args, normalized):
         for key in ("fee", "estimated_fee", "kalshi_fee"):
@@ -212,6 +227,541 @@ def _order_fee(args: Mapping[str, Any], normalized: Mapping[str, Any]) -> float:
         _as_float(normalized.get("price")),
         _as_float(normalized.get("quantity")),
     )
+
+
+def _account_conn() -> sqlite3.Connection:
+    path = _account_db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    _ensure_account_schema(conn)
+    return conn
+
+
+@contextmanager
+def _account_transaction() -> Iterable[sqlite3.Connection]:
+    conn = _account_conn()
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
+
+
+def _ensure_account_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS agent_accounts (
+            agent_id TEXT PRIMARY KEY,
+            starting_cash REAL NOT NULL,
+            cash REAL NOT NULL,
+            realized_pnl REAL NOT NULL DEFAULT 0,
+            fees_paid REAL NOT NULL DEFAULT 0,
+            settlement_fees_paid REAL NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS agent_positions (
+            agent_id TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            ticker TEXT NOT NULL,
+            side TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            cost_basis REAL NOT NULL,
+            avg_entry_price REAL NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (agent_id, platform, ticker, side)
+        );
+        CREATE TABLE IF NOT EXISTS agent_actions (
+            id TEXT PRIMARY KEY,
+            ts TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            action_type TEXT NOT NULL,
+            mode TEXT,
+            submitted INTEGER NOT NULL DEFAULT 0,
+            platform TEXT,
+            ticker TEXT,
+            side TEXT,
+            price REAL,
+            quantity REAL,
+            notional REAL,
+            fee REAL NOT NULL DEFAULT 0,
+            settlement_fee REAL NOT NULL DEFAULT 0,
+            payout REAL NOT NULL DEFAULT 0,
+            netting_payout REAL NOT NULL DEFAULT 0,
+            cash_required REAL NOT NULL DEFAULT 0,
+            cash_delta REAL NOT NULL DEFAULT 0,
+            realized_pnl REAL NOT NULL DEFAULT 0,
+            realized_pairs REAL NOT NULL DEFAULT 0,
+            cycle_id TEXT,
+            client_order_id TEXT,
+            outcome TEXT,
+            metadata_json TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_actions_agent_cycle
+            ON agent_actions(agent_id, cycle_id, action_type);
+        CREATE TABLE IF NOT EXISTS agent_cycle_settlements (
+            agent_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            checked_at TEXT NOT NULL,
+            PRIMARY KEY (agent_id, cycle_id)
+        );
+        """
+    )
+
+
+def _ensure_agent_account(conn: sqlite3.Connection, agent_id: str, starting_cash: float) -> None:
+    now = _now()
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO agent_accounts
+            (agent_id, starting_cash, cash, realized_pnl, fees_paid, settlement_fees_paid, updated_at)
+        VALUES (?, ?, ?, 0, 0, 0, ?)
+        """,
+        (agent_id, starting_cash, starting_cash, now),
+    )
+
+
+def _account_row(conn: sqlite3.Connection, agent_id: str, starting_cash: float) -> sqlite3.Row:
+    _ensure_agent_account(conn, agent_id, starting_cash)
+    row = conn.execute(
+        "SELECT * FROM agent_accounts WHERE agent_id = ?",
+        (agent_id,),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("agent account could not be initialized")
+    return row
+
+
+def _account_summary(conn: sqlite3.Connection, agent_id: str, starting_cash: float) -> Dict[str, Any]:
+    row = _account_row(conn, agent_id, starting_cash)
+    positions = [
+        dict(p)
+        for p in conn.execute(
+            """
+            SELECT platform, ticker, side, quantity, cost_basis, avg_entry_price
+            FROM agent_positions
+            WHERE agent_id = ? AND quantity > 0
+            ORDER BY platform, ticker, side
+            """,
+            (agent_id,),
+        )
+    ]
+    open_cost_basis = sum(float(p["cost_basis"]) for p in positions)
+    return {
+        "cash": round(float(row["cash"]), 6),
+        "starting_cash": round(float(row["starting_cash"]), 6),
+        "realized_pnl": round(float(row["realized_pnl"]), 6),
+        "fees_paid": round(float(row["fees_paid"]), 6),
+        "settlement_fees_paid": round(float(row["settlement_fees_paid"]), 6),
+        "open_cost_basis": round(open_cost_basis, 6),
+        "n_open_positions": len(positions),
+        "open_positions": [
+            {
+                **p,
+                "quantity": round(float(p["quantity"]), 6),
+                "cost_basis": round(float(p["cost_basis"]), 6),
+                "avg_entry_price": round(float(p["avg_entry_price"]), 6),
+            }
+            for p in positions
+        ],
+    }
+
+
+def _upsert_position(
+    conn: sqlite3.Connection,
+    *,
+    agent_id: str,
+    platform: str,
+    ticker: str,
+    side: str,
+    quantity: float,
+    cost_basis: float,
+) -> None:
+    now = _now()
+    if quantity <= 1e-12:
+        conn.execute(
+            "DELETE FROM agent_positions WHERE agent_id = ? AND platform = ? AND ticker = ? AND side = ?",
+            (agent_id, platform, ticker, side),
+        )
+        return
+    conn.execute(
+        """
+        INSERT INTO agent_positions
+            (agent_id, platform, ticker, side, quantity, cost_basis, avg_entry_price, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(agent_id, platform, ticker, side) DO UPDATE SET
+            quantity = excluded.quantity,
+            cost_basis = excluded.cost_basis,
+            avg_entry_price = excluded.avg_entry_price,
+            updated_at = excluded.updated_at
+        """,
+        (agent_id, platform, ticker, side, quantity, cost_basis, cost_basis / quantity, now),
+    )
+
+
+def _opposite_side(side: str) -> str:
+    return "no" if side == "yes" else "yes"
+
+
+def _record_account_action(
+    conn: sqlite3.Connection,
+    *,
+    agent_id: str,
+    action_type: str,
+    cycle_id: str,
+    mode: Optional[str] = None,
+    submitted: bool = False,
+    platform: Optional[str] = None,
+    ticker: Optional[str] = None,
+    side: Optional[str] = None,
+    price: Optional[float] = None,
+    quantity: Optional[float] = None,
+    notional: float = 0.0,
+    fee: float = 0.0,
+    settlement_fee: float = 0.0,
+    payout: float = 0.0,
+    netting_payout: float = 0.0,
+    cash_required: float = 0.0,
+    cash_delta: float = 0.0,
+    realized_pnl: float = 0.0,
+    realized_pairs: float = 0.0,
+    client_order_id: Optional[str] = None,
+    outcome: Optional[str] = None,
+    metadata: Optional[Mapping[str, Any]] = None,
+) -> str:
+    action_id = str(uuid.uuid4())
+    conn.execute(
+        """
+        INSERT INTO agent_actions (
+            id, ts, agent_id, action_type, mode, submitted, platform, ticker, side,
+            price, quantity, notional, fee, settlement_fee, payout, netting_payout,
+            cash_required, cash_delta, realized_pnl, realized_pairs, cycle_id,
+            client_order_id, outcome, metadata_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            action_id,
+            _now(),
+            agent_id,
+            action_type,
+            mode,
+            int(bool(submitted)),
+            platform,
+            ticker,
+            side,
+            price,
+            quantity,
+            notional,
+            fee,
+            settlement_fee,
+            payout,
+            netting_payout,
+            cash_required,
+            cash_delta,
+            realized_pnl,
+            realized_pairs,
+            cycle_id,
+            client_order_id,
+            outcome,
+            json.dumps(dict(metadata or {}), sort_keys=True),
+        ),
+    )
+    return action_id
+
+
+def _record_rejected_account_action(
+    *,
+    agent_id: str,
+    mode: str,
+    ticker: str,
+    side: str,
+    normalized: Mapping[str, Any],
+    guard: Mapping[str, Any],
+) -> None:
+    with _account_transaction() as conn:
+        _ensure_agent_account(conn, agent_id, _as_float(guard.get("account_value"), DEFAULT_AGENT_ACCOUNT_VALUE))
+        _record_account_action(
+            conn,
+            agent_id=agent_id,
+            action_type="rejected_trade",
+            mode=mode,
+            submitted=False,
+            platform="kalshi",
+            ticker=ticker,
+            side=side,
+            price=_as_float(normalized.get("price")),
+            quantity=_as_float(normalized.get("quantity")),
+            notional=_as_float(guard.get("notional")),
+            fee=_as_float(guard.get("fee")),
+            netting_payout=_as_float(guard.get("netting_payout")),
+            cash_required=_as_float(guard.get("cash_required")),
+            cash_delta=_as_float(guard.get("cash_delta")),
+            realized_pairs=_as_float(guard.get("netting_payout")),
+            cycle_id=str(guard.get("cycle_id") or ""),
+            client_order_id=normalized.get("exchange_order", {}).get("client_order_id"),
+            outcome="rejected",
+            metadata={"risk_guard": dict(guard)},
+        )
+
+
+def _apply_trade_to_account_tables(
+    *,
+    agent_id: str,
+    policy: RiskGuardPolicy,
+    mode: str,
+    submitted: bool,
+    ticker: str,
+    side: str,
+    normalized: Mapping[str, Any],
+    guard: Mapping[str, Any],
+) -> Dict[str, Any]:
+    platform = "kalshi"
+    opposite_side = _opposite_side(side)
+    price = _as_float(normalized.get("price"))
+    quantity = _as_float(normalized.get("quantity"))
+    fee = _as_float(guard.get("fee"))
+    notional = price * quantity
+    now = _now()
+    with _account_transaction() as conn:
+        row = _account_row(conn, agent_id, policy.account_value)
+        cash_before = float(row["cash"])
+        realized_pnl_before = float(row["realized_pnl"])
+        fees_paid_before = float(row["fees_paid"])
+        remaining = quantity
+        realized_pairs = 0.0
+        realized_pnl = 0.0
+        opposite = conn.execute(
+            """
+            SELECT * FROM agent_positions
+            WHERE agent_id = ? AND platform = ? AND ticker = ? AND side = ?
+            """,
+            (agent_id, platform, ticker, opposite_side),
+        ).fetchone()
+        if opposite is not None:
+            opposite_qty = float(opposite["quantity"])
+            if opposite_qty > 1e-12:
+                realized_pairs = min(remaining, opposite_qty)
+                old_basis = float(opposite["avg_entry_price"]) * realized_pairs
+                new_basis = price * realized_pairs
+                fee_alloc = fee * (realized_pairs / quantity) if quantity else 0.0
+                realized_pnl = realized_pairs - old_basis - new_basis - fee_alloc
+                new_opposite_qty = opposite_qty - realized_pairs
+                new_opposite_basis = max(0.0, float(opposite["cost_basis"]) - old_basis)
+                _upsert_position(
+                    conn,
+                    agent_id=agent_id,
+                    platform=platform,
+                    ticker=ticker,
+                    side=opposite_side,
+                    quantity=new_opposite_qty,
+                    cost_basis=new_opposite_basis,
+                )
+                remaining -= realized_pairs
+
+        if remaining > 1e-12:
+            same = conn.execute(
+                """
+                SELECT * FROM agent_positions
+                WHERE agent_id = ? AND platform = ? AND ticker = ? AND side = ?
+                """,
+                (agent_id, platform, ticker, side),
+            ).fetchone()
+            same_qty = float(same["quantity"]) if same is not None else 0.0
+            same_basis = float(same["cost_basis"]) if same is not None else 0.0
+            _upsert_position(
+                conn,
+                agent_id=agent_id,
+                platform=platform,
+                ticker=ticker,
+                side=side,
+                quantity=same_qty + remaining,
+                cost_basis=same_basis + (remaining * price),
+            )
+
+        cash_delta = -notional - fee + realized_pairs
+        cash_required = max(0.0, -cash_delta)
+        cash_after = cash_before + cash_delta
+        conn.execute(
+            """
+            UPDATE agent_accounts
+            SET cash = ?, realized_pnl = ?, fees_paid = ?, updated_at = ?
+            WHERE agent_id = ?
+            """,
+            (
+                cash_after,
+                realized_pnl_before + realized_pnl,
+                fees_paid_before + fee,
+                now,
+                agent_id,
+            ),
+        )
+        action_id = _record_account_action(
+            conn,
+            agent_id=agent_id,
+            action_type="trade",
+            mode=mode,
+            submitted=submitted,
+            platform=platform,
+            ticker=ticker,
+            side=side,
+            price=price,
+            quantity=quantity,
+            notional=notional,
+            fee=fee,
+            netting_payout=realized_pairs,
+            cash_required=cash_required,
+            cash_delta=cash_delta,
+            realized_pnl=realized_pnl,
+            realized_pairs=realized_pairs,
+            cycle_id=policy.cycle_id,
+            client_order_id=normalized.get("exchange_order", {}).get("client_order_id"),
+            outcome="realized" if realized_pairs > 0 else "open",
+            metadata={"risk_guard": dict(guard)},
+        )
+        summary = _account_summary(conn, agent_id, policy.account_value)
+    return {
+        "action_id": action_id,
+        "cash_delta": round(cash_delta, 6),
+        "realized_pairs": round(realized_pairs, 6),
+        "realized_pnl": round(realized_pnl, 6),
+        "account": summary,
+    }
+
+
+def _settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> List[Dict[str, Any]]:
+    """Settle resolved Kalshi markets once per agent/cycle before trading."""
+    settled: List[Dict[str, Any]] = []
+    with tracer.start_as_current_span("benchmark_tools.settle_agent_positions") as span:
+        span.set_attributes({"agent.id": agent_id, "cycle.id": policy.cycle_id})
+        try:
+            from analyzing_llm_rationale import market_data
+
+            with _account_transaction() as conn:
+                _ensure_agent_account(conn, agent_id, policy.account_value)
+                already = conn.execute(
+                    """
+                    SELECT 1 FROM agent_cycle_settlements
+                    WHERE agent_id = ? AND cycle_id = ?
+                    """,
+                    (agent_id, policy.cycle_id),
+                ).fetchone()
+                if already is not None:
+                    span.set_attribute("settlement.skipped", True)
+                    return []
+                markets = [
+                    dict(row)
+                    for row in conn.execute(
+                        """
+                        SELECT platform, ticker
+                        FROM agent_positions
+                        WHERE agent_id = ? AND quantity > 0
+                        GROUP BY platform, ticker
+                        """,
+                        (agent_id,),
+                    )
+                ]
+                for market in markets:
+                    platform = str(market["platform"] or "").lower()
+                    ticker = str(market["ticker"] or "").upper()
+                    if platform != "kalshi" or not ticker:
+                        continue
+                    try:
+                        outcome_value = market_data.resolve_kalshi(ticker)
+                    except Exception:
+                        logger.warning("agent settlement lookup failed ticker=%s", ticker, exc_info=True)
+                        continue
+                    if outcome_value is None:
+                        continue
+                    winning_side = "yes" if int(outcome_value) == 1 else "no"
+                    positions = [
+                        dict(row)
+                        for row in conn.execute(
+                            """
+                            SELECT * FROM agent_positions
+                            WHERE agent_id = ? AND platform = ? AND ticker = ?
+                            """,
+                            (agent_id, platform, ticker),
+                        )
+                    ]
+                    if not positions:
+                        continue
+                    settled_contracts = sum(float(p["quantity"]) for p in positions)
+                    settled_basis = sum(float(p["cost_basis"]) for p in positions)
+                    payout = sum(
+                        float(p["quantity"]) for p in positions if str(p["side"]) == winning_side
+                    )
+                    settlement_fee = payout * _settlement_fee_rate()
+                    cash_delta = payout - settlement_fee
+                    realized_pnl = cash_delta - settled_basis
+                    row = _account_row(conn, agent_id, policy.account_value)
+                    conn.execute(
+                        """
+                        UPDATE agent_accounts
+                        SET cash = ?,
+                            realized_pnl = ?,
+                            settlement_fees_paid = ?,
+                            updated_at = ?
+                        WHERE agent_id = ?
+                        """,
+                        (
+                            float(row["cash"]) + cash_delta,
+                            float(row["realized_pnl"]) + realized_pnl,
+                            float(row["settlement_fees_paid"]) + settlement_fee,
+                            _now(),
+                            agent_id,
+                        ),
+                    )
+                    conn.execute(
+                        """
+                        DELETE FROM agent_positions
+                        WHERE agent_id = ? AND platform = ? AND ticker = ?
+                        """,
+                        (agent_id, platform, ticker),
+                    )
+                    action_id = _record_account_action(
+                        conn,
+                        agent_id=agent_id,
+                        action_type="settlement",
+                        platform=platform,
+                        ticker=ticker,
+                        side=winning_side,
+                        quantity=settled_contracts,
+                        settlement_fee=settlement_fee,
+                        payout=payout,
+                        cash_delta=cash_delta,
+                        realized_pnl=realized_pnl,
+                        cycle_id=policy.cycle_id,
+                        outcome=winning_side,
+                        metadata={"settled_basis": round(settled_basis, 6)},
+                    )
+                    settled.append({
+                        "action_id": action_id,
+                        "ticker": ticker,
+                        "outcome": winning_side,
+                        "settled_contracts": round(settled_contracts, 6),
+                        "payout": round(payout, 6),
+                        "settlement_fee": round(settlement_fee, 6),
+                        "realized_pnl": round(realized_pnl, 6),
+                        "cash_delta": round(cash_delta, 6),
+                    })
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO agent_cycle_settlements
+                        (agent_id, cycle_id, checked_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (agent_id, policy.cycle_id, _now()),
+                )
+            settlement_actions.add(len(settled), {"outcome": "success"})
+            span.set_attributes({"settlement.count": len(settled), "outcome": "success"})
+            return settled
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            settlement_actions.add(1, {"outcome": "failure"})
+            logger.warning("agent settlement pass failed", exc_info=True)
+            return []
 
 
 def _iter_ledger_events() -> Iterable[Dict[str, Any]]:
@@ -249,38 +799,32 @@ def _load_guard_account(agent_id: str, policy: RiskGuardPolicy) -> tuple[Any, fl
     from analyzing_llm_rationale.accounting import PredictionMarketAccount
 
     account = PredictionMarketAccount(starting_cash=policy.account_value)
-    cycle_spend = 0.0
-    for event in _iter_ledger_events():
-        if event.get("tool") != "place_trade":
-            continue
-        if _bounded_agent_id(str(event.get("agent_id") or "")) != agent_id:
-            continue
-        if event.get("rejected") or event.get("ok") is False:
-            continue
-        if str(event.get("platform") or "kalshi").lower() != "kalshi":
-            continue
-        ticker = str(event.get("ticker") or "").upper()
-        side = str(event.get("side") or "").lower()
-        if not ticker or side not in {"yes", "no"}:
-            continue
-        try:
-            quantity = _as_float(event.get("quantity"))
-            price = _as_float(event.get("price"))
-            fee = _as_float(event.get("fee"), _kalshi_fee(price, quantity))
-            fill = account.buy(
-                platform="kalshi",
-                ident=ticker,
-                side=side,
-                quantity=quantity,
-                price=price,
-                fee=fee,
-                ts=event.get("ts"),
-            )
-        except Exception:
-            logger.warning("skipping invalid agent trade ledger event", exc_info=True)
-            continue
-        if str(event.get("cycle_id") or "") == policy.cycle_id:
-            cycle_spend += _as_float(event.get("cash_required"), max(0.0, -fill.cash_delta))
+    with _account_transaction() as conn:
+        row = _account_row(conn, agent_id, policy.account_value)
+        account.cash = float(row["cash"])
+        account.realized_pnl = float(row["realized_pnl"])
+        account.fees_paid = float(row["fees_paid"])
+        for pos in conn.execute(
+            """
+            SELECT platform, ticker, side, quantity, cost_basis
+            FROM agent_positions
+            WHERE agent_id = ? AND quantity > 0
+            """,
+            (agent_id,),
+        ):
+            loaded = account._position(str(pos["platform"]), str(pos["ticker"]), str(pos["side"]))
+            loaded.quantity = float(pos["quantity"])
+            loaded.cost_basis = float(pos["cost_basis"])
+        cycle_spend = float(
+            conn.execute(
+                """
+                SELECT COALESCE(SUM(cash_required), 0)
+                FROM agent_actions
+                WHERE agent_id = ? AND cycle_id = ? AND action_type = 'trade'
+                """,
+                (agent_id, policy.cycle_id),
+            ).fetchone()[0]
+        )
     return account, cycle_spend
 
 
@@ -291,8 +835,9 @@ def _check_trade_guards(
     agent_id: str,
     ticker: str,
     side: str,
-) -> tuple[bool, Dict[str, Any]]:
+) -> tuple[bool, Dict[str, Any], RiskGuardPolicy]:
     policy = _risk_guard_policy()
+    settlements = _settle_agent_open_positions(agent_id, policy)
     account, cycle_spend_before = _load_guard_account(agent_id, policy)
     price = _as_float(normalized.get("price"))
     quantity = _as_float(normalized.get("quantity"))
@@ -335,12 +880,13 @@ def _check_trade_guards(
         "netting_payout": round(float(fill.realized_pairs), 6),
         "cash_required": round(cash_required, 6),
         "cash_delta": round(float(fill.cash_delta), 6),
+        "settlements_before_trade": settlements,
     }
     outcome = "allowed" if detail["allowed"] else "rejected"
     risk_guard_checks.add(1, {"outcome": outcome})
     if reasons:
         risk_guard_rejections.add(1, {"reason": reasons[0]})
-    return detail["allowed"], detail
+    return detail["allowed"], detail, policy
 
 
 def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
@@ -383,7 +929,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
 
             preview = trading.preview_order(order)
             normalized = preview.get("normalized_order") or {}
-            allowed, guard = _check_trade_guards(
+            allowed, guard, policy = _check_trade_guards(
                 args=args,
                 normalized=normalized,
                 agent_id=agent_id,
@@ -415,6 +961,14 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "risk_guard": guard,
                 }
                 _record_ledger(event)
+                _record_rejected_account_action(
+                    agent_id=agent_id,
+                    mode=mode,
+                    ticker=ticker,
+                    side=side,
+                    normalized=normalized,
+                    guard=guard,
+                )
                 span.set_attributes({
                     "outcome": "rejected",
                     "risk_guard.allowed": False,
@@ -468,6 +1022,16 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "risk_guard": guard,
             }
             _record_ledger(event)
+            account_update = _apply_trade_to_account_tables(
+                agent_id=agent_id,
+                policy=policy,
+                mode=mode,
+                submitted=submitted,
+                ticker=ticker,
+                side=side,
+                normalized=normalized,
+                guard=guard,
+            )
             trade_actions.add(1, {"mode": mode, "submitted": str(submitted).lower()})
             span.set_attributes({
                 "outcome": "success",
@@ -488,6 +1052,8 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 ),
                 "normalized_order": normalized,
                 "risk_guard": guard,
+                "account": account_update["account"],
+                "action_id": account_update["action_id"],
                 "warnings": result.get("warnings", []),
             }
         except Exception as exc:
