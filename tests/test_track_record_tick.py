@@ -39,6 +39,10 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn('PROVIDER_MAX_RETRIES: "4"', workflow)
         self.assertIn('PROVIDER_TIMEOUT_S: "300"', workflow)
         self.assertIn('COUNCIL_MEMBER_TIMEOUT_S: "180"', workflow)
+        self.assertIn("track-record-forecast", workflow)
+        self.assertIn("python scripts/track_record_tick.py --snapshot-only", workflow)
+        self.assertIn("git add data/track_record_store.duckdb", workflow)
+        self.assertNotIn("static/track_record_live.json static/forecast_evaluation.json", workflow)
         self.assertNotIn("TRACK_MODELS:", workflow)
         for model in (
             "scads-alias-code",
@@ -59,6 +63,52 @@ class TrackRecordTickTests(unittest.TestCase):
             self.assertIn(model, track_record_tick.TRACK_MODELS)
         self.assertNotIn("deepseek-v3", track_record_tick.TRACK_MODELS)
         self.assertNotIn("kimi-k2.6", track_record_tick.TRACK_MODELS)
+
+    def test_mtm_and_resolved_workflows_publish_independent_artifacts(self):
+        root = Path(__file__).resolve().parents[1]
+        mtm_workflow = (
+            root / ".github" / "workflows" / "track-record-tick.yml"
+        ).read_text()
+        resolved_workflow = (
+            root / ".github" / "workflows" / "track-record-resolved.yml"
+        ).read_text()
+
+        self.assertIn('cron: "*/15 * * * *"', mtm_workflow)
+        self.assertIn("track-record-mtm", mtm_workflow)
+        self.assertIn("python scripts/track_record_tick.py --mtm-only", mtm_workflow)
+        self.assertIn("static/mark_to_market_live.json", mtm_workflow)
+        self.assertNotIn("static/forecast_evaluation.json", mtm_workflow)
+
+        self.assertIn('cron: "7 * * * *"', resolved_workflow)
+        self.assertIn("track-record-resolved", resolved_workflow)
+        self.assertIn("python scripts/track_record_tick.py --resolved-only", resolved_workflow)
+        self.assertIn("static/track_record_live.json static/forecast_evaluation.json", resolved_workflow)
+        self.assertNotIn("static/mark_to_market_live.json", resolved_workflow)
+
+    def test_public_payloads_split_mtm_from_resolved_quality(self):
+        aggregate = {
+            "generated_at": "2026-07-29T04:00:00+00:00",
+            "overall": {"accuracy": 0.7},
+            "models_comparison": [{"model": "council"}],
+            "edge_board": [{"question": "Live edge?"}],
+            "n_markets_open": 3,
+            "n_markets_tracked": 8,
+            "mark_to_market_account": {"account_value": 9999.5},
+            "mark_to_market_by_model": [{"model": "council"}],
+            "mark_to_market_cycle_minutes": 15,
+            "arbitrage_signals": [],
+        }
+
+        resolved = track_record_tick._resolved_public_payload(aggregate)
+        mtm = track_record_tick._mark_to_market_payload(aggregate)
+
+        self.assertEqual(resolved["overall"]["accuracy"], 0.7)
+        self.assertEqual(resolved["models_comparison"][0]["model"], "council")
+        self.assertNotIn("mark_to_market_account", resolved)
+        self.assertNotIn("edge_board", resolved)
+        self.assertEqual(mtm["source"], "mark_to_market_live")
+        self.assertEqual(mtm["mark_to_market_account"]["account_value"], 9999.5)
+        self.assertEqual(mtm["edge_board"][0]["question"], "Live edge?")
 
     def test_forecast_fn_delivers_rules_and_venue_news_context(self):
         quote = {
@@ -266,6 +316,9 @@ class TrackRecordTickTests(unittest.TestCase):
     def test_main_fails_fast_when_local_predict_secret_is_missing(self):
         with (
             mock.patch.object(track_record_tick, "PRICE_ONLY", False),
+            mock.patch.object(track_record_tick, "MARK_TO_MARKET_ONLY", False),
+            mock.patch.object(track_record_tick, "RESOLVED_ONLY", False),
+            mock.patch.object(track_record_tick, "SNAPSHOT_ONLY", False),
             mock.patch.object(track_record_tick, "PREDICT_MODE", "local"),
             mock.patch.object(
                 track_record_tick,
@@ -342,18 +395,22 @@ class TrackRecordTickTests(unittest.TestCase):
         store = mock.Mock()
         with tempfile.TemporaryDirectory() as td:
             public_path = Path(td) / "track_record_live.json"
+            mtm_path = Path(td) / "mark_to_market_live.json"
             evaluation_path = Path(td) / "forecast_evaluation.json"
             with (
                 mock.patch.object(track_record_tick, "DuckDBStore", return_value=store),
-                mock.patch.object(track_record_tick, "PUBLIC_PATH", public_path),
-                mock.patch.object(
+                mock.patch.multiple(
                     track_record_tick,
-                    "EVALUATION_PATH",
-                    evaluation_path,
+                    PUBLIC_PATH=public_path,
+                    MARK_TO_MARKET_PATH=mtm_path,
+                    EVALUATION_PATH=evaluation_path,
+                    PRICE_ONLY=True,
+                    MARK_TO_MARKET_ONLY=False,
+                    RESOLVED_ONLY=False,
+                    SNAPSHOT_ONLY=False,
+                    MODEL="council",
+                    TRACK_MODELS=["gpt-oss-120b", "council"],
                 ),
-                mock.patch.object(track_record_tick, "PRICE_ONLY", True),
-                mock.patch.object(track_record_tick, "MODEL", "council"),
-                mock.patch.object(track_record_tick, "TRACK_MODELS", ["gpt-oss-120b", "council"]),
                 mock.patch.object(
                     track_record_tick,
                     "_model_progress",
@@ -442,16 +499,20 @@ class TrackRecordTickTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             public_path = Path(td) / "track_record_live.json"
+            mtm_path = Path(td) / "mark_to_market_live.json"
             evaluation_path = Path(td) / "forecast_evaluation.json"
             with (
                 mock.patch.object(track_record_tick, "DuckDBStore", return_value=mock.Mock()),
-                mock.patch.object(track_record_tick, "PUBLIC_PATH", public_path),
-                mock.patch.object(
+                mock.patch.multiple(
                     track_record_tick,
-                    "EVALUATION_PATH",
-                    evaluation_path,
+                    PUBLIC_PATH=public_path,
+                    MARK_TO_MARKET_PATH=mtm_path,
+                    EVALUATION_PATH=evaluation_path,
+                    PRICE_ONLY=False,
+                    MARK_TO_MARKET_ONLY=False,
+                    RESOLVED_ONLY=False,
+                    SNAPSHOT_ONLY=False,
                 ),
-                mock.patch.object(track_record_tick, "PRICE_ONLY", False),
                 mock.patch.object(track_record_tick, "_predict_stats", Counter()),
                 mock.patch.object(track_record_tick, "_SNAPSHOT_PASS_RETRIES", 2),
                 mock.patch.object(track_record_tick, "_SNAPSHOT_PASS_RETRY_SLEEP_S", 0.0),
@@ -492,16 +553,20 @@ class TrackRecordTickTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as td:
             public_path = Path(td) / "track_record_live.json"
+            mtm_path = Path(td) / "mark_to_market_live.json"
             evaluation_path = Path(td) / "forecast_evaluation.json"
             with (
                 mock.patch.object(track_record_tick, "DuckDBStore", return_value=mock.Mock()),
-                mock.patch.object(track_record_tick, "PUBLIC_PATH", public_path),
-                mock.patch.object(
+                mock.patch.multiple(
                     track_record_tick,
-                    "EVALUATION_PATH",
-                    evaluation_path,
+                    PUBLIC_PATH=public_path,
+                    MARK_TO_MARKET_PATH=mtm_path,
+                    EVALUATION_PATH=evaluation_path,
+                    PRICE_ONLY=False,
+                    MARK_TO_MARKET_ONLY=False,
+                    RESOLVED_ONLY=False,
+                    SNAPSHOT_ONLY=False,
                 ),
-                mock.patch.object(track_record_tick, "PRICE_ONLY", False),
                 mock.patch.object(track_record_tick, "_predict_stats", Counter({"attempts": 3, "successes": 3})),
                 mock.patch.object(track_record_tick, "_model_progress", side_effect=[progress, progress]),
                 mock.patch.object(track_record_tick, "_get_pending_markets", return_value=[]),
@@ -539,16 +604,20 @@ class TrackRecordTickTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as td:
             public_path = Path(td) / "track_record_live.json"
+            mtm_path = Path(td) / "mark_to_market_live.json"
             evaluation_path = Path(td) / "forecast_evaluation.json"
             with (
                 mock.patch.object(track_record_tick, "DuckDBStore", return_value=mock.Mock()),
-                mock.patch.object(track_record_tick, "PUBLIC_PATH", public_path),
-                mock.patch.object(
+                mock.patch.multiple(
                     track_record_tick,
-                    "EVALUATION_PATH",
-                    evaluation_path,
+                    PUBLIC_PATH=public_path,
+                    MARK_TO_MARKET_PATH=mtm_path,
+                    EVALUATION_PATH=evaluation_path,
+                    PRICE_ONLY=False,
+                    MARK_TO_MARKET_ONLY=False,
+                    RESOLVED_ONLY=False,
+                    SNAPSHOT_ONLY=False,
                 ),
-                mock.patch.object(track_record_tick, "PRICE_ONLY", False),
                 mock.patch.object(track_record_tick, "_predict_stats", Counter({"attempts": 1, "http_401": 1})),
                 mock.patch.object(track_record_tick, "_model_progress", side_effect=[progress, progress]),
                 mock.patch.object(track_record_tick, "_get_pending_markets", return_value=[]),

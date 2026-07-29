@@ -1,4 +1,4 @@
-name: Track record forecast
+name: Track record forecast snapshots
 
 # Cost-capped scheduled pass: LLM forecast snapshots for selected open markets
 # and tracked models. Each run makes up to N_markets × N_models /predict calls.
@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: track-record
+  group: track-record-forecast
   cancel-in-progress: false
 
 jobs:
@@ -83,18 +83,18 @@ jobs:
           PREDICT_FAILURE_CIRCUIT_THRESHOLD: "12"
           TRACK_RECORD_SNAPSHOT_PASS_RETRIES: "3"
           TRACK_RECORD_SNAPSHOT_PASS_RETRY_SLEEP_S: "300"
-        run: python scripts/track_record_tick.py
+        run: python scripts/track_record_tick.py --snapshot-only
 
-      - name: Commit updated track record
+      - name: Commit updated forecast snapshots
         env:
-          GIT_REBASE_KEEP_THEIRS: "data/track_record_store.duckdb,static/track_record_live.json,static/forecast_evaluation.json"
+          GIT_REBASE_KEEP_THEIRS: "data/track_record_store.duckdb"
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/track_record_store.duckdb static/track_record_live.json static/forecast_evaluation.json
+          git add data/track_record_store.duckdb
           if git diff --cached --quiet; then
-            echo "No track-record changes to commit."
+            echo "No forecast snapshot changes to commit."
             exit 0
           fi
-          git commit -m "track record: forecast tick [skip ci]"
+          git commit -m "track record: forecast snapshots [skip ci]"
           bash .github/scripts/push_with_rebase_retry.sh origin main

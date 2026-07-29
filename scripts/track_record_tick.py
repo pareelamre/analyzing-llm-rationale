@@ -85,6 +85,10 @@ _predict_calls = _context_meter.create_counter(
 
 STORE_PATH = Path(os.environ.get("TRACK_STORE_PATH") or ROOT / "data" / "track_record_store.duckdb")
 PUBLIC_PATH = Path(os.environ.get("TRACK_PUBLIC_PATH") or ROOT / "static" / "track_record_live.json")
+MARK_TO_MARKET_PATH = Path(
+    os.environ.get("TRACK_MTM_PATH")
+    or ROOT / "static" / "mark_to_market_live.json"
+)
 EVALUATION_PATH = Path(
     os.environ.get("TRACK_EVALUATION_PATH")
     or ROOT / "static" / "forecast_evaluation.json"
@@ -631,6 +635,58 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
 
 
 PRICE_ONLY = "--price-only" in sys.argv
+MARK_TO_MARKET_ONLY = "--mtm-only" in sys.argv
+RESOLVED_ONLY = "--resolved-only" in sys.argv
+SNAPSHOT_ONLY = "--snapshot-only" in sys.argv
+_MODE_FLAGS = [PRICE_ONLY, MARK_TO_MARKET_ONLY, RESOLVED_ONLY, SNAPSHOT_ONLY]
+if sum(1 for flag in _MODE_FLAGS if flag) > 1:
+    raise RuntimeError(
+        "Use only one of --price-only, --mtm-only, --resolved-only, or --snapshot-only"
+    )
+
+_LIVE_MARKET_KEYS = (
+    "source",
+    "generated_at",
+    "model",
+    "primary_model",
+    "n_markets_open",
+    "n_markets_tracked",
+    "edge_board",
+    "discrepancy_monitor",
+    "arbitrage_signals",
+    "mark_to_market_account",
+    "mark_to_market_by_model",
+    "mark_to_market_cycle_minutes",
+)
+_RESOLVED_PUBLIC_OMIT_KEYS = {
+    "edge_board",
+    "discrepancy_monitor",
+    "arbitrage_signals",
+    "mark_to_market_account",
+    "mark_to_market_by_model",
+    "mark_to_market_cycle_minutes",
+    "n_markets_open",
+    "n_markets_tracked",
+}
+
+
+def _mark_to_market_payload(aggregate: dict) -> dict:
+    payload = {
+        key: aggregate.get(key)
+        for key in _LIVE_MARKET_KEYS
+        if key in aggregate
+    }
+    payload["source"] = "mark_to_market_live"
+    payload["generated_at"] = aggregate.get("generated_at")
+    return payload
+
+
+def _resolved_public_payload(aggregate: dict) -> dict:
+    return {
+        key: value
+        for key, value in aggregate.items()
+        if key not in _RESOLVED_PUBLIC_OMIT_KEYS
+    }
 
 
 def _model_progress(store: DuckDBStore, model: str) -> dict:
@@ -721,7 +777,15 @@ async def _record_snapshots_with_retries(
 
 async def main() -> int:
     print(f"track-record predict mode: {_predict_mode()}")
-    if not PRICE_ONLY and _predict_mode() == "local" and not _local_predict_credentials_available():
+    run_snapshots = not (PRICE_ONLY or MARK_TO_MARKET_ONLY or RESOLVED_ONLY)
+    run_prices = not (RESOLVED_ONLY or SNAPSHOT_ONLY)
+    run_resolutions = not (MARK_TO_MARKET_ONLY or SNAPSHOT_ONLY)
+    run_ledger = not MARK_TO_MARKET_ONLY
+    run_evaluation = not (MARK_TO_MARKET_ONLY or SNAPSHOT_ONLY)
+    write_public = not (MARK_TO_MARKET_ONLY or SNAPSHOT_ONLY)
+    write_mtm = MARK_TO_MARKET_ONLY or not (RESOLVED_ONLY or SNAPSHOT_ONLY)
+
+    if run_snapshots and _predict_mode() == "local" and not _local_predict_credentials_available():
         print(
             "track-record forecast failed: TRACK_RECORD_PREDICT_MODE=local requires "
             "SCADS_AI_API_KEY as a GitHub Actions secret before model forecasts can run.",
@@ -732,13 +796,21 @@ async def main() -> int:
     primary_model = MODEL
     before_primary = _model_progress(store, primary_model)
 
-    newly_resolved = trl.resolve_open_snapshots(store, market_data)
-    price_points = trl.record_price_points(store, market_data)
-    convergence_written = trl.record_convergence_trades(store)
+    newly_resolved = (
+        trl.resolve_open_snapshots(store, market_data)
+        if run_resolutions
+        else 0
+    )
+    price_points = trl.record_price_points(store, market_data) if run_prices else 0
+    convergence_written = (
+        trl.record_convergence_trades(store)
+        if run_resolutions
+        else 0
+    )
 
     recorded = 0
     backfilled = 0
-    if not PRICE_ONLY:
+    if run_snapshots:
         seeds = _get_pending_markets()
         recorded = await _record_snapshots_with_retries(store, seeds=seeds)
         if ALLOW_RESOLVED_BACKFILL:
@@ -748,29 +820,56 @@ async def main() -> int:
                 concurrency=PREDICT_CONCURRENCY)
         _mark_enrolled([f"{p}:{i}" for p, i in seeds])
 
-    ledger_summary = sync_snapshot_ledger(store)
-    ledger_evaluation = _evaluate_ledger(store, model=primary_model)
+    if run_ledger:
+        ledger_summary = sync_snapshot_ledger(store)
+    else:
+        ledger_summary = {
+            "snapshots_scanned": 0,
+            "forecast_events_appended": 0,
+            "resolution_events_appended": 0,
+        }
+    ledger_evaluation = (
+        _evaluate_ledger(store, model=primary_model)
+        if run_evaluation
+        else {}
+    )
     ledger_evaluation_summary = (
         compact_evaluation_summary(ledger_evaluation)
         if ledger_evaluation
         else {}
     )
-    agg = trl.aggregate(
-        store,
-        model=primary_model,
-        variant=VARIANT,
-        temperature=TEMPERATURE,
-        cycle_minutes=CYCLE_INTERVAL_MINUTES,
-        tracked_models=TRACK_MODELS,
-    )
+    agg = {}
+    if write_public or write_mtm:
+        agg = trl.aggregate(
+            store,
+            model=primary_model,
+            variant=VARIANT,
+            temperature=TEMPERATURE,
+            cycle_minutes=CYCLE_INTERVAL_MINUTES,
+            tracked_models=TRACK_MODELS,
+        )
     after_primary = _model_progress(store, primary_model)
 
-    PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)
-    PUBLIC_PATH.write_text(json.dumps(agg, indent=2, sort_keys=True) + "\n")
-    EVALUATION_PATH.parent.mkdir(parents=True, exist_ok=True)
-    EVALUATION_PATH.write_text(
-        json.dumps(ledger_evaluation, indent=2, sort_keys=True) + "\n"
-    )
+    if write_public:
+        PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)
+        public_payload = (
+            _resolved_public_payload(agg)
+            if RESOLVED_ONLY
+            else agg
+        )
+        PUBLIC_PATH.write_text(
+            json.dumps(public_payload, indent=2, sort_keys=True) + "\n"
+        )
+    if run_evaluation:
+        EVALUATION_PATH.parent.mkdir(parents=True, exist_ok=True)
+        EVALUATION_PATH.write_text(
+            json.dumps(ledger_evaluation, indent=2, sort_keys=True) + "\n"
+        )
+    if write_mtm:
+        MARK_TO_MARKET_PATH.parent.mkdir(parents=True, exist_ok=True)
+        MARK_TO_MARKET_PATH.write_text(
+            json.dumps(_mark_to_market_payload(agg), indent=2, sort_keys=True) + "\n"
+        )
 
     summary = {
         "snapshots_recorded": recorded,
@@ -800,6 +899,13 @@ async def main() -> int:
         },
         "predict_circuit_open_models": sorted(_predict_circuit_open_models),
         "predict_model_mismatches": _predict_stats["model_mismatches"],
+        "mode": (
+            "snapshot-only" if SNAPSHOT_ONLY else
+            "mtm-only" if MARK_TO_MARKET_ONLY else
+            "resolved-only" if RESOLVED_ONLY else
+            "price-only" if PRICE_ONLY else
+            "full"
+        ),
         "primary_model": primary_model,
         "primary_snapshots_before": before_primary["snapshots"],
         "primary_snapshots_after": after_primary["snapshots"],
@@ -809,7 +915,7 @@ async def main() -> int:
         "primary_resolved_after": after_primary["resolved_snapshots"],
     }
     print(json.dumps(summary))
-    if not PRICE_ONLY:
+    if run_snapshots:
         if _predict_stats["http_401"]:
             print(
                 "track-record forecast failed: predict returned HTTP 401. "

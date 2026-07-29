@@ -91,6 +91,11 @@ _FORECAST_EVALUATION_URL = os.environ.get(
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
     "main/static/forecast_evaluation.json",
 )
+_MARK_TO_MARKET_LIVE_URL = os.environ.get(
+    "MARK_TO_MARKET_LIVE_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/mark_to_market_live.json",
+)
 _FORECAST_EVALUATION_TTL = int(
     os.environ.get("FORECAST_EVALUATION_TTL", "60")
 )
@@ -99,6 +104,15 @@ _FORECAST_EVALUATION_TIMEOUT = int(
 )
 _FORECAST_EVALUATION_STALE_AFTER_S = int(
     os.environ.get("FORECAST_EVALUATION_STALE_AFTER_S", "1800")
+)
+_MARK_TO_MARKET_LIVE_TTL = int(
+    os.environ.get("MARK_TO_MARKET_LIVE_TTL", str(_TRACK_RECORD_LIVE_TTL))
+)
+_MARK_TO_MARKET_LIVE_TIMEOUT = int(
+    os.environ.get("MARK_TO_MARKET_LIVE_TIMEOUT", str(_TRACK_RECORD_LIVE_TIMEOUT))
+)
+_MARK_TO_MARKET_STALE_AFTER_S = int(
+    os.environ.get("MARK_TO_MARKET_STALE_AFTER_S", str(_EDGE_BOARD_STALE_AFTER_S))
 )
 # Shared secret gating the evolution-loop bridge endpoints (pending-markets /
 # mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
@@ -1148,6 +1162,62 @@ _FORECAST_EVALUATION_READER = live_track_record_support.LiveTrackRecordReader(
 )
 _read_forecast_evaluation = _FORECAST_EVALUATION_READER.read
 _forecast_evaluation_freshness = _FORECAST_EVALUATION_READER.freshness
+_MARK_TO_MARKET_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_MARK_TO_MARKET_LIVE_URL,
+        ttl_seconds=_MARK_TO_MARKET_LIVE_TTL,
+        stale_after_seconds=_MARK_TO_MARKET_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "mark_to_market_live.json",
+        request_timeout_seconds=_MARK_TO_MARKET_LIVE_TIMEOUT,
+        cache_namespace="mark_to_market_live",
+        cache_version="v1",
+        resource_label="mark-to-market live report",
+        user_agent="Foresea/mark-to-market-live",
+    ),
+    logger=logger,
+)
+_read_mark_to_market_record = _MARK_TO_MARKET_READER.read
+
+_MARK_TO_MARKET_MERGE_KEYS = (
+    "edge_board",
+    "discrepancy_monitor",
+    "arbitrage_signals",
+    "mark_to_market_account",
+    "mark_to_market_by_model",
+    "mark_to_market_cycle_minutes",
+    "n_markets_open",
+    "n_markets_tracked",
+)
+
+
+def _merge_mark_to_market_record(
+    resolved_payload: Optional[Dict[str, Any]],
+    mtm_payload: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    merged = dict(resolved_payload or {})
+    if not mtm_payload:
+        return merged
+    resolved_generated_at = merged.get("generated_at")
+    mtm_generated_at = mtm_payload.get("generated_at")
+    for key in _MARK_TO_MARKET_MERGE_KEYS:
+        if key in mtm_payload:
+            merged[key] = mtm_payload[key]
+    if mtm_generated_at:
+        merged["generated_at"] = mtm_generated_at
+        merged["mark_to_market_generated_at"] = mtm_generated_at
+        if resolved_generated_at:
+            merged["resolved_generated_at"] = resolved_generated_at
+    return merged
+
+
+def _read_edge_board_record() -> Dict[str, Any]:
+    return _merge_mark_to_market_record(
+        _read_live_track_record(),
+        _read_mark_to_market_record(),
+    )
 
 
 _AUTO_SELECT_MODEL = os.environ.get("AUTO_SELECT_MODEL", "1").lower() not in {"0", "false", "no"}
@@ -2082,7 +2152,7 @@ async def edge_board():
       resolved snapshots (flat / edge-weighted / validated-only). Paper only — no
       fees or slippage; not live trading.
     """
-    live = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
+    live = await asyncio.get_running_loop().run_in_executor(None, _read_edge_board_record)
     live = live or {}
     freshness = _track_record_freshness(live)
     return JSONResponse(
@@ -2290,7 +2360,7 @@ async def live_prices():
     if cached is not None:
         return JSONResponse(cached, headers={"Cache-Control": "public, max-age=30"})
 
-    live = await asyncio.get_running_loop().run_in_executor(None, _read_live_track_record)
+    live = await asyncio.get_running_loop().run_in_executor(None, _read_edge_board_record)
     board = (live or {}).get("edge_board") or []
 
     from analyzing_llm_rationale import market_data as _md
@@ -4523,7 +4593,7 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
         cached = _cache_get(cache_key)
         if cached is not None:
             return RadarResponse(**cached)
-    payload = _read_live_track_record() or {}
+    payload = _read_edge_board_record() or {}
     rows = payload.get("edge_board") or []
     markets: List[RadarMarket] = []
     seen: set[str] = set()
@@ -5374,7 +5444,7 @@ def _norm_url(url: Optional[str]) -> str:
 def _forecast_by_url() -> Dict[str, float]:
     """Latest model forecast per market URL from the committed live track record."""
     out: Dict[str, float] = {}
-    live = _read_live_track_record() or {}
+    live = _read_edge_board_record() or {}
     for item in live.get("edge_board", []):
         url = _norm_url(item.get("market_url"))
         mp = item.get("model_probability")
