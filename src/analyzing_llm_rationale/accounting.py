@@ -27,6 +27,9 @@ shadow_mark_to_market_duration = meter.create_histogram(
 shadow_mark_to_market_trades = meter.create_counter(
     "accounting.shadow_mark_to_market_trades", unit="1"
 )
+market_follow_mark_to_market_runs = meter.create_counter(
+    "accounting.market_follow_mark_to_market_runs", unit="1"
+)
 
 YES = "YES"
 NO = "NO"
@@ -547,6 +550,64 @@ def simulate_shadow_mark_to_market_account(
                 time.perf_counter() - start,
                 {"operation": "shadow_mark_to_market"},
             )
+
+
+def simulate_market_follow_mark_to_market_account(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    latest_quotes: Optional[Mapping[Any, MarketQuote | Mapping[str, Any]]] = None,
+    starting_cash: float = 10_000.0,
+    target_contracts: float = 1.0,
+    fee_fn: Optional[Callable[[Any, float, float], float]] = None,
+    max_trades: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Simulate an active crowd baseline that buys the market-favored side."""
+    baseline_rows: List[Dict[str, Any]] = []
+    skipped_no_direction = 0
+    for row in rows:
+        item = dict(row)
+        market_probability = _price(item.get("market_probability"))
+        if market_probability is None or market_probability == 0.5:
+            skipped_no_direction += 1
+            continue
+        item["model_probability"] = 1.0 if market_probability > 0.5 else 0.0
+        baseline_rows.append(item)
+
+    with tracer.start_as_current_span("accounting.market_follow_mark_to_market") as span:
+        span.set_attributes({
+            "items.count": len(baseline_rows),
+            "items.skipped_no_direction": skipped_no_direction,
+            "account.value_method": "bid_liquidation",
+        })
+        try:
+            account = simulate_shadow_mark_to_market_account(
+                baseline_rows,
+                latest_quotes=latest_quotes,
+                starting_cash=starting_cash,
+                target_contracts=target_contracts,
+                min_edge=0.0,
+                fee_fn=fee_fn,
+                max_trades=max_trades,
+            )
+            account["strategy"] = "market_follow_baseline"
+            account["n_skipped_no_direction"] = skipped_no_direction
+            account["notes"] = [
+                "Active MTM baseline: buys the market-favored side at snapshot time.",
+                *account.get("notes", []),
+            ]
+            market_follow_mark_to_market_runs.add(1, {"outcome": "success"})
+            span.set_attributes({
+                "outcome": "success",
+                "trades.count": int(account.get("n_trades") or 0),
+                "positions.open_count": int(account.get("n_open_positions") or 0),
+            })
+            return account
+        except Exception as exc:
+            market_follow_mark_to_market_runs.add(1, {"outcome": "failure"})
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "failure")
+            raise
 
 
 def simulate_mark_to_market_account(

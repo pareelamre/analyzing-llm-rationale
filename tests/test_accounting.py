@@ -8,6 +8,7 @@ from analyzing_llm_rationale.accounting import (
     YES,
     PredictionMarketAccount,
     simulate_mark_to_market_account,
+    simulate_market_follow_mark_to_market_account,
     simulate_shadow_mark_to_market_account,
 )
 
@@ -134,6 +135,44 @@ class PredictionMarketAccountTests(unittest.TestCase):
         self.assertEqual(account["settlements"][0]["settled_contracts"], 1)
         self.assertEqual(account["n_open_positions"], 0)
         self.assertAlmostEqual(account["account_value"], 100.89)
+
+    def test_market_follow_baseline_trades_market_favored_side(self):
+        rows = [
+            {
+                "platform": "Polymarket",
+                "ident": "MKT",
+                "snapshot_ts": datetime(2026, 7, 1, tzinfo=timezone.utc),
+                "market_probability": 0.62,
+                "market_bid": 0.60,
+                "market_ask": 0.64,
+                "resolved": False,
+            },
+            {
+                "platform": "Kalshi",
+                "ident": "KXTEST",
+                "snapshot_ts": datetime(2026, 7, 1, 1, tzinfo=timezone.utc),
+                "market_probability": 0.30,
+                "market_bid": 0.29,
+                "market_ask": 0.31,
+                "resolved": False,
+            },
+        ]
+
+        account = simulate_market_follow_mark_to_market_account(
+            rows,
+            starting_cash=100.0,
+            latest_quotes={
+                ("Polymarket", "MKT"): {"market_bid": 0.61, "market_ask": 0.65},
+                ("Kalshi", "KXTEST"): {"market_bid": 0.31, "market_ask": 0.33},
+            },
+        )
+
+        self.assertEqual(account["strategy"], "market_follow_baseline")
+        self.assertEqual(account["n_trades"], 2)
+        self.assertEqual(account["trades"][0]["side"], YES)
+        self.assertEqual(account["trades"][1]["side"], NO)
+        self.assertEqual(account["n_open_positions"], 2)
+        self.assertGreater(account["liquidation_value"], 0.0)
 
 
 if __name__ == "__main__":

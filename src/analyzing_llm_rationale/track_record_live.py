@@ -32,7 +32,10 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from analyzing_llm_rationale import trackrec_store as _ds
-from analyzing_llm_rationale.accounting import simulate_shadow_mark_to_market_account
+from analyzing_llm_rationale.accounting import (
+    simulate_market_follow_mark_to_market_account,
+    simulate_shadow_mark_to_market_account,
+)
 from analyzing_llm_rationale.entity_tagger import tag_question
 
 # ── DuckDB SQL helpers ────────────────────────────────────────────────────────
@@ -1599,8 +1602,9 @@ def build_mark_to_market_accounts(
     tracked_models: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Bid-liquidation shadow strategy ledgers for every active tracked model."""
+    all_rows = list(rows)
     by_model: Dict[str, List[Dict[str, Any]]] = {}
-    for row in rows:
+    for row in all_rows:
         label = str(row.get("model") or default_model)
         by_model.setdefault(label, []).append(row)
     for label in tracked_models or []:
@@ -1625,6 +1629,26 @@ def build_mark_to_market_accounts(
             "n_settlements": account.get("n_settlements"),
             "n_open_positions": account.get("n_open_positions"),
             "n_illiquid_positions": account.get("n_illiquid_positions"),
+        })
+    baseline_rows = _crowd_baseline_reference_rows(all_rows, default_model=default_model)
+    if baseline_rows:
+        account = _public_mark_to_market_account(
+            simulate_market_follow_mark_to_market_account(
+                baseline_rows,
+                latest_quotes=latest_quotes,
+                fee_fn=_bet_fee,
+            )
+        )
+        accounts.append({
+            "model": "market-follow",
+            "account": account,
+            "account_value": account.get("account_value"),
+            "return": account.get("return"),
+            "n_trades": account.get("n_trades"),
+            "n_settlements": account.get("n_settlements"),
+            "n_open_positions": account.get("n_open_positions"),
+            "n_illiquid_positions": account.get("n_illiquid_positions"),
+            "baseline": True,
         })
     accounts.sort(
         key=lambda item: (
@@ -1654,6 +1678,7 @@ _MTM_PUBLIC_ACCOUNT_FIELDS = (
     "n_open_positions",
     "n_illiquid_positions",
     "n_skipped_no_edge",
+    "n_skipped_no_direction",
     "n_skipped_unexecutable",
     "notes",
 )

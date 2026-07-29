@@ -5070,6 +5070,7 @@ const _MTM_MODEL_COLORS = {
   'qwen3-coder-30b-a3b-instruct': '#14b8a6',
   'glm-5.2-fp8': '#eab308',
   'crowd-follow': '#94a3b8',
+  'market-follow': '#64748b',
 };
 function _mtmModelColor(model, i = 0) {
   const palette = ['#10b981', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa', '#06b6d4', '#f97316', '#84cc16', '#14b8a6', '#db2777', '#eab308', '#94a3b8'];
@@ -5783,6 +5784,7 @@ function _ebModelLabel(model) {
   const raw = String(model || '').trim();
   if (!raw) return 'Model';
   if (raw === 'crowd-follow') return 'crowd-follow baseline';
+  if (raw === 'market-follow') return 'market-follow baseline';
   if (raw === 'scads-alias-code') return 'SCADS Code';
   if (raw === 'scads-alias-ha') return 'SCADS HA';
   if (raw === 'scads-alias-reasoning') return 'SCADS Reasoning';
@@ -5805,6 +5807,7 @@ function _ebModelLabel(model) {
 function _ebModelHead(model) {
   const raw = String(model || '').toLowerCase();
   if (raw === 'crowd-follow') return 'MKT';
+  if (raw === 'market-follow') return 'BASE';
   if (raw === 'scads-alias-code') return 'COD';
   if (raw === 'scads-alias-ha') return 'HA';
   if (raw === 'scads-alias-reasoning') return 'RSN';
@@ -5829,6 +5832,7 @@ function _ebModelColor(model, index = 0) {
   const raw = String(model || '').toLowerCase();
   if (_MTM_MODEL_COLORS[raw]) return _MTM_MODEL_COLORS[raw];
   if (raw === 'crowd-follow') return '#94a3b8';
+  if (raw === 'market-follow') return '#64748b';
   return EB_MODEL_COLORS[index % EB_MODEL_COLORS.length];
 }
 
