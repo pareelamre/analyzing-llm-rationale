@@ -123,6 +123,33 @@ class TrajectoryTests(unittest.TestCase):
             "2026-06-03T12:30",
         )
 
+    def test_target_sharding_is_deterministic_and_caps_targets(self):
+        targets = [
+            {"platform": "Kalshi", "ident": f"KXTEST-{i}", "market_url": ""}
+            for i in range(12)
+        ]
+        shards = [
+            trl._select_target_shard(targets, count=3, index=i)
+            for i in range(3)
+        ]
+        selected_keys = {
+            (quote["platform"], quote["ident"])
+            for shard in shards
+            for quote in shard
+        }
+
+        self.assertEqual(len(selected_keys), len(targets))
+        self.assertTrue(all(shards))
+        self.assertEqual(
+            trl._select_target_shard(
+                targets,
+                count=3,
+                index=0,
+                max_targets=2,
+            ),
+            shards[0][:2],
+        )
+
     def test_public_mtm_curve_includes_final_heartbeat(self):
         public = trl._public_mark_to_market_account({
             "ts": "2026-07-29T06:35:36+00:00",
