@@ -5077,6 +5077,21 @@ function _mtmModelColor(model, i = 0) {
   return _MTM_MODEL_COLORS[model] || palette[i % palette.length];
 }
 
+function _mtmLastMarkedText(d) {
+  const primary = d && d.mark_to_market_account;
+  const ts = primary && primary.ts ? primary.ts : d && d.generated_at;
+  if (!ts) return 'building';
+  const t = new Date(ts).getTime();
+  if (!Number.isFinite(t)) return 'building';
+  const ageMs = Math.max(0, Date.now() - t);
+  const mins = Math.floor(ageMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(t).toLocaleString();
+}
+
 async function refreshEdgeForecasts() {
   try {
     const r = await _liveJsonFetch('/edge-board');
@@ -5141,6 +5156,8 @@ async function refreshEdgeForecasts() {
       }
       const mtmPrimary = document.getElementById('eb-mtm-primary-v');
       if (mtmPrimary) mtmPrimary.textContent = _usd(d.mark_to_market_account && d.mark_to_market_account.account_value);
+      const mtmMarked = document.getElementById('eb-mtm-last-marked-v');
+      if (mtmMarked) mtmMarked.textContent = _mtmLastMarkedText(d);
     }
     const modelCompSvg = document.getElementById('eb-model-comparison-svg');
     if (modelCompSvg) {
@@ -6327,6 +6344,7 @@ function renderEdgeBoard(d) {
           <div class="k" style="font-size:11px;color:var(--text-dim)">cash + bid liquidation</div>
         </div>
         <div class="tr-stat"><div class="v">${mtmCycleMinutes}m</div><div class="k label">Cycle</div><div class="k" style="font-size:11px;color:var(--text-dim)">forecast cadence</div></div>
+        <div class="tr-stat"><div class="v" id="eb-mtm-last-marked-v">${_mtmLastMarkedText(d)}</div><div class="k label">Last marked</div><div class="k" style="font-size:11px;color:var(--text-dim)">chart heartbeat</div></div>
         <div class="tr-stat"><div class="v">${mtm?.n_open_positions || 0}</div><div class="k label">Open positions</div><div class="k" style="font-size:11px;color:var(--text-dim)">primary model</div></div>
         <div class="tr-stat"><div class="v">${mtmModels.length}</div><div class="k label">Models tracked</div><div class="k" style="font-size:11px;color:var(--text-dim)">SCADS + baseline</div></div>
       </div>
