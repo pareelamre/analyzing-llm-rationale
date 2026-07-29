@@ -6,6 +6,11 @@ branch="${2:-main}"
 retries="${GIT_PUSH_RETRIES:-5}"
 sleep_s="${GIT_PUSH_RETRY_SLEEP_S:-5}"
 keep_theirs_csv="${GIT_REBASE_KEEP_THEIRS:-}"
+publish_via_pr="${GIT_PUBLISH_VIA_PR:-1}"
+
+slugify() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//'
+}
 
 resolve_allowed_rebase_conflicts() {
   local conflicted file
@@ -28,6 +33,30 @@ resolve_allowed_rebase_conflicts() {
   GIT_EDITOR=true git rebase --continue
 }
 
+publish_through_pr() {
+  if [ "$publish_via_pr" != "1" ] && [ "$publish_via_pr" != "true" ]; then
+    return 1
+  fi
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "gh CLI is required for PR fallback publishing." >&2
+    return 1
+  fi
+
+  local workflow run_id branch_slug update_branch title body pr_url
+  workflow="$(slugify "${GITHUB_WORKFLOW:-scheduled-update}")"
+  run_id="${GITHUB_RUN_ID:-$(date +%s)}"
+  branch_slug="$(slugify "$branch")"
+  update_branch="automation/${workflow}-${branch_slug}-${run_id}"
+  title="${GIT_PUBLISH_PR_TITLE:-Automated ${GITHUB_WORKFLOW:-artifact} update}"
+  body="${GIT_PUBLISH_PR_BODY:-Automated artifact update from ${GITHUB_WORKFLOW:-workflow} run ${GITHUB_RUN_ID:-local}.}"
+
+  echo "Publishing through PR branch ${update_branch}." >&2
+  git push --force-with-lease "$remote" "HEAD:refs/heads/${update_branch}"
+  pr_url="$(gh pr create --base "$branch" --head "$update_branch" --title "$title" --body "$body")"
+  echo "Created ${pr_url}." >&2
+  gh pr merge "$pr_url" --squash --delete-branch --subject "$title" --body "$body"
+}
+
 for attempt in $(seq 1 "$retries"); do
   if git pull --rebase --autostash "$remote" "$branch"; then
     if git push "$remote" "HEAD:$branch"; then
@@ -47,6 +76,10 @@ for attempt in $(seq 1 "$retries"); do
     sleep "$sleep_s"
   fi
 done
+
+if publish_through_pr; then
+  exit 0
+fi
 
 echo "Failed to push after ${retries} attempts." >&2
 exit 1
