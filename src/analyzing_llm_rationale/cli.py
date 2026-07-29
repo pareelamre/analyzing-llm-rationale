@@ -361,19 +361,21 @@ def resolve_api_key(args: argparse.Namespace) -> str:
     if args.api_key_env_var:
         value = os.environ.get(args.api_key_env_var)
         if value:
-            return value
+            return value.lstrip("\ufeff").strip()
         # Fallback: fetch from GCP Secret Manager when running on GCP
         # (env var absent means we're likely in a Vertex AI container without baked-in creds)
         secret_value = _fetch_secret_from_gcp(args.api_key_env_var)
         if secret_value:
-            return secret_value
+            return secret_value.lstrip("\ufeff").strip()
 
     if args.api_key_file:
         api_key_path = Path(args.api_key_file)
         if not api_key_path.is_absolute():
             api_key_path = repo_root() / api_key_path
         try:
-            return api_key_path.read_text(encoding="utf-8").strip()
+            # utf-8-sig automatically strips a leading UTF-8 BOM (\ufeff) that
+            # Windows editors (Notepad, Excel) add when saving text files.
+            return api_key_path.read_text(encoding="utf-8-sig").strip()
         except OSError:
             return ""
 

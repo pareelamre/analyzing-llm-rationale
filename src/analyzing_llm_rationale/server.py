@@ -6401,7 +6401,7 @@ def _scads_alt_provider(
         or label not in _SCADS_MODEL_ALLOWLIST
     ):
         return None
-    scads_key = os.environ.get("SCADS_AI_API_KEY")
+    scads_key = (os.environ.get("SCADS_AI_API_KEY") or "").lstrip("\ufeff").strip()
     if not scads_key:
         raise HTTPException(status_code=503, detail="Alternate models are not configured on this server.")
     from analyzing_llm_rationale.providers import OpenAICompatibleProvider
