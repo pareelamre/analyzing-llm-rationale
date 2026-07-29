@@ -1700,6 +1700,21 @@ def _public_mark_to_market_account(account: Dict[str, Any]) -> Dict[str, Any]:
         item["n_open_positions"] = _position_count(point, "open_positions")
         item["n_illiquid_positions"] = _position_count(point, "illiquid_positions")
         curve.append(item)
+    final_point = {
+        key: account.get(key)
+        for key in _MTM_PUBLIC_CURVE_FIELDS
+        if key in account
+    }
+    if final_point.get("ts") and final_point.get("account_value") is not None:
+        final_point.setdefault("event_type", "heartbeat")
+        final_point["n_open_positions"] = public["n_open_positions"]
+        final_point["n_illiquid_positions"] = public["n_illiquid_positions"]
+        last = curve[-1] if curve else {}
+        if (
+            last.get("ts") != final_point.get("ts")
+            or last.get("account_value") != final_point.get("account_value")
+        ):
+            curve.append(final_point)
     public["value_curve"] = curve
     return public
 

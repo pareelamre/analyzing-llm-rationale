@@ -5090,10 +5090,18 @@ async function refreshEdgeForecasts() {
     if (mtmModels.length) {
       const curves = mtmModels.map((m, i) => {
         const account = m.account || {};
-        const values = (account.value_curve || []).map(p => Number(p.account_value)).filter(Number.isFinite);
-        if (Number.isFinite(Number(account.account_value))) values.push(Number(account.account_value));
+        const curvePoints = account.value_curve || [];
+        const values = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
+        const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
+        const accountValue = Number(account.account_value);
+        const accountTime = new Date(account.ts).getTime();
+        const lastValue = values.length ? values[values.length - 1] : null;
+        const lastTime = times.length ? times[times.length - 1] : null;
+        if (Number.isFinite(accountValue) && Number.isFinite(accountTime) && (lastValue !== accountValue || lastTime !== accountTime)) {
+          values.push(accountValue);
+          times.push(accountTime);
+        }
         if (!values.length) return null;
-        const times = (account.value_curve || []).map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
         const label = _ebModelLabel(m.model);
         const value = account.account_value ?? m.account_value;
         const ret = account.return ?? m.return;
@@ -6266,10 +6274,18 @@ function renderEdgeBoard(d) {
   if (mtmModels.length) {
     const curves = mtmModels.map((m, i) => {
       const account = m.account || {};
-      const values = (account.value_curve || []).map(p => Number(p.account_value)).filter(Number.isFinite);
-      if (Number.isFinite(Number(account.account_value))) values.push(Number(account.account_value));
+      const curvePoints = account.value_curve || [];
+      const values = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
+      const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
+      const accountValue = Number(account.account_value);
+      const accountTime = new Date(account.ts).getTime();
+      const lastValue = values.length ? values[values.length - 1] : null;
+      const lastTime = times.length ? times[times.length - 1] : null;
+      if (Number.isFinite(accountValue) && Number.isFinite(accountTime) && (lastValue !== accountValue || lastTime !== accountTime)) {
+        values.push(accountValue);
+        times.push(accountTime);
+      }
       if (!values.length) return null;
-      const times = (account.value_curve || []).map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
       const label = _ebModelLabel(m.model);
       const value = account.account_value ?? m.account_value;
       const ret = account.return ?? m.return;
