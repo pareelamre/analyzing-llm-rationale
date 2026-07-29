@@ -2655,6 +2655,15 @@ class PredictRequest(BaseModel):
         le=10,
         description="Maximum number of evidence articles to retrieve (1–10).",
     )
+    evidence_detail: str = Field(
+        "full",
+        pattern="^(summary|full)$",
+        description=(
+            "Evidence detail level in the model prompt. Use `summary` for scheduled "
+            "multi-model runs to keep prompts bounded; default `full` preserves the "
+            "interactive API behaviour."
+        ),
+    )
     created_time: Optional[str] = Field(None, max_length=50, description="ISO 8601 question creation time.")
     publish_time: Optional[str] = Field(None, max_length=50, description="ISO 8601 question publish time.")
     resolve_time: Optional[str] = Field(None, max_length=50, description="ISO 8601 resolution deadline.")
@@ -4194,7 +4203,7 @@ async def _prepare_predict_messages(
                 pass
         user_prompt = build_user_prompt(record, "[question]", "full")
     else:
-        user_prompt = build_user_prompt(record, prompt_text, "full")
+        user_prompt = build_user_prompt(record, prompt_text, req.evidence_detail)
         user_prompt += _typing_instruction(req.question_type, req.options, has_history=bool(req.history))
 
     steering = (req.conversation_steer or "").strip()
