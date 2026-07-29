@@ -9,7 +9,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
@@ -20,6 +20,13 @@ meter = metrics.get_meter("foresea.accounting")
 mark_to_market_runs = meter.create_counter("accounting.mark_to_market_runs", unit="1")
 mark_to_market_duration = meter.create_histogram("accounting.mark_to_market_duration", unit="s")
 realized_pairs_counter = meter.create_counter("accounting.realized_pairs", unit="contracts")
+shadow_mark_to_market_runs = meter.create_counter("accounting.shadow_mark_to_market_runs", unit="1")
+shadow_mark_to_market_duration = meter.create_histogram(
+    "accounting.shadow_mark_to_market_duration", unit="s"
+)
+shadow_mark_to_market_trades = meter.create_counter(
+    "accounting.shadow_mark_to_market_trades", unit="1"
+)
 
 YES = "YES"
 NO = "NO"
@@ -242,6 +249,37 @@ class PredictionMarketAccount:
     def open_positions(self) -> List[Position]:
         return [p for p in self.positions.values() if p.quantity > 1e-12]
 
+    def settle_market(self, *, platform: str, ident: str, outcome: int, ts: Any = None) -> Dict[str, Any]:
+        """Settle open inventory against a final binary outcome."""
+        ts = ts or _now()
+        payout = 0.0
+        settled_basis = 0.0
+        settled_contracts = 0.0
+        for side in (YES, NO):
+            pos = self._active_position(platform, ident, side)
+            if pos is None:
+                continue
+            wins = (side == YES and int(outcome) == 1) or (side == NO and int(outcome) == 0)
+            if wins:
+                payout += pos.quantity
+            settled_contracts += pos.quantity
+            settled_basis += pos.cost_basis
+            pos.quantity = 0.0
+            pos.cost_basis = 0.0
+        self.cash += payout
+        realized_pnl = payout - settled_basis
+        self.realized_pnl += realized_pnl
+        return {
+            "platform": platform,
+            "ident": ident,
+            "outcome": int(outcome),
+            "ts": _iso(ts),
+            "settlement_status": "settled",
+            "settled_contracts": round(settled_contracts, 6),
+            "payout": round(payout, 6),
+            "realized_pnl": round(realized_pnl, 6),
+        }
+
     def liquidation_value(
         self,
         quotes: Mapping[Tuple[str, str], MarketQuote | Mapping[str, Any]],
@@ -308,6 +346,17 @@ def _row_side(row: Mapping[str, Any]) -> Optional[str]:
     return YES if model_p > 0.5 else NO
 
 
+def _row_edge_side(row: Mapping[str, Any], min_edge: float) -> Optional[str]:
+    model_p = _price(row.get("model_probability"))
+    market_p = _price(row.get("market_probability"))
+    if model_p is None or market_p is None:
+        return None
+    edge = model_p - market_p
+    if abs(edge) < min_edge or abs(edge) <= 1e-12:
+        return None
+    return YES if edge > 0 else NO
+
+
 def _quote_map(
     quotes: Optional[Mapping[Any, MarketQuote | Mapping[str, Any]]],
 ) -> Dict[Tuple[str, str], MarketQuote | Mapping[str, Any]]:
@@ -318,6 +367,186 @@ def _quote_map(
         else:
             out[("", str(key or ""))] = quote
     return out
+
+
+def _event_sort_key(value: Any) -> str:
+    iso = _iso(value)
+    if not iso:
+        return ""
+    return iso.replace("Z", "+00:00")
+
+
+def simulate_shadow_mark_to_market_account(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    latest_quotes: Optional[Mapping[Any, MarketQuote | Mapping[str, Any]]] = None,
+    starting_cash: float = 10_000.0,
+    target_contracts: float = 1.0,
+    min_edge: float = 0.0,
+    fee_fn: Optional[Callable[[Any, float, float], float]] = None,
+    max_trades: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Simulate a persistent shadow ledger from forecast snapshots.
+
+    Trade events happen at snapshot time; settlement events happen later at
+    resolved_ts/close_time. The strategy trades only model-vs-market edge:
+    model > market buys YES, model < market buys NO.
+    """
+    row_list = sorted([dict(r) for r in rows], key=_row_sort_ts)
+    start = time.perf_counter()
+    with tracer.start_as_current_span("accounting.shadow_mark_to_market") as span:
+        span.set_attributes({
+            "items.count": len(row_list),
+            "account.value_method": "bid_liquidation",
+            "strategy.min_edge": float(min_edge),
+        })
+        try:
+            account = PredictionMarketAccount(starting_cash=starting_cash)
+            current_quotes = _quote_map(latest_quotes)
+            settlements_by_market: Dict[Tuple[str, str], Dict[str, Any]] = {}
+            events: List[Tuple[str, int, int, Dict[str, Any]]] = []
+            seq = 0
+            for row in row_list:
+                platform = str(row.get("platform") or "")
+                ident = str(row.get("ident") or "")
+                if not platform or not ident:
+                    continue
+                events.append((_event_sort_key(row.get("snapshot_ts") or row.get("ts")), 1, seq, row))
+                seq += 1
+                if row.get("resolved") and row.get("outcome") is not None:
+                    settlements_by_market.setdefault((platform, ident), {
+                        "platform": platform,
+                        "ident": ident,
+                        "outcome": int(row["outcome"]),
+                        "ts": row.get("resolved_ts") or row.get("close_time") or row.get("snapshot_ts"),
+                    })
+            for item in settlements_by_market.values():
+                events.append((_event_sort_key(item.get("ts")), 0, seq, item))
+                seq += 1
+            events.sort(key=lambda e: (e[0], e[1], e[2]))
+
+            trade_count = 0
+            skipped_no_edge = 0
+            skipped_unexecutable = 0
+            settled_markets: set[Tuple[str, str]] = set()
+            settlements: List[Dict[str, Any]] = []
+            value_curve: List[Dict[str, Any]] = []
+
+            for _ts_key, priority, _seq, payload in events:
+                platform = str(payload.get("platform") or "")
+                ident = str(payload.get("ident") or "")
+                market_key = (platform, ident)
+                if priority == 0:
+                    if market_key in settled_markets:
+                        continue
+                    settlement = account.settle_market(
+                        platform=platform,
+                        ident=ident,
+                        outcome=int(payload["outcome"]),
+                        ts=payload.get("ts"),
+                    )
+                    settled_markets.add(market_key)
+                    settlements.append(settlement)
+                    snap = account.snapshot(current_quotes, ts=payload.get("ts"))
+                    snap["event_type"] = "settlement"
+                    snap["event_market"] = {"platform": platform, "ident": ident}
+                    value_curve.append(snap)
+                    continue
+
+                row = payload
+                if market_key in settled_markets:
+                    continue
+                side = _row_edge_side(row, min_edge)
+                if not side:
+                    skipped_no_edge += 1
+                    continue
+                quote = MarketQuote.from_mapping(row)
+                current_quotes.setdefault((platform, ident), quote)
+                ask = quote.ask(side)
+                if ask is None or ask <= 0.0 or ask >= 1.0:
+                    skipped_unexecutable += 1
+                    logger.warning("skipping shadow trade without executable ask")
+                    continue
+
+                buy_qty = 0.0
+                opposite = account._active_position(platform, ident, _opposite(side))
+                same = account._active_position(platform, ident, side)
+                if opposite is not None:
+                    buy_qty += opposite.quantity
+                if same is None:
+                    buy_qty += target_contracts
+                elif same.quantity < target_contracts:
+                    buy_qty += target_contracts - same.quantity
+                if buy_qty <= 1e-12:
+                    continue
+                if max_trades is not None and trade_count >= max_trades:
+                    break
+
+                notional = buy_qty * ask
+                explicit_fee = row.get("fee")
+                fee = float(explicit_fee) if explicit_fee not in (None, "") else (
+                    float(fee_fn(platform, notional, ask)) if fee_fn else 0.0
+                )
+                fill = account.buy(
+                    platform=platform,
+                    ident=ident,
+                    side=side,
+                    quantity=buy_qty,
+                    price=ask,
+                    fee=fee,
+                    ts=row.get("snapshot_ts") or row.get("ts"),
+                )
+                trade_count += 1
+                shadow_mark_to_market_trades.add(1, {"platform": platform.lower() or "unknown"})
+                snap = account.snapshot(current_quotes, ts=row.get("snapshot_ts") or row.get("ts"))
+                snap["event_type"] = "trade"
+                snap["trade_status"] = fill.settlement_status
+                snap["event_market"] = {"platform": platform, "ident": ident, "side": side}
+                value_curve.append(snap)
+
+            final = account.snapshot(current_quotes)
+            final.update({
+                "strategy": "edge_shadow_ledger",
+                "starting_cash": round(starting_cash, 6),
+                "return": round((final["account_value"] / starting_cash) - 1.0, 6)
+                if starting_cash else None,
+                "target_contracts": round(float(target_contracts), 6),
+                "min_edge": round(float(min_edge), 6),
+                "n_trades": trade_count,
+                "n_settlements": len(settlements),
+                "n_open_positions": len(final["open_positions"]),
+                "n_illiquid_positions": len(final["illiquid_positions"]),
+                "n_skipped_no_edge": skipped_no_edge,
+                "n_skipped_unexecutable": skipped_unexecutable,
+                "trades": [t.as_dict() for t in account.trades],
+                "settlements": settlements,
+                "value_curve": value_curve,
+                "notes": [
+                    "Shadow ledger: trades are inferred from model-vs-market edge at forecast time, not sent to an exchange.",
+                    "Open positions are valued at bid-side liquidation prices.",
+                    "Resolved markets settle into cash once per market before later trades are considered.",
+                    "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00.",
+                ],
+            })
+            shadow_mark_to_market_runs.add(1, {"outcome": "success"})
+            span.set_attributes({
+                "outcome": "success",
+                "trades.count": trade_count,
+                "settlements.count": len(settlements),
+                "positions.open_count": final["n_open_positions"],
+            })
+            return final
+        except Exception as exc:
+            shadow_mark_to_market_runs.add(1, {"outcome": "failure"})
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "failure")
+            raise
+        finally:
+            shadow_mark_to_market_duration.record(
+                time.perf_counter() - start,
+                {"operation": "shadow_mark_to_market"},
+            )
 
 
 def simulate_mark_to_market_account(

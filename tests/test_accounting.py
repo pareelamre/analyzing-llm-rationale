@@ -8,6 +8,7 @@ from analyzing_llm_rationale.accounting import (
     YES,
     PredictionMarketAccount,
     simulate_mark_to_market_account,
+    simulate_shadow_mark_to_market_account,
 )
 
 
@@ -52,6 +53,23 @@ class PredictionMarketAccountTests(unittest.TestCase):
         self.assertEqual(account.open_positions(), [])
         self.assertAlmostEqual(account.cash, 100.33)
 
+    def test_settlement_records_realized_pnl(self):
+        account = PredictionMarketAccount(starting_cash=100.0)
+        account.buy(platform="Kalshi", ident="KXTEST", side=YES, quantity=2, price=0.40)
+
+        settlement = account.settle_market(
+            platform="Kalshi",
+            ident="KXTEST",
+            outcome=1,
+            ts=datetime(2026, 7, 3, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(settlement["settled_contracts"], 2)
+        self.assertEqual(settlement["payout"], 2)
+        self.assertAlmostEqual(settlement["realized_pnl"], 1.20)
+        self.assertAlmostEqual(account.realized_pnl, 1.20)
+        self.assertAlmostEqual(account.cash, 101.20)
+
     def test_simulation_tracks_value_curve(self):
         rows = [
             {
@@ -74,6 +92,48 @@ class PredictionMarketAccountTests(unittest.TestCase):
         self.assertEqual(account["liquidation_value"], 0.5)
         self.assertEqual(account["account_value"], 9999.88)
         self.assertEqual(len(account["value_curve"]), 1)
+
+    def test_shadow_ledger_trades_model_vs_market_edge_and_settles_once(self):
+        rows = [
+            {
+                "platform": "Kalshi",
+                "ident": "KXTEST",
+                "snapshot_ts": datetime(2026, 7, 1, tzinfo=timezone.utc),
+                "model_probability": 0.70,
+                "market_probability": 0.90,
+                "market_bid": 0.89,
+                "market_ask": 0.91,
+                "resolved": True,
+                "outcome": 0,
+                "resolved_ts": datetime(2026, 7, 3, tzinfo=timezone.utc),
+            },
+            {
+                "platform": "Kalshi",
+                "ident": "KXTEST",
+                "snapshot_ts": datetime(2026, 7, 2, tzinfo=timezone.utc),
+                "model_probability": 0.72,
+                "market_probability": 0.88,
+                "market_bid": 0.87,
+                "market_ask": 0.89,
+                "resolved": True,
+                "outcome": 0,
+                "resolved_ts": datetime(2026, 7, 3, tzinfo=timezone.utc),
+            },
+        ]
+
+        account = simulate_shadow_mark_to_market_account(
+            rows,
+            starting_cash=100.0,
+            target_contracts=1.0,
+        )
+
+        self.assertEqual(account["strategy"], "edge_shadow_ledger")
+        self.assertEqual(account["n_trades"], 1)
+        self.assertEqual(account["n_settlements"], 1)
+        self.assertEqual(account["trades"][0]["side"], NO)
+        self.assertEqual(account["settlements"][0]["settled_contracts"], 1)
+        self.assertEqual(account["n_open_positions"], 0)
+        self.assertAlmostEqual(account["account_value"], 100.89)
 
 
 if __name__ == "__main__":
