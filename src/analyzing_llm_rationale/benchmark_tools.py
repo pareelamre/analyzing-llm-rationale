@@ -36,6 +36,7 @@ note_actions = meter.create_counter("benchmark_tools.manage_notes.actions", unit
 risk_guard_checks = meter.create_counter("benchmark_tools.risk_guard.checks", unit="1")
 risk_guard_rejections = meter.create_counter("benchmark_tools.risk_guard.rejections", unit="1")
 settlement_actions = meter.create_counter("benchmark_tools.settlements", unit="1")
+fill_actions = meter.create_counter("benchmark_tools.place_trade.fills", unit="1")
 
 BLACKLISTED_WEB_DOMAINS = ("coinmarketcap.com",)
 MAX_NOTES_PER_AGENT = 50
@@ -47,6 +48,7 @@ DEFAULT_PER_CYCLE_SPEND_LIMIT = 500.0
 DEFAULT_CYCLE_MINUTES = 15
 KALSHI_FEE_COEFFICIENT = 0.07
 DEFAULT_SETTLEMENT_FEE_RATE = 0.014
+IMMEDIATE_TIME_IN_FORCE = "immediate_or_cancel"
 
 
 @dataclass(frozen=True)
@@ -227,6 +229,131 @@ def _order_fee(args: Mapping[str, Any], normalized: Mapping[str, Any]) -> float:
         _as_float(normalized.get("price")),
         _as_float(normalized.get("quantity")),
     )
+
+
+def _immediate_order_adjustments(args: Mapping[str, Any]) -> List[str]:
+    warnings: List[str] = []
+    requested_tif = str(args.get("time_in_force") or "").strip().lower()
+    if requested_tif and requested_tif != IMMEDIATE_TIME_IN_FORCE:
+        warnings.append(
+            f"time_in_force={requested_tif!r} ignored; benchmark place_trade uses immediate_or_cancel only."
+        )
+    if bool(args.get("post_only", False)):
+        warnings.append("post_only=true ignored; benchmark place_trade never posts resting orders.")
+    requested_order_type = str(args.get("order_type") or "").strip().lower()
+    if requested_order_type and requested_order_type != "limit":
+        warnings.append("order_type ignored; benchmark place_trade uses immediate limit orders.")
+    return warnings
+
+
+def _nested_values(payload: Any) -> Iterable[Any]:
+    if isinstance(payload, dict):
+        yield payload
+        for value in payload.values():
+            yield from _nested_values(value)
+    elif isinstance(payload, list):
+        for value in payload:
+            yield from _nested_values(value)
+
+
+def _first_float(mapping: Mapping[str, Any], keys: Iterable[str]) -> Optional[float]:
+    for key in keys:
+        if key in mapping and mapping[key] not in (None, ""):
+            try:
+                return float(mapping[key])
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _extract_filled_quantity(result: Mapping[str, Any], normalized: Mapping[str, Any], *, live: bool) -> tuple[float, str]:
+    requested = _as_float(normalized.get("quantity"))
+    if not live:
+        return requested, "shadow_assumed_full"
+    body = ((result.get("venue_response") or {}).get("body") or {})
+    filled_keys = (
+        "filled_quantity",
+        "filled_size",
+        "fill_quantity",
+        "fill_size",
+        "filled_count",
+        "fill_count",
+        "executed_quantity",
+        "executed_size",
+        "executed_count",
+        "count_filled",
+    )
+    remaining_keys = (
+        "remaining_quantity",
+        "remaining_size",
+        "remaining_count",
+        "unfilled_quantity",
+        "unfilled_size",
+        "unfilled_count",
+    )
+    for item in _nested_values(body):
+        if not isinstance(item, dict):
+            continue
+        filled = _first_float(item, filled_keys)
+        if filled is not None:
+            return max(0.0, min(requested, filled)), "venue_reported"
+        remaining = _first_float(item, remaining_keys)
+        if remaining is not None:
+            return max(0.0, min(requested, requested - remaining)), "venue_reported_remaining"
+    status_text = json.dumps(body, sort_keys=True).lower()[:3000]
+    if any(token in status_text for token in ("filled", "executed")):
+        return requested, "venue_status_assumed_full"
+    if any(token in status_text for token in ("canceled", "cancelled", "expired", "rejected")):
+        return 0.0, "venue_status_assumed_zero"
+    return requested, "venue_unknown_assumed_full"
+
+
+def _extract_fee_from_result(result: Mapping[str, Any]) -> Optional[float]:
+    body = ((result.get("venue_response") or {}).get("body") or {})
+    fee_keys = (
+        "fee",
+        "fees",
+        "fee_amount",
+        "total_fee",
+        "total_fees",
+        "taker_fee",
+        "exchange_fee",
+    )
+    for item in _nested_values(body):
+        if isinstance(item, dict):
+            fee = _first_float(item, fee_keys)
+            if fee is not None and fee >= 0:
+                return fee
+    return None
+
+
+def _normalize_fill_for_accounting(
+    *,
+    args: Mapping[str, Any],
+    result: Mapping[str, Any],
+    normalized: Mapping[str, Any],
+    guard: Mapping[str, Any],
+    live: bool,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    filled_quantity, fill_status = _extract_filled_quantity(result, normalized, live=live)
+    accounting_order = dict(normalized)
+    accounting_order["quantity"] = filled_quantity
+    accounting_order["estimated_notional"] = round(_as_float(normalized.get("price")) * filled_quantity, 6)
+    accounting_guard = dict(guard)
+    price = _as_float(accounting_order.get("price"))
+    venue_fee = _extract_fee_from_result(result) if live else None
+    fee = venue_fee if venue_fee is not None else (
+        _order_fee(args, accounting_order) if filled_quantity > 0 else 0.0
+    )
+    accounting_guard.update({
+        "requested_quantity": round(_as_float(normalized.get("quantity")), 6),
+        "filled_quantity": round(filled_quantity, 6),
+        "fill_status": fill_status,
+        "filled_notional": round(price * filled_quantity, 6),
+        "filled_fee": round(fee, 6),
+        "fee_source": "venue" if venue_fee is not None else "estimated",
+    })
+    return accounting_order, accounting_guard
 
 
 def _account_conn() -> sqlite3.Connection:
@@ -520,7 +647,7 @@ def _apply_trade_to_account_tables(
     opposite_side = _opposite_side(side)
     price = _as_float(normalized.get("price"))
     quantity = _as_float(normalized.get("quantity"))
-    fee = _as_float(guard.get("fee"))
+    fee = _as_float(guard.get("filled_fee", guard.get("fee")))
     notional = price * quantity
     now = _now()
     with _account_transaction() as conn:
@@ -622,7 +749,11 @@ def _apply_trade_to_account_tables(
         summary = _account_summary(conn, agent_id, policy.account_value)
     return {
         "action_id": action_id,
+        "notional": round(notional, 6),
+        "fee": round(fee, 6),
+        "cash_required": round(cash_required, 6),
         "cash_delta": round(cash_delta, 6),
+        "netting_payout": round(realized_pairs, 6),
         "realized_pairs": round(realized_pairs, 6),
         "realized_pnl": round(realized_pnl, 6),
         "account": summary,
@@ -914,13 +1045,16 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "platform": "kalshi",
                 "action": "buy",
                 "outcome": side,
-                "order_type": str(args.get("order_type") or "limit").lower(),
+                "order_type": "limit",
                 "ticker": ticker,
                 "price": args.get("price"),
                 "quantity": args.get("quantity", 1),
+                "time_in_force": IMMEDIATE_TIME_IN_FORCE,
+                "post_only": False,
                 "client_order_id": str(args.get("client_order_id") or f"foresea-agent-{uuid.uuid4()}"),
             }
-            for key in ("time_in_force", "post_only", "reduce_only", "cancel_order_on_pause", "subaccount"):
+            execution_warnings = _immediate_order_adjustments(args)
+            for key in ("reduce_only", "cancel_order_on_pause", "subaccount"):
                 if key in args:
                     order[key] = args[key]
             mode = str(os.environ.get("FORESEA_AGENT_PLACE_TRADE_MODE", "shadow")).strip().lower()
@@ -987,7 +1121,14 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "submitted": False,
                     "normalized_order": normalized,
                     "risk_guard": guard,
-                    "warnings": preview.get("warnings", []),
+                    "execution": {
+                        "immediate_only": True,
+                        "time_in_force": IMMEDIATE_TIME_IN_FORCE,
+                        "requested_quantity": normalized.get("quantity"),
+                        "filled_quantity": 0.0,
+                        "fill_status": "rejected_before_execution",
+                    },
+                    "warnings": execution_warnings + preview.get("warnings", []),
                 }
 
             if mode == "live":
@@ -998,7 +1139,32 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             else:
                 result = preview
                 submitted = False
+            live = mode == "live"
+            accounting_normalized, accounting_guard = _normalize_fill_for_accounting(
+                args=args,
+                result=result,
+                normalized=normalized,
+                guard=guard,
+                live=live,
+            )
+            fill_status = str(accounting_guard.get("fill_status") or "unknown")
+            filled_quantity = _as_float(accounting_guard.get("filled_quantity"))
+            fill_outcome = (
+                "none" if filled_quantity <= 1e-12
+                else "full" if abs(filled_quantity - _as_float(normalized.get("quantity"))) <= 1e-12
+                else "partial"
+            )
 
+            account_update = _apply_trade_to_account_tables(
+                agent_id=agent_id,
+                policy=policy,
+                mode=mode,
+                submitted=submitted,
+                ticker=ticker,
+                side=side,
+                normalized=accounting_normalized,
+                guard=accounting_guard,
+            )
             event = {
                 "ts": _now(),
                 "agent_id": agent_id,
@@ -1011,33 +1177,29 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "ticker": ticker,
                 "side": side,
                 "price": normalized.get("price"),
-                "quantity": normalized.get("quantity"),
+                "quantity": accounting_normalized.get("quantity"),
+                "requested_quantity": normalized.get("quantity"),
+                "filled_quantity": accounting_guard["filled_quantity"],
+                "fill_status": fill_status,
                 "client_order_id": normalized.get("exchange_order", {}).get("client_order_id"),
-                "cycle_id": guard["cycle_id"],
-                "notional": guard["notional"],
-                "fee": guard["fee"],
-                "netting_payout": guard["netting_payout"],
-                "cash_required": guard["cash_required"],
-                "cash_delta": guard["cash_delta"],
-                "risk_guard": guard,
+                "cycle_id": accounting_guard["cycle_id"],
+                "notional": account_update["notional"],
+                "fee": account_update["fee"],
+                "netting_payout": account_update["netting_payout"],
+                "cash_required": account_update["cash_required"],
+                "cash_delta": account_update["cash_delta"],
+                "risk_guard": accounting_guard,
             }
             _record_ledger(event)
-            account_update = _apply_trade_to_account_tables(
-                agent_id=agent_id,
-                policy=policy,
-                mode=mode,
-                submitted=submitted,
-                ticker=ticker,
-                side=side,
-                normalized=normalized,
-                guard=guard,
-            )
             trade_actions.add(1, {"mode": mode, "submitted": str(submitted).lower()})
+            fill_actions.add(1, {"mode": mode, "outcome": fill_outcome})
             span.set_attributes({
                 "outcome": "success",
                 "risk_guard.allowed": True,
                 "trade.mode": mode,
                 "trade.submitted": submitted,
+                "trade.fill_outcome": fill_outcome,
+                "trade.fill_status": fill_status,
             })
             _finish_tool(tool, start, "success")
             return {
@@ -1051,10 +1213,22 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     else "Shadow Kalshi trade recorded; no exchange order was submitted."
                 ),
                 "normalized_order": normalized,
-                "risk_guard": guard,
+                "risk_guard": accounting_guard,
+                "execution": {
+                    "immediate_only": True,
+                    "time_in_force": IMMEDIATE_TIME_IN_FORCE,
+                    "requested_quantity": normalized.get("quantity"),
+                    "filled_quantity": accounting_guard["filled_quantity"],
+                    "fill_status": fill_status,
+                    "fill_outcome": fill_outcome,
+                    "unfilled_quantity_cancelled": round(
+                        max(0.0, _as_float(normalized.get("quantity")) - filled_quantity),
+                        6,
+                    ),
+                },
                 "account": account_update["account"],
                 "action_id": account_update["action_id"],
-                "warnings": result.get("warnings", []),
+                "warnings": execution_warnings + result.get("warnings", []),
             }
         except Exception as exc:
             span.record_exception(exc)

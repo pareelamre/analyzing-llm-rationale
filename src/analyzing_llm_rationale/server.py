@@ -7011,7 +7011,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "manage_notes": _tool_manage_notes,
     }
     benchmark_specs = [
-        {"name": "place_trade", "args": "ticker, side, price, quantity", "description": "Buy YES or NO contracts on Kalshi. There is no sell tool; exiting is represented by buying the opposite side. Trades update persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit. Defaults to shadow mode unless live trading is explicitly enabled."},
+        {"name": "place_trade", "args": "ticker, side, price, quantity", "description": "Buy YES or NO contracts on Kalshi using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. There is no sell tool; exiting is represented by buying the opposite side. Trades update persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit. Defaults to shadow mode unless live trading is explicitly enabled."},
         {"name": "web_search", "args": "query", "description": "Research market events with OpenAI web search. CoinMarketCap and other blacklisted domains are excluded from results."},
         {"name": "manage_notes", "args": "action, id?, text?, query?, tags?", "description": "Store, search, edit, list, or delete persistent notes. Max 50 notes per agent, 1200 characters each."},
     ]
@@ -7058,9 +7058,11 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         rule = (
             "Benchmark mode: you have exactly three tools: `place_trade`, `web_search`, "
             "and `manage_notes`. Use `place_trade` for Kalshi trade decisions. There is "
-            "no sell tool; exit by buying the opposite side. Cash, positions, actions, "
-            "weighted-average entry price, netting PnL, and market settlements persist "
-            "across cycles; settlements are checked before a new cycle's trade. "
+            "no sell tool; exit by buying the opposite side. `place_trade` uses "
+            "immediate-or-cancel execution only: unfilled quantity is cancelled and no "
+            "order rests. Cash, positions, actions, weighted-average entry price, "
+            "netting PnL, and market settlements persist across cycles; settlements "
+            "are checked before a new cycle's trade. "
             "`place_trade` is guarded by account solvency including fees/netting payouts, "
             "a 15% single-market cost-basis cap, and a per-cycle spend limit. Use "
             "`web_search` for current evidence and `manage_notes` for memory across cycles."
