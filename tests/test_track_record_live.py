@@ -123,6 +123,33 @@ class TrajectoryTests(unittest.TestCase):
             "2026-06-03T12:30",
         )
 
+    def test_public_mtm_curve_includes_final_heartbeat(self):
+        public = trl._public_mark_to_market_account({
+            "ts": "2026-07-29T06:35:36+00:00",
+            "cash": 9990.0,
+            "liquidation_value": 5.0,
+            "account_value": 9995.0,
+            "value_method": "mark_to_market_bid_liquidation",
+            "open_positions": [{"platform": "Polymarket", "ident": "m1"}],
+            "illiquid_positions": [],
+            "value_curve": [
+                {
+                    "ts": "2026-07-29T04:13:11+00:00",
+                    "cash": 9991.0,
+                    "liquidation_value": 4.0,
+                    "account_value": 9995.0,
+                    "value_method": "mark_to_market_bid_liquidation",
+                    "open_positions": [],
+                    "illiquid_positions": [],
+                }
+            ],
+        })
+
+        self.assertEqual(public["value_curve"][-1]["event_type"], "heartbeat")
+        self.assertEqual(public["value_curve"][-1]["ts"], "2026-07-29T06:35:36+00:00")
+        self.assertEqual(public["value_curve"][-1]["account_value"], 9995.0)
+        self.assertEqual(public["value_curve"][-1]["n_open_positions"], 1)
+
     def test_seed_idents_enroll_market_without_discovery(self):
         far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)
