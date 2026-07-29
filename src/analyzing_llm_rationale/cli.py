@@ -641,14 +641,18 @@ def fetch_and_rank_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def serve_command(args: argparse.Namespace) -> int:
-    try:
-        import uvicorn
+def init_server_state(args: argparse.Namespace) -> None:
+    """Initialise the FastAPI prediction state without starting a server.
 
-        from analyzing_llm_rationale.server import _state, app
+    The Cloud Run API and the GitHub-hosted track-record job share this setup so
+    both paths use the same provider, prompts, model allowlist, and evidence
+    pipeline.
+    """
+    try:
+        from analyzing_llm_rationale.server import _state
     except ImportError:
         print("The 'serve' extra is required: pip install '.[serve]'")
-        return 1
+        raise
 
     root = repo_root()
     args = resolve_model_args(args)
@@ -685,6 +689,21 @@ def serve_command(args: argparse.Namespace) -> int:
             )
         except Exception as exc:
             print(f"Evidence retrieval disabled: {exc}")
+
+
+def serve_command(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+
+        from analyzing_llm_rationale.server import app
+    except ImportError:
+        print("The 'serve' extra is required: pip install '.[serve]'")
+        return 1
+
+    try:
+        init_server_state(args)
+    except ImportError:
+        return 1
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
 

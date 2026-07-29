@@ -34,7 +34,8 @@ jobs:
 
       - name: Install deps
         run: >-
-          pip install --quiet requests duckdb pyyaml
+          pip install --quiet -e ".[serve,pipeline]"
+          requests duckdb pyyaml
           opentelemetry-sdk
           opentelemetry-exporter-otlp-proto-http
           opentelemetry-instrumentation-logging
@@ -43,6 +44,10 @@ jobs:
       - name: Advance live track record
         env:
           FORESEA_BASE_URL: https://foresea.ink
+          SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+          TRACK_RECORD_PREDICT_MODE: "local"
+          TRACK_RECORD_LOCAL_MODEL: "gpt-oss-120b"
           TRACK_MODEL: "council"
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
