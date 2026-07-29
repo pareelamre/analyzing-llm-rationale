@@ -193,9 +193,13 @@ class OpenAICompatibleProvider(ChatProvider):
             )
 
         try:
-            return response.json()["choices"][0]["message"]["content"]
+            message = response.json()["choices"][0]["message"]
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise RetryableProviderError(f"Malformed provider response: {exc}") from exc
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, str) or not content.strip():
+            raise RetryableProviderError("Malformed provider response: empty message content")
+        return content
 
     def stream_chat_completion(
         self,

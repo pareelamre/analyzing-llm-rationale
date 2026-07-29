@@ -30,11 +30,14 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("Verify forecast secrets", workflow)
         self.assertIn("SCADS_AI_API_KEY must be configured", workflow)
         self.assertIn('pip install --quiet -e ".[serve,pipeline]"', workflow)
+        self.assertIn('MAX_TOKENS: "4096"', workflow)
         self.assertIn('PREDICT_CONCURRENCY: "2"', workflow)
         self.assertIn('PREDICT_MIN_INTERVAL_S: "4.0"', workflow)
-        self.assertIn('PREDICT_RETRIES: "4"', workflow)
-        self.assertIn('PROVIDER_MAX_RETRIES: "3"', workflow)
-        self.assertIn('PROVIDER_TIMEOUT_S: "180"', workflow)
+        self.assertIn('PREDICT_RETRIES: "5"', workflow)
+        self.assertIn('PREDICT_TIMEOUT_S: "600"', workflow)
+        self.assertIn('PROVIDER_MAX_RETRIES: "4"', workflow)
+        self.assertIn('PROVIDER_TIMEOUT_S: "300"', workflow)
+        self.assertIn('COUNCIL_MEMBER_TIMEOUT_S: "180"', workflow)
         self.assertNotIn("TRACK_MODELS:", workflow)
         for model in (
             "scads-alias-code",
