@@ -28,7 +28,7 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn('TRACK_RECORD_PREDICT_MODE: "local"', workflow)
         self.assertIn("strategy:", workflow)
         self.assertIn("fail-fast: false", workflow)
-        self.assertIn("max-parallel: 8", workflow)
+        self.assertIn("max-parallel: 15", workflow)
         self.assertIn("forecast (${{ matrix.model }})", workflow)
         self.assertIn("target_shard_count", workflow)
         self.assertIn("target_shard_index", workflow)
