@@ -18,7 +18,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("resolved strategy performance", renderer.lower())
         self.assertIn('id="eb-equity-svg"', renderer)
 
-    def test_edge_board_mark_to_market_chart_tracks_scads_models(self):
+    def test_edge_board_model_comparison_chart_tracks_scads_models(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
         ).read_text(encoding="utf-8")
@@ -27,19 +27,17 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("'scads-alias-code':", index)
         self.assertIn("'scads-alias-reasoning':", index)
         self.assertIn("'kimi-k2.7-code':", index)
-        self.assertIn('id="eb-mtm-svg"', index)
-        self.assertIn('id="eb-mtm-table-body"', index)
-        self.assertIn("head: _ebModelHead(m.model)", index)
         self.assertIn("raw.includes('kimi-k2.7')", index)
         self.assertIn("const padL = 60, padR = 34, padT = 26", index)
         self.assertIn("legendRowH = 17", index)
-        self.assertIn("_equitySvg(curves, 760, 180", index)
+        self.assertIn("_equitySvg(compCurves, 760, 180", index)
         self.assertIn('id="eb-model-comparison-svg"', index)
-        self.assertIn("d.mark_to_market_by_model", index)
+        self.assertNotIn('id="eb-mtm-svg"', index)
+        self.assertNotIn('id="eb-mtm-table-body"', index)
         self.assertIn("data-eq-id", index)
         self.assertIn("const _equityChartStates = new Map()", index)
         self.assertIn("_attachEdgeBoardChartHovers(host)", index)
-        self.assertIn("'#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'", index)
+        self.assertIn("'#eb-model-comparison-svg', '#eb-equity-svg'", index)
 
     def test_edge_board_refresh_rerenders_full_surface(self):
         index = (
@@ -79,16 +77,15 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("padL + pointInsetX + ((t - tMin) / tSpan) * innerW", renderer)
         self.assertIn("pointInsetX, innerW", renderer)
 
-    def test_mtm_primary_account_card_uses_neutral_stat_style(self):
+    def test_edge_board_omits_mark_to_market_account_dom(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
         ).read_text(encoding="utf-8")
-        mtm_block = index.split('id="eb-mtm-primary-v"', 1)[0].rsplit(
-            '<div class="tr-stat"', 1
-        )[1]
 
-        self.assertNotIn("rgba(16,185,129", mtm_block)
-        self.assertNotIn("background:", mtm_block)
+        self.assertNotIn('id="eb-mtm-primary-v"', index)
+        self.assertNotIn('id="eb-mtm-last-marked-v"', index)
+        self.assertNotIn('id="eb-mtm-svg"', index)
+        self.assertNotIn('id="eb-mtm-table-body"', index)
 
 
 if __name__ == "__main__":

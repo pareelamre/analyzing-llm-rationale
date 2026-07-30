@@ -5071,26 +5071,6 @@ const _MTM_MODEL_COLORS = {
   'crowd-follow': '#94a3b8',
   'market-follow': '#64748b',
 };
-function _mtmModelColor(model, i = 0) {
-  const palette = ['#10b981', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa', '#06b6d4', '#f97316', '#84cc16', '#14b8a6', '#db2777', '#eab308', '#94a3b8'];
-  return _MTM_MODEL_COLORS[model] || palette[i % palette.length];
-}
-
-function _mtmLastMarkedText(d) {
-  const primary = d && d.mark_to_market_account;
-  const ts = primary && primary.ts ? primary.ts : d && d.generated_at;
-  if (!ts) return 'building';
-  const t = new Date(ts).getTime();
-  if (!Number.isFinite(t)) return 'building';
-  const ageMs = Math.max(0, Date.now() - t);
-  const mins = Math.floor(ageMs / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return new Date(t).toLocaleString();
-}
-
 async function refreshEdgeForecasts() {
   try {
     const r = await _liveJsonFetch('/edge-board');
@@ -5114,66 +5094,6 @@ async function refreshEdgeForecasts() {
     }
     const pnl = d.paper_pnl;
     const comp = d.models_comparison || [];
-    const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
-    const _usd = v => Number.isFinite(Number(v))
-      ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
-      : 'building';
-    if (mtmModels.length) {
-      const curves = mtmModels.map((m, i) => {
-        const account = m.account || {};
-        const curvePoints = account.value_curve || [];
-        const values = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
-        const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
-        const accountValue = Number(account.account_value);
-        const accountTime = new Date(account.ts).getTime();
-        const lastValue = values.length ? values[values.length - 1] : null;
-        const lastTime = times.length ? times[times.length - 1] : null;
-        if (Number.isFinite(accountValue) && Number.isFinite(accountTime) && (lastValue !== accountValue || lastTime !== accountTime)) {
-          values.push(accountValue);
-          times.push(accountTime);
-        }
-        if (!values.length) return null;
-        const label = _ebModelLabel(m.model);
-        const value = account.account_value ?? m.account_value;
-        const ret = account.return ?? m.return;
-        const curve = {
-          points: values,
-          color: _mtmModelColor(m.model, i),
-          label,
-          head: _ebModelHead(m.model),
-          headTitle: `${label} mark-to-market ${_usd(value)} ${ret == null ? '' : _roiPct(ret)}`.trim(),
-        };
-        if (times.length === values.length) curve.times = times;
-        return curve;
-      }).filter(Boolean);
-      const mtmSvg = document.getElementById('eb-mtm-svg');
-      if (mtmSvg) {
-        mtmSvg.innerHTML = curves.length ? _equitySvg(curves, 760, 180, {asPct: false, yPrefix: '$'}) : '';
-        if (curves.length) _attachEquityHover(mtmSvg);
-      }
-      const mtmBody = document.getElementById('eb-mtm-table-body');
-      if (mtmBody) {
-        mtmBody.innerHTML = mtmModels.map((m, i) => {
-          const account = m.account || {};
-          const value = account.account_value ?? m.account_value;
-          const ret = account.return ?? m.return;
-          const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
-          return `<tr class="eb-row">
-            <td><b>${i + 1}</b></td>
-            <td><b>${escHtml(m.model || '')}</b></td>
-            <td>${_usd(value)}</td>
-            <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
-            <td>${account.n_trades ?? m.n_trades ?? 0}</td>
-            <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
-            <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
-          </tr>`;
-        }).join('');
-      }
-      const mtmPrimary = document.getElementById('eb-mtm-primary-v');
-      if (mtmPrimary) mtmPrimary.textContent = _usd(d.mark_to_market_account && d.mark_to_market_account.account_value);
-      const mtmMarked = document.getElementById('eb-mtm-last-marked-v');
-      if (mtmMarked) mtmMarked.textContent = _mtmLastMarkedText(d);
-    }
     const modelCompSvg = document.getElementById('eb-model-comparison-svg');
     if (modelCompSvg) {
       const modelCurves = _ebModelCurves(comp, 5, 9);
@@ -6125,7 +6045,7 @@ function _attachEquityHover(container) {
 }
 
 function _attachEdgeBoardChartHovers(root = document) {
-  ['#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'].forEach(sel => {
+  ['#eb-model-comparison-svg', '#eb-equity-svg'].forEach(sel => {
     const el = root.querySelector(sel);
     if (el) _attachEquityHover(el);
   });
@@ -6281,17 +6201,11 @@ function renderEdgeBoard(d) {
   _ebBoardData = board;
   _ebPage = 0;
   const pnl = d.paper_pnl, ll = d.lead_lag;
-  const mtm = d.mark_to_market_account || null;
-  const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
-  const mtmCycleMinutes = d.mark_to_market_cycle_minutes || 15;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   // Never surface a degenerate metric (a 0% / −100% read off a handful of points).
   // Below EB_MIN_N samples a metric reads "building n=…" instead of a misleading zero.
   const EB_MIN_N = 5;
   const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
-  const _usd = v => Number.isFinite(Number(v))
-    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
-    : 'building';
   const modelFollowsMkt = (ll && ll.n_markets >= EB_MIN_N && ll.market_converged_to_model_pct != null)
     ? pct(1 - ll.market_converged_to_model_pct) + '%' : _build(ll && ll.n_markets);
   const stats = `
@@ -6318,68 +6232,6 @@ function renderEdgeBoard(d) {
         `<td>${enough ? _roiPct(modelSmartRoi) : '·'}</td><td>${enough ? _roiDeltaPct(roiDelta) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
   } else {
     compHtml = `<p class="text-sm text-gray-500">Model comparison across SCADS-hosted models fills in as forecasts resolve.</p>`;
-  }
-  let mtmHtml;
-  if (mtmModels.length) {
-    const curves = mtmModels.map((m, i) => {
-      const account = m.account || {};
-      const curvePoints = account.value_curve || [];
-      const values = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
-      const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
-      const accountValue = Number(account.account_value);
-      const accountTime = new Date(account.ts).getTime();
-      const lastValue = values.length ? values[values.length - 1] : null;
-      const lastTime = times.length ? times[times.length - 1] : null;
-      if (Number.isFinite(accountValue) && Number.isFinite(accountTime) && (lastValue !== accountValue || lastTime !== accountTime)) {
-        values.push(accountValue);
-        times.push(accountTime);
-      }
-      if (!values.length) return null;
-      const label = _ebModelLabel(m.model);
-      const value = account.account_value ?? m.account_value;
-      const ret = account.return ?? m.return;
-      const curve = {
-        points: values,
-        color: _mtmModelColor(m.model, i),
-        label,
-        head: _ebModelHead(m.model),
-        headTitle: `${label} mark-to-market ${_usd(value)} ${ret == null ? '' : _roiPct(ret)}`.trim(),
-      };
-      if (times.length === values.length) curve.times = times;
-      return curve;
-    }).filter(Boolean);
-    const rows = mtmModels.map((m, i) => {
-      const account = m.account || {};
-      const value = account.account_value ?? m.account_value;
-      const ret = account.return ?? m.return;
-      const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
-      return `<tr class="eb-row">
-        <td><b>${i + 1}</b></td>
-        <td><b>${escHtml(m.model || '')}</b></td>
-        <td>${_usd(value)}</td>
-        <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
-        <td>${account.n_trades ?? m.n_trades ?? 0}</td>
-        <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
-        <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
-      </tr>`;
-    }).join('');
-    mtmHtml = `
-      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Shadow benchmark account refreshed on ${mtmCycleMinutes}-minute cycles. Trades are inferred from model-vs-market edge, resolved markets settle into cash, and open YES/NO positions are marked to bid-side liquidation prices. No benchmark orders are submitted to an exchange.</p>
-      <div class="tr-stats">
-        <div class="tr-stat">
-          <div class="v" id="eb-mtm-primary-v">${_usd(mtm && mtm.account_value)}</div>
-          <div class="k label">Council account value</div>
-          <div class="k" style="font-size:11px;color:var(--text-dim)">cash + bid liquidation</div>
-        </div>
-        <div class="tr-stat"><div class="v">${mtmCycleMinutes}m</div><div class="k label">Cycle</div><div class="k" style="font-size:11px;color:var(--text-dim)">forecast cadence</div></div>
-        <div class="tr-stat"><div class="v" id="eb-mtm-last-marked-v">${_mtmLastMarkedText(d)}</div><div class="k label">Last marked</div><div class="k" style="font-size:11px;color:var(--text-dim)">chart heartbeat</div></div>
-        <div class="tr-stat"><div class="v">${mtm?.n_open_positions || 0}</div><div class="k label">Open positions</div><div class="k" style="font-size:11px;color:var(--text-dim)">primary model</div></div>
-        <div class="tr-stat"><div class="v">${mtmModels.length}</div><div class="k label">Models tracked</div><div class="k" style="font-size:11px;color:var(--text-dim)">SCADS + baseline</div></div>
-      </div>
-      <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 180, {asPct: false, yPrefix: '$'}) : ''}</div>
-      <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
-  } else {
-    mtmHtml = `<p class="text-sm text-gray-500">Shadow mark-to-market account values will appear after strategy snapshots are available.</p>`;
   }
   let performanceHtml;
   if (pnl && pnl.flat) {
@@ -6486,7 +6338,6 @@ function renderEdgeBoard(d) {
     ${stats}
     <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
     <h4 class="eb-h">Model comparison · resolved forecast quality</h4>${compHtml}
-    <h4 class="eb-h">Shadow mark-to-market account · bid-side liquidation value</h4>${mtmHtml}
     <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift · does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live council forecasts · ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}

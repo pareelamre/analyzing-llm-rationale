@@ -88,6 +88,13 @@ class ChatUiTests(unittest.TestCase):
         self.assertNotIn('id="eb-pnl-flat-v"', self.index_html)
         self.assertNotIn("<th>Flat ROI</th>", self.index_html)
 
+    def test_edge_board_does_not_render_mark_to_market_account_panel(self) -> None:
+        self.assertNotIn("Shadow mark-to-market account", self.index_html)
+        self.assertNotIn("Council account value", self.index_html)
+        self.assertNotIn("cash + bid liquidation", self.index_html)
+        self.assertNotIn("chart heartbeat", self.index_html)
+        self.assertNotIn("SCADS + baseline", self.index_html)
+
 
 if __name__ == "__main__":
     unittest.main()
