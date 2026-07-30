@@ -41,6 +41,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("_attachEdgeBoardChartHovers(host)", index)
         self.assertIn("'#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'", index)
 
+<<<<<<< HEAD
     def test_mtm_curves_carry_head_labels(self):
         """_equitySvg skips the end-of-line bubble unless the curve sets `head`;
         _renderMtmPage used to omit it, so the MTM chart rendered as bare lines."""
@@ -116,6 +117,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertNotIn("lft + 150 > container.offsetWidth", hover)
 
     def test_edge_board_refresh_rerenders_full_surface(self):
+
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
         ).read_text(encoding="utf-8")
