@@ -66,6 +66,17 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("padL + pointInsetX + ((t - tMin) / tSpan) * innerW", renderer)
         self.assertIn("pointInsetX, innerW", renderer)
 
+    def test_mtm_primary_account_card_uses_neutral_stat_style(self):
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        mtm_block = index.split('id="eb-mtm-primary-v"', 1)[0].rsplit(
+            '<div class="tr-stat"', 1
+        )[1]
+
+        self.assertNotIn("rgba(16,185,129", mtm_block)
+        self.assertNotIn("background:", mtm_block)
+
 
 if __name__ == "__main__":
     unittest.main()
