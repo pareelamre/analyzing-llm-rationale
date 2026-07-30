@@ -5856,10 +5856,18 @@ function _ebModelColor(model, index = 0) {
 function _ebNormalizeBankrollCurve(s) {
   const curve = s?.growth_curve;
   if (!Array.isArray(curve) || !curve.length) return null;
-  const first = Number(curve[0]);
+  const values = curve.map(Number).filter(Number.isFinite);
+  if (!values.length) return null;
+  const first = values[0];
   if (!Number.isFinite(first)) return null;
-  if (first < 1000) return curve.map(v => Number(v) * (EB_STARTING_BANKROLL / 100));
-  return curve.map(Number);
+  const maxAbs = Math.max(...values.map(v => Math.abs(v)));
+  // Supported historical encodings:
+  //  - account value curve: 10000 -> 10000
+  //  - indexed-to-100 curve: 100 -> 10000
+  //  - multiplier curve: 1.0 -> 10000
+  if (maxAbs <= 10) return values.map(v => v * EB_STARTING_BANKROLL);
+  if (maxAbs < 1000) return values.map(v => v * (EB_STARTING_BANKROLL / 100));
+  return values;
 }
 
 function _ebPnlCurve(s) {

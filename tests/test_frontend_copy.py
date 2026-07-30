@@ -41,6 +41,18 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("_attachEdgeBoardChartHovers(host)", index)
         self.assertIn("'#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'", index)
 
+    def test_edge_board_growth_curve_normalizes_multiplier_to_bankroll(self):
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        normalizer = index.split("function _ebNormalizeBankrollCurve(s) {", 1)[1].split(
+            "function _ebPnlCurve", 1
+        )[0]
+
+        self.assertIn("maxAbs <= 10", normalizer)
+        self.assertIn("v * EB_STARTING_BANKROLL", normalizer)
+        self.assertIn("v * (EB_STARTING_BANKROLL / 100)", normalizer)
+
 
 if __name__ == "__main__":
     unittest.main()
