@@ -5097,6 +5097,22 @@ async function refreshEdgeForecasts() {
     const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) return;
     const d = await _readJson(r);
+    const host = document.getElementById('edgeBody');
+    if (host) {
+      const scrollTop = host.scrollTop;
+      const previousPage = _ebPage;
+      host.innerHTML = renderEdgeBoard(d);
+      if (previousPage > 0 && _ebBoardData.length) {
+        const pages = Math.ceil(_ebBoardData.length / _EB_PAGE_SIZE);
+        _ebPage = Math.max(0, Math.min(previousPage, pages - 1));
+        const boardSection = document.getElementById('eb-board-section');
+        if (boardSection) boardSection.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+      }
+      _attachEdgeBoardChartHovers(host);
+      host.scrollTop = scrollTop;
+      refreshEdgePrices();
+      return;
+    }
     const pnl = d.paper_pnl;
     const comp = d.models_comparison || [];
     const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
