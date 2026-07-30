@@ -53,6 +53,19 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("v * EB_STARTING_BANKROLL", normalizer)
         self.assertIn("v * (EB_STARTING_BANKROLL / 100)", normalizer)
 
+    def test_edge_board_equity_chart_insets_points_from_edges(self):
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        renderer = index.split("function _equitySvg(", 1)[1].split(
+            "function _attachEquityHover", 1
+        )[0]
+
+        self.assertIn("const pointInsetX", renderer)
+        self.assertIn("const innerW", renderer)
+        self.assertIn("padL + pointInsetX + ((t - tMin) / tSpan) * innerW", renderer)
+        self.assertIn("pointInsetX, innerW", renderer)
+
 
 if __name__ == "__main__":
     unittest.main()
