@@ -1,8 +1,9 @@
 name: Track record forecast snapshots
 
-# Cost-capped scheduled pass: LLM forecast snapshots for selected open markets
-# and tracked models. Each run makes up to N_markets × N_models /predict calls.
-# Uses the shared concurrency group so it never races a price-tick commit.
+# Cost-capped scheduled pass: LLM forecast snapshots for selected open markets.
+# Each model runs as an isolated matrix job, then merges only its own snapshot
+# writes back into the shared DuckDB store. One unavailable model should not
+# block the other models from updating the mark-to-market chart.
 
 on:
   schedule:
@@ -13,14 +14,6 @@ on:
         description: "Force re-forecast all open markets regardless of slot (1=yes, 0=no)"
         required: false
         default: "0"
-      model_shard_count:
-        description: "Number of rotating model shards"
-        required: false
-        default: "4"
-      model_shard_index:
-        description: "0-based model shard to run; blank rotates from the 15-minute slot"
-        required: false
-        default: ""
       target_shard_count:
         description: "Number of rotating market/target shards"
         required: false
@@ -38,14 +31,46 @@ permissions:
   contents: write
   pull-requests: write
 
-concurrency:
-  group: track-record-forecast
-  cancel-in-progress: false
-
 jobs:
   forecast:
+    name: forecast (${{ matrix.model }})
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        include:
+          - model: council
+            artifact: council
+          - model: scads-alias-code
+            artifact: scads-alias-code
+          - model: scads-alias-ha
+            artifact: scads-alias-ha
+          - model: scads-alias-reasoning
+            artifact: scads-alias-reasoning
+          - model: scads-alias-huge
+            artifact: scads-alias-huge
+          - model: scads-alias-huge-no-thinking
+            artifact: scads-alias-huge-no-thinking
+          - model: llama-3.1-8b-instruct
+            artifact: llama-3.1-8b-instruct
+          - model: llama-3.3-70b-instruct
+            artifact: llama-3.3-70b-instruct
+          - model: gpt-oss-120b
+            artifact: gpt-oss-120b
+          - model: gemma-4-31b-it
+            artifact: gemma-4-31b-it
+          - model: minimax-m3
+            artifact: minimax-m3
+          - model: kimi-k2.7-code
+            artifact: kimi-k2.7-code
+          - model: qwen3-coder-30b-a3b-instruct
+            artifact: qwen3-coder-30b-a3b-instruct
+          - model: glm-5.2-fp8
+            artifact: glm-5.2-fp8
+          - model: crowd-follow
+            artifact: crowd-follow
     steps:
       - uses: actions/checkout@v4
 
@@ -71,17 +96,24 @@ jobs:
             exit 1
           fi
 
-      - name: Advance live track record
+      - name: Prepare isolated model store
+        run: |
+          mkdir -p tmp/model-forecast
+          cp data/track_record_store.duckdb "tmp/model-forecast/${{ matrix.artifact }}.duckdb"
+
+      - name: Advance model forecast snapshots
         env:
           FORESEA_BASE_URL: https://foresea.ink
+          TRACK_STORE_PATH: tmp/model-forecast/${{ matrix.artifact }}.duckdb
           SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
           TRACK_RECORD_PREDICT_MODE: "local"
           TRACK_RECORD_LOCAL_MODEL: "gpt-oss-120b"
-          TRACK_MODEL: "council"
-          TRACK_MODEL_SHARD_COUNT: ${{ github.event.inputs.model_shard_count || '4' }}
-          TRACK_MODEL_SHARD_INDEX: ${{ github.event.inputs.model_shard_index || '' }}
-          TRACK_MODEL_SHARD_ALWAYS: "crowd-follow"
+          TRACK_MODEL: ${{ matrix.model }}
+          TRACK_MODELS: ${{ matrix.model }}
+          TRACK_MODEL_SHARD_COUNT: "1"
+          TRACK_MODEL_SHARD_INDEX: "0"
+          TRACK_MODEL_SHARD_ALWAYS: ""
           TRACK_MODEL_SHARD_SLOT_MINUTES: "15"
           TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '4' }}
           TRACK_TARGET_SHARD_INDEX: ${{ github.event.inputs.target_shard_index || '' }}
@@ -100,30 +132,56 @@ jobs:
           EXPIRY_SLOT_HOURS: "6"
           MAX_TOKENS: "4096"
           PROVIDER_TIMEOUT_S: "300"
-          PROVIDER_MAX_RETRIES: "4"
+          PROVIDER_MAX_RETRIES: "1"
           PROVIDER_BACKOFF_BASE_S: "4"
           COUNCIL_MEMBER_TIMEOUT_S: "180"
-          PREDICT_TIMEOUT_S: "600"
+          PREDICT_TIMEOUT_S: "300"
           PREDICT_CONCURRENCY: "2"
           PREDICT_MIN_INTERVAL_S: "4.0"
-          PREDICT_RETRIES: "5"
+          PREDICT_RETRIES: "2"
           PREDICT_RETRY_BACKOFF_BASE_S: "20"
           PREDICT_RETRY_BACKOFF_MAX_S: "300"
-          PREDICT_FAILURE_CIRCUIT_THRESHOLD: "12"
-          TRACK_RECORD_SNAPSHOT_PASS_RETRIES: "3"
-          TRACK_RECORD_SNAPSHOT_PASS_RETRY_SLEEP_S: "300"
+          PREDICT_FAILURE_CIRCUIT_THRESHOLD: "2"
+          TRACK_RECORD_SNAPSHOT_PASS_RETRIES: "1"
+          TRACK_RECORD_SNAPSHOT_PASS_RETRY_SLEEP_S: "0"
         run: python scripts/track_record_tick.py --snapshot-only
 
-      - name: Commit updated forecast snapshots
+      - name: Publish model snapshots and refresh MTM
         env:
-          GIT_REBASE_KEEP_THEIRS: "data/track_record_store.duckdb"
+          FORESEA_BASE_URL: https://foresea.ink
+          TRACK_MODEL: "council"
+          CYCLE_INTERVAL_MINUTES: "15"
+          MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
         run: |
+          set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/track_record_store.duckdb
-          if git diff --cached --quiet; then
-            echo "No forecast snapshot changes to commit."
-            exit 0
+          if [ -n "$MTM_PUBLISH_DEPLOY_KEY_B64" ]; then
+            mkdir -p ~/.ssh
+            printf '%s' "$MTM_PUBLISH_DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/mtm_publish_deploy_key
+            chmod 600 ~/.ssh/mtm_publish_deploy_key
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
+            git config core.sshCommand "ssh -i ~/.ssh/mtm_publish_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+            git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
           fi
-          git commit -m "track record: forecast snapshots [skip ci]"
-          bash .github/scripts/push_with_rebase_retry.sh origin main
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git checkout -B "forecast-publish-${{ matrix.artifact }}" origin/main
+            python scripts/merge_track_record_store.py \
+              --target data/track_record_store.duckdb \
+              "tmp/model-forecast/${{ matrix.artifact }}.duckdb"
+            python scripts/track_record_tick.py --mtm-only
+            git add data/track_record_store.duckdb static/mark_to_market_live.json
+            if git diff --cached --quiet; then
+              echo "No forecast snapshot changes to commit for ${{ matrix.model }}."
+              exit 0
+            fi
+            git commit -m "track record: forecast ${{ matrix.model }} [skip ci]"
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Publish attempt ${attempt}/5 failed for ${{ matrix.model }}; retrying."
+            sleep 5
+          done
+          echo "Failed to publish forecast snapshots for ${{ matrix.model }}." >&2
+          exit 1
