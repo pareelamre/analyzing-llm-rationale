@@ -87,6 +87,7 @@ _TRACK_RECORD_LIVE_URL = os.environ.get(
 _TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "30"))
 _TRACK_RECORD_LIVE_TIMEOUT = int(os.environ.get("TRACK_RECORD_LIVE_TIMEOUT", "20"))
 _EDGE_BOARD_STALE_AFTER_S = int(os.environ.get("EDGE_BOARD_STALE_AFTER_S", "1800"))
+_EDGE_BOARD_CURVE_MAX_POINTS = int(os.environ.get("EDGE_BOARD_CURVE_MAX_POINTS", "160"))
 _FORECAST_EVALUATION_URL = os.environ.get(
     "FORECAST_EVALUATION_URL",
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
@@ -1129,6 +1130,136 @@ def _track_record_freshness(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]
 
 
 # ── Evolution-loop feedback: live calibration + model auto-selection ──────────
+def _sample_indices(n: int, max_points: int) -> List[int]:
+    """Evenly sample an ordered series while preserving both endpoints."""
+    if n <= max_points:
+        return list(range(n))
+    if max_points <= 1:
+        return [0]
+    return sorted({round(i * (n - 1) / (max_points - 1)) for i in range(max_points)})
+
+
+def _sample_list(values: Any, max_points: int = _EDGE_BOARD_CURVE_MAX_POINTS) -> Any:
+    if not isinstance(values, list) or len(values) <= max_points:
+        return values
+    return [values[i] for i in _sample_indices(len(values), max_points)]
+
+
+def _compact_pnl_strategy(strategy: Any) -> Any:
+    if not isinstance(strategy, dict):
+        return strategy
+    keep = {
+        "n_bets",
+        "roi",
+        "win_rate",
+        "total_staked",
+        "compound_bankroll",
+        "compound_return",
+        "growth_curve",
+        "equity_curve",
+        "equity_curve_ts",
+    }
+    compact = {k: strategy.get(k) for k in keep if k in strategy}
+    for curve_key in ("growth_curve", "equity_curve", "equity_curve_ts"):
+        if curve_key in compact:
+            compact[curve_key] = _sample_list(compact[curve_key])
+    return compact
+
+
+def _compact_paper_pnl(pnl: Any) -> Any:
+    if not isinstance(pnl, dict):
+        return pnl
+    compact: Dict[str, Any] = {}
+    for key, value in pnl.items():
+        if isinstance(value, dict) and (
+            "growth_curve" in value or "equity_curve" in value or "n_bets" in value
+        ):
+            compact[key] = _compact_pnl_strategy(value)
+        elif key in {"disclaimer", "methodology", "notes"}:
+            compact[key] = value
+    return compact
+
+
+def _compact_models_comparison(models: Any) -> List[Dict[str, Any]]:
+    compact_models: List[Dict[str, Any]] = []
+    for model in models or []:
+        if not isinstance(model, dict):
+            continue
+        compact: Dict[str, Any] = {
+            key: model.get(key)
+            for key in (
+                "model",
+                "n_snapshots_resolved",
+                "n_markets_resolved",
+                "accuracy",
+                "model_brier",
+                "skill_vs_market",
+                "paper_roi",
+                "paper_roi_smart",
+                "by_horizon",
+            )
+            if key in model
+        }
+        if "paper_pnl" in model:
+            compact["paper_pnl"] = _compact_paper_pnl(model.get("paper_pnl"))
+        compact_models.append(compact)
+    return compact_models
+
+
+def _compact_mark_to_market_account(account: Any) -> Any:
+    if not isinstance(account, dict):
+        return account
+    compact = {
+        key: account.get(key)
+        for key in (
+            "account_value",
+            "cash",
+            "liquidation_value",
+            "return",
+            "realized_pnl",
+            "unrealized_pnl",
+            "n_open_positions",
+            "n_illiquid_positions",
+            "n_settlements",
+            "n_trades",
+            "notes",
+            "ts",
+            "value_method",
+        )
+        if key in account
+    }
+    if "value_curve" in account:
+        compact["value_curve"] = _sample_list(account.get("value_curve"))
+    return compact
+
+
+def _compact_mark_to_market_by_model(rows: Any) -> List[Dict[str, Any]]:
+    compact_rows: List[Dict[str, Any]] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        compact = {
+            key: row.get(key)
+            for key in (
+                "model",
+                "account_value",
+                "cash",
+                "liquidation_value",
+                "return",
+                "realized_pnl",
+                "unrealized_pnl",
+                "n_open_positions",
+                "n_illiquid_positions",
+                "n_settlements",
+                "n_trades",
+            )
+            if key in row
+        }
+        compact["account"] = _compact_mark_to_market_account(row.get("account"))
+        compact_rows.append(compact)
+    return compact_rows
+
+
 _LIVE_TRACK_RECORD_READER = live_track_record_support.LiveTrackRecordReader(
     cache_key=_cache_key,
     cache_get=_cache_get,
@@ -2165,12 +2296,12 @@ async def edge_board():
             "by_edge": live.get("by_edge", []),
             "by_horizon": live.get("by_horizon", []),
             "lead_lag": live.get("lead_lag"),
-            "paper_pnl": live.get("paper_pnl"),
-            "primary_paper_pnl": live.get("primary_paper_pnl"),
-            "mark_to_market_account": live.get("mark_to_market_account"),
-            "mark_to_market_by_model": live.get("mark_to_market_by_model", []),
+            "paper_pnl": _compact_paper_pnl(live.get("paper_pnl")),
+            "primary_paper_pnl": _compact_paper_pnl(live.get("primary_paper_pnl")),
+            "mark_to_market_account": _compact_mark_to_market_account(live.get("mark_to_market_account")),
+            "mark_to_market_by_model": _compact_mark_to_market_by_model(live.get("mark_to_market_by_model", [])),
             "mark_to_market_cycle_minutes": live.get("mark_to_market_cycle_minutes"),
-            "models_comparison": live.get("models_comparison", []),
+            "models_comparison": _compact_models_comparison(live.get("models_comparison", [])),
             "resolved_log": live.get("resolved_log", []),
             "n_markets_open": live.get("n_markets_open", 0),
             "n_markets_resolved": live.get("n_markets_resolved", 0),
