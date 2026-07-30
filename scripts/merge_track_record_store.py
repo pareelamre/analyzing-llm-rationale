@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""Merge one or more forecast DuckDB stores into the checked-out store.
+
+Forecast model jobs run independently from the same base repository snapshot.
+Before each job publishes, it fetches current ``main`` and uses this utility to
+upsert only the rows from its model-local DuckDB copy into the current shared
+store. This avoids direct binary-file rebases between parallel model jobs.
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from analyzing_llm_rationale.trackrec_store import (  # noqa: E402
+    _CONVERGENCE_COLS,
+    _CONVERGENCE_TABLE,
+    _LEDGER_EVENT_COLS,
+    _LEDGER_EVENT_TABLE,
+    _PRICE_COLS,
+    _PRICE_TABLE,
+    _SNAPSHOT_COLS,
+    _SNAPSHOT_TABLE,
+    DuckDBStore,
+)
+
+TABLES = (
+    (_SNAPSHOT_TABLE, tuple(_SNAPSHOT_COLS)),
+    (_PRICE_TABLE, tuple(_PRICE_COLS)),
+    (_CONVERGENCE_TABLE, tuple(_CONVERGENCE_COLS)),
+    (_LEDGER_EVENT_TABLE, tuple(_LEDGER_EVENT_COLS)),
+)
+
+
+def _sql_string(value: Path) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _quote_ident(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
+
+
+def merge_stores(target: Path, sources: list[Path]) -> dict[str, int]:
+    target = target.resolve()
+    source_paths = [source.resolve() for source in sources]
+    missing = [str(source) for source in source_paths if not source.exists()]
+    if missing:
+        raise FileNotFoundError("missing source store(s): " + ", ".join(missing))
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target_store = DuckDBStore(target)
+    con = target_store._con
+    merged: dict[str, int] = {table: 0 for table, _cols in TABLES}
+
+    for idx, source in enumerate(source_paths):
+        source_store = DuckDBStore(source)
+        source_store._con.close()
+        alias = f"src_{idx}"
+        con.execute(f"ATTACH {_sql_string(source)} AS {_quote_ident(alias)}")
+        try:
+            for table, cols in TABLES:
+                col_sql = ", ".join(_quote_ident(col) for col in cols)
+                before = con.execute(
+                    f"SELECT COUNT(*) FROM {_quote_ident(table)}"
+                ).fetchone()[0]
+                con.execute(
+                    f"INSERT OR REPLACE INTO {_quote_ident(table)} ({col_sql}) "
+                    f"SELECT {col_sql} FROM {_quote_ident(alias)}.{_quote_ident(table)}"
+                )
+                after = con.execute(
+                    f"SELECT COUNT(*) FROM {_quote_ident(table)}"
+                ).fetchone()[0]
+                merged[table] += max(0, int(after) - int(before))
+        finally:
+            con.execute(f"DETACH {_quote_ident(alias)}")
+
+    con.close()
+    return merged
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--target", type=Path, required=True)
+    parser.add_argument("sources", type=Path, nargs="+")
+    args = parser.parse_args()
+    merged = merge_stores(args.target, args.sources)
+    print("merged forecast stores:", merged)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
