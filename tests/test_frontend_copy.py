@@ -32,12 +32,12 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("legendRowH = 17", index)
         self.assertIn("_equitySvg(compCurves, 760, 180", index)
         self.assertIn('id="eb-model-comparison-svg"', index)
-        self.assertNotIn('id="eb-mtm-svg"', index)
-        self.assertNotIn('id="eb-mtm-table-body"', index)
+        self.assertIn('id="eb-mtm-svg"', index)
+        self.assertIn('id="eb-mtm-table-body"', index)
         self.assertIn("data-eq-id", index)
         self.assertIn("const _equityChartStates = new Map()", index)
         self.assertIn("_attachEdgeBoardChartHovers(host)", index)
-        self.assertIn("'#eb-model-comparison-svg', '#eb-equity-svg'", index)
+        self.assertIn("'#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'", index)
 
     def test_edge_board_refresh_rerenders_full_surface(self):
         index = (
@@ -77,15 +77,17 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("padL + pointInsetX + ((t - tMin) / tSpan) * innerW", renderer)
         self.assertIn("pointInsetX, innerW", renderer)
 
-    def test_edge_board_omits_mark_to_market_account_dom(self):
+    def test_edge_board_omits_mark_to_market_summary_cards(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
         ).read_text(encoding="utf-8")
 
         self.assertNotIn('id="eb-mtm-primary-v"', index)
         self.assertNotIn('id="eb-mtm-last-marked-v"', index)
-        self.assertNotIn('id="eb-mtm-svg"', index)
-        self.assertNotIn('id="eb-mtm-table-body"', index)
+        self.assertNotIn("Council account value", index)
+        self.assertNotIn("cash + bid liquidation", index)
+        self.assertNotIn("chart heartbeat", index)
+        self.assertNotIn("SCADS + baseline", index)
 
 
 if __name__ == "__main__":

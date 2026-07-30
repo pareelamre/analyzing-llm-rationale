@@ -88,8 +88,11 @@ class ChatUiTests(unittest.TestCase):
         self.assertNotIn('id="eb-pnl-flat-v"', self.index_html)
         self.assertNotIn("<th>Flat ROI</th>", self.index_html)
 
-    def test_edge_board_does_not_render_mark_to_market_account_panel(self) -> None:
-        self.assertNotIn("Shadow mark-to-market account", self.index_html)
+    def test_edge_board_renders_mtm_chart_without_summary_cards(self) -> None:
+        self.assertIn("_ebSetView('mtm')", self.index_html)
+        self.assertIn("Shadow mark-to-market account", self.index_html)
+        self.assertIn('id="eb-mtm-svg"', self.index_html)
+        self.assertIn('id="eb-mtm-table-body"', self.index_html)
         self.assertNotIn("Council account value", self.index_html)
         self.assertNotIn("cash + bid liquidation", self.index_html)
         self.assertNotIn("chart heartbeat", self.index_html)
