@@ -52,13 +52,13 @@ class ChatProvider:
 
 def resolve_hf_token() -> Optional[str]:
     for env_var in ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGINGFACEHUB_API_TOKEN"):
-        value = os.environ.get(env_var, "").strip()
+        value = clean_http_header_value(os.environ.get(env_var, ""))
         if value:
             return value
 
     token_path = Path(__file__).resolve().parents[2] / "HF_TOKEN.txt"
     if token_path.exists():
-        value = token_path.read_text(encoding="utf-8").strip()
+        value = clean_http_header_value(token_path.read_text(encoding="utf-8"))
         if value:
             return value
     return None
@@ -99,9 +99,30 @@ def uses_default_temperature_only(model_name: str, base_url: str) -> bool:
     return "api.openai.com" in base_url and model_name.startswith("gpt-5")
 
 
+def clean_provider_string(value: object) -> str:
+    """Strip config/file artifacts that can leak into model names or URLs."""
+    return str(value or "").replace("\ufeff", "").strip()
+
+
+def clean_http_header_value(value: object) -> str:
+    """Return a Requests-safe HTTP header value.
+
+    Requests encodes headers as Latin-1. Secrets copied from files or UI fields
+    can carry a UTF-8 BOM or other invisible characters, which makes the request
+    fail before it reaches the provider.
+    """
+    cleaned = clean_provider_string(value)
+    cleaned = "".join(
+        ch
+        for ch in cleaned
+        if ch not in "\r\n" and (ord(ch) >= 32 and ord(ch) != 127)
+    )
+    return cleaned.encode("latin-1", errors="ignore").decode("latin-1")
+
+
 def normalize_openai_chat_completions_url(base_url: str) -> str:
     """Accept either an OpenAI-compatible /v1 base URL or the full chat endpoint."""
-    url = (base_url or "").strip()
+    url = clean_provider_string(base_url)
     if not url:
         return url
 
@@ -126,10 +147,12 @@ class OpenAICompatibleProvider(ChatProvider):
     def __post_init__(self) -> None:
         import requests
 
+        self.model_name = clean_provider_string(self.model_name)
+        self.api_key = clean_http_header_value(self.api_key)
+        self.base_url = normalize_openai_chat_completions_url(self.base_url)
         if not self.api_key:
             raise ValueError(self.missing_api_key_message)
 
-        self.base_url = normalize_openai_chat_completions_url(self.base_url)
         self._requests = requests
         self._session = requests.Session()
 
@@ -163,7 +186,7 @@ class OpenAICompatibleProvider(ChatProvider):
 
     def _headers(self) -> Dict[str, str]:
         return {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": clean_http_header_value(f"Bearer {self.api_key}"),
             "Content-Type": "application/json",
         }
 
@@ -277,7 +300,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
 
     def _headers(self) -> Dict[str, str]:
         return {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": clean_http_header_value(f"Bearer {self.api_key}"),
             "Content-Type": "application/json",
             "HTTP-Referer": "https://foresea.ink",
             "X-Title": "Foresea",
@@ -318,6 +341,9 @@ class OllamaProvider(OpenAICompatibleProvider):
         import requests
         if not self.api_key:
             self.api_key = "ollama"
+        self.model_name = clean_provider_string(self.model_name)
+        self.api_key = clean_http_header_value(self.api_key)
+        self.base_url = normalize_openai_chat_completions_url(self.base_url)
         self._requests = requests
         self._session = requests.Session()
 
