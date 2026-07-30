@@ -36,6 +36,7 @@ jobs:
     name: forecast (${{ matrix.model }})
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    continue-on-error: true
     strategy:
       fail-fast: false
       max-parallel: 15
@@ -208,7 +209,7 @@ jobs:
           mapfile -t forecast_stores < <(find tmp/model-forecast-artifacts -type f -name '*.duckdb' | sort)
           if [ "${#forecast_stores[@]}" -eq 0 ]; then
             echo "No model forecast artifacts were available to publish."
-            exit 0
+            exit 1
           fi
           printf 'Publishing %s model forecast stores:\n' "${#forecast_stores[@]}"
           printf ' - %s\n' "${forecast_stores[@]}"
