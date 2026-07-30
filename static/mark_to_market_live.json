@@ -755,7 +755,7 @@
       "edge_bucket": "0-5pp",
       "entry_price": 0.085,
       "evidence_count": 5,
-      "forecast_age_hours": 22.3,
+      "forecast_age_hours": 22.4,
       "forecast_market_probability": 0.115,
       "forecasted_at": "2026-07-29T03:53:21.221728+00:00",
       "horizon": "30d+",
@@ -1225,7 +1225,7 @@
       "edge_bucket": "0-5pp",
       "entry_price": 0.015,
       "evidence_count": 5,
-      "forecast_age_hours": 49.0,
+      "forecast_age_hours": 49.1,
       "forecast_market_probability": 0.015,
       "forecasted_at": "2026-07-28T01:11:11.318406+00:00",
       "horizon": "3-7d",
@@ -1329,7 +1329,7 @@
       "edge_bucket": "0-5pp",
       "entry_price": 0.015,
       "evidence_count": 5,
-      "forecast_age_hours": 49.1,
+      "forecast_age_hours": 49.2,
       "forecast_market_probability": 0.015,
       "forecasted_at": "2026-07-28T01:05:12.093710+00:00",
       "horizon": "3-7d",
@@ -1734,7 +1734,7 @@
       "venue_news_count": 0
     }
   ],
-  "generated_at": "2026-07-30T02:14:10.011135+00:00",
+  "generated_at": "2026-07-30T02:14:33.500998+00:00",
   "mark_to_market_account": {
     "account_value": 9993.567909,
     "cash": 9977.705909,
@@ -1756,7 +1756,7 @@
     "return": -0.000643,
     "starting_cash": 10000.0,
     "strategy": "edge_shadow_ledger",
-    "ts": "2026-07-30T02:14:09.882073+00:00",
+    "ts": "2026-07-30T02:14:33.425633+00:00",
     "unrealized_pnl": -0.655,
     "value_curve": [
       {
@@ -7483,7 +7483,7 @@
         "n_illiquid_positions": 3,
         "n_open_positions": 41,
         "realized_pnl": -5.699454,
-        "ts": "2026-07-30T02:14:09.882073+00:00",
+        "ts": "2026-07-30T02:14:33.425633+00:00",
         "unrealized_pnl": -0.655,
         "value_method": "mark_to_market_bid_liquidation"
       }
@@ -7513,7 +7513,7 @@
         "return": 0.000104,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.597061+00:00",
+        "ts": "2026-07-30T02:14:33.267719+00:00",
         "unrealized_pnl": -0.56,
         "value_curve": [
           {
@@ -14414,7 +14414,7 @@
             "n_illiquid_positions": 2,
             "n_open_positions": 35,
             "realized_pnl": 1.661019,
-            "ts": "2026-07-30T02:14:09.597061+00:00",
+            "ts": "2026-07-30T02:14:33.267719+00:00",
             "unrealized_pnl": -0.56,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -14428,97 +14428,6 @@
       "n_settlements": 195,
       "n_trades": 311,
       "return": 0.000104
-    },
-    {
-      "account": {
-        "account_value": 9999.963628,
-        "cash": 9997.176628,
-        "fees_paid": 0.001372,
-        "liquidation_value": 2.787,
-        "n_illiquid_positions": 0,
-        "n_open_positions": 3,
-        "n_settlements": 0,
-        "n_skipped_no_edge": 0,
-        "n_skipped_unexecutable": 0,
-        "n_trades": 3,
-        "notes": [
-          "Shadow ledger: trades are inferred from model-vs-market edge at forecast time, not sent to an exchange.",
-          "Open positions are valued at bid-side liquidation prices.",
-          "Resolved markets settle into cash once per market before later trades are considered.",
-          "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
-        ],
-        "realized_pnl": 0.0,
-        "return": -4e-06,
-        "starting_cash": 10000.0,
-        "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.902326+00:00",
-        "unrealized_pnl": -0.035,
-        "value_curve": [
-          {
-            "account_value": 10000.02,
-            "cash": 9999.11,
-            "event_type": "trade",
-            "fees_paid": 0.0,
-            "liquidation_value": 0.91,
-            "n_illiquid_positions": 0,
-            "n_open_positions": 1,
-            "realized_pnl": 0.0,
-            "trade_status": "open",
-            "ts": "2026-07-29T03:52:53.173270+00:00",
-            "unrealized_pnl": 0.02,
-            "value_method": "mark_to_market_bid_liquidation"
-          },
-          {
-            "account_value": 9999.968628,
-            "cash": 9998.128628,
-            "event_type": "trade",
-            "fees_paid": 0.001372,
-            "liquidation_value": 1.84,
-            "n_illiquid_positions": 0,
-            "n_open_positions": 2,
-            "realized_pnl": 0.0,
-            "trade_status": "open",
-            "ts": "2026-07-29T03:55:44.147121+00:00",
-            "unrealized_pnl": -0.03,
-            "value_method": "mark_to_market_bid_liquidation"
-          },
-          {
-            "account_value": 9999.963628,
-            "cash": 9997.176628,
-            "event_type": "trade",
-            "fees_paid": 0.001372,
-            "liquidation_value": 2.787,
-            "n_illiquid_positions": 0,
-            "n_open_positions": 3,
-            "realized_pnl": 0.0,
-            "trade_status": "open",
-            "ts": "2026-07-29T03:58:20.618597+00:00",
-            "unrealized_pnl": -0.035,
-            "value_method": "mark_to_market_bid_liquidation"
-          },
-          {
-            "account_value": 9999.963628,
-            "cash": 9997.176628,
-            "event_type": "heartbeat",
-            "fees_paid": 0.001372,
-            "liquidation_value": 2.787,
-            "n_illiquid_positions": 0,
-            "n_open_positions": 3,
-            "realized_pnl": 0.0,
-            "ts": "2026-07-30T02:14:09.902326+00:00",
-            "unrealized_pnl": -0.035,
-            "value_method": "mark_to_market_bid_liquidation"
-          }
-        ],
-        "value_method": "mark_to_market_bid_liquidation"
-      },
-      "account_value": 9999.963628,
-      "model": "minimax-m3",
-      "n_illiquid_positions": 0,
-      "n_open_positions": 3,
-      "n_settlements": 0,
-      "n_trades": 3,
-      "return": -4e-06
     },
     {
       "account": {
@@ -14542,7 +14451,7 @@
         "return": -4e-06,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.901971+00:00",
+        "ts": "2026-07-30T02:14:33.438747+00:00",
         "unrealized_pnl": -0.032,
         "value_curve": [
           {
@@ -14596,7 +14505,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 3,
             "realized_pnl": 0.0,
-            "ts": "2026-07-30T02:14:09.901971+00:00",
+            "ts": "2026-07-30T02:14:33.438747+00:00",
             "unrealized_pnl": -0.032,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -14610,6 +14519,223 @@
       "n_settlements": 0,
       "n_trades": 3,
       "return": -4e-06
+    },
+    {
+      "account": {
+        "account_value": 9999.929628,
+        "cash": 9992.297628,
+        "fees_paid": 0.001372,
+        "liquidation_value": 7.632,
+        "n_illiquid_positions": 0,
+        "n_open_positions": 12,
+        "n_settlements": 0,
+        "n_skipped_no_edge": 3,
+        "n_skipped_unexecutable": 0,
+        "n_trades": 12,
+        "notes": [
+          "Shadow ledger: trades are inferred from model-vs-market edge at forecast time, not sent to an exchange.",
+          "Open positions are valued at bid-side liquidation prices.",
+          "Resolved markets settle into cash once per market before later trades are considered.",
+          "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00."
+        ],
+        "realized_pnl": 0.0,
+        "return": -7e-06,
+        "starting_cash": 10000.0,
+        "strategy": "edge_shadow_ledger",
+        "ts": "2026-07-30T02:14:33.436357+00:00",
+        "unrealized_pnl": -0.069,
+        "value_curve": [
+          {
+            "account_value": 10000.02,
+            "cash": 9999.11,
+            "event_type": "trade",
+            "fees_paid": 0.0,
+            "liquidation_value": 0.91,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 1,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-29T03:52:53.173270+00:00",
+            "unrealized_pnl": 0.02,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.968628,
+            "cash": 9998.128628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 1.84,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 2,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-29T03:55:44.147121+00:00",
+            "unrealized_pnl": -0.03,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.963628,
+            "cash": 9997.176628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 2.787,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 3,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-29T03:58:20.618597+00:00",
+            "unrealized_pnl": -0.035,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.961628,
+            "cash": 9997.171628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 2.79,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 4,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-30T02:11:29.422324+00:00",
+            "unrealized_pnl": -0.037,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.960628,
+            "cash": 9996.221628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 3.739,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 5,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-30T02:11:34.325001+00:00",
+            "unrealized_pnl": -0.038,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.950628,
+            "cash": 9995.481628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 4.469,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 6,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-30T02:12:08.459764+00:00",
+            "unrealized_pnl": -0.048,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.943628,
+            "cash": 9994.526628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 5.417,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 7,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-30T02:12:10.240794+00:00",
+            "unrealized_pnl": -0.055,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.939628,
+            "cash": 9993.576628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 6.363,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 8,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-30T02:12:27.348691+00:00",
+            "unrealized_pnl": -0.059,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.938628,
+            "cash": 9993.506628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 6.432,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 9,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-30T02:12:31.087242+00:00",
+            "unrealized_pnl": -0.06,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.931628,
+            "cash": 9993.296628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 6.635,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 10,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-30T02:12:46.126463+00:00",
+            "unrealized_pnl": -0.067,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.930628,
+            "cash": 9993.294628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 6.636,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 11,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-30T02:12:48.274600+00:00",
+            "unrealized_pnl": -0.068,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.929628,
+            "cash": 9992.297628,
+            "event_type": "trade",
+            "fees_paid": 0.001372,
+            "liquidation_value": 7.632,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 12,
+            "realized_pnl": 0.0,
+            "trade_status": "open",
+            "ts": "2026-07-30T02:13:01.055858+00:00",
+            "unrealized_pnl": -0.069,
+            "value_method": "mark_to_market_bid_liquidation"
+          },
+          {
+            "account_value": 9999.929628,
+            "cash": 9992.297628,
+            "event_type": "heartbeat",
+            "fees_paid": 0.001372,
+            "liquidation_value": 7.632,
+            "n_illiquid_positions": 0,
+            "n_open_positions": 12,
+            "realized_pnl": 0.0,
+            "ts": "2026-07-30T02:14:33.436357+00:00",
+            "unrealized_pnl": -0.069,
+            "value_method": "mark_to_market_bid_liquidation"
+          }
+        ],
+        "value_method": "mark_to_market_bid_liquidation"
+      },
+      "account_value": 9999.929628,
+      "model": "minimax-m3",
+      "n_illiquid_positions": 0,
+      "n_open_positions": 12,
+      "n_settlements": 0,
+      "n_trades": 12,
+      "return": -7e-06
     },
     {
       "account": {
@@ -14633,7 +14759,7 @@
         "return": -1e-05,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.901634+00:00",
+        "ts": "2026-07-30T02:14:33.438551+00:00",
         "unrealized_pnl": -0.092,
         "value_curve": [
           {
@@ -14687,7 +14813,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 3,
             "realized_pnl": 0.0,
-            "ts": "2026-07-30T02:14:09.901634+00:00",
+            "ts": "2026-07-30T02:14:33.438551+00:00",
             "unrealized_pnl": -0.092,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -14724,7 +14850,7 @@
         "return": -1e-05,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.902645+00:00",
+        "ts": "2026-07-30T02:14:33.438923+00:00",
         "unrealized_pnl": -0.092,
         "value_curve": [
           {
@@ -14778,7 +14904,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 3,
             "realized_pnl": 0.0,
-            "ts": "2026-07-30T02:14:09.902645+00:00",
+            "ts": "2026-07-30T02:14:33.438923+00:00",
             "unrealized_pnl": -0.092,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -14815,7 +14941,7 @@
         "return": -1e-05,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.902961+00:00",
+        "ts": "2026-07-30T02:14:33.439095+00:00",
         "unrealized_pnl": -0.092,
         "value_curve": [
           {
@@ -14869,7 +14995,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 3,
             "realized_pnl": 0.0,
-            "ts": "2026-07-30T02:14:09.902961+00:00",
+            "ts": "2026-07-30T02:14:33.439095+00:00",
             "unrealized_pnl": -0.092,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -14906,7 +15032,7 @@
         "return": -1e-05,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.903298+00:00",
+        "ts": "2026-07-30T02:14:33.439275+00:00",
         "unrealized_pnl": -0.092,
         "value_curve": [
           {
@@ -14960,7 +15086,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 3,
             "realized_pnl": 0.0,
-            "ts": "2026-07-30T02:14:09.903298+00:00",
+            "ts": "2026-07-30T02:14:33.439275+00:00",
             "unrealized_pnl": -0.092,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -14997,7 +15123,7 @@
         "return": -1.6e-05,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.898782+00:00",
+        "ts": "2026-07-30T02:14:33.437002+00:00",
         "unrealized_pnl": -0.157,
         "value_curve": [
           {
@@ -15205,7 +15331,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 14,
             "realized_pnl": 0.0,
-            "ts": "2026-07-30T02:14:09.898782+00:00",
+            "ts": "2026-07-30T02:14:33.437002+00:00",
             "unrealized_pnl": -0.157,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -15242,7 +15368,7 @@
         "return": -1.6e-05,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.901228+00:00",
+        "ts": "2026-07-30T02:14:33.438322+00:00",
         "unrealized_pnl": -0.154,
         "value_curve": [
           {
@@ -15464,7 +15590,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 15,
             "realized_pnl": 0.0,
-            "ts": "2026-07-30T02:14:09.901228+00:00",
+            "ts": "2026-07-30T02:14:33.438322+00:00",
             "unrealized_pnl": -0.154,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -15501,7 +15627,7 @@
         "return": -2.2e-05,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.897425+00:00",
+        "ts": "2026-07-30T02:14:33.435790+00:00",
         "unrealized_pnl": -0.147,
         "value_curve": [
           {
@@ -15695,7 +15821,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 12,
             "realized_pnl": -0.062037,
-            "ts": "2026-07-30T02:14:09.897425+00:00",
+            "ts": "2026-07-30T02:14:33.435790+00:00",
             "unrealized_pnl": -0.147,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -15732,7 +15858,7 @@
         "return": -2.2e-05,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.899951+00:00",
+        "ts": "2026-07-30T02:14:33.437628+00:00",
         "unrealized_pnl": -0.148,
         "value_curve": [
           {
@@ -15940,7 +16066,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 13,
             "realized_pnl": -0.062037,
-            "ts": "2026-07-30T02:14:09.899951+00:00",
+            "ts": "2026-07-30T02:14:33.437628+00:00",
             "unrealized_pnl": -0.148,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -15979,7 +16105,7 @@
         "return": -0.000419,
         "starting_cash": 10000.0,
         "strategy": "market_follow_baseline",
-        "ts": "2026-07-30T02:14:10.005983+00:00",
+        "ts": "2026-07-30T02:14:33.497713+00:00",
         "unrealized_pnl": -0.214,
         "value_curve": [
           {
@@ -25717,7 +25843,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 40,
             "realized_pnl": -3.9395,
-            "ts": "2026-07-30T02:14:10.005983+00:00",
+            "ts": "2026-07-30T02:14:33.497713+00:00",
             "unrealized_pnl": -0.214,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -25755,7 +25881,7 @@
         "return": -0.000475,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.805461+00:00",
+        "ts": "2026-07-30T02:14:33.381534+00:00",
         "unrealized_pnl": -0.406,
         "value_curve": [
           {
@@ -33302,7 +33428,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 28,
             "realized_pnl": -4.288843,
-            "ts": "2026-07-30T02:14:09.805461+00:00",
+            "ts": "2026-07-30T02:14:33.381534+00:00",
             "unrealized_pnl": -0.406,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -33339,7 +33465,7 @@
         "return": -0.000598,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.716937+00:00",
+        "ts": "2026-07-30T02:14:33.335757+00:00",
         "unrealized_pnl": -0.59,
         "value_curve": [
           {
@@ -45989,7 +46115,7 @@
             "n_illiquid_positions": 1,
             "n_open_positions": 33,
             "realized_pnl": -5.330609,
-            "ts": "2026-07-30T02:14:09.716937+00:00",
+            "ts": "2026-07-30T02:14:33.335757+00:00",
             "unrealized_pnl": -0.59,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -46026,7 +46152,7 @@
         "return": -0.000643,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.882073+00:00",
+        "ts": "2026-07-30T02:14:33.425633+00:00",
         "unrealized_pnl": -0.655,
         "value_curve": [
           {
@@ -51753,7 +51879,7 @@
             "n_illiquid_positions": 3,
             "n_open_positions": 41,
             "realized_pnl": -5.699454,
-            "ts": "2026-07-30T02:14:09.882073+00:00",
+            "ts": "2026-07-30T02:14:33.425633+00:00",
             "unrealized_pnl": -0.655,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -51790,7 +51916,7 @@
         "return": 0.0,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.895179+00:00",
+        "ts": "2026-07-30T02:14:33.434198+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -56404,7 +56530,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 0,
             "realized_pnl": 0.0,
-            "ts": "2026-07-30T02:14:09.895179+00:00",
+            "ts": "2026-07-30T02:14:33.434198+00:00",
             "unrealized_pnl": 0.0,
             "value_method": "mark_to_market_bid_liquidation"
           }
@@ -56441,7 +56567,7 @@
         "return": 0.0,
         "starting_cash": 10000.0,
         "strategy": "edge_shadow_ledger",
-        "ts": "2026-07-30T02:14:09.903489+00:00",
+        "ts": "2026-07-30T02:14:33.439376+00:00",
         "unrealized_pnl": 0.0,
         "value_curve": [
           {
@@ -56453,7 +56579,7 @@
             "n_illiquid_positions": 0,
             "n_open_positions": 0,
             "realized_pnl": 0.0,
-            "ts": "2026-07-30T02:14:09.903489+00:00",
+            "ts": "2026-07-30T02:14:33.439376+00:00",
             "unrealized_pnl": 0.0,
             "value_method": "mark_to_market_bid_liquidation"
           }
