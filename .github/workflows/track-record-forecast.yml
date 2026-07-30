@@ -1,9 +1,9 @@
 name: Track record forecast snapshots
 
 # Cost-capped scheduled pass: LLM forecast snapshots for selected open markets.
-# Each model runs as an isolated matrix job, then merges only its own snapshot
-# writes back into the shared DuckDB store. One unavailable model should not
-# block the other models from updating the mark-to-market chart.
+# Each model runs as an isolated matrix job and uploads its own DuckDB store.
+# A single downstream publish job merges the successful model artifacts and
+# pushes once, avoiding parallel write contention on main.
 
 on:
   schedule:
@@ -146,7 +146,47 @@ jobs:
           TRACK_RECORD_SNAPSHOT_PASS_RETRY_SLEEP_S: "0"
         run: python scripts/track_record_tick.py --snapshot-only
 
-      - name: Publish model snapshots and refresh MTM
+      - name: Upload model forecast store
+        uses: actions/upload-artifact@v4
+        with:
+          name: track-record-store-${{ matrix.artifact }}
+          path: tmp/model-forecast/${{ matrix.artifact }}.duckdb
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: publish forecast snapshots
+    needs: forecast
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: >-
+          pip install --quiet -e ".[serve,pipeline]"
+          requests duckdb pyyaml
+          opentelemetry-sdk
+          opentelemetry-exporter-otlp-proto-http
+          opentelemetry-instrumentation-logging
+          opentelemetry-instrumentation-requests
+
+      - name: Download model forecast stores
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: track-record-store-*
+          path: tmp/model-forecast-artifacts
+          merge-multiple: false
+
+      - name: Publish forecast snapshots and refresh MTM
         env:
           FORESEA_BASE_URL: https://foresea.ink
           TRACK_MODEL: "council"
@@ -164,24 +204,33 @@ jobs:
             git config core.sshCommand "ssh -i ~/.ssh/mtm_publish_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
             git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
           fi
-          for attempt in 1 2 3 4 5; do
+
+          mapfile -t forecast_stores < <(find tmp/model-forecast-artifacts -type f -name '*.duckdb' | sort)
+          if [ "${#forecast_stores[@]}" -eq 0 ]; then
+            echo "No model forecast artifacts were available to publish."
+            exit 0
+          fi
+          printf 'Publishing %s model forecast stores:\n' "${#forecast_stores[@]}"
+          printf ' - %s\n' "${forecast_stores[@]}"
+
+          for attempt in 1 2 3 4 5 6 7 8; do
             git fetch origin main
-            git checkout -B "forecast-publish-${{ matrix.artifact }}" origin/main
+            git checkout -B "forecast-publish-batch" origin/main
             python scripts/merge_track_record_store.py \
               --target data/track_record_store.duckdb \
-              "tmp/model-forecast/${{ matrix.artifact }}.duckdb"
+              "${forecast_stores[@]}"
             python scripts/track_record_tick.py --mtm-only
             git add data/track_record_store.duckdb static/mark_to_market_live.json
             if git diff --cached --quiet; then
-              echo "No forecast snapshot changes to commit for ${{ matrix.model }}."
+              echo "No forecast snapshot changes to commit."
               exit 0
             fi
-            git commit -m "track record: forecast ${{ matrix.model }} [skip ci]"
+            git commit -m "track record: forecast batch [skip ci]"
             if git push origin HEAD:main; then
               exit 0
             fi
-            echo "Publish attempt ${attempt}/5 failed for ${{ matrix.model }}; retrying."
-            sleep 5
+            echo "Publish attempt ${attempt}/8 failed; retrying."
+            sleep $((attempt * 10))
           done
-          echo "Failed to publish forecast snapshots for ${{ matrix.model }}." >&2
+          echo "Failed to publish forecast snapshots." >&2
           exit 1
