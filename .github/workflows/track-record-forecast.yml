@@ -38,9 +38,11 @@ jobs:
     timeout-minutes: 75
     strategy:
       fail-fast: false
-      max-parallel: 8
+      max-parallel: 15
       matrix:
         include:
+          - model: crowd-follow
+            artifact: crowd-follow
           - model: council
             artifact: council
           - model: scads-alias-code
@@ -69,8 +71,6 @@ jobs:
             artifact: qwen3-coder-30b-a3b-instruct
           - model: glm-5.2-fp8
             artifact: glm-5.2-fp8
-          - model: crowd-follow
-            artifact: crowd-follow
     steps:
       - uses: actions/checkout@v4
 
