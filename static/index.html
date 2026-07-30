@@ -1049,6 +1049,10 @@
     .eb-calib-row { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-dim); padding: 4px 0; }
     .eb-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--paper); color: var(--text-dim); white-space: nowrap; }
     .eb-badge.eb-sig { background: #e7f6ee; color: #0a7a4a; }
+    .eb-view-tabs { display: inline-flex; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 3px; margin-top: 18px; background: #fff; }
+    .eb-view-tab { border: 0; border-radius: 5px; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 6px 12px; }
+    .eb-view-tab.active { background: var(--ink); color: #fff; }
+    .eb-view-tab:not(.active):hover { background: var(--paper); color: var(--text); }
     .eb-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; justify-content: center; }
     .eb-page-btn { padding: 5px 16px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 12.5px; cursor: pointer; color: var(--text-dim); transition: background .15s; }
     .eb-page-btn:hover:not(:disabled) { background: var(--paper); color: var(--text); }
@@ -5071,6 +5075,12 @@ const _MTM_MODEL_COLORS = {
   'crowd-follow': '#94a3b8',
   'market-follow': '#64748b',
 };
+
+function _mtmModelColor(model, i = 0) {
+  const palette = ['#10b981', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa', '#06b6d4', '#f97316', '#84cc16', '#14b8a6', '#db2777', '#eab308', '#94a3b8'];
+  return _MTM_MODEL_COLORS[model] || palette[i % palette.length];
+}
+
 async function refreshEdgeForecasts() {
   try {
     const r = await _liveJsonFetch('/edge-board');
@@ -5847,11 +5857,22 @@ function _ebModelCurves(models, minBets = 5, limit = 6) {
 const _EB_PAGE_SIZE = 10;
 let _ebPage = 0;
 let _ebBoardData = [];
+let _ebView = 'markets';
+let _ebLastData = null;
 
 function _ebGoPage(n) {
   _ebPage = n;
   const sec = document.getElementById('eb-board-section');
   if (sec) sec.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+}
+
+function _ebSetView(view) {
+  _ebView = view === 'mtm' ? 'mtm' : 'markets';
+  const host = document.getElementById('edgeBody');
+  if (!host || !_ebLastData) return;
+  host.innerHTML = renderEdgeBoard(_ebLastData);
+  _attachEdgeBoardChartHovers(host);
+  refreshEdgePrices();
 }
 
 function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}) {
@@ -6045,7 +6066,7 @@ function _attachEquityHover(container) {
 }
 
 function _attachEdgeBoardChartHovers(root = document) {
-  ['#eb-model-comparison-svg', '#eb-equity-svg'].forEach(sel => {
+  ['#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'].forEach(sel => {
     const el = root.querySelector(sel);
     if (el) _attachEquityHover(el);
   });
@@ -6196,8 +6217,59 @@ function _renderBoardPage(board, page) {
   return tableHtml + pagination;
 }
 
+function _renderMtmPage(d) {
+  const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
+  if (!mtmModels.length) {
+    return '<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4><p class="text-sm text-gray-500">Shadow mark-to-market account values will appear after strategy snapshots are available.</p>';
+  }
+  const _usd = v => Number.isFinite(Number(v))
+    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+    : 'building';
+  const curves = mtmModels.map((m, i) => {
+    const account = m.account || {};
+    const curvePoints = account.value_curve || [];
+    const values = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
+    const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
+    const accountValue = Number(account.account_value ?? m.account_value);
+    const accountTime = new Date(account.ts || m.ts || d.generated_at).getTime();
+    const lastValue = values.length ? values[values.length - 1] : null;
+    const lastTime = times.length ? times[times.length - 1] : null;
+    if (Number.isFinite(accountValue) && Number.isFinite(accountTime) && (lastValue !== accountValue || lastTime !== accountTime)) {
+      values.push(accountValue);
+      times.push(accountTime);
+    }
+    if (!values.length) return null;
+    const curve = {
+      points: values,
+      color: _mtmModelColor(m.model, i),
+      label: _ebModelLabel(m.model),
+    };
+    if (times.length === values.length) curve.times = times;
+    return curve;
+  }).filter(Boolean);
+  const rows = mtmModels.map((m, i) => {
+    const account = m.account || {};
+    const value = account.account_value ?? m.account_value;
+    const ret = account.return ?? m.return;
+    const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
+    return `<tr class="eb-row">
+      <td><b>${i + 1}</b></td>
+      <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
+      <td>${_usd(value)}</td>
+      <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
+      <td>${account.n_trades ?? m.n_trades ?? 0}</td>
+      <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
+      <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
+    </tr>`;
+  }).join('');
+  return `<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4>
+    <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 180, {asPct: false, yPrefix: '$'}) : ''}</div>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
+}
+
 function renderEdgeBoard(d) {
   const board = d.edge_board || [], comp = d.models_comparison || [];
+  _ebLastData = d;
   _ebBoardData = board;
   _ebPage = 0;
   const pnl = d.paper_pnl, ll = d.lead_lag;
@@ -6331,16 +6403,23 @@ function renderEdgeBoard(d) {
     calibHtml = `<p class="text-sm text-gray-500">Lead-time calibration — whether forecasts made this early actually pay — builds as markets resolve.</p>`;
   }
   const boardHtml = `<div id="eb-board-section">${_renderBoardPage(board, 0)}</div>`;
+  const viewTabs = `<div class="eb-view-tabs" role="tablist" aria-label="Edge board views">
+    <button type="button" class="eb-view-tab ${_ebView === 'markets' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'markets'}" onclick="_ebSetView('markets')">Markets</button>
+    <button type="button" class="eb-view-tab ${_ebView === 'mtm' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'mtm'}" onclick="_ebSetView('mtm')">MTM</button>
+  </div>`;
+  const marketsPageHtml = `${stats}
+    <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging - risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
+    <h4 class="eb-h">Model comparison - resolved forecast quality</h4>${compHtml}
+    <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
+    <h4 id="forecastDriftPanel" class="eb-h">Forecast drift - does an early call pay?</h4>${calibHtml}
+    <h4 class="eb-h">Live council forecasts - ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
+  const mtmPageHtml = _renderMtmPage(d);
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
-    <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced — and our track record of being right about it</h3>
+    <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced - and our track record of being right about it</h3>
     <p class="tr-method">Live council-vs-market gaps, ranked. Accuracy, calibration, and lead-time skill are calculated from resolved forecasts saved before each market closed. ${gen ? 'Updated ' + gen + '.' : ''}</p>
-    ${stats}
-    <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
-    <h4 class="eb-h">Model comparison · resolved forecast quality</h4>${compHtml}
-    <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
-    <h4 id="forecastDriftPanel" class="eb-h">Forecast drift · does an early call pay?</h4>${calibHtml}
-    <h4 class="eb-h">Live council forecasts · ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
+    ${viewTabs}
+    <div style="margin-top:18px">${_ebView === 'mtm' ? mtmPageHtml : marketsPageHtml}</div>
   </div>`;
 }
 function _fmtDate(value) {
