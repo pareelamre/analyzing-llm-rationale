@@ -753,6 +753,68 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])
 
+    def test_edge_board_endpoint_compacts_large_chart_payloads(self):
+        long_curve = list(range(server_module._EDGE_BOARD_CURVE_MAX_POINTS + 40))
+        live = {
+            "generated_at": "2026-06-28T23:51:20+00:00",
+            "paper_pnl": {
+                "smart": {
+                    "n_bets": 200,
+                    "roi": 0.12,
+                    "growth_curve": long_curve,
+                    "equity_curve_ts": [f"2026-01-{(i % 28) + 1:02d}T00:00:00+00:00" for i in long_curve],
+                    "bet_log": [{"private": True}] * 200,
+                }
+            },
+            "models_comparison": [{
+                "model": "council",
+                "n_snapshots_resolved": 200,
+                "accuracy": 0.7,
+                "paper_pnl": {
+                    "smart": {
+                        "n_bets": 200,
+                        "roi": 0.1,
+                        "growth_curve": long_curve,
+                        "bet_log": [{"private": True}] * 200,
+                    }
+                },
+            }],
+            "mark_to_market_account": {
+                "account_value": 9999.47,
+                "value_curve": [{"account_value": i, "ts": str(i)} for i in long_curve],
+                "trades": [{"private": True}] * 200,
+            },
+            "mark_to_market_by_model": [{
+                "model": "council",
+                "account": {
+                    "account_value": 9999.47,
+                    "value_curve": [{"account_value": i, "ts": str(i)} for i in long_curve],
+                    "open_positions": [{"private": True}] * 200,
+                },
+            }],
+        }
+        with (
+            mock.patch.object(server_module, "_read_live_track_record", return_value=live),
+            mock.patch.object(server_module, "_read_mark_to_market_record", return_value=None),
+        ):
+            response = self.client.get("/edge-board")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertLessEqual(
+            len(payload["paper_pnl"]["smart"]["growth_curve"]),
+            server_module._EDGE_BOARD_CURVE_MAX_POINTS,
+        )
+        self.assertEqual(payload["paper_pnl"]["smart"]["growth_curve"][0], long_curve[0])
+        self.assertEqual(payload["paper_pnl"]["smart"]["growth_curve"][-1], long_curve[-1])
+        self.assertNotIn("bet_log", payload["paper_pnl"]["smart"])
+        self.assertNotIn("trades", payload["mark_to_market_account"])
+        self.assertNotIn("open_positions", payload["mark_to_market_by_model"][0]["account"])
+        self.assertLessEqual(
+            len(payload["mark_to_market_by_model"][0]["account"]["value_curve"]),
+            server_module._EDGE_BOARD_CURVE_MAX_POINTS,
+        )
+        self.assertNotIn("bet_log", payload["models_comparison"][0]["paper_pnl"]["smart"])
+
     def test_edge_board_endpoint_merges_independent_mtm_artifact(self):
         resolved = {
             "generated_at": "2026-06-28T23:00:00+00:00",
