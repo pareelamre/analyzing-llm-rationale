@@ -1521,6 +1521,16 @@ _forecast_errors = _meter.create_counter(
 _forecast_duration = _meter.create_histogram(
     "forecast.duration", unit="s", description="Forecast end-to-end latency"
 )
+_forecast_stream_prepare_duration = _meter.create_histogram(
+    "forecast.stream.prepare.duration",
+    unit="s",
+    description="Latency before a forecast stream is ready to call the model",
+)
+_forecast_stream_first_token_duration = _meter.create_histogram(
+    "forecast.stream.first_token.duration",
+    unit="s",
+    description="Latency from forecast stream start to first model token",
+)
 _llm_calls = _meter.create_counter(
     "llm.calls", unit="1", description="LLM provider call attempts"
 )
@@ -4221,7 +4231,6 @@ async def _prepare_predict_messages(
     ) and (
         record.get("market_probability") is None
         or not record.get("resolution_criteria")
-        or not record.get("news_articles")
     ):
         try:
             quote = await _fetch_market_context(
@@ -4811,7 +4820,7 @@ def _share_payload(req: SharedForecastRequest, request: Request) -> Dict[str, An
 
 
 def _store_shared_forecast(req: SharedForecastRequest, request: Request) -> "SharedForecastResponse":
-    share_id = secrets.token_urlsafe(8).replace("_", "").replace("-", "")[:10]
+    share_id = "".join(secrets.choice("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(10))
     payload = _share_payload(req, request)
     client = _get_datastore()
     if client is not None:

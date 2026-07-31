@@ -2181,7 +2181,7 @@
     </div>
   </div>
 
-  <button type="button" class="new-chat-btn text-left" onclick="newConversation()">New market brief</button>
+  <button type="button" class="new-chat-btn text-left" onclick="newConversation()">New conversation</button>
 
   <!-- Primary navigation -->
   <nav class="side-nav" aria-label="Sections">
@@ -2874,20 +2874,30 @@ function closeSidebar() {
 }
 
 // ── Conversation management ──────────────────────────────────────────────────
-function newConversation() {
-  closeSidebar();
-  const id = 'conv_' + Date.now();
-  upsertConv(id, { id, title: 'New market brief', createdAt: Date.now(), updatedAt: Date.now(), conversationSteer: '', messages: [] });
-  activateConv(id);
+const CHAT_HASH_PREFIX = '#chat/';
+function conversationHash(id) {
+  return CHAT_HASH_PREFIX + encodeURIComponent(id);
+}
+function conversationIdFromHash(hash = window.location.hash) {
+  return hash?.startsWith(CHAT_HASH_PREFIX) ? decodeURIComponent(hash.slice(CHAT_HASH_PREFIX.length)) : null;
 }
 
-function activateConv(id) {
+function newConversation(options = {}) {
+  closeSidebar();
+  const id = 'conv_' + Date.now();
+  upsertConv(id, { id, title: 'New conversation', createdAt: Date.now(), updatedAt: Date.now(), conversationSteer: '', messages: [] });
+  activateConv(id, options);
+}
+
+function activateConv(id, options = {}) {
+  const { updateHistory = true, historyMode = 'push' } = options;
   closeSidebar();
   activeId = id;
   renderSidebar();
   renderMessages();
-  document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New market brief';
+  document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New conversation';
   renderConversationSteer();
+  if (updateHistory && currentView === 'app') setHistoryState('chat', historyMode, { convId: id });
 }
 
 function getConversationSteer() {
@@ -2968,52 +2978,6 @@ function renderMessages() {
   el.innerHTML = '';
 
   if (!conv || conv.messages.length === 0) {
-    el.innerHTML = `
-      <div id="emptyState" class="max-w-6xl mx-auto w-full pt-10 sm:pt-20 px-4">
-        <div class="market-empty">
-          <div class="empty-copy">
-            <p class="label mb-4">Foresea market desk</p>
-            <h2 class="display text-3xl sm:text-[44px] text-gray-900 leading-tight mb-3 font-semibold">
-              The intelligence layer for prediction markets.
-            </h2>
-            <p class="text-[15px] text-gray-500 leading-relaxed">
-              Price any market — yes/no, multiple-choice, numeric, or date — challenge the consensus, and turn resolution criteria into a source-backed forecast.
-            </p>
-            <div class="mt-8 grid gap-2.5 text-left">
-              ${MARKET_EXAMPLES.map(q => `
-            <button type="button" class="empty-suggestion" onclick="startExample('${escAttr(q)}')">
-              ${escHtml(q)}
-            </button>`).join('')}
-            </div>
-          </div>
-          <div class="empty-market-panel" aria-label="Foresea market intelligence format">
-            <div class="panel-bar">
-              <span>Intelligence stack</span>
-              <span>Live brief format</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Market</span>
-              <span class="intel-value">Will the Fed cut rates by Sep. 30, 2026?</span>
-              <span class="intel-note">binary</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Quote</span>
-              <span class="intel-value">42% implied Yes</span>
-              <span class="intel-note">supplied</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Foresea</span>
-              <span class="intel-value">56% Yes</span>
-              <span class="intel-note">+14 pp</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Thesis</span>
-              <span class="intel-value">Policy path, inflation prints, and central-bank guidance.</span>
-              <span class="intel-note">sources</span>
-            </div>
-          </div>
-        </div>
-      </div>`;
     return;
   }
 
@@ -4679,12 +4643,12 @@ const _VIEW_URL = {
 };
 const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
 
-function setHistoryState(view, mode = 'push') {
+function setHistoryState(view, mode = 'push', options = {}) {
   if (isApplyingHistory || !window.history) return;
-  const state = { view };
-  const url = _VIEW_URL[view] ?? '#ask';
+  const state = { view, convId: options.convId || null };
+  const url = view === 'chat' && options.convId ? conversationHash(options.convId) : (_VIEW_URL[view] ?? '#ask');
   if (mode === 'replace') history.replaceState(state, '', url);
-  else if (history.state?.view !== view) history.pushState(state, '', url);
+  else if (history.state?.view !== view || history.state?.convId !== state.convId) history.pushState(state, '', url);
 }
 function showLanding({ updateHistory = true } = {}) {
   closeSidebar();
@@ -6651,7 +6615,9 @@ function syncSidebarA11y() {
 function applyHistoryState(state) {
   isApplyingHistory = true;
   // Infer view from URL hash when state is missing (e.g. external link / fresh load)
+  const urlConversationId = state?.convId || conversationIdFromHash();
   const view = state?.view
+    || (urlConversationId ? 'chat' : null)
     || _URL_VIEW[window.location.hash]
     || (window.location.hash ? 'landing' : 'landing');
 
@@ -6660,7 +6626,12 @@ function applyHistoryState(state) {
   closeEdgeBoard({ updateHistory: false });
   closeWatchlistPage({ updateHistory: false });
 
-  if (view === 'app') {
+  if (view === 'chat') {
+    launchApp({ updateHistory: false });
+    if (urlConversationId && store.conversations[urlConversationId]) {
+      activateConv(urlConversationId, { updateHistory: false });
+    }
+  } else if (view === 'app') {
     launchApp({ updateHistory: false });
   } else if (view === 'track-app') {
     launchApp({ updateHistory: false });
@@ -8709,8 +8680,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-const _initView = _URL_VIEW[window.location.hash || '/'] ?? 'app';
-setHistoryState(_initView, 'replace');
+const _initConversationId = conversationIdFromHash();
+const _initView = _initConversationId ? 'chat' : (_URL_VIEW[window.location.hash || '/'] ?? 'app');
+setHistoryState(_initView, 'replace', { convId: _initConversationId });
 syncSidebarA11y();
 recordPageVisit();
 updateVariantDesc();
@@ -8721,9 +8693,12 @@ loadKb();
 initAuth();
 loadLandingPanels();
 const ids = sortedIds();
-if (ids.length) activateConv(ids[0]);
-else newConversation();
-if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView });
+const _initialActiveId = _initConversationId && store.conversations[_initConversationId]
+  ? _initConversationId
+  : ids[0];
+if (_initialActiveId) activateConv(_initialActiveId, { updateHistory: false });
+else newConversation({ updateHistory: false });
+if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView, convId: _initConversationId });
 
 // ── Smooth scroll + entrance choreography ────────────────────────────────────
 (function initMotion() {
