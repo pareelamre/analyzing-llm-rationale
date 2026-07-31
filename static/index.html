@@ -6136,14 +6136,40 @@ function _attachEquityHover(container) {
       dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
       dots[ci].style.display = '';
       const value = eq.asPct ? `${(v * 100).toFixed(1)}%` : `${eq.yPrefix || '$'}${v.toFixed(2)}`;
-      return `<span style="color:${c.color}">${c.label}: ${value}</span>`;
+      return { y, html: `<span style="color:${c.color}">${c.label}: ${value}</span>` };
     }).filter(Boolean);
-    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>` + lines.join('<br>');
+    // With ~17 models a row-per-curve tooltip grows taller than the chart and
+    // spills off the bottom of the container. Show only the curves nearest the
+    // cursor — the ones actually being pointed at — and say how many are hidden.
+    const TIP_MAX_ROWS = 8;
+    const rect2 = svg.getBoundingClientRect();
+    const scale = rect2.width / eq.W || 1;
+    const cursorY = (e.clientY - rect2.top) / scale;
+    let shown = lines;
+    let hiddenCount = 0;
+    if (lines.length > TIP_MAX_ROWS) {
+      shown = lines
+        .slice()
+        .sort((a, b) => Math.abs(a.y - cursorY) - Math.abs(b.y - cursorY))
+        .slice(0, TIP_MAX_ROWS)
+        .sort((a, b) => a.y - b.y);
+      hiddenCount = lines.length - shown.length;
+    }
+    const more = hiddenCount
+      ? `<div style="color:#64748b;margin-top:3px;font-size:10px">+${hiddenCount} more</div>`
+      : '';
+    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>`
+      + shown.map(l => l.html).join('<br>') + more;
     tip.style.display = 'block';
+    // Clamp against the measured tooltip box on both axes (the old code guessed
+    // a 150px width and never clamped the bottom at all).
     const cr = container.getBoundingClientRect();
-    let lft = e.clientX - cr.left + 14, top = e.clientY - cr.top - 24;
-    if (lft + 150 > container.offsetWidth) lft -= 164;
-    tip.style.left = Math.max(0, lft) + 'px';
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let lft = e.clientX - cr.left + 14;
+    let top = e.clientY - cr.top - 24;
+    if (lft + tw > container.offsetWidth) lft = e.clientX - cr.left - tw - 14;
+    if (top + th > cr.height) top = cr.height - th;
+    tip.style.left = Math.max(0, Math.min(lft, Math.max(0, container.offsetWidth - tw))) + 'px';
     tip.style.top = Math.max(0, top) + 'px';
   }
 

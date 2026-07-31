@@ -93,6 +93,24 @@ class FrontendCopyTests(unittest.TestCase):
         )[0]
         self.assertIn("seq !== _edgeOpenSeq", closer)
 
+    def test_equity_tooltip_is_bounded(self):
+        """A row-per-curve tooltip with ~17 models grows taller than the chart;
+        the old code clamped only the top edge, so it ran off the bottom."""
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        hover = index.split("function _attachEquityHover(container) {", 1)[1].split(
+            "function _attachEdgeBoardChartHovers", 1
+        )[0]
+
+        self.assertIn("TIP_MAX_ROWS", hover)
+        self.assertIn("more</div>", hover)
+        # Clamp against the measured box on both axes, not a hardcoded guess.
+        self.assertIn("tip.offsetWidth", hover)
+        self.assertIn("tip.offsetHeight", hover)
+        self.assertIn("if (top + th > cr.height)", hover)
+        self.assertNotIn("lft + 150 > container.offsetWidth", hover)
+
     def test_edge_board_refresh_rerenders_full_surface(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
