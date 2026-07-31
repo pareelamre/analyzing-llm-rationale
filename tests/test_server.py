@@ -96,6 +96,14 @@ class SlowStreamProvider:
         yield "late primary"
 
 
+class EmptyStreamProvider(FakeProvider):
+    def stream_chat_completion(self, messages, temperature, max_tokens):
+        self.calls.append(messages)
+        self.max_tokens.append(max_tokens)
+        if False:
+            yield ""
+
+
 class ServerTests(unittest.TestCase):
     def setUp(self):
         self.provider = FakeProvider()
@@ -605,6 +613,34 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Streaming answer.", second.text)
         self.assertIn("event: done", second.text)
 
+    def test_predict_stream_falls_back_when_provider_stream_is_empty(self):
+        provider = EmptyStreamProvider()
+        provider.response = {
+            "type": "chat",
+            "rationale": "Blocking fallback answer.",
+        }
+        _state["provider"] = provider
+
+        with mock.patch.object(server_module, "_INTERACTIVE_DEFAULT_MODEL", ""):
+            response = self.client.post(
+                "/predict/stream",
+                json={
+                    "question": "Can you answer normally?",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.text
+        self.assertIn("event: delta", body)
+        self.assertIn('"stream_empty_fallback": true', body)
+        self.assertIn("Blocking fallback answer.", body)
+        self.assertIn('"first_delta_ms":', body)
+        self.assertIn('"provider_first_delta_ms":', body)
+        self.assertIn("event: done", body)
+        self.assertEqual(len(provider.calls), 2)
+
     def test_agent_analyze_stream_returns_sse_report(self):
         self.provider.stream_response = json.dumps(self.provider.response)
         response = self.client.post(
@@ -736,6 +772,42 @@ class ServerTests(unittest.TestCase):
         # No forecast/JSON typing instruction is appended in chat mode.
         self.assertNotIn("Only binary questions", user_message)
         self.assertNotIn('"type":', user_message)
+
+    def test_simple_chat_skips_context_preparation_work(self):
+        with (
+            mock.patch.object(
+                server_module,
+                "_fetch_market_context",
+                side_effect=AssertionError("simple chat should not fetch market context"),
+            ),
+            mock.patch.object(
+                server_module,
+                "_fetch_evidence_with_cache",
+                side_effect=AssertionError("simple chat should not fetch evidence"),
+            ),
+            mock.patch.object(
+                server_module,
+                "_rag_search",
+                side_effect=AssertionError("anonymous simple chat should not search KB"),
+            ),
+            mock.patch.object(
+                server_module,
+                "_read_live_track_record",
+                side_effect=AssertionError("non-trading simple chat should not load track record"),
+            ),
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "can i talk to you?",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["question_type"], "chat")
+        self.assertEqual(len(self.provider.calls), 1)
 
     def test_markets_polymarket_endpoint_returns_quote(self):
         import analyzing_llm_rationale.market_data as md
@@ -2453,9 +2525,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(len(self.provider.calls), 2)
 
-    def test_short_followup_skips_fresh_evidence(self):
-        # A short follow-up in a thread should be answered from context, not a
-        # fresh literal web search (which derails on odd queries).
+    def test_short_followup_fetches_contextualized_fresh_evidence(self):
+        # A short follow-up in a thread is too terse for standalone retrieval,
+        # but Foresea should still fetch raw evidence anchored to thread context.
         self.client.post(
             "/predict",
             json={
@@ -2467,7 +2539,11 @@ class ServerTests(unittest.TestCase):
                 ],
             },
         )
-        self.assertEqual(self.evidence_pipeline.calls, [])  # no fresh retrieval
+        self.assertEqual(len(self.evidence_pipeline.calls), 1)
+        query, top_k = self.evidence_pipeline.calls[0]
+        self.assertIn("Who wins AL vs WE in the LPL series?", query)
+        self.assertIn("Follow-up: WE is 90+", query)
+        self.assertEqual(top_k, 5)
 
     def test_substantive_question_with_history_still_retrieves(self):
         self.client.post(

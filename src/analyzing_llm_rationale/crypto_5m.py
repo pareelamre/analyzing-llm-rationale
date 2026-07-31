@@ -18,6 +18,7 @@ import math
 import os
 import sqlite3
 import time
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean, pstdev
@@ -2191,7 +2192,7 @@ def init_crypto_5m_signal_db(*, db_path: Optional[Path] = None) -> Dict[str, Any
     """Create the SQLite signal table used as a queryable paper-trade dataset."""
     path = db_path or DEFAULT_SIGNAL_DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS crypto_5m_signals (
                 id TEXT PRIMARY KEY,
@@ -2283,7 +2284,7 @@ def upsert_crypto_5m_signal_records(
     path = db_path or DEFAULT_SIGNAL_DB_PATH
     init_crypto_5m_signal_db(db_path=path)
     signal_records = [record for record in records if record.get("type") == "crypto_5m_signal"]
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn:
         conn.executemany("""
             INSERT OR REPLACE INTO crypto_5m_signals (
                 id, type, logged_at, symbol, status, strategy_name, recommendation,
@@ -2315,7 +2316,7 @@ def import_crypto_5m_signal_log_to_db(
 def _signal_db_records(db_path: Path) -> List[Dict[str, Any]]:
     if not db_path.exists():
         return []
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         rows = conn.execute(
             "SELECT raw_json FROM crypto_5m_signals ORDER BY start_time_ms, symbol"
         ).fetchall()

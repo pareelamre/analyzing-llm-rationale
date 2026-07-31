@@ -7,6 +7,7 @@ __pycache__/
 .venv/
 .cache/
 .codex
+.codex-worktrees/
 envs/
 build/
 dist/
@@ -31,7 +32,10 @@ paper/rationale_shap_summary.*
 *.metaculus_format.json
 image.png
 *.lock
+!package-lock.json
+node_modules/
 tmp_*.json
+tmp/
 SCADS_AI_API_KEY.txt
 DEEPSEEK_API_KEY.txt
 HF_TOKEN.txt
@@ -62,6 +66,9 @@ data/crypto_5m_backfill_log.jsonl
 data/crypto_5m_backfill_seed.jsonl
 analysis/autoresearch/
 data/crypto_kalshi_research.db
+analysis/resolved_public_cohort_markets.csv
+artifact_submission_anon/
+artifact_submission_anon*.zip
 
 # graphify output (regenerate: python scripts/graphify.py or `graphify extract . --code-only --out .`)
 repo-graph/

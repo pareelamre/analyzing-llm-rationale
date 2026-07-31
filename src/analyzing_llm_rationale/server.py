@@ -4503,6 +4503,61 @@ async def _prepare_predict_messages(
     system_prompt = _state["system_prompt"]
 
     record = req.model_dump()
+    simple_chat_has_market_context = any((
+        record.get("market_url"),
+        record.get("market_platform"),
+        record.get("market_ident"),
+        record.get("market_probability") is not None,
+        record.get("description"),
+        record.get("resolution_criteria"),
+        record.get("categories"),
+        record.get("resolve_time"),
+        record.get("market_bid") is not None,
+        record.get("market_ask") is not None,
+        record.get("market_volume") is not None,
+        record.get("market_liquidity") is not None,
+    ))
+    simple_chat_fast_path = (
+        req.chat_mode
+        and not req.attach_evidence
+        and not req.news_articles
+        and not rag_user_id
+        and not simple_chat_has_market_context
+        and not _detect_trading_intent(req.question)
+    )
+    if simple_chat_fast_path:
+        span = otel_trace.get_current_span()
+        span.set_attributes({
+            "market.platform": "none",
+            "forecast.context.rules_present": False,
+            "forecast.context.supplied_articles": 0,
+            "forecast.context.retrieved_articles": 0,
+            "forecast.context.total_articles": 0,
+            "forecast.context.outcome": "skipped_simple_chat",
+        })
+        _forecast_context_packages.add(1, {
+            "market.platform": "none",
+            "rules_present": "false",
+            "outcome": "skipped_simple_chat",
+        })
+        system_prompt = _CHAT_SYSTEM_PROMPT
+        user_prompt = build_user_prompt(record, "[question]", "full")
+        steering = (req.conversation_steer or "").strip()
+        if steering:
+            system_prompt += (
+                "\n\nConversation steering for this thread: "
+                f"{steering}\nApply this to tone, emphasis, and analytical stance. "
+                "Do not let it override safety rules, factual grounding, or the required response format."
+            )
+        messages = [{"role": "system", "content": system_prompt}]
+        for turn in req.history[-12:]:
+            role = turn.get("role")
+            content = (turn.get("content") or "").strip()
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content[:4000]})
+        messages.append({"role": "user", "content": user_prompt})
+        return messages, [], None
+
     quote: Optional[Dict[str, Any]] = None
     # Enrich identifiable markets whenever either live odds or venue rules are
     # missing. Best-effort and off the critical path on provider failure.
@@ -4876,6 +4931,7 @@ def _record_visit_duckdb(event: VisitRequest, request: Request) -> None:
                 _visitor_hash(request),
             ],
         )
+        conn.commit()
     finally:
         conn.close()
 
@@ -4946,6 +5002,7 @@ def _record_analytics_event_duckdb(event: AnalyticsEventRequest, request: Reques
                 json.dumps(event.metadata or {}, default=str, sort_keys=True),
             ],
         )
+        conn.commit()
     finally:
         conn.close()
 
@@ -6933,6 +6990,36 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
                     payload["first_delta_ms"] = first_delta_ms
                     payload["provider_first_delta_ms"] = provider_first_delta_ms
                 yield _sse_event("delta", payload)
+            if not chunks:
+                fallback_started = time.monotonic()
+                text, served_provider = await _provider_chat_with_chat_fallbacks(
+                    req,
+                    provider,
+                    messages,
+                    temperature,
+                    max_tokens,
+                )
+                used_provider_ref["provider"] = served_provider
+                text = text.strip()
+                if text:
+                    chunks.append(text)
+                    first_delta_sent = True
+                    first_token_elapsed = time.monotonic() - stream_started
+                    _forecast_stream_first_token_duration.record(
+                        first_token_elapsed,
+                        {**stream_attrs, "outcome": "stream_empty_fallback"},
+                    )
+                    first_delta_ms = round(first_token_elapsed * 1000)
+                    provider_first_delta_ms = round((time.monotonic() - fallback_started) * 1000)
+                    span.set_attribute("forecast.stream.first_delta_ms", first_delta_ms)
+                    span.set_attribute("forecast.stream.provider_first_delta_ms", provider_first_delta_ms)
+                    span.set_attribute("forecast.stream.empty_fallback", True)
+                    yield _sse_event("delta", {
+                        "text": text,
+                        "first_delta_ms": first_delta_ms,
+                        "provider_first_delta_ms": provider_first_delta_ms,
+                        "stream_empty_fallback": True,
+                    })
         except Exception as exc:
             if not first_delta_sent:
                 _forecast_stream_first_token_duration.record(

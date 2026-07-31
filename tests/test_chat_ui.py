@@ -175,6 +175,7 @@ class ChatUiTests(unittest.TestCase):
             1,
         )[0]
         self.assertIn("body.evidence_top_k = 3;", send_body)
+        self.assertIn("if (chat_mode) body.max_tokens = 384;", send_body)
         self.assertIn(
             "body.attach_evidence = !(shortFollowup || attachedEvidence.length || hasCompleteMarketContext);",
             send_body,

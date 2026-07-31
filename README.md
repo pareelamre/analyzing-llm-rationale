@@ -298,7 +298,8 @@ gcloud run services update analyzing-llm-rationale --region us-central1 \
 
 For the lowest-cost public deployment, keep the service on request-only CPU,
 scale to zero, and cap burst scale-out. This is the profile used by the deploy
-workflow:
+workflow. Startup CPU boost stays enabled because it reduces cold-start latency
+without keeping an idle instance warm:
 
 ```bash
 gcloud run services update analyzing-llm-rationale \
@@ -311,8 +312,24 @@ gcloud run services update analyzing-llm-rationale \
   --concurrency 20 \
   --timeout 180 \
   --cpu-throttling \
-  --no-cpu-boost
+  --cpu-boost \
+  --update-env-vars INTERACTIVE_DEFAULT_MODEL=minimax-m3,INTERACTIVE_MAX_TOKENS=384,CHAT_PROVIDER_TIMEOUT_S=15,CHAT_PROVIDER_MAX_RETRIES=0,EVIDENCE_TIMEOUT_S=6,EVIDENCE_MAX_CONCURRENCY=4
 ```
+
+Measure deployed forecast latency after each runtime change:
+
+```bash
+py scripts/measure_forecast_latency.py \
+  --url https://foresea.ink \
+  --mode stream \
+  --models minimax-m3 \
+  --runs 3 \
+  --no-attach-evidence \
+  --max-tokens 384
+```
+
+If cold starts still dominate, raise `--min-instances` to `1` as an explicit
+latency/cost tradeoff.
 
 Market search runs in-process in the main API. The optional Go `marketd`
 microservice is build/test-only in GitHub Actions and is not deployed to Cloud
