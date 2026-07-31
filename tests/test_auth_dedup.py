@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
+import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -50,39 +51,46 @@ class _Client:
         self.store[entity.key.name] = entity
 
 
-def _setup(monkey_store):
-    client = _Client()
-    client.store.update(monkey_store)
-    server._get_datastore = lambda: client
-    # inject a fake google.cloud.datastore so `_ds.Entity(...)` works offline
-    sys.modules["google.cloud.datastore"] = types.SimpleNamespace(
-        Entity=lambda key=None, exclude_from_indexes=(): _Entity(key=key))
-    return client
+class AuthDedupTests(unittest.TestCase):
+    def setUp(self):
+        self._orig_get_datastore = server._get_datastore
+        self._orig_ds_module = sys.modules.get("google.cloud.datastore")
 
+    def tearDown(self):
+        server._get_datastore = self._orig_get_datastore
+        if self._orig_ds_module is None:
+            sys.modules.pop("google.cloud.datastore", None)
+        else:
+            sys.modules["google.cloud.datastore"] = self._orig_ds_module
 
-def test_new_email_creates_account_keyed_by_sub():
-    client = _setup({})
-    uid = server._upsert_user("sub-A", "a@x.com", "A", "")
-    assert uid == "sub-A"
-    assert len(client.store) == 1
+    def _setup(self, monkey_store):
+        client = _Client()
+        client.store.update(monkey_store)
+        server._get_datastore = lambda: client
+        # inject a fake google.cloud.datastore so `_ds.Entity(...)` works offline
+        sys.modules["google.cloud.datastore"] = types.SimpleNamespace(
+            Entity=lambda key=None, exclude_from_indexes=(): _Entity(key=key))
+        return client
 
+    def test_new_email_creates_account_keyed_by_sub(self):
+        client = self._setup({})
+        uid = server._upsert_user("sub-A", "a@x.com", "A", "")
+        assert uid == "sub-A"
+        assert len(client.store) == 1
 
-def test_same_email_new_sub_reuses_canonical_not_duplicate():
-    # existing account for the email, under an older sub
-    import datetime
-    old = _Entity(key=_Key("sub-OLD"))
-    old.update(email="dup@x.com", name="Old", created_at=datetime.datetime(2020, 1, 1))
-    client = _setup({"sub-OLD": old})
+    def test_same_email_new_sub_reuses_canonical_not_duplicate(self):
+        import datetime
+        old = _Entity(key=_Key("sub-OLD"))
+        old.update(email="dup@x.com", name="Old", created_at=datetime.datetime(2020, 1, 1))
+        client = self._setup({"sub-OLD": old})
 
-    uid = server._upsert_user("sub-NEW", "dup@x.com", "New Name", "pic")
+        uid = server._upsert_user("sub-NEW", "dup@x.com", "New Name", "pic")
 
-    # resolves to the canonical (oldest) account, does NOT fork a duplicate
-    assert uid == "sub-OLD"
-    assert len(client.store) == 1
-    assert "sub-NEW" in client.store["sub-OLD"].get("alt_subs", [])
+        # resolves to the canonical (oldest) account, does NOT fork a duplicate
+        assert uid == "sub-OLD"
+        assert len(client.store) == 1
+        assert "sub-NEW" in client.store["sub-OLD"].get("alt_subs", [])
 
 
 if __name__ == "__main__":
-    test_new_email_creates_account_keyed_by_sub()
-    test_same_email_new_sub_reuses_canonical_not_duplicate()
-    print("ok")
+    unittest.main()
