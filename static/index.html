@@ -4941,6 +4941,11 @@ let edgeLoaded = false;
 let _edgePriceTimer = null;
 let _ebForecastTimer = null;
 let _crypto5mTimer = null;
+// Bumped every time the edge board is opened or closed. A deferred close
+// (fade-out animation) only completes if its token is still the current one,
+// so a re-open that lands mid-fade cancels the pending close instead of
+// racing with it.
+let _edgeOpenSeq = 0;
 let _crypto5mLastGen = null;
 let _lastEquityCurves = null;
 let _equityChartSeq = 0;
@@ -5091,6 +5096,19 @@ async function refreshEdgeForecasts() {
       const modelCurves = _ebModelCurves(comp, 5, 9);
       modelCompSvg.innerHTML = modelCurves.length ? _equitySvg(modelCurves, 760, 180, {asPct: false, yPrefix: '$'}) : '';
       if (modelCurves.length) _attachEquityHover(modelCompSvg);
+    }
+    // The MTM view lives on the same payload; without this it kept whatever it
+    // was first rendered with while the other two charts ticked along.
+    const mtmHost = document.getElementById('eb-mtm-svg');
+    if (mtmHost && _ebView === 'mtm') {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = _renderMtmPage(d);
+      const freshSvg = wrap.querySelector('#eb-mtm-svg');
+      const freshRows = wrap.querySelector('#eb-mtm-table-body');
+      const tableBody = document.getElementById('eb-mtm-table-body');
+      if (freshSvg) mtmHost.innerHTML = freshSvg.innerHTML;
+      if (freshRows && tableBody) tableBody.innerHTML = freshRows.innerHTML;
+      _attachEquityHover(mtmHost);
     }
     if (pnl) {
       const EB_MIN_N = 5;
@@ -5336,9 +5354,46 @@ async function loadCrypto5mEquity() {
   }
 }
 
+function _stopEdgeTimers() {
+  clearInterval(_edgePriceTimer);   _edgePriceTimer = null;
+  clearInterval(_ebForecastTimer);  _ebForecastTimer = null;
+  clearInterval(_crypto5mTimer);    _crypto5mTimer = null;
+}
+
+// Idempotent: always clears before setting, so calling this twice can never
+// leak a duplicate interval, and calling it on an already-open board revives
+// polling that an earlier close() tore down.
+function _startEdgeTimers() {
+  _stopEdgeTimers();
+  _edgePriceTimer  = setInterval(refreshEdgePrices, 60000);
+  _ebForecastTimer = setInterval(refreshEdgeForecasts, 2 * 60 * 1000);
+  _crypto5mTimer   = setInterval(loadCrypto5mEquity, 30 * 1000);
+}
+
+// Browsers throttle (and in some cases suspend) setInterval in hidden tabs, so
+// a board left open in the background comes back showing stale data. Re-sync on
+// the way back in rather than waiting out the next tick.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!document.getElementById('edgeOverlay')?.classList.contains('open')) return;
+  _startEdgeTimers();
+  refreshEdgePrices();
+  refreshEdgeForecasts();
+  loadCrypto5mEquity();
+});
+
 async function openEdgeBoard({ updateHistory = true } = {}) {
   const ov = document.getElementById('edgeOverlay');
-  if (ov.classList.contains('open')) return;
+  _edgeOpenSeq++;
+  if (ov.classList.contains('open')) {
+    // Either genuinely already open, or mid fade-out from a close() that ran
+    // moments ago (applyHistoryState closes every overlay before re-opening the
+    // requested one). The bumped token above cancels that pending close; all
+    // that is left is to make sure polling is running again.
+    ov.style.opacity = '';
+    _startEdgeTimers();
+    return;
+  }
   lastFocusedBeforeDialog = document.activeElement;
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
@@ -5350,9 +5405,7 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   if (!edgeLoaded) { edgeLoaded = true; await loadEdgeBoard(); }
   refreshEdgePrices();
   loadCrypto5mEquity();
-  _edgePriceTimer = setInterval(refreshEdgePrices, 60000);
-  _ebForecastTimer = setInterval(refreshEdgeForecasts, 2 * 60 * 1000);
-  _crypto5mTimer = setInterval(loadCrypto5mEquity, 30 * 1000);
+  _startEdgeTimers();
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
 async function openArbitrage() {
@@ -5364,20 +5417,18 @@ async function openForecastDrift() {
   setTimeout(() => document.getElementById('forecastDriftPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
 }
 function closeEdgeBoard({ updateHistory = true } = {}) {
-  clearInterval(_edgePriceTimer);
-  _edgePriceTimer = null;
-  clearInterval(_ebForecastTimer);
-  _ebForecastTimer = null;
-  clearInterval(_crypto5mTimer);
-  _crypto5mTimer = null;
+  _stopEdgeTimers();
   const ov = document.getElementById('edgeOverlay');
   if (!ov.classList.contains('open')) return;
+  const seq = ++_edgeOpenSeq;
   if (updateHistory && (history.state?.view === 'edge-app' || history.state?.view === 'edge-landing')) {
     history.back();
     return;
   }
   const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
+    // Re-opened while we were fading out — leave it open, polling is already back.
+    if (seq !== _edgeOpenSeq) { ov.style.opacity = ''; return; }
     ov.classList.remove('open');
     ov.setAttribute('aria-hidden', 'true');
     ov.style.opacity = '';
@@ -5862,29 +5913,59 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
   // points = growth-of-$10,000 value, compounding each bet's return.
   const allPts = curves.flatMap(c => c.points);
   if (!allPts.length) return '';
-  const hasTimes = curves.every(c => Array.isArray(c.times) && c.times.length === c.points.length);
+  // Time axis is used when *any* curve carries timestamps. Previously this was
+  // `every`, so a single model with a missing/short ts array dropped the whole
+  // chart into index mode — which crushes short curves into the left edge and
+  // reads as a truncated chart. Curves without their own times are spread
+  // evenly across the full span instead.
+  const timedCurves = curves.filter(c => Array.isArray(c.times) && c.times.length === c.points.length);
+  const hasTimes = timedCurves.length > 0;
   const n = Math.max(...curves.map(c => c.points.length));
-  const lo = Math.min(EB_STARTING_BANKROLL, ...allPts);
-  const hi = Math.max(EB_STARTING_BANKROLL, ...allPts);
+  const dataLo = Math.min(EB_STARTING_BANKROLL, ...allPts);
+  const dataHi = Math.max(EB_STARTING_BANKROLL, ...allPts);
+  // Headroom: without it the extreme points sit exactly on the frame, so the
+  // stroke and (worse) the end-of-line head bubbles get sliced by the edge.
+  const headPad = ((dataHi - dataLo) || Math.abs(dataHi) * 0.001 || 1) * 0.09;
+  const lo = dataLo - headPad;
+  const hi = dataHi + headPad;
   const range = hi - lo || 1;
-  const padL = 60, padR = 34, padT = 26, padB = hasTimes ? 40 : 26;
-  const cW = W - padL - padR, cH = H - padT - padB;
+  const HEAD_R = 12;
+  const gap = 2;
+  const headPitch = 2 * HEAD_R + gap;
+  // Every curve with a `head` gets a bubble stacked on the right edge. Rather
+  // than dropping bubbles that don't fit (the previous behaviour, capped at
+  // whatever cH allowed), grow the chart to guarantee room for all of them —
+  // sized for the worst case where every curve ends at the same value and the
+  // bubbles must stack with zero overlap.
+  const nHeadCurves = curves.filter(c => c.head && c.points.length).length;
+  const requiredHeadsHeight = nHeadCurves > 0 ? (nHeadCurves - 1) * headPitch + 2 * HEAD_R : 0;
+  // padR has to clear a head bubble drawn at the last point, or the newest
+  // value — the one people actually look at — is clipped at the right edge.
+  const padL = 60, padR = HEAD_R + 24, padT = 26, padB = hasTimes ? 40 : 26;
+  const cW = W - padL - padR;
+  const cH = Math.max(H - padT - padB, requiredHeadsHeight);
+  // H (the parameter) drives everything drawn below the plot area — the
+  // legend block and the final viewBox — so grow it in step with cH rather
+  // than leaving those fixed at the caller's original, now too-short, height.
+  H = padT + cH + padB;
   const pointInsetX = Math.min(14, Math.max(8, cW * 0.025));
   const innerW = Math.max(1, cW - pointInsetX * 2);
   let tMin = 0, tMax = 1;
   if (hasTimes) {
-    const allT = curves.flatMap(c => c.times);
+    const allT = timedCurves.flatMap(c => c.times);
     tMin = Math.min(...allT); tMax = Math.max(...allT);
     if (tMax <= tMin) tMax = tMin + 1;
   }
   const tSpan = tMax - tMin;
-  const toX = (i, t) => hasTimes
+  const _spread = (i, len) => padL + pointInsetX + (len > 1 ? (i / (len - 1)) * innerW : innerW / 2);
+  const toX = (i, t, len) => (hasTimes && Number.isFinite(t))
     ? padL + pointInsetX + ((t - tMin) / tSpan) * innerW
-    : padL + pointInsetX + (n > 1 ? (i / (n - 1)) * innerW : innerW / 2);
+    : _spread(i, len == null ? n : len);
   const toY = v => padT + cH - ((v - lo) / range) * cH;
   const baselineY = toY(EB_STARTING_BANKROLL).toFixed(1);
-  // Y-axis: show the starting bankroll baseline plus lo/hi.
-  const yLabels = [...new Set([lo, EB_STARTING_BANKROLL, hi])];
+  // Y-axis: show the starting bankroll baseline plus the true data min/max
+  // (labels use the real values, not the padded drawing domain).
+  const yLabels = [...new Set([dataLo, EB_STARTING_BANKROLL, dataHi])];
   const yAxisHtml = yLabels.map(v => {
     const labelStr = '$' + v.toLocaleString(undefined, { maximumFractionDigits: v >= 1000 ? 0 : 1 });
     return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="${v === EB_STARTING_BANKROLL ? '#94a3b8' : '#888'}">${labelStr}</text>`;
@@ -5902,21 +5983,52 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
   const baseline = `<line x1="${padL}" y1="${baselineY}" x2="${padL + cW}" y2="${baselineY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>`;
   const paths = curves.map(c => {
     if (!c.points.length) return '';
-    const pts = c.points.map((v, i) => `${toX(i, c.times && c.times[i]).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+    const len = c.points.length;
+    const pts = c.points.map((v, i) => `${toX(i, c.times && c.times[i], len).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
     const dashAttr = c.dash ? ' stroke-dasharray="5,3" stroke-width="1.4" opacity="0.75"' : ' stroke-width="1.8"';
-    return `<polyline points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>`;
+    // A single-sample curve has no segment to stroke, so a bare polyline is
+    // invisible — give it a dot so the model still shows up on the chart.
+    const solo = len === 1
+      ? `<circle cx="${toX(0, c.times && c.times[0], 1).toFixed(1)}" cy="${toY(c.points[0]).toFixed(1)}" r="2" fill="${c.color}"/>`
+      : '';
+    return `<polyline points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>${solo}`;
   }).join('');
-  const heads = curves.map(c => {
-    if (!c.head || !c.points.length) return '';
+  // Every head lands on the same right-hand edge, so with more than a handful
+  // of models they'd stack into an unreadable pile. Resolve collisions by
+  // nudging them apart vertically (nearest-value order preserved) and draw a
+  // leader line back to the true endpoint.
+  const headSpecs = curves.map((c, ci) => {
+    if (!c.head || !c.points.length) return null;
     const i = c.points.length - 1;
-    const x = toX(i, c.times && c.times[i]);
-    const y = toY(c.points[i]);
-    const label = escHtml(String(c.head).slice(0, 4));
-    const title = escHtml(c.headTitle || c.label || '');
     const rawLabel = String(c.head);
-    const r = rawLabel.length > 3 ? 12 : 11;
-    const fs = rawLabel.length > 3 ? 6.5 : 7.2;
-    return `<g class="eq-head" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><title>${title}</title><circle r="${r}" fill="#fff" stroke="${c.color}" stroke-width="1.5"/><text y="3.2" text-anchor="middle" font-size="${fs}" font-weight="700" fill="${c.color}">${label}</text></g>`;
+    return {
+      ci,
+      color: c.color,
+      x: toX(i, c.times && c.times[i], c.points.length),
+      y: toY(c.points[i]),
+      label: escHtml(rawLabel.slice(0, 4)),
+      title: escHtml(c.headTitle || c.label || ''),
+      r: rawLabel.length > 3 ? 12 : 11,
+      fs: rawLabel.length > 3 ? 6.5 : 7.2,
+    };
+  }).filter(Boolean);
+  // Sorted by y == sorted by value, best first.
+  headSpecs.sort((a, b) => a.y - b.y);
+  headSpecs.forEach((cur, i) => {
+    const prev = headSpecs[i - 1];
+    cur.ty = prev ? Math.max(cur.y, prev.ty + prev.r + cur.r + gap) : cur.y;
+  });
+  // cH was sized above for exactly this worst case, so every bubble fits —
+  // but clamp both edges anyway as a safety net against radius rounding
+  // (labels >3 chars get a 1px larger radius than shorter ones).
+  const last = headSpecs[headSpecs.length - 1];
+  const overflow = last ? Math.max(0, last.ty + last.r - (padT + cH)) : 0;
+  const heads = headSpecs.map(h => {
+    const ty = Math.min(padT + cH - h.r, Math.max(padT + h.r, h.ty - overflow));
+    const leader = Math.abs(ty - h.y) > 1.5
+      ? `<line x1="${h.x.toFixed(1)}" y1="${h.y.toFixed(1)}" x2="${h.x.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${h.color}" stroke-width="0.75" opacity="0.45"/>`
+      : '';
+    return `${leader}<g class="eq-head" transform="translate(${h.x.toFixed(1)} ${ty.toFixed(1)})"><title>${h.title}</title><circle r="${h.r}" fill="#fff" stroke="${h.color}" stroke-width="1.5"/><text y="3.2" text-anchor="middle" font-size="${h.fs}" font-weight="700" fill="${h.color}">${h.label}</text></g>`;
   }).join('');
   const maxLabelLen = Math.max(8, ...curves.map(c => String(c.label || '').length));
   const legendItemW = Math.max(150, Math.min(205, 42 + maxLabelLen * 5.5));
@@ -5939,7 +6051,10 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
   _lastEquityCurves = eqState;
   _equityChartStates.set(chartId, eqState);
   const chartLabel = `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">Growth of $10,000 (reinvested)</text>`;
-  return `<svg class="eq-svg" data-eq-id="${chartId}" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
+  // height:auto (not a fixed ${svgH}px) so the viewBox aspect ratio drives the
+  // box. With a fixed height the chart letterboxed into a squashed band on any
+  // viewport narrower than ${W}px instead of scaling down cleanly.
+  return `<svg class="eq-svg" data-eq-id="${chartId}" viewBox="0 0 ${W} ${svgH}" preserveAspectRatio="xMidYMid meet" style="width:100%;max-width:${W}px;height:auto;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
     ${chartLabel}${yAxisHtml}${xAxisHtml}${baseline}${paths}${heads}${legend}
   </svg>`;
 }
@@ -6028,14 +6143,40 @@ function _attachEquityHover(container) {
       dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
       dots[ci].style.display = '';
       const value = eq.asPct ? `${(v * 100).toFixed(1)}%` : `${eq.yPrefix || '$'}${v.toFixed(2)}`;
-      return `<span style="color:${c.color}">${c.label}: ${value}</span>`;
+      return { y, html: `<span style="color:${c.color}">${c.label}: ${value}</span>` };
     }).filter(Boolean);
-    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>` + lines.join('<br>');
+    // With ~17 models a row-per-curve tooltip grows taller than the chart and
+    // spills off the bottom of the container. Show only the curves nearest the
+    // cursor — the ones actually being pointed at — and say how many are hidden.
+    const TIP_MAX_ROWS = 8;
+    const rect2 = svg.getBoundingClientRect();
+    const scale = rect2.width / eq.W || 1;
+    const cursorY = (e.clientY - rect2.top) / scale;
+    let shown = lines;
+    let hiddenCount = 0;
+    if (lines.length > TIP_MAX_ROWS) {
+      shown = lines
+        .slice()
+        .sort((a, b) => Math.abs(a.y - cursorY) - Math.abs(b.y - cursorY))
+        .slice(0, TIP_MAX_ROWS)
+        .sort((a, b) => a.y - b.y);
+      hiddenCount = lines.length - shown.length;
+    }
+    const more = hiddenCount
+      ? `<div style="color:#64748b;margin-top:3px;font-size:10px">+${hiddenCount} more</div>`
+      : '';
+    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>`
+      + shown.map(l => l.html).join('<br>') + more;
     tip.style.display = 'block';
+    // Clamp against the measured tooltip box on both axes (the old code guessed
+    // a 150px width and never clamped the bottom at all).
     const cr = container.getBoundingClientRect();
-    let lft = e.clientX - cr.left + 14, top = e.clientY - cr.top - 24;
-    if (lft + 150 > container.offsetWidth) lft -= 164;
-    tip.style.left = Math.max(0, lft) + 'px';
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let lft = e.clientX - cr.left + 14;
+    let top = e.clientY - cr.top - 24;
+    if (lft + tw > container.offsetWidth) lft = e.clientX - cr.left - tw - 14;
+    if (top + th > cr.height) top = cr.height - th;
+    tip.style.left = Math.max(0, Math.min(lft, Math.max(0, container.offsetWidth - tw))) + 'px';
     tip.style.top = Math.max(0, top) + 'px';
   }
 
@@ -6221,10 +6362,17 @@ function _renderMtmPage(d) {
       times.push(accountTime);
     }
     if (!values.length) return null;
+    const label = _ebModelLabel(m.model);
+    const ret = account.return ?? m.return;
     const curve = {
       points: values,
       color: _mtmModelColor(m.model, i),
-      label: _ebModelLabel(m.model),
+      label,
+      // Without `head` _equitySvg skips the end-of-line bubble entirely, which
+      // is why the MTM chart used to render as bare lines while the model
+      // comparison chart (built by _ebModelCurves) showed its bubbles.
+      head: _ebModelHead(m.model),
+      headTitle: `${label} · ${_usd(account.account_value ?? m.account_value)}${ret == null ? '' : ' · ' + _roiPct(ret)}`,
     };
     if (times.length === values.length) curve.times = times;
     return curve;
@@ -6245,7 +6393,7 @@ function _renderMtmPage(d) {
     </tr>`;
   }).join('');
   return `<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4>
-    <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 180, {asPct: false, yPrefix: '$'}) : ''}</div>
+    <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
 }
 

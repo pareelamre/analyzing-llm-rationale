@@ -28,7 +28,9 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("'scads-alias-reasoning':", index)
         self.assertIn("'kimi-k2.7-code':", index)
         self.assertIn("raw.includes('kimi-k2.7')", index)
-        self.assertIn("const padL = 60, padR = 34, padT = 26", index)
+        # padR is derived from the head-bubble radius so the newest value is
+        # never clipped at the right edge.
+        self.assertIn("const padL = 60, padR = HEAD_R + 24, padT = 26", index)
         self.assertIn("legendRowH = 17", index)
         self.assertIn("_equitySvg(compCurves, 760, 180", index)
         self.assertIn('id="eb-model-comparison-svg"', index)
@@ -38,6 +40,80 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("const _equityChartStates = new Map()", index)
         self.assertIn("_attachEdgeBoardChartHovers(host)", index)
         self.assertIn("'#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'", index)
+
+    def test_mtm_curves_carry_head_labels(self):
+        """_equitySvg skips the end-of-line bubble unless the curve sets `head`;
+        _renderMtmPage used to omit it, so the MTM chart rendered as bare lines."""
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        renderer = index.split("function _renderMtmPage(d) {", 1)[1].split(
+            "function renderEdgeBoard", 1
+        )[0]
+
+        self.assertIn("head: _ebModelHead(m.model)", renderer)
+        self.assertIn("headTitle:", renderer)
+
+    def test_equity_chart_scales_and_bounds_head_bubbles(self):
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        chart = index.split("function _equitySvg(", 1)[1].split(
+            "function _attachEquityHover", 1
+        )[0]
+
+        # Responsive height, not a fixed px box that letterboxes when narrow.
+        self.assertIn("height:auto", chart)
+        # The chart grows to guarantee room for every head bubble rather than
+        # dropping the ones that don't fit — this is the "I want all 17
+        # bubbles" behaviour, not a fixed-height cap.
+        self.assertIn("requiredHeadsHeight", chart)
+        self.assertIn("H = padT + cH + padB", chart)
+        self.assertNotIn("headCapacity", chart)
+        self.assertNotIn("shownHeads", chart)
+        # Headroom keeps extremes off the frame.
+        self.assertIn("const headPad", chart)
+        # One curve missing timestamps must not drop the whole chart to index mode.
+        self.assertIn("const hasTimes = timedCurves.length > 0", chart)
+
+    def test_edge_board_polling_survives_history_navigation(self):
+        """applyHistoryState closes every overlay before re-opening the requested
+        one; the re-open must restart polling rather than bail on the still-set
+        `open` class, or the charts freeze."""
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("function _startEdgeTimers()", index)
+        self.assertIn("function _stopEdgeTimers()", index)
+        opener = index.split("async function openEdgeBoard(", 1)[1].split(
+            "async function openArbitrage", 1
+        )[0]
+        self.assertIn("_startEdgeTimers()", opener)
+        # The early-return path must still revive the timers.
+        self.assertNotIn("if (ov.classList.contains('open')) return;", opener)
+        closer = index.split("function closeEdgeBoard(", 1)[1].split(
+            "function _ebAskQuestion", 1
+        )[0]
+        self.assertIn("seq !== _edgeOpenSeq", closer)
+
+    def test_equity_tooltip_is_bounded(self):
+        """A row-per-curve tooltip with ~17 models grows taller than the chart;
+        the old code clamped only the top edge, so it ran off the bottom."""
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        hover = index.split("function _attachEquityHover(container) {", 1)[1].split(
+            "function _attachEdgeBoardChartHovers", 1
+        )[0]
+
+        self.assertIn("TIP_MAX_ROWS", hover)
+        self.assertIn("more</div>", hover)
+        # Clamp against the measured box on both axes, not a hardcoded guess.
+        self.assertIn("tip.offsetWidth", hover)
+        self.assertIn("tip.offsetHeight", hover)
+        self.assertIn("if (top + th > cr.height)", hover)
+        self.assertNotIn("lft + 150 > container.offsetWidth", hover)
 
     def test_edge_board_refresh_rerenders_full_surface(self):
         index = (
