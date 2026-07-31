@@ -60,7 +60,7 @@ from analyzing_llm_rationale.pipeline import (
 from analyzing_llm_rationale.server_security import RateLimiter
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_STATIC_DIR = _REPO_ROOT / "static"
+_STATIC_DIR = Path(os.environ.get("STATIC_DIR", str(_REPO_ROOT / "static"))).resolve()
 _ANALYTICS_DB = Path(os.environ.get("ANALYTICS_DB", "/tmp/foresea_analytics.duckdb"))
 _CANONICAL = "https://foresea.ink"
 _MCP_ENDPOINT = f"{_CANONICAL}/mcp/"
