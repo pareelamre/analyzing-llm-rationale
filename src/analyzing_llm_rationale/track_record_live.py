@@ -1524,7 +1524,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
     cum = 0.0
     curve: List[float] = []
     curve_ts: List[Any] = []
-    profits: List[float] = []
+    bets: List[Dict[str, Any]] = []
     staked = pnl = wins = 0.0
     n = 0
     for r in sorted(resolved, key=lambda x: x.get("resolved_ts") or _now()):
@@ -1545,7 +1545,6 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         wins += 1 if win else 0
         n += 1
         cum += profit
-        profits.append(profit)
         curve.append(round(cum, 4))
         ts = r.get("resolved_ts")
         if isinstance(ts, dict):
@@ -1553,13 +1552,28 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         elif hasattr(ts, "isoformat"):
             ts = ts.isoformat()
         curve_ts.append(ts)
+        bets.append({"platform": r.get("platform"), "ident": r.get("ident"), "profit": profit})
     if not n:
         return None
+
+    # Compound only once per market (mirrors paper_pnl's _run(): repeated
+    # snapshots of the same still-open market are correlated re-draws of one
+    # outcome, not independent trials -- compounding through every one of
+    # them lets a single event's backlog produce a spurious swing).
+    first_idx: Dict[Tuple[Any, Any], int] = {}
+    for idx, b in enumerate(bets):
+        key = (b["platform"], b["ident"])
+        if key not in first_idx:
+            first_idx[key] = idx
+    dedup_staked = float(len(first_idx))
+
     growth_curve: List[float] = []
     bankroll = _COMPOUND_STARTING_BANKROLL
-    if staked:
-        for profit in profits:
-            bankroll *= max(0.0, 1.0 + (1.0 / staked) * profit)
+    if dedup_staked:
+        for idx, b in enumerate(bets):
+            if idx != first_idx.get((b["platform"], b["ident"])):
+                continue
+            bankroll *= max(0.0, 1.0 + (1.0 / dedup_staked) * b["profit"])
             growth_curve.append(round(bankroll, 6))
     return {
         "n_bets": n,

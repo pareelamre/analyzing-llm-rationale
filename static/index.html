@@ -5237,9 +5237,12 @@ async function refreshEdgeForecasts() {
       const EB_SMALL_N = 30;
       const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
       const _smallN = n => `<span style="color:var(--text-dim);font-size:0.75em;opacity:0.7"> (small n)</span>`;
-      const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
-      const _roiDeltaVal = (a, b) => (a && b && a.n_bets >= EB_MIN_N && b.n_bets >= EB_MIN_N && a.roi != null && b.roi != null)
-        ? _roiDeltaPct(a.roi - b.roi)
+      // compound_return, not the flat `roi` -- matches what strategyCurves
+      // plots below via _ebPnlCurve (see the static-render copy of this logic
+      // in _renderMtmPage's sibling, renderEdgeBoard, for why).
+      const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.compound_return) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
+      const _roiDeltaVal = (a, b) => (a && b && a.n_bets >= EB_MIN_N && b.n_bets >= EB_MIN_N && a.compound_return != null && b.compound_return != null)
+        ? _roiDeltaPct(a.compound_return - b.compound_return)
         : _build(a && a.n_bets);
       const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
       _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
@@ -5998,7 +6001,7 @@ function _ebModelCurves(models, minBets = 5, limit = 6) {
         color: _ebModelColor(model, index),
         label,
         head: _ebModelHead(model),
-        headTitle: `${label} ${isCrowd ? 'crowd-follow' : 'Smart ROI'} ${_roiPct(strategy.roi)} · ${strategy.n_bets || 0} bets`,
+        headTitle: `${label} ${isCrowd ? 'crowd-follow' : 'Smart ROI'} ${_roiPct(strategy.compound_return)} · ${strategy.n_bets || 0} bets`,
         opacity: 0.86,
         isCrowdBaseline: isCrowd,
       };
@@ -6546,14 +6549,20 @@ function renderEdgeBoard(d) {
     </div>`;
   let compHtml;
   if (comp.length) {
-    const crowdRoi = ((pnl || {}).crowd_baseline || {}).roi;
+    // Same metric the chart below plots (compound_return, deduped to one
+    // compounding step per real market) -- previously this read the flat,
+    // un-deduped `roi`, which scores every snapshot and can disagree in sign
+    // with the chart for models with many repeated snapshots per market.
+    const crowdRoi = ((pnl || {}).crowd_baseline || {}).compound_return;
     const compCurves = _ebModelCurves(comp, EB_MIN_N, 9);
     const compChart = compCurves.length
       ? `<div id="eb-model-comparison-svg">${_equitySvg(compCurves, 760, 180, {asPct: false, yPrefix: '$'})}</div>`
       : '';
     compHtml = `${compChart}<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Smart ROI</th><th>vs crowd</th></tr></thead><tbody>` +
       comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
-        const modelSmartRoi = m.paper_roi_smart != null ? m.paper_roi_smart : (m.model === 'crowd-follow' ? m.paper_roi : null);
+        const isCrowd = m.model === 'crowd-follow';
+        const strategy = isCrowd ? (m.paper_pnl || {}).flat : ((m.paper_pnl || {}).smart || (m.paper_pnl || {}).flat);
+        const modelSmartRoi = strategy ? strategy.compound_return : null;
         const roiDelta = modelSmartRoi != null && crowdRoi != null ? modelSmartRoi - crowdRoi : null;
         return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
         `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
@@ -6564,11 +6573,15 @@ function renderEdgeBoard(d) {
   }
   let performanceHtml;
   if (pnl && pnl.flat) {
-    const roi = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets')
+    // compound_return (deduped to one compounding step per real market) --
+    // matches what strategyCurves/_mk below plots via _ebPnlCurve, unlike the
+    // flat, un-deduped `roi` this used to read (the caption below literally
+    // says "Compounded growth", so the number should be too).
+    const roi = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.compound_return) + ' · ' + s.n_bets + ' bets')
       : _build(s && s.n_bets);
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
-    const smartVsCrowd = (pnl.smart?.roi != null && pnl.crowd_baseline?.roi != null) ? pnl.smart.roi - pnl.crowd_baseline.roi : null;
+    const smartVsCrowd = (pnl.smart?.compound_return != null && pnl.crowd_baseline?.compound_return != null) ? pnl.smart.compound_return - pnl.crowd_baseline.compound_return : null;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const _normCurve = s => {
       return _ebPnlCurve(s);
@@ -8255,7 +8268,11 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const pp = d.paper_pnl || {};
       const smart = pp.smart || {};
       const crowd = pp.crowd_baseline || {};
-      const smartDelta = smart.roi != null && crowd.roi != null ? smart.roi - crowd.roi : null;
+      // compound_return (deduped to one compounding step per real market) --
+      // matches what the chart below plots, unlike the flat, un-deduped `roi`.
+      const smartRoi = smart.compound_return;
+      const crowdRoi = crowd.compound_return;
+      const smartDelta = smartRoi != null && crowdRoi != null ? smartRoi - crowdRoi : null;
       const _trackCurve = (s, color, label, dash) => {
         const points = _ebPnlCurve(s);
         if (!points) return null;
@@ -8272,13 +8289,16 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const trackChart = trackCurves.length
         ? `<div style="margin:0 0 12px">${_equitySvg(trackCurves, 460, 112, {asPct:false, yPrefix:'$'})}</div>`
         : '';
-      const rows = (d.models_comparison || []).slice(0,5).map(m =>
-        `<tr style="border-bottom:1px solid var(--border)">
+      const rows = (d.models_comparison || []).slice(0,5).map(m => {
+        const isCrowd = m.model === 'crowd-follow';
+        const strategy = isCrowd ? (m.paper_pnl || {}).flat : ((m.paper_pnl || {}).smart || (m.paper_pnl || {}).flat);
+        const modelRoi = strategy ? strategy.compound_return : null;
+        return `<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:5px 10px 5px 0;font-family:monospace;font-size:12px">${escHtml(m.model||'?')}</td>
           <td style="padding:5px 4px;text-align:right">${m.brier!=null?m.brier.toFixed(3):'—'}</td>
-          <td style="padding:5px 0 5px 8px;text-align:right;color:${(m.paper_roi_smart ?? m.paper_roi ?? 0)>=0?'var(--accent)':'#e55'}">${m.paper_roi_smart!=null?(m.paper_roi_smart>=0?'+':'')+(m.paper_roi_smart*100).toFixed(1)+'%':(m.model==='crowd-follow'&&m.paper_roi!=null?(m.paper_roi>=0?'+':'')+(m.paper_roi*100).toFixed(1)+'%':'—')}</td>
-        </tr>`
-      ).join('');
+          <td style="padding:5px 0 5px 8px;text-align:right;color:${(modelRoi ?? 0)>=0?'var(--accent)':'#e55'}">${modelRoi!=null?(modelRoi>=0?'+':'')+(modelRoi*100).toFixed(1)+'%':'—'}</td>
+        </tr>`;
+      }).join('');
       typing.remove();
       _appendInline(`
         <p style="margin-bottom:10px"><strong>Track record</strong></p>
@@ -8293,7 +8313,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
             <div style="font-size:12px;color:var(--text-dim)">Brier score</div>
           </div>
           <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:22px;font-weight:700;color:${(smart.roi||0)>=0?'var(--accent)':'#e55'}">${smart.roi!=null?(smart.roi>=0?'+':'')+(smart.roi*100).toFixed(1)+'%':'—'}</div>
+            <div style="font-size:22px;font-weight:700;color:${(smartRoi||0)>=0?'var(--accent)':'#e55'}">${smartRoi!=null?(smartRoi>=0?'+':'')+(smartRoi*100).toFixed(1)+'%':'—'}</div>
             <div style="font-size:12px;color:var(--text-dim)">Smart ROI</div>
           </div>
           <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
