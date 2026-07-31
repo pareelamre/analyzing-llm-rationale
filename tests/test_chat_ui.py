@@ -15,15 +15,15 @@ class ChatUiTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
     def test_composer_uses_the_shell_as_its_focus_indicator(self) -> None:
-        self.assertIn(
-            ".input-box #questionInput:focus-visible {\n      outline: none;",
+        self.assertRegex(
             self.index_html,
+            r"\.input-box #questionInput:focus-visible\s*\{\s*outline: none;",
         )
 
     def test_hidden_live_status_does_not_leave_an_empty_pill(self) -> None:
-        self.assertIn(
-            ".chat-live-status {\n      display: none !important;",
+        self.assertRegex(
             self.index_html,
+            r"\.chat-live-status\s*\{\s*display: none !important;",
         )
         self.assertIn(
             'class="chat-live-status" aria-hidden="true"',
@@ -63,9 +63,9 @@ class ChatUiTests(unittest.TestCase):
             "const authProvidersReady = _ensureAuthProviders();",
             self.index_html,
         )
-        self.assertIn(
-            "_syncAuthProviderVisibility();\n  _ensureAuthProviders();",
+        self.assertRegex(
             self.index_html,
+            r"_syncAuthProviderVisibility\(\);\s+_ensureAuthProviders\(\);",
         )
         self.assertIn('id="googleFallbackBtn"', self.index_html)
         self.assertIn("githubBtn.disabled = !_ghClientId;", self.index_html)
