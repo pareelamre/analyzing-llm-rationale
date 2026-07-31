@@ -46,9 +46,16 @@ jobs:
       - name: Commit resolved-quality artifacts
         env:
           GIT_REBASE_KEEP_THEIRS: "data/track_record_store.duckdb,static/track_record_live.json,static/forecast_evaluation.json"
+          MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p ~/.ssh
+          printf '%s' "$MTM_PUBLISH_DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/mtm_publish_deploy_key
+          chmod 600 ~/.ssh/mtm_publish_deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git config core.sshCommand "ssh -i ~/.ssh/mtm_publish_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
           git add data/track_record_store.duckdb static/track_record_live.json static/forecast_evaluation.json
           if git diff --cached --quiet; then
             echo "No resolved-quality changes to commit."
