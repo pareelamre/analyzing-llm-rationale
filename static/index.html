@@ -1049,6 +1049,10 @@
     .eb-calib-row { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-dim); padding: 4px 0; }
     .eb-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--paper); color: var(--text-dim); white-space: nowrap; }
     .eb-badge.eb-sig { background: #e7f6ee; color: #0a7a4a; }
+    .eb-view-tabs { display: inline-flex; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 3px; margin-top: 18px; background: #fff; }
+    .eb-view-tab { border: 0; border-radius: 5px; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 6px 12px; }
+    .eb-view-tab.active { background: var(--ink); color: #fff; }
+    .eb-view-tab:not(.active):hover { background: var(--paper); color: var(--text); }
     .eb-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; justify-content: center; }
     .eb-page-btn { padding: 5px 16px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 12.5px; cursor: pointer; color: var(--text-dim); transition: background .15s; }
     .eb-page-btn:hover:not(:disabled) { background: var(--paper); color: var(--text); }
@@ -1386,6 +1390,14 @@
     .input-box:focus-within { transform: translateY(-1px); }
     .input-box #questionInput:focus-visible {
       outline: none;
+    }
+    #questionInput {
+      min-height: 40px;
+      box-sizing: border-box;
+      padding-top: 9px !important;
+      padding-bottom: 9px !important;
+      line-height: 22px;
+      overflow-y: hidden;
     }
     #questionInput::placeholder { color: #8f8f8f; }
     .send-btn {
@@ -1754,23 +1766,39 @@
     }
 
     /* Clean Google button — single pill outline, full width, no double border */
-    .auth-google { display: flex; justify-content: center; min-height: 42px; }
-    .auth-google .gsi-wrap {
-      border-radius: 999px;
-      overflow: hidden;
-    }
-    .auth-github {
+    .auth-provider {
       display: flex; align-items: center; justify-content: center; gap: 8px;
       width: 100%; margin-top: 10px;
       background: #ffffff; color: var(--ink);
       border: 1px solid var(--border-2); border-radius: 999px;
       padding: 10px 16px; font-size: 14px; font-weight: 500; cursor: pointer;
-      transition: background var(--dur-med), border-color var(--dur-med), transform var(--dur-fast);
+      transition: background var(--dur-med), border-color var(--dur-med), transform var(--dur-fast), opacity var(--dur-med);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
     }
-    .auth-github:hover { background: var(--panel); border-color: var(--text-mute); }
-    .auth-github:active { transform: translateY(1px); }
-    .auth-github svg { width: 18px; height: 18px; fill: var(--ink); }
+    .auth-provider:hover:not(:disabled) { background: var(--panel); border-color: var(--text-mute); }
+    .auth-provider:active:not(:disabled) { transform: translateY(1px); }
+    .auth-provider:disabled {
+      cursor: not-allowed;
+      opacity: .58;
+      background: #f8fafc;
+      color: var(--text-dim);
+    }
+    .auth-provider svg { width: 18px; height: 18px; fill: currentColor; }
+    .auth-google { display: flex; justify-content: center; min-height: 42px; }
+    .auth-google .gsi-wrap {
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .auth-google-fallback { margin-top: 0; }
+    .auth-google-mark {
+      display: inline-grid; place-items: center;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      color: #4285f4;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1;
+    }
 
     .auth-divider {
       display: flex; align-items: center; gap: 12px;
@@ -1916,7 +1944,6 @@
         <span id="landingUserName" class="user-name"></span>
         <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
       </div>
-      <button type="button" class="topbar-link nav-collapse" onclick="openFeedback()" title="Send feedback">Feedback</button>
       <button type="button" class="hero-action primary py-2" onclick="launchApp()">Open desk</button>
     </div>
   </nav>
@@ -2484,7 +2511,7 @@
           <button class="attach-add-btn" onclick="addUrlAttachment()">Add</button>
         </div>
       </div>
-      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">Decision support only. Verify important markets. · <button type="button" class="underline hover:text-gray-300 bg-transparent border-0 p-0 cursor-pointer" onclick="openFeedback()">Feedback</button></p>
+      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">Decision support only. Verify important markets.</p>
     </div>
   </div>
 
@@ -2567,10 +2594,14 @@
     </div>
 
     <div id="authSocial" hidden>
+      <button type="button" id="googleFallbackBtn" class="auth-provider auth-google-fallback" onclick="startGoogleLogin()">
+        <span class="auth-google-mark" aria-hidden="true">G</span>
+        Continue with Google
+      </button>
       <div id="authGoogleSection" class="auth-google" hidden>
         <div id="modalGsiWrap" class="gsi-wrap" aria-label="Continue with Google"></div>
       </div>
-      <button type="button" id="githubBtn" class="auth-github" hidden onclick="startGitHubLogin()">
+      <button type="button" id="githubBtn" class="auth-provider auth-github" hidden onclick="startGitHubLogin()">
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         Continue with GitHub
       </button>
@@ -3501,7 +3532,7 @@ function sourceFeedHtml(sources, evidenceError = '') {
     const label = s.title || s.source || s.url;
     const sub = s.title && s.source ? `<span class="source-chip-src">${escHtml(s.source)}</span>` : '';
     return s.url
-      ? `<a href="${escHtml(s.url)}" target="_blank" rel="noopener" class="source-chip hover:opacity-80" title="${escAttr(s.title || s.source || '')}">${escHtml(label)}${sub}</a>`
+      ? `<a href="${escAttr(s.url)}" target="_blank" rel="noopener" class="source-chip hover:opacity-80" title="${escAttr(s.title || s.source || '')}">${escHtml(label)}${sub}</a>`
       : `<span class="source-chip">${escHtml(label)}</span>`;
   }).join('');
   return `
@@ -3511,7 +3542,7 @@ function sourceFeedHtml(sources, evidenceError = '') {
     </div>`;
 }
 
-function makeAIBubble(data, variant) {
+function makeAIBubble(data, variant, options = {}) {
   if (variant && !data.variant) data.variant = variant;
   const qtype = data.question_type || 'binary';
   const rationale = data.rationale || '';
@@ -3589,7 +3620,7 @@ function makeAIBubble(data, variant) {
 
   const typeTag = qtype !== 'binary' ? ' · ' + qtype.replace(/_/g, ' ') : '';
   const marketLensHtml = makeMarketLens(data);
-  const actionsHtml = forecastActionsHtml(data);
+  const actionsHtml = options.includeActions === false ? '' : forecastActionsHtml(data);
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
   div._forecastData = data;
@@ -3600,7 +3631,7 @@ function makeAIBubble(data, variant) {
       ${rationale ? `
         <div class="pt-2">
           <p class="label mb-1">Forecast thesis</p>
-          <p class="text-[15px] text-gray-700 leading-relaxed">${escHtml(rationale)}</p>
+          <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         </div>` : ''}
       ${sourcesHtml}
       ${actionsHtml}
@@ -3995,10 +4026,6 @@ async function sendQuestion(options = {}) {
   const input = document.getElementById('questionInput');
   const question = String(options.question ?? input.value).trim();
   if (!question || activeRequest) return;
-  if (!isUserSignedIn()) {
-    _queueForecastAfterSignIn(question, _pendingMarketCtx);
-    return;
-  }
   if (!activeId) return;
 
   _hideSlashPalette();
@@ -4670,11 +4697,6 @@ function showLanding({ updateHistory = true } = {}) {
   if (updateHistory) setHistoryState('landing');
 }
 function launchApp({ updateHistory = true } = {}) {
-  if (!isUserSignedIn()) {
-    showLanding({ updateHistory: true });
-    openAuthModal('login');
-    return;
-  }
   const app = document.getElementById('appShell');
   document.getElementById('landingPage').classList.add('hidden-view');
   stopTransparencyAutoRefresh();
@@ -4695,16 +4717,7 @@ function fillExample(question) {
   input.focus();
 }
 function startExample(question) {
-  const onLanding = !document.getElementById('appShell') ||
-    document.getElementById('landingPage')?.style.display !== 'none' &&
-    !document.getElementById('appShell').classList.contains('visible');
-  if (onLanding) {
-    const input = document.getElementById('landingQuestionInput');
-    if (input) input.value = question;
-    _streamLandingQuestion(question);
-  } else {
-    startForecast(question);
-  }
+  startForecast(question);
 }
 let _landingLastQuestion = '';
 let _landingLastData = null;
@@ -4717,11 +4730,16 @@ function submitLandingQuestion(event) {
   _streamLandingQuestion(question);
 }
 
+function _landingForecastHtml(data, fallbackText = '') {
+  const response = { ...(data || {}) };
+  const rationale = response.rationale || response.model_rationale || fallbackText || 'No response.';
+  response.rationale = rationale;
+  const bubble = makeAIBubble(response, response.variant, { includeActions: false });
+  return bubble.querySelector('.msg-ai')?.innerHTML
+    || renderMarkdown(_chatText(rationale));
+}
+
 async function _streamLandingQuestion(question) {
-  if (!isUserSignedIn()) {
-    _queueForecastAfterSignIn(question);
-    return;
-  }
   _landingLastQuestion = question;
   _landingLastData = null;
   const answerEl = document.getElementById('landingAnswer');
@@ -4760,8 +4778,8 @@ async function _streamLandingQuestion(question) {
           contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>';
         } else if (event === 'done') {
           _landingLastData = data.response;
-          const finalText = data.response?.rationale || data.response?.model_rationale || text || 'No response.';
-          contentEl.innerHTML = renderMarkdown(_chatText(finalText));
+          contentEl.innerHTML = _landingForecastHtml(data.response, text);
+          enhanceCard(contentEl);
           actionsEl.style.display = 'flex';
           btn.disabled = false;
           return;
@@ -4783,7 +4801,8 @@ async function _streamLandingQuestion(question) {
       });
       const d = await _readJson(r);
       _landingLastData = d;
-      contentEl.innerHTML = renderMarkdown(d.rationale || d.model_rationale || 'No response.');
+      contentEl.innerHTML = _landingForecastHtml(d);
+      enhanceCard(contentEl);
       actionsEl.style.display = 'flex';
     } catch (_2) {
       contentEl.innerHTML = '<span style="color:#c33">Could not reach Foresea. Please try again.</span>';
@@ -4807,10 +4826,6 @@ function _landingReset() {
 function startForecast(question, ctx = null) {
   const normalizedQuestion = String(question ?? '').trim();
   if (!normalizedQuestion) return;
-  if (!isUserSignedIn()) {
-    _queueForecastAfterSignIn(normalizedQuestion, ctx);
-    return;
-  }
   _pendingMarketCtx = ctx || null;
   launchApp();
   if (!activeId || (getConv(activeId)?.messages || []).length > 0) {
@@ -4926,8 +4941,15 @@ let edgeLoaded = false;
 let _edgePriceTimer = null;
 let _ebForecastTimer = null;
 let _crypto5mTimer = null;
+// Bumped every time the edge board is opened or closed. A deferred close
+// (fade-out animation) only completes if its token is still the current one,
+// so a re-open that lands mid-fade cancels the pending close instead of
+// racing with it.
+let _edgeOpenSeq = 0;
 let _crypto5mLastGen = null;
 let _lastEquityCurves = null;
+let _equityChartSeq = 0;
+const _equityChartStates = new Map();
 let _lastCrypto5mCurves = null;
 let _pendingMarketCtx = null;
 
@@ -5018,30 +5040,94 @@ function _leadSkillBadge(tr) {
   return `<span class="eb-badge ${state.proven ? 'eb-sig' : ''}">${state.label}</span>`;
 }
 
+const _MTM_MODEL_COLORS = {
+  'council': '#10b981',
+  'scads-alias-code': '#db2777',
+  'scads-alias-ha': '#0f766e',
+  'scads-alias-reasoning': '#7c3aed',
+  'scads-alias-huge': '#2563eb',
+  'scads-alias-huge-no-thinking': '#0891b2',
+  'llama-3.1-8b-instruct': '#38bdf8',
+  'llama-3.3-70b-instruct': '#60a5fa',
+  'llama-4-scout-17b-16e-instruct': '#06b6d4',
+  'deepseek-v3': '#f59e0b',
+  'gpt-oss-120b': '#a78bfa',
+  'gemma-4-31b-it': '#f97316',
+  'kimi-k2.5': '#ef4444',
+  'kimi-k2.6': '#ec4899',
+  'kimi-k2.7-code': '#f43f5e',
+  'minimax-m3': '#22c55e',
+  'qwen3-coder-30b-a3b-instruct': '#14b8a6',
+  'glm-5.2-fp8': '#eab308',
+  'crowd-follow': '#94a3b8',
+  'market-follow': '#64748b',
+};
+
+function _mtmModelColor(model, i = 0) {
+  const palette = ['#10b981', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa', '#06b6d4', '#f97316', '#84cc16', '#14b8a6', '#db2777', '#eab308', '#94a3b8'];
+  return _MTM_MODEL_COLORS[model] || palette[i % palette.length];
+}
+
 async function refreshEdgeForecasts() {
   try {
     const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) return;
     const d = await _readJson(r);
+    const host = document.getElementById('edgeBody');
+    if (host) {
+      const scrollTop = host.scrollTop;
+      const previousPage = _ebPage;
+      host.innerHTML = renderEdgeBoard(d);
+      if (previousPage > 0 && _ebBoardData.length) {
+        const pages = Math.ceil(_ebBoardData.length / _EB_PAGE_SIZE);
+        _ebPage = Math.max(0, Math.min(previousPage, pages - 1));
+        const boardSection = document.getElementById('eb-board-section');
+        if (boardSection) boardSection.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
+      }
+      _attachEdgeBoardChartHovers(host);
+      host.scrollTop = scrollTop;
+      refreshEdgePrices();
+      return;
+    }
     const pnl = d.paper_pnl;
+    const comp = d.models_comparison || [];
+    const modelCompSvg = document.getElementById('eb-model-comparison-svg');
+    if (modelCompSvg) {
+      const modelCurves = _ebModelCurves(comp, 5, 9);
+      modelCompSvg.innerHTML = modelCurves.length ? _equitySvg(modelCurves, 760, 180, {asPct: false, yPrefix: '$'}) : '';
+      if (modelCurves.length) _attachEquityHover(modelCompSvg);
+    }
+    // The MTM view lives on the same payload; without this it kept whatever it
+    // was first rendered with while the other two charts ticked along.
+    const mtmHost = document.getElementById('eb-mtm-svg');
+    if (mtmHost && _ebView === 'mtm') {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = _renderMtmPage(d);
+      const freshSvg = wrap.querySelector('#eb-mtm-svg');
+      const freshRows = wrap.querySelector('#eb-mtm-table-body');
+      const tableBody = document.getElementById('eb-mtm-table-body');
+      if (freshSvg) mtmHost.innerHTML = freshSvg.innerHTML;
+      if (freshRows && tableBody) tableBody.innerHTML = freshRows.innerHTML;
+      _attachEquityHover(mtmHost);
+    }
     if (pnl) {
       const EB_MIN_N = 5;
       const EB_SMALL_N = 30;
       const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
       const _smallN = n => `<span style="color:var(--text-dim);font-size:0.75em;opacity:0.7"> (small n)</span>`;
       const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
+      const _roiDeltaVal = (a, b) => (a && b && a.n_bets >= EB_MIN_N && b.n_bets >= EB_MIN_N && a.roi != null && b.roi != null)
+        ? _roiDeltaPct(a.roi - b.roi)
+        : _build(a && a.n_bets);
       const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
-      _upd('eb-pnl-flat-v', _roiVal(pnl.flat));
       _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
       _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
       _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
+      _upd('eb-pnl-edge-v', _roiDeltaVal(pnl.smart, pnl.crowd_baseline));
       const _normCurve = s => {
-        if (s?.growth_curve?.length) return s.growth_curve.slice();
-        if (!s?.equity_curve?.length) return null;
-        const staked = s.total_staked || s.n_bets || 1;
-        return s.equity_curve.map(v => 100 + (v / staked) * 100);
+        return _ebPnlCurve(s);
       };
-      const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+      const _times = s => _ebCurveTimes(s);
       const _mk = (s, color, label, dash) => {
         const points = _normCurve(s);
         if (!points) return null;
@@ -5051,16 +5137,15 @@ async function refreshEdgeForecasts() {
         if (times.length === points.length) curve.times = times;
         return curve;
       };
-      const curves = [
-        _mk(pnl.smart, '#10b981', 'Smart'),
+      const strategyCurves = [
+        _mk(pnl.smart, '#10b981', 'Smart ROI'),
         _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
-        _mk(pnl.flat, '#60a5fa', 'Flat stake'),
-        _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
+        _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
       ].filter(Boolean);
       const el = document.getElementById('eb-equity-svg');
       if (el) {
-        el.innerHTML = curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : '';
-        if (curves.length) _attachEquityHover(el);
+        el.innerHTML = strategyCurves.length ? _equitySvg(strategyCurves, 680, 160, {asPct: false, yPrefix: '$'}) : '';
+        if (strategyCurves.length) _attachEquityHover(el);
       }
       const ts = document.getElementById('eb-pnl-ts');
       if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
@@ -5269,9 +5354,46 @@ async function loadCrypto5mEquity() {
   }
 }
 
+function _stopEdgeTimers() {
+  clearInterval(_edgePriceTimer);   _edgePriceTimer = null;
+  clearInterval(_ebForecastTimer);  _ebForecastTimer = null;
+  clearInterval(_crypto5mTimer);    _crypto5mTimer = null;
+}
+
+// Idempotent: always clears before setting, so calling this twice can never
+// leak a duplicate interval, and calling it on an already-open board revives
+// polling that an earlier close() tore down.
+function _startEdgeTimers() {
+  _stopEdgeTimers();
+  _edgePriceTimer  = setInterval(refreshEdgePrices, 60000);
+  _ebForecastTimer = setInterval(refreshEdgeForecasts, 2 * 60 * 1000);
+  _crypto5mTimer   = setInterval(loadCrypto5mEquity, 30 * 1000);
+}
+
+// Browsers throttle (and in some cases suspend) setInterval in hidden tabs, so
+// a board left open in the background comes back showing stale data. Re-sync on
+// the way back in rather than waiting out the next tick.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!document.getElementById('edgeOverlay')?.classList.contains('open')) return;
+  _startEdgeTimers();
+  refreshEdgePrices();
+  refreshEdgeForecasts();
+  loadCrypto5mEquity();
+});
+
 async function openEdgeBoard({ updateHistory = true } = {}) {
   const ov = document.getElementById('edgeOverlay');
-  if (ov.classList.contains('open')) return;
+  _edgeOpenSeq++;
+  if (ov.classList.contains('open')) {
+    // Either genuinely already open, or mid fade-out from a close() that ran
+    // moments ago (applyHistoryState closes every overlay before re-opening the
+    // requested one). The bumped token above cancels that pending close; all
+    // that is left is to make sure polling is running again.
+    ov.style.opacity = '';
+    _startEdgeTimers();
+    return;
+  }
   lastFocusedBeforeDialog = document.activeElement;
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
@@ -5283,9 +5405,7 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   if (!edgeLoaded) { edgeLoaded = true; await loadEdgeBoard(); }
   refreshEdgePrices();
   loadCrypto5mEquity();
-  _edgePriceTimer = setInterval(refreshEdgePrices, 60000);
-  _ebForecastTimer = setInterval(refreshEdgeForecasts, 2 * 60 * 1000);
-  _crypto5mTimer = setInterval(loadCrypto5mEquity, 30 * 1000);
+  _startEdgeTimers();
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
 async function openArbitrage() {
@@ -5297,20 +5417,18 @@ async function openForecastDrift() {
   setTimeout(() => document.getElementById('forecastDriftPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
 }
 function closeEdgeBoard({ updateHistory = true } = {}) {
-  clearInterval(_edgePriceTimer);
-  _edgePriceTimer = null;
-  clearInterval(_ebForecastTimer);
-  _ebForecastTimer = null;
-  clearInterval(_crypto5mTimer);
-  _crypto5mTimer = null;
+  _stopEdgeTimers();
   const ov = document.getElementById('edgeOverlay');
   if (!ov.classList.contains('open')) return;
+  const seq = ++_edgeOpenSeq;
   if (updateHistory && (history.state?.view === 'edge-app' || history.state?.view === 'edge-landing')) {
     history.back();
     return;
   }
   const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
+    // Re-opened while we were fading out — leave it open, polling is already back.
+    if (seq !== _edgeOpenSeq) { ov.style.opacity = ''; return; }
     ov.classList.remove('open');
     ov.setAttribute('aria-hidden', 'true');
     ov.style.opacity = '';
@@ -5349,8 +5467,7 @@ async function loadEdgeBoard() {
     const r = await _liveJsonFetch('/edge-board');
     if (!r.ok) throw new Error('unavailable');
     host.innerHTML = renderEdgeBoard(await _readJson(r));
-    const eqDiv = document.getElementById('eb-equity-svg');
-    if (eqDiv) _attachEquityHover(eqDiv);
+    _attachEdgeBoardChartHovers(host);
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#edgeBody .tr-stat',
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
@@ -5653,9 +5770,128 @@ function _slugKey(text) {
 function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
 function _roiPct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + pct(x) + '%'; }
 
+function _roiDeltaPct(x) { return x == null ? 'â€”' : (x >= 0 ? '+' : '') + (x * 100).toFixed(1).replace(/\.0$/, '') + 'pp'; }
+
+const EB_STARTING_BANKROLL = 10000;
+const EB_MODEL_COLORS = ['#6366f1', '#f59e0b', '#14b8a6', '#ef4444', '#8b5cf6', '#0ea5e9'];
+
+function _ebModelLabel(model) {
+  const raw = String(model || '').trim();
+  if (!raw) return 'Model';
+  if (raw === 'crowd-follow') return 'crowd-follow baseline';
+  if (raw === 'market-follow') return 'market-follow baseline';
+  if (raw === 'scads-alias-code') return 'SCADS Code';
+  if (raw === 'scads-alias-ha') return 'SCADS HA';
+  if (raw === 'scads-alias-reasoning') return 'SCADS Reasoning';
+  if (raw === 'scads-alias-huge') return 'SCADS Huge';
+  if (raw === 'scads-alias-huge-no-thinking') return 'SCADS Huge no-think';
+  if (raw === 'llama-3.1-8b-instruct') return 'Llama 3.1 8B';
+  if (raw === 'llama-3.3-70b-instruct') return 'Llama 3.3 70B';
+  if (raw === 'gpt-oss-120b') return 'GPT OSS 120B';
+  if (raw === 'gemma-4-31b-it') return 'Gemma 4 31B IT';
+  if (raw === 'minimax-m3') return 'MiniMax M3';
+  if (raw === 'qwen3-coder-30b-a3b-instruct') return 'Qwen3 Coder 30B';
+  if (raw === 'glm-5.2-fp8') return 'GLM 5.2';
+  if (raw === 'kimi-k2.5') return 'Kimi K2.5';
+  if (raw === 'kimi-k2.6') return 'Kimi K2.6';
+  if (raw === 'kimi-k2.7-code') return 'Kimi K2.7 Code';
+  if (raw === 'council') return 'Council';
+  return raw.split(/[-_]/g).filter(Boolean).map(w => w[0]?.toUpperCase() + w.slice(1)).join(' ');
+}
+
+function _ebModelHead(model) {
+  const raw = String(model || '').toLowerCase();
+  if (raw === 'crowd-follow') return 'MKT';
+  if (raw === 'market-follow') return 'BASE';
+  if (raw === 'scads-alias-code') return 'COD';
+  if (raw === 'scads-alias-ha') return 'HA';
+  if (raw === 'scads-alias-reasoning') return 'RSN';
+  if (raw === 'scads-alias-huge') return 'HUG';
+  if (raw === 'scads-alias-huge-no-thinking') return 'HNT';
+  if (raw.includes('llama-3.1')) return 'L31';
+  if (raw.includes('llama-3.3')) return 'L33';
+  if (raw.includes('gpt')) return 'GPT';
+  if (raw.includes('gemma')) return 'GEM';
+  if (raw.includes('minimax')) return 'MM';
+  if (raw.includes('qwen3-coder')) return 'Q3C';
+  if (raw.includes('glm')) return 'GLM';
+  if (raw.includes('kimi-k2.7')) return 'K27';
+  if (raw.includes('kimi-k2.6')) return 'K26';
+  if (raw.includes('kimi-k2.5')) return 'K25';
+  if (raw.includes('kimi')) return 'KIM';
+  if (raw.includes('council')) return 'C';
+  return (String(model || 'AI').match(/[a-z0-9]/i)?.[0] || 'AI').toUpperCase();
+}
+
+function _ebModelColor(model, index = 0) {
+  const raw = String(model || '').toLowerCase();
+  if (_MTM_MODEL_COLORS[raw]) return _MTM_MODEL_COLORS[raw];
+  if (raw === 'crowd-follow') return '#94a3b8';
+  if (raw === 'market-follow') return '#64748b';
+  return EB_MODEL_COLORS[index % EB_MODEL_COLORS.length];
+}
+
+function _ebNormalizeBankrollCurve(s) {
+  const curve = s?.growth_curve;
+  if (!Array.isArray(curve) || !curve.length) return null;
+  const values = curve.map(Number).filter(Number.isFinite);
+  if (!values.length) return null;
+  const first = values[0];
+  if (!Number.isFinite(first)) return null;
+  const maxAbs = Math.max(...values.map(v => Math.abs(v)));
+  // Supported historical encodings:
+  //  - account value curve: 10000 -> 10000
+  //  - indexed-to-100 curve: 100 -> 10000
+  //  - multiplier curve: 1.0 -> 10000
+  if (maxAbs <= 10) return values.map(v => v * EB_STARTING_BANKROLL);
+  if (maxAbs < 1000) return values.map(v => v * (EB_STARTING_BANKROLL / 100));
+  return values;
+}
+
+function _ebPnlCurve(s) {
+  const growthCurve = _ebNormalizeBankrollCurve(s);
+  if (growthCurve) return growthCurve;
+  if (!s?.equity_curve?.length) return null;
+  const staked = s.total_staked || s.n_bets || 1;
+  return s.equity_curve.map(v => EB_STARTING_BANKROLL + (v / staked) * EB_STARTING_BANKROLL);
+}
+
+function _ebCurveTimes(s) {
+  return (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+}
+
+function _ebModelCurves(models, minBets = 5, limit = 6) {
+  return (models || [])
+    .map((m, index) => {
+      const model = m.model || `model-${index + 1}`;
+      const isCrowd = String(model).toLowerCase() === 'crowd-follow';
+      const strategy = isCrowd ? (m.paper_pnl || {}).flat : ((m.paper_pnl || {}).smart || (m.paper_pnl || {}).flat);
+      const points = _ebPnlCurve(strategy);
+      if (!points || (strategy?.n_bets || 0) < minBets) return null;
+      const times = _ebCurveTimes(strategy);
+      const label = _ebModelLabel(model);
+      const curve = {
+        points,
+        color: _ebModelColor(model, index),
+        label,
+        head: _ebModelHead(model),
+        headTitle: `${label} ${isCrowd ? 'crowd-follow' : 'Smart ROI'} ${_roiPct(strategy.roi)} · ${strategy.n_bets || 0} bets`,
+        opacity: 0.86,
+        isCrowdBaseline: isCrowd,
+      };
+      if (isCrowd) curve.dash = true;
+      if (times.length === points.length) curve.times = times;
+      return curve;
+    })
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
 const _EB_PAGE_SIZE = 10;
 let _ebPage = 0;
 let _ebBoardData = [];
+let _ebView = 'markets';
+let _ebLastData = null;
 
 function _ebGoPage(n) {
   _ebPage = n;
@@ -5663,72 +5899,171 @@ function _ebGoPage(n) {
   if (sec) sec.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
 }
 
+function _ebSetView(view) {
+  _ebView = view === 'mtm' ? 'mtm' : 'markets';
+  const host = document.getElementById('edgeBody');
+  if (!host || !_ebLastData) return;
+  host.innerHTML = renderEdgeBoard(_ebLastData);
+  _attachEdgeBoardChartHovers(host);
+  refreshEdgePrices();
+}
+
 function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}) {
   // curves = [{points: float[], color: string, label: string}, ...]
-  // points = growth-of-$100 value (starts at $100, compounds each bet's return).
+  // points = growth-of-$10,000 value, compounding each bet's return.
   const allPts = curves.flatMap(c => c.points);
   if (!allPts.length) return '';
-  const hasTimes = curves.every(c => Array.isArray(c.times) && c.times.length === c.points.length);
+  // Time axis is used when *any* curve carries timestamps. Previously this was
+  // `every`, so a single model with a missing/short ts array dropped the whole
+  // chart into index mode — which crushes short curves into the left edge and
+  // reads as a truncated chart. Curves without their own times are spread
+  // evenly across the full span instead.
+  const timedCurves = curves.filter(c => Array.isArray(c.times) && c.times.length === c.points.length);
+  const hasTimes = timedCurves.length > 0;
   const n = Math.max(...curves.map(c => c.points.length));
-  const lo = Math.min(100, ...allPts);
-  const hi = Math.max(100, ...allPts);
+  const dataLo = Math.min(EB_STARTING_BANKROLL, ...allPts);
+  const dataHi = Math.max(EB_STARTING_BANKROLL, ...allPts);
+  // Headroom: without it the extreme points sit exactly on the frame, so the
+  // stroke and (worse) the end-of-line head bubbles get sliced by the edge.
+  const headPad = ((dataHi - dataLo) || Math.abs(dataHi) * 0.001 || 1) * 0.09;
+  const lo = dataLo - headPad;
+  const hi = dataHi + headPad;
   const range = hi - lo || 1;
-  const padL = 46, padR = 8, padT = 8, padB = hasTimes ? 32 : 20;
-  const cW = W - padL - padR, cH = H - padT - padB;
+  const HEAD_R = 12;
+  const gap = 2;
+  const headPitch = 2 * HEAD_R + gap;
+  // Every curve with a `head` gets a bubble stacked on the right edge. Rather
+  // than dropping bubbles that don't fit (the previous behaviour, capped at
+  // whatever cH allowed), grow the chart to guarantee room for all of them —
+  // sized for the worst case where every curve ends at the same value and the
+  // bubbles must stack with zero overlap.
+  const nHeadCurves = curves.filter(c => c.head && c.points.length).length;
+  const requiredHeadsHeight = nHeadCurves > 0 ? (nHeadCurves - 1) * headPitch + 2 * HEAD_R : 0;
+  // padR has to clear a head bubble drawn at the last point, or the newest
+  // value — the one people actually look at — is clipped at the right edge.
+  const padL = 60, padR = HEAD_R + 24, padT = 26, padB = hasTimes ? 40 : 26;
+  const cW = W - padL - padR;
+  const cH = Math.max(H - padT - padB, requiredHeadsHeight);
+  // H (the parameter) drives everything drawn below the plot area — the
+  // legend block and the final viewBox — so grow it in step with cH rather
+  // than leaving those fixed at the caller's original, now too-short, height.
+  H = padT + cH + padB;
+  const pointInsetX = Math.min(14, Math.max(8, cW * 0.025));
+  const innerW = Math.max(1, cW - pointInsetX * 2);
   let tMin = 0, tMax = 1;
   if (hasTimes) {
-    const allT = curves.flatMap(c => c.times);
+    const allT = timedCurves.flatMap(c => c.times);
     tMin = Math.min(...allT); tMax = Math.max(...allT);
     if (tMax <= tMin) tMax = tMin + 1;
   }
   const tSpan = tMax - tMin;
-  const toX = (i, t) => hasTimes
-    ? padL + ((t - tMin) / tSpan) * cW
-    : padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
+  const _spread = (i, len) => padL + pointInsetX + (len > 1 ? (i / (len - 1)) * innerW : innerW / 2);
+  const toX = (i, t, len) => (hasTimes && Number.isFinite(t))
+    ? padL + pointInsetX + ((t - tMin) / tSpan) * innerW
+    : _spread(i, len == null ? n : len);
   const toY = v => padT + cH - ((v - lo) / range) * cH;
-  const baselineY = toY(100).toFixed(1);
-  // Y-axis: show $100 baseline plus lo/hi
-  const yLabels = [...new Set([lo, 100, hi])].filter(v => v === 100 || v !== 100);
+  const baselineY = toY(EB_STARTING_BANKROLL).toFixed(1);
+  // Y-axis: show the starting bankroll baseline plus the true data min/max
+  // (labels use the real values, not the padded drawing domain).
+  const yLabels = [...new Set([dataLo, EB_STARTING_BANKROLL, dataHi])];
   const yAxisHtml = yLabels.map(v => {
-    const labelStr = '$' + v.toFixed(v >= 100 ? 0 : 1);
-    return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="${v === 100 ? '#94a3b8' : '#888'}">${labelStr}</text>`;
+    const labelStr = '$' + v.toLocaleString(undefined, { maximumFractionDigits: v >= 1000 ? 0 : 1 });
+    return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="${v === EB_STARTING_BANKROLL ? '#94a3b8' : '#888'}">${labelStr}</text>`;
   }).join('');
   let xAxisHtml = '';
   if (hasTimes) {
     const withTime = tSpan < 2 * 86400000, ticks = 4;
     for (let k = 0; k <= ticks; k++) {
-      const t = tMin + (tSpan * k / ticks), x = padL + (cW * k / ticks);
+      const t = tMin + (tSpan * k / ticks), x = padL + pointInsetX + (innerW * k / ticks);
       const anchor = k === 0 ? 'start' : (k === ticks ? 'end' : 'middle');
       xAxisHtml += `<text x="${x.toFixed(1)}" y="${(padT + cH + 12).toFixed(1)}" font-size="8.5" text-anchor="${anchor}" fill="#888">${escHtml(_fmtEquityDate(t, withTime))}</text>`;
     }
   }
-  // $100 baseline
+  // Starting bankroll baseline.
   const baseline = `<line x1="${padL}" y1="${baselineY}" x2="${padL + cW}" y2="${baselineY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>`;
   const paths = curves.map(c => {
     if (!c.points.length) return '';
-    const pts = c.points.map((v, i) => `${toX(i, c.times && c.times[i]).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+    const len = c.points.length;
+    const pts = c.points.map((v, i) => `${toX(i, c.times && c.times[i], len).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
     const dashAttr = c.dash ? ' stroke-dasharray="5,3" stroke-width="1.4" opacity="0.75"' : ' stroke-width="1.8"';
-    return `<polyline points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>`;
+    // A single-sample curve has no segment to stroke, so a bare polyline is
+    // invisible — give it a dot so the model still shows up on the chart.
+    const solo = len === 1
+      ? `<circle cx="${toX(0, c.times && c.times[0], 1).toFixed(1)}" cy="${toY(c.points[0]).toFixed(1)}" r="2" fill="${c.color}"/>`
+      : '';
+    return `<polyline points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>${solo}`;
   }).join('');
-  const legendY = hasTimes ? H + 8 : H - 6;
+  // Every head lands on the same right-hand edge, so with more than a handful
+  // of models they'd stack into an unreadable pile. Resolve collisions by
+  // nudging them apart vertically (nearest-value order preserved) and draw a
+  // leader line back to the true endpoint.
+  const headSpecs = curves.map((c, ci) => {
+    if (!c.head || !c.points.length) return null;
+    const i = c.points.length - 1;
+    const rawLabel = String(c.head);
+    return {
+      ci,
+      color: c.color,
+      x: toX(i, c.times && c.times[i], c.points.length),
+      y: toY(c.points[i]),
+      label: escHtml(rawLabel.slice(0, 4)),
+      title: escHtml(c.headTitle || c.label || ''),
+      r: rawLabel.length > 3 ? 12 : 11,
+      fs: rawLabel.length > 3 ? 6.5 : 7.2,
+    };
+  }).filter(Boolean);
+  // Sorted by y == sorted by value, best first.
+  headSpecs.sort((a, b) => a.y - b.y);
+  headSpecs.forEach((cur, i) => {
+    const prev = headSpecs[i - 1];
+    cur.ty = prev ? Math.max(cur.y, prev.ty + prev.r + cur.r + gap) : cur.y;
+  });
+  // cH was sized above for exactly this worst case, so every bubble fits —
+  // but clamp both edges anyway as a safety net against radius rounding
+  // (labels >3 chars get a 1px larger radius than shorter ones).
+  const last = headSpecs[headSpecs.length - 1];
+  const overflow = last ? Math.max(0, last.ty + last.r - (padT + cH)) : 0;
+  const heads = headSpecs.map(h => {
+    const ty = Math.min(padT + cH - h.r, Math.max(padT + h.r, h.ty - overflow));
+    const leader = Math.abs(ty - h.y) > 1.5
+      ? `<line x1="${h.x.toFixed(1)}" y1="${h.y.toFixed(1)}" x2="${h.x.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${h.color}" stroke-width="0.75" opacity="0.45"/>`
+      : '';
+    return `${leader}<g class="eq-head" transform="translate(${h.x.toFixed(1)} ${ty.toFixed(1)})"><title>${h.title}</title><circle r="${h.r}" fill="#fff" stroke="${h.color}" stroke-width="1.5"/><text y="3.2" text-anchor="middle" font-size="${h.fs}" font-weight="700" fill="${h.color}">${h.label}</text></g>`;
+  }).join('');
+  const maxLabelLen = Math.max(8, ...curves.map(c => String(c.label || '').length));
+  const legendItemW = Math.max(150, Math.min(205, 42 + maxLabelLen * 5.5));
+  const legendCols = Math.max(1, Math.floor((W - padL - padR) / legendItemW));
+  const legendRows = Math.ceil(curves.length / legendCols);
+  const legendRowH = 17;
+  const legendStartY = H + 14;
   const legend = curves.map((c, i) => {
+    const col = i % legendCols, row = Math.floor(i / legendCols);
+    const x0 = padL + col * legendItemW;
+    const y0 = legendStartY + row * legendRowH;
     const swatch = c.dash
-      ? `<line x1="${padL + i * 110}" y1="${legendY}" x2="${padL + i * 110 + 14}" y2="${legendY}" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="4,2" opacity="0.8"/>`
-      : `<circle cx="${padL + i * 110 + 7}" cy="${legendY}" r="3.5" fill="${c.color}"/>`;
-    return swatch + `<text x="${padL + i * 110 + 17}" y="${legendY + 4}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
+      ? `<line x1="${x0}" y1="${y0}" x2="${x0 + 14}" y2="${y0}" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="4,2" opacity="0.8"/>`
+      : `<circle cx="${x0 + 7}" cy="${y0}" r="3.5" fill="${c.color}"/>`;
+    return swatch + `<text x="${x0 + 17}" y="${y0 + 4}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
   }).join('');
-  const svgH = H + (hasTimes ? 14 : 0);
-  _lastEquityCurves = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan };
-  const chartLabel = `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">Growth of $100 (reinvested)</text>`;
-  return `<svg class="eq-svg" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
-    ${chartLabel}${yAxisHtml}${xAxisHtml}${baseline}${paths}${legend}
+  const svgH = H + 20 + legendRows * legendRowH;
+  const chartId = `eq-${++_equityChartSeq}`;
+  const eqState = { curves, W, H, padL, padT, cW, cH, pointInsetX, innerW, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan, asPct, yPrefix };
+  _lastEquityCurves = eqState;
+  _equityChartStates.set(chartId, eqState);
+  const chartLabel = `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">Growth of $10,000 (reinvested)</text>`;
+  // height:auto (not a fixed ${svgH}px) so the viewBox aspect ratio drives the
+  // box. With a fixed height the chart letterboxed into a squashed band on any
+  // viewport narrower than ${W}px instead of scaling down cleanly.
+  return `<svg class="eq-svg" data-eq-id="${chartId}" viewBox="0 0 ${W} ${svgH}" preserveAspectRatio="xMidYMid meet" style="width:100%;max-width:${W}px;height:auto;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
+    ${chartLabel}${yAxisHtml}${xAxisHtml}${baseline}${paths}${heads}${legend}
   </svg>`;
 }
 
 function _attachEquityHover(container) {
   const svg = container.querySelector('.eq-svg');
-  if (!svg || !_lastEquityCurves) return;
-  const eq = _lastEquityCurves;
+  const chartId = svg ? svg.getAttribute('data-eq-id') : null;
+  const eq = (chartId && _equityChartStates.get(chartId)) || _lastEquityCurves;
+  if (!svg || !eq) return;
 
   let tip = container.querySelector('.eq-tip');
   if (!tip) {
@@ -5775,7 +6110,8 @@ function _attachEquityHover(container) {
     const rect = svg.getBoundingClientRect();
     const svgX = (e.clientX - rect.left) * (eq.W / rect.width);
     if (svgX < eq.padL || svgX > eq.padL + eq.cW) { hide(); return; }
-    const frac = (svgX - eq.padL) / eq.cW;
+    const plotX = Math.max(eq.padL + eq.pointInsetX, Math.min(eq.padL + eq.pointInsetX + eq.innerW, svgX));
+    const frac = (plotX - eq.padL - eq.pointInsetX) / eq.innerW;
     const x = svgX;
     xhair.setAttribute('x1', x.toFixed(1)); xhair.setAttribute('x2', x.toFixed(1));
     xhair.style.display = '';
@@ -5800,18 +6136,47 @@ function _attachEquityHover(container) {
       }
       const v = c.points[idx];
       if (v == null) { dots[ci].style.display = 'none'; return null; }
-      const dotX = eq.hasTimes && c.times ? eq.padL + ((c.times[idx] - eq.tMin) / eq.tSpan) * eq.cW : x;
+      const dotX = eq.hasTimes && c.times
+        ? eq.padL + eq.pointInsetX + ((c.times[idx] - eq.tMin) / eq.tSpan) * eq.innerW
+        : plotX;
       const y = eq.padT + eq.cH - ((v - eq.lo) / eq.range) * eq.cH;
       dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
       dots[ci].style.display = '';
-      return `<span style="color:${c.color}">${c.label}: $${v.toFixed(2)}</span>`;
+      const value = eq.asPct ? `${(v * 100).toFixed(1)}%` : `${eq.yPrefix || '$'}${v.toFixed(2)}`;
+      return { y, html: `<span style="color:${c.color}">${c.label}: ${value}</span>` };
     }).filter(Boolean);
-    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>` + lines.join('<br>');
+    // With ~17 models a row-per-curve tooltip grows taller than the chart and
+    // spills off the bottom of the container. Show only the curves nearest the
+    // cursor — the ones actually being pointed at — and say how many are hidden.
+    const TIP_MAX_ROWS = 8;
+    const rect2 = svg.getBoundingClientRect();
+    const scale = rect2.width / eq.W || 1;
+    const cursorY = (e.clientY - rect2.top) / scale;
+    let shown = lines;
+    let hiddenCount = 0;
+    if (lines.length > TIP_MAX_ROWS) {
+      shown = lines
+        .slice()
+        .sort((a, b) => Math.abs(a.y - cursorY) - Math.abs(b.y - cursorY))
+        .slice(0, TIP_MAX_ROWS)
+        .sort((a, b) => a.y - b.y);
+      hiddenCount = lines.length - shown.length;
+    }
+    const more = hiddenCount
+      ? `<div style="color:#64748b;margin-top:3px;font-size:10px">+${hiddenCount} more</div>`
+      : '';
+    tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>`
+      + shown.map(l => l.html).join('<br>') + more;
     tip.style.display = 'block';
+    // Clamp against the measured tooltip box on both axes (the old code guessed
+    // a 150px width and never clamped the bottom at all).
     const cr = container.getBoundingClientRect();
-    let lft = e.clientX - cr.left + 14, top = e.clientY - cr.top - 24;
-    if (lft + 150 > container.offsetWidth) lft -= 164;
-    tip.style.left = Math.max(0, lft) + 'px';
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let lft = e.clientX - cr.left + 14;
+    let top = e.clientY - cr.top - 24;
+    if (lft + tw > container.offsetWidth) lft = e.clientX - cr.left - tw - 14;
+    if (top + th > cr.height) top = cr.height - th;
+    tip.style.left = Math.max(0, Math.min(lft, Math.max(0, container.offsetWidth - tw))) + 'px';
     tip.style.top = Math.max(0, top) + 'px';
   }
 
@@ -5821,6 +6186,13 @@ function _attachEquityHover(container) {
   svg._eqLeave = hide;
   svg.addEventListener('mousemove', onMove);
   svg.addEventListener('mouseleave', hide);
+}
+
+function _attachEdgeBoardChartHovers(root = document) {
+  ['#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'].forEach(sel => {
+    const el = root.querySelector(sel);
+    if (el) _attachEquityHover(el);
+  });
 }
 
 function _attachCrypto5mHover(container) {
@@ -5968,8 +6340,66 @@ function _renderBoardPage(board, page) {
   return tableHtml + pagination;
 }
 
+function _renderMtmPage(d) {
+  const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
+  if (!mtmModels.length) {
+    return '<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4><p class="text-sm text-gray-500">Shadow mark-to-market account values will appear after strategy snapshots are available.</p>';
+  }
+  const _usd = v => Number.isFinite(Number(v))
+    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+    : 'building';
+  const curves = mtmModels.map((m, i) => {
+    const account = m.account || {};
+    const curvePoints = account.value_curve || [];
+    const values = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
+    const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
+    const accountValue = Number(account.account_value ?? m.account_value);
+    const accountTime = new Date(account.ts || m.ts || d.generated_at).getTime();
+    const lastValue = values.length ? values[values.length - 1] : null;
+    const lastTime = times.length ? times[times.length - 1] : null;
+    if (Number.isFinite(accountValue) && Number.isFinite(accountTime) && (lastValue !== accountValue || lastTime !== accountTime)) {
+      values.push(accountValue);
+      times.push(accountTime);
+    }
+    if (!values.length) return null;
+    const label = _ebModelLabel(m.model);
+    const ret = account.return ?? m.return;
+    const curve = {
+      points: values,
+      color: _mtmModelColor(m.model, i),
+      label,
+      // Without `head` _equitySvg skips the end-of-line bubble entirely, which
+      // is why the MTM chart used to render as bare lines while the model
+      // comparison chart (built by _ebModelCurves) showed its bubbles.
+      head: _ebModelHead(m.model),
+      headTitle: `${label} · ${_usd(account.account_value ?? m.account_value)}${ret == null ? '' : ' · ' + _roiPct(ret)}`,
+    };
+    if (times.length === values.length) curve.times = times;
+    return curve;
+  }).filter(Boolean);
+  const rows = mtmModels.map((m, i) => {
+    const account = m.account || {};
+    const value = account.account_value ?? m.account_value;
+    const ret = account.return ?? m.return;
+    const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
+    return `<tr class="eb-row">
+      <td><b>${i + 1}</b></td>
+      <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
+      <td>${_usd(value)}</td>
+      <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
+      <td>${account.n_trades ?? m.n_trades ?? 0}</td>
+      <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
+      <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
+    </tr>`;
+  }).join('');
+  return `<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4>
+    <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
+}
+
 function renderEdgeBoard(d) {
   const board = d.edge_board || [], comp = d.models_comparison || [];
+  _ebLastData = d;
   _ebBoardData = board;
   _ebPage = 0;
   const pnl = d.paper_pnl, ll = d.lead_lag;
@@ -5989,14 +6419,21 @@ function renderEdgeBoard(d) {
     </div>`;
   let compHtml;
   if (comp.length) {
-    compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Flat ROI</th><th>Smart ROI</th></tr></thead><tbody>` +
+    const crowdRoi = ((pnl || {}).crowd_baseline || {}).roi;
+    const compCurves = _ebModelCurves(comp, EB_MIN_N, 9);
+    const compChart = compCurves.length
+      ? `<div id="eb-model-comparison-svg">${_equitySvg(compCurves, 760, 180, {asPct: false, yPrefix: '$'})}</div>`
+      : '';
+    compHtml = `${compChart}<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Smart ROI</th><th>vs crowd</th></tr></thead><tbody>` +
       comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
+        const modelSmartRoi = m.paper_roi_smart != null ? m.paper_roi_smart : (m.model === 'crowd-follow' ? m.paper_roi : null);
+        const roiDelta = modelSmartRoi != null && crowdRoi != null ? modelSmartRoi - crowdRoi : null;
         return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
         `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
         `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td>` +
-        `<td>${enough ? _roiPct(m.paper_roi) : '·'}</td><td>${enough ? _roiPct(m.paper_roi_smart) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
+        `<td>${enough ? _roiPct(modelSmartRoi) : '·'}</td><td>${enough ? _roiDeltaPct(roiDelta) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
   } else {
-    compHtml = `<p class="text-sm text-gray-500">Model comparison (gpt-oss-120b vs Gemma vs Kimi) fills in as forecasts resolve.</p>`;
+    compHtml = `<p class="text-sm text-gray-500">Model comparison across SCADS-hosted models fills in as forecasts resolve.</p>`;
   }
   let performanceHtml;
   if (pnl && pnl.flat) {
@@ -6004,14 +6441,12 @@ function renderEdgeBoard(d) {
       : _build(s && s.n_bets);
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
+    const smartVsCrowd = (pnl.smart?.roi != null && pnl.crowd_baseline?.roi != null) ? pnl.smart.roi - pnl.crowd_baseline.roi : null;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const _normCurve = s => {
-      if (s?.growth_curve?.length) return s.growth_curve.slice();
-      if (!s?.equity_curve?.length) return null;
-      const staked = s.total_staked || s.n_bets || 1;
-      return s.equity_curve.map(v => 100 + (v / staked) * 100);
+      return _ebPnlCurve(s);
     };
-    const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+    const _times = s => _ebCurveTimes(s);
     const _mk = (s, color, label, dash) => {
       const points = _normCurve(s);
       if (!points) return null;
@@ -6021,22 +6456,21 @@ function renderEdgeBoard(d) {
       if (times.length === points.length) curve.times = times;
       return curve;
     };
-    const curves = [
-      _mk(pnl.smart, '#10b981', 'Smart'),
+    const strategyCurves = [
+      _mk(pnl.smart, '#10b981', 'Smart ROI'),
       _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
-      _mk(pnl.flat, '#60a5fa', 'Flat stake'),
-      _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
+      _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
     ].filter(Boolean);
-    const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : ''}</div>`;
+    const svgChart = `<div id="eb-equity-svg">${strategyCurves.length ? _equitySvg(strategyCurves, 680, 160, {asPct: false, yPrefix: '$'}) : ''}</div>`;
     performanceHtml = `
-      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $100 starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
-      <div class="tr-stats">
-      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label ui-icon-label">${uiIcon('star')} Smart</div>${_sub('Kelly + filters')}</div>
-        <div class="tr-stat" title="Calibrated Half-Kelly sizing proportional to estimated edge and market odds."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
-        <div class="tr-stat" title="Equal stake on every resolved forecast."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
-        <div class="tr-stat" title="Equal stake following the market consensus as a zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">Crowd baseline</div>${_sub('agree with market')}</div>
-      </div>
+      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $${EB_STARTING_BANKROLL.toLocaleString()} starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
       ${svgChart}
+      <div class="tr-stats">
+      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label ui-icon-label">${uiIcon('star')} Smart ROI</div>${_sub('Kelly + filters')}</div>
+        <div class="tr-stat" title="Calibrated Half-Kelly sizing proportional to estimated edge and market odds."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
+        <div class="tr-stat" title="Smart ROI minus the crowd-follow baseline over the same resolved cohort."><div class="v" id="eb-pnl-edge-v">${smartVsCrowd != null ? _roiDeltaPct(smartVsCrowd) : _build(pnl.smart && pnl.smart.n_bets)}</div><div class="k label">vs crowd-follow</div>${_sub('excess return')}</div>
+        <div class="tr-stat" title="Always betting the crowd's own direction as the zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">crowd-follow baseline</div>${_sub('agree with market')}</div>
+      </div>
       <p class="text-xs text-gray-400" style="margin-top:8px">Historical simulation of forecasts saved before market close, net of venue trading fees. Excludes slippage and liquidity constraints; not actual trading results.</p>`;
   } else {
     performanceHtml = `<p class="text-sm text-gray-500">Strategy performance will appear as tracked markets resolve.</p>`;
@@ -6099,16 +6533,23 @@ function renderEdgeBoard(d) {
     calibHtml = `<p class="text-sm text-gray-500">Lead-time calibration — whether forecasts made this early actually pay — builds as markets resolve.</p>`;
   }
   const boardHtml = `<div id="eb-board-section">${_renderBoardPage(board, 0)}</div>`;
+  const viewTabs = `<div class="eb-view-tabs" role="tablist" aria-label="Edge board views">
+    <button type="button" class="eb-view-tab ${_ebView === 'markets' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'markets'}" onclick="_ebSetView('markets')">Markets</button>
+    <button type="button" class="eb-view-tab ${_ebView === 'mtm' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'mtm'}" onclick="_ebSetView('mtm')">MTM</button>
+  </div>`;
+  const marketsPageHtml = `${stats}
+    <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging - risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
+    <h4 class="eb-h">Model comparison - resolved forecast quality</h4>${compHtml}
+    <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
+    <h4 id="forecastDriftPanel" class="eb-h">Forecast drift - does an early call pay?</h4>${calibHtml}
+    <h4 class="eb-h">Live council forecasts - ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
+  const mtmPageHtml = _renderMtmPage(d);
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
-    <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced — and our track record of being right about it</h3>
+    <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced - and our track record of being right about it</h3>
     <p class="tr-method">Live council-vs-market gaps, ranked. Accuracy, calibration, and lead-time skill are calculated from resolved forecasts saved before each market closed. ${gen ? 'Updated ' + gen + '.' : ''}</p>
-    ${stats}
-    <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
-    <h4 class="eb-h">Model comparison · resolved forecast quality</h4>${compHtml}
-    <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
-    <h4 id="forecastDriftPanel" class="eb-h">Forecast drift · does an early call pay?</h4>${calibHtml}
-    <h4 class="eb-h">Live council forecasts · ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
+    ${viewTabs}
+    <div style="margin-top:18px">${_ebView === 'mtm' ? mtmPageHtml : marketsPageHtml}</div>
   </div>`;
 }
 function _fmtDate(value) {
@@ -6218,14 +6659,6 @@ function applyHistoryState(state) {
   closeTrackRecord({ updateHistory: false });
   closeEdgeBoard({ updateHistory: false });
   closeWatchlistPage({ updateHistory: false });
-
-  const isAppView = ['app', 'track-app', 'edge-app', 'watch-app'].includes(view);
-  if (isAppView && !isUserSignedIn()) {
-    showLanding({ updateHistory: false });
-    openAuthModal('login');
-    isApplyingHistory = false;
-    return;
-  }
 
   if (view === 'app') {
     launchApp({ updateHistory: false });
@@ -7391,14 +7824,15 @@ function _agentReportData(report) {
   const d = report || {};
   return {
     question_type: 'chat',
-    rationale: _agentReportToMarkdown(d),
+    rationale: _agentReportToMarkdown(d, { includeSources: false }),
     model_key: 'agent',
     evidence_sources: d.evidence_sources || [],
     evidence_error: d.evidence_error || '',
   };
 }
 
-function _agentReportToMarkdown(d) {
+function _agentReportToMarkdown(d, options = {}) {
+  const includeSources = options.includeSources !== false;
   const pct = x => (x == null ? '—' : Math.round(x * 100) + '%');
   const out = d.outcome || 'Yes';
   let md = '';
@@ -7426,6 +7860,7 @@ function _agentReportToMarkdown(d) {
 
   if (d.grounding) md += `\n\n> _${d.grounding.replace(/\n/g, ' ')}_`;
 
+  if (includeSources) {
   // Clickable, de-duplicated source citations.
   const seen = new Set();
   const links = [];
@@ -7438,6 +7873,7 @@ function _agentReportToMarkdown(d) {
     md += `\n\n---\n*Sources:* ${links.join(' · ')}`;
   } else {
     md += `\n\n*I couldn't pull solid sources on this one, so I'm low-confidence. Paste an article or link (the 📎 button) and I'll factor it in, or sharpen the question — e.g. add the exact threshold and date.*`;
+  }
   }
   return md;
 }
@@ -7623,21 +8059,37 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const d = await r.json();
       const ov = d.overall || {};
       const pp = d.paper_pnl || {};
-      const flat = pp.flat || {};
       const smart = pp.smart || {};
-      const best = [smart, pp.half_kelly, flat, pp.crowd_baseline]
-        .filter(s => s && s.roi != null).sort((a,b) => b.roi - a.roi)[0] || flat;
+      const crowd = pp.crowd_baseline || {};
+      const smartDelta = smart.roi != null && crowd.roi != null ? smart.roi - crowd.roi : null;
+      const _trackCurve = (s, color, label, dash) => {
+        const points = _ebPnlCurve(s);
+        if (!points) return null;
+        const times = _ebCurveTimes(s);
+        const curve = { points, color, label };
+        if (dash) curve.dash = true;
+        if (times.length === points.length) curve.times = times;
+        return curve;
+      };
+      const trackCurves = [
+        _trackCurve(smart, '#10b981', 'Smart ROI'),
+        _trackCurve(crowd, '#94a3b8', 'crowd-follow baseline', true),
+      ].filter(Boolean);
+      const trackChart = trackCurves.length
+        ? `<div style="margin:0 0 12px">${_equitySvg(trackCurves, 460, 112, {asPct:false, yPrefix:'$'})}</div>`
+        : '';
       const rows = (d.models_comparison || []).slice(0,5).map(m =>
         `<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:5px 10px 5px 0;font-family:monospace;font-size:12px">${escHtml(m.model||'?')}</td>
           <td style="padding:5px 4px;text-align:right">${m.brier!=null?m.brier.toFixed(3):'—'}</td>
-          <td style="padding:5px 0 5px 8px;text-align:right;color:${(m.paper_roi||0)>=0?'var(--accent)':'#e55'}">${m.paper_roi!=null?(m.paper_roi>=0?'+':'')+(m.paper_roi*100).toFixed(1)+'%':'—'}</td>
+          <td style="padding:5px 0 5px 8px;text-align:right;color:${(m.paper_roi_smart ?? m.paper_roi ?? 0)>=0?'var(--accent)':'#e55'}">${m.paper_roi_smart!=null?(m.paper_roi_smart>=0?'+':'')+(m.paper_roi_smart*100).toFixed(1)+'%':(m.model==='crowd-follow'&&m.paper_roi!=null?(m.paper_roi>=0?'+':'')+(m.paper_roi*100).toFixed(1)+'%':'—')}</td>
         </tr>`
       ).join('');
       typing.remove();
       _appendInline(`
         <p style="margin-bottom:10px"><strong>Track record</strong></p>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+        ${trackChart}
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
           <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
             <div style="font-size:22px;font-weight:700;color:var(--ink)">${ov.n_resolved||0}</div>
             <div style="font-size:12px;color:var(--text-dim)">Resolved</div>
@@ -7647,8 +8099,12 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
             <div style="font-size:12px;color:var(--text-dim)">Brier score</div>
           </div>
           <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:22px;font-weight:700;color:${(best.roi||0)>=0?'var(--accent)':'#e55'}">${best.roi!=null?(best.roi>=0?'+':'')+(best.roi*100).toFixed(1)+'%':'—'}</div>
-            <div style="font-size:12px;color:var(--text-dim)">Best paper ROI</div>
+            <div style="font-size:22px;font-weight:700;color:${(smart.roi||0)>=0?'var(--accent)':'#e55'}">${smart.roi!=null?(smart.roi>=0?'+':'')+(smart.roi*100).toFixed(1)+'%':'—'}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Smart ROI</div>
+          </div>
+          <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:${(smartDelta||0)>=0?'var(--accent)':'#e55'}">${smartDelta!=null?_roiDeltaPct(smartDelta):'—'}</div>
+            <div style="font-size:12px;color:var(--text-dim)">vs crowd-follow</div>
           </div>
         </div>
         ${rows ? `<p style="margin-bottom:6px;font-size:13px;color:var(--text-dim);font-weight:600">Models</p>
@@ -7656,11 +8112,11 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           <thead><tr style="border-bottom:2px solid var(--border)">
             <th style="padding:4px 10px 4px 0;text-align:left;color:var(--text-dim)">Model</th>
             <th style="padding:4px;text-align:right;color:var(--text-dim)">Brier</th>
-            <th style="padding:4px 0 4px 8px;text-align:right;color:var(--text-dim)">Paper ROI</th>
+            <th style="padding:4px 0 4px 8px;text-align:right;color:var(--text-dim)">Smart ROI</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>` : ''}
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. <a href="#track-app" class="ui-icon-label" style="color:var(--accent)" onclick="showView('track-app')">Full track record ${uiIcon('arrow-right')}</a></p>`);
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. Smart ROI uses the filtered strategy; crowd-follow is the zero-edge baseline. <a href="#track-app" class="ui-icon-label" style="color:var(--accent)" onclick="showView('track-app')">Full track record ${uiIcon('arrow-right')}</a></p>`);
     } catch(e) { typing.remove(); _appendError('Could not load track record: ' + e.message); }
     return true;
   }
@@ -7766,54 +8222,28 @@ async function runScan(platform, query, customLabel) {
 // ── Auth ─────────────────────────────────────────────────────────────────────
 let _gClientId = null;
 let _ghClientId = null;
+let _authConfigPromise = null;
+let _googleIdentityLoadStarted = false;
 let currentUser = null;
-let _pendingQuestionAfterSignIn = null;
-const _PENDING_FORECAST_KEY = 'foresea_pending_forecast';
-
-function isUserSignedIn() {
-  return !!(currentUser || localStorage.getItem('foresea_session'));
-}
-
-function _savePendingForecastAfterSignIn(pending) {
-  try { sessionStorage.setItem(_PENDING_FORECAST_KEY, JSON.stringify(pending)); } catch {}
-}
-
-function _loadPendingForecastAfterSignIn() {
-  try {
-    const raw = sessionStorage.getItem(_PENDING_FORECAST_KEY);
-    if (!raw) return null;
-    const pending = JSON.parse(raw);
-    const question = String(pending?.question ?? '').trim();
-    if (!question) return null;
-    return { question, ctx: pending?.ctx || null };
-  } catch {
-    return null;
-  }
-}
-
-function _clearPendingForecastAfterSignIn() {
-  _pendingQuestionAfterSignIn = null;
-  try { sessionStorage.removeItem(_PENDING_FORECAST_KEY); } catch {}
-}
-
-function _queueForecastAfterSignIn(question, ctx = null) {
-  const normalizedQuestion = String(question ?? '').trim();
-  if (!normalizedQuestion) return false;
-  _pendingQuestionAfterSignIn = {
-    question: normalizedQuestion,
-    ctx: ctx || null,
-  };
-  _savePendingForecastAfterSignIn(_pendingQuestionAfterSignIn);
-  showLanding({ updateHistory: true });
-  openAuthModal('login');
-  return true;
-}
 
 // ── GitHub OAuth (authorization-code flow) ────────────────────────────────────
 function _githubRedirectUri() { return location.origin + location.pathname; }
 
+function _authProviderUnavailable(provider) {
+  _showAuthError(provider + ' sign-in is not configured on this server.');
+}
+
+function startGoogleLogin() {
+  if (!_gClientId) { _authProviderUnavailable('Google'); return; }
+  if (!window.google?.accounts?.id) {
+    _showAuthError('Google sign-in is still loading. Try again in a moment.');
+    return;
+  }
+  _syncAuthProviderVisibility();
+}
+
 function startGitHubLogin() {
-  if (!_ghClientId) return;
+  if (!_ghClientId) { _authProviderUnavailable('GitHub'); return; }
   const state = (window.crypto?.randomUUID?.() || String(Math.random())).replace(/-/g, '');
   try { localStorage.setItem('gh_oauth_state', state); } catch {}
   const params = new URLSearchParams({
@@ -7873,12 +8303,8 @@ async function _afterSignIn(user, source = 'auth') {
   trackEvent('sign_in_completed', { source });
   await syncConversationsAfterSignIn(user);
   await _syncFavoritesFromServer();
-  
-  const pendingForecast = _pendingQuestionAfterSignIn || _loadPendingForecastAfterSignIn();
-  if (pendingForecast) {
-    _clearPendingForecastAfterSignIn();
-    startForecast(pendingForecast.question, pendingForecast.ctx || null);
-  } else if (currentView === 'landing' || !currentView) {
+
+  if (currentView === 'landing' || !currentView) {
     launchApp();
   }
   
@@ -8000,27 +8426,84 @@ function setAuthMode(mode) {
 
 function toggleAuthMode() { setAuthMode(_authMode === 'login' ? 'register' : 'login'); }
 
+function _syncAuthProviderVisibility() {
+  const googleReady = !!(_gClientId && window.google?.accounts?.id);
+  const social = document.getElementById('authSocial');
+  const googleSection = document.getElementById('authGoogleSection');
+  const googleFallback = document.getElementById('googleFallbackBtn');
+  const githubBtn = document.getElementById('githubBtn');
+  if (social) social.hidden = false;
+  if (googleSection) googleSection.hidden = !googleReady;
+  if (googleFallback) {
+    googleFallback.hidden = googleReady;
+    googleFallback.disabled = !_gClientId || !googleReady;
+    googleFallback.title = _gClientId
+      ? 'Google sign-in is loading.'
+      : 'Google sign-in is not configured on this server.';
+    googleFallback.setAttribute('aria-disabled', String(googleFallback.disabled));
+  }
+  if (githubBtn) {
+    githubBtn.hidden = false;
+    githubBtn.disabled = !_ghClientId;
+    githubBtn.title = _ghClientId
+      ? 'Continue with GitHub'
+      : 'GitHub sign-in is not configured on this server.';
+    githubBtn.setAttribute('aria-disabled', String(!_ghClientId));
+  }
+  if (googleReady &&
+      document.getElementById('authOverlay').classList.contains('show')) {
+    requestAnimationFrame(() => renderGoogleButton('modalGsiWrap'));
+  }
+}
+
+function _loadGoogleIdentityServices() {
+  if (!_gClientId || window.google?.accounts?.id || _googleIdentityLoadStarted) return;
+  _googleIdentityLoadStarted = true;
+  const script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.onload = () => {
+    google.accounts.id.initialize({
+      client_id: _gClientId,
+      callback: handleGoogleCredential,
+      auto_select: false,
+    });
+    _syncAuthProviderVisibility();
+  };
+  script.onerror = () => { _googleIdentityLoadStarted = false; };
+  document.head.appendChild(script);
+}
+
+function _ensureAuthProviders() {
+  if (_authConfigPromise) return _authConfigPromise;
+  _authConfigPromise = fetch('/auth/config')
+    .then(r => r.ok ? r.json() : {})
+    .catch(() => ({}))
+    .then(cfg => {
+      _ghClientId = cfg.github_client_id || null;
+      _gClientId = cfg.google_client_id || null;
+      _syncAuthProviderVisibility();
+      _loadGoogleIdentityServices();
+      return cfg;
+    });
+  return _authConfigPromise;
+}
+
 function openAuthModal(mode) {
   setAuthMode(mode || 'login');
   _showAuthError('');
   const overlay = document.getElementById('authOverlay');
   overlay.classList.add('show');
   overlay.setAttribute('aria-hidden', 'false');
-  document.getElementById('authSocial').hidden = !(_gClientId || _ghClientId);
-  document.getElementById('authGoogleSection').hidden = !_gClientId;
-  document.getElementById('githubBtn').hidden = !_ghClientId;
-  // Render after layout so the button width matches the modal.
-  if (_gClientId) requestAnimationFrame(() => renderGoogleButton('modalGsiWrap'));
+  _syncAuthProviderVisibility();
+  _ensureAuthProviders();
   setTimeout(() => document.getElementById('authEmail').focus(), 60);
 }
 
-function closeAuthModal(options = {}) {
-  const { clearPendingForecast = true } = options;
+function closeAuthModal(_options = {}) {
   const overlay = document.getElementById('authOverlay');
   overlay.classList.remove('show');
   overlay.setAttribute('aria-hidden', 'true');
   _authBusy = false;
-  if (clearPendingForecast) _clearPendingForecastAfterSignIn();
 }
 
 // ── Feedback modal ──────────────────────────────────────────────────────────
@@ -8196,6 +8679,10 @@ function signOut() {
 }
 
 async function initAuth() {
+  // Start provider discovery immediately so a landing-page forecast can show
+  // Google and GitHub even when the sign-in modal opens during initial load.
+  const authProvidersReady = _ensureAuthProviders();
+
   // 1. Restore any existing session
   const user = await _verifySession();
   if (user) {
@@ -8210,32 +8697,8 @@ async function initAuth() {
   // 2. Complete a GitHub OAuth round-trip if we just returned from GitHub.
   await _maybeCompleteGitHubLogin();
 
-  // 3. Fetch public OAuth client IDs (Google + GitHub, independent of each other).
-  let cfg = {};
-  try {
-    const r = await fetch('/auth/config');
-    if (r.ok) cfg = await r.json();
-  } catch { return; }
-  _ghClientId = cfg.github_client_id || null;
-  if (!cfg.google_client_id) return;
-  _gClientId = cfg.google_client_id;
-
-  // 4. Load GIS so the modal's "Continue with Google" button can render on demand.
-  const script = document.createElement('script');
-  script.src = 'https://accounts.google.com/gsi/client';
-  script.onload = () => {
-    google.accounts.id.initialize({
-      client_id: _gClientId,
-      callback: handleGoogleCredential,
-      auto_select: false,
-    });
-    // If the modal is already open (rare), render the button now.
-    if (document.getElementById('authOverlay').classList.contains('show')) {
-      document.getElementById('authGoogleSection').hidden = false;
-      renderGoogleButton('modalGsiWrap');
-    }
-  };
-  document.head.appendChild(script);
+  // 3. Provider discovery runs in parallel with session restoration.
+  await authProvidersReady;
 }
 
 // Close the auth modal on Escape.
