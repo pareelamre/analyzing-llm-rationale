@@ -98,6 +98,39 @@ class ChatUiTests(unittest.TestCase):
         self.assertNotIn("chart heartbeat", self.index_html)
         self.assertNotIn("SCADS + baseline", self.index_html)
 
+    def test_signed_out_users_can_try_the_forecast_desk(self) -> None:
+        launch_body = self.index_html.split("function launchApp", 1)[1].split(
+            "function fillExample", 1
+        )[0]
+        send_preamble = self.index_html.split("async function sendQuestion", 1)[1].split(
+            "_hideSlashPalette();", 1
+        )[0]
+        landing_stream_body = self.index_html.split("async function _streamLandingQuestion", 1)[
+            1
+        ].split("function _landingOpenInApp", 1)[0]
+        history_body = self.index_html.split("function applyHistoryState", 1)[1].split(
+            "window.addEventListener('popstate'",
+            1,
+        )[0]
+        start_example_body = self.index_html.split("function startExample", 1)[1].split(
+            "let _landingLastQuestion",
+            1,
+        )[0]
+        submit_landing_body = self.index_html.split("function submitLandingQuestion", 1)[1].split(
+            "async function _streamLandingQuestion",
+            1,
+        )[0]
+
+        self.assertNotIn("openAuthModal('login')", launch_body)
+        self.assertNotIn("_queueForecastAfterSignIn", launch_body)
+        self.assertNotIn("_queueForecastAfterSignIn", send_preamble)
+        self.assertNotIn("_queueForecastAfterSignIn", landing_stream_body)
+        self.assertNotIn("_queueForecastAfterSignIn", submit_landing_body)
+        self.assertNotIn("function _queueForecastAfterSignIn", self.index_html)
+        self.assertNotIn("openAuthModal('login')", history_body)
+        self.assertIn("startForecast(question)", start_example_body)
+        self.assertIn("_streamLandingQuestion(question)", submit_landing_body)
+        self.assertNotIn("_streamLandingQuestion(question)", start_example_body)
 
 if __name__ == "__main__":
     unittest.main()
