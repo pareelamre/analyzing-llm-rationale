@@ -1132,6 +1132,16 @@ _LIQUIDITY_BUCKETS = [
     ("liquid (>$25k)", 25_000.0, float("inf")),
 ]
 
+# Models with an established, non-degenerate resolved history for the public
+# "Model comparison" table. Newer forecast-matrix additions start out with all
+# their resolved snapshots coming from a single backlog market
+# (n_markets_resolved == 1) — that reads like a real track record but isn't.
+# Keep the comparison to models with real accumulated history until a new
+# model actually builds one; MTM is intentionally NOT filtered by this list.
+_RESOLVED_QUALITY_MODELS = {
+    "council", "crowd-follow", "gpt-oss-120b", "gemma-4-31b-it", "kimi-k2.6",
+}
+
 
 def _edge(row: Dict[str, Any]) -> float:
     """Absolute model-vs-market disagreement for a snapshot."""
@@ -2555,7 +2565,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         },
         "arbitrage_signals": build_arbitrage_board(open_primary, latest_price),
         "models_comparison": build_models_comparison(
-            resolved,
+            [r for r in resolved if (r.get("model") or model) in _RESOLVED_QUALITY_MODELS],
             default_model=model,
             crowd_baseline=_crowd_base,
             crowd_reference_rows=_crowd_ref_rows,
