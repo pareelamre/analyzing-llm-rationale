@@ -132,5 +132,27 @@ class ChatUiTests(unittest.TestCase):
         self.assertIn("_streamLandingQuestion(question)", submit_landing_body)
         self.assertNotIn("_streamLandingQuestion(question)", start_example_body)
 
+    def test_new_conversation_opens_plain_empty_chat(self) -> None:
+        empty_branch = self.index_html.split("function renderMessages", 1)[1].split(
+            "let i = 0;",
+            1,
+        )[0]
+
+        self.assertIn(">New conversation</button>", self.index_html)
+        self.assertIn("title: 'New conversation'", self.index_html)
+        self.assertNotIn("New market brief", self.index_html)
+        self.assertIn("if (!conv || conv.messages.length === 0)", empty_branch)
+        self.assertNotIn("Foresea market desk", empty_branch)
+        self.assertNotIn("Intelligence stack", empty_branch)
+        self.assertNotIn("Live brief format", empty_branch)
+
+    def test_conversations_get_stable_hash_urls(self) -> None:
+        self.assertIn("const CHAT_HASH_PREFIX = '#chat/';", self.index_html)
+        self.assertIn("function conversationHash(id)", self.index_html)
+        self.assertIn("function conversationIdFromHash", self.index_html)
+        self.assertIn("setHistoryState('chat', historyMode, { convId: id });", self.index_html)
+        self.assertIn("conversationIdFromHash()", self.index_html)
+        self.assertIn("activateConv(urlConversationId, { updateHistory: false });", self.index_html)
+
 if __name__ == "__main__":
     unittest.main()
