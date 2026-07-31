@@ -4623,20 +4623,30 @@ async def _prepare_predict_messages(
         else ""
     ) or req.question
 
-    # A short follow-up in an ongoing thread ("WE is 90+", "why?") makes a poor
-    # search query and derails on literal matches, so answer it from the
-    # conversation instead of fetching fresh evidence. Substantive questions
-    # (even mid-thread) still retrieve.
+    # A short follow-up in an ongoing thread ("WE is 90+", "why?") is a poor
+    # standalone search query. Keep retrieval on, but anchor it to the latest
+    # substantive user question so the forecast still receives raw evidence.
     short_followup = bool(req.history) and len(req.question.split()) <= 6
+    evidence_top_k = req.evidence_top_k
+    if short_followup:
+        previous_user_questions = [
+            (turn.get("content") or "").strip()
+            for turn in req.history
+            if turn.get("role") == "user" and (turn.get("content") or "").strip()
+        ]
+        if previous_user_questions:
+            evidence_question = (
+                f"{previous_user_questions[-1][:500]}\n"
+                f"Follow-up: {req.question}"
+            )
+            evidence_top_k = max(evidence_top_k, 5)
 
-    if req.attach_evidence and not short_followup:
+    if req.attach_evidence:
         retrieved_articles, evidence_error, _ = await _fetch_evidence_with_cache(
             evidence_question,
-            req.evidence_top_k,
+            evidence_top_k,
             source="forecast",
         )
-    elif req.attach_evidence and short_followup:
-        _forecast_evidence_requests.add(1, {"source": "forecast", "outcome": "skipped_followup"})
 
     evidence_articles = _merge_evidence_articles(supplied_articles, retrieved_articles)
     evidence_articles = [_clean_article(a) for a in evidence_articles]
@@ -4685,7 +4695,6 @@ async def _prepare_predict_messages(
 
     if (
         req.attach_evidence
-        and not short_followup
         and not evidence_articles
         and evidence_error is None
     ):
