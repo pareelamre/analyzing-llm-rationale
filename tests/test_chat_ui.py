@@ -114,6 +114,20 @@ class ChatUiTests(unittest.TestCase):
         )[1].split("\n  }\n}", 1)[0]
         self.assertNotIn("renderMessages();", finally_block)
 
+    def test_streaming_markdown_rendering_is_frame_throttled(self) -> None:
+        self.assertIn("function _makeStreamMarkdownRenderer", self.index_html)
+        self.assertIn("window.requestAnimationFrame", self.index_html)
+        self.assertIn("renderStreamText.update(text);", self.index_html)
+
+    def test_live_json_fetch_uses_browser_cache_by_default(self) -> None:
+        helper_body = self.index_html.split("function _liveJsonFetch", 1)[1].split(
+            "\n}\n\nfunction _parseSseBlock",
+            1,
+        )[0]
+        self.assertIn("cache: 'default'", helper_body)
+        self.assertIn("forceFresh", helper_body)
+        self.assertNotIn("Date.now()}`, {", helper_body)
+
     def test_stopped_stream_preserves_partial_answer(self) -> None:
         self.assertIn("request.cancelStream?.();", self.index_html)
         self.assertIn("reader.cancel().catch(() => {});", self.index_html)
@@ -227,6 +241,38 @@ class ChatUiTests(unittest.TestCase):
         self.assertIn("startForecast(question)", submit_landing_body)
         self.assertNotIn("_streamLandingQuestion(question)", start_example_body)
         self.assertNotIn("_streamLandingQuestion(question)", submit_landing_body)
+
+    def test_new_conversation_opens_plain_empty_chat(self) -> None:
+        empty_branch = self.index_html.split("function renderMessages", 1)[1].split(
+            "let i = 0;",
+            1,
+        )[0]
+
+        self.assertIn(">New conversation</button>", self.index_html)
+        self.assertIn("title: 'New conversation'", self.index_html)
+        self.assertNotIn("New market brief", self.index_html)
+        self.assertIn("if (!conv || conv.messages.length === 0)", empty_branch)
+        self.assertIn("return;", empty_branch)
+        self.assertNotIn("el.innerHTML = `", empty_branch)
+        self.assertNotIn("Foresea market desk", empty_branch)
+
+    def test_conversations_get_stable_hash_urls(self) -> None:
+        history_helpers = self.index_html.split("const CHAT_HASH_PREFIX", 1)[1].split(
+            "function showLanding",
+            1,
+        )[0]
+        apply_history = self.index_html.split("function applyHistoryState", 1)[1].split(
+            "window.addEventListener('popstate'",
+            1,
+        )[0]
+
+        self.assertIn("const CHAT_HASH_PREFIX = '#chat/';", self.index_html)
+        self.assertIn("return CHAT_HASH_PREFIX + encodeURIComponent(id);", history_helpers)
+        self.assertIn("decodeURIComponent(String(hash).slice(CHAT_HASH_PREFIX.length))", history_helpers)
+        self.assertIn("history.pushState(state, '', url)", history_helpers)
+        self.assertIn("setConversationHistoryState(id, historyMode)", self.index_html)
+        self.assertIn("urlConversationId ? 'chat' : null", apply_history)
+        self.assertIn("activateConv(conversationId, { updateHistory: false })", apply_history)
 
     def test_edge_board_uses_static_hash_route(self) -> None:
         self.assertIn("'edge-landing':  '#edge'", self.index_html)

@@ -1,16 +1,22 @@
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
+import os
 import random
 import re
 import time
 import traceback
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 from analyzing_llm_rationale.providers import (
     ChatProvider,
@@ -486,12 +492,21 @@ def build_user_prompt(
                         age_note = f" [⚠ {age_days}d old]"
                         stale_indices.append(index)
 
-            parts.append(f"Article {index}{date_label}{age_note}: {json.dumps(item, ensure_ascii=False)}")
+            source = str(item.get("source") or "").strip()
+            title = str(item.get("title") or "").strip()
+            citation = ": ".join(value for value in (source, title) if value)
+            evidence_label = f"Evidence {index}"
+            if citation:
+                evidence_label += f" — {citation}"
+            parts.append(
+                f"{evidence_label}{date_label}{age_note}: "
+                f"{json.dumps(item, ensure_ascii=False)}"
+            )
 
         if stale_indices:
             idx_str = ", ".join(f"#{i}" for i in stale_indices)
             parts.append(
-                f"\n[TEMPORAL SANITY CHECK] Article(s) {idx_str} are 21+ days old. "
+                f"\n[TEMPORAL SANITY CHECK] Evidence item(s) {idx_str} are 21+ days old. "
                 "Events described in older articles may have already concluded, reversed, or been superseded. "
                 "Do NOT assume a past closure, shutdown, or event mentioned in a stale article is still ongoing. "
                 "Explicitly ask: is the condition described still true TODAY, or did it end after the article was written?"
@@ -716,6 +731,24 @@ def load_existing_results(output_path: Path) -> List[Dict[str, object]]:
     return existing if isinstance(existing, list) else []
 
 
+@contextmanager
+def _exclusive_file_lock(lock_handle):
+    if os.name == "nt":
+        lock_handle.seek(0)
+        msvcrt.locking(lock_handle.fileno(), msvcrt.LK_LOCK, 1)
+        try:
+            yield
+        finally:
+            lock_handle.seek(0)
+            msvcrt.locking(lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+
 def merge_result_row_locked(
     output_path: Path,
     records: Sequence[Dict[str, object]],
@@ -724,17 +757,16 @@ def merge_result_row_locked(
     lock_path = output_path.with_name(f"{output_path.name}.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as lock_handle:
-        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
-        latest_results = load_existing_results(output_path)
-        latest_by_id = {
-            row.get("id"): row
-            for row in latest_results
-            if isinstance(row, dict) and row.get("id") is not None
-        }
-        latest_by_id[result_row.get("id")] = result_row
-        ordered_results = _ordered_results(records, latest_by_id)
-        write_json_atomic(output_path, ordered_results)
-        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+        with _exclusive_file_lock(lock_handle):
+            latest_results = load_existing_results(output_path)
+            latest_by_id = {
+                row.get("id"): row
+                for row in latest_results
+                if isinstance(row, dict) and row.get("id") is not None
+            }
+            latest_by_id[result_row.get("id")] = result_row
+            ordered_results = _ordered_results(records, latest_by_id)
+            write_json_atomic(output_path, ordered_results)
     return ordered_results
 
 

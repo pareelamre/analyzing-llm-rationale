@@ -18,6 +18,7 @@ import math
 import os
 import sqlite3
 import time
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean, pstdev
@@ -2191,49 +2192,49 @@ def init_crypto_5m_signal_db(*, db_path: Optional[Path] = None) -> Dict[str, Any
     """Create the SQLite signal table used as a queryable paper-trade dataset."""
     path = db_path or DEFAULT_SIGNAL_DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(path) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS crypto_5m_signals (
-                id TEXT PRIMARY KEY,
-                type TEXT NOT NULL,
-                logged_at TEXT,
-                symbol TEXT NOT NULL,
-                status TEXT,
-                strategy_name TEXT,
-                recommendation TEXT,
-                predicted_outcome TEXT,
-                actual_outcome TEXT,
-                prediction_correct INTEGER,
-                start_time_ms INTEGER,
-                expiry_time_ms INTEGER,
-                horizon_minutes INTEGER,
-                target_price REAL,
-                resolved_price REAL,
-                probability_up REAL,
-                market_probability_up REAL,
-                edge REAL,
-                fee_bps REAL,
-                edge_threshold REAL,
-                realized_vol_1m REAL,
-                momentum_5m REAL,
-                ml_mode_effective TEXT,
-                pnl_per_contract REAL,
-                raw_json TEXT NOT NULL
-            )
-        """)
-        existing = {row[1] for row in conn.execute("PRAGMA table_info(crypto_5m_signals)").fetchall()}
-        for name, ddl_type in (
-            ("realized_vol_1m", "REAL"),
-            ("momentum_5m", "REAL"),
-            ("ml_mode_effective", "TEXT"),
-            ("strategy_name", "TEXT"),
-        ):
-            if name not in existing:
-                conn.execute(f"ALTER TABLE crypto_5m_signals ADD COLUMN {name} {ddl_type}")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_crypto_5m_symbol_status ON crypto_5m_signals(symbol, status)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_crypto_5m_expiry ON crypto_5m_signals(expiry_time_ms)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_crypto_5m_recommendation ON crypto_5m_signals(recommendation)")
-        conn.commit()
+    with closing(sqlite3.connect(path)) as conn:
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS crypto_5m_signals (
+                    id TEXT PRIMARY KEY,
+                    type TEXT NOT NULL,
+                    logged_at TEXT,
+                    symbol TEXT NOT NULL,
+                    status TEXT,
+                    strategy_name TEXT,
+                    recommendation TEXT,
+                    predicted_outcome TEXT,
+                    actual_outcome TEXT,
+                    prediction_correct INTEGER,
+                    start_time_ms INTEGER,
+                    expiry_time_ms INTEGER,
+                    horizon_minutes INTEGER,
+                    target_price REAL,
+                    resolved_price REAL,
+                    probability_up REAL,
+                    market_probability_up REAL,
+                    edge REAL,
+                    fee_bps REAL,
+                    edge_threshold REAL,
+                    realized_vol_1m REAL,
+                    momentum_5m REAL,
+                    ml_mode_effective TEXT,
+                    pnl_per_contract REAL,
+                    raw_json TEXT NOT NULL
+                )
+            """)
+            existing = {row[1] for row in conn.execute("PRAGMA table_info(crypto_5m_signals)").fetchall()}
+            for name, ddl_type in (
+                ("realized_vol_1m", "REAL"),
+                ("momentum_5m", "REAL"),
+                ("ml_mode_effective", "TEXT"),
+                ("strategy_name", "TEXT"),
+            ):
+                if name not in existing:
+                    conn.execute(f"ALTER TABLE crypto_5m_signals ADD COLUMN {name} {ddl_type}")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_crypto_5m_symbol_status ON crypto_5m_signals(symbol, status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_crypto_5m_expiry ON crypto_5m_signals(expiry_time_ms)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_crypto_5m_recommendation ON crypto_5m_signals(recommendation)")
     return {"db_path": str(path)}
 
 
@@ -2283,18 +2284,18 @@ def upsert_crypto_5m_signal_records(
     path = db_path or DEFAULT_SIGNAL_DB_PATH
     init_crypto_5m_signal_db(db_path=path)
     signal_records = [record for record in records if record.get("type") == "crypto_5m_signal"]
-    with sqlite3.connect(path) as conn:
-        conn.executemany("""
-            INSERT OR REPLACE INTO crypto_5m_signals (
-                id, type, logged_at, symbol, status, strategy_name, recommendation,
-                predicted_outcome, actual_outcome, prediction_correct,
-                start_time_ms, expiry_time_ms, horizon_minutes,
-                target_price, resolved_price, probability_up, market_probability_up,
-                edge, fee_bps, edge_threshold, realized_vol_1m, momentum_5m,
-                ml_mode_effective, pnl_per_contract, raw_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [_signal_db_row(record) for record in signal_records])
-        conn.commit()
+    with closing(sqlite3.connect(path)) as conn:
+        with conn:
+            conn.executemany("""
+                INSERT OR REPLACE INTO crypto_5m_signals (
+                    id, type, logged_at, symbol, status, strategy_name, recommendation,
+                    predicted_outcome, actual_outcome, prediction_correct,
+                    start_time_ms, expiry_time_ms, horizon_minutes,
+                    target_price, resolved_price, probability_up, market_probability_up,
+                    edge, fee_bps, edge_threshold, realized_vol_1m, momentum_5m,
+                    ml_mode_effective, pnl_per_contract, raw_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, [_signal_db_row(record) for record in signal_records])
     return {"db_path": str(path), "upserted": len(signal_records)}
 
 
@@ -2315,7 +2316,7 @@ def import_crypto_5m_signal_log_to_db(
 def _signal_db_records(db_path: Path) -> List[Dict[str, Any]]:
     if not db_path.exists():
         return []
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         rows = conn.execute(
             "SELECT raw_json FROM crypto_5m_signals ORDER BY start_time_ms, symbol"
         ).fetchall()

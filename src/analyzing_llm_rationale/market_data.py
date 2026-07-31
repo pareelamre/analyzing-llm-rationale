@@ -364,7 +364,7 @@ def _kalshi_quote(
         if isinstance(source, dict)
     ]
     source_labels = [
-        " ? ".join(
+        " — ".join(
             value for value in (
                 str(source.get("name") or "").strip(),
                 str(source.get("url") or "").strip(),

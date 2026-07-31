@@ -77,6 +77,7 @@ class PipelineTests(unittest.TestCase):
                 {
                     "url": "https://example.com",
                     "title": "Example",
+                    "source": "Example News",
                     "authors": ["A"],
                     "publish_date": "2025-01-02",
                     "summary": "Summary",
@@ -100,6 +101,7 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("Question: Will event X happen?", prompt)
         self.assertIn("Current Time: 2026-06-05T12:00:00Z", prompt)
         self.assertIn("Evidence (newest first):", prompt)
+        self.assertIn("Evidence 1 — Example News: Example", prompt)
         self.assertIn('"summary_llm": "LLM summary"', prompt)
         self.assertNotIn("Full article text", prompt)
         self.assertNotIn("[question]", prompt)
@@ -577,9 +579,9 @@ class PipelineTests(unittest.TestCase):
 
         config = resolve_run_config(args)
 
-        self.assertTrue(str(config.user_prompt_path).endswith("prompts/variant5_key_conditions.txt"))
+        self.assertTrue(config.user_prompt_path.as_posix().endswith("prompts/variant5_key_conditions.txt"))
         self.assertTrue(
-            str(config.output_path).endswith(
+            config.output_path.as_posix().endswith(
                 "results/Qwen2.5-7b-instruct/temperature_07/results_variant5_key_conditions.json"
             )
         )
@@ -621,7 +623,7 @@ class PipelineTests(unittest.TestCase):
 
         self.assertEqual(config.max_tokens, 2048)
         self.assertTrue(
-            str(config.output_path).endswith(
+            config.output_path.as_posix().endswith(
                 "results/Llama-3.3-70B-Instruct/temperature_175/results_variant0_neutral_baseline.json"
             )
         )

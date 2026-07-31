@@ -19,8 +19,10 @@ import traceback
 import uuid
 from collections import OrderedDict, defaultdict
 from contextlib import AsyncExitStack, asynccontextmanager
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
+from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote as url_quote
@@ -80,7 +82,12 @@ _TRACK_RECORD_LIVE_URL = os.environ.get(
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/static/track_record_live.json",
 )
 _TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "30"))
+_LIVE_PANEL_CACHE_CONTROL = os.environ.get(
+    "LIVE_PANEL_CACHE_CONTROL",
+    "public, max-age=30, stale-while-revalidate=120",
+)
 _EDGE_BOARD_STALE_AFTER_S = int(os.environ.get("EDGE_BOARD_STALE_AFTER_S", "1800"))
+_EDGE_BOARD_CURVE_MAX_POINTS = int(os.environ.get("EDGE_BOARD_CURVE_MAX_POINTS", "160"))
 # Shared secret gating the evolution-loop bridge endpoints (pending-markets /
 # mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
 _TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
@@ -95,9 +102,18 @@ logger = logging.getLogger("foresea")
 # a per-attempt timeout, so a flaky SCADS AI response degrades gracefully into a
 # clean 503 instead of a raw 500. The batch pipeline already retries; this brings
 # the live /predict + agent paths up to the same standard.
-_PROVIDER_MAX_RETRIES = int(os.environ.get("PROVIDER_MAX_RETRIES", "2"))      # attempts = retries + 1
-_PROVIDER_TIMEOUT_S = float(os.environ.get("PROVIDER_TIMEOUT_S", "90"))       # per-attempt wall-clock budget
+_FORECAST_SLA_TARGET_S = float(os.environ.get("FORECAST_SLA_TARGET_S", "60"))
+_FORECAST_HARD_TIMEOUT_S = float(os.environ.get("FORECAST_HARD_TIMEOUT_S", "55"))
+_EVIDENCE_TIMEOUT_S = float(os.environ.get("EVIDENCE_TIMEOUT_S", "15"))
+_MARKET_DATA_TIMEOUT_S = float(os.environ.get("MARKET_DATA_TIMEOUT_S", "4"))
+_RAG_TIMEOUT_S = float(os.environ.get("RAG_TIMEOUT_S", "3"))
+_PROVIDER_MAX_RETRIES = int(os.environ.get("PROVIDER_MAX_RETRIES", "1"))      # attempts = retries + 1
+_PROVIDER_TIMEOUT_S = float(os.environ.get("PROVIDER_TIMEOUT_S", "40"))       # per-attempt wall-clock budget
 _PROVIDER_BACKOFF_BASE_S = float(os.environ.get("PROVIDER_BACKOFF_BASE_S", "0.5"))
+_forecast_deadline: ContextVar[Optional[float]] = ContextVar(
+    "forecast_deadline",
+    default=None,
+)
 # Reject oversized request bodies before they reach a handler. Generous enough
 # for PDF uploads on /extract, small enough to blunt memory-exhaustion abuse.
 _MAX_BODY_BYTES = int(os.environ.get("MAX_BODY_BYTES", str(12 * 1024 * 1024)))
@@ -115,7 +131,9 @@ _CHAT_SYSTEM_PROMPT = (
     "uncertainty. Treat the provided Current Time as today's date/time for temporal "
     "phrases and deadlines. If the question implies a probability, express it in prose "
     "(e.g., \"around 60%\") and, when a market price is given, briefly note whether "
-    "you lean above or below it. "
+    "you lean above or below it. When discussing evidence, identify every cited item "
+    "by its publisher or domain and article title. Never refer to evidence only as "
+    "\"Article 1\", \"Article 2\", or another bare item number. "
     "Whenever you give a probability estimate, append a machine-readable tag on its own "
     "line at the very end of your response: [p:0.XX] where 0.XX is your estimate as a "
     "decimal (e.g. [p:0.65]). Omit the tag if you give no probability. "
@@ -968,6 +986,8 @@ def _get_redis() -> Any:
 
 # ── Cache (Redis-backed, per-instance in-memory fallback) ────────────────────
 _local_cache: "OrderedDict[str, Any]" = OrderedDict()
+_predict_inflight: Dict[str, "asyncio.Task[PredictResponse]"] = {}
+_background_tasks: set = set()
 _LOCAL_CACHE_MAX = int(os.environ.get("LOCAL_CACHE_MAX", "1024"))
 _EVIDENCE_CACHE_TTL = int(os.environ.get("EVIDENCE_CACHE_TTL", "900"))
 _EXTRACT_CACHE_TTL = int(os.environ.get("EXTRACT_CACHE_TTL", "3600"))
@@ -1015,6 +1035,13 @@ def _cache_set(key: str, value: Any, ttl: int) -> None:
     _local_cache.move_to_end(key)
     while len(_local_cache) > _LOCAL_CACHE_MAX:
         _local_cache.popitem(last=False)
+
+
+def _spawn_background(awaitable) -> None:
+    """Keep best-effort side effects alive without holding the response open."""
+    task = asyncio.ensure_future(awaitable)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 def _read_live_track_record() -> Optional[Dict[str, Any]]:
@@ -1077,6 +1104,136 @@ def _track_record_freshness(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]
         "stale": stale,
         "stale_after_seconds": _EDGE_BOARD_STALE_AFTER_S,
     }
+
+
+def _sample_indices(n: int, max_points: int) -> List[int]:
+    """Evenly sample an ordered series while preserving both endpoints."""
+    if n <= max_points:
+        return list(range(n))
+    if max_points <= 1:
+        return [0]
+    return sorted({round(i * (n - 1) / (max_points - 1)) for i in range(max_points)})
+
+
+def _sample_list(values: Any, max_points: int = _EDGE_BOARD_CURVE_MAX_POINTS) -> Any:
+    if not isinstance(values, list) or len(values) <= max_points:
+        return values
+    return [values[i] for i in _sample_indices(len(values), max_points)]
+
+
+def _compact_pnl_strategy(strategy: Any) -> Any:
+    if not isinstance(strategy, dict):
+        return strategy
+    keep = {
+        "n_bets",
+        "roi",
+        "win_rate",
+        "total_staked",
+        "compound_bankroll",
+        "compound_return",
+        "growth_curve",
+        "equity_curve",
+        "equity_curve_ts",
+    }
+    compact = {k: strategy.get(k) for k in keep if k in strategy}
+    for curve_key in ("growth_curve", "equity_curve", "equity_curve_ts"):
+        if curve_key in compact:
+            compact[curve_key] = _sample_list(compact[curve_key])
+    return compact
+
+
+def _compact_paper_pnl(pnl: Any) -> Any:
+    if not isinstance(pnl, dict):
+        return pnl
+    compact: Dict[str, Any] = {}
+    for key, value in pnl.items():
+        if isinstance(value, dict) and (
+            "growth_curve" in value or "equity_curve" in value or "n_bets" in value
+        ):
+            compact[key] = _compact_pnl_strategy(value)
+        elif key in {"disclaimer", "methodology", "notes"}:
+            compact[key] = value
+    return compact
+
+
+def _compact_models_comparison(models: Any) -> List[Dict[str, Any]]:
+    compact_models: List[Dict[str, Any]] = []
+    for model in models or []:
+        if not isinstance(model, dict):
+            continue
+        compact: Dict[str, Any] = {
+            key: model.get(key)
+            for key in (
+                "model",
+                "n_snapshots_resolved",
+                "n_markets_resolved",
+                "accuracy",
+                "model_brier",
+                "skill_vs_market",
+                "paper_roi",
+                "paper_roi_smart",
+                "by_horizon",
+            )
+            if key in model
+        }
+        if "paper_pnl" in model:
+            compact["paper_pnl"] = _compact_paper_pnl(model.get("paper_pnl"))
+        compact_models.append(compact)
+    return compact_models
+
+
+def _compact_mark_to_market_account(account: Any) -> Any:
+    if not isinstance(account, dict):
+        return account
+    compact = {
+        key: account.get(key)
+        for key in (
+            "account_value",
+            "cash",
+            "liquidation_value",
+            "return",
+            "realized_pnl",
+            "unrealized_pnl",
+            "n_open_positions",
+            "n_illiquid_positions",
+            "n_settlements",
+            "n_trades",
+            "notes",
+            "ts",
+            "value_method",
+        )
+        if key in account
+    }
+    if "value_curve" in account:
+        compact["value_curve"] = _sample_list(account.get("value_curve"))
+    return compact
+
+
+def _compact_mark_to_market_by_model(rows: Any) -> List[Dict[str, Any]]:
+    compact_rows: List[Dict[str, Any]] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        compact = {
+            key: row.get(key)
+            for key in (
+                "model",
+                "account_value",
+                "cash",
+                "liquidation_value",
+                "return",
+                "realized_pnl",
+                "unrealized_pnl",
+                "n_open_positions",
+                "n_illiquid_positions",
+                "n_settlements",
+                "n_trades",
+            )
+            if key in row
+        }
+        compact["account"] = _compact_mark_to_market_account(row.get("account"))
+        compact_rows.append(compact)
+    return compact_rows
 
 
 # ── Evolution-loop feedback: live calibration + model auto-selection ──────────
@@ -1249,6 +1406,18 @@ _forecast_errors = _meter.create_counter(
 _forecast_duration = _meter.create_histogram(
     "forecast.duration", unit="s", description="Forecast end-to-end latency"
 )
+_forecast_phase_duration = _meter.create_histogram(
+    "forecast.phase.duration", unit="s", description="Forecast phase latency"
+)
+_forecast_sla_timeouts = _meter.create_counter(
+    "forecast.sla.timeouts", unit="1", description="Forecasts terminated at the hard SLA deadline"
+)
+_forecast_cache_hits = _meter.create_counter(
+    "forecast.cache.hits", unit="1", description="Forecast responses served from cache"
+)
+_forecast_coalesced = _meter.create_counter(
+    "forecast.coalesced", unit="1", description="Duplicate in-flight forecasts coalesced"
+)
 _llm_calls = _meter.create_counter(
     "llm.calls", unit="1", description="LLM provider call attempts"
 )
@@ -1263,6 +1432,88 @@ _market_context_counter = _meter.create_counter(
     unit="1",
     description="Prediction-market context enrichment outcomes",
 )
+
+
+def _remaining_forecast_budget(limit_s: float) -> float:
+    """Return the smaller of a phase limit and the request's remaining SLA budget."""
+    deadline = _forecast_deadline.get()
+    if deadline is None:
+        return max(0.001, limit_s)
+    return max(0.001, min(limit_s, deadline - time.monotonic()))
+
+
+async def _run_blocking_forecast_phase(phase: str, func, timeout_s: float):
+    """Run blocking forecast work with a bounded, observable phase budget."""
+    started = time.monotonic()
+    outcome = "success"
+    with _tracer.start_as_current_span(f"forecast.{phase}") as span:
+        try:
+            return await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(None, func),
+                timeout=_remaining_forecast_budget(timeout_s),
+            )
+        except asyncio.TimeoutError:
+            outcome = "timeout"
+            span.set_attribute("outcome", outcome)
+            raise
+        except Exception:
+            outcome = "error"
+            span.set_attribute("outcome", outcome)
+            raise
+        finally:
+            _forecast_phase_duration.record(
+                time.monotonic() - started,
+                {"forecast.phase": phase, "outcome": outcome},
+            )
+
+
+def _bounded_forecast(func):
+    """Enforce and record the hard end-to-end SLA for blocking forecasts."""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        req = args[0] if args else kwargs.get("req")
+        attributes = {
+            "forecast.variant": getattr(req, "variant", None) or "unknown",
+            "forecast.model": getattr(req, "model", None) or "default",
+        }
+        started = time.monotonic()
+        outcome = "success"
+        token = _forecast_deadline.set(started + _FORECAST_HARD_TIMEOUT_S)
+        try:
+            return await asyncio.wait_for(
+                func(*args, **kwargs),
+                timeout=_FORECAST_HARD_TIMEOUT_S,
+            )
+        except asyncio.TimeoutError as exc:
+            outcome = "timeout"
+            _forecast_sla_timeouts.add(1, attributes)
+            raise HTTPException(
+                status_code=504,
+                detail=(
+                    f"The forecast exceeded the {_FORECAST_HARD_TIMEOUT_S:g}s service deadline. "
+                    "Please retry; identical requests are cached and coalesced."
+                ),
+                headers={"Retry-After": "5"},
+            ) from exc
+        except HTTPException:
+            outcome = "error"
+            raise
+        except Exception:
+            outcome = "error"
+            raise
+        finally:
+            elapsed = time.monotonic() - started
+            _forecast_duration.record(elapsed, {**attributes, "outcome": outcome})
+            span = otel_trace.get_current_span()
+            span.set_attributes({
+                "forecast.duration_s": elapsed,
+                "forecast.sla_target_s": _FORECAST_SLA_TARGET_S,
+                "forecast.sla_met": elapsed <= _FORECAST_SLA_TARGET_S,
+                "forecast.outcome": outcome,
+            })
+            _forecast_deadline.reset(token)
+
+    return wrapper
 
 
 # Redirect middleware: send requests from run.app hosts to the custom domain
@@ -1440,14 +1691,16 @@ async def _provider_chat(provider, messages, temperature, max_tokens) -> str:
         last_exc: Optional[Exception] = None
         for attempt in range(attempts):
             try:
+                attempt_timeout = _remaining_forecast_budget(_PROVIDER_TIMEOUT_S)
                 result = await asyncio.wait_for(
                     loop.run_in_executor(
                         None,
                         lambda: provider.chat_completion(messages, temperature, max_tokens),
                     ),
-                    timeout=_PROVIDER_TIMEOUT_S,
+                    timeout=attempt_timeout,
                 )
                 span.set_attribute("outcome", "success")
+                span.set_attribute("retry.count", attempt)
                 return result
             except ContextLimitError:
                 span.set_status(Status(StatusCode.ERROR))
@@ -1460,6 +1713,9 @@ async def _provider_chat(provider, messages, temperature, max_tokens) -> str:
                     break
                 delay = _PROVIDER_BACKOFF_BASE_S * (2 ** attempt)
                 delay += random.uniform(0, delay * 0.25)  # jitter to avoid thundering herd
+                deadline = _forecast_deadline.get()
+                if deadline is not None and deadline - time.monotonic() <= delay + 0.05:
+                    break
                 logger.warning(
                     "provider call failed (attempt %d/%d), retrying in %.2fs: %s",
                     attempt + 1, attempts, delay, type(exc).__name__,
@@ -1493,7 +1749,10 @@ async def _provider_stream_chat(provider, messages, temperature, max_tokens):
     threading.Thread(target=worker, daemon=True).start()
     loop = asyncio.get_running_loop()
     while True:
-        item = await loop.run_in_executor(None, q.get)
+        item = await asyncio.wait_for(
+            loop.run_in_executor(None, q.get),
+            timeout=_remaining_forecast_budget(_PROVIDER_TIMEOUT_S),
+        )
         if item is sentinel:
             break
         if isinstance(item, Exception):
@@ -1936,14 +2195,14 @@ async def track_record():
     if live and live.get("n_snapshots_resolved"):
         payload = dict(live)
         payload["freshness"] = _track_record_freshness(payload)
-        return JSONResponse(payload, headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"})
+        return JSONResponse(payload, headers={"Cache-Control": _LIVE_PANEL_CACHE_CONTROL})
     path = _STATIC_DIR / "track_record.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Track record not generated yet.")
     return FileResponse(
         str(path),
         media_type="application/json",
-        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
+        headers={"Cache-Control": _LIVE_PANEL_CACHE_CONTROL},
     )
 
 
@@ -1975,9 +2234,12 @@ async def edge_board():
             "by_edge": live.get("by_edge", []),
             "by_horizon": live.get("by_horizon", []),
             "lead_lag": live.get("lead_lag"),
-            "paper_pnl": live.get("paper_pnl"),
-            "primary_paper_pnl": live.get("primary_paper_pnl"),
-            "models_comparison": live.get("models_comparison", []),
+            "paper_pnl": _compact_paper_pnl(live.get("paper_pnl")),
+            "primary_paper_pnl": _compact_paper_pnl(live.get("primary_paper_pnl")),
+            "mark_to_market_account": _compact_mark_to_market_account(live.get("mark_to_market_account")),
+            "mark_to_market_by_model": _compact_mark_to_market_by_model(live.get("mark_to_market_by_model", [])),
+            "mark_to_market_cycle_minutes": live.get("mark_to_market_cycle_minutes"),
+            "models_comparison": _compact_models_comparison(live.get("models_comparison", [])),
             "resolved_log": live.get("resolved_log", []),
             "n_markets_open": live.get("n_markets_open", 0),
             "n_markets_resolved": live.get("n_markets_resolved", 0),
@@ -1988,7 +2250,7 @@ async def edge_board():
             "n_snapshots_resolved": live.get("n_snapshots_resolved", 0),
             "arbitrage_signals": live.get("arbitrage_signals", []),
         },
-        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
+        headers={"Cache-Control": _LIVE_PANEL_CACHE_CONTROL},
     )
 
 
@@ -3273,6 +3535,9 @@ class RadarResponse(BaseModel):
     models_comparison: List[Dict[str, Any]] = Field(default_factory=list)
     paper_pnl: Optional[Any] = None
     primary_paper_pnl: Optional[Any] = None
+    mark_to_market_account: Optional[Any] = None
+    mark_to_market_by_model: List[Dict[str, Any]] = Field(default_factory=list)
+    mark_to_market_cycle_minutes: Optional[int] = None
     lead_lag: Optional[Any] = None
     calibration: Optional[Any] = None
     resolved_log: List[Dict[str, Any]] = Field(default_factory=list)
@@ -3711,12 +3976,10 @@ async def _fetch_market_context(
     with _tracer.start_as_current_span("market.enrich_context") as span:
         span.set_attribute("market.venue", venue)
         try:
-            quote = await asyncio.get_running_loop().run_in_executor(
-                None,
-                _fetch_live_odds,
-                platform,
-                ident,
-                market_url,
+            quote = await _run_blocking_forecast_phase(
+                "market_context",
+                lambda: _fetch_live_odds(platform, ident, market_url),
+                _MARKET_DATA_TIMEOUT_S,
             )
         except Exception as exc:
             span.record_exception(exc)
@@ -3823,19 +4086,25 @@ async def _prepare_predict_messages(
             evidence_error = "Evidence pipeline is not configured on this server."
         else:
             top_k = max(1, min(req.evidence_top_k, 10))
-            loop = asyncio.get_running_loop()
             evidence_cache_key = _cache_key("evidence", evidence_question, top_k)
             evidence_articles = _cache_get(evidence_cache_key)
             if evidence_articles is None:
                 try:
-                    evidence_articles = await loop.run_in_executor(
-                        None,
+                    evidence_articles = await _run_blocking_forecast_phase(
+                        "evidence",
                         lambda: evidence_pipeline.fetch_summarize_rank(
                             evidence_question,
                             top_k=top_k,
                         ),
+                        _EVIDENCE_TIMEOUT_S,
                     )
                     _cache_set(evidence_cache_key, evidence_articles, _EVIDENCE_CACHE_TTL)
+                except asyncio.TimeoutError:
+                    evidence_articles = []
+                    evidence_error = (
+                        f"Evidence retrieval exceeded its {_EVIDENCE_TIMEOUT_S:g}s budget; "
+                        "the forecast continued without live evidence."
+                    )
                 except Exception as exc:
                     evidence_articles = []
                     evidence_error = f"Evidence retrieval failed: {exc}"
@@ -3845,9 +4114,10 @@ async def _prepare_predict_messages(
     # Personalised retrieval: prepend the signed-in user's knowledge-base hits.
     if rag_user_id:
         try:
-            loop = asyncio.get_running_loop()
-            kb_hits = await loop.run_in_executor(
-                None, _rag_search, rag_user_id, "kb", req.question, 3
+            kb_hits = await _run_blocking_forecast_phase(
+                "knowledge_base",
+                lambda: _rag_search(rag_user_id, "kb", req.question, 3),
+                _RAG_TIMEOUT_S,
             )
             kb_articles = [
                 _clean_article({
@@ -3873,7 +4143,11 @@ async def _prepare_predict_messages(
         system_prompt = _CHAT_SYSTEM_PROMPT
         if _detect_trading_intent(req.question):
             try:
-                trl = _read_live_track_record()
+                trl = await _run_blocking_forecast_phase(
+                    "track_record_context",
+                    _read_live_track_record,
+                    _MARKET_DATA_TIMEOUT_S,
+                )
                 if trl:
                     ctx = _edge_board_order_context(trl)
                     if ctx:
@@ -4252,6 +4526,9 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
         models_comparison=payload.get("models_comparison") or [],
         paper_pnl=payload.get("paper_pnl"),
         primary_paper_pnl=payload.get("primary_paper_pnl"),
+        mark_to_market_account=payload.get("mark_to_market_account"),
+        mark_to_market_by_model=payload.get("mark_to_market_by_model") or [],
+        mark_to_market_cycle_minutes=payload.get("mark_to_market_cycle_minutes"),
         lead_lag=payload.get("lead_lag"),
         calibration=payload.get("calibration"),
         resolved_log=payload.get("resolved_log") or [],
@@ -4284,7 +4561,7 @@ def _share_payload(req: SharedForecastRequest, request: Request) -> Dict[str, An
 
 
 def _store_shared_forecast(req: SharedForecastRequest, request: Request) -> "SharedForecastResponse":
-    share_id = secrets.token_urlsafe(8).replace("_", "").replace("-", "")[:10]
+    share_id = "".join(secrets.choice("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(10))
     payload = _share_payload(req, request)
     client = _get_datastore()
     if client is not None:
@@ -4695,7 +4972,7 @@ async def radar(limit: int = Query(12, ge=1, le=30)) -> JSONResponse:
     payload = await asyncio.get_running_loop().run_in_executor(None, _radar_from_track_record, limit)
     return JSONResponse(
         payload.model_dump(mode="json"),
-        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
+        headers={"Cache-Control": _LIVE_PANEL_CACHE_CONTROL},
     )
 
 
@@ -5208,7 +5485,7 @@ async def market_forecast_stream(req: MarketForecastRequest, request: Request) -
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
 
-    async def events():
+    async def raw_events():
         pr = _market_forecast_predict_request(req)
         try:
             messages, evidence_articles, evidence_error = await _prepare_predict_messages(
@@ -5250,6 +5527,38 @@ async def market_forecast_stream(req: MarketForecastRequest, request: Request) -
             "response": resp.model_dump(mode="json"),
             **_market_forecast_payload(resp),
         })
+
+    async def events():
+        started = time.monotonic()
+        outcome = "success"
+        attributes = {
+            "forecast.variant": getattr(req, "variant", None) or "variant0_neutral_baseline",
+            "forecast.model": getattr(req, "model", None) or "default",
+        }
+        token = _forecast_deadline.set(started + _FORECAST_HARD_TIMEOUT_S)
+        try:
+            async for event in raw_events():
+                if event.startswith("event: error"):
+                    outcome = "error"
+                yield event
+        except asyncio.TimeoutError:
+            outcome = "timeout"
+            _forecast_sla_timeouts.add(1, attributes)
+            yield _sse_event("error", {
+                "status_code": 504,
+                "detail": f"The forecast exceeded the {_FORECAST_HARD_TIMEOUT_S:g}s service deadline.",
+            })
+        finally:
+            elapsed = time.monotonic() - started
+            _forecast_duration.record(elapsed, {**attributes, "outcome": outcome})
+            span = otel_trace.get_current_span()
+            span.set_attributes({
+                "forecast.duration_s": elapsed,
+                "forecast.sla_target_s": _FORECAST_SLA_TARGET_S,
+                "forecast.sla_met": elapsed <= _FORECAST_SLA_TARGET_S,
+                "forecast.outcome": outcome,
+            })
+            _forecast_deadline.reset(token)
 
     return StreamingResponse(
         events(),
@@ -5576,9 +5885,11 @@ async def _council_forecast(
         401: {"description": "Missing or invalid `X-API-Key` header (only when API key is configured)."},
         429: {"description": "Rate limit exceeded. Retry after 60 seconds."},
         503: {"description": "Server not yet initialised — LLM provider not loaded."},
+        504: {"description": "Forecast exceeded the application service deadline."},
     },
     response_model=PredictResponse,
 )
+@_bounded_forecast
 async def predict(req: PredictRequest, request: Request = None, kb_user_id: Optional[str] = None) -> PredictResponse:
     """Submit a forecasting question and receive a typed structured prediction.
 
@@ -5680,27 +5991,51 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
             "predict",
             {
                 "prompt_date": prompt_date,
-                "question": req.question,
-                "description": req.description,
-                "variant": req.variant,
-                "question_type": req.question_type,
-                "options": req.options,
-                "chat_mode": req.chat_mode,
-                "attach_evidence": req.attach_evidence,
-                "evidence_top_k": req.evidence_top_k,
-                "news_articles": [a.model_dump() for a in req.news_articles],
-                "market_platform": req.market_platform,
-                "market_url": req.market_url,
-                "market_outcome": req.market_outcome,
-                "market_probability": req.market_probability,
-                "model_key": _state.get("model_key"),
+                # Cache the complete prompt-affecting request. In particular,
+                # ``model`` must be part of the identity: the track-record job
+                # submits the same market to several models, and sharing a key
+                # caused one model's response to be returned as "council".
+                "request": req.model_dump(
+                    mode="json",
+                    exclude={"openrouter_api_key"},
+                ),
+                "served_model_key": _model_key_for_request(req),
+                "server_model_key": _state.get("model_key"),
                 "temperature": _state.get("temperature"),
             },
         )
         cached = _cache_get(predict_cache_key)
         if cached is not None:
+            _forecast_cache_hits.add(1, {"forecast.model": _model_key_for_request(req)})
             return PredictResponse(**cached)
 
+    async def run_uncached() -> PredictResponse:
+        return await _predict_uncached(req, rag_user_id, predict_cache_key)
+
+    if predict_cache_key is None:
+        return await run_uncached()
+
+    # Collapse identical concurrent misses into one evidence + model call. This
+    # protects both tail latency and the upstream provider during bursts.
+    existing = _predict_inflight.get(predict_cache_key)
+    if existing is not None:
+        _forecast_coalesced.add(1, {"forecast.model": _model_key_for_request(req)})
+        return await asyncio.shield(existing)
+
+    task = asyncio.create_task(run_uncached())
+    _predict_inflight[predict_cache_key] = task
+    try:
+        return await task
+    finally:
+        if _predict_inflight.get(predict_cache_key) is task:
+            _predict_inflight.pop(predict_cache_key, None)
+
+
+async def _predict_uncached(
+    req: PredictRequest,
+    rag_user_id: Optional[str],
+    predict_cache_key: Optional[str],
+) -> PredictResponse:
     messages, evidence_articles, evidence_error = await _prepare_predict_messages(req, rag_user_id)
 
     if req.model == "council":
@@ -5709,15 +6044,22 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         return response
 
     provider, temperature, max_tokens = _select_predict_provider(req)
-
+    provider_started = time.monotonic()
+    provider_outcome = "success"
     try:
         content = await _provider_chat(provider, messages, temperature, max_tokens)
     except Exception as exc:
+        provider_outcome = "error"
         _forecast_errors.add(1, {
             "forecast.variant": req.variant or "unknown",
             "error.type": type(exc).__name__,
         })
         raise _provider_http_error(exc) from exc
+    finally:
+        _forecast_phase_duration.record(
+            time.monotonic() - provider_started,
+            {"forecast.phase": "provider", "outcome": provider_outcome},
+        )
 
     parsed = _parse_json_dict(content)
     if req.chat_mode:
@@ -5785,24 +6127,34 @@ async def _finalize_predict_response(
     _ma = getattr(response, "market_analysis", None)
     if _ma is not None and _ma.market_url and _ma.model_probability is not None:
         _ident = _trl.ident_from_url(_ma.platform or "", _ma.market_url)
-        await _enroll_market(_ma.platform, _ident, _ma.market_url, req.question, "predict")
+        _spawn_background(
+            _enroll_market(_ma.platform, _ident, _ma.market_url, req.question, "predict")
+        )
     else:
         _purl = _parse_market_url(req.question or "")
         _m = re.search(r"https?://\S+", req.question or "")
         if _purl and _m:
             _venue, _kind, _id = _purl
-            await _enroll_market(_venue, _id, _m.group(0).rstrip(").,"), req.question, "predict")
+            _spawn_background(
+                _enroll_market(
+                    _venue,
+                    _id,
+                    _m.group(0).rstrip(").,"),
+                    req.question,
+                    "predict",
+                )
+            )
 
     # Best-effort: index the forecast for "search my past forecasts", but only if
     # the embedder is already loaded — never pay a cold start on the forecast path.
     if rag_user_id and rag.is_loaded():
         try:
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, _rag_add, rag_user_id, "forecasts", [{
+            _spawn_background(loop.run_in_executor(None, _rag_add, rag_user_id, "forecasts", [{
                 "text": f"Q: {req.question}\nForecast: {response.predicted_answer or response.question_type} — "
                         f"{response.model_rationale or response.rationale or ''}",
                 "title": req.question[:300], "source": "Past forecast",
-            }])
+            }]))
         except Exception:
             pass
 
@@ -5841,7 +6193,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
 
     rag_user_id = claims.get("sub")
 
-    async def events():
+    async def raw_events():
         yield _sse_event("meta", {
             "status": "preparing",
             "variant": req.variant,
@@ -5851,7 +6203,8 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             messages, evidence_articles, evidence_error = await _prepare_predict_messages(
                 req, rag_user_id
             )
-            provider, temperature, max_tokens = _select_predict_provider(req)
+            if req.model != "council":
+                provider, temperature, max_tokens = _select_predict_provider(req)
         except HTTPException as exc:
             yield _sse_event("error", {"status_code": exc.status_code, "detail": exc.detail})
             return
@@ -5871,6 +6224,29 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             "evidence_articles": [a.model_dump(mode="json") for a in _news_articles(evidence_articles)],
             "evidence_error": evidence_error,
         })
+
+        # The council is an orchestration path, not a stream-capable provider.
+        # Running it through _select_predict_provider silently used the server's
+        # default model while labelling the result "council". Return a single
+        # completed council event so /predict and /predict/stream agree.
+        if req.model == "council":
+            try:
+                response = await _council_forecast(
+                    messages,
+                    req,
+                    evidence_articles,
+                    evidence_error,
+                )
+                await _finalize_predict_response(req, response, rag_user_id)
+            except Exception as exc:
+                http_exc = _provider_http_error(exc)
+                yield _sse_event("error", {
+                    "status_code": http_exc.status_code,
+                    "detail": http_exc.detail,
+                })
+                return
+            yield _sse_event("done", {"response": response.model_dump(mode="json")})
+            return
 
         chunks: List[str] = []
         try:
@@ -5893,6 +6269,38 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
         response = _build_typed_response(req, parsed, text, evidence_articles, evidence_error)
         await _finalize_predict_response(req, response, rag_user_id)
         yield _sse_event("done", {"response": response.model_dump(mode="json")})
+
+    async def events():
+        started = time.monotonic()
+        outcome = "success"
+        attributes = {
+            "forecast.variant": req.variant or "unknown",
+            "forecast.model": req.model or "default",
+        }
+        token = _forecast_deadline.set(started + _FORECAST_HARD_TIMEOUT_S)
+        try:
+            async for event in raw_events():
+                if event.startswith("event: error"):
+                    outcome = "error"
+                yield event
+        except asyncio.TimeoutError:
+            outcome = "timeout"
+            _forecast_sla_timeouts.add(1, attributes)
+            yield _sse_event("error", {
+                "status_code": 504,
+                "detail": f"The forecast exceeded the {_FORECAST_HARD_TIMEOUT_S:g}s service deadline.",
+            })
+        finally:
+            elapsed = time.monotonic() - started
+            _forecast_duration.record(elapsed, {**attributes, "outcome": outcome})
+            span = otel_trace.get_current_span()
+            span.set_attributes({
+                "forecast.duration_s": elapsed,
+                "forecast.sla_target_s": _FORECAST_SLA_TARGET_S,
+                "forecast.sla_met": elapsed <= _FORECAST_SLA_TARGET_S,
+                "forecast.outcome": outcome,
+            })
+            _forecast_deadline.reset(token)
 
     return StreamingResponse(
         events(),

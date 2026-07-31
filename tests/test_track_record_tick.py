@@ -16,6 +16,40 @@ _SPEC.loader.exec_module(track_record_tick)
 
 
 class TrackRecordTickTests(unittest.TestCase):
+    def test_forecast_workflow_runs_15_minute_cycles(self):
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "track-record-forecast.yml"
+        ).read_text()
+        self.assertIn('cron: "*/15 * * * *"', workflow)
+        self.assertIn('CYCLE_INTERVAL_MINUTES: "15"', workflow)
+        self.assertIn('SNAPSHOT_SLOT_MINUTES: "15"', workflow)
+
+    def test_forecast_fn_rejects_response_from_a_different_model(self):
+        quote = {
+            "question": "Will the test event happen?",
+            "platform": "Polymarket",
+            "market_url": "https://polymarket.com/event/test",
+            "probability": 0.4,
+        }
+        response = {
+            "model_key": "gpt-oss-120b",
+            "market_analysis": {
+                "model_probability": 0.7,
+                "market_probability": 0.4,
+            },
+        }
+        with (
+            mock.patch.object(track_record_tick, "_post_predict", return_value=response),
+            mock.patch.object(track_record_tick, "_predict_stats", Counter()) as stats,
+        ):
+            result = asyncio.run(
+                track_record_tick.forecast_fn(quote, 3, model="council")
+            )
+
+        self.assertIsNone(result)
+        self.assertEqual(stats["model_mismatches"], 1)
+
     def test_main_warns_instead_of_failing_when_primary_model_does_not_progress(self):
         progress = {
             "snapshots": 10,

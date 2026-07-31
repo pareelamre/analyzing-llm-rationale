@@ -88,8 +88,9 @@ class TrajectoryTests(unittest.TestCase):
         self.client = FakeClient()
         fake_ds = types.ModuleType("google.cloud.datastore")
         fake_ds.Entity = FakeEntity
-        self._p = mock.patch.dict(sys.modules, {"google.cloud.datastore": fake_ds})
-        self._p.start()
+        self._missing = object()
+        self._orig_datastore = sys.modules.get("google.cloud.datastore", self._missing)
+        sys.modules["google.cloud.datastore"] = fake_ds
         self.model_probs = {"Will A happen?": 0.70, "Will B happen?": 0.30}
 
         async def forecast_fn(quote, top_k, model=None):
@@ -99,7 +100,10 @@ class TrajectoryTests(unittest.TestCase):
         self.forecast_fn = forecast_fn
 
     def tearDown(self):
-        self._p.stop()
+        if self._orig_datastore is self._missing:
+            sys.modules.pop("google.cloud.datastore", None)
+        else:
+            sys.modules["google.cloud.datastore"] = self._orig_datastore
 
     def _record(self, md, day):
         now = datetime.fromisoformat(day).replace(tzinfo=timezone.utc)
@@ -111,6 +115,13 @@ class TrajectoryTests(unittest.TestCase):
         self.assertEqual(trl._horizon_label(20.0), "14-30d")
         self.assertEqual(trl._horizon_label(0.5), "<1d")
         self.assertEqual(trl._horizon_label(8.0), "7-14d")
+
+    def test_snapshot_slot_can_use_15_minute_cycles(self):
+        now = datetime(2026, 6, 3, 12, 37, 42, tzinfo=timezone.utc)
+        self.assertEqual(
+            trl._snapshot_slot(10.0, now=now, slot_minutes=15),
+            "2026-06-03T12:30",
+        )
 
     def test_seed_idents_enroll_market_without_discovery(self):
         far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
@@ -623,6 +634,94 @@ class FileStoreTests(unittest.TestCase):
             comparison = {m["model"]: m for m in agg["models_comparison"]}
             self.assertNotIn("kimi-k2.6", comparison)
 
+    def test_aggregate_tracks_mark_to_market_account_with_bid_liquidation(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "store.json"
+            store = FileStore(path)
+            now = datetime(2026, 7, 1, 12, tzinfo=timezone.utc)
+            snap = Entity(store.key(trl.SNAPSHOT_KIND, "Kalshi:KXTEST:council:2026-07-01"))
+            snap.update(
+                platform="Kalshi",
+                ident="KXTEST",
+                model="council",
+                question="Will KXTEST happen?",
+                market_url="https://kalshi.com/markets/KXTEST",
+                snapshot_ts=now,
+                snapshot_date="2026-07-01",
+                model_probability=0.7,
+                market_probability=0.6,
+                market_bid=0.58,
+                market_ask=0.62,
+                lead_time_days=10.0,
+                horizon="7-14d",
+                resolved=False,
+                close_time=(now + timedelta(days=10)).isoformat(),
+            )
+            store.put(snap)
+            price = Entity(store.key(trl.PRICE_KIND, "Kalshi:KXTEST:2026-07-01T13"))
+            price.update(
+                platform="Kalshi",
+                ident="KXTEST",
+                market_url="https://kalshi.com/markets/KXTEST",
+                ts=now + timedelta(hours=1),
+                hour="2026-07-01T13",
+                market_probability=0.54,
+                market_bid=0.50,
+                market_ask=0.56,
+            )
+            store.put(price)
+
+            agg = trl.aggregate(store, model="council", variant="v", temperature=0.0)
+            account = agg["mark_to_market_account"]
+            self.assertEqual(account["value_method"], "mark_to_market_bid_liquidation")
+            self.assertEqual(account["n_trades"], 1)
+            self.assertEqual(account["liquidation_value"], 0.5)
+            self.assertEqual(account["account_value"], 9999.863508)
+            self.assertEqual(agg["mark_to_market_by_model"][0]["model"], "council")
+            self.assertEqual(agg["mark_to_market_by_model"][0]["account_value"], 9999.863508)
+
+    def test_aggregate_mark_to_market_settles_resolved_snapshots_into_cash(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "store.json"
+            store = FileStore(path)
+            snap_ts = datetime(2026, 7, 1, 12, tzinfo=timezone.utc)
+            resolved_ts = datetime(2026, 7, 5, 12, tzinfo=timezone.utc)
+            snap = Entity(store.key(trl.SNAPSHOT_KIND, "Polymarket:slug-a:council:2026-07-01"))
+            snap.update(
+                platform="Polymarket",
+                ident="slug-a",
+                model="council",
+                question="Will A happen?",
+                market_url="https://polymarket.com/market/slug-a",
+                snapshot_ts=snap_ts,
+                snapshot_date="2026-07-01",
+                model_probability=0.7,
+                market_probability=0.6,
+                market_bid=0.58,
+                market_ask=0.62,
+                lead_time_days=4.0,
+                horizon="3-7d",
+                resolved=True,
+                outcome=1,
+                resolved_ts=resolved_ts,
+                close_time=resolved_ts.isoformat(),
+                model_brier=trl.brier(0.7, 1),
+                market_brier=trl.brier(0.6, 1),
+                model_correct=True,
+            )
+            store.put(snap)
+
+            agg = trl.aggregate(store, model="council", variant="v", temperature=0.0)
+            account = agg["mark_to_market_account"]
+
+            self.assertEqual(account["strategy"], "edge_shadow_ledger")
+            self.assertEqual(account["n_trades"], 1)
+            self.assertEqual(account["n_settlements"], 1)
+            self.assertEqual(account["n_open_positions"], 0)
+            self.assertEqual(account["liquidation_value"], 0)
+            self.assertEqual(account["account_value"], 10000.38)
+            self.assertEqual(account["realized_pnl"], 0.38)
+
 
 class CalibrationTests(unittest.TestCase):
     def test_isotonic_is_monotonic_and_corrects_bias(self):
@@ -707,7 +806,12 @@ class EdgeAnalyticsTests(unittest.TestCase):
         open_rows = [
             {"platform": "Polymarket", "ident": "A", "model_probability": 0.8,
              "market_probability": 0.5, "snapshot_ts": now, "question": "Q1",
-             "market_url": "u1", "horizon": "30d+", "lead_time_days": 40.0},
+             "market_url": "u1", "horizon": "30d+", "lead_time_days": 40.0,
+             "description": "Market description",
+             "resolution_criteria": "Official result",
+             "category": "Politics", "market_bid": 0.49, "market_ask": 0.51,
+             "market_volume": 1234.0, "market_liquidity": 567.0,
+             "close_time": now + timedelta(days=40)},
             {"platform": "Kalshi", "ident": "B", "model_probability": 0.52,
              "market_probability": 0.5, "snapshot_ts": now, "question": "Q2",
              "market_url": "u2", "horizon": "7-14d", "lead_time_days": 10.0},
@@ -721,6 +825,12 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertEqual(top["edge_bucket"], "20pp+")
         self.assertEqual(top["stance"], "model_above_market")
         self.assertTrue(top["track_record"]["skill_significant"])
+        self.assertEqual(top["forecasted_at"], now.isoformat())
+        self.assertEqual(top["description"], "Market description")
+        self.assertEqual(top["resolution_criteria"], "Official result")
+        self.assertEqual(top["categories"], ["Politics"])
+        self.assertEqual(top["market_bid"], 0.49)
+        self.assertEqual(top["resolve_time"], (now + timedelta(days=40)).isoformat())
         self.assertIsNone(board[1]["track_record"])  # 0-5pp gap has no calibration row
 
     def test_paper_pnl_positive_on_winning_edge(self):
@@ -737,12 +847,13 @@ class EdgeAnalyticsTests(unittest.TestCase):
         )
 
     def test_growth_curve_compounds_bankroll(self):
-        # The edge-board chart plots growth_curve as a compounded $100 bankroll:
+        # The edge-board chart plots growth_curve as a compounded $10,000 bankroll:
         # each nominal stake is a fraction of current bankroll, so winnings
         # increase later bet sizes instead of being added to a static base.
         resolved = ([self._res(0.8, 0.5, 1) for _ in range(7)]
                     + [self._res(0.3, 0.5, 0) for _ in range(3)])
         pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
+        self.assertGreater(pnl["flat"]["growth_curve"][0], trl._COMPOUND_STARTING_BANKROLL)
         for name, s in pnl.items():
             if not isinstance(s, dict) or not s.get("growth_curve"):
                 continue
@@ -750,7 +861,8 @@ class EdgeAnalyticsTests(unittest.TestCase):
                 s["growth_curve"][-1], s["compound_bankroll"], places=6,
                 msg=f"{name}: growth_curve endpoint != compound_bankroll")
             self.assertAlmostEqual(
-                s["compound_return"], (s["compound_bankroll"] / 100.0) - 1.0,
+                s["compound_return"],
+                (s["compound_bankroll"] / trl._COMPOUND_STARTING_BANKROLL) - 1.0,
                 places=4,
                 msg=f"{name}: compound_return does not match compound_bankroll")
         self.assertGreater(pnl["flat"]["compound_return"], pnl["flat"]["roi"])

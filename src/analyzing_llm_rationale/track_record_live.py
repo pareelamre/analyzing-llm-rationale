@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from analyzing_llm_rationale import trackrec_store as _ds
+from analyzing_llm_rationale.accounting import MarketQuote, simulate_shadow_mark_to_market_account
 from analyzing_llm_rationale.entity_tagger import tag_question
 
 # ── DuckDB SQL helpers ────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ SHORT_HORIZON_REFORECAST_LEAD_DAYS = 3.0
 SHORT_HORIZON_SLOT_HOURS = 6
 EXPIRY_REFORECAST_LEAD_DAYS = 3.0   # markets within this many days get hourly slots
 EXPIRY_SLOT_HOURS = 1
+SNAPSHOT_SLOT_MINUTES: Optional[int] = None
 
 
 
@@ -112,7 +114,8 @@ def _snapshot_slot(lead_days: Optional[float],
                    short_lead_days: float = SHORT_HORIZON_REFORECAST_LEAD_DAYS,
                    short_slot_hours: int = SHORT_HORIZON_SLOT_HOURS,
                    expiry_lead_days: float = EXPIRY_REFORECAST_LEAD_DAYS,
-                   expiry_slot_hours: int = EXPIRY_SLOT_HOURS) -> str:
+                   expiry_slot_hours: int = EXPIRY_SLOT_HOURS,
+                   slot_minutes: Optional[int] = SNAPSHOT_SLOT_MINUTES) -> str:
     """Storage slot for a forecast snapshot.
 
     Three tiers by days-to-resolution:
@@ -121,6 +124,13 @@ def _snapshot_slot(lead_days: Optional[float],
       ≤ expiry_lead_days       → one slot per expiry_slot_hours (default 1h)
     """
     now = now or _now()
+    if slot_minutes and slot_minutes > 0:
+        total_minutes = now.hour * 60 + now.minute
+        slot_start = (total_minutes // slot_minutes) * slot_minutes
+        hour, minute = divmod(slot_start, 60)
+        return now.replace(
+            hour=hour, minute=minute, second=0, microsecond=0
+        ).strftime("%Y-%m-%dT%H:%M")
     if lead_days is None or lead_days > short_lead_days or short_slot_hours <= 0:
         return now.strftime("%Y-%m-%d")
     slot_h = (expiry_slot_hours if (lead_days <= expiry_lead_days and expiry_slot_hours > 0)
@@ -198,6 +208,16 @@ def _parse_dt(value: Any) -> Optional[datetime]:
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+def _iso_ts(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return value.get("__dt__")
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
 def _lead_time_days(close_time: Any, ref: Optional[datetime] = None) -> Optional[float]:
@@ -475,6 +495,7 @@ async def record_snapshots(
     short_horizon_slot_hours: int = SHORT_HORIZON_SLOT_HOURS,
     expiry_reforecast_lead_days: float = EXPIRY_REFORECAST_LEAD_DAYS,
     expiry_slot_hours: int = EXPIRY_SLOT_HOURS,
+    snapshot_slot_minutes: Optional[int] = SNAPSHOT_SLOT_MINUTES,
     concurrency: int = 4,
     convergence_per_venue: int = 0,
 ) -> int:
@@ -648,6 +669,7 @@ async def record_snapshots(
             short_slot_hours=short_horizon_slot_hours,
             expiry_lead_days=expiry_reforecast_lead_days,
             expiry_slot_hours=expiry_slot_hours,
+            slot_minutes=snapshot_slot_minutes,
         )
         for model in model_list:
             key = client.key(SNAPSHOT_KIND, f"{quote.get('platform')}:{ident}:{model}:{slot}")
@@ -997,6 +1019,7 @@ _EDGE_BUCKETS = [
 # made (lead time / horizon), not edge size — so every forecast counts, and the
 # board/lead-lag/PnL stratify by lead time rather than filtering by |model − market|.
 _EDGE_MIN = 0.0
+_COMPOUND_STARTING_BANKROLL = 10_000.0
 
 # Trading costs deducted per paper bet so ROI is net-of-fees (the "real" ROI).
 # Kalshi charges a price-dependent taker fee ≈ coeff·contracts·p·(1−p); since a
@@ -1257,7 +1280,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         curve: List[float] = []
         curve_ts: List[Any] = []
         growth_curve: List[float] = []
-        bankroll = 100.0
+        bankroll = _COMPOUND_STARTING_BANKROLL
         for b in all_bets:
             if validated and not b["in_validated"]:
                 continue
@@ -1310,7 +1333,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "equity_curve_ts": curve_ts,
             "growth_curve": growth_curve,
             "compound_bankroll": round(bankroll, 6),
-            "compound_return": round((bankroll / 100.0) - 1.0, 4),
+            "compound_return": round((bankroll / _COMPOUND_STARTING_BANKROLL) - 1.0, 4),
         }
 
     flat = _run(lambda b: 1.0)
@@ -1422,7 +1445,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
     if not n:
         return None
     growth_curve: List[float] = []
-    bankroll = 100.0
+    bankroll = _COMPOUND_STARTING_BANKROLL
     if staked:
         for profit in profits:
             bankroll *= max(0.0, 1.0 + (1.0 / staked) * profit)
@@ -1437,7 +1460,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         "equity_curve_ts": curve_ts,
         "growth_curve": growth_curve,
         "compound_bankroll": round(bankroll, 6),
-        "compound_return": round((bankroll / 100.0) - 1.0, 4),
+        "compound_return": round((bankroll / _COMPOUND_STARTING_BANKROLL) - 1.0, 4),
     }
 
 
@@ -1526,6 +1549,53 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
     return out
 
 
+def build_mark_to_market_accounts(
+    rows: List[Dict[str, Any]],
+    latest_quotes: Dict[Tuple[str, str], MarketQuote],
+    *,
+    default_model: str,
+    starting_cash: float = _COMPOUND_STARTING_BANKROLL,
+    target_contracts: float = 1.0,
+    min_edge: float = _EDGE_MIN,
+) -> List[Dict[str, Any]]:
+    """Per-model shadow strategy ledgers, valued at bid-side liquidation prices."""
+    by_model: Dict[str, List[Dict[str, Any]]] = {}
+    for row in rows:
+        by_model.setdefault(row.get("model") or default_model, []).append(row)
+    accounts: List[Dict[str, Any]] = []
+    for model_label, rows in by_model.items():
+        account = simulate_shadow_mark_to_market_account(
+            rows,
+            latest_quotes=latest_quotes,
+            starting_cash=starting_cash,
+            target_contracts=target_contracts,
+            min_edge=min_edge,
+            fee_fn=_bet_fee,
+        )
+        accounts.append({
+            "model": model_label,
+            "account_value": account.get("account_value"),
+            "return": account.get("return"),
+            "cash": account.get("cash"),
+            "liquidation_value": account.get("liquidation_value"),
+            "realized_pnl": account.get("realized_pnl"),
+            "unrealized_pnl": account.get("unrealized_pnl"),
+            "n_trades": account.get("n_trades"),
+            "n_settlements": account.get("n_settlements"),
+            "n_open_positions": account.get("n_open_positions"),
+            "n_illiquid_positions": account.get("n_illiquid_positions"),
+            "account": account,
+        })
+    accounts.sort(
+        key=lambda item: (
+            item.get("account_value") if item.get("account_value") is not None else -1.0,
+            item.get("return") if item.get("return") is not None else -9.0,
+        ),
+        reverse=True,
+    )
+    return accounts
+
+
 def build_edge_board(open_rows: List[Dict[str, Any]],
                      latest_price: Dict[str, float],
                      edge_calib: List[Dict[str, Any]],
@@ -1584,9 +1654,18 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             "platform": platform,
             "ident": ident,
             "market_url": r.get("market_url"),
+            "forecasted_at": _iso_ts(r.get("snapshot_ts")),
+            "description": r.get("description"),
+            "resolution_criteria": r.get("resolution_criteria"),
+            "categories": [r.get("category")] if r.get("category") else [],
             "domain": r.get("domain") or "other",
             "horizon": r.get("horizon"),
             "lead_days": round(current_lead, 1) if current_lead is not None else None,
+            "resolve_time": _iso_ts(r.get("close_time")),
+            "market_bid": r.get("market_bid"),
+            "market_ask": r.get("market_ask"),
+            "market_volume": r.get("market_volume"),
+            "market_liquidity": r.get("market_liquidity"),
             "model_probability": round(model_p, 3),
             "market_probability": round(market_p, 3),
             "edge": round(signed, 3),
@@ -1892,7 +1971,8 @@ def build_arbitrage_board(open_rows: List[Dict[str, Any]], latest_price: Dict[st
 
 
 def aggregate(client, *, model: str, variant: str, temperature: float,
-              trajectory_samples: int = 8) -> Dict[str, Any]:
+              trajectory_samples: int = 8,
+              cycle_minutes: Optional[int] = None) -> Dict[str, Any]:
     """Recompute the public aggregate (overall + by-horizon) and persist it."""
 
     con = _sql_con(client)
@@ -1919,6 +1999,24 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             """).fetchall()
             if r[0] and r[1] is not None
         }
+        latest_quotes: Dict[Tuple[str, str], MarketQuote] = {
+            (str(r[0] or ""), str(r[1] or "")): MarketQuote(
+                yes_probability=float(r[2]) if r[2] is not None else None,
+                yes_bid=float(r[3]) if r[3] is not None else None,
+                yes_ask=float(r[4]) if r[4] is not None else None,
+                ts=r[5],
+            )
+            for r in con.execute("""
+                SELECT platform, ident,
+                       arg_max(market_probability, ts),
+                       arg_max(market_bid, ts),
+                       arg_max(market_ask, ts),
+                       max(ts)
+                FROM market_price_point
+                GROUP BY platform, ident
+            """).fetchall()
+            if r[0] and r[1]
+        }
     else:
         # ORM fallback (FileStore / Datastore)
         resolved = []
@@ -1931,6 +2029,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             else:
                 open_rows.append(dict(e))
         latest_price = {}
+        latest_quotes = {}
         _latest_price_ts: Dict[str, Any] = {}
         for p in client.query(kind=PRICE_KIND).fetch():
             ident = p.get("ident")
@@ -1938,6 +2037,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
             if ident not in _latest_price_ts or ts > _latest_price_ts[ident]:
                 _latest_price_ts[ident] = ts
                 latest_price[ident] = float(p.get("market_probability") or 0.0)
+                latest_quotes[(p.get("platform") or "", ident)] = MarketQuote.from_mapping(p)
 
     # Drop stale open snapshots (not re-forecast recently) so orphaned readings
     # from an old ident don't surface on the edge board as live disagreements.
@@ -1974,6 +2074,24 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     _res_skill_early = [r for r in resolved if (r.get("model") or model) == model]
     by_edge_early = edge_calibration(_res_skill_early)
     edge_board_result = build_edge_board(open_primary, latest_price, by_edge_early, by_horizon)
+    mark_to_market_rows_primary = resolved_primary + open_primary
+    mark_to_market_rows_all = resolved + open_rows
+    mark_to_market_account = simulate_shadow_mark_to_market_account(
+        mark_to_market_rows_primary,
+        latest_quotes=latest_quotes,
+        starting_cash=_COMPOUND_STARTING_BANKROLL,
+        target_contracts=1.0,
+        min_edge=_EDGE_MIN,
+        fee_fn=_bet_fee,
+    )
+    mark_to_market_by_model = build_mark_to_market_accounts(
+        mark_to_market_rows_all,
+        latest_quotes,
+        default_model=model,
+        starting_cash=_COMPOUND_STARTING_BANKROLL,
+        target_contracts=1.0,
+        min_edge=_EDGE_MIN,
+    )
 
     payload: Dict[str, Any] = {
         "source": "live",
@@ -1995,6 +2113,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "primary_n_markets_resolved": primary_n_markets_resolved,
         "n_markets_open": len(edge_board_result),
         "n_markets_tracked": len(open_idents),
+        "mark_to_market_cycle_minutes": cycle_minutes,
     }
 
     overall = _bucket_stats(resolved_skill)
@@ -2156,6 +2275,8 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "paper_pnl": {**(paper_pnl(resolved_skill, by_edge_skill) or {}),
                       "crowd_baseline": _crowd_base},
         "primary_paper_pnl": paper_pnl(resolved_primary, edge_calibration(resolved_primary)),
+        "mark_to_market_account": mark_to_market_account,
+        "mark_to_market_by_model": mark_to_market_by_model,
         "edge_board": edge_board_result,
         "arbitrage_signals": build_arbitrage_board(open_primary, latest_price),
         "models_comparison": build_models_comparison(

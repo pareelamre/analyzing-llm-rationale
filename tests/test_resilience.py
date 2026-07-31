@@ -6,6 +6,7 @@ import asyncio
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -46,6 +47,17 @@ class FlakyProvider:
         self.calls += 1
         if self.calls <= self.fail_times:
             raise self.error
+        return self.ok
+
+
+class SlowProvider(FlakyProvider):
+    def __init__(self, delay_s):
+        super().__init__(fail_times=0, error=RetryableProviderError("unused"))
+        self.delay_s = delay_s
+
+    def chat_completion(self, messages, temperature, max_tokens):
+        self.calls += 1
+        time.sleep(self.delay_s)
         return self.ok
 
 
@@ -196,6 +208,41 @@ class MiddlewareAndProbeTests(unittest.TestCase):
             )
         self.assertEqual(r.status_code, 503)
         self.assertNotIn("503", r.json()["detail"])  # raw upstream text not leaked
+
+    def test_predict_hard_deadline_returns_structured_504(self):
+        _configure_state(SlowProvider(delay_s=0.1))
+        with (
+            mock.patch.object(server, "_FORECAST_HARD_TIMEOUT_S", 0.01),
+            mock.patch.object(server, "_PROVIDER_TIMEOUT_S", 1.0),
+        ):
+            r = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the hard forecast deadline be enforced?",
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(r.status_code, 504)
+        self.assertEqual(r.headers.get("Retry-After"), "5")
+        self.assertIn("service deadline", r.json()["detail"])
+
+    def test_identical_concurrent_forecasts_share_one_provider_call(self):
+        provider = SlowProvider(delay_s=0.05)
+        _configure_state(provider)
+        server._predict_inflight.clear()
+        req = server.PredictRequest(
+            question="Will duplicate in-flight forecasts be coalesced?",
+            attach_evidence=False,
+        )
+
+        async def run_both():
+            return await asyncio.gather(server.predict(req), server.predict(req))
+
+        first, second = asyncio.run(run_both())
+
+        self.assertEqual(provider.calls, 1)
+        self.assertEqual(first.model_dump(), second.model_dump())
 
 
 if __name__ == "__main__":

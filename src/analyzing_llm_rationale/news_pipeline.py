@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, Optional, Sequence
 from urllib.parse import urlencode, urlparse, urlunparse
 from xml.etree import ElementTree
@@ -27,6 +28,8 @@ STOOQ_RSS_FEEDS = (
 # TAVILY_API_KEY, SERPER_API_KEY, BRAVE_API_KEY, or SEARXNG_URL.
 DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "rss", "open-meteo")
 SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "newsapi", "rss", "stooq", "fred", "open-meteo")
+_FETCH_WORKERS = max(1, int(os.environ.get("NEWS_FETCH_WORKERS", "6")))
+_MAX_SEARCH_QUERIES = max(1, int(os.environ.get("NEWS_MAX_SEARCH_QUERIES", "2")))
 HIGH_CREDIBILITY_SOURCES = {
     "abc news",
     "al jazeera",
@@ -400,34 +403,47 @@ class NewsPipeline:
         """Return up to top_k raw article dicts from configured news sources."""
         articles: List[dict] = []
         per_source_limit = max(top_k, 10)
+        source_calls: List[Callable[[], List[dict]]] = []
 
         web_configured = any((
             getattr(self, "_tavily_key", None), getattr(self, "_serper_key", None),
             getattr(self, "_brave_key", None), getattr(self, "_searxng_url", None),
         ))
         if "web" in self._fetch_sources and web_configured:
-            articles.extend(self._fetch_web(query, limit=per_source_limit))
+            source_calls.append(lambda: self._fetch_web(query, limit=per_source_limit))
 
         if self._newsapi_key and "newsapi" in self._fetch_sources:
-            articles.extend(self._fetch_newsapi(query, page_size=per_source_limit))
+            source_calls.append(lambda: self._fetch_newsapi(query, page_size=per_source_limit))
 
         if "gdelt" in self._fetch_sources:
-            articles.extend(self._fetch_gdelt(query, limit=per_source_limit))
+            source_calls.append(lambda: self._fetch_gdelt(query, limit=per_source_limit))
 
         if "google-news" in self._fetch_sources:
-            articles.extend(self._fetch_google_news(query, limit=per_source_limit))
+            source_calls.append(lambda: self._fetch_google_news(query, limit=per_source_limit))
 
         if "stooq" in self._fetch_sources and _is_finance_query(query):
-            articles.extend(self._fetch_stooq(limit=per_source_limit))
+            source_calls.append(lambda: self._fetch_stooq(limit=per_source_limit))
 
         if "fred" in self._fetch_sources and self._fred_key and _is_finance_query(query):
-            articles.extend(self._fetch_fred(query, limit=5))
+            source_calls.append(lambda: self._fetch_fred(query, limit=5))
 
         if "open-meteo" in self._fetch_sources and _is_weather_query(query):
-            articles.extend(self._fetch_open_meteo(query))
+            source_calls.append(lambda: self._fetch_open_meteo(query))
 
         if "rss" in self._fetch_sources:
-            articles.extend(self._fetch_rss(limit=per_source_limit))
+            source_calls.append(lambda: self._fetch_rss(limit=per_source_limit))
+
+        # Each source is independent. This bounds retrieval latency by the
+        # slowest source instead of the sum of all source timeouts.
+        if source_calls:
+            workers = min(_FETCH_WORKERS, len(source_calls))
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="news-source") as pool:
+                futures = [pool.submit(call) for call in source_calls]
+                for future in futures:
+                    try:
+                        articles.extend(future.result())
+                    except Exception:
+                        continue
 
         seen_keys: set = set()
         unique: List[dict] = []
@@ -1051,6 +1067,12 @@ class NewsPipeline:
             dense_rel = [max(0.0, min(1.0, float(_cosine_similarity(q_vec, d)))) for d in doc_vecs]
             has_dense = True
 
+        # Keep a lexical relevance signal even when dense embeddings are available.
+        # In production the evidence floor is used to suppress junk sources, but a
+        # weak or miscalibrated embedding model can otherwise zero out every
+        # article despite strong exact keyword/entity matches.
+        lexical_rel = [_lexical_relevance(question, t) for t in texts]
+
         # Lexical BM25 (the other half of hybrid retrieval).
         q_terms = _content_terms(question)
         bm25 = _bm25_scores(q_terms, [re.findall(r"[a-z0-9]+", t.lower()) for t in texts])
@@ -1084,7 +1106,11 @@ class NewsPipeline:
         for i, article in enumerate(articles):
             credibility = _source_credibility(article)
             article["source_credibility"] = round(credibility, 2)
-            article["relevance"] = round(dense_rel[i], 4)
+            article["semantic_relevance"] = round(dense_rel[i], 4)
+            article["lexical_relevance"] = round(lexical_rel[i], 4)
+            # Relevance floor should fail open to exact lexical matches rather than
+            # dropping all evidence when the embedding signal is weak.
+            article["relevance"] = round(max(dense_rel[i], lexical_rel[i]), 4)
             article["bm25"] = round(bm25[i], 4)
             if i in rerank_scores:
                 article["rerank_score"] = round(rerank_scores[i], 4)
@@ -1131,21 +1157,48 @@ class NewsPipeline:
         self, question: str, top_k: int = 5
     ) -> List[dict]:
         """Full pipeline: fetch → summarize → rank → return top_k."""
-        search_queries = self.plan_search_queries(question)
+        search_queries = self.plan_search_queries(question)[:_MAX_SEARCH_QUERIES]
         raw: List[dict] = []
-        for search_query in search_queries:
-            for article in self.fetch(search_query, top_k=max(top_k, 5)):
-                article.setdefault("search_query", search_query)
-                raw.append(article)
+
+        # Decomposed searches are independent. Preserve query order in the
+        # merged result while doing the network work concurrently.
+        def fetch_query(search_query: str) -> List[dict]:
+            try:
+                return self.fetch(search_query, top_k=max(top_k, 5))
+            except Exception:
+                return []
+
+        workers = min(_FETCH_WORKERS, len(search_queries))
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="news-query") as pool:
+            fetched_by_query = pool.map(fetch_query, search_queries)
+            for search_query, fetched in zip(search_queries, fetched_by_query):
+                for article in fetched:
+                    article.setdefault("search_query", search_query)
+                    raw.append(article)
         if not raw:
             fallback_query = _keyword_search_query(question)
             if fallback_query not in search_queries:
                 for article in self.fetch(fallback_query, top_k=top_k * 2):
                     article.setdefault("search_query", fallback_query)
                     raw.append(article)
-        for article in raw:
-            if self._summarize_articles:
-                article["summary"] = self.summarize(article)
-            article.setdefault("search_query", search_queries[0])
+
+        # Rank on source text first, then summarize only evidence that will be
+        # returned. Previously every candidate triggered a sequential LLM call.
         ranked = self.rank(question, raw)
-        return self.select_diverse_sources(ranked, top_k)
+        selected = self.select_diverse_sources(ranked, top_k)
+        if self._summarize_articles and selected:
+            def safe_summarize(article: dict) -> str:
+                try:
+                    return self.summarize(article)
+                except Exception:
+                    return str(article.get("summary") or article.get("text") or article.get("title") or "")
+
+            workers = min(_FETCH_WORKERS, len(selected))
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="news-summary") as pool:
+                summaries = pool.map(safe_summarize, selected)
+                for article, summary in zip(selected, summaries):
+                    article["summary"] = summary
+        for article in selected:
+            if search_queries:
+                article.setdefault("search_query", search_queries[0])
+        return selected

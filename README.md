@@ -256,6 +256,13 @@ The server is built to scale horizontally on Cloud Run:
 | `REDIS_URL` | unset | Memorystore/Redis URL. Shares cache + rate limits across instances. |
 | `PREDICT_CACHE_TTL` | `600` | Cache TTL (s) for non-personalised `/predict` responses. `0` disables. |
 | `EVIDENCE_CACHE_TTL` | `900` | Cache TTL (s) for evidence retrieval. |
+| `FORECAST_SLA_TARGET_S` | `60` | Published end-to-end latency objective used by forecast metrics. |
+| `FORECAST_HARD_TIMEOUT_S` | `55` | Application cutoff, leaving proxy/network headroom inside the 60 s objective. |
+| `EVIDENCE_TIMEOUT_S` | `15` | Live-evidence budget. On timeout, forecasting continues without live evidence. |
+| `PROVIDER_TIMEOUT_S` | `40` | Per-attempt model-provider budget, capped by the remaining forecast deadline. |
+| `PROVIDER_MAX_RETRIES` | `1` | Transient provider retries, attempted only when deadline budget remains. |
+| `NEWS_MAX_SEARCH_QUERIES` | `2` | Maximum decomposed evidence searches per forecast. |
+| `NEWS_FETCH_WORKERS` | `6` | Bounded concurrency for evidence sources, searches, and selected summaries. |
 | `EXTRACT_CACHE_TTL` | `3600` | Cache TTL (s) for `/extract` URL fetches. |
 | `LOCAL_CACHE_MAX` | `1024` | Max entries in the in-memory fallback cache. |
 | `SEARXNG_URL` / `TAVILY_API_KEY` / `SERPER_API_KEY` / `BRAVE_API_KEY` | unset | Enable web search as an evidence source. A self-hosted **SearXNG** is preferred when set, then Tavily, Serper, Brave. Tavily/Serper have free no-card tiers. When none is set, evidence comes from GDELT, Google News, and RSS. |
@@ -296,23 +303,37 @@ gcloud run services update analyzing-llm-rationale --region us-central1 \
   --max-instances 20 --concurrency 40 --memory 1Gi
 ```
 
-For the lowest-cost public deployment, keep the service on request-only CPU,
-scale to zero, and cap burst scale-out. This is the profile used by the deploy
-workflow:
+For the forecast SLA profile, keep one warm instance, limit per-instance
+concurrency so CPU-heavy ranking cannot starve model requests, and retain
+request-only CPU billing. This is the profile used by the deploy workflow:
 
 ```bash
 gcloud run services update analyzing-llm-rationale \
   --region us-central1 \
   --project brave-drive-471109-d9 \
-  --cpu 1 \
-  --memory 512Mi \
-  --min-instances 0 \
-  --max-instances 3 \
-  --concurrency 20 \
-  --timeout 180 \
+  --cpu 2 \
+  --memory 1Gi \
+  --min-instances 1 \
+  --max-instances 15 \
+  --concurrency 4 \
+  --timeout 70 \
   --cpu-throttling \
-  --no-cpu-boost
+  --cpu-boost
 ```
+
+### Forecast service-level objectives
+
+The production objective is 99.9% monthly availability for valid, admitted
+forecast requests and p99 end-to-end latency below 60 seconds. Invalid requests
+(`4xx`) and deliberate rate limiting (`429`) are excluded from availability.
+The application cuts work off at 55 seconds so it can return a structured `504`
+before Cloud Run's 70-second request deadline.
+
+`forecast.duration` is the SLI histogram. `forecast.phase.duration` separates
+evidence and model-provider time; `forecast.sla.timeouts`, `forecast.errors`,
+`forecast.cache.hits`, and `forecast.coalesced` cover the failure, cache, and
+burst paths. Alert on both a fast burn (p99 above 60 seconds or availability
+below 99% for 5 minutes) and a slow burn (availability below 99.9% for 1 hour).
 
 Market search runs in-process in the main API. The optional Go `marketd`
 microservice is build/test-only in GitHub Actions and is not deployed to Cloud

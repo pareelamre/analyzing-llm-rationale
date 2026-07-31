@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -153,6 +154,42 @@ class ServerTests(unittest.TestCase):
         )
         self.assertIn("Central bank signals", self.provider.calls[0][1]["content"])
 
+    def test_chat_prompt_requires_named_source_attribution(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "Will the Fed cut rates before July 31, 2026?",
+                "evidence_top_k": 3,
+                "chat_mode": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        messages = self.provider.calls[0]
+        self.assertIn("Never refer to evidence only as", messages[0]["content"])
+        self.assertIn(
+            "Evidence 1 — Example News: Central bank signals policy shift",
+            messages[1]["content"],
+        )
+
+    def test_predict_continues_when_evidence_exceeds_phase_budget(self):
+        def slow_evidence(question, top_k=5):
+            time.sleep(0.05)
+            return []
+
+        self.evidence_pipeline.fetch_summarize_rank = slow_evidence
+        with mock.patch.object(server_module, "_EVIDENCE_TIMEOUT_S", 0.01):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will this unique evidence timeout test complete?",
+                    "attach_evidence": True,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("continued without live evidence", response.json()["evidence_error"])
+
     def test_predict_council_returns_structured_probability(self):
         with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": {}}):
             response = self.client.post(
@@ -173,6 +210,24 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["market_analysis"]["model_probability"], 0.7)
         self.assertIn("[Council debate]", payload["rationale"])
         self.assertEqual(payload["model_key"], "council")
+
+    def test_predict_stream_council_uses_council_orchestration(self):
+        with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": {}}):
+            response = self.client.post(
+                "/predict/stream",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "model": "council",
+                    "market_probability": 0.4,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("event: done", response.text)
+        self.assertIn('"model_key": "council"', response.text)
+        self.assertIn("[Council debate]", response.text)
+        self.assertNotIn("Streaming answer.", response.text)
 
     def test_predict_allows_anonymous_when_api_key_unset(self):
         with mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
@@ -468,14 +523,17 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["lead_lag"]["n_markets"], 12)
         self.assertEqual(payload["resolved_log"][0]["question"], "Resolved example?")
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
-        self.assertIn("no-cache", response.headers["cache-control"])
+        self.assertIn("public, max-age=30", response.headers["cache-control"])
         self.assertEqual(payload["markets"][0]["question"], "Will example happen?")
 
-    def test_edge_board_endpoint_includes_freshness_and_no_cache(self):
+    def test_edge_board_endpoint_includes_freshness_and_short_cache(self):
         live = {
             "generated_at": "2026-06-28T23:51:20+00:00",
             "edge_board": [{"question": "Live edge?", "edge": 0.2}],
             "paper_pnl": {"flat": {"growth_curve": [100, 105]}},
+            "mark_to_market_account": {"account_value": 9999.47, "n_open_positions": 8},
+            "mark_to_market_by_model": [{"model": "council", "account_value": 9999.47}],
+            "mark_to_market_cycle_minutes": 15,
             "model": "council",
             "n_snapshots_resolved": 184,
             "n_markets_resolved": 139,
@@ -489,10 +547,72 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["model"], "council")
         self.assertEqual(payload["edge_board"][0]["question"], "Live edge?")
         self.assertEqual(payload["paper_pnl"]["flat"]["growth_curve"], [100, 105])
+        self.assertEqual(payload["mark_to_market_account"]["account_value"], 9999.47)
+        self.assertEqual(payload["mark_to_market_by_model"][0]["model"], "council")
+        self.assertEqual(payload["mark_to_market_cycle_minutes"], 15)
         self.assertEqual(payload["n_markets_resolved"], 139)
         self.assertEqual(payload["resolved_log"][0]["question"], "Resolved edge?")
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
-        self.assertIn("no-cache", response.headers["cache-control"])
+        self.assertIn("public, max-age=30", response.headers["cache-control"])
+
+    def test_edge_board_endpoint_compacts_large_chart_payloads(self):
+        long_curve = list(range(server_module._EDGE_BOARD_CURVE_MAX_POINTS + 40))
+        live = {
+            "generated_at": "2026-06-28T23:51:20+00:00",
+            "paper_pnl": {
+                "smart": {
+                    "n_bets": 200,
+                    "roi": 0.12,
+                    "growth_curve": long_curve,
+                    "equity_curve_ts": [f"2026-01-{(i % 28) + 1:02d}T00:00:00+00:00" for i in long_curve],
+                    "bet_log": [{"private": True}] * 200,
+                }
+            },
+            "models_comparison": [{
+                "model": "council",
+                "n_snapshots_resolved": 200,
+                "accuracy": 0.7,
+                "paper_pnl": {
+                    "smart": {
+                        "n_bets": 200,
+                        "roi": 0.1,
+                        "growth_curve": long_curve,
+                        "bet_log": [{"private": True}] * 200,
+                    }
+                },
+            }],
+            "mark_to_market_account": {
+                "account_value": 9999.47,
+                "value_curve": [{"account_value": i, "ts": str(i)} for i in long_curve],
+                "trades": [{"private": True}] * 200,
+            },
+            "mark_to_market_by_model": [{
+                "model": "council",
+                "account": {
+                    "account_value": 9999.47,
+                    "value_curve": [{"account_value": i, "ts": str(i)} for i in long_curve],
+                    "open_positions": [{"private": True}] * 200,
+                },
+            }],
+        }
+        with mock.patch.object(server_module, "_read_live_track_record", return_value=live):
+            response = self.client.get("/edge-board")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertLessEqual(
+            len(payload["paper_pnl"]["smart"]["growth_curve"]),
+            server_module._EDGE_BOARD_CURVE_MAX_POINTS,
+        )
+        self.assertEqual(payload["paper_pnl"]["smart"]["growth_curve"][0], long_curve[0])
+        self.assertEqual(payload["paper_pnl"]["smart"]["growth_curve"][-1], long_curve[-1])
+        self.assertNotIn("bet_log", payload["paper_pnl"]["smart"])
+        self.assertNotIn("trades", payload["mark_to_market_account"])
+        self.assertNotIn("open_positions", payload["mark_to_market_by_model"][0]["account"])
+        self.assertLessEqual(
+            len(payload["mark_to_market_by_model"][0]["account"]["value_curve"]),
+            server_module._EDGE_BOARD_CURVE_MAX_POINTS,
+        )
+        self.assertNotIn("bet_log", payload["models_comparison"][0]["paper_pnl"]["smart"])
 
     def test_analytics_event_summary_counts_events(self):
         response = self.client.post(
@@ -1486,6 +1606,43 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(first.json(), second.json())
         # The model provider is invoked only once; the second call hits the cache.
         self.assertEqual(len(self.provider.calls), 1)
+
+    def test_predict_cache_isolated_by_requested_model(self):
+        payload = {
+            "question": "Will the Fed cut rates before November 30, 2026?",
+            "question_type": "binary",
+            "attach_evidence": False,
+            "chat_mode": False,
+        }
+        first = self.client.post("/predict", json=payload)
+        with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": {}}):
+            council = self.client.post("/predict", json={**payload, "model": "council"})
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(council.status_code, 200)
+        self.assertEqual(first.json()["model_key"], "test-model")
+        self.assertEqual(council.json()["model_key"], "council")
+        self.assertIn("[Council debate]", council.json()["rationale"])
+
+    def test_predict_cache_includes_resolution_criteria(self):
+        payload = {
+            "question": "Will Project Atlas launch in 2026?",
+            "question_type": "binary",
+            "attach_evidence": False,
+            "chat_mode": False,
+        }
+        first = self.client.post(
+            "/predict",
+            json={**payload, "resolution_criteria": "Resolve from the company announcement."},
+        )
+        second = self.client.post(
+            "/predict",
+            json={**payload, "resolution_criteria": "Resolve from the regulator filing."},
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(len(self.provider.calls), 2)
 
     def test_short_followup_skips_fresh_evidence(self):
         # A short follow-up in a thread should be answered from context, not a

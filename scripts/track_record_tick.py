@@ -79,6 +79,8 @@ EXPIRY_REFORECAST_LEAD_DAYS = float(
     os.environ.get("EXPIRY_REFORECAST_LEAD_DAYS") or trl.EXPIRY_REFORECAST_LEAD_DAYS)
 EXPIRY_SLOT_HOURS = int(
     os.environ.get("EXPIRY_SLOT_HOURS") or trl.EXPIRY_SLOT_HOURS)
+CYCLE_INTERVAL_MINUTES = max(1, int(os.environ.get("CYCLE_INTERVAL_MINUTES", "15") or 15))
+SNAPSHOT_SLOT_MINUTES = int(os.environ.get("SNAPSHOT_SLOT_MINUTES", "0") or 0) or None
 # Re-run the LLM forecast for every tracked-open market on every tick (not just
 # the daily first pass / price-drift), so the edge board always reflects the
 # model's current opinion and matches live /predict. Default on. Each tick then
@@ -218,6 +220,15 @@ async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None
     res = await loop.run_in_executor(None, _post_predict, payload)
     if not res:
         return None
+    returned_model = str(res.get("model_key") or "").strip()
+    if model and returned_model != model:
+        _predict_stats["model_mismatches"] += 1
+        print(
+            f"  predict model mismatch: requested {model!r}, "
+            f"received {returned_model or '<missing>'!r}",
+            file=sys.stderr,
+        )
+        return None
     analysis = res.get("market_analysis")
     if not analysis or analysis.get("model_probability") is None:
         return None
@@ -275,6 +286,7 @@ async def main() -> int:
             short_horizon_slot_hours=SHORT_HORIZON_SLOT_HOURS,
             expiry_reforecast_lead_days=EXPIRY_REFORECAST_LEAD_DAYS,
             expiry_slot_hours=EXPIRY_SLOT_HOURS,
+            snapshot_slot_minutes=SNAPSHOT_SLOT_MINUTES,
             concurrency=PREDICT_CONCURRENCY,
             convergence_per_venue=CONVERGENCE_PER_VENUE)
         if ALLOW_RESOLVED_BACKFILL:
@@ -284,7 +296,13 @@ async def main() -> int:
                 concurrency=PREDICT_CONCURRENCY)
         _mark_enrolled([f"{p}:{i}" for p, i in seeds])
 
-    agg = trl.aggregate(store, model=TRACK_MODELS[0], variant=VARIANT, temperature=TEMPERATURE)
+    agg = trl.aggregate(
+        store,
+        model=TRACK_MODELS[0],
+        variant=VARIANT,
+        temperature=TEMPERATURE,
+        cycle_minutes=CYCLE_INTERVAL_MINUTES,
+    )
     after_primary = _model_progress(store, primary_model)
 
     PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -303,6 +321,7 @@ async def main() -> int:
         "predict_successes": _predict_stats["successes"],
         "predict_failures": _predict_stats["failures"],
         "predict_http_401": _predict_stats["http_401"],
+        "predict_model_mismatches": _predict_stats["model_mismatches"],
         "primary_model": primary_model,
         "primary_snapshots_before": before_primary["snapshots"],
         "primary_snapshots_after": after_primary["snapshots"],

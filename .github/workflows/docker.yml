@@ -94,16 +94,16 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --port 8000 \
-            --timeout 180 \
-            --cpu 1 \
-            --memory 512Mi \
-            --min-instances 0 \
-            --max-instances 3 \
-            --concurrency 20 \
+            --timeout 70 \
+            --cpu 2 \
+            --memory 1Gi \
+            --min-instances 1 \
+            --max-instances 15 \
+            --concurrency 4 \
             --cpu-throttling \
-            --no-cpu-boost \
+            --cpu-boost \
             --update-secrets SCADS_AI_API_KEY=SCADS_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,SESSION_SECRET=SESSION_SECRET:latest \
-            --update-env-vars MODEL_DEVICE=cpu,CUSTOM_DOMAIN=foresea.ink,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json \
+            --update-env-vars MODEL_DEVICE=cpu,CUSTOM_DOMAIN=foresea.ink,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json,FORECAST_SLA_TARGET_S=60,FORECAST_HARD_TIMEOUT_S=55,EVIDENCE_TIMEOUT_S=15,PROVIDER_TIMEOUT_S=35,PROVIDER_MAX_RETRIES=1,NEWS_MAX_SEARCH_QUERIES=2,NEWS_FETCH_WORKERS=6 \
             --remove-env-vars MARKETD_URL \
             --project ${{ env.GCP_PROJECT_ID }}
           # The RAG embedding model is served from a GCS volume mounted at

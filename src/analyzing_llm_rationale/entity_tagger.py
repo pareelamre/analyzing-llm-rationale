@@ -98,6 +98,15 @@ _DOMAIN_KEYWORDS: Dict[str, List[str]] = {
     ],
 }
 
+# Keywords meant to match token prefixes rather than whole tokens.
+# Example: "geopolit*" should match "geopolitical", and "retire*" should
+# match "retired" / "retirement".
+_DOMAIN_PREFIX_KEYWORDS = {
+    "geopolit",
+    "inaugurati",
+    "retire",
+}
+
 # ── Entity extraction ────────────────────────────────────────────────────────
 
 # Known entities to always capture regardless of capitalisation.
@@ -122,6 +131,7 @@ _KNOWN_LOWER = {e.lower(): e for e in _KNOWN_ENTITIES}
 _TITLE_PATTERN = re.compile(
     r'\b([A-Z][a-z]{1,20})(?:\s+[A-Z][a-z]{1,20}){0,3}\b'
 )
+_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 _STOP_WORDS = {
     "will", "the", "a", "an", "is", "are", "was", "were", "be", "been",
     "have", "has", "had", "do", "does", "did", "would", "could", "should",
@@ -179,15 +189,36 @@ def _extract_entities(text: str) -> List[str]:
 def _score_domain(text: str) -> Tuple[str, Dict[str, int]]:
     """Return (best_domain, {domain: score}) for a question string."""
     lower = text.lower()
+    tokens = _TOKEN_PATTERN.findall(lower)
+    token_set = set(tokens)
     scores: Dict[str, int] = {}
     for domain, keywords in _DOMAIN_KEYWORDS.items():
-        score = sum(1 for kw in keywords if kw in lower)
+        score = sum(1 for kw in keywords if _keyword_matches(lower, tokens, token_set, kw))
         if score:
             scores[domain] = score
     if not scores:
         return "other", scores
     best = max(scores, key=lambda d: scores[d])
     return best, scores
+
+
+def _keyword_matches(lower: str, tokens: List[str], token_set: set[str], keyword: str) -> bool:
+    """Token-aware keyword matching for domain scoring.
+
+    Raw substring matching causes false positives for short symbols such as
+    "eth" inside "netherlands". Match ordinary keywords as whole tokens or
+    contiguous token phrases, with a small explicit allowlist for true stems.
+    """
+    kw = keyword.lower()
+    if " " in kw:
+        parts = _TOKEN_PATTERN.findall(kw)
+        if not parts:
+            return False
+        width = len(parts)
+        return any(tokens[i:i + width] == parts for i in range(len(tokens) - width + 1))
+    if kw in _DOMAIN_PREFIX_KEYWORDS:
+        return any(tok.startswith(kw) for tok in tokens)
+    return kw in token_set
 
 
 # ── Public API ───────────────────────────────────────────────────────────────

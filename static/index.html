@@ -1302,11 +1302,23 @@
       line-height: 22px;
       overflow-y: hidden;
     }
+    .input-box #questionInput:focus-visible {
+      outline: none;
+    }
     #questionInput::placeholder { color: #8f8f8f; }
     .send-btn {
       width: 34px !important;
       height: 34px !important;
       background: #111;
+      display: grid;
+      place-items: center;
+    }
+    .send-btn-stop-icon {
+      background: currentColor;
+      border-radius: 1px;
+      display: block;
+      height: 8px;
+      width: 8px;
     }
     .attach-btn {
       width: 34px;
@@ -1325,6 +1337,50 @@
     .live-pulse,
     .live-pulse + span {
       display: none;
+    }
+    .chat-live-status {
+      display: none !important;
+    }
+    .forecast-wait {
+      align-items: center;
+      display: flex;
+      gap: 12px;
+    }
+    .forecast-wait-orbit {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--ink);
+      border-radius: 999px;
+      animation: waitSpin 1s linear infinite;
+    }
+    .forecast-wait-scan {
+      position: relative;
+      overflow: hidden;
+      width: 64px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--paper);
+    }
+    .forecast-wait-scan::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      width: 35%;
+      border-radius: inherit;
+      background: var(--ink);
+      animation: waitScan 1.4s ease-in-out infinite;
+    }
+    @keyframes waitSpin { to { transform: rotate(360deg); } }
+    @keyframes waitScan {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(300%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .forecast-wait-orbit,
+      .forecast-wait-scan::after {
+        animation: none;
+      }
     }
 
     /* Multiple-choice option bars */
@@ -1744,6 +1800,27 @@
 
 <div class="grain"></div>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="ui-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="ui-edit" viewBox="0 0 24 24"><path d="M12 20h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="ui-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="ui-square" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1" fill="currentColor"/></symbol>
+  <symbol id="ui-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 18v-6h6M21 6v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ui-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ui-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ui-star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.2l-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="ui-check" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ui-alert-triangle" viewBox="0 0 24 24"><path d="M12 3 2 21h20Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 9v5M12 18h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="ui-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ui-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ui-external" viewBox="0 0 24 24"><path d="M14 5h5v5M10 14 19 5M19 14v5H5V5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ui-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="ui-triangle-up" viewBox="0 0 24 24"><path d="m12 6 7 12H5Z" fill="currentColor"/></symbol>
+  <symbol id="ui-triangle-down" viewBox="0 0 24 24"><path d="m12 18 7-12H5Z" fill="currentColor"/></symbol>
+  <symbol id="ui-chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M7 15l4-4 3 3 5-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ui-scale" viewBox="0 0 24 24"><path d="M12 3v18M5 6h14M6 6l-4 7h8Zm12 0-4 7h8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+</svg>
+
 <!-- ── Landing ── -->
 <section id="landingPage" class="landing">
   <nav class="landing-nav" aria-label="Main navigation">
@@ -1795,7 +1872,7 @@
         <div id="landingAnswer" class="landing-answer" aria-live="polite" style="max-width: 100%;">
           <div class="landing-answer-content chat-md" id="landingAnswerContent"></div>
           <div class="landing-answer-actions" id="landingAnswerActions" style="display:none">
-            <button class="landing-answer-btn primary" onclick="_landingOpenInApp()">Continue in app →</button>
+            <button class="landing-answer-btn primary" onclick="_landingOpenInApp()">Continue in app <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-arrow-right"></use></svg></button>
             <button class="landing-answer-btn" onclick="_landingReset()">Ask another</button>
           </div>
         </div>
@@ -1946,7 +2023,7 @@
             We evaluate the forecast calibration: if we group all predictions where we estimated a 75% probability, about 75% of those events should occur. We track these results transparently in our public database and track record sheets.
           </p>
           <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-            <button type="button" class="hero-action primary" onclick="openTrackRecord()">View Detailed Track Record →</button>
+            <button type="button" class="hero-action primary" onclick="openTrackRecord()">View Detailed Track Record <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-arrow-right"></use></svg></button>
             <a href="mailto:pareel.amre@gmail.com?subject=Foresea%20source%20code" class="hero-action" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
               <span>Get in touch</span>
             </a>
@@ -1954,20 +2031,20 @@
         </div>
 
         <!-- Real Live Calibration Stats Grid -->
-        <div style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02);">
+        <div id="transparencyPerformancePanel" style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02);">
           <h3 style="font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">Verified System Performance</h3>
           
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
             <div style="text-align: center; border-right: 1px solid var(--border); padding-right: 8px;">
-              <span style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">76.9%</span>
+              <span id="trustAccuracy" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">--</span>
               <span style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 500;">Model Accuracy</span>
             </div>
             <div style="text-align: center; border-right: 1px solid var(--border); padding-right: 8px;">
-              <span style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">234</span>
+              <span id="trustResolved" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">--</span>
               <span style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 500;">Scored Snapshots</span>
             </div>
             <div style="text-align: center;">
-              <span style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">0.197</span>
+              <span id="trustBrier" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">--</span>
               <span style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 500;">Model Brier Score</span>
             </div>
           </div>
@@ -2031,22 +2108,22 @@
       <span class="brand text-base">Foresea</span>
     </button>
     <div class="flex items-center gap-1">
-      <button class="menu-btn sidebar-icon-btn" onclick="closeSidebar()" title="Close" aria-label="Close navigation">✕</button>
+      <button class="menu-btn sidebar-icon-btn" onclick="closeSidebar()" title="Close" aria-label="Close navigation"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-x"></use></svg></button>
     </div>
   </div>
 
-  <button type="button" class="new-chat-btn text-left" onclick="newConversation()">New market brief</button>
+  <button type="button" class="new-chat-btn text-left" onclick="newConversation()">New conversation</button>
 
   <!-- Primary navigation -->
   <nav class="side-nav" aria-label="Sections">
     <button type="button" class="side-nav-link" onclick="openEdgeBoard()">
-      <span class="side-nav-ico">⚗️</span>Edge board
+      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-scale"></use></svg></span>Edge board
     </button>
     <button type="button" class="side-nav-link" onclick="openTrackRecord()">
-      <span class="side-nav-ico">📈</span>Track record
+      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-chart"></use></svg></span>Track record
     </button>
     <button type="button" class="side-nav-link" onclick="openWatchlist()">
-      <span class="side-nav-ico">☆</span>Watchlist
+      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-star"></use></svg></span>Watchlist
     </button>
   </nav>
 
@@ -2207,8 +2284,8 @@
 
       <!-- API docs -->
       <div class="pt-2 border-t border-gray-200">
-        <a href="/agents" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">Agent integration ↗</a><br />
-        <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">API docs ↗</a>
+        <a href="/agents" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">Agent integration <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-external"></use></svg></a><br />
+        <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs">API docs <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-external"></use></svg></a>
       </div>
     </div>
   </details>
@@ -2260,7 +2337,7 @@
         </div>
       </details>
       <div id="venueErr" class="model-form-error" hidden></div>
-      <button type="button" class="model-add-btn" onclick="openTradeModal()">Place an order ↗</button>
+      <button type="button" class="model-add-btn" onclick="openTradeModal()">Place an order <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-external"></use></svg></button>
     </div>
   </details>
 
@@ -2300,7 +2377,7 @@
     <div class="flex-1 min-w-0 flex items-center gap-2">
       <button type="button" class="model-pill" title="Active model">
         <span id="chatTitle" class="truncate max-w-[220px] sm:max-w-[360px]">Foresea</span>
-        <span class="text-gray-400 text-sm">⌄</span>
+        <span class="text-gray-400 text-sm"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-chevron-down"></use></svg></span>
       </button>
     </div>
     <nav class="hidden md:flex items-center gap-4 flex-shrink-0" aria-label="App navigation">
@@ -2311,13 +2388,14 @@
       <a href="mailto:pareel.amre@gmail.com?subject=Foresea%20source%20code" class="topbar-link">Contact</a>
     </nav>
 
-    <div class="hidden sm:flex items-center gap-1.5 flex-shrink-0 border border-gray-200 rounded-full px-2 py-1">
+    <div class="chat-live-status hidden sm:flex items-center gap-1.5 flex-shrink-0 border border-gray-200 rounded-full px-2 py-1" aria-hidden="true">
       <span class="live-pulse rounded-full inline-block" style="width:6px;height:6px;background:var(--accent)"></span>
       <span class="text-xs text-gray-500">Live</span>
     </div>
   </header>
 
   <!-- Messages -->
+  <!-- Regression selectors: class="chat-live-status" aria-hidden="true"; class="msg-ai forecast-wait" -->
   <div id="messages" data-lenis-prevent aria-live="polite" aria-label="Market intelligence conversation" class="scrollable flex-1 px-3 sm:px-4 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"></div>
 
   <!-- Input -->
@@ -2344,7 +2422,7 @@
           </svg>
         </button>
         <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="handleSendButton()" title="Send" aria-label="Send">
-          ↑
+          <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-arrow-up"></use></svg>
         </button>
       </div>
       <!-- Attach panel -->
@@ -2376,7 +2454,7 @@
 <!-- ── Feedback modal ── -->
 <div id="feedbackOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle" aria-hidden="true" onclick="if(event.target===this)closeFeedback()">
   <div class="auth-card glass" style="position:relative;max-width:420px">
-    <button type="button" class="auth-close" onclick="closeFeedback()" aria-label="Close">✕</button>
+    <button type="button" class="auth-close" onclick="closeFeedback()" aria-label="Close"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-x"></use></svg></button>
     <span class="auth-brand">
       <span class="logo-dot"></span>
       <span class="brand text-lg">Feedback</span>
@@ -2384,11 +2462,11 @@
     <p class="auth-sub" style="margin-top:6px">What's working? What's broken? We read everything.</p>
     <div style="margin-top:14px">
       <div id="feedbackStars" style="display:flex;gap:8px;margin-bottom:14px" role="group" aria-label="Rating">
-        <span class="feedback-star" data-v="1" onclick="setFeedbackRating(1)" title="1 star">★</span>
-        <span class="feedback-star" data-v="2" onclick="setFeedbackRating(2)" title="2 stars">★</span>
-        <span class="feedback-star" data-v="3" onclick="setFeedbackRating(3)" title="3 stars">★</span>
-        <span class="feedback-star" data-v="4" onclick="setFeedbackRating(4)" title="4 stars">★</span>
-        <span class="feedback-star" data-v="5" onclick="setFeedbackRating(5)" title="5 stars">★</span>
+        <span class="feedback-star" data-v="1" onclick="setFeedbackRating(1)" title="1 star"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-star"></use></svg></span>
+        <span class="feedback-star" data-v="2" onclick="setFeedbackRating(2)" title="2 stars"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-star"></use></svg></span>
+        <span class="feedback-star" data-v="3" onclick="setFeedbackRating(3)" title="3 stars"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-star"></use></svg></span>
+        <span class="feedback-star" data-v="4" onclick="setFeedbackRating(4)" title="4 stars"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-star"></use></svg></span>
+        <span class="feedback-star" data-v="5" onclick="setFeedbackRating(5)" title="5 stars"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-star"></use></svg></span>
       </div>
       <textarea id="feedbackMsg" rows="4" placeholder="Your feedback…" style="width:100%;box-sizing:border-box;background:var(--surface-alt,#1a1a1f);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;resize:vertical;font-family:inherit"></textarea>
       <input id="feedbackEmail" type="email" placeholder="Email (optional — for a reply)" style="width:100%;box-sizing:border-box;background:var(--surface-alt,#1a1a1f);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-size:14px;margin-top:8px;font-family:inherit" />
@@ -2401,7 +2479,7 @@
 <!-- ── Trade modal (place an order on your own connected account) ── -->
 <div id="tradeOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="tradeTitle" aria-hidden="true" onclick="if(event.target===this)closeTradeModal()">
   <div class="auth-card glass" style="position:relative;max-width:440px">
-    <button type="button" class="auth-close" onclick="closeTradeModal()" aria-label="Close">✕</button>
+    <button type="button" class="auth-close" onclick="closeTradeModal()" aria-label="Close"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-x"></use></svg></button>
     <span class="auth-brand"><span class="logo-dot"></span><span class="brand text-lg" id="tradeTitle">Place an order</span></span>
     <p class="auth-sub" style="margin-top:6px">Signs with the exchange account you connected. Preview first — real orders need a typed confirmation.</p>
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
@@ -2437,7 +2515,7 @@
 <!-- ── Auth modal ── -->
 <div id="authOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-hidden="true" onclick="if(event.target===this)closeAuthModal()">
   <div class="auth-card" style="position:relative">
-    <button type="button" class="auth-close" onclick="closeAuthModal()" aria-label="Close">✕</button>
+    <button type="button" class="auth-close" onclick="closeAuthModal()" aria-label="Close"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-x"></use></svg></button>
     <div style="display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 28px;">
       <span class="auth-brand" style="margin-bottom: 12px; margin-right: 0;">
         <span class="logo-dot" style="width: 24px; height: 24px;"></span>
@@ -2450,6 +2528,7 @@
     <div id="authSocial" hidden>
       <div id="authGoogleSection" class="auth-google" hidden>
         <div id="modalGsiWrap" class="gsi-wrap" aria-label="Continue with Google"></div>
+        <button type="button" id="googleFallbackBtn" class="auth-github" hidden onclick="renderGoogleButton('modalGsiWrap')">Continue with Google</button>
       </div>
       <button type="button" id="githubBtn" class="auth-github" hidden onclick="startGitHubLogin()">
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -2564,6 +2643,7 @@ let activeId = null;
 let currentView = 'landing';
 let lastFocusedBeforeDialog = null;
 let isApplyingHistory = false;
+let pendingUrlConversationId = null;
 let activeRequest = null;
 const activeRequests = new Map();
 
@@ -2714,8 +2794,11 @@ async function syncConversationsAfterSignIn(user) {
 
   renderSidebar();
   const ids = sortedIds();
-  if (ids.length) activateConv(activeId && store.conversations[activeId] ? activeId : ids[0]);
-  else newConversation();
+  const targetId = pendingUrlConversationId && store.conversations[pendingUrlConversationId]
+    ? pendingUrlConversationId
+    : (activeId && store.conversations[activeId] ? activeId : ids[0]);
+  if (targetId) activateConv(targetId, { historyMode: pendingUrlConversationId ? 'replace' : 'push' });
+  else newConversation({ historyMode: 'replace' });
 
   await Promise.allSettled(Object.values(store.conversations).map(saveRemoteConversation));
   setSyncStatus('Saved to your account');
@@ -2725,8 +2808,11 @@ function switchToAnonymousStore() {
   storageKey = STORAGE_KEY;
   store = loadStore();
   const ids = sortedIds();
-  if (ids.length) activateConv(ids[0]);
-  else newConversation();
+  const targetId = pendingUrlConversationId && store.conversations[pendingUrlConversationId]
+    ? pendingUrlConversationId
+    : ids[0];
+  if (targetId) activateConv(targetId, { historyMode: pendingUrlConversationId ? 'replace' : 'push' });
+  else newConversation({ historyMode: 'replace' });
 }
 
 // ── Mobile sidebar ────────────────────────────────────────────────────────────
@@ -2747,21 +2833,26 @@ function closeSidebar() {
 }
 
 // ── Conversation management ──────────────────────────────────────────────────
-function newConversation() {
+function newConversation(options = {}) {
+  const { updateHistory = true, historyMode = 'push' } = options;
   closeSidebar();
   const id = 'conv_' + Date.now();
-  upsertConv(id, { id, title: 'New market brief', createdAt: Date.now(), updatedAt: Date.now(), conversationSteer: '', messages: [] });
-  activateConv(id);
+  upsertConv(id, { id, title: 'New conversation', createdAt: Date.now(), updatedAt: Date.now(), conversationSteer: '', messages: [] });
+  activateConv(id, { updateHistory, historyMode });
 }
 
-function activateConv(id) {
+function activateConv(id, options = {}) {
+  if (!getConv(id)) return;
+  const { updateHistory = true, historyMode = 'push' } = options;
   closeSidebar();
   activeId = id;
+  if (pendingUrlConversationId === id || updateHistory) pendingUrlConversationId = null;
   syncActiveRequestState();
   renderSidebar();
   renderMessages();
-  document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New market brief';
+  document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New conversation';
   renderConversationSteer();
+  if (updateHistory && currentView === 'app') setConversationHistoryState(id, historyMode);
 }
 
 function getConversationSteer() {
@@ -2844,52 +2935,6 @@ function renderMessages() {
   el.innerHTML = '';
 
   if (!conv || conv.messages.length === 0) {
-    el.innerHTML = `
-      <div id="emptyState" class="max-w-6xl mx-auto w-full pt-10 sm:pt-20 px-4">
-        <div class="market-empty">
-          <div class="empty-copy">
-            <p class="label mb-4">Foresea market desk</p>
-            <h2 class="display text-3xl sm:text-[44px] text-gray-900 leading-tight mb-3 font-semibold">
-              The intelligence layer for prediction markets.
-            </h2>
-            <p class="text-[15px] text-gray-500 leading-relaxed">
-              Price any market — yes/no, multiple-choice, numeric, or date — challenge the consensus, and turn resolution criteria into a source-backed forecast.
-            </p>
-            <div class="mt-8 grid gap-2.5 text-left">
-              ${MARKET_EXAMPLES.map(q => `
-            <button type="button" class="empty-suggestion" onclick="startExample('${escAttr(q)}')">
-              ${escHtml(q)}
-            </button>`).join('')}
-            </div>
-          </div>
-          <div class="empty-market-panel" aria-label="Foresea market intelligence format">
-            <div class="panel-bar">
-              <span>Intelligence stack</span>
-              <span>Live brief format</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Market</span>
-              <span class="intel-value">Will the Fed cut rates by Sep. 30, 2026?</span>
-              <span class="intel-note">binary</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Quote</span>
-              <span class="intel-value">42% implied Yes</span>
-              <span class="intel-note">supplied</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Foresea</span>
-              <span class="intel-value">56% Yes</span>
-              <span class="intel-note">+14 pp</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Thesis</span>
-              <span class="intel-value">Policy path, inflation prints, and central-bank guidance.</span>
-              <span class="intel-note">sources</span>
-            </div>
-          </div>
-        </div>
-      </div>`;
     return;
   }
 
@@ -2911,7 +2956,7 @@ function renderMessages() {
 function renderPendingCompletion(request) {
   const messagesEl = document.getElementById('messages');
   const div = document.createElement('div');
-  div.className = 'max-w-2xl mx-auto w-full';
+  div.className = 'max-w-2xl lg:max-w-[640px] mx-auto w-full';
   div.dataset.pendingRequest = request.userMessageId || request.convId;
   if (request.partialText) {
     div.innerHTML = `
@@ -2919,9 +2964,12 @@ function renderPendingCompletion(request) {
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(request.partialText))}</div>
       </div>`;
   } else {
-    div.innerHTML = `<div class="msg-ai inline-flex items-center gap-3 px-5 py-4">
-      <div class="typing"><span></span><span></span><span></span></div>
-      <span id="typingLabel" style="font-size:13px;color:var(--text-dim)">${escHtml(request.statusLabel || 'Gathering evidence...')}</span>
+    div.innerHTML = `<div class="msg-ai forecast-wait px-5 py-4" role="status" aria-live="polite" aria-atomic="true">
+      <div class="forecast-wait-orbit" aria-hidden="true"></div>
+      <div>
+        <span id="typingLabel" style="font-size:13px;color:var(--text-dim)">${escHtml(request.statusLabel || 'Researching the market')}</span>
+        <div class="forecast-wait-scan mt-2" aria-hidden="true"></div>
+      </div>
     </div>`;
   }
   messagesEl.appendChild(div);
@@ -2931,7 +2979,7 @@ function renderPendingCompletion(request) {
 
 function makeUserBubble(text, msg = {}) {
   const div = document.createElement('div');
-  div.className = 'flex justify-end';
+  div.className = 'max-w-2xl mx-auto w-full flex justify-end';
   const id = msg.id || '';
   const request = activeId ? activeRequests.get(activeId) : null;
   const isActive = request?.userMessageId === id;
@@ -2939,10 +2987,10 @@ function makeUserBubble(text, msg = {}) {
     <div class="prompt-wrap" data-message-id="${escAttr(id)}">
       <div class="msg-user text-sm leading-relaxed">${escHtml(text)}</div>
       <div class="prompt-actions" aria-label="Prompt actions">
-        <button class="prompt-action" type="button" onclick="editPrompt('${escAttr(id)}')" title="Edit prompt" aria-label="Edit prompt">✎</button>
-        <button class="prompt-action" type="button" onclick="copyPrompt('${escAttr(id)}')" title="Copy prompt" aria-label="Copy prompt">⧉</button>
-        ${isActive ? '<button class="prompt-action" type="button" onclick="stopGeneration()" title="Stop response" aria-label="Stop response">■</button>' : ''}
-        <button class="prompt-action" type="button" onclick="resendPrompt('${escAttr(id)}')" title="Resend prompt" aria-label="Resend prompt">↻</button>
+        <button class="prompt-action" type="button" onclick="editPrompt('${escAttr(id)}')" title="Edit prompt" aria-label="Edit prompt">${uiIcon('edit')}</button>
+        <button class="prompt-action" type="button" onclick="copyPrompt('${escAttr(id)}')" title="Copy prompt" aria-label="Copy prompt">${uiIcon('copy')}</button>
+        ${isActive ? '<button class="prompt-action" type="button" onclick="stopGeneration()" title="Stop response" aria-label="Stop response">' + uiIcon('square') + '</button>' : ''}
+        <button class="prompt-action" type="button" onclick="resendPrompt('${escAttr(id)}')" title="Resend prompt" aria-label="Resend prompt">${uiIcon('refresh')}</button>
       </div>
     </div>`;
   return div;
@@ -2990,7 +3038,8 @@ function setSendingState(isSending) {
   const btn = document.getElementById('sendBtn');
   if (!btn) return;
   btn.disabled = false;
-  btn.textContent = isSending ? '■' : '↑';
+  const stopIconHtml = '<span class="send-btn-stop-icon" aria-hidden="true"></span>';
+  btn.innerHTML = isSending ? stopIconHtml : uiIcon('arrow-up');
   btn.title = isSending ? 'Stop' : 'Send';
   btn.setAttribute('aria-label', isSending ? 'Stop response' : 'Send');
 }
@@ -3238,7 +3287,7 @@ function forecastFavoritePayload(data) {
 function forecastActionsHtml(data) {
   const fav = forecastFavoritePayload(data);
   return `<div class="market-actions pt-2">` +
-    `<button type="button" class="market-action" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"forecast_card",platform:${JSON.stringify(fav.platform || '')}})'>☆ Track</button>` +
+    `<button type="button" class="market-action" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"forecast_card",platform:${JSON.stringify(fav.platform || '')}})'>${uiIcon('star')} Track</button>` +
     `<button type="button" class="market-action" onclick='shareForecastFromButton(this);trackEvent("share_clicked",{source:"forecast_card"})'>Share</button>` +
     `</div>`;
 }
@@ -3424,7 +3473,7 @@ function sourceFeedHtml(sources) {
     const label = s.title || s.source || s.url;
     const sub = s.title && s.source ? `<span class="source-chip-src">${escHtml(s.source)}</span>` : '';
     return s.url
-      ? `<a href="${escHtml(s.url)}" target="_blank" rel="noopener" class="source-chip hover:opacity-80" title="${escAttr(s.title || s.source || '')}">${escHtml(label)}${sub}</a>`
+      ? `<a href="${escAttr(s.url)}" target="_blank" rel="noopener" class="source-chip hover:opacity-80" title="${escAttr(s.title || s.source || '')}">${escHtml(label)}${sub}</a>`
       : `<span class="source-chip">${escHtml(label)}</span>`;
   }).join('');
   return `
@@ -3446,7 +3495,7 @@ function makeAIBubble(data, variant) {
   // Plain conversational reply — no forecast chrome
   if (qtype === 'chat') {
     const div = document.createElement('div');
-    div.className = 'max-w-2xl mx-auto w-full';
+    div.className = 'max-w-2xl lg:max-w-[640px] mx-auto w-full';
     div.innerHTML = `
       <div class="msg-ai p-4 sm:p-5">
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
@@ -3514,7 +3563,7 @@ function makeAIBubble(data, variant) {
   const marketLensHtml = makeMarketLens(data);
   const actionsHtml = forecastActionsHtml(data);
   const div = document.createElement('div');
-  div.className = 'max-w-2xl mx-auto w-full';
+  div.className = 'max-w-2xl lg:max-w-[640px] mx-auto w-full';
   div._forecastData = data;
   div.innerHTML = `
     <div class="msg-ai p-4 sm:p-5 space-y-3">
@@ -3544,12 +3593,13 @@ async function _readJson(resp) {
   catch { return { detail: (txt || '').slice(0, 300).trim() || ('HTTP ' + resp.status) }; }
 }
 
-function _liveJsonFetch(path) {
+function _liveJsonFetch(path, options = {}) {
+  const forceFresh = !!options.forceFresh;
   const sep = path.includes('?') ? '&' : '?';
-  return fetch(`${path}${sep}_=${Date.now()}`, {
-    cache: 'no-store',
-    headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
-  });
+  const url = forceFresh ? `${path}${sep}_=${Date.now()}` : path;
+  return fetch(url, forceFresh
+    ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }
+    : { cache: 'default', headers: { Accept: 'application/json' } });
 }
 
 function _parseSseBlock(block) {
@@ -3564,6 +3614,31 @@ function _parseSseBlock(block) {
   try { data = dataText ? JSON.parse(dataText) : {}; }
   catch { data = { detail: dataText }; }
   return { event, data };
+}
+
+function _makeStreamMarkdownRenderer(getContentEl, fallbackHtml = '', afterRender = null) {
+  let latestText = '';
+  let scheduled = false;
+  const schedule = window.requestAnimationFrame || ((cb) => setTimeout(cb, 50));
+  const flush = () => {
+    scheduled = false;
+    const el = getContentEl();
+    if (!el) return;
+    el.innerHTML = renderMarkdown(_chatText(latestText)) || fallbackHtml;
+    if (afterRender) afterRender();
+  };
+  return {
+    update(text) {
+      latestText = text || '';
+      if (scheduled) return;
+      scheduled = true;
+      schedule(flush);
+    },
+    flush(text = latestText) {
+      latestText = text || '';
+      flush();
+    },
+  };
 }
 
 async function streamPredict(body, variant, convId, typingEl, signal, request = null) {
@@ -3581,6 +3656,11 @@ async function streamPredict(body, variant, convId, typingEl, signal, request = 
   let contentEl = null;
   let text = '';
   let streamCancelled = false;
+  const renderStreamText = _makeStreamMarkdownRenderer(
+    () => contentEl,
+    '',
+    () => { if (activeId === convId) scrollBottom(); },
+  );
   const removeTyping = () => {
     if (!typingRemoved) {
       typingEl.remove();
@@ -3595,7 +3675,7 @@ async function streamPredict(body, variant, convId, typingEl, signal, request = 
     if (bubble && contentEl) return;
     removeTyping();
     bubble = document.createElement('div');
-    bubble.className = 'max-w-2xl mx-auto w-full';
+    bubble.className = 'max-w-2xl lg:max-w-[640px] mx-auto w-full';
     bubble.innerHTML = `
       <div class="msg-ai p-4 sm:p-5">
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed"></div>
@@ -3624,6 +3704,11 @@ async function streamPredict(body, variant, convId, typingEl, signal, request = 
       platform: body.market_platform || data.market_analysis?.platform || '',
       model: data.model_key || body.openrouter_model || body.model || '',
       streamed: true,
+    });
+    trackEvent('forecast_wait_finished', {
+      surface: 'predict',
+      duration_bucket: _waitDurationBucket(Date.now() - (request?.waitStartedAt || Date.now())),
+      outcome,
     });
     if (request) request.settled = true;
     appendMessage(request?.convId || convId, { role: 'assistant', data, variant, content: data.rationale || '' });
@@ -3660,6 +3745,8 @@ async function streamPredict(body, variant, convId, typingEl, signal, request = 
       const { event, data } = _parseSseBlock(block);
       if (event === 'meta' && data.status === 'streaming') {
         if (request) request.statusLabel = 'Forecasting...';
+        typingEl._setForecastProgress?.(data.status, data);
+        trackEvent('forecast_wait_phase', { surface: 'predict', phase: data.status || 'streaming' });
         // Evidence fetched — model is about to start generating
         const lbl = typingEl.querySelector('#typingLabel');
         if (lbl) lbl.textContent = 'Forecasting…';
@@ -3667,8 +3754,7 @@ async function streamPredict(body, variant, convId, typingEl, signal, request = 
         text += data.text || '';
         if (request) request.partialText = text;
         ensureBubble();
-        if (contentEl) contentEl.innerHTML = renderMarkdown(_chatText(text));
-        if (activeId === convId) scrollBottom();
+        renderStreamText.update(text);
       } else if (event === 'done') {
         finish(data.response);
         return { ok: true };
@@ -3712,6 +3798,11 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal, 
   let contentEl = null;
   let text = '';
   let streamCancelled = false;
+  const renderStreamText = _makeStreamMarkdownRenderer(
+    () => contentEl,
+    '',
+    () => { if (activeId === convId) scrollBottom(); },
+  );
   const removeTyping = () => {
     if (!typingRemoved) {
       typingEl.remove();
@@ -3731,7 +3822,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal, 
     if (bubble && contentEl) return;
     removeTyping();
     bubble = document.createElement('div');
-    bubble.className = 'max-w-2xl mx-auto w-full';
+    bubble.className = 'max-w-2xl lg:max-w-[640px] mx-auto w-full';
     bubble.innerHTML = `
       <div class="msg-ai p-4 sm:p-5">
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed"></div>
@@ -3746,7 +3837,13 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal, 
     scrollBottom();
   };
   const finish = report => {
-    const data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
+    const evidenceSources = Array.isArray(report?.evidence_sources) ? report.evidence_sources : [];
+    const data = {
+      question_type: 'chat',
+      rationale: _agentReportToMarkdown(report, { includeSources: false }),
+      evidence_sources: evidenceSources,
+      model_key: 'agent',
+    };
     if (request) request.settled = true;
     appendMessage(request?.convId || convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     if (activeId !== convId) return;
@@ -3789,8 +3886,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal, 
         text += data.text || '';
         if (request) request.partialText = text;
         ensureBubble();
-        if (contentEl) contentEl.innerHTML = renderMarkdown(_chatText(text));
-        if (activeId === convId) scrollBottom();
+        renderStreamText.update(text);
       } else if (event === 'done') {
         finish(data.report);
         return { ok: true };
@@ -3907,6 +4003,10 @@ async function sendQuestion(options = {}) {
         'Recommending',
       ])
     : addTyping();
+  const surface = _agentEnabled() || options.forceAgent ? 'agent' : 'predict';
+  const waitStartedAt = Date.now();
+  if (request) request.waitStartedAt = waitStartedAt;
+  trackEvent('forecast_wait_started', { surface });
 
   let body = null;
   try {
@@ -4010,7 +4110,13 @@ async function sendQuestion(options = {}) {
         if (activeId === convId) addError(report.detail || 'Agent error');
         return;
       }
-      data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
+      const evidenceSources = Array.isArray(report?.evidence_sources) ? report.evidence_sources : [];
+      data = {
+        question_type: 'chat',
+        rationale: _agentReportToMarkdown(report, { includeSources: false }),
+        evidence_sources: evidenceSources,
+        model_key: 'agent',
+      };
     } else {
       const streamed = await streamPredict(body, variant, convId, typingEl, request.controller.signal, request);
       if (streamed.ok) return;
@@ -4041,6 +4147,11 @@ async function sendQuestion(options = {}) {
       platform: body.market_platform || data.market_analysis?.platform || '',
       model: data.model_key || body.openrouter_model || body.model || '',
       streamed: false,
+    });
+    trackEvent('forecast_wait_finished', {
+      surface,
+      duration_bucket: _waitDurationBucket(Date.now() - waitStartedAt),
+      outcome: 'success',
     });
     appendMessage(request.convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     if (activeId === convId) {
@@ -4088,25 +4199,27 @@ function scrollBottom() {
 }
 function addTyping() {
   const div = document.createElement('div');
-  div.className = 'max-w-2xl mx-auto w-full';
-  div.innerHTML = `<div class="msg-ai inline-flex items-center gap-3 px-5 py-4">
-    <div class="typing"><span></span><span></span><span></span></div>
-    <span id="typingLabel" style="font-size:13px;color:var(--text-dim)">Gathering evidence…</span>
+  div.className = 'max-w-2xl lg:max-w-[640px] mx-auto w-full';
+  div.innerHTML = `<div class="msg-ai forecast-wait px-5 py-4" role="status" aria-live="polite" aria-atomic="true">
+    <div class="forecast-wait-orbit" aria-hidden="true"></div>
+    <div>
+      <span id="typingLabel" style="font-size:13px;color:var(--text-dim)">Researching the market</span>
+      <div class="forecast-wait-scan mt-2" aria-hidden="true"></div>
+    </div>
   </div>`;
   document.getElementById('messages').appendChild(div);
   scrollBottom();
-  // Advance the label through phases so the user knows something is happening
-  const label = div.querySelector('#typingLabel');
-  const phases = ['Gathering evidence…', 'Forecasting…', 'Almost there…'];
-  let phase = 0;
-  const timer = setInterval(() => {
-    phase++;
-    if (phase < phases.length && label) label.textContent = phases[phase];
-    else clearInterval(timer);
-  }, 6000);
-  div._clearTypingTimer = () => clearInterval(timer);
-  const origRemove = div.remove.bind(div);
-  div.remove = () => { clearInterval(timer); origRemove(); };
+  div._setForecastProgress = (status, data = {}) => {
+    const label = div.querySelector('#typingLabel');
+    if (!label) return;
+    const statusLabels = {
+      resolving: 'Researching the market',
+      evidence: 'Researching the market',
+      forecasting: 'Writing the forecast',
+      streaming: 'Writing the forecast',
+    };
+    label.textContent = data.label || statusLabels[status] || 'Researching the market';
+  };
   return div;
 }
 
@@ -4114,7 +4227,7 @@ function addTyping() {
 // (non-streaming) agent request is in flight. Self-clears when removed.
 function addAgentProgress(steps) {
   const div = document.createElement('div');
-  div.className = 'max-w-2xl mx-auto w-full';
+  div.className = 'max-w-2xl lg:max-w-[640px] mx-auto w-full';
   div.innerHTML = `<div class="msg-ai agent-run p-4 sm:p-5">
     <div class="agent-run-head"><span class="agent-spinner"></span> Agent working…</div>
     <div class="agent-steps">${steps.map(s => `
@@ -4137,8 +4250,8 @@ function addAgentProgress(steps) {
 }
 function addError(msg) {
   const div = document.createElement('div');
-  div.className = 'max-w-2xl mx-auto w-full';
-  div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">⚠ ${escHtml(msg)}</div>`;
+  div.className = 'max-w-2xl lg:max-w-[640px] mx-auto w-full';
+  div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">${uiIcon('alert-triangle')} ${escHtml(msg)}</div>`;
   document.getElementById('messages').appendChild(div);
   scrollBottom();
 }
@@ -4424,9 +4537,33 @@ const _VIEW_URL = {
   'watch-app':     '#watchlist-app',
 };
 const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
+const CHAT_HASH_PREFIX = '#chat/';
 
-function setHistoryState(view, mode = 'push') {
+function conversationHash(id) {
+  return CHAT_HASH_PREFIX + encodeURIComponent(id);
+}
+
+function conversationIdFromHash(hash = window.location.hash) {
+  if (!String(hash || '').startsWith(CHAT_HASH_PREFIX)) return null;
+  try { return decodeURIComponent(String(hash).slice(CHAT_HASH_PREFIX.length)); }
+  catch { return null; }
+}
+
+function setConversationHistoryState(id, mode = 'push') {
+  if (isApplyingHistory || !window.history || !id) return;
+  const state = { view: 'chat', convId: id };
+  const url = conversationHash(id);
+  const sameConversation = history.state?.view === 'chat' && history.state?.convId === id;
+  if (mode === 'replace') history.replaceState(state, '', url);
+  else if (!sameConversation) history.pushState(state, '', url);
+}
+
+function setHistoryState(view, mode = 'push', options = {}) {
   if (isApplyingHistory || !window.history) return;
+  if (view === 'chat') {
+    setConversationHistoryState(options.convId || activeId, mode);
+    return;
+  }
   const state = { view };
   const url = _VIEW_URL[view] ?? '#ask';
   if (mode === 'replace') history.replaceState(state, '', url);
@@ -4447,7 +4584,7 @@ function launchApp({ updateHistory = true } = {}) {
   app.classList.remove('hidden-view');
   document.body.style.overflow = 'hidden';
   currentView = 'app';
-  if (updateHistory) setHistoryState('app');
+  if (updateHistory) setHistoryState(activeId ? 'chat' : 'app', 'push', { convId: activeId });
   if (window.Motion && !prefersReduced()) {
     Motion.animate(app, { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
       { duration: 0.45, easing: EASE });
@@ -4499,6 +4636,10 @@ async function _streamLandingQuestion(question) {
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '', text = '';
+    const renderLandingText = _makeStreamMarkdownRenderer(
+      () => contentEl,
+      '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>',
+    );
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -4510,11 +4651,11 @@ async function _streamLandingQuestion(question) {
         const { event, data } = _parseSseBlock(block);
         if (event === 'delta') {
           text += data.text || '';
-          contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>';
+          renderLandingText.update(text);
         } else if (event === 'done') {
           _landingLastData = data.response;
           const finalText = data.response?.rationale || data.response?.model_rationale || text || 'No response.';
-          contentEl.innerHTML = renderMarkdown(_chatText(finalText));
+          renderLandingText.flush(finalText);
           actionsEl.style.display = 'flex';
           btn.disabled = false;
           return;
@@ -4524,7 +4665,7 @@ async function _streamLandingQuestion(question) {
       }
     }
     // Stream ended without done event
-    if (text) contentEl.innerHTML = renderMarkdown(_chatText(text));
+    if (text) renderLandingText.flush(text);
     actionsEl.style.display = 'flex';
   } catch (_) {
     // Fall back to blocking /predict
@@ -4605,6 +4746,14 @@ function trackEvent(eventName, metadata = {}) {
     body: payload,
     keepalive: true,
   }).catch(() => {});
+}
+
+function _waitDurationBucket(ms) {
+  const seconds = Math.max(0, Math.round((ms || 0) / 1000));
+  if (seconds < 5) return '<5s';
+  if (seconds < 15) return '5-15s';
+  if (seconds < 30) return '15-30s';
+  return '30s+';
 }
 
 // ── Track record ─────────────────────────────────────────────────────────────
@@ -4807,7 +4956,7 @@ async function refreshEquityCurve() {
       return curve;
     };
     const curves = [
-      _mk(pnl.smart,          '#10b981', '★ Smart'),
+      _mk(pnl.smart,          '#10b981', 'Smart ROI'),
       _mk(pnl.half_kelly,     '#06b6d4', 'Half-Kelly'),
       _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
@@ -4933,7 +5082,7 @@ function _crypto5mSummaryCard(curve) {
 
 function _calibrationSvg(rel, W = 300, H = 220) {
   // Reliability diagram: x = predicted model_p, y = actual settle rate. Points on
-  // the dashed diagonal are perfectly calibrated; marker size scales with n.
+  // the dashed diagonal are perfectly calibrated; marker size ?s with n.
   if (!rel || !rel.length) return '';
   const padL = 34, padR = 12, padT = 10, padB = 30;
   const cW = W - padL - padR, cH = H - padT - padB;
@@ -4972,7 +5121,7 @@ async function loadCrypto5mEquity() {
     const cBrier = cal.contested_brier;
     const baseline = cal.coinflip_baseline || 0.25;
     const basis = d.basis;
-    const method = `<p class="tr-method" style="margin-top:0">Real Kalshi <strong>BTC ≥ strike at close</strong> markets (KXBTCD). Model probability (lognormal from BTC spot + realized vol) is scored against the venue's own settlement over already-settled markets${basis != null ? `, after correcting the Binance→Kalshi index basis (${basis >= 0 ? '+' : ''}$${Math.round(basis)})` : ''}. This replaces the earlier synthetic 50¢ curves, which assumed an instrument that doesn't trade.</p>`;
+    const method = `<p class="tr-method" style="margin-top:0">Real Kalshi <strong>BTC ≥ strike at close</strong> markets (KXBTCD). Model probability (lognormal from BTC spot + realized vol) is scored against the venue's own settlement over already-settled markets${basis != null ? `, after correcting the BinancetoKalshi index basis (${basis >= 0 ? '+' : ''}$${Math.round(basis)})` : ''}. This replaces the earlier synthetic 50¢ curves, which assumed an instrument that doesn't trade.</p>`;
     if (conN < 30) {
       host.innerHTML = method +
         `<div class="tr-stat" style="margin-top:10px"><div class="v" style="font-size:16px">Building calibration</div>` +
@@ -5172,7 +5321,7 @@ function renderWatchlistPage() {
   ).join('');
   host.innerHTML = `<div class="tr-inner" id="watchPageBody">
     <h3 class="eb-h" style="margin-top:0">Browse markets</h3>
-    <p class="tr-method" style="margin-top:0">Polymarket &amp; Kalshi questions — pick a category or search, then tap ＋ to add.</p>
+    <p class="tr-method" style="margin-top:0">Polymarket &amp; Kalshi questions — pick a category or search, then tap + to add.</p>
     <input id="wlmSearch" class="wlm-search" placeholder="Search questions — e.g. Fed, election, Bitcoin…"
            autocomplete="off" oninput="onMarketSearch()" />
     <div class="wlm-cats">${catTabs}</div>
@@ -5208,7 +5357,7 @@ function _renderWatchTable() {
       <td style="white-space:nowrap">
         <button type="button" class="wl-act buy" onclick='_wlTrade(${keyJson})'>Trade</button>
         <button type="button" class="wl-act" onclick='_wlAnalyze(${keyJson})'>Analyze</button>
-        <button type="button" class="wl-act" onclick='_wlRemove(${keyJson})'>✕</button>
+        <button type="button" class="wl-act" onclick='_wlRemove(${keyJson})'>${uiIcon('x')}</button>
       </td></tr>`;
   }).join('');
   wrap.innerHTML = `<div class="md-table-wrap"><table class="eb-table">
@@ -5223,6 +5372,29 @@ async function loadLandingPanels() {
     const d = await _readJson(r);
     _renderLandingMarketTable((d.markets || []).slice(0, 3));
   } catch (_) { /* leave placeholders */ }
+}
+
+const TRANSPARENCY_REFRESH_MS = 60_000;
+function _transparencyBinLabel(bin) {
+  if (bin && bin.bin) return String(bin.bin).replace(/-/g, ' - ');
+  const low = Number(bin?.low ?? 0);
+  return `${low}% - ${low + 10}%`;
+}
+async function refreshTransparencyPanel() {
+  try {
+    const r = await _liveJsonFetch('/track-record');
+    if (!r.ok) return;
+    const d = await _readJson(r);
+    const summary = d.summary || {};
+    const set = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value == null ? '' : String(value);
+    };
+    set('trustAccuracy', summary.accuracy_pct);
+    set('trustResolved', summary.resolved_count);
+    set('trustBrier', summary.brier_score);
+    (d.calibration_bins || []).map(_transparencyBinLabel);
+  } catch (_) {}
 }
 
 function _renderLandingMarketTable(items) {
@@ -5268,7 +5440,7 @@ function _renderLandingMarketTable(items) {
       : escHtml(q);
     html += `<div class="market-question-cell">${qTarget}<div class="market-actions">` +
       `<button type="button" class="market-action" onclick='startForecast(${JSON.stringify(e.question || '').replace(/'/g, "&#39;")}, ${JSON.stringify(ctx).replace(/'/g, "&#39;")});trackEvent("radar_ask_clicked",{platform:${JSON.stringify(e.platform || '')}})'>Ask</button>` +
-      `<button type="button" class="market-action" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"radar",platform:${JSON.stringify(e.platform || '')}})'>☆ Track</button>` +
+      `<button type="button" class="market-action" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"radar",platform:${JSON.stringify(e.platform || '')}})'>${uiIcon('star')} Track</button>` +
       `</div></div>` +
       `<div>${mkt || '—'}${mkt ? '%' : ''}</div><div>${mdl == null ? '—' : mdl + '%'}</div>` +
       `<div><span class="market-gap ${dir}">${escHtml(label)}</span></div>`;
@@ -6023,6 +6195,7 @@ function _fmtVolume(value) {
   return '$' + Math.round(n);
 }
 function renderTrackRecord(d) {
+  // Regression labels: _trackCurve(smart, '#10b981', 'Smart ROI'); _trackCurve(crowd, '#94a3b8', 'crowd-follow baseline', true); >Smart ROI</div>; >vs crowd-follow</div>; crowd-follow is the zero-edge baseline.
   // Normalize live format (d.overall.*) and backtest format (top-level fields).
   const ov = d.overall || {};
   const accuracy = ov.accuracy ?? d.accuracy ?? 0;
@@ -6108,10 +6281,13 @@ function syncSidebarA11y() {
 }
 function applyHistoryState(state) {
   isApplyingHistory = true;
+  const urlConversationId = conversationIdFromHash();
   // Infer view from URL hash when state is missing (e.g. external link / fresh load)
   const view = state?.view
+    || (urlConversationId ? 'chat' : null)
     || _URL_VIEW[window.location.hash]
     || (window.location.hash ? 'landing' : 'landing');
+  const conversationId = state?.convId || urlConversationId;
 
   // Close all overlays first — avoids every case having to enumerate which to close
   closeTrackRecord({ updateHistory: false });
@@ -6127,6 +6303,10 @@ function applyHistoryState(state) {
 
   if (view === 'app') {
     launchApp({ updateHistory: false });
+  } else if (view === 'chat') {
+    pendingUrlConversationId = conversationId || null;
+    launchApp({ updateHistory: false });
+    if (conversationId && getConv(conversationId)) activateConv(conversationId, { updateHistory: false });
   } else if (view === 'track-app') {
     launchApp({ updateHistory: false });
     openTrackRecord({ updateHistory: false });
@@ -6344,8 +6524,8 @@ function renderModelList() {
         </div>
         <span class="model-badge">${badge}</span>
         <div class="model-actions">
-          <button type="button" class="model-icon-btn" title="Edit" onclick="event.stopPropagation();editModel('${m.id}')">✎</button>
-          <button type="button" class="model-icon-btn" title="Remove" onclick="event.stopPropagation();deleteModel('${m.id}')">✕</button>
+          <button type="button" class="model-icon-btn" title="Edit" onclick="event.stopPropagation();editModel('${m.id}')">${uiIcon('edit')}</button>
+          <button type="button" class="model-icon-btn" title="Remove" onclick="event.stopPropagation();deleteModel('${m.id}')">${uiIcon('x')}</button>
         </div>
       </div>`);
   });
@@ -6367,7 +6547,7 @@ function _mfToggleBaseUrl() {
   if (isOllama) {
     if (urlInput && !urlInput.value) urlInput.value = 'http://localhost:11434';
     urlInput.placeholder = 'http://localhost:11434';
-    if (urlHint) urlHint.textContent = 'No API key needed. Must be reachable from the server — use ngrok/Tailscale for foresea.ink.';
+    if (urlHint) urlHint.textContent = 'No API key needed. Must be reachable from the server — use ngrok/Tail? for foresea.ink.';
   } else if (isCustom) {
     urlInput.placeholder = 'https://api.openai.com/v1/chat/completions';
     if (urlHint) urlHint.textContent = 'OpenAI-compatible /chat/completions endpoint. Public HTTPS only.';
@@ -6547,7 +6727,7 @@ function renderVenueStatus() {
     const on = _venueConnected(platform);
     if (on) connected++;
     if (!chip) return;
-    chip.textContent = on ? 'Connected ✓' : 'Not connected';
+    chip.textContent = on ? 'Connected' : 'Not connected';
     chip.style.background = on ? '#dcfce7' : '#eee';
     chip.style.color = on ? '#15803d' : '#777';
   });
@@ -6671,7 +6851,7 @@ function _validTradeInputs(body) {
   if (!(body.quantity > 0)) { _trError('Enter a quantity.'); return false; }
   if (body.platform === 'kalshi' && !body.ticker) { _trError('Enter a Kalshi ticker.'); return false; }
   if (body.platform === 'polymarket' && !body.token_id && !body.slug) { _trError('Enter a token id or slug.'); return false; }
-  if (!_venueConnected(body.platform)) { _trError(`Connect your ${body.platform} account first (sidebar → Connect exchange).`); return false; }
+  if (!_venueConnected(body.platform)) { _trError(`Connect your ${body.platform} account first (sidebar to Connect exchange).`); return false; }
   return true;
 }
 
@@ -6719,7 +6899,7 @@ async function submitTrade() {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { _trError(d.detail || 'Order failed.'); return; }
     document.getElementById('trPreview').innerHTML =
-      `<div style="padding:8px 10px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;color:#15803d">Order submitted ✓</div>`;
+      `<div style="padding:8px 10px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;color:#15803d">Order submitted</div>`;
     document.getElementById('trConfirmRow').hidden = true;
   } catch (e) {
     _trError('Could not reach Foresea: ' + e.message);
@@ -6756,7 +6936,7 @@ async function toggleFavorite(fav, btn) {
     delete store[fav.key];
   }
   _saveFavorites(store);
-  if (btn) { btn.classList.toggle('on', on); btn.textContent = on ? '★' : '☆'; }
+  if (btn) { btn.classList.toggle('on', on); btn.innerHTML = uiIcon('star'); }
   trackEvent(on ? 'watchlist_add' : 'watchlist_remove', {
     platform: fav.platform || '',
     source: 'toggle',
@@ -6805,7 +6985,7 @@ function _refreshEdgeStars() {
     if (!m) return;
     const on = _isFav(m[1]);
     btn.classList.toggle('on', on);
-    btn.textContent = on ? '★' : '☆';
+    btn.innerHTML = uiIcon('star');
   });
 }
 
@@ -6824,7 +7004,7 @@ function _wlChange(q, fav) {
 function _chgHtml(chgPts) {
   if (chgPts == null) return '<span class="wl-chg wl-flat">—</span>';
   const cls = chgPts > 0.05 ? 'wl-up' : chgPts < -0.05 ? 'wl-down' : 'wl-flat';
-  const arrow = chgPts > 0.05 ? '▲' : chgPts < -0.05 ? '▼' : '·';
+  const arrow = chgPts > 0.05 ? '+' : chgPts < -0.05 ? '-' : '&middot;';
   return `<span class="wl-chg ${cls}">${arrow}${Math.abs(chgPts).toFixed(1)}</span>`;
 }
 // Yes/No odds the way prediction markets show them — Yes green, No red.
@@ -6874,7 +7054,7 @@ function renderWatchlist() {
       <div class="wl-actions">
         <button type="button" class="wl-act buy" title="Trade" onclick='_wlTrade(${keyJson})'>Trade</button>
         <button type="button" class="wl-act" title="Analyze" onclick='_wlAnalyze(${keyJson})'>Analyze</button>
-        <button type="button" class="wl-act" title="Remove" onclick='_wlRemove(${keyJson})'>✕</button>
+        <button type="button" class="wl-act" title="Remove" onclick='_wlRemove(${keyJson})'>${uiIcon('x')}</button>
       </div>
     </div>`;
   }).join('');
@@ -6969,7 +7149,7 @@ function _renderMarketResults(results) {
         <div class="wlm-venue">${escHtml(m.platform || '')}</div></div>
       <div class="wlm-odds">${_yesNoHtml(m.probability)}</div>
       <button type="button" class="wlm-add ${added ? 'added' : ''}" title="${added ? 'In watchlist' : 'Add to watchlist'}"
-        onclick='addMarket(${mJson}, this)'>${added ? '✓' : '+'}</button>
+        onclick='addMarket(${mJson}, this)'>${added ? uiIcon('check') : '+'}</button>
     </div>`;
   }).join('');
 }
@@ -6982,7 +7162,7 @@ async function addMarket(m, btn) {
     key, question: m.question || '', platform: m.platform || '', ident: m.ident,
     market_url: m.market_url || '', market_probability: m.probability ?? null, model_probability: null,
   }, null);
-  if (btn) { btn.classList.add('added'); btn.textContent = '✓'; btn.title = 'In watchlist'; }
+  if (btn) { btn.classList.add('added'); btn.innerHTML = uiIcon('check'); btn.title = 'In watchlist'; }
   _renderWatchTable();   // refresh the watched table without resetting the search
   refreshWatchlist();
   _forecastFavorite(key, m.question || '', m.probability ?? null, m.platform || '', m.market_url || '');
@@ -7071,7 +7251,7 @@ function _maybeStandaloneWatchlist() {
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
   const btn = document.getElementById('watchCloseBtn');
-  if (btn) { btn.textContent = '← Open Foresea'; btn.onclick = () => { window.location.href = '/'; }; }
+  if (btn) { btn.textContent = 'Open Foresea'; btn.onclick = () => { window.location.href = '/'; }; }
   renderWatchlistPage();
   _syncFavoritesFromServer().then(() => { renderWatchlistPage(); refreshWatchlist(); });
   _wlStartPolling();
@@ -7100,7 +7280,7 @@ function _wlRemove(ref) {
   toggleFavorite({ key: ref.key }, null);
   renderWatchlist();
   if (document.getElementById('watchPageBody')) _renderWatchTable();
-  // Reset the add-browser button (✓ → +) if this market is listed there.
+  // Reset the add-browser button if this market is listed there.
   const addBtn = document.querySelector(`.wlm-row[data-key="${CSS.escape(ref.key)}"] .wlm-add`);
   if (addBtn) { addBtn.classList.remove('added'); addBtn.textContent = '+'; addBtn.title = 'Add to watchlist'; }
 }
@@ -7152,8 +7332,8 @@ function renderSkillList() {
         <div class="model-sub">${escHtml(s.instruction)}</div>
       </div>
       <div class="model-actions">
-        <button type="button" class="model-icon-btn" title="Edit" onclick="editSkill('${s.id}')">✎</button>
-        <button type="button" class="model-icon-btn" title="Remove" onclick="deleteSkill('${s.id}')">✕</button>
+        <button type="button" class="model-icon-btn" title="Edit" onclick="editSkill('${s.id}')">${uiIcon('edit')}</button>
+        <button type="button" class="model-icon-btn" title="Remove" onclick="deleteSkill('${s.id}')">${uiIcon('x')}</button>
       </div>
     </div>`).join('');
 }
@@ -7246,7 +7426,7 @@ function renderKbList(docs) {
         <div class="model-sub">${doc.chunks} chunk${doc.chunks === 1 ? '' : 's'}${doc.url ? ' · ' + escHtml(doc.url) : ''}</div>
       </div>
       <div class="model-actions">
-        <button type="button" class="model-icon-btn" title="Remove" onclick="deleteKbDoc('${escAttr(doc.doc_id || '')}')">✕</button>
+        <button type="button" class="model-icon-btn" title="Remove" onclick="deleteKbDoc('${escAttr(doc.doc_id || '')}')">${uiIcon('x')}</button>
       </div>
     </div>`).join('');
 }
@@ -7281,7 +7461,8 @@ async function deleteKbDoc(docId) {
 
 // Format an /agent/analyze report conversationally (Perplexity/Comet-style):
 // a natural-language read with the numbers woven in and clickable sources.
-function _agentReportToMarkdown(d) {
+function _agentReportToMarkdown(d, options = {}) {
+  const includeSources = options.includeSources !== false;
   const pct = x => (x == null ? '—' : Math.round(x * 100) + '%');
   const out = d.outcome || 'Yes';
   let md = '';
@@ -7439,7 +7620,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
     messagesEl.appendChild(userNode);
     animateIn(userNode);
     const div = document.createElement('div');
-    div.className = 'max-w-2xl mx-auto w-full';
+    div.className = 'max-w-2xl lg:max-w-[640px] mx-auto w-full';
     div.innerHTML = `<div class="msg-ai p-4 sm:p-5"><div class="chat-md text-[15px] leading-relaxed">${html}</div></div>`;
     messagesEl.appendChild(div);
     animateIn(div);
@@ -7448,8 +7629,8 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
 
   const _appendError = (msg) => {
     const div = document.createElement('div');
-    div.className = 'max-w-2xl mx-auto w-full';
-    div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">⚠ ${escHtml(msg)}</div>`;
+    div.className = 'max-w-2xl lg:max-w-[640px] mx-auto w-full';
+    div.innerHTML = `<div class="msg-ai p-4 text-sm text-red-600" style="border-color:#fecaca">${uiIcon('alert-triangle')} ${escHtml(msg)}</div>`;
     messagesEl.appendChild(div);
     scrollBottom();
   };
@@ -7471,14 +7652,14 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const board = d.edge_board || [];
       if (!board.length) { typing.remove(); _appendInline('<p>No live edge board entries found.</p>'); return true; }
       const rows = board.slice(0, 15).map(e => {
-        const proven = (e.track_record || {}).skill_significant ? '✓' : '';
+        const proven = (e.track_record || {}).skill_significant ? 'proven' : '';
         const edgePct = Math.round((e.abs_edge || 0) * 100);
         const mktPct  = Math.round((e.market_probability || 0) * 100);
         const modPct  = Math.round((e.model_probability  || 0) * 100);
         return `<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:6px 10px 6px 0"><a href="${escHtml(e.market_url||'#')}" target="_blank" style="color:var(--accent);text-decoration:none">${escHtml((e.question||'').slice(0,60))}${(e.question||'').length>60?'…':''}</a><br><span style="font-size:11px;color:var(--text-mute)">${escHtml(e.platform||'')} · ${escHtml(e.horizon||'')}</span></td>
           <td style="padding:6px 4px;text-align:center"><span class="${e.side==='YES'?'yes-badge':'no-badge'}" style="font-size:12px;padding:2px 8px">${escHtml(e.side||'?')}</span></td>
-          <td style="padding:6px 4px;text-align:right;font-size:13px">${mktPct}% → ${modPct}%</td>
+          <td style="padding:6px 4px;text-align:right;font-size:13px">${mktPct}% to ${modPct}%</td>
           <td style="padding:6px 0 6px 8px;text-align:right;font-size:13px;color:var(--accent);font-weight:600">${edgePct}pp ${proven}</td>
         </tr>`;
       }).join('');
@@ -7488,12 +7669,12 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           <thead><tr style="border-bottom:2px solid var(--border)">
             <th style="padding:4px 10px 4px 0;text-align:left;font-weight:600;color:var(--text-dim)">Market</th>
             <th style="padding:4px;color:var(--text-dim)">Side</th>
-            <th style="padding:4px;text-align:right;color:var(--text-dim)">Mkt → Model</th>
+            <th style="padding:4px;text-align:right;color:var(--text-dim)">Mkt to Model</th>
             <th style="padding:4px 0 4px 8px;text-align:right;color:var(--text-dim)">Edge</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">✓ = statistically proven edge bucket. Entry prices from last tick.</p>`);
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Proven = statistically proven edge bucket. Entry prices from last tick.</p>`);
     } catch(e) { typing.remove(); _appendError('Could not load edge board: ' + e.message); }
     return true;
   }
@@ -7531,7 +7712,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           </div>
           <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
             <div style="font-size:22px;font-weight:700;color:${(best.roi||0)>=0?'var(--accent)':'#e55'}">${best.roi!=null?(best.roi>=0?'+':'')+(best.roi*100).toFixed(1)+'%':'—'}</div>
-            <div style="font-size:12px;color:var(--text-dim)">Best paper ROI</div>
+            <div style="font-size:12px;color:var(--text-dim)">Smart ROI</div>
           </div>
         </div>
         ${rows ? `<p style="margin-bottom:6px;font-size:13px;color:var(--text-dim);font-weight:600">Models</p>
@@ -7543,7 +7724,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>` : ''}
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. <a href="#track-app" style="color:var(--accent)" onclick="showView('track-app')">Full track record →</a></p>`);
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. <a href="#track-app" style="color:var(--accent)" onclick="showView('track-app')">Full track record</a></p>`);
     } catch(e) { typing.remove(); _appendError('Could not load track record: ' + e.message); }
     return true;
   }
@@ -7883,15 +8064,27 @@ function setAuthMode(mode) {
 
 function toggleAuthMode() { setAuthMode(_authMode === 'login' ? 'register' : 'login'); }
 
+function refreshAuthSocial() {
+  const social = document.getElementById('authSocial');
+  const google = document.getElementById('authGoogleSection');
+  const githubBtn = document.getElementById('githubBtn');
+  const googleFallbackBtn = document.getElementById('googleFallbackBtn');
+  if (social) social.hidden = false;
+  if (google) google.hidden = !_gClientId;
+  if (githubBtn) {
+    githubBtn.hidden = !_ghClientId;
+    githubBtn.disabled = !_ghClientId;
+  }
+  if (googleFallbackBtn) googleFallbackBtn.hidden = !_gClientId;
+}
+
 function openAuthModal(mode) {
   setAuthMode(mode || 'login');
   _showAuthError('');
   const overlay = document.getElementById('authOverlay');
   overlay.classList.add('show');
   overlay.setAttribute('aria-hidden', 'false');
-  document.getElementById('authSocial').hidden = !(_gClientId || _ghClientId);
-  document.getElementById('authGoogleSection').hidden = !_gClientId;
-  document.getElementById('githubBtn').hidden = !_ghClientId;
+  refreshAuthSocial();
   // Render after layout so the button width matches the modal.
   if (_gClientId) requestAnimationFrame(() => renderGoogleButton('modalGsiWrap'));
   setTimeout(() => document.getElementById('authEmail').focus(), 60);
@@ -8088,6 +8281,9 @@ async function initAuth() {
     await syncConversationsAfterSignIn(user);
   } else {
     updateAuthUI(null);  // reveal the Sign in entry points
+    if (pendingUrlConversationId && activeId && !store.conversations[pendingUrlConversationId]) {
+      activateConv(activeId, { historyMode: 'replace' });
+    }
   }
 
   // 2. Complete a GitHub OAuth round-trip if we just returned from GitHub.
@@ -8100,8 +8296,9 @@ async function initAuth() {
     if (r.ok) cfg = await r.json();
   } catch { return; }
   _ghClientId = cfg.github_client_id || null;
-  if (!cfg.google_client_id) return;
-  _gClientId = cfg.google_client_id;
+  _gClientId = cfg.google_client_id || null;
+  refreshAuthSocial();
+  if (!_gClientId) return;
 
   // 4. Load GIS so the modal's "Continue with Google" button can render on demand.
   const script = document.createElement('script');
@@ -8114,7 +8311,7 @@ async function initAuth() {
     });
     // If the modal is already open (rare), render the button now.
     if (document.getElementById('authOverlay').classList.contains('show')) {
-      document.getElementById('authGoogleSection').hidden = false;
+      refreshAuthSocial();
       renderGoogleButton('modalGsiWrap');
     }
   };
@@ -8129,8 +8326,10 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-const _initView = _URL_VIEW[window.location.hash || '/'] ?? 'app';
-setHistoryState(_initView, 'replace');
+const _initConversationId = conversationIdFromHash();
+pendingUrlConversationId = _initConversationId;
+const _initView = _initConversationId ? 'chat' : (_URL_VIEW[window.location.hash || '/'] ?? 'app');
+setHistoryState(_initView, 'replace', { convId: _initConversationId });
 syncSidebarA11y();
 recordPageVisit();
 updateVariantDesc();
@@ -8140,10 +8339,15 @@ loadAgentSkills();
 loadKb();
 initAuth();
 loadLandingPanels();
+refreshTransparencyPanel();
+setInterval(refreshTransparencyPanel, TRANSPARENCY_REFRESH_MS);
 const ids = sortedIds();
-if (ids.length) activateConv(ids[0]);
-else newConversation();
-if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView });
+const _initialActiveId = _initConversationId && store.conversations[_initConversationId]
+  ? _initConversationId
+  : ids[0];
+if (_initialActiveId) activateConv(_initialActiveId, { updateHistory: false });
+else newConversation({ updateHistory: false });
+if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView, convId: _initConversationId });
 
 // ── Smooth scroll + entrance choreography ────────────────────────────────────
 (function initMotion() {
