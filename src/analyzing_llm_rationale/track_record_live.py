@@ -1394,6 +1394,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         curve: List[float] = []
         curve_ts: List[Any] = []
         growth_curve: List[float] = []
+        growth_curve_ts: List[Any] = []
         bankroll = _COMPOUND_STARTING_BANKROLL
         for _idx, b in enumerate(_scoped_bets):
             stake = sizing(b)
@@ -1431,6 +1432,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
                 stake_fraction = stake / _pre_staked
                 bankroll *= max(0.0, 1.0 + stake_fraction * (profit / stake))
                 growth_curve.append(round(bankroll, 6))
+                growth_curve_ts.append(b["resolved_ts"])
         if not n:
             return None
         return {
@@ -1443,6 +1445,12 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             "equity_curve": curve,
             "equity_curve_ts": curve_ts,
             "growth_curve": growth_curve,
+            # One timestamp per growth_curve point (deduped to one per market,
+            # unlike equity_curve_ts which has one per snapshot) -- without
+            # this, the frontend's times.length !== points.length check fails
+            # silently, the chart falls back to synthetic even-spacing, and
+            # hover tooltips read the wrong index against the wrong curve.
+            "growth_curve_ts": growth_curve_ts,
             "compound_bankroll": round(bankroll, 6),
             "compound_return": round((bankroll / _COMPOUND_STARTING_BANKROLL) - 1.0, 4),
         }
@@ -1552,7 +1560,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         elif hasattr(ts, "isoformat"):
             ts = ts.isoformat()
         curve_ts.append(ts)
-        bets.append({"platform": r.get("platform"), "ident": r.get("ident"), "profit": profit})
+        bets.append({"platform": r.get("platform"), "ident": r.get("ident"), "profit": profit, "ts": ts})
     if not n:
         return None
 
@@ -1568,6 +1576,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
     dedup_staked = float(len(first_idx))
 
     growth_curve: List[float] = []
+    growth_curve_ts: List[Any] = []
     bankroll = _COMPOUND_STARTING_BANKROLL
     if dedup_staked:
         for idx, b in enumerate(bets):
@@ -1575,6 +1584,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
                 continue
             bankroll *= max(0.0, 1.0 + (1.0 / dedup_staked) * b["profit"])
             growth_curve.append(round(bankroll, 6))
+            growth_curve_ts.append(b["ts"])
     return {
         "n_bets": n,
         "total_staked": round(staked, 4),
@@ -1584,6 +1594,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         "equity_curve": curve,
         "equity_curve_ts": curve_ts,
         "growth_curve": growth_curve,
+        "growth_curve_ts": growth_curve_ts,
         "compound_bankroll": round(bankroll, 6),
         "compound_return": round((bankroll / _COMPOUND_STARTING_BANKROLL) - 1.0, 4),
     }

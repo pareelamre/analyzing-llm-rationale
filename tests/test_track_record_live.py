@@ -992,6 +992,43 @@ class EdgeAnalyticsTests(unittest.TestCase):
             pnl_dup["flat"]["compound_return"], pnl_one["flat"]["compound_return"], places=6)
         self.assertEqual(len(pnl_dup["flat"]["growth_curve"]), 1)
 
+    def test_growth_curve_ts_matches_growth_curve_length(self):
+        # Regression guard: growth_curve is deduped to one point per market,
+        # but equity_curve_ts still has one entry per snapshot. The frontend
+        # equity chart requires times.length === points.length or it silently
+        # falls back to synthetic even-spacing and desyncs hover tooltips from
+        # the line. growth_curve_ts must track growth_curve's length exactly,
+        # for every strategy and for markets with many duplicate snapshots.
+        resolved = [
+            dict(self._res(0.8, 0.5, 1), platform="P", ident=f"m{i}",
+                 snapshot_ts=f"2026-06-{(i % 28) + 1:02d}T00:00:00+00:00")
+            for i in range(20)
+        ] + [
+            dict(self._res(0.8, 0.5, 1), platform="P", ident="dup",
+                 snapshot_ts=f"2026-07-01T00:{i:02d}:00+00:00")
+            for i in range(15)
+        ]
+        pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
+        for name, s in pnl.items():
+            if not isinstance(s, dict) or not s.get("growth_curve"):
+                continue
+            self.assertEqual(
+                len(s["growth_curve"]), len(s["growth_curve_ts"]),
+                msg=f"{name}: growth_curve/growth_curve_ts length mismatch")
+
+    def test_crowd_baseline_equity_growth_curve_ts_matches_length(self):
+        resolved = [
+            dict(market_probability=0.5 + 0.01 * (i % 5), outcome=1, platform="P", ident=f"m{i}",
+                 resolved_ts=f"2026-06-{(i % 28) + 1:02d}T00:00:00+00:00")
+            for i in range(20)
+        ] + [
+            dict(market_probability=0.8, outcome=1, platform="P", ident="dup",
+                 resolved_ts=f"2026-07-01T00:{i:02d}:00+00:00")
+            for i in range(15)
+        ]
+        result = trl.crowd_baseline_equity(resolved)
+        self.assertEqual(len(result["growth_curve"]), len(result["growth_curve_ts"]))
+
     def test_crowd_baseline_equity_compounds_once_per_market(self):
         # Same bug, same fix, separate function: crowd_baseline_equity has its
         # own standalone compounding walk (used for the "vs crowd" comparison
