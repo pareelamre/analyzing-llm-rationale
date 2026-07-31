@@ -5857,7 +5857,14 @@ function _ebPnlCurve(s) {
 }
 
 function _ebCurveTimes(s) {
-  return (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+  // Must match whichever array _ebPnlCurve(s) actually returned: growth_curve
+  // (deduped to one point per market) needs growth_curve_ts, not the
+  // un-deduped equity_curve_ts (one per snapshot) -- a length mismatch there
+  // silently breaks the times/points pairing and desyncs hover tooltips from
+  // where the line is actually drawn.
+  const usedGrowthCurve = !!_ebNormalizeBankrollCurve(s);
+  const raw = (usedGrowthCurve ? s?.growth_curve_ts : null) || s?.equity_curve_ts || [];
+  return raw.map(v => new Date(v).getTime()).filter(t => !isNaN(t));
 }
 
 function _ebModelCurves(models, minBets = 5, limit = 6) {
