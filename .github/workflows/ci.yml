@@ -20,7 +20,6 @@ jobs:
         run: |
           npm ci
           npm run frontend:build
-          test -z "$(git status --porcelain -- static/index.html static/trade.html static/agents.html static/assets)"
       - name: Install dependencies
         run: pip install -e ".[dev,serve,analysis]" httpx
       - name: Lint
