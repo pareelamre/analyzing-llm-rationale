@@ -2525,10 +2525,10 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(len(self.provider.calls), 2)
 
-    def test_short_followup_fetches_contextualized_fresh_evidence(self):
+    def test_short_followup_skips_fresh_evidence(self):
         # A short follow-up in a thread is too terse for standalone retrieval,
-        # but Foresea should still fetch raw evidence anchored to thread context.
-        self.client.post(
+        # so Foresea answers it from conversation context without adding lookup latency.
+        response = self.client.post(
             "/predict",
             json={
                 "question": "WE is 90+",
@@ -2539,11 +2539,8 @@ class ServerTests(unittest.TestCase):
                 ],
             },
         )
-        self.assertEqual(len(self.evidence_pipeline.calls), 1)
-        query, top_k = self.evidence_pipeline.calls[0]
-        self.assertIn("Who wins AL vs WE in the LPL series?", query)
-        self.assertIn("Follow-up: WE is 90+", query)
-        self.assertEqual(top_k, 5)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.evidence_pipeline.calls, [])
 
     def test_substantive_question_with_history_still_retrieves(self):
         self.client.post(
