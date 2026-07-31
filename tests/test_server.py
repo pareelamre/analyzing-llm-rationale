@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,7 +31,10 @@ from analyzing_llm_rationale.server import (  # noqa: E402
 
 class FakeProvider:
     def __init__(self):
+        self.model_name = "fake-model"
+        self.last_response_model = "fake-model"
         self.calls = []
+        self.max_tokens = []
         self.response = {
             "predicted_answer": "Yes",
             "confidence": 0.7,
@@ -40,10 +44,12 @@ class FakeProvider:
 
     def chat_completion(self, messages, temperature, max_tokens):
         self.calls.append(messages)
+        self.max_tokens.append(max_tokens)
         return json.dumps(self.response)
 
     def stream_chat_completion(self, messages, temperature, max_tokens):
         self.calls.append(messages)
+        self.max_tokens.append(max_tokens)
         mid = max(1, len(self.stream_response) // 2)
         yield self.stream_response[:mid]
         yield self.stream_response[mid:]
@@ -76,6 +82,18 @@ class FailingProvider:
     def chat_completion(self, messages, temperature, max_tokens):
         self.calls += 1
         raise RetryableProviderError("upstream unavailable")
+
+
+class SlowStreamProvider:
+    model_name = "slow-stream-model"
+
+    def __init__(self):
+        self.calls = 0
+
+    def stream_chat_completion(self, messages, temperature, max_tokens):
+        self.calls += 1
+        time.sleep(0.05)
+        yield "late primary"
 
 
 class ServerTests(unittest.TestCase):
@@ -133,6 +151,12 @@ class ServerTests(unittest.TestCase):
         if self.analytics_db.exists():
             self.analytics_db.unlink()
 
+    def _page_context(self, response):
+        marker = '<script type="application/json" id="foresea-page-context">'
+        start = response.text.index(marker) + len(marker)
+        end = response.text.index("</script>", start)
+        return json.loads(response.text[start:end])
+
     def test_predict_fetches_and_returns_evidence(self):
         response = self.client.post(
             "/predict",
@@ -186,6 +210,124 @@ class ServerTests(unittest.TestCase):
             "Evidence 1 — Example News: Central bank signals policy shift",
             messages[1]["content"],
         )
+
+    def test_chat_predict_uses_configured_server_model_fallback(self):
+        failing = FailingProvider("openai/gpt-oss-120b")
+        self.provider.model_name = "google/gemma-4-31B-it"
+        self.provider.last_response_model = "google/gemma-4-31B-it"
+
+        with mock.patch.object(server_module, "_CHAT_PROVIDER_MAX_RETRIES", 0), \
+             mock.patch.object(server_module, "_scads_alt_provider", return_value=failing), \
+             mock.patch.object(server_module, "_scads_provider_for_model_name", return_value=self.provider), \
+             mock.patch.object(
+                 server_module,
+                 "_SCADS_MODEL_FALLBACKS",
+                 {"gpt-oss-120b": ("google/gemma-4-31B-it",)},
+             ), \
+             mock.patch.object(
+                 server_module,
+                 "_SCADS_MODEL_ALLOWLIST",
+                 {"gpt-oss-120b": "openai/gpt-oss-120b"},
+             ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "variant": "variant0_neutral_baseline",
+                    "model": "gpt-oss-120b",
+                    "attach_evidence": False,
+                    "chat_mode": True,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["model_key"], "gpt-oss-120b")
+        self.assertEqual(payload["served_model_name"], "google/gemma-4-31B-it")
+        self.assertEqual(failing.calls, 1)
+        self.assertEqual(len(self.provider.calls), 1)
+
+    def test_chat_models_endpoint_returns_chat_only_fallback_metadata(self):
+        response = self.client.get("/chat/models")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        by_key = {m["key"]: m for m in payload["models"]}
+        self.assertIn("scads-alias-code", by_key)
+        self.assertIn("qwen3-coder-30b-a3b-instruct", by_key)
+        self.assertEqual(
+            by_key["scads-alias-code"]["fallbacks"],
+            ["openai/gpt-oss-120b", "google/gemma-4-31B-it"],
+        )
+        self.assertNotIn("qwen3-vl-8b-instruct", by_key)
+
+    def test_predict_defaults_to_three_evidence_articles(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "Will the Fed cut rates before July 31, 2026?",
+                "variant": "variant0_neutral_baseline",
+                "chat_mode": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self.evidence_pipeline.calls,
+            [("Will the Fed cut rates before July 31, 2026?", 3)],
+        )
+
+    def test_predict_times_out_slow_evidence_and_continues(self):
+        slow_pipeline = mock.Mock()
+
+        def slow_fetch(question, top_k=5):
+            time.sleep(0.05)
+            return [{
+                "title": "Late evidence",
+                "source": "Slow News",
+                "summary": "This arrived too late for the forecast path.",
+            }]
+
+        slow_pipeline.fetch_summarize_rank.side_effect = slow_fetch
+        _state["evidence_pipeline"] = slow_pipeline
+
+        with mock.patch.object(server_module, "_EVIDENCE_TIMEOUT_S", 0.001):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "variant": "variant0_neutral_baseline",
+                    "chat_mode": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["predicted_answer"], "Yes")
+        self.assertEqual(payload["evidence_sources"], [])
+        self.assertIn("Evidence retrieval timed out", payload["evidence_error"])
+        self.assertEqual(slow_pipeline.fetch_summarize_rank.call_count, 1)
+
+    def test_predict_skips_evidence_when_fetch_pool_is_busy(self):
+        busy_slots = server_module.threading.BoundedSemaphore(1)
+        self.assertTrue(busy_slots.acquire(blocking=False))
+        with mock.patch.object(server_module, "_evidence_fetch_slots", busy_slots):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "variant": "variant0_neutral_baseline",
+                    "chat_mode": False,
+                },
+            )
+        busy_slots.release()
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["predicted_answer"], "Yes")
+        self.assertEqual(payload["evidence_sources"], [])
+        self.assertIn("Evidence retrieval is busy", payload["evidence_error"])
+        self.assertEqual(self.evidence_pipeline.calls, [])
 
     def test_predict_marks_empty_evidence_and_does_not_cache_the_miss(self):
         empty_pipeline = mock.Mock()
@@ -436,10 +578,32 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.headers["content-type"].split(";")[0], "text/event-stream")
         body = response.text
         self.assertIn("event: meta", body)
+        self.assertIn('"prepare_ms":', body)
         self.assertIn("event: delta", body)
+        self.assertIn('"first_delta_ms":', body)
+        self.assertIn('"provider_first_delta_ms":', body)
         self.assertIn("Streaming ", body)
         self.assertIn("event: done", body)
         self.assertIn("Streaming answer.", body)
+        self._require_auth_mock.assert_not_called()
+
+    def test_predict_stream_uses_response_cache_for_repeated_request(self):
+        payload = {
+            "question": "Will the Fed cut rates before July 31, 2026?",
+            "chat_mode": True,
+            "attach_evidence": False,
+        }
+        first = self.client.post("/predict/stream", json=payload)
+        second = self.client.post("/predict/stream", json=payload)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(len(self.provider.calls), 1)
+        self.assertIn('"cache_hit": true', second.text)
+        self.assertIn('"provider_first_delta_ms": 0', second.text)
+        self.assertIn("event: delta", second.text)
+        self.assertIn("Streaming answer.", second.text)
+        self.assertIn("event: done", second.text)
 
     def test_agent_analyze_stream_returns_sse_report(self):
         self.provider.stream_response = json.dumps(self.provider.response)
@@ -501,7 +665,7 @@ class ServerTests(unittest.TestCase):
         )
         self.assertEqual(
             self.evidence_pipeline.calls,
-            [("Will event X happen?", 5)],
+            [("Will event X happen?", 3)],
         )
 
     def test_predict_strips_html_from_returned_evidence(self):
@@ -650,6 +814,30 @@ class ServerTests(unittest.TestCase):
             [("Will X happen before December 31, 2026?", 2)],
         )
 
+    def test_predict_skips_market_enrichment_when_context_is_complete(self):
+        import analyzing_llm_rationale.market_data as md
+
+        with mock.patch.object(md, "fetch_polymarket") as fetch_polymarket:
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Please analyze this already-loaded market.",
+                    "market_platform": "Polymarket",
+                    "market_url": "https://polymarket.com/market/will-x",
+                    "market_probability": 0.60,
+                    "description": "Already supplied venue background.",
+                    "resolution_criteria": "Already supplied venue rules.",
+                    "attach_evidence": False,
+                    "chat_mode": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fetch_polymarket.assert_not_called()
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Already supplied venue background.", prompt)
+        self.assertIn("Already supplied venue rules.", prompt)
+
     def test_markets_kalshi_not_found_maps_to_404(self):
         import analyzing_llm_rationale.market_data as md
 
@@ -667,6 +855,57 @@ class ServerTests(unittest.TestCase):
         self.assertIn("updated_at", payload)
         self.assertGreaterEqual(len(payload["markets"]), 1)
         self.assertIn("question", payload["markets"][0])
+
+    def test_radar_endpoint_schedules_evidence_prefetch(self):
+        live = {
+            "generated_at": "2026-06-28T23:51:20+00:00",
+            "edge_board": [{
+                "platform": "Kalshi",
+                "ident": "KXEXAMPLE",
+                "question": "Will example happen?",
+                "market_url": "https://kalshi.com/markets/example",
+                "market_probability": 0.45,
+                "model_probability": 0.62,
+                "edge": 0.17,
+                "abs_edge": 0.17,
+            }],
+        }
+        scheduled = []
+
+        def fake_spawn(awaitable):
+            scheduled.append(awaitable)
+            awaitable.close()
+
+        with (
+            mock.patch.object(server_module, "_read_edge_board_record", return_value=live),
+            mock.patch.object(server_module, "_spawn_background", side_effect=fake_spawn),
+        ):
+            response = self.client.get("/radar?limit=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(scheduled), 1)
+
+    def test_radar_evidence_prefetch_warms_forecast_cache(self):
+        market = server_module.RadarMarket(
+            id="one",
+            ident="KXEXAMPLE",
+            platform="Kalshi",
+            question="Will example happen?",
+            market_probability=0.45,
+            model_probability=0.62,
+        )
+
+        import asyncio
+        asyncio.run(server_module._prefetch_radar_evidence([market]))
+
+        self.assertEqual(
+            self.evidence_pipeline.calls,
+            [("Will example happen?", 3)],
+        )
+        cache_key = server_module._cache_key("evidence", "Will example happen?", 3)
+        cached = _cache_get(cache_key)
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached[0]["title"], "Central bank signals policy shift")
 
     def test_radar_endpoint_includes_live_edge_board_metadata(self):
         live = {
@@ -1159,7 +1398,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Atlas enters final testing", prompt)
         self.assertEqual(
             self.evidence_pipeline.calls,
-            [("Will Project Atlas launch before December 31, 2026?", 5)],
+            [("Will Project Atlas launch before December 31, 2026?", 3)],
         )
         self.assertIn("Central bank signals policy shift", prompt)
 
@@ -1320,6 +1559,26 @@ class ServerTests(unittest.TestCase):
         self.assertIn("https://foresea.ink/mcp/", r.text)
         self.assertIn("OpenClaw agents", r.text)
         self.assertIn("/predict/stream", r.text)
+
+    def test_page_routes_include_dynamic_context(self):
+        cases = [
+            ("/", "home", "no-cache"),
+            ("/watchlist", "watchlist", "no-cache"),
+            ("/trade", "trade", "no-cache"),
+            ("/agents", "agents", "public, max-age=300"),
+        ]
+        for path, page, cache_control in cases:
+            with self.subTest(path=path):
+                r = self.client.get(path)
+                self.assertEqual(r.status_code, 200)
+                self.assertIn("text/html", r.headers.get("content-type", ""))
+                self.assertEqual(r.headers.get("cache-control"), cache_control)
+                context = self._page_context(r)
+                self.assertEqual(context["page"], page)
+                self.assertEqual(context["path"], path)
+                self.assertEqual(context["canonical"], f"https://foresea.ink{path}")
+                self.assertEqual(context["api"]["radar"], "/radar")
+                self.assertIn("</head>", r.text)
 
     def test_agent_manifest(self):
         r = self.client.get("/.well-known/agent.json")
@@ -1649,6 +1908,28 @@ class ServerTests(unittest.TestCase):
         finally:
             rag.set_embedder(None)
 
+    def test_predict_skips_cold_knowledge_base_for_signed_in_user(self):
+        from analyzing_llm_rationale import rag
+
+        rag._embedder = None
+        rag._embedder_loaded = False
+        headers = {"Authorization": "Bearer " + _issue_session("coldkb", "cold@e.com", "K", "")}
+        with mock.patch.object(
+            server_module,
+            "_rag_search",
+            side_effect=AssertionError("cold RAG should not run on forecast path"),
+        ):
+            response = self.client.post(
+                "/predict",
+                json={"question": "Will the Fed cut the rate this year?", "attach_evidence": False},
+                headers=headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        sources = [s["source"] for s in response.json().get("evidence_sources", [])]
+        self.assertNotIn("Knowledge base", sources)
+        self.assertFalse(rag.is_loaded())
+
     def test_records_anonymous_page_visit(self):
         response = self.client.post(
             "/analytics/visit",
@@ -1948,6 +2229,192 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(first.json(), second.json())
         # The model provider is invoked only once; the second call hits the cache.
         self.assertEqual(len(self.provider.calls), 1)
+
+    def test_predict_cache_is_scoped_by_signed_in_user(self):
+        payload = {
+            "question": "Will the Fed cut rates before December 31, 2026?",
+            "question_type": "binary",
+            "attach_evidence": False,
+        }
+        first_user = {"Authorization": "Bearer " + _issue_session("user-a", "a@example.com", "A", "")}
+        second_user = {"Authorization": "Bearer " + _issue_session("user-b", "b@example.com", "B", "")}
+
+        first = self.client.post("/predict", json=payload, headers=first_user)
+        second = self.client.post("/predict", json=payload, headers=second_user)
+        repeat_first = self.client.post("/predict", json=payload, headers=first_user)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(repeat_first.status_code, 200)
+        self.assertEqual(first.json(), repeat_first.json())
+        self.assertEqual(len(self.provider.calls), 2)
+
+    def test_chat_predict_uses_fast_interactive_default_model(self):
+        fast_provider = FakeProvider()
+        with (
+            mock.patch.object(server_module, "_INTERACTIVE_DEFAULT_MODEL", "minimax-m3"),
+            mock.patch.object(
+                server_module,
+                "_SCADS_MODEL_ALLOWLIST",
+                {"minimax-m3": "MiniMaxAI/MiniMax-M3-MXFP8"},
+            ),
+            mock.patch.object(server_module, "_scads_alt_provider", return_value=fast_provider) as alt_provider,
+            mock.patch.dict(os.environ, {"SCADS_AI_API_KEY": "test-key"}, clear=False),
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["model_key"], "minimax-m3")
+        alt_provider.assert_called_once_with("minimax-m3")
+        self.assertEqual(len(fast_provider.calls), 1)
+        self.assertEqual(len(self.provider.calls), 0)
+
+    def test_typed_predict_keeps_server_default_model(self):
+        with (
+            mock.patch.object(server_module, "_INTERACTIVE_DEFAULT_MODEL", "minimax-m3"),
+            mock.patch.object(
+                server_module,
+                "_SCADS_MODEL_ALLOWLIST",
+                {"minimax-m3": "MiniMaxAI/MiniMax-M3-MXFP8"},
+            ),
+            mock.patch.object(server_module, "_scads_alt_provider") as alt_provider,
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "chat_mode": False,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["model_key"], "test-model")
+        alt_provider.assert_not_called()
+        self.assertEqual(len(self.provider.calls), 1)
+
+    def test_chat_fallback_uses_one_bounded_primary_attempt(self):
+        import asyncio
+
+        primary = FailingProvider("primary-model")
+        fallback = FakeProvider()
+        req = server_module.PredictRequest(
+            question="Will the Fed cut rates before July 31, 2026?",
+            chat_mode=True,
+            attach_evidence=False,
+        )
+
+        with (
+            mock.patch.object(server_module, "_CHAT_PROVIDER_TIMEOUT_S", 0.01),
+            mock.patch.object(server_module, "_CHAT_PROVIDER_MAX_RETRIES", 0),
+            mock.patch.object(server_module, "_SCADS_MODEL_FALLBACKS", {"test-model": ("fallback-model",)}),
+            mock.patch.object(server_module, "_scads_provider_for_model_name", return_value=fallback),
+        ):
+            content, served = asyncio.run(
+                server_module._provider_chat_with_chat_fallbacks(
+                    req,
+                    primary,
+                    [{"role": "user", "content": "Question"}],
+                    0.0,
+                    128,
+                )
+            )
+
+        self.assertEqual(primary.calls, 1)
+        self.assertEqual(len(fallback.calls), 1)
+        self.assertIs(served, fallback)
+        self.assertIn("predicted_answer", content)
+
+    def test_chat_provider_default_keeps_transient_retry_enabled(self):
+        self.assertEqual(server_module._CHAT_PROVIDER_MAX_RETRIES, 1)
+
+    def test_stream_chat_fallback_after_first_token_timeout(self):
+        import asyncio
+
+        primary = SlowStreamProvider()
+        fallback = FakeProvider()
+        fallback.stream_response = "fast fallback"
+        req = server_module.PredictRequest(
+            question="Will the Fed cut rates before July 31, 2026?",
+            chat_mode=True,
+            attach_evidence=False,
+        )
+
+        async def collect_chunks():
+            used = {"provider": primary}
+            chunks = []
+            async for chunk in server_module._provider_stream_chat_with_chat_fallbacks(
+                req,
+                primary,
+                [{"role": "user", "content": "Question"}],
+                0.0,
+                128,
+                used,
+            ):
+                chunks.append(chunk)
+            return chunks, used["provider"]
+
+        with (
+            mock.patch.object(server_module, "_CHAT_PROVIDER_TIMEOUT_S", 0.01),
+            mock.patch.object(server_module, "_SCADS_MODEL_FALLBACKS", {"test-model": ("fallback-model",)}),
+            mock.patch.object(server_module, "_scads_provider_for_model_name", return_value=fallback),
+        ):
+            chunks, served = asyncio.run(collect_chunks())
+
+        self.assertEqual(primary.calls, 1)
+        self.assertEqual(len(fallback.calls), 1)
+        self.assertIs(served, fallback)
+        self.assertEqual("".join(chunks), "fast fallback")
+
+    def test_chat_predict_uses_interactive_token_cap(self):
+        with (
+            mock.patch.object(server_module, "_INTERACTIVE_DEFAULT_MODEL", ""),
+            mock.patch.object(server_module, "_INTERACTIVE_MAX_TOKENS", 128),
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.provider.max_tokens, [128])
+
+    def test_predict_respects_request_max_tokens_with_server_cap(self):
+        _state["max_tokens"] = 256
+        with mock.patch.object(server_module, "_INTERACTIVE_DEFAULT_MODEL", ""):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                    "max_tokens": 128,
+                },
+            )
+            capped = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before August 31, 2026?",
+                    "chat_mode": True,
+                    "attach_evidence": False,
+                    "max_tokens": 1024,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(capped.status_code, 200)
+        self.assertEqual(self.provider.max_tokens, [128, 256])
 
     def test_predict_cache_isolated_by_requested_model(self):
         payload = {

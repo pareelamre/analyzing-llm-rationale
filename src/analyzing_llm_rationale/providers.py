@@ -144,6 +144,7 @@ class OpenAICompatibleProvider(ChatProvider):
     request_timeout_s: float = 120.0
     base_url: str = "https://api.openai.com/v1/chat/completions"
     missing_api_key_message: str = "API key must be set."
+    last_response_model: Optional[str] = None
     def __post_init__(self) -> None:
         import requests
 
@@ -216,7 +217,10 @@ class OpenAICompatibleProvider(ChatProvider):
             )
 
         try:
-            message = response.json()["choices"][0]["message"]
+            payload = response.json()
+            response_model = payload.get("model")
+            self.last_response_model = response_model if isinstance(response_model, str) else None
+            message = payload["choices"][0]["message"]
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise RetryableProviderError(f"Malformed provider response: {exc}") from exc
         content = message.get("content") if isinstance(message, dict) else None
@@ -230,6 +234,7 @@ class OpenAICompatibleProvider(ChatProvider):
         temperature: float,
         max_tokens: int,
     ) -> Iterator[str]:
+        self.last_response_model = None
         response = self._session.post(
             self.base_url,
             headers=self._headers(),
@@ -256,6 +261,9 @@ class OpenAICompatibleProvider(ChatProvider):
                 break
             try:
                 obj = json.loads(data)
+                response_model = obj.get("model")
+                if isinstance(response_model, str):
+                    self.last_response_model = response_model
                 choice = (obj.get("choices") or [{}])[0]
                 delta = choice.get("delta") or {}
                 text = delta.get("content")

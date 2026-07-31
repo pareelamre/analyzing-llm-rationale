@@ -20,6 +20,7 @@ from analyzing_llm_rationale.cli import main as cli_main
 from analyzing_llm_rationale.config import (  # noqa: E402
     load_model_configs,
     load_variant_configs,
+    scads_chat_model_options,
     scads_hosted_model_allowlist,
     scads_track_model_labels,
     temperature_to_tag,
@@ -573,6 +574,14 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("deepseek-v3", scads_models)
         self.assertFalse(models["deepseek-v3"].forecasting_enabled)
         self.assertNotIn("gpt-5", scads_models)
+        self.assertEqual(
+            models["scads-alias-code"].fallback_model_chain,
+            ("openai/gpt-oss-120b", "google/gemma-4-31B-it"),
+        )
+        chat_models = {cfg.name for cfg in scads_chat_model_options(repo_root / "configs" / "models.yaml")}
+        self.assertIn("qwen3-coder-30b-a3b-instruct", chat_models)
+        self.assertIn("glm-5.2-fp8", chat_models)
+        self.assertNotIn("qwen3-vl-8b-instruct", chat_models)
         self.assertEqual(temperature_to_tag(0.7), "temperature_07")
 
     def test_resolve_run_config_builds_output_path_from_variant_model_and_temperature(self):
@@ -606,9 +615,9 @@ class PipelineTests(unittest.TestCase):
 
         config = resolve_run_config(args)
 
-        self.assertTrue(str(config.user_prompt_path).endswith("prompts/variant5_key_conditions.txt"))
+        self.assertTrue(config.user_prompt_path.as_posix().endswith("prompts/variant5_key_conditions.txt"))
         self.assertTrue(
-            str(config.output_path).endswith(
+            config.output_path.as_posix().endswith(
                 "results/Qwen2.5-7b-instruct/temperature_07/results_variant5_key_conditions.json"
             )
         )
@@ -650,7 +659,7 @@ class PipelineTests(unittest.TestCase):
 
         self.assertEqual(config.max_tokens, 2048)
         self.assertTrue(
-            str(config.output_path).endswith(
+            config.output_path.as_posix().endswith(
                 "results/Llama-3.3-70B-Instruct/temperature_175/results_variant0_neutral_baseline.json"
             )
         )

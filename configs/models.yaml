@@ -29,6 +29,10 @@ models:
     api_key_file: SCADS_AI_API_KEY.txt
     request_timeout_cap_s: 90
     access: hosted
+    chat_interface_enabled: true
+    fallback_model_chain:
+      - google/gemma-4-31B-it
+      - openai/gpt-oss-120b
   llama-3.1-8b-instruct:
     result_label: Llama-3.1-8B-Instruct
     provider: openai-compatible
@@ -57,6 +61,10 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: true
+    fallback_model_chain:
+      - openai/gpt-oss-120b
+      - google/gemma-4-31B-it
   scads-alias-ha:
     result_label: SCADS Alias HA
     provider: openai-compatible
@@ -66,6 +74,11 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: true
+    fallback_model_chain:
+      - google/gemma-4-31B-it
+      - openai/gpt-oss-120b
+      - MiniMaxAI/MiniMax-M3-MXFP8
   scads-alias-reasoning:
     result_label: SCADS Alias Reasoning
     provider: openai-compatible
@@ -75,6 +88,10 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: true
+    fallback_model_chain:
+      - openai/gpt-oss-120b
+      - MiniMaxAI/MiniMax-M3-MXFP8
   scads-alias-huge:
     result_label: SCADS Alias Huge
     provider: openai-compatible
@@ -112,6 +129,10 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: true
+    fallback_model_chain:
+      - openai/gpt-oss-120b
+      - google/gemma-4-31B-it
   minimax-m3:
     result_label: MiniMax-M3
     provider: openai-compatible
@@ -121,6 +142,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: true
+    fallback_model_chain:
+      - moonshotai/Kimi-K2.7-Code
   kimi-k2.7-code:
     result_label: Kimi-K2.7-Code
     provider: openai-compatible
@@ -130,6 +154,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: true
+    fallback_model_chain:
+      - MiniMaxAI/MiniMax-M3-MXFP8
   glm-5.2-fp8:
     result_label: GLM-5.2-FP8
     provider: openai-compatible
@@ -139,6 +166,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: true
+    fallback_model_chain:
+      - MiniMaxAI/MiniMax-M3-MXFP8
   deepseek-r1:
     result_label: DeepSeek-R1
     provider: openai-compatible
@@ -176,6 +206,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: true
+    fallback_model_chain:
+      - google/gemma-4-31B-it
   gemma-4-31b-it:
     result_label: Gemma-4-31B-it
     provider: openai-compatible
@@ -185,6 +218,10 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    chat_interface_enabled: true
+    fallback_model_chain:
+      - openai/gpt-oss-120b
+      - meta-llama/Llama-3.3-70B-Instruct
   kimi-k2.5:
     result_label: Kimi-K2.5
     provider: openai-compatible

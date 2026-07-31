@@ -55,7 +55,11 @@ from analyzing_llm_rationale import (
 from analyzing_llm_rationale import (
     live_track_record as live_track_record_support,
 )
-from analyzing_llm_rationale.config import scads_hosted_model_allowlist
+from analyzing_llm_rationale.config import (
+    scads_chat_model_options,
+    scads_hosted_model_allowlist,
+    scads_hosted_model_fallbacks,
+)
 from analyzing_llm_rationale.observability import init_observability
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
@@ -69,6 +73,7 @@ _STATIC_DIR = _REPO_ROOT / "static"
 _ANALYTICS_DB = Path(os.environ.get("ANALYTICS_DB", "/tmp/foresea_analytics.duckdb"))
 _CANONICAL = "https://foresea.ink"
 _MCP_ENDPOINT = f"{_CANONICAL}/mcp/"
+_PAGE_CONTEXT_SCRIPT_ID = "foresea-page-context"
 
 _REQUIRED_API_KEY: Optional[str] = os.environ.get("API_KEY")
 _GOOGLE_CLIENT_ID: Optional[str] = os.environ.get("GOOGLE_CLIENT_ID")
@@ -133,6 +138,10 @@ logger = logging.getLogger("foresea")
 _PROVIDER_MAX_RETRIES = int(os.environ.get("PROVIDER_MAX_RETRIES", "2"))      # attempts = retries + 1
 _PROVIDER_TIMEOUT_S = float(os.environ.get("PROVIDER_TIMEOUT_S", "90"))       # per-attempt wall-clock budget
 _PROVIDER_BACKOFF_BASE_S = float(os.environ.get("PROVIDER_BACKOFF_BASE_S", "0.5"))
+_INTERACTIVE_DEFAULT_MODEL = os.environ.get("INTERACTIVE_DEFAULT_MODEL", "minimax-m3").strip()
+_INTERACTIVE_MAX_TOKENS = int(os.environ.get("INTERACTIVE_MAX_TOKENS", "768"))
+_CHAT_PROVIDER_TIMEOUT_S = float(os.environ.get("CHAT_PROVIDER_TIMEOUT_S", "15"))
+_CHAT_PROVIDER_MAX_RETRIES = int(os.environ.get("CHAT_PROVIDER_MAX_RETRIES", "1"))
 # Council members run concurrently, so retrying each member multiplies load
 # without improving quorum availability. Bound each member independently and
 # let the successful subset produce the forecast.
@@ -1018,8 +1027,14 @@ def _get_redis() -> Any:
 
 # ── Cache (Redis-backed, per-instance in-memory fallback) ────────────────────
 _local_cache: "OrderedDict[str, Any]" = OrderedDict()
+_background_tasks: set = set()
+_evidence_prefetch_inflight: set[str] = set()
 _LOCAL_CACHE_MAX = int(os.environ.get("LOCAL_CACHE_MAX", "1024"))
 _EVIDENCE_CACHE_TTL = int(os.environ.get("EVIDENCE_CACHE_TTL", "900"))
+_EVIDENCE_PREFETCH_TOP_N = int(os.environ.get("EVIDENCE_PREFETCH_TOP_N", "3"))
+_EVIDENCE_TIMEOUT_S = float(os.environ.get("EVIDENCE_TIMEOUT_S", "6"))
+_EVIDENCE_MAX_CONCURRENCY = max(1, int(os.environ.get("EVIDENCE_MAX_CONCURRENCY", "4")))
+_evidence_fetch_slots = threading.BoundedSemaphore(_EVIDENCE_MAX_CONCURRENCY)
 _EXTRACT_CACHE_TTL = int(os.environ.get("EXTRACT_CACHE_TTL", "3600"))
 _PREDICT_CACHE_TTL = int(os.environ.get("PREDICT_CACHE_TTL", "600"))
 
@@ -1065,6 +1080,13 @@ def _cache_set(key: str, value: Any, ttl: int) -> None:
     _local_cache.move_to_end(key)
     while len(_local_cache) > _LOCAL_CACHE_MAX:
         _local_cache.popitem(last=False)
+
+
+def _spawn_background(awaitable) -> None:
+    """Keep best-effort async work alive without holding the response open."""
+    task = asyncio.ensure_future(awaitable)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 def _read_live_track_record() -> Optional[Dict[str, Any]]:
@@ -1565,6 +1587,26 @@ _forecast_context_packages = _meter.create_counter(
     unit="1",
     description="Forecast context packages by completeness",
 )
+_forecast_rag_contexts = _meter.create_counter(
+    "forecast.rag.contexts",
+    unit="1",
+    description="Forecast knowledge-base context retrieval outcomes",
+)
+_forecast_evidence_requests = _meter.create_counter(
+    "forecast.evidence.requests",
+    unit="1",
+    description="Forecast evidence retrieval cache and fetch outcomes",
+)
+_forecast_evidence_duration = _meter.create_histogram(
+    "forecast.evidence.duration",
+    unit="s",
+    description="Forecast evidence retrieval latency",
+)
+_radar_evidence_prefetches = _meter.create_counter(
+    "radar.evidence.prefetches",
+    unit="1",
+    description="Radar-triggered evidence prefetch outcomes",
+)
 _market_context_counter = _meter.create_counter(
     "market.context_enrichments",
     unit="1",
@@ -1806,7 +1848,14 @@ async def _provider_chat(
         raise last_exc
 
 
-async def _provider_stream_chat(provider, messages, temperature, max_tokens):
+async def _provider_stream_chat(
+    provider,
+    messages,
+    temperature,
+    max_tokens,
+    *,
+    first_token_timeout_s: Optional[float] = None,
+):
     """Yield provider tokens from a blocking stream without blocking the event loop."""
     q: "queue.Queue[Any]" = queue.Queue()
     sentinel = object()
@@ -1823,12 +1872,21 @@ async def _provider_stream_chat(provider, messages, temperature, max_tokens):
 
     threading.Thread(target=worker, daemon=True).start()
     loop = asyncio.get_running_loop()
+    emitted = False
     while True:
-        item = await loop.run_in_executor(None, q.get)
+        next_item = loop.run_in_executor(None, q.get)
+        if first_token_timeout_s is not None and not emitted:
+            item = await asyncio.wait_for(
+                next_item,
+                timeout=max(0.001, first_token_timeout_s),
+            )
+        else:
+            item = await next_item
         if item is sentinel:
             break
         if isinstance(item, Exception):
             raise item
+        emitted = True
         yield str(item)
 
 
@@ -1858,26 +1916,90 @@ def _provider_http_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=502, detail="The forecasting model returned an unexpected response.")
 
 
+def _json_script_payload(payload: Dict[str, Any]) -> str:
+    """Serialize data for an inert JSON script tag without allowing HTML breaks."""
+    return (
+        json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+
+
+def _page_context(request: Request, page: str) -> Dict[str, Any]:
+    path = request.url.path or "/"
+    return {
+        "page": page,
+        "path": path,
+        "canonical": f"{_CANONICAL}{path}",
+        "api": {
+            "authConfig": "/auth/config",
+            "radar": "/radar",
+            "trackRecord": "/track-record",
+            "marketForecast": "/market/forecast",
+            "marketForecastStream": "/market/forecast/stream",
+            "analyticsEvent": "/analytics/event",
+        },
+        "auth": {
+            "google": bool(_GOOGLE_CLIENT_ID),
+            "github": bool(_GITHUB_CLIENT_ID),
+        },
+    }
+
+
+def _inject_page_context(source: str, context: Dict[str, Any]) -> str:
+    marker = f'id="{_PAGE_CONTEXT_SCRIPT_ID}"'
+    if marker in source:
+        return source
+    tag = (
+        f'\n  <script type="application/json" id="{_PAGE_CONTEXT_SCRIPT_ID}">'
+        f"{_json_script_payload(context)}</script>\n"
+    )
+    if "</head>" in source:
+        return source.replace("</head>", f"{tag}</head>", 1)
+    return f"{tag}{source}"
+
+
+def _render_static_html_page(
+    filename: str,
+    request: Request,
+    *,
+    page: str,
+    cache_control: str,
+) -> Response:
+    source = (_STATIC_DIR / filename).read_text(encoding="utf-8")
+    html_source = _inject_page_context(source, _page_context(request, page))
+    return Response(
+        html_source,
+        media_type="text/html",
+        headers={"Cache-Control": cache_control},
+    )
+
+
 if _STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
 
 @app.get("/", include_in_schema=False)
-async def index():
+async def index(request: Request) -> Response:
     # Revalidate every load so deploys of the single-file SPA show immediately
     # (browser still gets a cheap 304 when unchanged).
-    return FileResponse(
-        str(_STATIC_DIR / "index.html"),
-        headers={"Cache-Control": "no-cache"},
+    return _render_static_html_page(
+        "index.html",
+        request,
+        page="home",
+        cache_control="no-cache",
     )
 
 
 @app.get("/agents", include_in_schema=False)
-async def agents_page():
+async def agents_page(request: Request) -> Response:
     """Human- and crawler-readable integration surface for AI agents."""
-    return FileResponse(
-        str(_STATIC_DIR / "agents.html"),
-        headers={"Cache-Control": "public, max-age=300"},
+    return _render_static_html_page(
+        "agents.html",
+        request,
+        page="agents",
+        cache_control="public, max-age=300",
     )
 
 
@@ -2862,7 +2984,7 @@ class PredictRequest(BaseModel):
         description="If `true`, fetch live evidence and merge it with any supplied articles.",
     )
     evidence_top_k: int = Field(
-        5,
+        3,
         ge=1,
         le=10,
         description="Maximum number of evidence articles to retrieve (1–10).",
@@ -3032,6 +3154,15 @@ class PredictRequest(BaseModel):
         description=(
             "When `true`, skips the forecast output template entirely. "
             "The model responds in plain natural language with no structured JSON."
+        ),
+    )
+    max_tokens: Optional[int] = Field(
+        None,
+        ge=64,
+        le=4096,
+        description=(
+            "Optional per-request generation cap. The server still clamps this to "
+            "its configured model limit."
         ),
     )
 
@@ -3374,7 +3505,7 @@ class AgentAnalyzeRequest(BaseModel):
     market_liquidity: Optional[float] = None
     resolve_time: Optional[str] = Field(None, max_length=50)
     variant: str = Field("variant0_neutral_baseline", max_length=64)
-    evidence_top_k: int = Field(5, ge=1, le=10)
+    evidence_top_k: int = Field(3, ge=1, le=10)
     skills: List[AgentSkill] = Field(default_factory=list, max_length=5, description="Up to 5 custom skills to run.")
     builtin_skills: bool = Field(False, description="Also run the built-in forecasting toolkit (base rate, scenario decomposition, red team, key drivers).")
     ground_in_record: bool = Field(False, description="Condition the forecast on the model's own live track-record calibration.")
@@ -3385,6 +3516,7 @@ class AgentAnalyzeRequest(BaseModel):
     conversation_steer: str = Field("", max_length=1000, description="Optional per-conversation steering instruction.")
     openrouter_api_key: Optional[str] = Field(None, max_length=256)
     openrouter_model: Optional[str] = Field(None, max_length=128)
+    model: Optional[str] = Field(None, max_length=64)
     provider_base_url: Optional[str] = Field(None, max_length=2000)
     ollama_base_url: Optional[str] = Field(None, max_length=500)
 
@@ -3452,6 +3584,7 @@ class PredictResponse(BaseModel):
             ),
             "variant": "variant0_neutral_baseline",
             "model_key": "gpt-oss-120b",
+            "served_model_name": "openai/gpt-oss-120b",
             "evidence_sources": [
                 {
                     "source": "Reuters",
@@ -3485,6 +3618,7 @@ class PredictResponse(BaseModel):
     model_rationale: Optional[str] = Field(None, description="Raw rationale as returned by the model (may differ from `rationale` after post-processing).")
     variant: str = Field(..., description="Prompt variant used for this prediction.")
     model_key: str = Field(..., description="Model identifier (e.g. `gpt-oss-120b`).")
+    served_model_name: Optional[str] = Field(None, description="Exact upstream model name that served the response, if reported by the provider.")
     evidence_sources: List[EvidenceSource] = Field(default_factory=list, description="Deduplicated citations used as evidence.")
     evidence_articles: List[NewsArticle] = Field(default_factory=list, description="Full evidence articles passed to the model.")
     evidence_error: Optional[str] = Field(None, description="Non-null if evidence retrieval failed (prediction still returned).")
@@ -3761,6 +3895,39 @@ def _check_predict_rate_limit(request: Request) -> None:
         _REQUIRED_API_KEY,
         _TRACK_RECORD_TOKEN,
         f"Too many forecast requests — limit is {_predict_rate_limiter._calls} per minute per IP.",
+    )
+
+
+def _predict_cache_key(req: "PredictRequest", rag_user_id: Optional[str]) -> Optional[str]:
+    """Return the response-cache key for a non-BYOK forecast, scoped per user."""
+    if (
+        _PREDICT_CACHE_TTL <= 0
+        or req.history
+        or req.openrouter_api_key
+    ):
+        return None
+    user_scope = (
+        f"user:{rag_user_id}"
+        if rag_user_id and rag_user_id != "api-key-user"
+        else "shared"
+    )
+    return _cache_key(
+        "predict",
+        {
+            "prompt_date": datetime.now(timezone.utc).date().isoformat(),
+            "user_scope": user_scope,
+            # Cache the complete prompt-affecting request. In particular,
+            # ``model`` must be part of the identity: the track-record job
+            # submits the same market to several models, and sharing a key
+            # can return one model's response as "council".
+            "request": req.model_dump(
+                mode="json",
+                exclude={"openrouter_api_key"},
+            ),
+            "served_model_key": _model_key_for_request(req),
+            "server_model_key": _state.get("model_key"),
+            "temperature": _state.get("temperature"),
+        },
     )
 
 
@@ -4056,6 +4223,7 @@ def _build_typed_response(
     content: str,
     evidence_articles: List[Dict[str, Any]],
     evidence_error: Optional[str],
+    served_model_name: Optional[str] = None,
 ) -> "PredictResponse":
     qtype = (req.question_type or (parsed.get("type") if parsed else None) or "binary").lower()
     rationale = parsed.get("rationale") if parsed else None
@@ -4063,6 +4231,7 @@ def _build_typed_response(
     base = dict(
         variant=req.variant,
         model_key=model_key,
+        served_model_name=served_model_name,
         evidence_sources=_evidence_sources(evidence_articles),
         evidence_articles=_news_articles(evidence_articles),
         evidence_error=evidence_error,
@@ -4139,13 +4308,47 @@ def _build_typed_response(
     )
 
 
+def _interactive_default_model_for_request(req: "PredictRequest") -> Optional[str]:
+    """Return the faster server-hosted default for interactive chat, if enabled."""
+    if (
+        not req.chat_mode
+        or req.model
+        or req.openrouter_model
+        or req.openrouter_api_key
+        or req.provider_base_url
+        or req.ollama_base_url
+    ):
+        return None
+    label = _INTERACTIVE_DEFAULT_MODEL
+    if (
+        label
+        and label != _state.get("model_key")
+        and label in _SCADS_MODEL_ALLOWLIST
+        and os.environ.get("SCADS_AI_API_KEY")
+    ):
+        return label
+    return None
+
+
 def _model_key_for_request(req: "PredictRequest") -> str:
     model_label = (req.model or "").strip()
     if model_label == "council":
         return "council"
     if model_label and model_label in _SCADS_MODEL_ALLOWLIST:
         return model_label
+    interactive_default = _interactive_default_model_for_request(req)
+    if interactive_default:
+        return interactive_default
     return req.openrouter_model or _state["model_key"]
+
+
+def _max_tokens_for_request(req: "PredictRequest") -> int:
+    server_max = int(_state.get("max_tokens", 1024))
+    if req.max_tokens is not None:
+        return max(1, min(int(req.max_tokens), server_max))
+    if req.chat_mode:
+        return max(1, min(_INTERACTIVE_MAX_TOKENS, server_max))
+    return server_max
 
 
 def _fetch_live_odds(
@@ -4212,6 +4415,83 @@ async def _fetch_market_context(
             {"market.venue": venue, "outcome": outcome},
         )
         return quote
+
+
+async def _fetch_evidence_with_cache(
+    evidence_question: str,
+    top_k: int,
+    *,
+    source: str,
+) -> tuple[List[Dict[str, Any]], Optional[str], str]:
+    """Return cached or freshly retrieved evidence with bounded telemetry."""
+    evidence_pipeline = _state.get("evidence_pipeline")
+    attrs = {"source": source}
+    started = time.monotonic()
+    if evidence_pipeline is None:
+        _forecast_evidence_requests.add(1, {**attrs, "outcome": "unconfigured"})
+        return [], "Evidence pipeline is not configured on this server.", "unconfigured"
+
+    top_k = max(1, min(top_k, 10))
+    evidence_cache_key = _cache_key("evidence", evidence_question, top_k)
+    cached = _cache_get(evidence_cache_key)
+    if cached is not None:
+        _forecast_evidence_requests.add(1, {**attrs, "outcome": "cache_hit"})
+        _forecast_evidence_duration.record(time.monotonic() - started, {**attrs, "outcome": "cache_hit"})
+        otel_trace.get_current_span().set_attribute("forecast.evidence.cache_hit", True)
+        return cached, None, "cache_hit"
+
+    _forecast_evidence_requests.add(1, {**attrs, "outcome": "cache_miss"})
+    if not _evidence_fetch_slots.acquire(blocking=False):
+        _forecast_evidence_requests.add(1, {**attrs, "outcome": "busy"})
+        _forecast_evidence_duration.record(time.monotonic() - started, {**attrs, "outcome": "busy"})
+        otel_trace.get_current_span().set_attribute("forecast.evidence.busy", True)
+        return [], "Evidence retrieval is busy; forecast continued without fresh evidence.", "busy"
+
+    try:
+        def fetch_articles() -> Any:
+            try:
+                return evidence_pipeline.fetch_summarize_rank(
+                    evidence_question,
+                    top_k=top_k,
+                )
+            finally:
+                _evidence_fetch_slots.release()
+
+        fetch_task = asyncio.get_running_loop().run_in_executor(
+            None,
+            fetch_articles,
+        )
+        articles = await asyncio.wait_for(fetch_task, timeout=_EVIDENCE_TIMEOUT_S)
+        articles = articles or []
+        outcome = "fresh_nonempty" if articles else "fresh_empty"
+        if articles:
+            _cache_set(evidence_cache_key, articles, _EVIDENCE_CACHE_TTL)
+        _forecast_evidence_requests.add(1, {**attrs, "outcome": outcome})
+        _forecast_evidence_duration.record(time.monotonic() - started, {**attrs, "outcome": outcome})
+        span = otel_trace.get_current_span()
+        span.set_attribute("forecast.evidence.cache_hit", False)
+        span.set_attribute("forecast.evidence.count", len(articles))
+        return articles, None, outcome
+    except asyncio.TimeoutError:
+        _forecast_evidence_requests.add(1, {**attrs, "outcome": "timeout"})
+        _forecast_evidence_duration.record(time.monotonic() - started, {**attrs, "outcome": "timeout"})
+        span = otel_trace.get_current_span()
+        span.set_attribute("forecast.evidence.cache_hit", False)
+        span.set_attribute("forecast.evidence.timeout_s", _EVIDENCE_TIMEOUT_S)
+        logger.warning(
+            "evidence retrieval timed out source=%s top_k=%s timeout_s=%.3f",
+            source,
+            top_k,
+            _EVIDENCE_TIMEOUT_S,
+        )
+        return [], (
+            f"Evidence retrieval timed out after {_EVIDENCE_TIMEOUT_S:g}s; "
+            "forecast continued without fresh evidence."
+        ), "timeout"
+    except Exception as exc:
+        _forecast_evidence_requests.add(1, {**attrs, "outcome": "error"})
+        _forecast_evidence_duration.record(time.monotonic() - started, {**attrs, "outcome": "error"})
+        return [], f"Evidence retrieval failed: {exc}", "error"
 
 
 @_tracer.start_as_current_span("forecast.context_prepare")
@@ -4295,37 +4575,19 @@ async def _prepare_predict_messages(
     short_followup = bool(req.history) and len(req.question.split()) <= 6
 
     if req.attach_evidence and not short_followup:
-        evidence_pipeline = _state.get("evidence_pipeline")
-        if evidence_pipeline is None:
-            evidence_error = "Evidence pipeline is not configured on this server."
-        else:
-            top_k = max(1, min(req.evidence_top_k, 10))
-            loop = asyncio.get_running_loop()
-            evidence_cache_key = _cache_key("evidence", evidence_question, top_k)
-            retrieved_articles = _cache_get(evidence_cache_key)
-            if retrieved_articles is None:
-                try:
-                    retrieved_articles = await loop.run_in_executor(
-                        None,
-                        lambda: evidence_pipeline.fetch_summarize_rank(
-                            evidence_question,
-                            top_k=top_k,
-                        ),
-                    )
-                    if retrieved_articles:
-                        _cache_set(
-                            evidence_cache_key,
-                            retrieved_articles,
-                            _EVIDENCE_CACHE_TTL,
-                        )
-                except Exception as exc:
-                    retrieved_articles = []
-                    evidence_error = f"Evidence retrieval failed: {exc}"
+        retrieved_articles, evidence_error, _ = await _fetch_evidence_with_cache(
+            evidence_question,
+            req.evidence_top_k,
+            source="forecast",
+        )
+    elif req.attach_evidence and short_followup:
+        _forecast_evidence_requests.add(1, {"source": "forecast", "outcome": "skipped_followup"})
 
     evidence_articles = _merge_evidence_articles(supplied_articles, retrieved_articles)
     evidence_articles = [_clean_article(a) for a in evidence_articles]
-    # Personalised retrieval: prepend the signed-in user's knowledge-base hits.
-    if rag_user_id:
+    # Personalised retrieval: prepend signed-in KB hits only when the embedder is
+    # already warm. Forecasts should not pay a sentence-transformer cold start.
+    if rag_user_id and rag.is_loaded():
         try:
             loop = asyncio.get_running_loop()
             kb_hits = await loop.run_in_executor(
@@ -4343,8 +4605,28 @@ async def _prepare_predict_messages(
                 for h in kb_hits
             ]
             evidence_articles = kb_articles + evidence_articles
+            _forecast_rag_contexts.add(1, {
+                "outcome": "success",
+                "namespace": "kb",
+                "hits": "nonzero" if kb_articles else "zero",
+            })
         except Exception:
+            _forecast_rag_contexts.add(1, {
+                "outcome": "error",
+                "namespace": "kb",
+                "hits": "unknown",
+            })
             pass
+    elif rag_user_id:
+        _forecast_rag_contexts.add(1, {
+            "outcome": "skipped_cold",
+            "namespace": "kb",
+            "hits": "unknown",
+        })
+        otel_trace.get_current_span().set_attribute(
+            "forecast.rag.skipped_cold_start",
+            True,
+        )
 
     if (
         req.attach_evidence
@@ -4440,17 +4722,18 @@ def _select_predict_provider(req: "PredictRequest"):
     # Use a user-supplied model if provided: a custom OpenAI-compatible endpoint
     # when provider_base_url is set, otherwise OpenRouter. Falls back to the
     # server default model when no key/model is given.
-    alt_provider = _scads_alt_provider(req.model) if req.model else None
+    server_hosted_model = req.model or _interactive_default_model_for_request(req)
+    alt_provider = _scads_alt_provider(server_hosted_model) if server_hosted_model else None
     if alt_provider is not None:
         # Server-hosted alternate model (allowlisted SCADS), server's own key.
-        return alt_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
+        return alt_provider, _state.get("temperature", 0.0), _max_tokens_for_request(req)
     if req.ollama_base_url and req.openrouter_model:
         from analyzing_llm_rationale.providers import OllamaProvider
         provider = OllamaProvider(
             model_name=req.openrouter_model,
             base_url=f"{req.ollama_base_url}/v1/chat/completions",
         )
-        return provider, 0.7, _state.get("max_tokens", 1024)
+        return provider, 0.7, _max_tokens_for_request(req)
     if req.openrouter_api_key and req.openrouter_model:
         if req.provider_base_url:
             from analyzing_llm_rationale.providers import OpenAICompatibleProvider
@@ -4465,15 +4748,15 @@ def _select_predict_provider(req: "PredictRequest"):
                 model_name=req.openrouter_model,
                 api_key=req.openrouter_api_key,
             )
-        return provider, 0.7, _state.get("max_tokens", 1024)
+        return provider, 0.7, _max_tokens_for_request(req)
     # Evolution-loop feedback: route to the model with the best validated paper-edge
     # when the live track record warrants it (no-op until resolved data exists).
     auto = _auto_selected_model()
     if auto:
         auto_provider = _scads_alt_provider(auto)
         if auto_provider is not None:
-            return auto_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
-    return _state["provider"], _state["temperature"], _state["max_tokens"]
+            return auto_provider, _state.get("temperature", 0.0), _max_tokens_for_request(req)
+    return _state["provider"], _state["temperature"], _max_tokens_for_request(req)
 
 
 # ── Attachment extraction ─────────────────────────────────────────────────────
@@ -4801,6 +5084,44 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
     )
     _cache_set(cache_key, response.model_dump(mode="json"), radar_cache_ttl)
     return response
+
+
+async def _prefetch_radar_evidence(markets: List["RadarMarket"]) -> None:
+    """Warm evidence cache for top radar markets without delaying /radar."""
+    if _EVIDENCE_PREFETCH_TOP_N <= 0 or _state.get("evidence_pipeline") is None:
+        return
+    top_k = 3
+    candidates = [
+        str(m.question or "").strip()
+        for m in markets[:_EVIDENCE_PREFETCH_TOP_N]
+        if str(m.question or "").strip()
+    ]
+    for question in candidates:
+        key = _cache_key("evidence", question, top_k)
+        if _cache_get(key) is not None:
+            _radar_evidence_prefetches.add(1, {"outcome": "cache_hit"})
+            continue
+        if key in _evidence_prefetch_inflight:
+            _radar_evidence_prefetches.add(1, {"outcome": "coalesced"})
+            continue
+        _evidence_prefetch_inflight.add(key)
+        with _tracer.start_as_current_span("radar.evidence_prefetch") as span:
+            span.set_attribute("radar.evidence.top_k", top_k)
+            try:
+                articles, _, outcome = await _fetch_evidence_with_cache(
+                    question,
+                    top_k,
+                    source="radar_prefetch",
+                )
+                _radar_evidence_prefetches.add(1, {
+                    "outcome": "filled" if articles else outcome,
+                })
+            except Exception as exc:
+                span.record_exception(exc)
+                _radar_evidence_prefetches.add(1, {"outcome": "error"})
+                logger.warning("radar evidence prefetch failed: %s", type(exc).__name__)
+            finally:
+                _evidence_prefetch_inflight.discard(key)
 
 
 def _share_payload(req: SharedForecastRequest, request: Request) -> Dict[str, Any]:
@@ -5229,6 +5550,8 @@ async def market_kalshi(request: Request, ticker: str) -> "MarketQuote":
 async def radar(limit: int = Query(12, ge=1, le=30)) -> JSONResponse:
     """Return a cached list of live markets with notable model-vs-market gaps."""
     payload = await asyncio.get_running_loop().run_in_executor(None, _radar_from_track_record, limit)
+    if payload.markets:
+        _spawn_background(_prefetch_radar_evidence(payload.markets))
     return JSONResponse(
         payload.model_dump(mode="json"),
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
@@ -5545,6 +5868,24 @@ async def delete_chat_conversation(conversation_id: str, request: Request) -> Di
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _delete_conversation, claims["sub"], conversation_id)
     return {"ok": True}
+
+
+@app.get("/chat/models", tags=["System"], include_in_schema=False)
+async def chat_models(request: Request) -> Dict[str, Any]:
+    """Chat-capable server-hosted models exposed in the prompt selector."""
+    _check_rate_limit(request)
+    default_key = _state.get("model_key") or "gpt-oss-120b"
+    models = [
+        {
+            "key": cfg.name,
+            "label": cfg.result_label,
+            "model": cfg.router_model_name,
+            "fallbacks": list(cfg.fallback_model_chain),
+            "default": cfg.name == default_key,
+        }
+        for cfg in _SCADS_CHAT_MODEL_OPTIONS
+    ]
+    return {"default_model": default_key, "models": models}
 
 
 @app.get("/favorites", tags=["Auth"], response_model=FavoriteList, summary="List favourited markets")
@@ -5919,20 +6260,24 @@ async def markets_search(
 
 
 @app.get("/watchlist", include_in_schema=False)
-async def watchlist_page() -> FileResponse:
+async def watchlist_page(request: Request) -> Response:
     """Serve the SPA at a real URL so the watchlist can open in its own window."""
-    return FileResponse(
-        str(_STATIC_DIR / "index.html"),
-        headers={"Cache-Control": "no-cache"},
+    return _render_static_html_page(
+        "index.html",
+        request,
+        page="watchlist",
+        cache_control="no-cache",
     )
 
 
 @app.get("/trade", include_in_schema=False)
-async def trade_page() -> FileResponse:
+async def trade_page(request: Request) -> Response:
     """Serve a dedicated professional trading dashboard in its own window."""
-    return FileResponse(
-        str(_STATIC_DIR / "trade.html"),
-        headers={"Cache-Control": "no-cache"},
+    return _render_static_html_page(
+        "trade.html",
+        request,
+        page="trade",
+        cache_control="no-cache",
     )
 
 
@@ -6267,34 +6612,10 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     # responses must never be shared via the cache.
     rag_user_id = kb_user_id or (claims.get("sub") if claims else None)
 
-    # Serve identical, non-personalised forecasts from cache to cut latency and
-    # model spend. History, BYOK, or a signed-in user disable caching.
-    cacheable = (
-        _PREDICT_CACHE_TTL > 0
-        and not req.history
-        and not req.openrouter_api_key
-        and (not rag_user_id or rag_user_id == "api-key-user")
-    )
-    predict_cache_key = None
-    prompt_date = datetime.now(timezone.utc).date().isoformat()
-    if cacheable:
-        predict_cache_key = _cache_key(
-            "predict",
-            {
-                "prompt_date": prompt_date,
-                # Cache the complete prompt-affecting request. In particular,
-                # ``model`` must be part of the identity: the track-record job
-                # submits the same market to several models, and sharing a key
-                # can return one model's response as "council".
-                "request": req.model_dump(
-                    mode="json",
-                    exclude={"openrouter_api_key"},
-                ),
-                "served_model_key": _model_key_for_request(req),
-                "server_model_key": _state.get("model_key"),
-                "temperature": _state.get("temperature"),
-            },
-        )
+    # Serve identical forecasts from cache to cut latency and model spend.
+    # Signed-in users use a per-user scope, so personalised context is not shared.
+    predict_cache_key = _predict_cache_key(req, rag_user_id)
+    if predict_cache_key is not None:
         cached = _cache_get(predict_cache_key)
         if cached is not None:
             return PredictResponse(**cached)
@@ -6316,7 +6637,9 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
     provider, temperature, max_tokens = _select_predict_provider(req)
 
     try:
-        content = await _provider_chat(provider, messages, temperature, max_tokens)
+        content, served_provider = await _provider_chat_with_chat_fallbacks(
+            req, provider, messages, temperature, max_tokens
+        )
     except Exception as exc:
         _forecast_errors.add(1, {
             "forecast.variant": req.variant or "unknown",
@@ -6354,13 +6677,21 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
             question_type="chat",
             rationale=text, model_rationale=text,
             variant=req.variant, model_key=model_key,
+            served_model_name=_provider_served_model_name(served_provider),
             evidence_sources=_evidence_sources(evidence_articles),
             evidence_articles=_news_articles(evidence_articles),
             evidence_error=evidence_error,
             market_analysis=chat_market_analysis,
         )
     else:
-        response = _build_typed_response(req, parsed, content, evidence_articles, evidence_error)
+        response = _build_typed_response(
+            req,
+            parsed,
+            content,
+            evidence_articles,
+            evidence_error,
+            _provider_served_model_name(served_provider),
+        )
 
     await _finalize_predict_response(req, response, rag_user_id, predict_cache_key)
     return response
@@ -6435,7 +6766,8 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
     numeric, and multiple-choice questions.
     """
     _check_rate_limit(request)
-    claims = _require_auth(request)
+    _check_predict_rate_limit(request)
+    claims = _optional_predict_claims(request)
 
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
@@ -6447,24 +6779,90 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             detail=f"Unknown variant '{req.variant}'. Valid: {sorted(variants)}",
         )
 
-    rag_user_id = claims.get("sub")
+    rag_user_id = claims.get("sub") if claims else None
 
     async def events():
+        stream_started = time.monotonic()
+        stream_attrs = {
+            "forecast.variant": req.variant or "unknown",
+            "forecast.model": _model_key_for_request(req),
+        }
+        span = otel_trace.get_current_span()
         yield _sse_event("meta", {
             "status": "preparing",
             "variant": req.variant,
             "model_key": _model_key_for_request(req),
+            "elapsed_ms": 0,
         })
+        prepare_started = time.monotonic()
+        predict_cache_key = _predict_cache_key(req, rag_user_id)
+        if predict_cache_key is not None:
+            cached = _cache_get(predict_cache_key)
+            if cached is not None:
+                response = PredictResponse(**cached)
+                prepare_elapsed = time.monotonic() - prepare_started
+                first_delta_ms = round((time.monotonic() - stream_started) * 1000)
+                _forecast_stream_prepare_duration.record(
+                    prepare_elapsed,
+                    {**stream_attrs, "outcome": "cache_hit"},
+                )
+                _forecast_stream_first_token_duration.record(
+                    time.monotonic() - stream_started,
+                    {**stream_attrs, "outcome": "cache_hit"},
+                )
+                span.set_attribute("forecast.stream.cache_hit", True)
+                span.set_attribute("forecast.stream.prepare_ms", round(prepare_elapsed * 1000))
+                span.set_attribute("forecast.stream.first_delta_ms", first_delta_ms)
+                yield _sse_event("meta", {
+                    "status": "streaming",
+                    "variant": req.variant,
+                    "model_key": response.model_key,
+                    "prepare_ms": round((time.monotonic() - stream_started) * 1000),
+                    "cache_hit": True,
+                    "evidence_sources": [s.model_dump(mode="json") for s in response.evidence_sources],
+                    "evidence_articles": [a.model_dump(mode="json") for a in response.evidence_articles],
+                    "evidence_error": response.evidence_error,
+                })
+                text = (
+                    response.rationale
+                    or response.model_rationale
+                    or response.predicted_answer
+                    or ""
+                )
+                if text:
+                    yield _sse_event("delta", {
+                        "text": text,
+                        "first_delta_ms": first_delta_ms,
+                        "provider_first_delta_ms": 0,
+                        "cache_hit": True,
+                    })
+                yield _sse_event("done", {"response": response.model_dump(mode="json")})
+                return
+
         try:
             messages, evidence_articles, evidence_error = await _prepare_predict_messages(
                 req, rag_user_id
             )
             if req.model != "council":
                 provider, temperature, max_tokens = _select_predict_provider(req)
+            prepare_elapsed = time.monotonic() - prepare_started
+            _forecast_stream_prepare_duration.record(
+                prepare_elapsed,
+                {**stream_attrs, "outcome": "success"},
+            )
+            span.set_attribute("forecast.stream.prepare_ms", round(prepare_elapsed * 1000))
         except HTTPException as exc:
+            _forecast_stream_prepare_duration.record(
+                time.monotonic() - prepare_started,
+                {**stream_attrs, "outcome": "error"},
+            )
             yield _sse_event("error", {"status_code": exc.status_code, "detail": exc.detail})
             return
         except Exception:
+            _forecast_stream_prepare_duration.record(
+                time.monotonic() - prepare_started,
+                {**stream_attrs, "outcome": "error"},
+            )
             logger.exception("predict stream setup failed")
             yield _sse_event("error", {
                 "status_code": 500,
@@ -6476,6 +6874,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             "status": "streaming",
             "variant": req.variant,
             "model_key": _model_key_for_request(req),
+            "prepare_ms": round((time.monotonic() - stream_started) * 1000),
             "evidence_sources": [s.model_dump(mode="json") for s in _evidence_sources(evidence_articles)],
             "evidence_articles": [a.model_dump(mode="json") for a in _news_articles(evidence_articles)],
             "evidence_error": evidence_error,
@@ -6492,7 +6891,7 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
                     evidence_articles,
                     evidence_error,
                 )
-                await _finalize_predict_response(req, response, rag_user_id)
+                await _finalize_predict_response(req, response, rag_user_id, predict_cache_key)
             except Exception as exc:
                 http_exc = _provider_http_error(exc)
                 yield _sse_event("error", {
@@ -6504,13 +6903,42 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             return
 
         chunks: List[str] = []
+        first_delta_sent = False
+        used_provider_ref: Dict[str, Any] = {"provider": provider}
+        provider_stream_started = time.monotonic()
         try:
-            async for chunk in _provider_stream_chat(provider, messages, temperature, max_tokens):
+            async for chunk in _provider_stream_chat_with_chat_fallbacks(
+                req,
+                provider,
+                messages,
+                temperature,
+                max_tokens,
+                used_provider_ref,
+            ):
                 if await request.is_disconnected():
                     return
                 chunks.append(chunk)
-                yield _sse_event("delta", {"text": chunk})
+                payload = {"text": chunk}
+                if not first_delta_sent:
+                    first_delta_sent = True
+                    first_token_elapsed = time.monotonic() - stream_started
+                    _forecast_stream_first_token_duration.record(
+                        first_token_elapsed,
+                        {**stream_attrs, "outcome": "success"},
+                    )
+                    first_delta_ms = round(first_token_elapsed * 1000)
+                    provider_first_delta_ms = round((time.monotonic() - provider_stream_started) * 1000)
+                    span.set_attribute("forecast.stream.first_delta_ms", first_delta_ms)
+                    span.set_attribute("forecast.stream.provider_first_delta_ms", provider_first_delta_ms)
+                    payload["first_delta_ms"] = first_delta_ms
+                    payload["provider_first_delta_ms"] = provider_first_delta_ms
+                yield _sse_event("delta", payload)
         except Exception as exc:
+            if not first_delta_sent:
+                _forecast_stream_first_token_duration.record(
+                    time.monotonic() - stream_started,
+                    {**stream_attrs, "outcome": "error"},
+                )
             http_exc = _provider_http_error(exc)
             yield _sse_event("error", {
                 "status_code": http_exc.status_code,
@@ -6521,8 +6949,15 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
         text = "".join(chunks).strip()
         parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
                                              "rationale", "options", "p10", "p50", "p90", "unit"))
-        response = _build_typed_response(req, parsed, text, evidence_articles, evidence_error)
-        await _finalize_predict_response(req, response, rag_user_id)
+        response = _build_typed_response(
+            req,
+            parsed,
+            text,
+            evidence_articles,
+            evidence_error,
+            _provider_served_model_name(used_provider_ref.get("provider")),
+        )
+        await _finalize_predict_response(req, response, rag_user_id, predict_cache_key)
         yield _sse_event("done", {"response": response.model_dump(mode="json")})
 
     return StreamingResponse(
@@ -6597,6 +7032,8 @@ _AGENT_SKILL_SYSTEM = (
 _SCADS_BASE_URL = os.environ.get("SCADS_BASE_URL", "https://llm.scads.ai/v1/chat/completions")
 try:
     _SCADS_MODEL_ALLOWLIST = scads_hosted_model_allowlist(_REPO_ROOT / "configs" / "models.yaml")
+    _SCADS_CHAT_MODEL_OPTIONS = scads_chat_model_options(_REPO_ROOT / "configs" / "models.yaml")
+    _SCADS_MODEL_FALLBACKS = scads_hosted_model_fallbacks(_REPO_ROOT / "configs" / "models.yaml")
 except Exception as exc:  # pragma: no cover - defensive production fallback.
     logger.warning("failed to load SCADS model allowlist from config: %s", exc)
     _SCADS_MODEL_ALLOWLIST = {
@@ -6605,6 +7042,8 @@ except Exception as exc:  # pragma: no cover - defensive production fallback.
         "scads-alias-reasoning": "alias-reasoning",
         "kimi-k2.7-code": "moonshotai/Kimi-K2.7-Code",
     }
+    _SCADS_CHAT_MODEL_OPTIONS = ()
+    _SCADS_MODEL_FALLBACKS = {"gpt-oss-120b": ("google/gemma-4-31B-it",)}
 
 
 def _scads_alt_provider(
@@ -6636,6 +7075,137 @@ def _scads_alt_provider(
             else 120.0
         ),
     )
+
+
+def _scads_provider_for_model_name(
+    model_name: str,
+    *,
+    request_timeout_s: Optional[float] = None,
+):
+    """Build a direct SCADS provider for a concrete upstream model name."""
+    name = (model_name or "").strip()
+    if not name:
+        return None
+    scads_key = os.environ.get("SCADS_AI_API_KEY")
+    if not scads_key:
+        return None
+    from analyzing_llm_rationale.providers import OpenAICompatibleProvider
+    return OpenAICompatibleProvider(
+        model_name=name,
+        api_key=scads_key,
+        base_url=_SCADS_BASE_URL,
+        request_timeout_s=(
+            max(0.001, request_timeout_s)
+            if request_timeout_s is not None
+            else 120.0
+        ),
+    )
+
+
+def _provider_served_model_name(provider) -> Optional[str]:
+    value = getattr(provider, "last_response_model", None)
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _chat_fallback_providers(req: "PredictRequest", primary_provider) -> List[Any]:
+    """Concrete fallback providers for interactive chat only.
+
+    Structured forecast jobs keep their requested model identity stable; the
+    chat UI can tolerate and surface fallback model use via served_model_name.
+    """
+    if (
+        not req.chat_mode
+        or req.openrouter_model
+        or req.openrouter_api_key
+        or req.provider_base_url
+        or req.ollama_base_url
+        or req.model == "council"
+    ):
+        return []
+    label = _model_key_for_request(req)
+    chain = _SCADS_MODEL_FALLBACKS.get(label, ())
+    if not chain:
+        return []
+    primary_name = getattr(primary_provider, "model_name", None)
+    providers = []
+    for model_name in chain:
+        if model_name == primary_name:
+            continue
+        provider = _scads_provider_for_model_name(model_name)
+        if provider is not None:
+            providers.append(provider)
+    return providers
+
+
+async def _provider_chat_with_chat_fallbacks(
+    req: "PredictRequest",
+    provider,
+    messages,
+    temperature,
+    max_tokens,
+) -> tuple[str, Any]:
+    providers = [provider, *_chat_fallback_providers(req, provider)]
+    last_exc: Optional[Exception] = None
+    for idx, candidate in enumerate(providers):
+        try:
+            content = await _provider_chat(
+                candidate,
+                messages,
+                temperature,
+                max_tokens,
+                timeout_s=(_CHAT_PROVIDER_TIMEOUT_S if req.chat_mode else None),
+                max_retries=(_CHAT_PROVIDER_MAX_RETRIES if req.chat_mode else None),
+                call_site="predict" if idx == 0 else "predict_fallback",
+            )
+            return content, candidate
+        except Exception as exc:
+            last_exc = exc
+            if idx == len(providers) - 1:
+                break
+            logger.warning(
+                "chat model failed; trying fallback requested=%s failed_model=%s fallback_model=%s error=%s",
+                _model_key_for_request(req),
+                getattr(candidate, "model_name", "unknown"),
+                getattr(providers[idx + 1], "model_name", "unknown"),
+                type(exc).__name__,
+            )
+    assert last_exc is not None
+    raise last_exc
+
+
+async def _provider_stream_chat_with_chat_fallbacks(
+    req: "PredictRequest",
+    provider,
+    messages,
+    temperature,
+    max_tokens,
+    used_provider_ref: Dict[str, Any],
+):
+    providers = [provider, *_chat_fallback_providers(req, provider)]
+    for idx, candidate in enumerate(providers):
+        used_provider_ref["provider"] = candidate
+        emitted = False
+        try:
+            async for chunk in _provider_stream_chat(
+                candidate,
+                messages,
+                temperature,
+                max_tokens,
+                first_token_timeout_s=(_CHAT_PROVIDER_TIMEOUT_S if req.chat_mode else None),
+            ):
+                emitted = True
+                yield chunk
+            return
+        except Exception as exc:
+            if emitted or idx == len(providers) - 1:
+                raise
+            logger.warning(
+                "chat stream model failed before first token; trying fallback requested=%s failed_model=%s fallback_model=%s error=%s",
+                _model_key_for_request(req),
+                getattr(candidate, "model_name", "unknown"),
+                getattr(providers[idx + 1], "model_name", "unknown"),
+                type(exc).__name__,
+            )
 
 
 def _select_provider(
@@ -6822,6 +7392,7 @@ def _agent_prediction_request(
         resolve_time=(quote.close_time if quote and quote.close_time else req.resolve_time),
         openrouter_api_key=req.openrouter_api_key,
         openrouter_model=req.openrouter_model,
+        model=req.model,
         provider_base_url=req.provider_base_url,
         chat_mode=False,
     )
@@ -6840,10 +7411,18 @@ async def _run_agent_skills(
     if not skills_to_run:
         return [], False
 
-    provider, temperature, max_tokens = _select_provider(
-        req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
-        getattr(req, "ollama_base_url", None),
-    )
+    alt_provider = _scads_alt_provider(req.model) if req.model else None
+    if alt_provider is not None:
+        provider, temperature, max_tokens = (
+            alt_provider,
+            _state.get("temperature", 0.0),
+            _state.get("max_tokens", 1024),
+        )
+    else:
+        provider, temperature, max_tokens = _select_provider(
+            req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
+            getattr(req, "ollama_base_url", None),
+        )
     sources_txt = "\n".join(
         f"- {s.source}: {s.title}" for s in result.evidence_sources[:8]
     ) or "(no evidence retrieved)"
