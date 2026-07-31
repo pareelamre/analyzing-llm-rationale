@@ -206,6 +206,13 @@
       background: #e9e9ed; color: var(--ink);
     }
     .conv-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conv-running {
+      flex: 0 0 auto;
+      font-size: 10px;
+      color: var(--text-mute);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
     .conv-delete {
       flex-shrink: 0; width: 18px; height: 18px; border-radius: 5px;
       color: var(--text-mute); font-size: 15px; line-height: 1;
@@ -1287,6 +1294,14 @@
       box-shadow: 0 2px 12px rgba(0,0,0,.09);
     }
     .input-box:focus-within { transform: translateY(-1px); }
+    #questionInput {
+      min-height: 34px;
+      box-sizing: border-box;
+      padding-top: 6px !important;
+      padding-bottom: 6px !important;
+      line-height: 22px;
+      overflow-y: hidden;
+    }
     #questionInput::placeholder { color: #8f8f8f; }
     .send-btn {
       width: 34px !important;
@@ -1752,7 +1767,6 @@
         <span id="landingUserName" class="user-name"></span>
         <button type="button" class="topbar-link" onclick="signOut()">Sign out</button>
       </div>
-      <button type="button" class="topbar-link nav-collapse" onclick="openFeedback()" title="Send feedback">Feedback</button>
       <button type="button" class="hero-action primary py-2" onclick="launchApp()">Open desk</button>
     </div>
   </nav>
@@ -2351,7 +2365,7 @@
           <button class="attach-add-btn" onclick="addUrlAttachment()">Add</button>
         </div>
       </div>
-      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">Decision support only. Verify important markets. · <button type="button" class="underline hover:text-gray-300 bg-transparent border-0 p-0 cursor-pointer" onclick="openFeedback()">Feedback</button></p>
+      <p class="text-xs text-gray-400 text-center mt-2 hidden sm:block">Decision support only. Verify important markets.</p>
     </div>
   </div>
 
@@ -2518,6 +2532,12 @@
 
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
+function uiIcon(name, className = '') {
+  if (!/^[a-z-]+$/.test(name) || !/^[a-z0-9 _-]*$/i.test(className)) return '';
+  const classes = className ? `ui-icon ${className}` : 'ui-icon';
+  return `<svg class="${classes}" aria-hidden="true" focusable="false"><use href="#ui-${name}"></use></svg>`;
+}
+
 const STORAGE_KEY = 'forecasting_ai_convs';
 const VARIANT_DESCS = {
   variant0_neutral_baseline:       'Neutral control — no extra framing',
@@ -2545,6 +2565,29 @@ let currentView = 'landing';
 let lastFocusedBeforeDialog = null;
 let isApplyingHistory = false;
 let activeRequest = null;
+const activeRequests = new Map();
+
+function _selectorValue(value) {
+  return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/["\\]/g, '\\$&');
+}
+
+function syncActiveRequestState() {
+  activeRequest = activeId ? (activeRequests.get(activeId) || null) : null;
+  setSendingState(!!activeRequest);
+}
+
+function trackActiveRequest(request) {
+  activeRequests.set(request.convId, request);
+  if (activeId === request.convId) syncActiveRequestState();
+  renderSidebar();
+}
+
+function clearTrackedRequest(request) {
+  if (activeRequests.get(request.convId) === request) activeRequests.delete(request.convId);
+  if (activeRequest === request) activeRequest = null;
+  if (activeId === request.convId) setSendingState(false);
+  renderSidebar();
+}
 
 // ── Persistence ──────────────────────────────────────────────────────────────
 function loadStore() {
@@ -2714,6 +2757,7 @@ function newConversation() {
 function activateConv(id) {
   closeSidebar();
   activeId = id;
+  syncActiveRequestState();
   renderSidebar();
   renderMessages();
   document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New market brief';
@@ -2744,6 +2788,8 @@ function updateConversationSteer(value) {
 
 function deleteConv(id, e) {
   e.stopPropagation();
+  if (activeRequest?.convId === id) stopGeneration(id);
+  else if (activeRequests.has(id)) stopGeneration(id);
   delete store.conversations[id];
   saveStore();
   deleteRemoteConversation(id).catch(err => console.warn('Chat delete sync failed:', err));
@@ -2766,7 +2812,7 @@ function appendMessage(convId, msg) {
   conv.updatedAt = Date.now();
   if (conv.messages.filter(m => m.role === 'user').length === 1 && msg.role === 'user') {
     conv.title = msg.content.slice(0, 60) + (msg.content.length > 60 ? '…' : '');
-    document.getElementById('chatTitle').textContent = conv.title;
+    if (activeId === convId) document.getElementById('chatTitle').textContent = conv.title;
   }
   saveStore();
   queueConversationSync(convId);
@@ -2781,9 +2827,11 @@ function renderSidebar() {
   list.innerHTML = ids.map(id => {
     const c = store.conversations[id];
     const active = id === activeId ? ' active' : '';
+    const running = activeRequests.has(id) ? '<span class="conv-running" title="Forecast running">Running</span>' : '';
     return `
       <div class="conv-item${active}" onclick="activateConv('${id}')">
         <span class="conv-title">${escHtml(c.title)}</span>
+        ${running}
         <span class="conv-delete" onclick="deleteConv('${id}', event)" title="Delete">×</span>
       </div>`;
   }).join('');
@@ -2855,14 +2903,38 @@ function renderMessages() {
     if (msg.role !== 'user') enhanceCard(node);
     i++;
   }
+  const running = activeRequests.get(activeId);
+  if (running) renderPendingCompletion(running);
   scrollBottom();
+}
+
+function renderPendingCompletion(request) {
+  const messagesEl = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'max-w-2xl mx-auto w-full';
+  div.dataset.pendingRequest = request.userMessageId || request.convId;
+  if (request.partialText) {
+    div.innerHTML = `
+      <div class="msg-ai p-4 sm:p-5">
+        <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(request.partialText))}</div>
+      </div>`;
+  } else {
+    div.innerHTML = `<div class="msg-ai inline-flex items-center gap-3 px-5 py-4">
+      <div class="typing"><span></span><span></span><span></span></div>
+      <span id="typingLabel" style="font-size:13px;color:var(--text-dim)">${escHtml(request.statusLabel || 'Gathering evidence...')}</span>
+    </div>`;
+  }
+  messagesEl.appendChild(div);
+  request.liveBubble = div;
+  request.liveContentEl = div.querySelector('.chat-md');
 }
 
 function makeUserBubble(text, msg = {}) {
   const div = document.createElement('div');
   div.className = 'flex justify-end';
   const id = msg.id || '';
-  const isActive = activeRequest?.userMessageId === id;
+  const request = activeId ? activeRequests.get(activeId) : null;
+  const isActive = request?.userMessageId === id;
   div.innerHTML = `
     <div class="prompt-wrap" data-message-id="${escAttr(id)}">
       <div class="msg-user text-sm leading-relaxed">${escHtml(text)}</div>
@@ -2910,7 +2982,7 @@ async function copyPrompt(messageId) {
 
 function resendPrompt(messageId) {
   const msg = findUserMessage(messageId);
-  if (!msg || activeRequest) return;
+  if (!msg || activeRequests.has(activeId)) return;
   sendQuestion({ question: msg.content || '' });
 }
 
@@ -2923,13 +2995,21 @@ function setSendingState(isSending) {
   btn.setAttribute('aria-label', isSending ? 'Stop response' : 'Send');
 }
 
-function stopGeneration() {
-  if (!activeRequest) return;
-  activeRequest.controller.abort();
+function stopGeneration(convId = activeId) {
+  const request = convId ? activeRequests.get(convId) : activeRequest;
+  if (!request) return;
+  request.cancelStream?.();
+  request.controller.abort();
+}
+
+function settlePromptActions(messageId) {
+  if (!messageId || activeRequest?.userMessageId !== messageId) return;
+  const wrap = document.querySelector(`[data-message-id="${_selectorValue(messageId)}"]`);
+  wrap?.querySelector('[aria-label="Stop response"]')?.remove();
 }
 
 function handleSendButton() {
-  if (activeRequest) stopGeneration();
+  if (activeRequests.has(activeId)) stopGeneration(activeId);
   else sendQuestion();
 }
 
@@ -3486,7 +3566,7 @@ function _parseSseBlock(block) {
   return { event, data };
 }
 
-async function streamPredict(body, variant, convId, typingEl, signal) {
+async function streamPredict(body, variant, convId, typingEl, signal, request = null) {
   const resp = await fetch('/predict/stream', {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -3500,6 +3580,7 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   let bubble = null;
   let contentEl = null;
   let text = '';
+  let streamCancelled = false;
   const removeTyping = () => {
     if (!typingRemoved) {
       typingEl.remove();
@@ -3507,7 +3588,11 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
     }
   };
   const ensureBubble = () => {
+    if (activeId !== convId) return;
     if (bubble) return;
+    bubble = request?.liveBubble || null;
+    contentEl = request?.liveContentEl || bubble?.querySelector('.chat-md') || null;
+    if (bubble && contentEl) return;
     removeTyping();
     bubble = document.createElement('div');
     bubble.className = 'max-w-2xl mx-auto w-full';
@@ -3517,15 +3602,20 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
       </div>`;
     contentEl = bubble.querySelector('.chat-md');
     messagesEl.appendChild(bubble);
+    if (request) {
+      request.liveBubble = bubble;
+      request.liveContentEl = contentEl;
+    }
     animateIn(bubble);
     scrollBottom();
   };
-  const finish = (finalData) => {
+  const finish = (finalData, outcome = 'success') => {
     const data = finalData || {
       question_type: 'chat',
       rationale: text,
       model_key: body.openrouter_model || body.model || 'gpt-oss-120b',
     };
+    if (outcome === 'cancelled') data.generation_stopped = true;
     data.question = body.question || data.question || '';
     if (data.question_type !== 'chat') data.market_context = buildMarketContext(body.question, data);
     trackEvent('forecast_completed', {
@@ -3535,8 +3625,11 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
       model: data.model_key || body.openrouter_model || body.model || '',
       streamed: true,
     });
-    appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    if (request) request.settled = true;
+    appendMessage(request?.convId || convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    if (activeId !== convId) return;
     const finalNode = makeAIBubble(data, variant);
+    bubble = bubble || request?.liveBubble || null;
     if (bubble) bubble.replaceWith(finalNode);
     else {
       removeTyping();
@@ -3548,6 +3641,12 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   };
 
   const reader = resp.body.getReader();
+  if (request) {
+    request.cancelStream = () => {
+      streamCancelled = true;
+      reader.cancel().catch(() => {});
+    };
+  }
   const decoder = new TextDecoder();
   let buffer = '';
   while (true) {
@@ -3560,14 +3659,16 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
       if (!block.trim()) continue;
       const { event, data } = _parseSseBlock(block);
       if (event === 'meta' && data.status === 'streaming') {
+        if (request) request.statusLabel = 'Forecasting...';
         // Evidence fetched — model is about to start generating
         const lbl = typingEl.querySelector('#typingLabel');
         if (lbl) lbl.textContent = 'Forecasting…';
       } else if (event === 'delta') {
-        ensureBubble();
         text += data.text || '';
-        contentEl.innerHTML = renderMarkdown(_chatText(text));
-        scrollBottom();
+        if (request) request.partialText = text;
+        ensureBubble();
+        if (contentEl) contentEl.innerHTML = renderMarkdown(_chatText(text));
+        if (activeId === convId) scrollBottom();
       } else if (event === 'done') {
         finish(data.response);
         return { ok: true };
@@ -3576,6 +3677,11 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
         return { ok: false, fallback: false, detail: data.detail || 'Streaming error' };
       }
     }
+  }
+  if (streamCancelled || signal.aborted) {
+    if (text) finish(null, 'cancelled');
+    trackEvent('forecast_stopped', { streamed: true });
+    return { ok: true, cancelled: true };
   }
   if (buffer.trim()) {
     const { event, data } = _parseSseBlock(buffer);
@@ -3591,7 +3697,7 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   return { ok: false, fallback: true };
 }
 
-async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) {
+async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal, request = null) {
   const resp = await fetch('/agent/analyze/stream', {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -3605,6 +3711,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   let bubble = null;
   let contentEl = null;
   let text = '';
+  let streamCancelled = false;
   const removeTyping = () => {
     if (!typingRemoved) {
       typingEl.remove();
@@ -3612,11 +3719,16 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     }
   };
   const setProgress = label => {
+    if (request && label) request.statusLabel = label;
     const lbl = typingEl.querySelector('#typingLabel') || typingEl.querySelector('.agent-progress-title');
     if (lbl && label) lbl.textContent = label;
   };
   const ensureBubble = () => {
+    if (activeId !== convId) return;
     if (bubble) return;
+    bubble = request?.liveBubble || null;
+    contentEl = request?.liveContentEl || bubble?.querySelector('.chat-md') || null;
+    if (bubble && contentEl) return;
     removeTyping();
     bubble = document.createElement('div');
     bubble.className = 'max-w-2xl mx-auto w-full';
@@ -3626,13 +3738,20 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
       </div>`;
     contentEl = bubble.querySelector('.chat-md');
     messagesEl.appendChild(bubble);
+    if (request) {
+      request.liveBubble = bubble;
+      request.liveContentEl = contentEl;
+    }
     animateIn(bubble);
     scrollBottom();
   };
   const finish = report => {
     const data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
-    appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    if (request) request.settled = true;
+    appendMessage(request?.convId || convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    if (activeId !== convId) return;
     const finalNode = makeAIBubble(data, variant);
+    bubble = bubble || request?.liveBubble || null;
     if (bubble) bubble.replaceWith(finalNode);
     else {
       removeTyping();
@@ -3644,6 +3763,12 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   };
 
   const reader = resp.body.getReader();
+  if (request) {
+    request.cancelStream = () => {
+      streamCancelled = true;
+      reader.cancel().catch(() => {});
+    };
+  }
   const decoder = new TextDecoder();
   let buffer = '';
   while (true) {
@@ -3661,10 +3786,11 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
         else if (data.status === 'streaming') setProgress('Forecasting');
         else if (data.status === 'skills') setProgress('Running your skills');
       } else if (event === 'delta') {
-        ensureBubble();
         text += data.text || '';
-        contentEl.innerHTML = renderMarkdown(_chatText(text));
-        scrollBottom();
+        if (request) request.partialText = text;
+        ensureBubble();
+        if (contentEl) contentEl.innerHTML = renderMarkdown(_chatText(text));
+        if (activeId === convId) scrollBottom();
       } else if (event === 'done') {
         finish(data.report);
         return { ok: true };
@@ -3674,9 +3800,19 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
       }
     }
   }
+  if (streamCancelled || signal.aborted) {
+    if (text) {
+      const data = { question_type: 'chat', rationale: text, model_key: 'agent', generation_stopped: true };
+      if (request) request.settled = true;
+      appendMessage(request?.convId || convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    }
+    trackEvent('forecast_stopped', { streamed: true, agent: true });
+    return { ok: true, cancelled: true };
+  }
   if (text) {
     const data = { question_type: 'chat', rationale: text, model_key: 'agent' };
-    appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    if (request) request.settled = true;
+    appendMessage(request?.convId || convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     return { ok: true };
   }
   return { ok: false, fallback: true };
@@ -3685,12 +3821,9 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
 async function sendQuestion(options = {}) {
   const input = document.getElementById('questionInput');
   const question = String(options.question ?? input.value).trim();
-  if (!question || activeRequest) return;
-  if (!isUserSignedIn()) {
-    _queueForecastAfterSignIn(question, _pendingMarketCtx);
-    return;
-  }
+  if (!question || activeRequests.has(activeId)) return;
   if (!activeId) return;
+  const convId = activeId;
 
   _hideSlashPalette();
 
@@ -3713,7 +3846,7 @@ async function sendQuestion(options = {}) {
   }
 
   // Multi-turn memory: send the most recent prior turns as context
-  const priorMessages = getConv(activeId)?.messages || [];
+  const priorMessages = getConv(convId)?.messages || [];
   const history = priorMessages.slice(-12).map(m => {
     if (m.role === 'user') return { role: 'user', content: m.content };
     // Conversational reply — pass through as-is
@@ -3733,16 +3866,26 @@ async function sendQuestion(options = {}) {
   const useScan = (_agentEnabled() || options.forceAgent) && _isDiscoveryRequest(question) && !options.forceAgent;
   let request = null;
   if (!useScan) {
-    request = { controller: new AbortController(), convId: activeId, userMessageId: null };
-    activeRequest = request;
-    setSendingState(true);
+    request = {
+      controller: new AbortController(),
+      convId,
+      userMessageId: null,
+      partialText: '',
+      statusLabel: 'Gathering evidence...',
+      liveBubble: null,
+      liveContentEl: null,
+      cancelStream: null,
+    };
+    trackActiveRequest(request);
   }
 
-  const userMsg = appendMessage(activeId, { role: 'user', content: question });
+  const userMsg = appendMessage(convId, { role: 'user', content: question });
   if (request) request.userMessageId = userMsg.id;
   const userNode = makeUserBubble(question, userMsg);
-  document.getElementById('messages').appendChild(userNode);
-  animateIn(userNode);
+  if (activeId === convId) {
+    document.getElementById('messages').appendChild(userNode);
+    animateIn(userNode);
+  }
 
   // Agent mode: a "find me an edge" style request isn't a single market to
   // price — run an edge scan (honouring any venue + topic named in the text)
@@ -3765,11 +3908,12 @@ async function sendQuestion(options = {}) {
       ])
     : addTyping();
 
+  let body = null;
   try {
     const activeModel = getActiveModelConfig();
     const conversationSteer = getConversationSteer();
     const chat_mode = options.forceChatMode === false ? false : isChatMode();
-    const body = { question, variant, history, chat_mode };
+    body = { question, variant, history, chat_mode };
     if (conversationSteer) body.conversation_steer = conversationSteer;
     const mCtx = _pendingMarketCtx;
     _pendingMarketCtx = null;
@@ -3847,11 +3991,11 @@ async function sendQuestion(options = {}) {
         }
         if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
       }
-      const streamed = await streamAgentAnalyze(agentBody, variant, activeId, typingEl, request.controller.signal);
+      const streamed = await streamAgentAnalyze(agentBody, variant, convId, typingEl, request.controller.signal, request);
       if (streamed.ok) return;
       if (!streamed.fallback) {
         typingEl.remove();
-        addError(streamed.detail || 'Agent streaming error');
+        if (activeId === convId) addError(streamed.detail || 'Agent streaming error');
         return;
       }
       const resp = await fetch('/agent/analyze', {
@@ -3862,14 +4006,17 @@ async function sendQuestion(options = {}) {
       });
       const report = await _readJson(resp);
       typingEl.remove();
-      if (!resp.ok) { addError(report.detail || 'Agent error'); return; }
+      if (!resp.ok) {
+        if (activeId === convId) addError(report.detail || 'Agent error');
+        return;
+      }
       data = { question_type: 'chat', rationale: _agentReportToMarkdown(report), model_key: 'agent' };
     } else {
-      const streamed = await streamPredict(body, variant, activeId, typingEl, request.controller.signal);
+      const streamed = await streamPredict(body, variant, convId, typingEl, request.controller.signal, request);
       if (streamed.ok) return;
       if (!streamed.fallback) {
         typingEl.remove();
-        addError(streamed.detail || 'Streaming error');
+        if (activeId === convId) addError(streamed.detail || 'Streaming error');
         return;
       }
       // Streaming failed (network/server) — fall back to blocking request
@@ -3881,7 +4028,10 @@ async function sendQuestion(options = {}) {
       });
       data = await _readJson(resp);
       typingEl.remove();
-      if (!resp.ok) { addError(data.detail || 'Server error'); return; }
+      if (!resp.ok) {
+        if (activeId === convId) addError(data.detail || 'Server error');
+        return;
+      }
       data.question = question;
       data.market_context = buildMarketContext(question, data);
     }
@@ -3892,22 +4042,41 @@ async function sendQuestion(options = {}) {
       model: data.model_key || body.openrouter_model || body.model || '',
       streamed: false,
     });
-    appendMessage(activeId, { role: 'assistant', data, variant, content: data.rationale || '' });
-    const aiNode = makeAIBubble(data, variant);
-    document.getElementById('messages').appendChild(aiNode);
-    animateIn(aiNode);
-    enhanceCard(aiNode);
-    scrollBottom();
+    appendMessage(request.convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+    if (activeId === convId) {
+      const aiNode = makeAIBubble(data, variant);
+      document.getElementById('messages').appendChild(aiNode);
+      animateIn(aiNode);
+      enhanceCard(aiNode);
+      scrollBottom();
+    }
   } catch (err) {
     typingEl.remove();
-    if (err?.name === 'AbortError') return;
-    addError('Network error: ' + err.message);
-  } finally {
-    if (activeRequest === request) {
-      activeRequest = null;
-      setSendingState(false);
-      renderMessages();
+    if (err?.name === 'AbortError') {
+      if (request?.partialText && !request.settled) {
+        const data = {
+          question_type: 'chat',
+          rationale: request.partialText,
+          model_key: body?.openrouter_model || body?.model || 'gpt-oss-120b',
+          generation_stopped: true,
+        };
+        request.settled = true;
+        appendMessage(request.convId, { role: 'assistant', data, variant, content: data.rationale || '' });
+        if (activeId === convId) {
+          const finalNode = makeAIBubble(data, variant);
+          if (request.liveBubble) request.liveBubble.replaceWith(finalNode);
+          else document.getElementById('messages').appendChild(finalNode);
+          enhanceCard(finalNode);
+          scrollBottom();
+        }
+        trackEvent('forecast_stopped', { streamed: true });
+      }
+      return;
     }
+    if (activeId === convId) addError('Network error: ' + err.message);
+  } finally {
+    settlePromptActions(request.userMessageId);
+    clearTrackedRequest(request);
     input.focus();
   }
 }
@@ -4273,11 +4442,6 @@ function showLanding({ updateHistory = true } = {}) {
   if (updateHistory) setHistoryState('landing');
 }
 function launchApp({ updateHistory = true } = {}) {
-  if (!isUserSignedIn()) {
-    showLanding({ updateHistory: true });
-    openAuthModal('login');
-    return;
-  }
   const app = document.getElementById('appShell');
   document.getElementById('landingPage').classList.add('hidden-view');
   app.classList.remove('hidden-view');
@@ -4297,16 +4461,7 @@ function fillExample(question) {
   input.focus();
 }
 function startExample(question) {
-  const onLanding = !document.getElementById('appShell') ||
-    document.getElementById('landingPage')?.style.display !== 'none' &&
-    !document.getElementById('appShell').classList.contains('visible');
-  if (onLanding) {
-    const input = document.getElementById('landingQuestionInput');
-    if (input) input.value = question;
-    _streamLandingQuestion(question);
-  } else {
-    startForecast(question);
-  }
+  startForecast(question);
 }
 let _landingLastQuestion = '';
 let _landingLastData = null;
@@ -4316,14 +4471,10 @@ function submitLandingQuestion(event) {
   const input = document.getElementById('landingQuestionInput');
   const question = input.value.trim();
   if (!question) { input.focus(); return; }
-  _streamLandingQuestion(question);
+  startForecast(question);
 }
 
 async function _streamLandingQuestion(question) {
-  if (!isUserSignedIn()) {
-    _queueForecastAfterSignIn(question);
-    return;
-  }
   _landingLastQuestion = question;
   _landingLastData = null;
   const answerEl = document.getElementById('landingAnswer');
@@ -4409,10 +4560,6 @@ function _landingReset() {
 function startForecast(question, ctx = null) {
   const normalizedQuestion = String(question ?? '').trim();
   if (!normalizedQuestion) return;
-  if (!isUserSignedIn()) {
-    _queueForecastAfterSignIn(normalizedQuestion, ctx);
-    return;
-  }
   _pendingMarketCtx = ctx || null;
   launchApp();
   if (!activeId || (getConv(activeId)?.messages || []).length > 0) {
@@ -4530,6 +4677,8 @@ let _ebEquityTimer = null;
 let _crypto5mTimer = null;
 let _crypto5mLastGen = null;
 let _lastEquityCurves = null;
+let _equityChartSeq = 0;
+const _equityChartStates = new Map();
 let _lastCrypto5mCurves = null;
 let _pendingMarketCtx = null;
 
@@ -4878,7 +5027,7 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
-  if (updateHistory) setHistoryState(currentView === 'app' ? 'edge-app' : 'edge-landing');
+  if (updateHistory) setHistoryState('edge-landing');
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   }
@@ -4959,6 +5108,7 @@ async function loadEdgeBoard() {
         { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
     }
   } catch (e) {
+    console.error('Edge board render failed', e);
     host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Edge board is not available yet.</p></div>';
   }
 }
@@ -5130,8 +5280,167 @@ function _slugKey(text) {
   return String(text || 'market').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'market';
 }
 
+const _MTM_MODEL_COLORS = {
+  'council': '#10b981',
+  'scads-alias-code': '#db2777',
+  'scads-alias-ha': '#0f766e',
+  'scads-alias-reasoning': '#7c3aed',
+  'scads-alias-huge': '#2563eb',
+  'scads-alias-huge-no-thinking': '#0891b2',
+  'llama-3.1-8b-instruct': '#38bdf8',
+  'llama-3.3-70b-instruct': '#60a5fa',
+  'llama-4-scout-17b-16e-instruct': '#06b6d4',
+  'deepseek-v3': '#f59e0b',
+  'gpt-oss-120b': '#a78bfa',
+  'gemma-4-31b-it': '#f97316',
+  'kimi-k2.5': '#ef4444',
+  'kimi-k2.6': '#ec4899',
+  'kimi-k2.7-code': '#f43f5e',
+  'minimax-m3': '#22c55e',
+  'qwen3-coder-30b-a3b-instruct': '#14b8a6',
+  'glm-5.2-fp8': '#eab308',
+  'crowd-follow': '#94a3b8',
+  'market-follow': '#64748b',
+};
+function _mtmModelColor(model, i = 0) {
+  const palette = ['#10b981', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa', '#06b6d4', '#f97316', '#84cc16', '#14b8a6', '#db2777', '#eab308', '#94a3b8'];
+  return _MTM_MODEL_COLORS[model] || palette[i % palette.length];
+}
+
+function _mtmLastMarkedText(d) {
+  const primary = d && d.mark_to_market_account;
+  const ts = primary && primary.ts ? primary.ts : d && d.generated_at;
+  if (!ts) return 'building';
+  const t = new Date(ts).getTime();
+  if (!Number.isFinite(t)) return 'building';
+  const ageMs = Math.max(0, Date.now() - t);
+  const mins = Math.floor(ageMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(t).toLocaleString();
+}
+
 function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
 function _roiPct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + pct(x) + '%'; }
+
+function _roiDeltaPct(x) { return x == null ? 'â€”' : (x >= 0 ? '+' : '') + (x * 100).toFixed(1).replace(/\.0$/, '') + 'pp'; }
+
+const EB_STARTING_BANKROLL = 10000;
+const EB_MODEL_COLORS = ['#6366f1', '#f59e0b', '#14b8a6', '#ef4444', '#8b5cf6', '#0ea5e9'];
+
+function _ebModelLabel(model) {
+  const raw = String(model || '').trim();
+  if (!raw) return 'Model';
+  if (raw === 'crowd-follow') return 'crowd-follow baseline';
+  if (raw === 'market-follow') return 'market-follow baseline';
+  if (raw === 'scads-alias-code') return 'SCADS Code';
+  if (raw === 'scads-alias-ha') return 'SCADS HA';
+  if (raw === 'scads-alias-reasoning') return 'SCADS Reasoning';
+  if (raw === 'scads-alias-huge') return 'SCADS Huge';
+  if (raw === 'scads-alias-huge-no-thinking') return 'SCADS Huge no-think';
+  if (raw === 'llama-3.1-8b-instruct') return 'Llama 3.1 8B';
+  if (raw === 'llama-3.3-70b-instruct') return 'Llama 3.3 70B';
+  if (raw === 'gpt-oss-120b') return 'GPT OSS 120B';
+  if (raw === 'gemma-4-31b-it') return 'Gemma 4 31B IT';
+  if (raw === 'minimax-m3') return 'MiniMax M3';
+  if (raw === 'qwen3-coder-30b-a3b-instruct') return 'Qwen3 Coder 30B';
+  if (raw === 'glm-5.2-fp8') return 'GLM 5.2';
+  if (raw === 'kimi-k2.5') return 'Kimi K2.5';
+  if (raw === 'kimi-k2.6') return 'Kimi K2.6';
+  if (raw === 'kimi-k2.7-code') return 'Kimi K2.7 Code';
+  if (raw === 'council') return 'Council';
+  return raw.split(/[-_]/g).filter(Boolean).map(w => w[0]?.toUpperCase() + w.slice(1)).join(' ');
+}
+
+function _ebModelHead(model) {
+  const raw = String(model || '').toLowerCase();
+  if (raw === 'crowd-follow') return 'MKT';
+  if (raw === 'market-follow') return 'BASE';
+  if (raw === 'scads-alias-code') return 'COD';
+  if (raw === 'scads-alias-ha') return 'HA';
+  if (raw === 'scads-alias-reasoning') return 'RSN';
+  if (raw === 'scads-alias-huge') return 'HUG';
+  if (raw === 'scads-alias-huge-no-thinking') return 'HNT';
+  if (raw.includes('llama-3.1')) return 'L31';
+  if (raw.includes('llama-3.3')) return 'L33';
+  if (raw.includes('gpt')) return 'GPT';
+  if (raw.includes('gemma')) return 'GEM';
+  if (raw.includes('minimax')) return 'MM';
+  if (raw.includes('qwen3-coder')) return 'Q3C';
+  if (raw.includes('glm')) return 'GLM';
+  if (raw.includes('kimi-k2.7')) return 'K27';
+  if (raw.includes('kimi-k2.6')) return 'K26';
+  if (raw.includes('kimi-k2.5')) return 'K25';
+  if (raw.includes('kimi')) return 'KIM';
+  if (raw.includes('council')) return 'C';
+  return (String(model || 'AI').match(/[a-z0-9]/i)?.[0] || 'AI').toUpperCase();
+}
+
+function _ebModelColor(model, index = 0) {
+  const raw = String(model || '').toLowerCase();
+  if (_MTM_MODEL_COLORS[raw]) return _MTM_MODEL_COLORS[raw];
+  if (raw === 'crowd-follow') return '#94a3b8';
+  if (raw === 'market-follow') return '#64748b';
+  return EB_MODEL_COLORS[index % EB_MODEL_COLORS.length];
+}
+
+function _ebNormalizeBankrollCurve(s) {
+  const curve = s?.growth_curve;
+  if (!Array.isArray(curve) || !curve.length) return null;
+  const values = curve.map(Number).filter(Number.isFinite);
+  if (!values.length) return null;
+  const first = values[0];
+  if (!Number.isFinite(first)) return null;
+  const maxAbs = Math.max(...values.map(v => Math.abs(v)));
+  // Supported historical encodings:
+  //  - account value curve: 10000 -> 10000
+  //  - indexed-to-100 curve: 100 -> 10000
+  //  - multiplier curve: 1.0 -> 10000
+  if (maxAbs <= 10) return values.map(v => v * EB_STARTING_BANKROLL);
+  if (maxAbs < 1000) return values.map(v => v * (EB_STARTING_BANKROLL / 100));
+  return values;
+}
+
+function _ebPnlCurve(s) {
+  const growthCurve = _ebNormalizeBankrollCurve(s);
+  if (growthCurve) return growthCurve;
+  if (!s?.equity_curve?.length) return null;
+  const staked = s.total_staked || s.n_bets || 1;
+  return s.equity_curve.map(v => EB_STARTING_BANKROLL + (v / staked) * EB_STARTING_BANKROLL);
+}
+
+function _ebCurveTimes(s) {
+  return (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+}
+
+function _ebModelCurves(models, minBets = 5, limit = 6) {
+  return (models || [])
+    .map((m, index) => {
+      const model = m.model || `model-${index + 1}`;
+      const isCrowd = String(model).toLowerCase() === 'crowd-follow';
+      const strategy = isCrowd ? (m.paper_pnl || {}).flat : ((m.paper_pnl || {}).smart || (m.paper_pnl || {}).flat);
+      const points = _ebPnlCurve(strategy);
+      if (!points || (strategy?.n_bets || 0) < minBets) return null;
+      const times = _ebCurveTimes(strategy);
+      const label = _ebModelLabel(model);
+      const curve = {
+        points,
+        color: _ebModelColor(model, index),
+        label,
+        head: _ebModelHead(model),
+        headTitle: `${label} ${isCrowd ? 'crowd-follow' : 'Smart ROI'} ${_roiPct(strategy.roi)} · ${strategy.n_bets || 0} bets`,
+        opacity: 0.86,
+        isCrowdBaseline: isCrowd,
+      };
+      if (isCrowd) curve.dash = true;
+      if (times.length === points.length) curve.times = times;
+      return curve;
+    })
+    .filter(Boolean)
+    .slice(0, limit);
+}
 
 const _EB_PAGE_SIZE = 10;
 let _ebPage = 0;
@@ -5145,16 +5454,18 @@ function _ebGoPage(n) {
 
 function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}) {
   // curves = [{points: float[], color: string, label: string}, ...]
-  // points = growth-of-$100 value (starts at $100, compounds each bet's return).
+  // points = growth-of-$10,000 value, compounding each bet's return.
   const allPts = curves.flatMap(c => c.points);
   if (!allPts.length) return '';
   const hasTimes = curves.every(c => Array.isArray(c.times) && c.times.length === c.points.length);
   const n = Math.max(...curves.map(c => c.points.length));
-  const lo = Math.min(100, ...allPts);
-  const hi = Math.max(100, ...allPts);
+  const lo = Math.min(EB_STARTING_BANKROLL, ...allPts);
+  const hi = Math.max(EB_STARTING_BANKROLL, ...allPts);
   const range = hi - lo || 1;
-  const padL = 46, padR = 8, padT = 8, padB = hasTimes ? 32 : 20;
+  const padL = 60, padR = 34, padT = 26, padB = hasTimes ? 40 : 26;
   const cW = W - padL - padR, cH = H - padT - padB;
+  const pointInsetX = Math.min(14, Math.max(8, cW * 0.025));
+  const innerW = Math.max(1, cW - pointInsetX * 2);
   let tMin = 0, tMax = 1;
   if (hasTimes) {
     const allT = curves.flatMap(c => c.times);
@@ -5163,26 +5474,26 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
   }
   const tSpan = tMax - tMin;
   const toX = (i, t) => hasTimes
-    ? padL + ((t - tMin) / tSpan) * cW
-    : padL + (n > 1 ? (i / (n - 1)) * cW : cW / 2);
+    ? padL + pointInsetX + ((t - tMin) / tSpan) * innerW
+    : padL + pointInsetX + (n > 1 ? (i / (n - 1)) * innerW : innerW / 2);
   const toY = v => padT + cH - ((v - lo) / range) * cH;
-  const baselineY = toY(100).toFixed(1);
-  // Y-axis: show $100 baseline plus lo/hi
-  const yLabels = [...new Set([lo, 100, hi])].filter(v => v === 100 || v !== 100);
+  const baselineY = toY(EB_STARTING_BANKROLL).toFixed(1);
+  // Y-axis: show the starting bankroll baseline plus lo/hi.
+  const yLabels = [...new Set([lo, EB_STARTING_BANKROLL, hi])];
   const yAxisHtml = yLabels.map(v => {
-    const labelStr = '$' + v.toFixed(v >= 100 ? 0 : 1);
-    return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="${v === 100 ? '#94a3b8' : '#888'}">${labelStr}</text>`;
+    const labelStr = '$' + v.toLocaleString(undefined, { maximumFractionDigits: v >= 1000 ? 0 : 1 });
+    return `<text x="${padL - 4}" y="${(toY(v) + 3.5).toFixed(1)}" font-size="9" text-anchor="end" fill="${v === EB_STARTING_BANKROLL ? '#94a3b8' : '#888'}">${labelStr}</text>`;
   }).join('');
   let xAxisHtml = '';
   if (hasTimes) {
     const withTime = tSpan < 2 * 86400000, ticks = 4;
     for (let k = 0; k <= ticks; k++) {
-      const t = tMin + (tSpan * k / ticks), x = padL + (cW * k / ticks);
+      const t = tMin + (tSpan * k / ticks), x = padL + pointInsetX + (innerW * k / ticks);
       const anchor = k === 0 ? 'start' : (k === ticks ? 'end' : 'middle');
       xAxisHtml += `<text x="${x.toFixed(1)}" y="${(padT + cH + 12).toFixed(1)}" font-size="8.5" text-anchor="${anchor}" fill="#888">${escHtml(_fmtEquityDate(t, withTime))}</text>`;
     }
   }
-  // $100 baseline
+  // Starting bankroll baseline.
   const baseline = `<line x1="${padL}" y1="${baselineY}" x2="${padL + cW}" y2="${baselineY}" stroke="#555" stroke-width="0.5" stroke-dasharray="3,3"/>`;
   const paths = curves.map(c => {
     if (!c.points.length) return '';
@@ -5190,25 +5501,49 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
     const dashAttr = c.dash ? ' stroke-dasharray="5,3" stroke-width="1.4" opacity="0.75"' : ' stroke-width="1.8"';
     return `<polyline points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>`;
   }).join('');
-  const legendY = hasTimes ? H + 8 : H - 6;
-  const legend = curves.map((c, i) => {
-    const swatch = c.dash
-      ? `<line x1="${padL + i * 110}" y1="${legendY}" x2="${padL + i * 110 + 14}" y2="${legendY}" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="4,2" opacity="0.8"/>`
-      : `<circle cx="${padL + i * 110 + 7}" cy="${legendY}" r="3.5" fill="${c.color}"/>`;
-    return swatch + `<text x="${padL + i * 110 + 17}" y="${legendY + 4}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
+  const heads = curves.map(c => {
+    if (!c.head || !c.points.length) return '';
+    const i = c.points.length - 1;
+    const x = toX(i, c.times && c.times[i]);
+    const y = toY(c.points[i]);
+    const label = escHtml(String(c.head).slice(0, 4));
+    const title = escHtml(c.headTitle || c.label || '');
+    const rawLabel = String(c.head);
+    const r = rawLabel.length > 3 ? 12 : 11;
+    const fs = rawLabel.length > 3 ? 6.5 : 7.2;
+    return `<g class="eq-head" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><title>${title}</title><circle r="${r}" fill="#fff" stroke="${c.color}" stroke-width="1.5"/><text y="3.2" text-anchor="middle" font-size="${fs}" font-weight="700" fill="${c.color}">${label}</text></g>`;
   }).join('');
-  const svgH = H + (hasTimes ? 14 : 0);
-  _lastEquityCurves = { curves, W, H, padL, padT, cW, cH, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan };
-  const chartLabel = `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">Growth of $100 (reinvested)</text>`;
-  return `<svg class="eq-svg" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
-    ${chartLabel}${yAxisHtml}${xAxisHtml}${baseline}${paths}${legend}
+  const maxLabelLen = Math.max(8, ...curves.map(c => String(c.label || '').length));
+  const legendItemW = Math.max(150, Math.min(205, 42 + maxLabelLen * 5.5));
+  const legendCols = Math.max(1, Math.floor((W - padL - padR) / legendItemW));
+  const legendRows = Math.ceil(curves.length / legendCols);
+  const legendRowH = 17;
+  const legendStartY = H + 14;
+  const legend = curves.map((c, i) => {
+    const col = i % legendCols, row = Math.floor(i / legendCols);
+    const x0 = padL + col * legendItemW;
+    const y0 = legendStartY + row * legendRowH;
+    const swatch = c.dash
+      ? `<line x1="${x0}" y1="${y0}" x2="${x0 + 14}" y2="${y0}" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="4,2" opacity="0.8"/>`
+      : `<circle cx="${x0 + 7}" cy="${y0}" r="3.5" fill="${c.color}"/>`;
+    return swatch + `<text x="${x0 + 17}" y="${y0 + 4}" font-size="9.5" fill="${c.color}">${escHtml(c.label)}</text>`;
+  }).join('');
+  const svgH = H + 20 + legendRows * legendRowH;
+  const chartId = `eq-${++_equityChartSeq}`;
+  const eqState = { curves, W, H, padL, padT, cW, cH, pointInsetX, innerW, n, lo, hi, range: hi - lo || 1, hasTimes, tMin, tMax, tSpan, asPct, yPrefix };
+  _lastEquityCurves = eqState;
+  _equityChartStates.set(chartId, eqState);
+  const chartLabel = `<text x="${padL}" y="${padT - 1}" font-size="8.5" fill="#64748b" font-style="italic">Growth of $10,000 (reinvested)</text>`;
+  return `<svg class="eq-svg" data-eq-id="${chartId}" viewBox="0 0 ${W} ${svgH}" style="width:100%;max-width:${W}px;height:${svgH}px;display:block;margin-top:14px;overflow:visible;cursor:crosshair" aria-label="Equity curve">
+    ${chartLabel}${yAxisHtml}${xAxisHtml}${baseline}${paths}${heads}${legend}
   </svg>`;
 }
 
 function _attachEquityHover(container) {
   const svg = container.querySelector('.eq-svg');
-  if (!svg || !_lastEquityCurves) return;
-  const eq = _lastEquityCurves;
+  const chartId = svg ? svg.getAttribute('data-eq-id') : null;
+  const eq = (chartId && _equityChartStates.get(chartId)) || _lastEquityCurves;
+  if (!svg || !eq) return;
 
   let tip = container.querySelector('.eq-tip');
   if (!tip) {
@@ -5255,7 +5590,8 @@ function _attachEquityHover(container) {
     const rect = svg.getBoundingClientRect();
     const svgX = (e.clientX - rect.left) * (eq.W / rect.width);
     if (svgX < eq.padL || svgX > eq.padL + eq.cW) { hide(); return; }
-    const frac = (svgX - eq.padL) / eq.cW;
+    const plotX = Math.max(eq.padL + eq.pointInsetX, Math.min(eq.padL + eq.pointInsetX + eq.innerW, svgX));
+    const frac = (plotX - eq.padL - eq.pointInsetX) / eq.innerW;
     const x = svgX;
     xhair.setAttribute('x1', x.toFixed(1)); xhair.setAttribute('x2', x.toFixed(1));
     xhair.style.display = '';
@@ -5280,11 +5616,14 @@ function _attachEquityHover(container) {
       }
       const v = c.points[idx];
       if (v == null) { dots[ci].style.display = 'none'; return null; }
-      const dotX = eq.hasTimes && c.times ? eq.padL + ((c.times[idx] - eq.tMin) / eq.tSpan) * eq.cW : x;
+      const dotX = eq.hasTimes && c.times
+        ? eq.padL + eq.pointInsetX + ((c.times[idx] - eq.tMin) / eq.tSpan) * eq.innerW
+        : plotX;
       const y = eq.padT + eq.cH - ((v - eq.lo) / eq.range) * eq.cH;
       dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
       dots[ci].style.display = '';
-      return `<span style="color:${c.color}">${c.label}: $${v.toFixed(2)}</span>`;
+      const value = eq.asPct ? `${(v * 100).toFixed(1)}%` : `${eq.yPrefix || '$'}${v.toFixed(2)}`;
+      return `<span style="color:${c.color}">${c.label}: ${value}</span>`;
     }).filter(Boolean);
     tip.innerHTML = `<div style="color:#94a3b8;margin-bottom:3px;font-size:10px">${escHtml(header)}</div>` + lines.join('<br>');
     tip.style.display = 'block';
@@ -5301,6 +5640,13 @@ function _attachEquityHover(container) {
   svg._eqLeave = hide;
   svg.addEventListener('mousemove', onMove);
   svg.addEventListener('mouseleave', hide);
+}
+
+function _attachEdgeBoardChartHovers(root = document) {
+  ['#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'].forEach(sel => {
+    const el = root.querySelector(sel);
+    if (el) _attachEquityHover(el);
+  });
 }
 
 function _attachCrypto5mHover(container) {
@@ -5416,14 +5762,14 @@ function _renderBoardPage(board, page) {
       ? (e.lead_days >= 1 ? Math.round(e.lead_days) + 'd' : '<1d') + ' ahead'
       : (e.lead_bucket || '—');
     const extLink = e.market_url
-      ? `<a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" class="eb-ext-link" title="Open on ${escHtml(e.platform||'market')}">↗</a>`
+      ? `<a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" class="eb-ext-link" title="Open on ${escHtml(e.platform||'market')}">${uiIcon('external')}</a>`
       : '';
     const qIdent = escAttr(e.ident || e.market_url || '');
     const trade = _formatEdgeSignal(e);
     const favKey = (e.platform && e.ident) ? `${String(e.platform).toLowerCase()}:${e.ident}` : '';
     const star = favKey
       ? `<button type="button" class="fav-star ${_isFav(favKey) ? 'on' : ''}" title="Watch this market"
-           onclick='toggleFavorite(${JSON.stringify({ key: favKey, question: e.question || '', platform: e.platform || '', ident: e.ident || '', market_url: e.market_url || '', model_probability: e.model_probability ?? null, market_probability: e.market_probability ?? null }).replace(/'/g, "&#39;")}, this)'>${_isFav(favKey) ? '★' : '☆'}</button>`
+           onclick='toggleFavorite(${JSON.stringify({ key: favKey, question: e.question || '', platform: e.platform || '', ident: e.ident || '', market_url: e.market_url || '', model_probability: e.model_probability ?? null, market_probability: e.market_probability ?? null }).replace(/'/g, "&#39;")}, this)'>${uiIcon('star')}</button>`
       : '';
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}" data-lead-skill="${_leadSkillState(tr).key}" data-lead-n="${tr && tr.n != null ? escAttr(String(tr.n)) : ''}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
@@ -5438,11 +5784,11 @@ function _renderBoardPage(board, page) {
   let pagination = '';
   if (pages > 1) {
     const prev = page > 0
-      ? `<button class="eb-page-btn" onclick="_ebGoPage(${page - 1})">← Prev</button>`
-      : `<button class="eb-page-btn" disabled>← Prev</button>`;
+      ? `<button class="eb-page-btn ui-icon-label" onclick="_ebGoPage(${page - 1})">${uiIcon('arrow-left')} Prev</button>`
+      : `<button class="eb-page-btn ui-icon-label" disabled>${uiIcon('arrow-left')} Prev</button>`;
     const next = page < pages - 1
-      ? `<button class="eb-page-btn" onclick="_ebGoPage(${page + 1})">Next →</button>`
-      : `<button class="eb-page-btn" disabled>Next →</button>`;
+      ? `<button class="eb-page-btn ui-icon-label" onclick="_ebGoPage(${page + 1})">Next ${uiIcon('arrow-right')}</button>`
+      : `<button class="eb-page-btn ui-icon-label" disabled>Next ${uiIcon('arrow-right')}</button>`;
     pagination = `<div class="eb-pagination">${prev}<span class="eb-page-info">${page + 1} / ${pages}</span>${next}</div>`;
   }
   return tableHtml + pagination;
@@ -5453,48 +5799,118 @@ function renderEdgeBoard(d) {
   _ebBoardData = board;
   _ebPage = 0;
   const pnl = d.paper_pnl, ll = d.lead_lag;
+  const mtm = d.mark_to_market_account || null;
+  const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
+  const mtmCycleMinutes = d.mark_to_market_cycle_minutes || 15;
   const gen = d.generated_at ? new Date(d.generated_at).toLocaleString() : '';
   // Never surface a degenerate metric (a 0% / −100% read off a handful of points).
   // Below EB_MIN_N samples a metric reads "building n=…" instead of a misleading zero.
   const EB_MIN_N = 5;
   const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
+  const _usd = v => Number.isFinite(Number(v))
+    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+    : 'building';
   const modelFollowsMkt = (ll && ll.n_markets >= EB_MIN_N && ll.market_converged_to_model_pct != null)
     ? pct(1 - ll.market_converged_to_model_pct) + '%' : _build(ll && ll.n_markets);
   const stats = `
     <div class="tr-stats">
-      <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div>${d.n_markets_tracked ? `<div class="k" style="font-size:11px;color:var(--text-dim)">tracking ${d.n_markets_tracked}</div>` : ''}</div>
+      <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div></div>
+      <div class="tr-stat"><div class="v">${(d.n_markets_tracked || 0)}</div><div class="k label">Markets tracked</div></div>
       <div class="tr-stat"><div class="v">${(d.n_snapshots_resolved || 0)}</div><div class="k label">Resolved forecasts</div></div>
       <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Council follows market</div></div>
     </div>`;
   let compHtml;
   if (comp.length) {
-    compHtml = `<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Flat ROI</th><th>Smart ROI</th></tr></thead><tbody>` +
+    const crowdRoi = ((pnl || {}).crowd_baseline || {}).roi;
+    const compCurves = _ebModelCurves(comp, EB_MIN_N, 9);
+    const compChart = compCurves.length
+      ? `<div id="eb-model-comparison-svg">${_equitySvg(compCurves, 760, 180, {asPct: false, yPrefix: '$'})}</div>`
+      : '';
+    compHtml = `${compChart}<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Smart ROI</th><th>vs crowd</th></tr></thead><tbody>` +
       comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
+        const modelSmartRoi = m.paper_roi_smart != null ? m.paper_roi_smart : (m.model === 'crowd-follow' ? m.paper_roi : null);
+        const roiDelta = modelSmartRoi != null && crowdRoi != null ? modelSmartRoi - crowdRoi : null;
         return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
         `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
         `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td>` +
-        `<td>${enough ? _roiPct(m.paper_roi) : '·'}</td><td>${enough ? _roiPct(m.paper_roi_smart) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
+        `<td>${enough ? _roiPct(modelSmartRoi) : '·'}</td><td>${enough ? _roiDeltaPct(roiDelta) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
   } else {
-    compHtml = `<p class="text-sm text-gray-500">Model comparison (gpt-oss-120b vs Gemma vs Kimi) fills in as forecasts resolve.</p>`;
+    compHtml = `<p class="text-sm text-gray-500">Model comparison across SCADS-hosted models fills in as forecasts resolve.</p>`;
   }
-  let pnlHtml;
+  let mtmHtml;
+  if (mtmModels.length) {
+    const curves = mtmModels.map((m, i) => {
+      const account = m.account || {};
+      const curvePoints = account.value_curve || [];
+      const values = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
+      const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
+      const accountValue = Number(account.account_value);
+      const accountTime = new Date(account.ts).getTime();
+      const lastValue = values.length ? values[values.length - 1] : null;
+      const lastTime = times.length ? times[times.length - 1] : null;
+      if (Number.isFinite(accountValue) && Number.isFinite(accountTime) && (lastValue !== accountValue || lastTime !== accountTime)) {
+        values.push(accountValue);
+        times.push(accountTime);
+      }
+      if (!values.length) return null;
+      const label = _ebModelLabel(m.model);
+      const value = account.account_value ?? m.account_value;
+      const ret = account.return ?? m.return;
+      const curve = {
+        points: values,
+        color: _mtmModelColor(m.model, i),
+        label,
+        head: _ebModelHead(m.model),
+        headTitle: `${label} mark-to-market ${_usd(value)} ${ret == null ? '' : _roiPct(ret)}`.trim(),
+      };
+      if (times.length === values.length) curve.times = times;
+      return curve;
+    }).filter(Boolean);
+    const rows = mtmModels.map((m, i) => {
+      const account = m.account || {};
+      const value = account.account_value ?? m.account_value;
+      const ret = account.return ?? m.return;
+      const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
+      return `<tr class="eb-row">
+        <td><b>${i + 1}</b></td>
+        <td><b>${escHtml(m.model || '')}</b></td>
+        <td>${_usd(value)}</td>
+        <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
+        <td>${account.n_trades ?? m.n_trades ?? 0}</td>
+        <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
+        <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
+      </tr>`;
+    }).join('');
+    mtmHtml = `
+      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Shadow benchmark account refreshed on ${mtmCycleMinutes}-minute cycles. Trades are inferred from model-vs-market edge, resolved markets settle into cash, and open YES/NO positions are marked to bid-side liquidation prices. No benchmark orders are submitted to an exchange.</p>
+      <div class="tr-stats">
+        <div class="tr-stat">
+          <div class="v" id="eb-mtm-primary-v">${_usd(mtm && mtm.account_value)}</div>
+          <div class="k label">Council account value</div>
+          <div class="k" style="font-size:11px;color:var(--text-dim)">cash + bid liquidation</div>
+        </div>
+        <div class="tr-stat"><div class="v">${mtmCycleMinutes}m</div><div class="k label">Cycle</div><div class="k" style="font-size:11px;color:var(--text-dim)">forecast cadence</div></div>
+        <div class="tr-stat"><div class="v" id="eb-mtm-last-marked-v">${_mtmLastMarkedText(d)}</div><div class="k label">Last marked</div><div class="k" style="font-size:11px;color:var(--text-dim)">chart heartbeat</div></div>
+        <div class="tr-stat"><div class="v">${mtm?.n_open_positions || 0}</div><div class="k label">Open positions</div><div class="k" style="font-size:11px;color:var(--text-dim)">primary model</div></div>
+        <div class="tr-stat"><div class="v">${mtmModels.length}</div><div class="k label">Models tracked</div><div class="k" style="font-size:11px;color:var(--text-dim)">SCADS + baseline</div></div>
+      </div>
+      <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 180, {asPct: false, yPrefix: '$'}) : ''}</div>
+      <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
+  } else {
+    mtmHtml = `<p class="text-sm text-gray-500">Shadow mark-to-market account values will appear after strategy snapshots are available.</p>`;
+  }
+  let performanceHtml;
   if (pnl && pnl.flat) {
-    // Every resolved forecast is bet (no minimum edge), so n_bets tracks resolutions.
     const roi = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets')
       : _build(s && s.n_bets);
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
+    const smartVsCrowd = (pnl.smart?.roi != null && pnl.crowd_baseline?.roi != null) ? pnl.smart.roi - pnl.crowd_baseline.roi : null;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
-    const intro = `<p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">If you'd followed the model's own call on every resolved market — bought at that day's price and held to resolution. The curve compounds a $100 bankroll using each strategy's actual bet history (${nBet} of ${nRes} resolved markets bet):</p>`;
     const _normCurve = s => {
-      // growth_curve is a compounded growth-of-$100 bankroll series. The card
-      // ROI remains the simple non-compounded return on total stake.
-      if (s?.growth_curve?.length) return s.growth_curve.slice();
-      if (!s?.equity_curve?.length) return null;
-      const staked = s.total_staked || s.n_bets || 1;
-      return s.equity_curve.map(v => 100 + (v / staked) * 100);
+      return _ebPnlCurve(s);
     };
-    const _times = s => (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+    const _times = s => _ebCurveTimes(s);
     const _mk = (s, color, label, dash) => {
       const points = _normCurve(s);
       if (!points) return null;
@@ -5504,82 +5920,24 @@ function renderEdgeBoard(d) {
       if (times.length === points.length) curve.times = times;
       return curve;
     };
-    const curves = [
-      _mk(pnl.smart,          '#10b981', '★ Smart'),
-      _mk(pnl.half_kelly,     '#06b6d4', 'Half-Kelly'),
-      _mk(pnl.flat,           '#60a5fa', 'Flat stake'),
-      _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd baseline', true),
+    const strategyCurves = [
+      _mk(pnl.smart, '#10b981', 'Smart ROI'),
+      _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
+      _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
     ].filter(Boolean);
-    const svgChart = `<div id="eb-equity-svg">${curves.length ? _equitySvg(curves, 460, 110, {asPct: false, yPrefix: '$'}) : ''}</div>`;
-    // Per-sizing explainer: what each number means and what the gap between them signals.
-    const _pnlExplainer = () => {
-      const fl = pnl.flat, kelly = pnl.half_kelly, smart = pnl.smart, crowd = pnl.crowd_baseline;
-      const hasFlat = fl && fl.n_bets >= EB_MIN_N;
-      const hasKelly = kelly && kelly.n_bets >= EB_MIN_N;
-      const hasSmart = smart && smart.n_bets >= EB_MIN_N;
-      const hasCrowd = crowd && crowd.n_bets >= EB_MIN_N;
-      const rows = [];
-
-      if (hasFlat) {
-        const sign = fl.roi >= 0 ? 'positive' : 'negative';
-        const verb = fl.roi >= 0 ? 'profitable' : 'loss-making';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#60a5fa"></span>
-          <div><strong>Flat stake ${_roiPct(fl.roi)}</strong> — equal $1 on every call, ${fl.n_bets} bets.
-          The model bet the same amount regardless of how confident it was or how far it sat from the market price.
-          A ${sign} result here means the model's <em>directional calls</em> were ${verb} at the odds the market offered at the time of each forecast.
-          Win rate was ${pct(fl.win_rate)}% (the model picked the right side on ${Math.round(fl.win_rate * fl.n_bets)} of ${fl.n_bets} bets).</div>
-        </div>`);
-      }
-
-      if (hasKelly) {
-        const sign = kelly.roi >= 0 ? 'positive' : 'negative';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#06b6d4"></span>
-          <div><strong>Half-Kelly ${_roiPct(kelly.roi)}</strong> — stake sized by the Kelly criterion (halved for safety), ${kelly.n_bets} bets.
-          Kelly sizes each bet as a fraction of bankroll proportional to the model's walk-forward calibrated edge divided by the payout odds.
-          This naturally bets small on heavy favourites (tiny payouts) and larger where the model sees value at fair odds.
-          Total staked: $${kelly.total_staked.toFixed(1)} across ${kelly.n_bets} bets. Win rate was ${pct(kelly.win_rate)}%.</div>
-        </div>`);
-      }
-
-      if (hasSmart) {
-        const sign = smart.roi >= 0 ? 'positive' : 'negative';
-        const verb = smart.roi >= 0 ? 'profitable' : 'loss-making';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#10b981"></span>
-          <div><strong>★ Smart ${_roiPct(smart.roi)}</strong> — data-driven composite: walk-forward calibrated Half-Kelly sizing plus a proprietary set of evidence-based filters, ${smart.n_bets} qualifying bets.
-          The filters were derived by studying where the model's edge estimates historically broke down, and only let through bets clear of those known failure modes.
-          Sizing uses calibrated Half-Kelly to bet proportional to estimated edge.
-          A ${sign} result here shows whether the model is ${verb} <em>after removing its known failure modes</em>.
-          Win rate was ${pct(smart.win_rate)}%.</div>
-        </div>`);
-      }
-
-      if (hasCrowd) {
-        const sign = crowd.roi >= 0 ? 'positive' : 'negative';
-        const verb = crowd.roi >= 0 ? 'profitable' : 'loss-making';
-        rows.push(`<div class="pnl-exp-row">
-          <span class="pnl-exp-dot" style="background:#94a3b8"></span>
-          <div><strong>Crowd baseline ${_roiPct(crowd.roi)}</strong> — flat $1 stake, always betting the crowd's own direction (model probability = market probability), ${crowd.n_bets} bets.
-          This represents the zero-edge baseline (always buying whichever outcome the market consensus already favors).
-          Use this to evaluate the excess return of the model's disagreement signals over the crowd consensus.
-          Win rate was ${pct(crowd.win_rate)}%.</div>
-        </div>`);
-      }
-
-      if (!rows.length) return '';
-      return `<div class="pnl-explainer"><h5 class="pnl-exp-title">What these numbers mean</h5>${rows.join('')}</div>`;
-    };
-
-    pnlHtml = intro + `<div class="tr-stats">
-      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="★ Recommended · Calibrated Half-Kelly sizing plus a proprietary set of data-driven filters tuned to the model's known failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">★ Smart</div>${_sub('Kelly + filters')}</div>
-      <div class="tr-stat" title="Calibrated Half-Kelly criterion sizing. Bet size proportional to estimated edge / odds. Naturally sizes down on heavy favourites."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
-      <div class="tr-stat" title="Equal stake on every call. Pure hit-rate at the odds paid — a winning favourite pays little, any loss costs the full stake."><div class="v" id="eb-pnl-flat-v">${roi(pnl.flat)}</div><div class="k label">Flat stake</div>${_sub('same stake every call')}</div>
-      <div class="tr-stat" title="Flat stake, always betting the crowd's own direction (zero edge baseline)."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">Crowd baseline</div>${_sub('agree with market')}</div>
-    </div>${svgChart}${_pnlExplainer()}<p class="text-xs text-gray-400" style="margin-top:8px">${escHtml(pnl.disclaimer || '')}</p>`;
+    const svgChart = `<div id="eb-equity-svg">${strategyCurves.length ? _equitySvg(strategyCurves, 680, 160, {asPct: false, yPrefix: '$'}) : ''}</div>`;
+    performanceHtml = `
+      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $${EB_STARTING_BANKROLL.toLocaleString()} starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
+      ${svgChart}
+      <div class="tr-stats">
+      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label ui-icon-label">${uiIcon('star')} Smart ROI</div>${_sub('Kelly + filters')}</div>
+        <div class="tr-stat" title="Calibrated Half-Kelly sizing proportional to estimated edge and market odds."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
+        <div class="tr-stat" title="Smart ROI minus the crowd-follow baseline over the same resolved cohort."><div class="v" id="eb-pnl-edge-v">${smartVsCrowd != null ? _roiDeltaPct(smartVsCrowd) : _build(pnl.smart && pnl.smart.n_bets)}</div><div class="k label">vs crowd-follow</div>${_sub('excess return')}</div>
+        <div class="tr-stat" title="Always betting the crowd's own direction as the zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">crowd-follow baseline</div>${_sub('agree with market')}</div>
+      </div>
+      <p class="text-xs text-gray-400" style="margin-top:8px">Historical simulation of forecasts saved before market close, net of venue trading fees. Excludes slippage and liquidity constraints; not actual trading results.</p>`;
   } else {
-    pnlHtml = `<p class="text-sm text-gray-500">Hypothetical paper PnL — following the model's calls — starts once markets resolve. No fees/slippage; a signal check, not live trading.</p>`;
+    performanceHtml = `<p class="text-sm text-gray-500">Strategy performance will appear as tracked markets resolve.</p>`;
   }
   const arbitrage = d.arbitrage_signals || [];
   let arbitrageHtml = '';
@@ -5642,11 +6000,12 @@ function renderEdgeBoard(d) {
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced — and our track record of being right about it</h3>
-    <p class="tr-method">Live council-vs-market gaps, ranked. Calibration, lead/lag and paper PnL come from resolved saved forecasts only — hypothetical, no fees or slippage. ${gen ? 'Updated ' + gen + '.' : ''}</p>
+    <p class="tr-method">Live council-vs-market gaps, ranked. Accuracy, calibration, and lead-time skill are calculated from resolved forecasts saved before each market closed. ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${stats}
     <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging · risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
-    <h4 class="eb-h">Model comparison · paper trading</h4>${compHtml}
-    <h4 class="eb-h">Hypothetical paper PnL · following the model's calls <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${pnlHtml}
+    <h4 class="eb-h">Shadow mark-to-market account · bid-side liquidation value</h4>${mtmHtml}
+    <h4 class="eb-h">Model comparison · resolved forecast quality</h4>${compHtml}
+    <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift · does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live council forecasts · ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}
   </div>`;
@@ -5759,8 +6118,7 @@ function applyHistoryState(state) {
   closeEdgeBoard({ updateHistory: false });
   closeWatchlistPage({ updateHistory: false });
 
-  const isAppView = ['app', 'track-app', 'edge-app', 'watch-app'].includes(view);
-  if (isAppView && !isUserSignedIn()) {
+  if (view === 'watch-app' && !isUserSignedIn()) {
     showLanding({ updateHistory: false });
     openAuthModal('login');
     isApplyingHistory = false;
