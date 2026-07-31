@@ -1,4 +1,12 @@
 # ── gpu target: pytorch base with CUDA ────────────────────────────────────────
+FROM node:22-slim AS frontend-build
+
+WORKDIR /app
+COPY package.json package-lock.json vite.config.mjs tsconfig.json ./
+COPY frontend/ frontend/
+COPY static/ static/
+RUN npm ci && npm run frontend:build
+
 FROM pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime AS gpu
 
 WORKDIR /app
@@ -6,7 +14,7 @@ COPY pyproject.toml README.md ./
 COPY src/ src/
 COPY configs/ configs/
 COPY prompts/ prompts/
-COPY static/ static/
+COPY --from=frontend-build /app/static/ static/
 COPY scripts/ scripts/
 
 RUN pip install --no-cache-dir -e ".[serve,tracking,pipeline,trading]"
@@ -30,7 +38,7 @@ COPY pyproject.toml README.md ./
 COPY src/ src/
 COPY configs/ configs/
 COPY prompts/ prompts/
-COPY static/ static/
+COPY --from=frontend-build /app/static/ static/
 COPY scripts/ scripts/
 
 # Install CPU-only torch first so pip doesn't pull CUDA wheels when resolving the package deps

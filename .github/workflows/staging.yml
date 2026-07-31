@@ -84,9 +84,9 @@ jobs:
             --max-instances 1 \
             --concurrency 20 \
             --cpu-throttling \
-            --no-cpu-boost \
+            --cpu-boost \
             --update-secrets SCADS_AI_API_KEY=SCADS_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,SESSION_SECRET=SESSION_SECRET:latest \
-            --update-env-vars MODEL_DEVICE=cpu,ENVIRONMENT=staging,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json \
+            --update-env-vars MODEL_DEVICE=cpu,ENVIRONMENT=staging,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json,INTERACTIVE_DEFAULT_MODEL=minimax-m3,INTERACTIVE_MAX_TOKENS=384,CHAT_PROVIDER_TIMEOUT_S=15,CHAT_PROVIDER_MAX_RETRIES=0,EVIDENCE_TIMEOUT_S=6,EVIDENCE_MAX_CONCURRENCY=4 \
             --remove-env-vars MARKETD_URL,CUSTOM_DOMAIN \
             --project "${GCP_PROJECT_ID}"
 
@@ -105,6 +105,29 @@ jobs:
         shell: bash
         run: |
           curl -fsS "${{ steps.service.outputs.url }}/health"
+          python scripts/measure_forecast_latency.py \
+            --url "${{ steps.service.outputs.url }}" \
+            --mode stream \
+            --models minimax-m3 \
+            --runs 3 \
+            --no-attach-evidence \
+            --max-tokens 64 \
+            --timeout 60 > stream-latency.json
+          cat stream-latency.json
+          python - <<'PY'
+          import json
+
+          payload = json.load(open("stream-latency.json", "r", encoding="utf-8"))
+          successes = [
+              row for row in payload["rows"]
+              if row.get("status") == 200
+              and row.get("first_delta_ms") is not None
+              and row.get("done_ms") is not None
+              and row.get("model_key") == "minimax-m3"
+          ]
+          assert successes, f"no successful streamed response: {payload['rows']}"
+          print("stream latency smoke test passed")
+          PY
           curl -fsS "${{ steps.service.outputs.url }}/edge-board" > edge-board.json
           python - <<'PY'
           import json

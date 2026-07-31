@@ -80,6 +80,8 @@ jobs:
       id-token: write
 
     steps:
+      - uses: actions/checkout@v4
+
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
@@ -101,9 +103,9 @@ jobs:
             --max-instances 3 \
             --concurrency 20 \
             --cpu-throttling \
-            --no-cpu-boost \
+            --cpu-boost \
             --update-secrets SCADS_AI_API_KEY=SCADS_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,SESSION_SECRET=SESSION_SECRET:latest \
-            --update-env-vars MODEL_DEVICE=cpu,CUSTOM_DOMAIN=foresea.ink,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json \
+            --update-env-vars MODEL_DEVICE=cpu,CUSTOM_DOMAIN=foresea.ink,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json,INTERACTIVE_DEFAULT_MODEL=minimax-m3,INTERACTIVE_MAX_TOKENS=384,CHAT_PROVIDER_TIMEOUT_S=15,CHAT_PROVIDER_MAX_RETRIES=0,EVIDENCE_TIMEOUT_S=6,EVIDENCE_MAX_CONCURRENCY=4 \
             --remove-env-vars MARKETD_URL \
             --project ${{ env.GCP_PROJECT_ID }}
           # The RAG embedding model is served from a GCS volume mounted at
@@ -112,9 +114,43 @@ jobs:
           # `gcloud run deploy` preserves volumes it isn't told to change, so the
           # mount persists across deploys; EMBED_MODEL_PATH is re-asserted above.
 
-      - name: Print service URL
+      - name: Resolve service URL
+        id: service
+        shell: bash
         run: |
-          gcloud run services describe ${{ env.SERVICE_NAME }} \
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
             --region ${{ env.GCP_REGION }} \
             --project ${{ env.GCP_PROJECT_ID }} \
-            --format 'value(status.url)'
+            --format 'value(status.url)')
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "Service URL: ${URL}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test deployed streaming path
+        shell: bash
+        env:
+          SERVICE_URL: ${{ steps.service.outputs.url }}
+        run: |
+          curl -fsS "${SERVICE_URL}/health"
+          python scripts/measure_forecast_latency.py \
+            --url "${SERVICE_URL}" \
+            --mode stream \
+            --models minimax-m3 \
+            --runs 3 \
+            --no-attach-evidence \
+            --max-tokens 64 \
+            --timeout 60 > stream-latency.json
+          cat stream-latency.json
+          python - <<'PY'
+          import json
+
+          payload = json.load(open("stream-latency.json", "r", encoding="utf-8"))
+          successes = [
+              row for row in payload["rows"]
+              if row.get("status") == 200
+              and row.get("first_delta_ms") is not None
+              and row.get("done_ms") is not None
+              and row.get("model_key") == "minimax-m3"
+          ]
+          assert successes, f"no successful streamed response: {payload['rows']}"
+          print("stream latency smoke test passed")
+          PY

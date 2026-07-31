@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import sys
 import unittest
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale.forecast_evaluation import ResolvedForecast
 from analyzing_llm_rationale.forecast_evaluation_report import (

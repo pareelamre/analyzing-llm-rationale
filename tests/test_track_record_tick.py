@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import sys
 import tempfile
 import unittest
 import urllib.error
 from collections import Counter
 from pathlib import Path
 from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "track_record_tick.py"
 _SPEC = importlib.util.spec_from_file_location("track_record_tick_test_module", _SCRIPT_PATH)

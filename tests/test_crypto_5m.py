@@ -7,6 +7,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -539,7 +540,7 @@ class Crypto5mTests(unittest.TestCase):
             self.assertEqual(record["strategy"]["side"], "down")
             self.assertEqual(record["strategy"]["strategy_mode"], "fade_5m_momentum")
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn:
                 row = conn.execute(
                     "SELECT strategy_name, recommendation FROM crypto_5m_signals"
                 ).fetchone()
@@ -829,7 +830,7 @@ class Crypto5mTests(unittest.TestCase):
                 klines_by_symbol={"BTCUSDT": future},
             )
 
-            with sqlite3.connect(db_path) as conn:
+            with closing(sqlite3.connect(db_path)) as conn:
                 rows = conn.execute(
                     """
                     SELECT symbol, status, strategy_name, recommendation, actual_outcome,

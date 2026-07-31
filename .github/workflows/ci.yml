@@ -12,6 +12,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run frontend:build
       - name: Install dependencies
         run: pip install -e ".[dev,serve,analysis]" httpx
       - name: Lint
