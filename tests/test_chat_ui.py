@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 
 class ChatUiTests(unittest.TestCase):
@@ -131,6 +134,62 @@ class ChatUiTests(unittest.TestCase):
         self.assertIn("startForecast(question)", start_example_body)
         self.assertIn("_streamLandingQuestion(question)", submit_landing_body)
         self.assertNotIn("_streamLandingQuestion(question)", start_example_body)
+        self.assertIn("attach_evidence: false", landing_stream_body)
+        self.assertIn("evidence_top_k: 3", landing_stream_body)
+        self.assertIn("max_tokens: 384", landing_stream_body)
+
+    def test_streaming_forecast_emits_timing_events(self) -> None:
+        self.assertIn("function _trackForecastStreamTiming", self.index_html)
+        self.assertIn("forecast_stream_timing", self.index_html)
+        self.assertIn("'first_delta'", self.index_html)
+        self.assertIn("server_first_delta_ms: data.first_delta_ms", self.index_html)
+        self.assertIn("server_prepare_ms: data.prepare_ms", self.index_html)
+
+    def test_streaming_forecasts_batch_markdown_renders(self) -> None:
+        predict_body = self.index_html.split("async function streamPredict", 1)[1].split(
+            "async function streamAgentAnalyze",
+            1,
+        )[0]
+        agent_body = self.index_html.split("async function streamAgentAnalyze", 1)[1].split(
+            "async function sendQuestion",
+            1,
+        )[0]
+        landing_body = self.index_html.split("async function _streamLandingQuestion", 1)[1].split(
+            "function _landingOpenInApp",
+            1,
+        )[0]
+
+        for stream_body in (predict_body, agent_body, landing_body):
+            delta_body = stream_body.split("event === 'delta'", 1)[1].split(
+                "event === 'done'",
+                1,
+            )[0]
+            self.assertIn("const scheduleRender = () =>", stream_body)
+            self.assertIn("requestAnimationFrame(() =>", stream_body)
+            self.assertIn("scheduleRender();", delta_body)
+            self.assertNotIn("contentEl.innerHTML = renderMarkdown(_chatText(text))", delta_body)
+
+    def test_interactive_forecasts_use_lighter_evidence_defaults(self) -> None:
+        send_body = self.index_html.split("async function sendQuestion", 1)[1].split(
+            "if (activeModel)",
+            1,
+        )[0]
+        self.assertIn("body.evidence_top_k = 3;", send_body)
+        self.assertIn(
+            "body.attach_evidence = !(shortFollowup || attachedEvidence.length || hasCompleteMarketContext);",
+            send_body,
+        )
+        self.assertIn("const hasCompleteMarketContext", send_body)
+        self.assertIn("let extractedMarketProbability = null;", send_body)
+
+    def test_prompt_window_exposes_builtin_chat_model_selector(self) -> None:
+        self.assertIn('id="promptModelSelect"', self.index_html)
+        self.assertIn("const BUILTIN_CHAT_MODELS_FALLBACK", self.index_html)
+        self.assertIn("function setBuiltinChatModel", self.index_html)
+        self.assertIn("body.model = builtinChatModel;", self.index_html)
+        self.assertIn("served_model_name", self.index_html)
+        self.assertNotIn("alias-image-generation", self.index_html)
+        self.assertNotIn("alias-vision", self.index_html)
 
     def test_new_conversation_opens_plain_empty_chat(self) -> None:
         empty_branch = self.index_html.split("function renderMessages", 1)[1].split(

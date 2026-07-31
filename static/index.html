@@ -1400,6 +1400,32 @@
       overflow-y: hidden;
     }
     #questionInput::placeholder { color: #8f8f8f; }
+    .prompt-model-select {
+      align-self: center;
+      background: #f6f6f7;
+      border: 1px solid #dedee3;
+      border-radius: 999px;
+      color: var(--text-dim);
+      cursor: pointer;
+      flex: 0 1 170px;
+      font-size: 12px;
+      height: 34px;
+      max-width: 36vw;
+      min-width: 118px;
+      padding: 0 28px 0 11px;
+    }
+    .prompt-model-select:focus-visible {
+      border-color: var(--ink);
+      outline: 2px solid rgba(17,17,17,.12);
+      outline-offset: 2px;
+    }
+    @media (max-width: 640px) {
+      .prompt-model-select {
+        flex-basis: 112px;
+        font-size: 11px;
+        max-width: 30vw;
+      }
+    }
     .send-btn {
       width: 40px !important;
       height: 40px !important;
@@ -1893,6 +1919,7 @@
       .btn-signin { padding: 7px 13px; }
     }
   </style>
+  <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
 
@@ -2489,6 +2516,7 @@
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
           </svg>
         </button>
+        <select id="promptModelSelect" class="prompt-model-select" title="Hosted chat model" aria-label="Hosted chat model" onchange="setBuiltinChatModel(this.value)"></select>
         <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="handleSendButton()" title="Send" aria-label="Send">
           <svg class="ui-icon send-btn-icon" aria-hidden="true"><use href="#ui-arrow-up"></use></svg>
         </button>
@@ -2706,6 +2734,21 @@ const MARKET_EXAMPLES = [
   'What will US CPI inflation be in December 2026?',
   'When will SpaceX complete its next major Starship milestone?'
 ];
+const BUILTIN_CHAT_MODEL_STORAGE_KEY = 'foresea_builtin_chat_model';
+const BUILTIN_CHAT_MODELS_FALLBACK = [
+  { key: 'gpt-oss-120b', label: 'GPT OSS 120B', model_name: 'openai/gpt-oss-120b', fallback_model_chain: ['google/gemma-4-31B-it'] },
+  { key: 'gemma-4-31b-it', label: 'Gemma 4 31B', model_name: 'google/gemma-4-31B-it', fallback_model_chain: ['openai/gpt-oss-120b', 'meta-llama/Llama-3.3-70B-Instruct'] },
+  { key: 'llama-3.3-70b-instruct', label: 'Llama 3.3 70B', model_name: 'meta-llama/Llama-3.3-70B-Instruct', fallback_model_chain: ['google/gemma-4-31B-it', 'openai/gpt-oss-120b'] },
+  { key: 'scads-alias-code', label: 'Code alias', model_name: 'alias-code', fallback_model_chain: ['openai/gpt-oss-120b', 'google/gemma-4-31B-it'] },
+  { key: 'scads-alias-ha', label: 'HA alias', model_name: 'alias-ha', fallback_model_chain: ['google/gemma-4-31B-it', 'openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'scads-alias-reasoning', label: 'Reasoning alias', model_name: 'alias-reasoning', fallback_model_chain: ['openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'qwen3-coder-30b-a3b-instruct', label: 'Qwen3 Coder 30B', model_name: 'Qwen/Qwen3-Coder-30B-A3B-Instruct', fallback_model_chain: ['openai/gpt-oss-120b', 'google/gemma-4-31B-it'] },
+  { key: 'minimax-m3', label: 'MiniMax M3', model_name: 'MiniMaxAI/MiniMax-M3-MXFP8', fallback_model_chain: ['moonshotai/Kimi-K2.7-Code'] },
+  { key: 'kimi-k2.7-code', label: 'Kimi K2.7 Code', model_name: 'moonshotai/Kimi-K2.7-Code', fallback_model_chain: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'glm-5.2-fp8', label: 'GLM 5.2 FP8', model_name: 'zai-org/GLM-5.2-FP8', fallback_model_chain: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
+];
+let builtinChatModels = BUILTIN_CHAT_MODELS_FALLBACK.slice();
+let builtinChatModel = localStorage.getItem(BUILTIN_CHAT_MODEL_STORAGE_KEY) || 'gpt-oss-120b';
 
 // ── State ────────────────────────────────────────────────────────────────────
 let storageKey = STORAGE_KEY;
@@ -3514,6 +3557,7 @@ function makeAIBubble(data, variant, options = {}) {
   const variantLabel = VARIANT_DESCS[variant] || variant || '';
   const p = x => Math.round((x || 0) * 100);
   const modelKey = data.model_key || 'gpt-oss-120b';
+  const modelFooter = modelFooterLabel(data, modelKey);
 
   // Plain conversational reply — no forecast chrome
   if (qtype === 'chat') {
@@ -3523,6 +3567,10 @@ function makeAIBubble(data, variant, options = {}) {
       <div class="msg-ai p-4 sm:p-5">
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         ${sourceFeedHtml(sources, data.evidence_error)}
+        <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
+          <span class="logo-dot" style="width:5px;height:5px"></span>
+          ${escHtml(modelFooter)}
+        </div>
       </div>`;
     return div;
   }
@@ -3638,7 +3686,23 @@ function _parseSseBlock(block) {
   return { event, data };
 }
 
+function _trackForecastStreamTiming(surface, phase, startedAt, extra = {}) {
+  trackEvent('forecast_stream_timing', {
+    surface,
+    phase,
+    elapsed_ms: Math.round(performance.now() - startedAt),
+    ...extra,
+  });
+}
+
 async function streamPredict(body, variant, convId, typingEl, signal) {
+  const streamStartedAt = performance.now();
+  let firstDeltaTracked = false;
+  _trackForecastStreamTiming('predict', 'submit', streamStartedAt, {
+    attach_evidence: body.attach_evidence !== false,
+    evidence_top_k: body.evidence_top_k || 5,
+    has_market_context: !!(body.market_probability != null || body.market_url || body.market_ident),
+  });
   let resp;
   try {
     resp = await fetch('/predict/stream', {
@@ -3659,8 +3723,23 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   let bubble = null;
   let contentEl = null;
   let text = '';
+  let renderFrame = 0;
   let settled = false;
   let releaseStream = () => {};
+  const cancelPendingRender = () => {
+    if (!renderFrame) return;
+    cancelAnimationFrame(renderFrame);
+    renderFrame = 0;
+  };
+  const scheduleRender = () => {
+    if (!contentEl || renderFrame) return;
+    renderFrame = requestAnimationFrame(() => {
+      renderFrame = 0;
+      if (!contentEl) return;
+      contentEl.innerHTML = renderMarkdown(_chatText(text));
+      scrollBottom({ force: false });
+    });
+  };
   const removeTyping = () => {
     if (!typingRemoved) {
       typingEl.remove();
@@ -3688,6 +3767,7 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   const finish = (finalData, outcome = 'completed') => {
     if (settled) return;
     settled = true;
+    cancelPendingRender();
     releaseStream();
     const data = finalData || {
       question_type: 'chat',
@@ -3713,6 +3793,7 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
     }
     const saved = appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     if (!saved || activeId !== convId) {
+      cancelPendingRender();
       settleTyping(outcome);
       return;
     }
@@ -3761,15 +3842,29 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
         const { event, data } = _parseSseBlock(block);
         if (event === 'meta') {
           typingEl._setForecastProgress?.(data.status, data);
+          if (data.status === 'preparing' || data.status === 'streaming') {
+            _trackForecastStreamTiming('predict', `meta_${data.status}`, streamStartedAt, {
+              server_prepare_ms: data.prepare_ms ?? null,
+            });
+          }
         } else if (event === 'delta') {
           text += data.text || '';
+          if (!firstDeltaTracked) {
+            firstDeltaTracked = true;
+            _trackForecastStreamTiming('predict', 'first_delta', streamStartedAt, {
+              server_first_delta_ms: data.first_delta_ms ?? null,
+            });
+          }
           ensureBubble();
-          if (contentEl) contentEl.innerHTML = renderMarkdown(_chatText(text));
-          scrollBottom({ force: false });
+          scheduleRender();
         } else if (event === 'done') {
+          _trackForecastStreamTiming('predict', 'done', streamStartedAt, {
+            streamed_chars: text.length,
+          });
           finish(data.response);
           return { ok: true };
         } else if (event === 'error') {
+          cancelPendingRender();
           releaseStream();
           settleTyping('error');
           return { ok: false, fallback: false, detail: data.detail || 'Streaming error' };
@@ -3780,7 +3875,10 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
     releaseStream();
     if (err?.name === 'AbortError') {
       if (text) finish(null, 'cancelled');
-      else settleTyping('cancelled');
+      else {
+        cancelPendingRender();
+        settleTyping('cancelled');
+      }
       return { ok: true, stopped: true };
     }
     if (text) {
@@ -3793,7 +3891,10 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   if (streamCancelled || signal.aborted) {
     releaseStream();
     if (text) finish(null, 'cancelled');
-    else settleTyping('cancelled');
+    else {
+      cancelPendingRender();
+      settleTyping('cancelled');
+    }
     return { ok: true, stopped: true };
   }
   if (buffer.trim()) {
@@ -3832,10 +3933,25 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   let bubble = null;
   let contentEl = null;
   let text = '';
+  let renderFrame = 0;
   let settled = false;
   let releaseStream = () => {};
   let streamedEvidenceSources = [];
   let streamedEvidenceError = '';
+  const cancelPendingRender = () => {
+    if (!renderFrame) return;
+    cancelAnimationFrame(renderFrame);
+    renderFrame = 0;
+  };
+  const scheduleRender = () => {
+    if (!contentEl || renderFrame) return;
+    renderFrame = requestAnimationFrame(() => {
+      renderFrame = 0;
+      if (!contentEl) return;
+      contentEl.innerHTML = renderMarkdown(_chatText(text));
+      scrollBottom({ force: false });
+    });
+  };
   const removeTyping = () => {
     if (!typingRemoved) {
       typingEl.remove();
@@ -3864,6 +3980,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   const finish = (report, outcome = 'completed') => {
     if (settled) return;
     settled = true;
+    cancelPendingRender();
     releaseStream();
     const data = outcome === 'completed'
       ? _agentReportData(report)
@@ -3891,6 +4008,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     }
     const saved = appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     if (!saved || activeId !== convId) {
+      cancelPendingRender();
       removeTyping();
       return;
     }
@@ -3947,12 +4065,12 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
         } else if (event === 'delta') {
           text += data.text || '';
           ensureBubble();
-          if (contentEl) contentEl.innerHTML = renderMarkdown(_chatText(text));
-          scrollBottom({ force: false });
+          scheduleRender();
         } else if (event === 'done') {
           finish(data.report);
           return { ok: true };
         } else if (event === 'error') {
+          cancelPendingRender();
           releaseStream();
           removeTyping();
           return { ok: false, fallback: false, detail: data.detail || 'Agent streaming error' };
@@ -3963,7 +4081,10 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     releaseStream();
     if (err?.name === 'AbortError') {
       if (text) finish(null, 'cancelled');
-      else removeTyping();
+      else {
+        cancelPendingRender();
+        removeTyping();
+      }
       return { ok: true, stopped: true };
     }
     if (text) {
@@ -3975,7 +4096,10 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   if (streamCancelled || signal.aborted) {
     releaseStream();
     if (text) finish(null, 'cancelled');
-    else removeTyping();
+    else {
+      cancelPendingRender();
+      removeTyping();
+    }
     return { ok: true, stopped: true };
   }
   releaseStream();
@@ -4088,16 +4212,26 @@ async function sendQuestion(options = {}) {
       if (mCtx.categories?.length)         body.categories = mCtx.categories;
       if (mCtx.model && !activeModel)       body.model = mCtx.model;
     }
+    let extractedMarketProbability = null;
     if (mCtx?.market_probability == null) {
-      const marketProbability = extractMarketProbability(question);
-      if (marketProbability != null) {
-        body.market_probability = marketProbability;
+      extractedMarketProbability = extractMarketProbability(question);
+      if (extractedMarketProbability != null) {
+        body.market_probability = extractedMarketProbability;
         const platform = detectMarketPlatform(question);
         if (platform) body.market_platform = platform;
       }
     }
     const attachedEvidence = [..._attachments];
     if (attachedEvidence.length) body.news_articles = attachedEvidence;
+    const shortFollowup = history.length > 0 && question.split(/\s+/).filter(Boolean).length <= 6;
+    const hasCompleteMarketContext = !!(
+      mCtx
+      && body.market_probability != null
+      && (body.resolution_criteria || body.description)
+    );
+    body.evidence_top_k = 3;
+    body.attach_evidence = !(shortFollowup || attachedEvidence.length || hasCompleteMarketContext);
+    if (!activeModel) body.model = builtinChatModel;
     if (activeModel) {
       body.openrouter_model = activeModel.model;
       if (activeModel.provider === 'ollama') {
@@ -4116,7 +4250,7 @@ async function sendQuestion(options = {}) {
     if (_agentEnabled() || options.forceAgent) {
       const agentBody = {
         question,
-        evidence_top_k: 5,
+        evidence_top_k: 3,
         history,  // full thread context — only a new brief resets it
         conversation_steer: conversationSteer,
         skills: _loadSkills().map(s => ({ name: s.name, instruction: s.instruction })),
@@ -4137,7 +4271,8 @@ async function sendQuestion(options = {}) {
         if (mCtx.description)                agentBody.description = mCtx.description;
         if (mCtx.resolution_criteria)        agentBody.resolution_criteria = mCtx.resolution_criteria;
         if (mCtx.categories?.length)         agentBody.categories = mCtx.categories;
-      } else if (marketProbability != null) agentBody.market_probability = marketProbability;
+      } else if (extractedMarketProbability != null) agentBody.market_probability = extractedMarketProbability;
+      if (!activeModel) agentBody.model = builtinChatModel;
       if (activeModel) {
         agentBody.openrouter_model = activeModel.model;
         if (activeModel.provider === 'ollama') {
@@ -4716,7 +4851,14 @@ async function _streamLandingQuestion(question) {
   answerEl.classList.add('visible');
   answerEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-  const body = { question, variant: 'variant0_neutral_baseline', history: [] };
+  const body = {
+    question,
+    variant: 'variant0_neutral_baseline',
+    history: [],
+    attach_evidence: false,
+    evidence_top_k: 3,
+    max_tokens: 384,
+  };
   try {
     const resp = await fetch('/predict/stream', {
       method: 'POST',
@@ -4728,6 +4870,19 @@ async function _streamLandingQuestion(question) {
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '', text = '';
+    let renderFrame = 0;
+    const cancelPendingRender = () => {
+      if (!renderFrame) return;
+      cancelAnimationFrame(renderFrame);
+      renderFrame = 0;
+    };
+    const scheduleRender = () => {
+      if (renderFrame) return;
+      renderFrame = requestAnimationFrame(() => {
+        renderFrame = 0;
+        contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>';
+      });
+    };
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -4739,8 +4894,9 @@ async function _streamLandingQuestion(question) {
         const { event, data } = _parseSseBlock(block);
         if (event === 'delta') {
           text += data.text || '';
-          contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>';
+          scheduleRender();
         } else if (event === 'done') {
+          cancelPendingRender();
           _landingLastData = data.response;
           contentEl.innerHTML = _landingForecastHtml(data.response, text);
           enhanceCard(contentEl);
@@ -4748,11 +4904,13 @@ async function _streamLandingQuestion(question) {
           btn.disabled = false;
           return;
         } else if (event === 'error') {
+          cancelPendingRender();
           throw new Error(data.detail || 'error');
         }
       }
     }
     // Stream ended without done event
+    cancelPendingRender();
     if (text) contentEl.innerHTML = renderMarkdown(_chatText(text));
     actionsEl.style.display = 'flex';
   } catch (_) {
@@ -6791,6 +6949,65 @@ async function addUrlAttachment() {
 function isChatMode() { return true; }
 function loadChatModeToggle() { /* toggle removed; chat is the default */ }
 
+function _activeBuiltinModel() {
+  return builtinChatModels.find(m => m.key === builtinChatModel) || builtinChatModels[0] || BUILTIN_CHAT_MODELS_FALLBACK[0];
+}
+
+function _builtinChatModelLabel(key) {
+  const model = builtinChatModels.find(m => m.key === key) || BUILTIN_CHAT_MODELS_FALLBACK.find(m => m.key === key);
+  return model?.label || model?.model_name || key || 'Hosted chat';
+}
+
+function _renderPromptModelSelect() {
+  const select = document.getElementById('promptModelSelect');
+  if (!select) return;
+  if (!_activeBuiltinModel()) builtinChatModels = BUILTIN_CHAT_MODELS_FALLBACK.slice();
+  if (!builtinChatModels.some(m => m.key === builtinChatModel)) builtinChatModel = builtinChatModels[0]?.key || 'gpt-oss-120b';
+  select.innerHTML = builtinChatModels.map(m => {
+    const fallbacks = (m.fallback_model_chain || []).length
+      ? `Fallbacks: ${m.fallback_model_chain.join(', ')}`
+      : 'No configured fallback';
+    return `<option value="${escAttr(m.key)}" title="${escAttr(fallbacks)}">${escHtml(m.label || m.key)}</option>`;
+  }).join('');
+  select.value = builtinChatModel;
+}
+
+function setBuiltinChatModel(key) {
+  if (!builtinChatModels.some(m => m.key === key)) return;
+  builtinChatModel = key;
+  localStorage.setItem(BUILTIN_CHAT_MODEL_STORAGE_KEY, key);
+  _renderPromptModelSelect();
+  _updateModelLabel();
+}
+
+async function loadBuiltinChatModels() {
+  _renderPromptModelSelect();
+  try {
+    const resp = await fetch('/chat/models');
+    const data = await resp.json();
+    if (!resp.ok || !Array.isArray(data.models) || !data.models.length) return;
+    builtinChatModels = data.models.map(m => ({
+      key: m.key || m.name,
+      label: m.label || m.key || m.name,
+      model_name: m.model_name || m.name || m.key,
+      fallback_model_chain: Array.isArray(m.fallback_model_chain) ? m.fallback_model_chain : [],
+    })).filter(m => m.key);
+    const defaultKey = data.default_model || builtinChatModels[0]?.key || 'gpt-oss-120b';
+    if (!builtinChatModels.some(m => m.key === builtinChatModel)) builtinChatModel = defaultKey;
+    localStorage.setItem(BUILTIN_CHAT_MODEL_STORAGE_KEY, builtinChatModel);
+    _renderPromptModelSelect();
+    _updateModelLabel();
+  } catch {
+    _renderPromptModelSelect();
+  }
+}
+
+function modelFooterLabel(data, fallback = '') {
+  const requested = data.model_key || fallback || 'gpt-oss-120b';
+  const served = data.served_model_name || '';
+  return served && served !== requested ? `${requested} -> ${served}` : (served || requested);
+}
+
 // ── Custom model manager (Ollama-style) ───────────────────────────────────────
 // Models live in localStorage as `or_models` (array) with `or_active` (id, or
 // '' for the server default). Each model: {id, name, provider, baseUrl, apiKey, model}.
@@ -6982,6 +7199,7 @@ function deleteModel(id) {
 function loadOrSettings() {
   _migrateLegacyModel();
   renderModelList();
+  loadBuiltinChatModels();
   if (_loadModels().length) {
     const det = document.getElementById('configDetails');
     if (det) det.open = true;
@@ -6994,7 +7212,7 @@ function loadOrSettings() {
 function _updateModelLabel() {
   const m = getActiveModelConfig();
   const label = document.getElementById('activeModelLabel');
-  if (label) label.textContent = m ? m.model.split('/').pop() : 'gpt-oss-120b';
+  if (label) label.textContent = m ? m.model.split('/').pop() : _builtinChatModelLabel(builtinChatModel);
 }
 
 // ── Exchange accounts (bring-your-own trading) ───────────────────────────────

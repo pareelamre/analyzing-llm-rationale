@@ -27,6 +27,8 @@ class ModelConfig:
     max_tokens_cap: int | None = None
     request_timeout_cap_s: float | None = None
     forecasting_enabled: bool = True
+    chat_interface_enabled: bool = False
+    fallback_model_chain: Tuple[str, ...] = ()
 
 
 def load_yaml(path: Path) -> Dict[str, object]:
@@ -78,6 +80,8 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
         max_tokens_cap = payload.get("max_tokens_cap")
         request_timeout_cap_s = payload.get("request_timeout_cap_s")
         forecasting_enabled = payload.get("forecasting_enabled", True)
+        chat_interface_enabled = payload.get("chat_interface_enabled", False)
+        fallback_model_chain = payload.get("fallback_model_chain", [])
         if not all(isinstance(value, str) for value in (result_label, provider, local_model_name, router_model_name)):
             raise ValueError(
                 f"Model '{name}' must define string result_label, provider, local_model_name, and router_model_name"
@@ -98,6 +102,11 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             raise ValueError(f"Model '{name}' request_timeout_cap_s must be positive when provided")
         if not isinstance(forecasting_enabled, bool):
             raise ValueError(f"Model '{name}' forecasting_enabled must be boolean when provided")
+        if not isinstance(chat_interface_enabled, bool):
+            raise ValueError(f"Model '{name}' chat_interface_enabled must be boolean when provided")
+        if not isinstance(fallback_model_chain, Sequence) or isinstance(fallback_model_chain, (str, bytes)):
+            raise ValueError(f"Model '{name}' fallback_model_chain must be a list when provided")
+        fallback_chain = tuple(str(model) for model in fallback_model_chain)
         models[name] = ModelConfig(
             name=name,
             result_label=result_label,
@@ -112,6 +121,8 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
                 float(request_timeout_cap_s) if request_timeout_cap_s is not None else None
             ),
             forecasting_enabled=forecasting_enabled,
+            chat_interface_enabled=chat_interface_enabled,
+            fallback_model_chain=fallback_chain,
         )
     return models
 
@@ -135,6 +146,31 @@ def scads_hosted_model_allowlist(path: Path) -> Dict[str, str]:
 def scads_track_model_labels(path: Path) -> Tuple[str, ...]:
     """Default non-synthetic model labels for the track-record comparison board."""
     return tuple(scads_hosted_model_allowlist(path).keys())
+
+
+def scads_chat_model_options(path: Path) -> Tuple[ModelConfig, ...]:
+    """SCADS-hosted text chat models exposed in the interactive composer."""
+    return tuple(
+        cfg
+        for cfg in load_model_configs(path).values()
+        if (
+            cfg.chat_interface_enabled
+            and cfg.provider == "openai-compatible"
+            and cfg.forecasting_enabled
+            and cfg.api_key_env_var == "SCADS_AI_API_KEY"
+            and cfg.api_base_url
+            and "llm.scads.ai" in cfg.api_base_url
+        )
+    )
+
+
+def scads_hosted_model_fallbacks(path: Path) -> Dict[str, Tuple[str, ...]]:
+    """Configured SCADS-hosted model labels mapped to provider fallback chains."""
+    return {
+        cfg.name: cfg.fallback_model_chain
+        for cfg in scads_chat_model_options(path)
+        if cfg.fallback_model_chain
+    }
 
 
 def temperature_to_tag(temperature: float) -> str:
