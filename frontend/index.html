@@ -1400,6 +1400,32 @@
       overflow-y: hidden;
     }
     #questionInput::placeholder { color: #8f8f8f; }
+    .prompt-model-select {
+      align-self: center;
+      background: #f7f7f8;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-dim);
+      cursor: pointer;
+      flex: 0 1 150px;
+      font-size: 12px;
+      height: 34px;
+      max-width: 34vw;
+      min-width: 112px;
+      padding: 0 24px 0 9px;
+    }
+    .prompt-model-select:focus-visible {
+      border-color: var(--ink);
+      box-shadow: 0 0 0 3px rgba(17, 17, 17, .08);
+      outline: none;
+    }
+    @media (max-width: 520px) {
+      .prompt-model-select {
+        flex-basis: 104px;
+        font-size: 11px;
+        min-width: 92px;
+      }
+    }
     .send-btn {
       width: 40px !important;
       height: 40px !important;
@@ -2485,6 +2511,9 @@
           oninput="autoResize(this); _updateSlashPalette(this.value)"
           onkeydown="handleKey(event)"
         ></textarea>
+        <select id="promptModelSelect" class="prompt-model-select" onchange="setBuiltinChatModel(this.value)" title="Chat model" aria-label="Chat model">
+          <option value="">Default</option>
+        </select>
         <button id="attachBtn" class="attach-btn" onclick="toggleAttachPanel()" title="Attach PDF or URL" aria-label="Attach file or URL" aria-expanded="false">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
@@ -2707,6 +2736,19 @@ const MARKET_EXAMPLES = [
   'What will US CPI inflation be in December 2026?',
   'When will SpaceX complete its next major Starship milestone?'
 ];
+const BUILTIN_CHAT_MODELS_FALLBACK = [
+  { key: 'scads-alias-code', label: 'Alias Code', model: 'alias-code', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-31B-it'] },
+  { key: 'scads-alias-ha', label: 'Alias HA', model: 'alias-ha', fallbacks: ['google/gemma-4-31B-it', 'openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'scads-alias-reasoning', label: 'Alias Reasoning', model: 'alias-reasoning', fallbacks: ['openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'gpt-oss-120b', label: 'GPT-OSS-120B', model: 'openai/gpt-oss-120b', fallbacks: ['google/gemma-4-31B-it'] },
+  { key: 'gemma-4-31b-it', label: 'Gemma-4-31B', model: 'google/gemma-4-31B-it', fallbacks: ['openai/gpt-oss-120b', 'meta-llama/Llama-3.3-70B-Instruct'] },
+  { key: 'llama-3.3-70b-instruct', label: 'Llama-3.3-70B', model: 'meta-llama/Llama-3.3-70B-Instruct', fallbacks: ['google/gemma-4-31B-it', 'openai/gpt-oss-120b'] },
+  { key: 'minimax-m3', label: 'MiniMax-M3', model: 'MiniMaxAI/MiniMax-M3-MXFP8', fallbacks: ['moonshotai/Kimi-K2.7-Code'] },
+  { key: 'kimi-k2.7-code', label: 'Kimi-K2.7-Code', model: 'moonshotai/Kimi-K2.7-Code', fallbacks: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'qwen3-coder-30b-a3b-instruct', label: 'Qwen3 Coder 30B', model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-31B-it'] },
+  { key: 'glm-5.2-fp8', label: 'GLM-5.2-FP8', model: 'zai-org/GLM-5.2-FP8', fallbacks: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
+];
+let builtinChatModels = BUILTIN_CHAT_MODELS_FALLBACK.slice();
 
 // ── State ────────────────────────────────────────────────────────────────────
 let storageKey = STORAGE_KEY;
@@ -3507,6 +3549,13 @@ function sourceFeedHtml(sources, evidenceError = '') {
     </div>`;
 }
 
+function modelFooterLabel(data) {
+  const requested = data?.model_key || 'gpt-oss-120b';
+  const served = data?.served_model_name || '';
+  if (served && served !== requested) return `${requested} -> ${served}`;
+  return requested;
+}
+
 function makeAIBubble(data, variant, options = {}) {
   if (variant && !data.variant) data.variant = variant;
   const qtype = data.question_type || 'binary';
@@ -3514,7 +3563,7 @@ function makeAIBubble(data, variant, options = {}) {
   const sources   = data.evidence_sources || [];
   const variantLabel = VARIANT_DESCS[variant] || variant || '';
   const p = x => Math.round((x || 0) * 100);
-  const modelKey = data.model_key || 'gpt-oss-120b';
+  const modelKey = modelFooterLabel(data);
 
   // Plain conversational reply — no forecast chrome
   if (qtype === 'chat') {
@@ -3524,6 +3573,10 @@ function makeAIBubble(data, variant, options = {}) {
       <div class="msg-ai p-4 sm:p-5">
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         ${sourceFeedHtml(sources, data.evidence_error)}
+        <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
+          <span class="logo-dot" style="width:5px;height:5px"></span>
+          ${escHtml(modelKey)}
+        </div>
       </div>`;
     return div;
   }
@@ -4144,9 +4197,11 @@ async function sendQuestion(options = {}) {
 
   try {
     const activeModel = getActiveModelConfig();
+    const builtinChatModel = getActiveBuiltinModelId();
     const conversationSteer = getConversationSteer();
     const chat_mode = options.forceChatMode === false ? false : isChatMode();
     const body = { question, variant, history, chat_mode };
+    if (chat_mode) body.max_tokens = 384;
     if (conversationSteer) body.conversation_steer = conversationSteer;
     const mCtx = _pendingMarketCtx;
     _pendingMarketCtx = null;
@@ -4195,6 +4250,9 @@ async function sendQuestion(options = {}) {
         body.provider_base_url = activeModel.baseUrl;
       }
     }
+    if (builtinChatModel && !activeModel) {
+      body.model = builtinChatModel;
+    }
     // Clear attachments after send
     _attachments = [];
     _renderChips();
@@ -4232,6 +4290,8 @@ async function sendQuestion(options = {}) {
           agentBody.openrouter_api_key = activeModel.apiKey;
         }
         if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
+      } else if (builtinChatModel) {
+        agentBody.model = builtinChatModel;
       }
       const streamed = await streamAgentAnalyze(agentBody, variant, request.convId, typingEl, request.controller.signal);
       if (streamed.ok) return;
@@ -6898,6 +6958,57 @@ function loadChatModeToggle() { /* toggle removed; chat is the default */ }
 // ── Custom model manager (Ollama-style) ───────────────────────────────────────
 // Models live in localStorage as `or_models` (array) with `or_active` (id, or
 // '' for the server default). Each model: {id, name, provider, baseUrl, apiKey, model}.
+function _activeBuiltinModel() { return localStorage.getItem('foresea_chat_model') || ''; }
+function _builtinModelByKey(key) {
+  return builtinChatModels.find(m => m.key === key) || null;
+}
+function _builtinModelLabel(key) {
+  const m = _builtinModelByKey(key);
+  return m ? (m.label || m.key) : 'gpt-oss-120b';
+}
+function getActiveBuiltinModelId() {
+  const key = _activeBuiltinModel();
+  return _builtinModelByKey(key) ? key : '';
+}
+function setBuiltinChatModel(key) {
+  if (key && !_builtinModelByKey(key)) key = '';
+  localStorage.setItem('foresea_chat_model', key || '');
+  if (key) localStorage.setItem('or_active', '');
+  renderBuiltinChatModelSelect();
+  renderModelList();
+  _updateModelLabel();
+}
+function renderBuiltinChatModelSelect() {
+  const select = document.getElementById('promptModelSelect');
+  if (!select) return;
+  const active = getActiveBuiltinModelId();
+  const options = [
+    '<option value="">Default</option>',
+    ...builtinChatModels.map(m => {
+      const suffix = (m.fallbacks || []).length ? ` (fallbacks: ${(m.fallbacks || []).join(' -> ')})` : '';
+      return `<option value="${escAttr(m.key)}" title="${escAttr((m.model || m.key) + suffix)}">${escHtml(m.label || m.key)}</option>`;
+    }),
+  ];
+  select.innerHTML = options.join('');
+  select.value = active;
+}
+async function loadBuiltinChatModels() {
+  renderBuiltinChatModelSelect();
+  try {
+    const resp = await _liveJsonFetch('/chat/models');
+    const data = await resp.json();
+    if (resp.ok && Array.isArray(data.models) && data.models.length) {
+      builtinChatModels = data.models.filter(m => m && m.key && m.label);
+      if (_activeBuiltinModel() && !getActiveBuiltinModelId()) {
+        localStorage.removeItem('foresea_chat_model');
+      }
+      renderBuiltinChatModelSelect();
+      _updateModelLabel();
+    }
+  } catch (err) {
+    console.warn('Could not load chat models:', err);
+  }
+}
 function _loadModels() {
   try { return JSON.parse(localStorage.getItem('or_models') || '[]') || []; }
   catch { return []; }
@@ -6906,6 +7017,7 @@ function _saveModels(models) { localStorage.setItem('or_models', JSON.stringify(
 function _activeModelId() { return localStorage.getItem('or_active') || ''; }
 
 function getActiveModelConfig() {
+  if (getActiveBuiltinModelId()) return null;
   const id = _activeModelId();
   if (!id) return null;
   const m = _loadModels().find(x => x.id === id);
@@ -6932,6 +7044,8 @@ function _migrateLegacyModel() {
 
 function setActiveModel(id) {
   localStorage.setItem('or_active', id || '');
+  if (id) localStorage.removeItem('foresea_chat_model');
+  renderBuiltinChatModelSelect();
   renderModelList();
   _updateModelLabel();
 }
@@ -6940,8 +7054,9 @@ function renderModelList() {
   const host = document.getElementById('modelList');
   if (!host) return;
   const active = _activeModelId();
+  const builtin = getActiveBuiltinModelId();
   const rows = [`
-    <div class="model-row ${!active ? 'active' : ''}" onclick="setActiveModel('')">
+    <div class="model-row ${!active && !builtin ? 'active' : ''}" onclick="setBuiltinChatModel('')">
       <span class="model-radio"></span>
       <div class="model-meta">
         <div class="model-name">Server default</div>
@@ -7085,6 +7200,7 @@ function deleteModel(id) {
 // Entry point at init (name kept for the existing call site).
 function loadOrSettings() {
   _migrateLegacyModel();
+  loadBuiltinChatModels();
   renderModelList();
   if (_loadModels().length) {
     const det = document.getElementById('configDetails');
@@ -7097,8 +7213,9 @@ function loadOrSettings() {
 
 function _updateModelLabel() {
   const m = getActiveModelConfig();
+  const builtin = getActiveBuiltinModelId();
   const label = document.getElementById('activeModelLabel');
-  if (label) label.textContent = m ? m.model.split('/').pop() : 'gpt-oss-120b';
+  if (label) label.textContent = m ? m.model.split('/').pop() : _builtinModelLabel(builtin);
 }
 
 // ── Exchange accounts (bring-your-own trading) ───────────────────────────────
