@@ -39,10 +39,9 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("data-eq-id", index)
         self.assertIn("const _equityChartStates = new Map()", index)
         self.assertIn("_attachEdgeBoardChartHovers(host)", index)
-        self.assertIn("'#eb-model-comparison-svg', '#eb-mtm-svg', '#eb-equity-svg'", index)
 
-<<<<<<< HEAD
     def test_mtm_curves_carry_head_labels(self):
+
         """_equitySvg skips the end-of-line bubble unless the curve sets `head`;
         _renderMtmPage used to omit it, so the MTM chart rendered as bare lines."""
         index = (

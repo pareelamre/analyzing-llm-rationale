@@ -1397,7 +1397,6 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         growth_curve_ts: List[Any] = []
         bankroll = _COMPOUND_STARTING_BANKROLL
         for _idx, b in enumerate(_scoped_bets):
-
             stake = sizing(b)
             if stake <= 0.0:
                 continue
