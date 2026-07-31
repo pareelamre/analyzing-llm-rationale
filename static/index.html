@@ -5930,10 +5930,24 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
   const hi = dataHi + headPad;
   const range = hi - lo || 1;
   const HEAD_R = 12;
+  const gap = 2;
+  const headPitch = 2 * HEAD_R + gap;
+  // Every curve with a `head` gets a bubble stacked on the right edge. Rather
+  // than dropping bubbles that don't fit (the previous behaviour, capped at
+  // whatever cH allowed), grow the chart to guarantee room for all of them —
+  // sized for the worst case where every curve ends at the same value and the
+  // bubbles must stack with zero overlap.
+  const nHeadCurves = curves.filter(c => c.head && c.points.length).length;
+  const requiredHeadsHeight = nHeadCurves > 0 ? (nHeadCurves - 1) * headPitch + 2 * HEAD_R : 0;
   // padR has to clear a head bubble drawn at the last point, or the newest
   // value — the one people actually look at — is clipped at the right edge.
   const padL = 60, padR = HEAD_R + 24, padT = 26, padB = hasTimes ? 40 : 26;
-  const cW = W - padL - padR, cH = H - padT - padB;
+  const cW = W - padL - padR;
+  const cH = Math.max(H - padT - padB, requiredHeadsHeight);
+  // H (the parameter) drives everything drawn below the plot area — the
+  // legend block and the final viewBox — so grow it in step with cH rather
+  // than leaving those fixed at the caller's original, now too-short, height.
+  H = padT + cH + padB;
   const pointInsetX = Math.min(14, Math.max(8, cW * 0.025));
   const innerW = Math.max(1, cW - pointInsetX * 2);
   let tMin = 0, tMax = 1;
@@ -5980,7 +5994,7 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
     return `<polyline points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>${solo}`;
   }).join('');
   // Every head lands on the same right-hand edge, so with more than a handful
-  // of models they stack into an unreadable pile. Resolve collisions by
+  // of models they'd stack into an unreadable pile. Resolve collisions by
   // nudging them apart vertically (nearest-value order preserved) and draw a
   // leader line back to the true endpoint.
   const headSpecs = curves.map((c, ci) => {
@@ -6000,24 +6014,17 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
   }).filter(Boolean);
   // Sorted by y == sorted by value, best first.
   headSpecs.sort((a, b) => a.y - b.y);
-  const gap = 2;
-  const headPitch = 2 * HEAD_R + gap;
-  // Only as many bubbles as physically fit between the plot edges. Beyond that
-  // they would overlap into an unreadable smear (or, if we simply stacked them
-  // all, spill off the top of the chart). The rest stay in the legend and in
-  // the hover tooltip.
-  const headCapacity = Math.max(1, Math.floor(cH / headPitch));
-  const shownHeads = headSpecs.slice(0, headCapacity);
-  shownHeads.forEach((cur, i) => {
-    const prev = shownHeads[i - 1];
+  headSpecs.forEach((cur, i) => {
+    const prev = headSpecs[i - 1];
     cur.ty = prev ? Math.max(cur.y, prev.ty + prev.r + cur.r + gap) : cur.y;
   });
-  // Slide the column up if it ran past the bottom, then clamp so it can never
-  // ride above the top of the plot area either.
-  const last = shownHeads[shownHeads.length - 1];
+  // cH was sized above for exactly this worst case, so every bubble fits —
+  // but clamp both edges anyway as a safety net against radius rounding
+  // (labels >3 chars get a 1px larger radius than shorter ones).
+  const last = headSpecs[headSpecs.length - 1];
   const overflow = last ? Math.max(0, last.ty + last.r - (padT + cH)) : 0;
-  const heads = shownHeads.map(h => {
-    const ty = Math.max(padT + h.r, h.ty - overflow);
+  const heads = headSpecs.map(h => {
+    const ty = Math.min(padT + cH - h.r, Math.max(padT + h.r, h.ty - overflow));
     const leader = Math.abs(ty - h.y) > 1.5
       ? `<line x1="${h.x.toFixed(1)}" y1="${h.y.toFixed(1)}" x2="${h.x.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${h.color}" stroke-width="0.75" opacity="0.45"/>`
       : '';

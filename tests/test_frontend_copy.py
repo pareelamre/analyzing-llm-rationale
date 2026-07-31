@@ -64,9 +64,13 @@ class FrontendCopyTests(unittest.TestCase):
 
         # Responsive height, not a fixed px box that letterboxes when narrow.
         self.assertIn("height:auto", chart)
-        # Only draw as many bubbles as fit; never stack them off the chart.
-        self.assertIn("headCapacity", chart)
-        self.assertIn("Math.max(padT + h.r, h.ty - overflow)", chart)
+        # The chart grows to guarantee room for every head bubble rather than
+        # dropping the ones that don't fit — this is the "I want all 17
+        # bubbles" behaviour, not a fixed-height cap.
+        self.assertIn("requiredHeadsHeight", chart)
+        self.assertIn("H = padT + cH + padB", chart)
+        self.assertNotIn("headCapacity", chart)
+        self.assertNotIn("shownHeads", chart)
         # Headroom keeps extremes off the frame.
         self.assertIn("const headPad", chart)
         # One curve missing timestamps must not drop the whole chart to index mode.
