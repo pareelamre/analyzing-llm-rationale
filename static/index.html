@@ -4026,10 +4026,6 @@ async function sendQuestion(options = {}) {
   const input = document.getElementById('questionInput');
   const question = String(options.question ?? input.value).trim();
   if (!question || activeRequest) return;
-  if (!isUserSignedIn()) {
-    _queueForecastAfterSignIn(question, _pendingMarketCtx);
-    return;
-  }
   if (!activeId) return;
 
   _hideSlashPalette();
@@ -4701,11 +4697,6 @@ function showLanding({ updateHistory = true } = {}) {
   if (updateHistory) setHistoryState('landing');
 }
 function launchApp({ updateHistory = true } = {}) {
-  if (!isUserSignedIn()) {
-    showLanding({ updateHistory: true });
-    openAuthModal('login');
-    return;
-  }
   const app = document.getElementById('appShell');
   document.getElementById('landingPage').classList.add('hidden-view');
   stopTransparencyAutoRefresh();
@@ -4726,16 +4717,7 @@ function fillExample(question) {
   input.focus();
 }
 function startExample(question) {
-  const onLanding = !document.getElementById('appShell') ||
-    document.getElementById('landingPage')?.style.display !== 'none' &&
-    !document.getElementById('appShell').classList.contains('visible');
-  if (onLanding) {
-    const input = document.getElementById('landingQuestionInput');
-    if (input) input.value = question;
-    _streamLandingQuestion(question);
-  } else {
-    startForecast(question);
-  }
+  startForecast(question);
 }
 let _landingLastQuestion = '';
 let _landingLastData = null;
@@ -4758,10 +4740,6 @@ function _landingForecastHtml(data, fallbackText = '') {
 }
 
 async function _streamLandingQuestion(question) {
-  if (!isUserSignedIn()) {
-    _queueForecastAfterSignIn(question);
-    return;
-  }
   _landingLastQuestion = question;
   _landingLastData = null;
   const answerEl = document.getElementById('landingAnswer');
@@ -4848,10 +4826,6 @@ function _landingReset() {
 function startForecast(question, ctx = null) {
   const normalizedQuestion = String(question ?? '').trim();
   if (!normalizedQuestion) return;
-  if (!isUserSignedIn()) {
-    _queueForecastAfterSignIn(normalizedQuestion, ctx);
-    return;
-  }
   _pendingMarketCtx = ctx || null;
   launchApp();
   if (!activeId || (getConv(activeId)?.messages || []).length > 0) {
@@ -6538,14 +6512,6 @@ function applyHistoryState(state) {
   closeEdgeBoard({ updateHistory: false });
   closeWatchlistPage({ updateHistory: false });
 
-  const isAppView = ['app', 'track-app', 'edge-app', 'watch-app'].includes(view);
-  if (isAppView && !isUserSignedIn()) {
-    showLanding({ updateHistory: false });
-    openAuthModal('login');
-    isApplyingHistory = false;
-    return;
-  }
-
   if (view === 'app') {
     launchApp({ updateHistory: false });
   } else if (view === 'track-app') {
@@ -8111,47 +8077,6 @@ let _ghClientId = null;
 let _authConfigPromise = null;
 let _googleIdentityLoadStarted = false;
 let currentUser = null;
-let _pendingQuestionAfterSignIn = null;
-const _PENDING_FORECAST_KEY = 'foresea_pending_forecast';
-
-function isUserSignedIn() {
-  return !!(currentUser || localStorage.getItem('foresea_session'));
-}
-
-function _savePendingForecastAfterSignIn(pending) {
-  try { sessionStorage.setItem(_PENDING_FORECAST_KEY, JSON.stringify(pending)); } catch {}
-}
-
-function _loadPendingForecastAfterSignIn() {
-  try {
-    const raw = sessionStorage.getItem(_PENDING_FORECAST_KEY);
-    if (!raw) return null;
-    const pending = JSON.parse(raw);
-    const question = String(pending?.question ?? '').trim();
-    if (!question) return null;
-    return { question, ctx: pending?.ctx || null };
-  } catch {
-    return null;
-  }
-}
-
-function _clearPendingForecastAfterSignIn() {
-  _pendingQuestionAfterSignIn = null;
-  try { sessionStorage.removeItem(_PENDING_FORECAST_KEY); } catch {}
-}
-
-function _queueForecastAfterSignIn(question, ctx = null) {
-  const normalizedQuestion = String(question ?? '').trim();
-  if (!normalizedQuestion) return false;
-  _pendingQuestionAfterSignIn = {
-    question: normalizedQuestion,
-    ctx: ctx || null,
-  };
-  _savePendingForecastAfterSignIn(_pendingQuestionAfterSignIn);
-  showLanding({ updateHistory: true });
-  openAuthModal('login');
-  return true;
-}
 
 // ── GitHub OAuth (authorization-code flow) ────────────────────────────────────
 function _githubRedirectUri() { return location.origin + location.pathname; }
@@ -8230,12 +8155,8 @@ async function _afterSignIn(user, source = 'auth') {
   trackEvent('sign_in_completed', { source });
   await syncConversationsAfterSignIn(user);
   await _syncFavoritesFromServer();
-  
-  const pendingForecast = _pendingQuestionAfterSignIn || _loadPendingForecastAfterSignIn();
-  if (pendingForecast) {
-    _clearPendingForecastAfterSignIn();
-    startForecast(pendingForecast.question, pendingForecast.ctx || null);
-  } else if (currentView === 'landing' || !currentView) {
+
+  if (currentView === 'landing' || !currentView) {
     launchApp();
   }
   
@@ -8430,13 +8351,11 @@ function openAuthModal(mode) {
   setTimeout(() => document.getElementById('authEmail').focus(), 60);
 }
 
-function closeAuthModal(options = {}) {
-  const { clearPendingForecast = true } = options;
+function closeAuthModal(_options = {}) {
   const overlay = document.getElementById('authOverlay');
   overlay.classList.remove('show');
   overlay.setAttribute('aria-hidden', 'true');
   _authBusy = false;
-  if (clearPendingForecast) _clearPendingForecastAfterSignIn();
 }
 
 // ── Feedback modal ──────────────────────────────────────────────────────────
