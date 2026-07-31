@@ -210,7 +210,12 @@ class MiddlewareAndProbeTests(unittest.TestCase):
             _configure_state(FlakyProvider(fail_times=1, error=RetryableProviderError("503")))
             r = self.client.post(
                 "/predict",
-                json={"question": "Will the retry path recover?", "variant": "variant0_neutral_baseline", "attach_evidence": False},
+                json={
+                    "question": "Will the retry path recover?",
+                    "variant": "variant0_neutral_baseline",
+                    "attach_evidence": False,
+                    "chat_mode": False,
+                },
             )
         self.assertEqual(r.status_code, 200)
 
@@ -219,7 +224,12 @@ class MiddlewareAndProbeTests(unittest.TestCase):
             _configure_state(FlakyProvider(fail_times=99, error=RetryableProviderError("503")))
             r = self.client.post(
                 "/predict",
-                json={"question": "Will the model stay down forever?", "variant": "variant0_neutral_baseline", "attach_evidence": False},
+                json={
+                    "question": "Will the model stay down forever?",
+                    "variant": "variant0_neutral_baseline",
+                    "attach_evidence": False,
+                    "chat_mode": False,
+                },
             )
         self.assertEqual(r.status_code, 503)
         self.assertNotIn("503", r.json()["detail"])  # raw upstream text not leaked

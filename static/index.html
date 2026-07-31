@@ -1400,32 +1400,6 @@
       overflow-y: hidden;
     }
     #questionInput::placeholder { color: #8f8f8f; }
-    .prompt-model-select {
-      align-self: center;
-      background: #f6f6f7;
-      border: 1px solid #dedee3;
-      border-radius: 999px;
-      color: var(--text-dim);
-      cursor: pointer;
-      flex: 0 1 170px;
-      font-size: 12px;
-      height: 34px;
-      max-width: 36vw;
-      min-width: 118px;
-      padding: 0 28px 0 11px;
-    }
-    .prompt-model-select:focus-visible {
-      border-color: var(--ink);
-      outline: 2px solid rgba(17,17,17,.12);
-      outline-offset: 2px;
-    }
-    @media (max-width: 640px) {
-      .prompt-model-select {
-        flex-basis: 112px;
-        font-size: 11px;
-        max-width: 30vw;
-      }
-    }
     .send-btn {
       width: 40px !important;
       height: 40px !important;
@@ -1918,7 +1892,7 @@
       .nav-collapse { display: none; }
       .btn-signin { padding: 7px 13px; }
     }
-  </style>
+  </style>
   <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
@@ -2516,7 +2490,6 @@
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
           </svg>
         </button>
-        <select id="promptModelSelect" class="prompt-model-select" title="Hosted chat model" aria-label="Hosted chat model" onchange="setBuiltinChatModel(this.value)"></select>
         <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="handleSendButton()" title="Send" aria-label="Send">
           <svg class="ui-icon send-btn-icon" aria-hidden="true"><use href="#ui-arrow-up"></use></svg>
         </button>
@@ -2734,21 +2707,6 @@ const MARKET_EXAMPLES = [
   'What will US CPI inflation be in December 2026?',
   'When will SpaceX complete its next major Starship milestone?'
 ];
-const BUILTIN_CHAT_MODEL_STORAGE_KEY = 'foresea_builtin_chat_model';
-const BUILTIN_CHAT_MODELS_FALLBACK = [
-  { key: 'gpt-oss-120b', label: 'GPT OSS 120B', model_name: 'openai/gpt-oss-120b', fallback_model_chain: ['google/gemma-4-31B-it'] },
-  { key: 'gemma-4-31b-it', label: 'Gemma 4 31B', model_name: 'google/gemma-4-31B-it', fallback_model_chain: ['openai/gpt-oss-120b', 'meta-llama/Llama-3.3-70B-Instruct'] },
-  { key: 'llama-3.3-70b-instruct', label: 'Llama 3.3 70B', model_name: 'meta-llama/Llama-3.3-70B-Instruct', fallback_model_chain: ['google/gemma-4-31B-it', 'openai/gpt-oss-120b'] },
-  { key: 'scads-alias-code', label: 'Code alias', model_name: 'alias-code', fallback_model_chain: ['openai/gpt-oss-120b', 'google/gemma-4-31B-it'] },
-  { key: 'scads-alias-ha', label: 'HA alias', model_name: 'alias-ha', fallback_model_chain: ['google/gemma-4-31B-it', 'openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
-  { key: 'scads-alias-reasoning', label: 'Reasoning alias', model_name: 'alias-reasoning', fallback_model_chain: ['openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
-  { key: 'qwen3-coder-30b-a3b-instruct', label: 'Qwen3 Coder 30B', model_name: 'Qwen/Qwen3-Coder-30B-A3B-Instruct', fallback_model_chain: ['openai/gpt-oss-120b', 'google/gemma-4-31B-it'] },
-  { key: 'minimax-m3', label: 'MiniMax M3', model_name: 'MiniMaxAI/MiniMax-M3-MXFP8', fallback_model_chain: ['moonshotai/Kimi-K2.7-Code'] },
-  { key: 'kimi-k2.7-code', label: 'Kimi K2.7 Code', model_name: 'moonshotai/Kimi-K2.7-Code', fallback_model_chain: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
-  { key: 'glm-5.2-fp8', label: 'GLM 5.2 FP8', model_name: 'zai-org/GLM-5.2-FP8', fallback_model_chain: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
-];
-let builtinChatModels = BUILTIN_CHAT_MODELS_FALLBACK.slice();
-let builtinChatModel = localStorage.getItem(BUILTIN_CHAT_MODEL_STORAGE_KEY) || 'gpt-oss-120b';
 
 // ── State ────────────────────────────────────────────────────────────────────
 let storageKey = STORAGE_KEY;
@@ -3557,7 +3515,6 @@ function makeAIBubble(data, variant, options = {}) {
   const variantLabel = VARIANT_DESCS[variant] || variant || '';
   const p = x => Math.round((x || 0) * 100);
   const modelKey = data.model_key || 'gpt-oss-120b';
-  const modelFooter = modelFooterLabel(data, modelKey);
 
   // Plain conversational reply — no forecast chrome
   if (qtype === 'chat') {
@@ -3567,10 +3524,6 @@ function makeAIBubble(data, variant, options = {}) {
       <div class="msg-ai p-4 sm:p-5">
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         ${sourceFeedHtml(sources, data.evidence_error)}
-        <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
-          <span class="logo-dot" style="width:5px;height:5px"></span>
-          ${escHtml(modelFooter)}
-        </div>
       </div>`;
     return div;
   }
@@ -4231,7 +4184,6 @@ async function sendQuestion(options = {}) {
     );
     body.evidence_top_k = 3;
     body.attach_evidence = !(shortFollowup || attachedEvidence.length || hasCompleteMarketContext);
-    if (!activeModel) body.model = builtinChatModel;
     if (activeModel) {
       body.openrouter_model = activeModel.model;
       if (activeModel.provider === 'ollama') {
@@ -4272,7 +4224,6 @@ async function sendQuestion(options = {}) {
         if (mCtx.resolution_criteria)        agentBody.resolution_criteria = mCtx.resolution_criteria;
         if (mCtx.categories?.length)         agentBody.categories = mCtx.categories;
       } else if (extractedMarketProbability != null) agentBody.market_probability = extractedMarketProbability;
-      if (!activeModel) agentBody.model = builtinChatModel;
       if (activeModel) {
         agentBody.openrouter_model = activeModel.model;
         if (activeModel.provider === 'ollama') {
@@ -4880,7 +4831,7 @@ async function _streamLandingQuestion(question) {
       if (renderFrame) return;
       renderFrame = requestAnimationFrame(() => {
         renderFrame = 0;
-        contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>';
+        contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing...</span>';
       });
     };
     while (true) {
@@ -5891,7 +5842,6 @@ function _slugKey(text) {
 
 function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
 function _roiPct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + pct(x) + '%'; }
-function _ddPct(x) { return x == null ? '—' : (x * 100).toFixed(2) + '%'; }
 
 function _roiDeltaPct(x) { return x == null ? 'â€”' : (x >= 0 ? '+' : '') + (x * 100).toFixed(1).replace(/\.0$/, '') + 'pp'; }
 
@@ -6504,16 +6454,12 @@ function _renderMtmPage(d) {
     const account = m.account || {};
     const value = account.account_value ?? m.account_value;
     const ret = account.return ?? m.return;
-    const sharpe = account.sharpe ?? m.sharpe;
-    const maxDd = account.max_drawdown ?? m.max_drawdown;
     const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
     return `<tr class="eb-row">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
       <td>${_usd(value)}</td>
       <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
-      <td title="Risk-adjusted return: mean/stdev of per-trade account-value returns">${sharpe == null ? '—' : _sg(sharpe)}</td>
-      <td title="Largest peak-to-trough decline in account value">${_ddPct(maxDd)}</td>
       <td>${account.n_trades ?? m.n_trades ?? 0}</td>
       <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
       <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
@@ -6521,7 +6467,7 @@ function _renderMtmPage(d) {
   }).join('');
   return `<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4>
     <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Sharpe</th><th>Max DD</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
 }
 
 function renderEdgeBoard(d) {
@@ -6949,65 +6895,6 @@ async function addUrlAttachment() {
 function isChatMode() { return true; }
 function loadChatModeToggle() { /* toggle removed; chat is the default */ }
 
-function _activeBuiltinModel() {
-  return builtinChatModels.find(m => m.key === builtinChatModel) || builtinChatModels[0] || BUILTIN_CHAT_MODELS_FALLBACK[0];
-}
-
-function _builtinChatModelLabel(key) {
-  const model = builtinChatModels.find(m => m.key === key) || BUILTIN_CHAT_MODELS_FALLBACK.find(m => m.key === key);
-  return model?.label || model?.model_name || key || 'Hosted chat';
-}
-
-function _renderPromptModelSelect() {
-  const select = document.getElementById('promptModelSelect');
-  if (!select) return;
-  if (!_activeBuiltinModel()) builtinChatModels = BUILTIN_CHAT_MODELS_FALLBACK.slice();
-  if (!builtinChatModels.some(m => m.key === builtinChatModel)) builtinChatModel = builtinChatModels[0]?.key || 'gpt-oss-120b';
-  select.innerHTML = builtinChatModels.map(m => {
-    const fallbacks = (m.fallback_model_chain || []).length
-      ? `Fallbacks: ${m.fallback_model_chain.join(', ')}`
-      : 'No configured fallback';
-    return `<option value="${escAttr(m.key)}" title="${escAttr(fallbacks)}">${escHtml(m.label || m.key)}</option>`;
-  }).join('');
-  select.value = builtinChatModel;
-}
-
-function setBuiltinChatModel(key) {
-  if (!builtinChatModels.some(m => m.key === key)) return;
-  builtinChatModel = key;
-  localStorage.setItem(BUILTIN_CHAT_MODEL_STORAGE_KEY, key);
-  _renderPromptModelSelect();
-  _updateModelLabel();
-}
-
-async function loadBuiltinChatModels() {
-  _renderPromptModelSelect();
-  try {
-    const resp = await fetch('/chat/models');
-    const data = await resp.json();
-    if (!resp.ok || !Array.isArray(data.models) || !data.models.length) return;
-    builtinChatModels = data.models.map(m => ({
-      key: m.key || m.name,
-      label: m.label || m.key || m.name,
-      model_name: m.model_name || m.name || m.key,
-      fallback_model_chain: Array.isArray(m.fallback_model_chain) ? m.fallback_model_chain : [],
-    })).filter(m => m.key);
-    const defaultKey = data.default_model || builtinChatModels[0]?.key || 'gpt-oss-120b';
-    if (!builtinChatModels.some(m => m.key === builtinChatModel)) builtinChatModel = defaultKey;
-    localStorage.setItem(BUILTIN_CHAT_MODEL_STORAGE_KEY, builtinChatModel);
-    _renderPromptModelSelect();
-    _updateModelLabel();
-  } catch {
-    _renderPromptModelSelect();
-  }
-}
-
-function modelFooterLabel(data, fallback = '') {
-  const requested = data.model_key || fallback || 'gpt-oss-120b';
-  const served = data.served_model_name || '';
-  return served && served !== requested ? `${requested} -> ${served}` : (served || requested);
-}
-
 // ── Custom model manager (Ollama-style) ───────────────────────────────────────
 // Models live in localStorage as `or_models` (array) with `or_active` (id, or
 // '' for the server default). Each model: {id, name, provider, baseUrl, apiKey, model}.
@@ -7199,7 +7086,6 @@ function deleteModel(id) {
 function loadOrSettings() {
   _migrateLegacyModel();
   renderModelList();
-  loadBuiltinChatModels();
   if (_loadModels().length) {
     const det = document.getElementById('configDetails');
     if (det) det.open = true;
@@ -7212,7 +7098,7 @@ function loadOrSettings() {
 function _updateModelLabel() {
   const m = getActiveModelConfig();
   const label = document.getElementById('activeModelLabel');
-  if (label) label.textContent = m ? m.model.split('/').pop() : _builtinChatModelLabel(builtinChatModel);
+  if (label) label.textContent = m ? m.model.split('/').pop() : 'gpt-oss-120b';
 }
 
 // ── Exchange accounts (bring-your-own trading) ───────────────────────────────
