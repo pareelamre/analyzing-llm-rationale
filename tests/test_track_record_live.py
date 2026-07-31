@@ -992,6 +992,24 @@ class EdgeAnalyticsTests(unittest.TestCase):
             pnl_dup["flat"]["compound_return"], pnl_one["flat"]["compound_return"], places=6)
         self.assertEqual(len(pnl_dup["flat"]["growth_curve"]), 1)
 
+    def test_crowd_baseline_equity_compounds_once_per_market(self):
+        # Same bug, same fix, separate function: crowd_baseline_equity has its
+        # own standalone compounding walk (used for the "vs crowd" comparison
+        # and its own equity curve) that must dedupe identically to paper_pnl,
+        # or the crowd baseline's own number/chart pair could mismatch too.
+        one_snapshot = [dict(market_probability=0.8, outcome=1, platform="P", ident="m1")]
+        thirty_duplicate_snapshots = [
+            dict(market_probability=0.8, outcome=1, platform="P", ident="m1",
+                 resolved_ts=f"2026-07-30T00:{i:02d}:00+00:00")
+            for i in range(30)
+        ]
+        base = trl.crowd_baseline_equity(one_snapshot)
+        dup = trl.crowd_baseline_equity(thirty_duplicate_snapshots)
+        self.assertEqual(dup["n_bets"], 30)
+        self.assertEqual(base["n_bets"], 1)
+        self.assertAlmostEqual(dup["compound_return"], base["compound_return"], places=6)
+        self.assertEqual(len(dup["growth_curve"]), 1)
+
     def test_paper_pnl_is_net_of_kalshi_fees(self):
         # Same winning bet on Kalshi (price-based fee) vs Polymarket (fee-free):
         # Kalshi ROI must be lower, and the fee must be reported and positive.
