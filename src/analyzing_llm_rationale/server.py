@@ -802,25 +802,34 @@ def _put_conversation(user_id: str, conversation: Dict[str, Any]) -> Dict[str, A
         _message_key(client, user_id, conversation["id"], message["id"])
         for message in messages
     ]
-    with client.transaction():
-        client.put(entity)
-        existing_query = client.query(kind="Message", ancestor=key)
-        existing_query.keys_only()
-        existing_keys = [message_entity.key for message_entity in existing_query.fetch()]
-        stale_keys = [existing_key for existing_key in existing_keys if existing_key not in message_keys]
-        if stale_keys:
-            client.delete_multi(stale_keys)
-        # Only index the short scalar fields used for ordering/identity;
-        # exclude everything else to stay under Datastore's 1500-byte limit.
-        _MSG_INDEXED = frozenset({"id", "role", "createdAt", "updatedAt", "index"})
-        message_entities = []
-        for message, message_key in zip(messages, message_keys):
-            exclude = tuple(k for k in message if k not in _MSG_INDEXED)
-            message_entity = _ds.Entity(key=message_key, exclude_from_indexes=exclude)
-            message_entity.update(message)
-            message_entities.append(message_entity)
-        if message_entities:
-            client.put_multi(message_entities)
+    # Only index the short scalar fields used for ordering/identity;
+    # exclude everything else to stay under Datastore's 1500-byte limit.
+    _MSG_INDEXED = frozenset({"id", "role", "createdAt", "updatedAt", "index"})
+    from google.api_core.exceptions import Aborted as _Aborted
+    _max_retries = 5
+    for _attempt in range(_max_retries):
+        try:
+            with client.transaction():
+                client.put(entity)
+                existing_query = client.query(kind="Message", ancestor=key)
+                existing_query.keys_only()
+                existing_keys = [message_entity.key for message_entity in existing_query.fetch()]
+                stale_keys = [existing_key for existing_key in existing_keys if existing_key not in message_keys]
+                if stale_keys:
+                    client.delete_multi(stale_keys)
+                message_entities = []
+                for message, message_key in zip(messages, message_keys):
+                    exclude = tuple(k for k in message if k not in _MSG_INDEXED)
+                    message_entity = _ds.Entity(key=message_key, exclude_from_indexes=exclude)
+                    message_entity.update(message)
+                    message_entities.append(message_entity)
+                if message_entities:
+                    client.put_multi(message_entities)
+            break  # transaction committed successfully
+        except _Aborted:
+            if _attempt == _max_retries - 1:
+                raise
+            time.sleep(0.1 * (2 ** _attempt) + random.uniform(0, 0.05))
     return conversation
 
 
