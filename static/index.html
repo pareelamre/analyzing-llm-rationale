@@ -5733,6 +5733,7 @@ function _slugKey(text) {
 
 function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
 function _roiPct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + pct(x) + '%'; }
+function _ddPct(x) { return x == null ? '—' : (x * 100).toFixed(2) + '%'; }
 
 function _roiDeltaPct(x) { return x == null ? 'â€”' : (x >= 0 ? '+' : '') + (x * 100).toFixed(1).replace(/\.0$/, '') + 'pp'; }
 
@@ -6345,12 +6346,16 @@ function _renderMtmPage(d) {
     const account = m.account || {};
     const value = account.account_value ?? m.account_value;
     const ret = account.return ?? m.return;
+    const sharpe = account.sharpe ?? m.sharpe;
+    const maxDd = account.max_drawdown ?? m.max_drawdown;
     const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
     return `<tr class="eb-row">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
       <td>${_usd(value)}</td>
       <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
+      <td title="Risk-adjusted return: mean/stdev of per-trade account-value returns">${sharpe == null ? '—' : _sg(sharpe)}</td>
+      <td title="Largest peak-to-trough decline in account value">${_ddPct(maxDd)}</td>
       <td>${account.n_trades ?? m.n_trades ?? 0}</td>
       <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
       <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
@@ -6358,7 +6363,7 @@ function _renderMtmPage(d) {
   }).join('');
   return `<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4>
     <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Sharpe</th><th>Max DD</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
 }
 
 function renderEdgeBoard(d) {

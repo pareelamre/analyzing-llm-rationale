@@ -1353,14 +1353,36 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             filter_fn: optional callable(bet_dict) -> bool, skip bet if False.
             fade: if True, bet the *opposite* side to the model's call.
         """
+        # Scope to the bets this run actually includes, once.
+        _scoped_bets = [
+            _b for _b in all_bets
+            if not (validated and not _b["in_validated"])
+            and not (filter_fn is not None and not filter_fn(_b))
+        ]
+
+        # Repeated snapshots of the same still-open market (e.g. a rolling
+        # 15-minute crypto forecast, or a backlog of snapshots that all
+        # resolved together after an outage) are highly correlated re-draws of
+        # one real-world outcome, not independent trials. win_rate/roi/accuracy
+        # below intentionally still score every snapshot (calling it right
+        # *early* is the documented reward this simulation measures). But
+        # compounding the bankroll through every one of them -- rather than
+        # once per market -- lets a single event's backlog produce a wild,
+        # spurious swing driven by nothing but duplicate data. Compound only
+        # once per market, using its earliest (first-call) snapshot, matching
+        # _public_bets()'s existing "preserve the earliest call" convention.
+        _first_compound_idx: Dict[Tuple[Any, Any], int] = {}
+        for _idx, _b in enumerate(_scoped_bets):
+            _key = (_b.get("platform"), _b.get("ident"))
+            if _key not in _first_compound_idx:
+                _first_compound_idx[_key] = _idx
+
         # Precount planned exposure. The growth curve treats each nominal stake
         # as a fraction of the current bankroll, so wins/losses affect the next
         # bet size instead of being added to a static capital base.
         _pre_staked = 0.0
-        for _b in all_bets:
-            if validated and not _b["in_validated"]:
-                continue
-            if filter_fn is not None and not filter_fn(_b):
+        for _idx, _b in enumerate(_scoped_bets):
+            if _idx != _first_compound_idx.get((_b.get("platform"), _b.get("ident"))):
                 continue
             _s = sizing(_b)
             if _s > 0.0:
@@ -1373,11 +1395,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         curve_ts: List[Any] = []
         growth_curve: List[float] = []
         bankroll = _COMPOUND_STARTING_BANKROLL
-        for b in all_bets:
-            if validated and not b["in_validated"]:
-                continue
-            if filter_fn is not None and not filter_fn(b):
-                continue
+        for _idx, b in enumerate(_scoped_bets):
             stake = sizing(b)
             if stake <= 0.0:
                 continue
@@ -1408,7 +1426,8 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             cum += profit
             curve.append(round(cum, 4))
             curve_ts.append(b["resolved_ts"])
-            if _pre_staked > 0:
+            is_first_for_market = _idx == _first_compound_idx.get((b.get("platform"), b.get("ident")))
+            if is_first_for_market and _pre_staked > 0:
                 stake_fraction = stake / _pre_staked
                 bankroll *= max(0.0, 1.0 + stake_fraction * (profit / stake))
                 growth_curve.append(round(bankroll, 6))
@@ -1641,6 +1660,44 @@ def build_models_comparison(resolved: List[Dict[str, Any]], *,
     return out
 
 
+def _sharpe_and_max_drawdown(value_curve: List[Dict[str, Any]]) -> Dict[str, Optional[float]]:
+    """Per-step Sharpe ratio and max drawdown from an account's mark-to-market
+    value curve (the same curve the equity chart plots).
+
+    Unannualized: value_curve points are event-driven (one per trade/
+    settlement), not fixed-interval, so there's no clean bar count to
+    annualize against. This is comparable across models scored the same way,
+    not meant to match a textbook annualized Sharpe."""
+    values = [
+        float(p["account_value"]) for p in value_curve
+        if isinstance(p, dict) and p.get("account_value") is not None
+    ]
+    if len(values) < 2:
+        return {"sharpe": None, "max_drawdown": None}
+
+    returns = [
+        (values[i] - values[i - 1]) / values[i - 1]
+        for i in range(1, len(values))
+        if values[i - 1] > 0
+    ]
+    sharpe = None
+    if len(returns) >= 2:
+        mean = sum(returns) / len(returns)
+        var = sum((r - mean) ** 2 for r in returns) / (len(returns) - 1)
+        std = var ** 0.5
+        if std > 0:
+            sharpe = round(mean / std, 4)
+
+    peak = values[0]
+    max_dd = 0.0
+    for v in values:
+        peak = max(peak, v)
+        if peak > 0:
+            max_dd = max(max_dd, (peak - v) / peak)
+
+    return {"sharpe": sharpe, "max_drawdown": round(max_dd, 4)}
+
+
 def build_mark_to_market_accounts(
     rows: List[Dict[str, Any]],
     latest_quotes: Dict[Any, Dict[str, Any]],
@@ -1667,6 +1724,7 @@ def build_mark_to_market_accounts(
                 fee_fn=_bet_fee,
             )
         )
+        risk = _sharpe_and_max_drawdown(account.get("value_curve") or [])
         accounts.append({
             "model": label,
             "account": account,
@@ -1676,6 +1734,8 @@ def build_mark_to_market_accounts(
             "n_settlements": account.get("n_settlements"),
             "n_open_positions": account.get("n_open_positions"),
             "n_illiquid_positions": account.get("n_illiquid_positions"),
+            "sharpe": risk["sharpe"],
+            "max_drawdown": risk["max_drawdown"],
         })
     baseline_rows = _crowd_baseline_reference_rows(all_rows, default_model=default_model)
     if baseline_rows:
@@ -1686,6 +1746,7 @@ def build_mark_to_market_accounts(
                 fee_fn=_bet_fee,
             )
         )
+        risk = _sharpe_and_max_drawdown(account.get("value_curve") or [])
         accounts.append({
             "model": "market-follow",
             "account": account,
@@ -1695,6 +1756,8 @@ def build_mark_to_market_accounts(
             "n_settlements": account.get("n_settlements"),
             "n_open_positions": account.get("n_open_positions"),
             "n_illiquid_positions": account.get("n_illiquid_positions"),
+            "sharpe": risk["sharpe"],
+            "max_drawdown": risk["max_drawdown"],
             "baseline": True,
         })
     accounts.sort(

@@ -943,8 +943,11 @@ class EdgeAnalyticsTests(unittest.TestCase):
         # The edge-board chart plots growth_curve as a compounded $10,000 bankroll:
         # each nominal stake is a fraction of current bankroll, so winnings
         # increase later bet sizes instead of being added to a static base.
-        resolved = ([self._res(0.8, 0.5, 1) for _ in range(7)]
-                    + [self._res(0.3, 0.5, 0) for _ in range(3)])
+        # Distinct platform/ident per row: compounding only happens once per
+        # market, so these need to be 10 independent markets, not 10 snapshots
+        # of the same one.
+        resolved = ([dict(self._res(0.8, 0.5, 1), platform="P", ident=f"w{i}") for i in range(7)]
+                    + [dict(self._res(0.3, 0.5, 0), platform="P", ident=f"l{i}") for i in range(3)])
         pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
         for name, s in pnl.items():
             if not isinstance(s, dict) or not s.get("growth_curve"):
@@ -958,6 +961,36 @@ class EdgeAnalyticsTests(unittest.TestCase):
                 msg=f"{name}: compound_return does not match compound_bankroll")
             self.assertGreater(s["growth_curve"][0], trl._COMPOUND_STARTING_BANKROLL)
         self.assertGreater(pnl["flat"]["compound_return"], pnl["flat"]["roi"])
+
+    def test_growth_curve_compounds_once_per_market_not_per_snapshot(self):
+        # Regression guard: a backlog (e.g. a stalled publish pipeline catching
+        # up) can resolve dozens of snapshots of the SAME still-open market at
+        # once. Those are correlated re-draws of one real outcome, not 30
+        # independent trials -- compounding through every one of them let a
+        # single event's backlog produce a wild, spurious swing (the incident
+        # that motivated this fix: n_snapshots_resolved=36 on ONE real market
+        # produced a compounded "+188% Smart ROI" from nothing but duplicate
+        # data). One real win should compound like one real win, whether it's
+        # scored once or reported 30 times over.
+        one_snapshot = [dict(self._res(0.8, 0.5, 1), platform="P", ident="m1")]
+        thirty_duplicate_snapshots = [
+            dict(self._res(0.8, 0.5, 1), platform="P", ident="m1",
+                 snapshot_ts=f"2026-07-30T00:{i:02d}:00+00:00")
+            for i in range(30)
+        ]
+        pnl_one = trl.paper_pnl(one_snapshot, trl.edge_calibration(one_snapshot))
+        pnl_dup = trl.paper_pnl(thirty_duplicate_snapshots, trl.edge_calibration(thirty_duplicate_snapshots))
+
+        # win_rate/roi/n_bets still score every snapshot (unchanged, documented
+        # design) -- only the compounding walk is deduped.
+        self.assertEqual(pnl_dup["flat"]["n_bets"], 30)
+        self.assertEqual(pnl_one["flat"]["n_bets"], 1)
+
+        # But the compounded bankroll outcome must match: one real market's
+        # result, not amplified by how many times it was re-scored.
+        self.assertAlmostEqual(
+            pnl_dup["flat"]["compound_return"], pnl_one["flat"]["compound_return"], places=6)
+        self.assertEqual(len(pnl_dup["flat"]["growth_curve"]), 1)
 
     def test_paper_pnl_is_net_of_kalshi_fees(self):
         # Same winning bet on Kalshi (price-based fee) vs Polymarket (fee-free):
@@ -1202,6 +1235,55 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertEqual(sig["total_cost"], 0.85)
         self.assertEqual(sig["net_profit"], 0.15)
         self.assertAlmostEqual(sig["roi"], 0.1765, places=4)
+
+
+class MarkToMarketRiskStatsTests(unittest.TestCase):
+    """Sharpe ratio and max drawdown surfaced on the MTM leaderboard."""
+
+    def test_fewer_than_two_points_returns_none(self):
+        self.assertEqual(
+            trl._sharpe_and_max_drawdown([]),
+            {"sharpe": None, "max_drawdown": None},
+        )
+        self.assertEqual(
+            trl._sharpe_and_max_drawdown([{"account_value": 10_000.0}]),
+            {"sharpe": None, "max_drawdown": None},
+        )
+
+    def test_flat_curve_has_zero_drawdown_and_no_sharpe(self):
+        curve = [{"account_value": 10_000.0} for _ in range(5)]
+        result = trl._sharpe_and_max_drawdown(curve)
+        self.assertEqual(result["max_drawdown"], 0.0)
+        self.assertIsNone(result["sharpe"])  # zero variance -> undefined Sharpe
+
+    def test_drawdown_measures_largest_peak_to_trough_decline(self):
+        # 100 -> 110 -> 121 -> 108: peak 121, trough 108 -> dd = 13/121.
+        curve = [{"account_value": v} for v in (100.0, 110.0, 121.0, 108.0)]
+        result = trl._sharpe_and_max_drawdown(curve)
+        self.assertAlmostEqual(result["max_drawdown"], 13.0 / 121.0, places=4)
+        self.assertIsNotNone(result["sharpe"])
+
+    def test_build_mark_to_market_accounts_includes_risk_stats(self):
+        rows = [
+            dict(self._res_row(0.8, 0.5, 1), platform="Polymarket", ident="m1",
+                 model="council", snapshot_ts="2026-07-01T00:00:00+00:00",
+                 resolved=True, resolved_ts="2026-07-03T00:00:00+00:00",
+                 market_bid=0.5, market_ask=0.55),
+            dict(self._res_row(0.3, 0.5, 0), platform="Polymarket", ident="m2",
+                 model="council", snapshot_ts="2026-07-02T00:00:00+00:00",
+                 resolved=True, resolved_ts="2026-07-04T00:00:00+00:00",
+                 market_bid=0.5, market_ask=0.55),
+        ]
+        accounts = trl.build_mark_to_market_accounts(
+            rows, {}, default_model="council",
+        )
+        by_model = {a["model"]: a for a in accounts}
+        self.assertIn("sharpe", by_model["council"])
+        self.assertIn("max_drawdown", by_model["council"])
+
+    def _res_row(self, model_p, market_p, outcome):
+        return {"model_probability": model_p, "market_probability": market_p,
+                "outcome": outcome}
 
 
 if __name__ == "__main__":
