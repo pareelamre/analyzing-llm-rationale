@@ -74,6 +74,45 @@ class ForecastLatencyMeasurementTests(unittest.TestCase):
         self.assertEqual(result["response_model_key"], "minimax-m3")
         self.assertEqual(result["served_model_name"], "MiniMaxAI/MiniMax-M3-MXFP8")
 
+    def test_stream_parser_treats_sse_error_as_failed_measurement(self) -> None:
+        def event(name: str, payload: dict[str, object]) -> list[bytes]:
+            return [
+                f"event: {name}\n".encode(),
+                f"data: {json.dumps(payload)}\n".encode(),
+                b"\n",
+            ]
+
+        lines = [
+            *event("meta", {"status": "streaming", "prepare_ms": 1, "model_key": "minimax-m3"}),
+            *event("error", {"status_code": 503, "detail": "temporarily unavailable"}),
+        ]
+
+        class FakeResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def readline(self):
+                if lines:
+                    return lines.pop(0)
+                return b""
+
+        with mock.patch.object(self.measure.urllib.request, "urlopen", return_value=FakeResponse()):
+            result = self.measure._post_stream(
+                "https://foresea.test/predict/stream",
+                {"question": "Will it happen?"},
+                {"content-type": "application/json"},
+                5,
+            )
+
+        self.assertEqual(result["status"], 503)
+        self.assertEqual(result["server_prepare_ms"], 1)
+        self.assertEqual(result["error_event"]["detail"], "temporarily unavailable")
+
 
 if __name__ == "__main__":
     unittest.main()

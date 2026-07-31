@@ -2984,7 +2984,7 @@ class PredictRequest(BaseModel):
         description="If `true`, fetch live evidence and merge it with any supplied articles.",
     )
     evidence_top_k: int = Field(
-        3,
+        5,
         ge=1,
         le=10,
         description="Maximum number of evidence articles to retrieve (1–10).",
@@ -3505,7 +3505,7 @@ class AgentAnalyzeRequest(BaseModel):
     market_liquidity: Optional[float] = None
     resolve_time: Optional[str] = Field(None, max_length=50)
     variant: str = Field("variant0_neutral_baseline", max_length=64)
-    evidence_top_k: int = Field(3, ge=1, le=10)
+    evidence_top_k: int = Field(5, ge=1, le=10)
     skills: List[AgentSkill] = Field(default_factory=list, max_length=5, description="Up to 5 custom skills to run.")
     builtin_skills: bool = Field(False, description="Also run the built-in forecasting toolkit (base rate, scenario decomposition, red team, key drivers).")
     ground_in_record: bool = Field(False, description="Condition the forecast on the model's own live track-record calibration.")
@@ -4623,20 +4623,28 @@ async def _prepare_predict_messages(
         else ""
     ) or req.question
 
-    # A short follow-up in an ongoing thread ("WE is 90+", "why?") makes a poor
-    # search query and derails on literal matches, so answer it from the
-    # conversation instead of fetching fresh evidence. Substantive questions
-    # (even mid-thread) still retrieve.
+    # A short follow-up in an ongoing thread ("WE is 90+", "why?") is a poor
+    # standalone search query. Keep retrieval on, but anchor it to the latest
+    # substantive user question so the forecast still receives raw evidence.
     short_followup = bool(req.history) and len(req.question.split()) <= 6
+    if short_followup:
+        previous_user_questions = [
+            (turn.get("content") or "").strip()
+            for turn in req.history
+            if turn.get("role") == "user" and (turn.get("content") or "").strip()
+        ]
+        if previous_user_questions:
+            evidence_question = (
+                f"{previous_user_questions[-1][:500]}\n"
+                f"Follow-up: {req.question}"
+            )
 
-    if req.attach_evidence and not short_followup:
+    if req.attach_evidence:
         retrieved_articles, evidence_error, _ = await _fetch_evidence_with_cache(
             evidence_question,
             req.evidence_top_k,
             source="forecast",
         )
-    elif req.attach_evidence and short_followup:
-        _forecast_evidence_requests.add(1, {"source": "forecast", "outcome": "skipped_followup"})
 
     evidence_articles = _merge_evidence_articles(supplied_articles, retrieved_articles)
     evidence_articles = [_clean_article(a) for a in evidence_articles]
@@ -4685,7 +4693,6 @@ async def _prepare_predict_messages(
 
     if (
         req.attach_evidence
-        and not short_followup
         and not evidence_articles
         and evidence_error is None
     ):

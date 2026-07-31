@@ -156,6 +156,8 @@ def _post_stream(url: str, payload: dict[str, Any], headers: dict[str, str], tim
                         break
                     elif name == "error":
                         result["error_event"] = data
+                        if isinstance(data, dict) and data.get("status_code") is not None:
+                            result["status"] = data.get("status_code")
                         break
                     event = None
                     data_lines = []

@@ -578,6 +578,10 @@ class PipelineTests(unittest.TestCase):
             models["scads-alias-code"].fallback_model_chain,
             ("openai/gpt-oss-120b", "google/gemma-4-31B-it"),
         )
+        self.assertEqual(
+            models["minimax-m3"].fallback_model_chain,
+            ("moonshotai/Kimi-K2.7-Code", "google/gemma-4-31B-it"),
+        )
         chat_models = {cfg.name for cfg in scads_chat_model_options(repo_root / "configs" / "models.yaml")}
         self.assertIn("qwen3-coder-30b-a3b-instruct", chat_models)
         self.assertIn("glm-5.2-fp8", chat_models)
