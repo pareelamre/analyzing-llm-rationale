@@ -981,9 +981,8 @@ class EdgeAnalyticsTests(unittest.TestCase):
         pnl_one = trl.paper_pnl(one_snapshot, trl.edge_calibration(one_snapshot))
         pnl_dup = trl.paper_pnl(thirty_duplicate_snapshots, trl.edge_calibration(thirty_duplicate_snapshots))
 
-        # win_rate/roi/n_bets still score every snapshot (unchanged, documented
-        # design) -- only the compounding walk is deduped.
-        self.assertEqual(pnl_dup["flat"]["n_bets"], 30)
+        # Both n_bets and compounding are deduped to 1 trade per market at resolution time.
+        self.assertEqual(pnl_dup["flat"]["n_bets"], 1)
         self.assertEqual(pnl_one["flat"]["n_bets"], 1)
 
         # But the compounded bankroll outcome must match: one real market's
@@ -1042,7 +1041,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         ]
         base = trl.crowd_baseline_equity(one_snapshot)
         dup = trl.crowd_baseline_equity(thirty_duplicate_snapshots)
-        self.assertEqual(dup["n_bets"], 30)
+        self.assertEqual(dup["n_bets"], 1)
         self.assertEqual(base["n_bets"], 1)
         self.assertAlmostEqual(dup["compound_return"], base["compound_return"], places=6)
         self.assertEqual(len(dup["growth_curve"]), 1)

@@ -1354,38 +1354,27 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             filter_fn: optional callable(bet_dict) -> bool, skip bet if False.
             fade: if True, bet the *opposite* side to the model's call.
         """
-        # Scope to the bets this run actually includes, once.
-        _scoped_bets = [
+        # Deduplicate to one trade per market using its earliest forecast call before close.
+        # Prediction market trades are placed before close and settled ONCE at resolution time.
+        _scoped_bets_raw = [
             _b for _b in all_bets
             if not (validated and not _b["in_validated"])
             and not (filter_fn is not None and not filter_fn(_b))
         ]
+        _first_idx_map: Dict[Tuple[Any, Any], int] = {}
+        for _i, _b in enumerate(_scoped_bets_raw):
+            _k = (_b.get("platform"), _b.get("ident"))
+            if _k not in _first_idx_map:
+                _first_idx_map[_k] = _i
+        _scoped_bets = [
+            _b for _i, _b in enumerate(_scoped_bets_raw)
+            if _i == _first_idx_map.get((_b.get("platform"), _b.get("ident")))
+        ]
 
-        # Repeated snapshots of the same still-open market (e.g. a rolling
-        # 15-minute crypto forecast, or a backlog of snapshots that all
-        # resolved together after an outage) are highly correlated re-draws of
-        # one real-world outcome, not independent trials. win_rate/roi/accuracy
-        # below intentionally still score every snapshot (calling it right
-        # *early* is the documented reward this simulation measures). But
-        # compounding the bankroll through every one of them -- rather than
-        # once per market -- lets a single event's backlog produce a wild,
-        # spurious swing driven by nothing but duplicate data. Compound only
-        # once per market, using its earliest (first-call) snapshot, matching
-        # _public_bets()'s existing "preserve the earliest call" convention.
-        _first_compound_idx: Dict[Tuple[Any, Any], int] = {}
-        for _idx, _b in enumerate(_scoped_bets):
-            _key = (_b.get("platform"), _b.get("ident"))
-            if _key not in _first_compound_idx:
-                _first_compound_idx[_key] = _idx
-
-        # Precount planned exposure. The growth curve treats each nominal stake
-        # as a fraction of the current bankroll, so wins/losses affect the next
-        # bet size instead of being added to a static capital base.
+        # Precount planned exposure.
         _pre_staked = 0.0
-        for _idx, _b in enumerate(_scoped_bets):
-            if _idx != _first_compound_idx.get((_b.get("platform"), _b.get("ident"))):
-                continue
-            _s = sizing(_b)
+        for b in _scoped_bets:
+            _s = sizing(b)
             if _s > 0.0:
                 _pre_staked += _s
 
@@ -1431,8 +1420,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             cum += profit
             curve.append(round(cum, 4))
             curve_ts.append(b["resolved_ts"])
-            is_first_for_market = _idx == _first_compound_idx.get((b.get("platform"), b.get("ident")))
-            if is_first_for_market and _pre_staked > 0:
+            if _pre_staked > 0:
                 stake_fraction = stake / _pre_staked
                 bankroll *= max(0.0, 1.0 + stake_fraction * (profit / stake))
                 growth_curve.append(round(bankroll, 6))
@@ -1543,13 +1531,29 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
     market set — the zero-edge baseline the LLM models are judged against."""
     if not resolved:
         return None
+
+    first_mkt_idx: Dict[Tuple[Any, Any], int] = {}
+    sorted_resolved = sorted(resolved, key=lambda x: x.get("resolved_ts") or _now())
+    for _i, r in enumerate(sorted_resolved):
+        _k = (r.get("platform"), r.get("ident"))
+        if _k not in first_mkt_idx:
+            first_mkt_idx[_k] = _i
+    dedup_resolved = [
+        r for _i, r in enumerate(sorted_resolved)
+        if _i == first_mkt_idx.get((r.get("platform"), r.get("ident")))
+    ]
+
     cum = 0.0
     curve: List[float] = []
     curve_ts: List[Any] = []
-    bets: List[Dict[str, Any]] = []
     staked = pnl = wins = 0.0
     n = 0
-    for r in sorted(resolved, key=lambda x: x.get("resolved_ts") or _now()):
+    growth_curve: List[float] = []
+    growth_curve_ts: List[Any] = []
+    bankroll = _COMPOUND_STARTING_BANKROLL
+    dedup_staked = float(len(dedup_resolved))
+
+    for r in dedup_resolved:
         market_p = float(r.get("market_probability") or 0.5)
         if market_p == 0.5:
             continue
@@ -1574,31 +1578,14 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         elif hasattr(ts, "isoformat"):
             ts = ts.isoformat()
         curve_ts.append(ts)
-        bets.append({"platform": r.get("platform"), "ident": r.get("ident"), "profit": profit, "ts": ts})
+        if dedup_staked > 0:
+            bankroll *= max(0.0, 1.0 + (1.0 / dedup_staked) * profit)
+            growth_curve.append(round(bankroll, 6))
+            growth_curve_ts.append(ts)
+
     if not n:
         return None
 
-    # Compound only once per market (mirrors paper_pnl's _run(): repeated
-    # snapshots of the same still-open market are correlated re-draws of one
-    # outcome, not independent trials -- compounding through every one of
-    # them lets a single event's backlog produce a spurious swing).
-    first_idx: Dict[Tuple[Any, Any], int] = {}
-    for idx, b in enumerate(bets):
-        key = (b["platform"], b["ident"])
-        if key not in first_idx:
-            first_idx[key] = idx
-    dedup_staked = float(len(first_idx))
-
-    growth_curve: List[float] = []
-    growth_curve_ts: List[Any] = []
-    bankroll = _COMPOUND_STARTING_BANKROLL
-    if dedup_staked:
-        for idx, b in enumerate(bets):
-            if idx != first_idx.get((b["platform"], b["ident"])):
-                continue
-            bankroll *= max(0.0, 1.0 + (1.0 / dedup_staked) * b["profit"])
-            growth_curve.append(round(bankroll, 6))
-            growth_curve_ts.append(b["ts"])
     return {
         "n_bets": n,
         "total_staked": round(staked, 4),
