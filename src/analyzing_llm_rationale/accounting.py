@@ -30,6 +30,13 @@ shadow_mark_to_market_trades = meter.create_counter(
 market_follow_mark_to_market_runs = meter.create_counter(
     "accounting.market_follow_mark_to_market_runs", unit="1"
 )
+validated_kelly_runs = meter.create_counter("accounting.validated_kelly_runs", unit="1")
+validated_kelly_duration = meter.create_histogram(
+    "accounting.validated_kelly_duration", unit="s"
+)
+validated_kelly_trades = meter.create_counter(
+    "accounting.validated_kelly_trades", unit="1"
+)
 
 YES = "YES"
 NO = "NO"
@@ -379,6 +386,21 @@ def _event_sort_key(value: Any) -> str:
     return iso.replace("Z", "+00:00")
 
 
+def _kelly_fraction(p_win: float, p_side: float) -> float:
+    """Full-Kelly fraction of bankroll for a binary bet: f* = (p*b - q) / b,
+    b = decimal payout odds on the side actually held. Uncapped and
+    un-fractioned -- callers apply their own kelly_fraction multiplier and a
+    max-concentration cap; this just returns the raw formula's output
+    (can be negative, meaning no edge on this side)."""
+    if p_side <= 0.0 or p_side >= 1.0:
+        return 0.0
+    odds = (1.0 - p_side) / p_side
+    if odds <= 0:
+        return 0.0
+    q_win = 1.0 - p_win
+    return (p_win * odds - q_win) / odds
+
+
 def simulate_shadow_mark_to_market_account(
     rows: Iterable[Mapping[str, Any]],
     *,
@@ -549,6 +571,279 @@ def simulate_shadow_mark_to_market_account(
             shadow_mark_to_market_duration.record(
                 time.perf_counter() - start,
                 {"operation": "shadow_mark_to_market"},
+            )
+
+
+def simulate_validated_kelly_account(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    latest_quotes: Optional[Mapping[Any, MarketQuote | Mapping[str, Any]]] = None,
+    starting_cash: float = 10_000.0,
+    kelly_fraction: float = 0.5,
+    max_concentration: float = 0.15,
+    require_validated: bool = True,
+    fade: bool = False,
+    min_edge: float = 0.0,
+    min_price: float = 0.20,
+    max_price: float = 0.80,
+    fee_fn: Optional[Callable[[Any, float, float], float]] = None,
+    max_trades: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Real position ledger (one settle per market) sized by fractional Kelly
+    on the *current* account value, gated on statistically-proven edge, and
+    capped per-market to bound tail risk from any single miscalibrated call.
+
+    This is the strategy actually meant to be traded, unlike
+    simulate_shadow_mark_to_market_account's fixed $1 target_contracts (a
+    diagnostic default) or paper_pnl's per-snapshot backtest scoring (a
+    research tool, not an executable position). Two things distinguish it:
+
+    1. Position size is a *fraction of the live account value*, recomputed at
+       every trade -- gains from earlier markets are reinvested (they raise
+       the stake on the next one), and losses genuinely shrink it. Capped at
+       max_concentration so no single market can consume more than that
+       fraction of the book, regardless of how confident the call is -- this
+       directly targets the failure mode found in production: a model with a
+       78% resolved win rate was still net-negative because a handful of
+       oversized, wrong, high-conviction bets outweighed many small correct
+       ones.
+    2. Each row is expected to carry (attached by the caller from historical
+       resolved data): 'calibrated_model_probability' -- P(YES) to use for
+       Kelly sizing of whichever side ends up traded -- and '_edge_validated'
+       (True only if this row is approved to trade under the current
+       strategy). With require_validated=True (the point of this strategy),
+       rows without that field or set to False are skipped entirely: no
+       proven edge, no trade, regardless of how large the raw disagreement
+       looks. What populates these two fields depends on the strategy the
+       caller is building (see track_record_live.py):
+         - follow (fade=False): calibrated_model_probability is the model's
+           own walk-forward isotonic fit; _edge_validated means this
+           disagreement bucket has *proven positive* skill
+           (edge_calibration's skill_significant).
+         - fade (fade=True): the traded side is the *opposite* of the
+           model's implied side -- betting with the market specifically in
+           the regime proven, across every tracked model, to be where the
+           model is worst (the 20pp+ bucket has statistically significant
+           *negative* skill everywhere, not just "no proven edge yet").
+           calibrated_model_probability there is the walk-forward empirical
+           win rate of that fade bet within its own resolved history, and
+           _edge_validated means enough of that history exists to trust the
+           estimate.
+    """
+    row_list = sorted([dict(r) for r in rows], key=_row_sort_ts)
+    start = time.perf_counter()
+    with tracer.start_as_current_span("accounting.validated_kelly") as span:
+        span.set_attributes({
+            "items.count": len(row_list),
+            "account.value_method": "bid_liquidation",
+            "strategy.kelly_fraction": float(kelly_fraction),
+            "strategy.max_concentration": float(max_concentration),
+            "strategy.require_validated": bool(require_validated),
+            "strategy.fade": bool(fade),
+        })
+        try:
+            account = PredictionMarketAccount(starting_cash=starting_cash)
+            current_quotes = _quote_map(latest_quotes)
+            settlements_by_market: Dict[Tuple[str, str], Dict[str, Any]] = {}
+            events: List[Tuple[str, int, int, Dict[str, Any]]] = []
+            seq = 0
+            for row in row_list:
+                platform = str(row.get("platform") or "")
+                ident = str(row.get("ident") or "")
+                if not platform or not ident:
+                    continue
+                events.append((_event_sort_key(row.get("snapshot_ts") or row.get("ts")), 1, seq, row))
+                seq += 1
+                if row.get("resolved") and row.get("outcome") is not None:
+                    settlements_by_market.setdefault((platform, ident), {
+                        "platform": platform,
+                        "ident": ident,
+                        "outcome": int(row["outcome"]),
+                        "ts": row.get("resolved_ts") or row.get("close_time") or row.get("snapshot_ts"),
+                    })
+            for item in settlements_by_market.values():
+                events.append((_event_sort_key(item.get("ts")), 0, seq, item))
+                seq += 1
+            events.sort(key=lambda e: (e[0], e[1], e[2]))
+
+            trade_count = 0
+            skipped_no_edge = 0
+            skipped_not_validated = 0
+            skipped_unexecutable = 0
+            settled_markets: set[Tuple[str, str]] = set()
+            settlements: List[Dict[str, Any]] = []
+            value_curve: List[Dict[str, Any]] = []
+
+            for _ts_key, priority, _seq, payload in events:
+                platform = str(payload.get("platform") or "")
+                ident = str(payload.get("ident") or "")
+                market_key = (platform, ident)
+                if priority == 0:
+                    if market_key in settled_markets:
+                        continue
+                    settlement = account.settle_market(
+                        platform=platform,
+                        ident=ident,
+                        outcome=int(payload["outcome"]),
+                        ts=payload.get("ts"),
+                    )
+                    settled_markets.add(market_key)
+                    settlements.append(settlement)
+                    snap = account.snapshot(current_quotes, ts=payload.get("ts"))
+                    snap["event_type"] = "settlement"
+                    snap["event_market"] = {"platform": platform, "ident": ident}
+                    value_curve.append(snap)
+                    continue
+
+                row = payload
+                if market_key in settled_markets:
+                    continue
+                model_side = _row_edge_side(row, min_edge)
+                if not model_side:
+                    skipped_no_edge += 1
+                    continue
+                side = _opposite(model_side) if fade else model_side
+                if require_validated and not row.get("_edge_validated"):
+                    skipped_not_validated += 1
+                    continue
+                quote = MarketQuote.from_mapping(row)
+                current_quotes.setdefault((platform, ident), quote)
+                ask = quote.ask(side)
+                if ask is None or ask <= 0.0 or ask >= 1.0:
+                    skipped_unexecutable += 1
+                    logger.warning("skipping validated-kelly trade without executable ask")
+                    continue
+                if ask < min_price or ask > max_price:
+                    # A blended/aggregate calibrated probability is only as
+                    # good as how well it represents the *specific* case it's
+                    # applied to. Near a price extreme (e.g. a $0.001 "will
+                    # this happen" longshot), the market's own price is
+                    # already a far stronger, more specific signal than the
+                    # bucket-wide average -- applying that average there
+                    # produced multi-hundred-thousand-contract "lottery
+                    # ticket" positions in testing (capped in dollars, but a
+                    # near-certain full loss of that capped stake, repeatedly).
+                    skipped_unexecutable += 1
+                    continue
+
+                # Size against the *live* account value (cash + open positions
+                # marked to market) so earlier gains/losses genuinely compound
+                # into this stake, then cap at max_concentration.
+                liq_value, _illiquid = account.liquidation_value(current_quotes)
+                account_value = account.cash + liq_value
+                model_p = float(
+                    row.get("calibrated_model_probability")
+                    if row.get("calibrated_model_probability") is not None
+                    else (row.get("model_probability") or 0.5)
+                )
+                market_p = float(row.get("market_probability") or 0.5)
+                p_win = model_p if side == YES else (1.0 - model_p)
+                p_side_mkt = market_p if side == YES else (1.0 - market_p)
+                raw_kelly = _kelly_fraction(p_win, p_side_mkt)
+                sized_fraction = max(0.0, min(kelly_fraction * raw_kelly, max_concentration))
+                if sized_fraction <= 1e-9 or account_value <= 0:
+                    skipped_no_edge += 1
+                    continue
+                target_contracts = (sized_fraction * account_value) / ask
+
+                buy_qty = 0.0
+                opposite = account._active_position(platform, ident, _opposite(side))
+                same = account._active_position(platform, ident, side)
+                if opposite is not None:
+                    buy_qty += opposite.quantity
+                if same is None:
+                    buy_qty += target_contracts
+                elif same.quantity < target_contracts:
+                    buy_qty += target_contracts - same.quantity
+                if buy_qty <= 1e-12:
+                    continue
+                if max_trades is not None and trade_count >= max_trades:
+                    break
+
+                notional = buy_qty * ask
+                explicit_fee = row.get("fee")
+                fee = float(explicit_fee) if explicit_fee not in (None, "") else (
+                    float(fee_fn(platform, notional, ask)) if fee_fn else 0.0
+                )
+                fill = account.buy(
+                    platform=platform,
+                    ident=ident,
+                    side=side,
+                    quantity=buy_qty,
+                    price=ask,
+                    fee=fee,
+                    ts=row.get("snapshot_ts") or row.get("ts"),
+                )
+                trade_count += 1
+                validated_kelly_trades.add(1, {"platform": platform.lower() or "unknown"})
+                snap = account.snapshot(current_quotes, ts=row.get("snapshot_ts") or row.get("ts"))
+                snap["event_type"] = "trade"
+                snap["trade_status"] = fill.settlement_status
+                snap["event_market"] = {"platform": platform, "ident": ident, "side": side}
+                snap["sized_fraction"] = round(sized_fraction, 6)
+                value_curve.append(snap)
+
+            final = account.snapshot(current_quotes)
+            final.update({
+                "strategy": "fade_kelly_ledger" if fade else "validated_kelly_ledger",
+                "starting_cash": round(starting_cash, 6),
+                "return": round((final["account_value"] / starting_cash) - 1.0, 6)
+                if starting_cash else None,
+                "kelly_fraction": round(float(kelly_fraction), 6),
+                "max_concentration": round(float(max_concentration), 6),
+                "min_edge": round(float(min_edge), 6),
+                "min_price": round(float(min_price), 6),
+                "max_price": round(float(max_price), 6),
+                "fade": bool(fade),
+                "n_trades": trade_count,
+                "n_settlements": len(settlements),
+                "n_open_positions": len(final["open_positions"]),
+                "n_illiquid_positions": len(final["illiquid_positions"]),
+                "n_skipped_no_edge": skipped_no_edge,
+                "n_skipped_not_validated": skipped_not_validated,
+                "n_skipped_unexecutable": skipped_unexecutable,
+                "trades": [t.as_dict() for t in account.trades],
+                "settlements": settlements,
+                "value_curve": value_curve,
+                "notes": [
+                    "Sized by fractional Kelly against the live account value -- gains "
+                    "and losses compound into the next stake, capped at max_concentration.",
+                    (
+                        "Fades the model: trades the *opposite* of its implied side, "
+                        "in the regime proven to have significantly negative model "
+                        "skill -- no other bets are taken."
+                        if fade else
+                        "Only trades disagreement buckets with proven, statistically "
+                        "significant historical edge (edge_calibration skill_significant); "
+                        "no other bets are taken regardless of raw disagreement size."
+                    ),
+                    f"Skips trades priced outside [{min_price}, {max_price}]: a blended "
+                    "calibrated probability isn't specific enough to size a bet near a "
+                    "price extreme, where the market's own price is already a far "
+                    "stronger signal than the bucket-wide average.",
+                    "Open positions are valued at bid-side liquidation prices.",
+                    "Resolved markets settle into cash once per market before later trades are considered.",
+                    "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00.",
+                ],
+            })
+            validated_kelly_runs.add(1, {"outcome": "success"})
+            span.set_attributes({
+                "outcome": "success",
+                "trades.count": trade_count,
+                "settlements.count": len(settlements),
+                "positions.open_count": final["n_open_positions"],
+            })
+            return final
+        except Exception as exc:
+            validated_kelly_runs.add(1, {"outcome": "failure"})
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "failure")
+            raise
+        finally:
+            validated_kelly_duration.record(
+                time.perf_counter() - start,
+                {"operation": "validated_kelly"},
             )
 
 
