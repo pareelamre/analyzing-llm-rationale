@@ -6571,12 +6571,18 @@ function renderEdgeBoard(d) {
       comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
         const isCrowd = m.model === 'crowd-follow';
         const strategy = isCrowd ? (m.paper_pnl || {}).flat : ((m.paper_pnl || {}).smart || (m.paper_pnl || {}).flat);
+        // Gate ROI/vs-crowd on the strategy's own n_bets, matching the chart's
+        // inclusion threshold (_ebModelCurves' minBets check) -- not
+        // n_snapshots_resolved, which can be well above EB_MIN_N even when
+        // very few snapshots actually passed the smart filter this ROI is
+        // computed over, surfacing a small-n number as if it were stable.
+        const enoughStrategy = !!strategy && (strategy.n_bets || 0) >= EB_MIN_N;
         const modelSmartRoi = strategy ? strategy.compound_return : null;
         const roiDelta = modelSmartRoi != null && crowdRoi != null ? modelSmartRoi - crowdRoi : null;
         return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
         `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
         `<td>${enough ? _sg(m.skill_vs_market) : '·'}</td>` +
-        `<td>${enough ? _roiPct(modelSmartRoi) : '·'}</td><td>${enough ? _roiDeltaPct(roiDelta) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
+        `<td>${enoughStrategy ? _roiPct(modelSmartRoi) : '·'}</td><td>${enoughStrategy ? _roiDeltaPct(roiDelta) : '·'}</td></tr>`; }).join('') + `</tbody></table>`;
   } else {
     compHtml = `<p class="text-sm text-gray-500">Model comparison across SCADS-hosted models fills in as forecasts resolve.</p>`;
   }
