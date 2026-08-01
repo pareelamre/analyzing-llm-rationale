@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -14,6 +14,7 @@ from analyzing_llm_rationale.accounting import (
     simulate_mark_to_market_account,
     simulate_market_follow_mark_to_market_account,
     simulate_shadow_mark_to_market_account,
+    simulate_validated_kelly_account,
 )
 
 
@@ -177,6 +178,102 @@ class PredictionMarketAccountTests(unittest.TestCase):
         self.assertEqual(account["trades"][1]["side"], NO)
         self.assertEqual(account["n_open_positions"], 2)
         self.assertGreater(account["liquidation_value"], 0.0)
+
+
+class ValidatedKellyAccountTests(unittest.TestCase):
+    def _row(self, *, platform="Polymarket", ident, model_p, market_p, calibrated_p=None,
+              validated=True, outcome, ts, resolved_ts=None, bid_ask_spread=0.02):
+        row = {
+            "platform": platform,
+            "ident": ident,
+            "snapshot_ts": ts,
+            "model_probability": model_p,
+            "market_probability": market_p,
+            "market_bid": max(0.0, market_p - bid_ask_spread / 2),
+            "market_ask": min(1.0, market_p + bid_ask_spread / 2),
+            "resolved": True,
+            "outcome": outcome,
+            # Resolution must happen strictly after the snapshot, or the
+            # settlement event (priority 0) and this row's trade event
+            # (priority 1) land at the identical timestamp and the trade is
+            # silently skipped (market already in settled_markets) before it
+            # ever reaches the edge/validation checks.
+            "resolved_ts": resolved_ts or (ts + timedelta(days=1)),
+            "_edge_validated": validated,
+        }
+        if calibrated_p is not None:
+            row["calibrated_model_probability"] = calibrated_p
+        return row
+
+    def test_skips_rows_without_edge_validated_by_default(self):
+        rows = [
+            self._row(ident="m1", model_p=0.7, market_p=0.5, calibrated_p=0.7,
+                      validated=False, outcome=1, ts=datetime(2026, 7, 1, tzinfo=timezone.utc))
+        ]
+        account = simulate_validated_kelly_account(rows, starting_cash=10_000.0)
+        self.assertEqual(account["n_trades"], 0)
+        self.assertEqual(account["n_skipped_not_validated"], 1)
+        self.assertEqual(account["account_value"], 10_000.0)
+
+    def test_trades_validated_row_on_model_implied_side(self):
+        rows = [
+            self._row(ident="m1", model_p=0.7, market_p=0.5, calibrated_p=0.7,
+                      outcome=1, ts=datetime(2026, 7, 1, tzinfo=timezone.utc))
+        ]
+        account = simulate_validated_kelly_account(rows, starting_cash=10_000.0)
+        self.assertEqual(account["n_trades"], 1)
+        self.assertEqual(account["trades"][0]["side"], YES)  # model_p > market_p -> YES
+        self.assertGreater(account["account_value"], 10_000.0)  # won
+
+    def test_fade_trades_the_opposite_side(self):
+        # model says YES (0.7 > market's 0.5), fade should buy NO instead.
+        rows = [
+            self._row(ident="m1", model_p=0.7, market_p=0.5, calibrated_p=0.3,
+                      outcome=0, ts=datetime(2026, 7, 1, tzinfo=timezone.utc))
+        ]
+        account = simulate_validated_kelly_account(
+            rows, starting_cash=10_000.0, fade=True,
+        )
+        self.assertEqual(account["n_trades"], 1)
+        self.assertEqual(account["trades"][0]["side"], NO)
+        self.assertEqual(account["strategy"], "fade_kelly_ledger")
+        self.assertGreater(account["account_value"], 10_000.0)  # NO won
+
+    def test_max_concentration_caps_stake_regardless_of_kelly_output(self):
+        # calibrated_p=0.95 vs market 0.5 implies a huge full-Kelly fraction;
+        # max_concentration must still bound the actual dollar stake.
+        rows = [
+            self._row(ident="m1", model_p=0.95, market_p=0.5, calibrated_p=0.95,
+                      outcome=1, ts=datetime(2026, 7, 1, tzinfo=timezone.utc))
+        ]
+        account = simulate_validated_kelly_account(
+            rows, starting_cash=10_000.0, kelly_fraction=1.0, max_concentration=0.10,
+        )
+        stake = account["trades"][0]["quantity"] * account["trades"][0]["price"]
+        self.assertLessEqual(stake, 10_000.0 * 0.10 + 1e-6)
+
+    def test_skips_prices_outside_the_default_band(self):
+        # market_p=0.05 -> ask for the model's YES-implied side sits near 0.06,
+        # well outside the default [0.20, 0.80] band -- must be skipped even
+        # though it's flagged validated.
+        rows = [
+            self._row(ident="m1", model_p=0.5, market_p=0.05, calibrated_p=0.9,
+                      outcome=1, ts=datetime(2026, 7, 1, tzinfo=timezone.utc))
+        ]
+        account = simulate_validated_kelly_account(rows, starting_cash=10_000.0)
+        self.assertEqual(account["n_trades"], 0)
+        self.assertEqual(account["account_value"], 10_000.0)
+
+    def test_settles_once_per_market_across_duplicate_snapshots(self):
+        base = datetime(2026, 7, 1, tzinfo=timezone.utc)
+        rows = [
+            self._row(ident="m1", model_p=0.7, market_p=0.5, calibrated_p=0.7,
+                      outcome=1, ts=base, resolved_ts=base),
+            self._row(ident="m1", model_p=0.72, market_p=0.52, calibrated_p=0.72,
+                      outcome=1, ts=base, resolved_ts=base),
+        ]
+        account = simulate_validated_kelly_account(rows, starting_cash=10_000.0)
+        self.assertEqual(account["n_settlements"], 1)
 
 
 if __name__ == "__main__":

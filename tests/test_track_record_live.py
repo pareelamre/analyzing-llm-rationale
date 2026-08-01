@@ -1341,5 +1341,128 @@ class MarkToMarketRiskStatsTests(unittest.TestCase):
                 "outcome": outcome}
 
 
+class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
+    """The deployable strategies built on top of statistically-proven edge:
+    build_validated_kelly_accounts only trades disagreement buckets with
+    proven positive skill; build_fade_kelly_accounts bets against the model
+    specifically in the regime proven (across every tracked model in
+    production) to have significant negative skill."""
+
+    def _resolved_row(self, *, ident, model_p, market_p, outcome, day, model="m"):
+        ts = f"2026-01-{day:02d}T00:00:00+00:00" if day <= 28 else f"2026-02-{day-28:02d}T00:00:00+00:00"
+        # resolved_ts must be strictly after snapshot_ts: the shadow-ledger
+        # event loop sorts settlement (priority 0) before trades (priority 1)
+        # at equal timestamps, so an identical snapshot_ts/resolved_ts makes
+        # the settlement fire first and silently swallow the trade.
+        resolved_ts = ts.replace("T00:00:00", "T12:00:00")
+        return {
+            "platform": "P", "ident": ident, "model": model,
+            "model_probability": model_p, "market_probability": market_p,
+            "market_bid": max(0.0, market_p - 0.02), "market_ask": min(1.0, market_p + 0.02),
+            "resolved": True, "outcome": outcome,
+            "snapshot_ts": ts, "resolved_ts": resolved_ts,
+            "model_brier": trl.brier(model_p, outcome), "market_brier": trl.brier(market_p, outcome),
+            "model_correct": (model_p >= 0.5) == (outcome == 1),
+        }
+
+    def test_walk_forward_calibration_uses_raw_probability_before_min_history(self):
+        rows = [self._resolved_row(ident=f"m{i}", model_p=0.65, market_p=0.5, outcome=1, day=i + 1)
+                for i in range(5)]
+        calibrated = trl._attach_walk_forward_calibration(rows, min_history=30)
+        for r in calibrated:
+            self.assertEqual(r["calibrated_model_probability"], 0.65)
+
+    def test_validated_kelly_only_trades_once_bucket_is_proven_significant(self):
+        # 40 distinct markets, all a consistent 15pp disagreement (10-20pp
+        # bucket), model always correct -> zero-variance skill estimate that
+        # trivially clears the significance bar.
+        rows = [self._resolved_row(ident=f"m{i}", model_p=0.65, market_p=0.5, outcome=1, day=(i % 27) + 1)
+                for i in range(40)]
+        accounts = trl.build_validated_kelly_accounts(
+            rows, {}, default_model="m", tracked_models=["m"],
+        )
+        self.assertEqual(len(accounts), 1)
+        account = accounts[0]
+        self.assertGreater(account["n_trades"], 0)
+        self.assertGreater(account["n_validated_buckets"], 0)
+        self.assertGreater(account["return"], 0.0)
+
+    def test_validated_kelly_abstains_with_no_proven_edge(self):
+        # Same small edge repeated with a coin-flip outcome -> no significant
+        # skill anywhere; must place zero trades rather than guess.
+        import random
+        rng = random.Random(7)
+        rows = [
+            self._resolved_row(ident=f"m{i}", model_p=0.53, market_p=0.5,
+                                outcome=rng.randint(0, 1), day=(i % 27) + 1)
+            for i in range(40)
+        ]
+        accounts = trl.build_validated_kelly_accounts(
+            rows, {}, default_model="m", tracked_models=["m"],
+        )
+        self.assertEqual(accounts[0]["n_trades"], 0)
+        self.assertEqual(accounts[0]["recommended_weight"], 0.0)
+
+    def test_validated_kelly_skips_crowd_follow(self):
+        rows = [self._resolved_row(ident="m1", model_p=0.7, market_p=0.5, outcome=1,
+                                    day=1, model="crowd-follow")]
+        accounts = trl.build_validated_kelly_accounts(
+            rows, {}, default_model="crowd-follow", tracked_models=["crowd-follow"],
+        )
+        self.assertEqual(accounts, [])
+
+    def test_fade_calibration_requires_min_history_in_the_20pp_bucket(self):
+        # 15 rows in the 20pp+ bucket, model always wrong (fade always wins).
+        # First 10 (min_history) must NOT be validated; the rest should be,
+        # with a fade win-rate approaching 1.0 from the prior perfect history.
+        rows = [
+            self._resolved_row(ident=f"m{i}", model_p=0.7, market_p=0.45, outcome=0, day=i + 1)
+            for i in range(15)
+        ]
+        calibrated = trl._attach_fade_calibration(rows, min_history=10)
+        not_validated = [r for r in calibrated if not r["_edge_validated"]]
+        validated = [r for r in calibrated if r["_edge_validated"]]
+        self.assertEqual(len(not_validated), 10)
+        self.assertEqual(len(validated), 5)
+        # model_p=0.7 > market_p=0.45 -> model's side is YES, so the fade side
+        # is NO. calibrated_model_probability is calibrated P(YES); a fade
+        # bet on NO winning ~100% of the time means P(YES) should be ~0, not
+        # ~1 -- the field is "P(YES)", not "P(the side we're trading wins)".
+        for r in validated:
+            self.assertLess(r["calibrated_model_probability"], 0.1)
+
+    def test_fade_kelly_bets_against_the_model_and_profits_when_model_is_wrong(self):
+        rows = [
+            self._resolved_row(ident=f"m{i}", model_p=0.7, market_p=0.45, outcome=0, day=(i % 27) + 1)
+            for i in range(20)
+        ]
+        accounts = trl.build_fade_kelly_accounts(
+            rows, {}, default_model="m", tracked_models=["m"],
+        )
+        self.assertEqual(len(accounts), 1)
+        account = accounts[0]
+        self.assertEqual(account["account"]["strategy"], "fade_kelly_ledger")
+        self.assertGreater(account["n_trades"], 0)
+        self.assertGreater(account["return"], 0.0)
+
+    def test_recommended_weight_is_zero_for_non_positive_accounts(self):
+        # One model with proven, consistently winning edge; one with none.
+        winner_rows = [self._resolved_row(ident=f"w{i}", model_p=0.65, market_p=0.5, outcome=1,
+                                           day=(i % 27) + 1, model="winner")
+                       for i in range(40)]
+        import random
+        rng = random.Random(3)
+        loser_rows = [self._resolved_row(ident=f"l{i}", model_p=0.53, market_p=0.5,
+                                          outcome=rng.randint(0, 1), day=(i % 27) + 1, model="loser")
+                      for i in range(40)]
+        accounts = trl.build_validated_kelly_accounts(
+            winner_rows + loser_rows, {}, default_model="winner",
+            tracked_models=["winner", "loser"],
+        )
+        by_model = {a["model"]: a for a in accounts}
+        self.assertEqual(by_model["loser"]["recommended_weight"], 0.0)
+        self.assertGreater(by_model["winner"]["recommended_weight"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
