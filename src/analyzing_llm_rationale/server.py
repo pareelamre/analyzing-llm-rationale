@@ -1967,7 +1967,13 @@ def _render_static_html_page(
     page: str,
     cache_control: str,
 ) -> Response:
-    source = (_STATIC_DIR / filename).read_text(encoding="utf-8")
+    raw = (_STATIC_DIR / filename).read_bytes()
+    try:
+        source = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        # File was saved with Windows-1252 encoding; decode and serve as Unicode
+        # (Starlette re-encodes the response body as UTF-8 for the browser).
+        source = raw.decode("cp1252")
     html_source = _inject_page_context(source, _page_context(request, page))
     return Response(
         html_source,
