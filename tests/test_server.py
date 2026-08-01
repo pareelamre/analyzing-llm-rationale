@@ -1440,7 +1440,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Atlas enters final testing", prompt)
         self.assertEqual(
             self.evidence_pipeline.calls,
-            [("Will Project Atlas launch before December 31, 2026?", 5)],
+            [("Will Project Atlas launch before December 31, 2026?", 20)],
         )
         self.assertIn("Central bank signals policy shift", prompt)
 
