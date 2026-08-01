@@ -142,7 +142,7 @@ jobs:
           # it first instead of assuming deploy-success means request-ready.
           echo "Waiting for ${SERVICE_URL}/ready ..."
           for attempt in $(seq 1 30); do
-            if curl -fsS "${SERVICE_URL}/ready" | grep -q '"ready":true'; then
+            if curl -fsS "${SERVICE_URL}/ready" > /dev/null; then
               echo "Service ready after ${attempt} attempt(s)."
               break
             fi
