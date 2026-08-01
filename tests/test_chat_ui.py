@@ -134,8 +134,8 @@ class ChatUiTests(unittest.TestCase):
         self.assertIn("startForecast(question)", start_example_body)
         self.assertIn("_streamLandingQuestion(question)", submit_landing_body)
         self.assertNotIn("_streamLandingQuestion(question)", start_example_body)
-        self.assertIn("attach_evidence: false", landing_stream_body)
-        self.assertIn("evidence_top_k: 3", landing_stream_body)
+        self.assertIn("attach_evidence: true", landing_stream_body)
+        self.assertIn("evidence_top_k: 5", landing_stream_body)
         self.assertIn("max_tokens: 384", landing_stream_body)
 
     def test_streaming_forecast_emits_timing_events(self) -> None:
@@ -169,18 +169,15 @@ class ChatUiTests(unittest.TestCase):
             self.assertIn("scheduleRender();", delta_body)
             self.assertNotIn("contentEl.innerHTML = renderMarkdown(_chatText(text))", delta_body)
 
-    def test_interactive_forecasts_use_lighter_evidence_defaults(self) -> None:
+    def test_interactive_forecasts_preserve_raw_evidence_defaults(self) -> None:
         send_body = self.index_html.split("async function sendQuestion", 1)[1].split(
             "if (activeModel)",
             1,
         )[0]
-        self.assertIn("body.evidence_top_k = 3;", send_body)
+        self.assertIn("body.evidence_top_k = 5;", send_body)
         self.assertIn("if (chat_mode) body.max_tokens = 384;", send_body)
-        self.assertIn(
-            "body.attach_evidence = !(shortFollowup || attachedEvidence.length || hasCompleteMarketContext);",
-            send_body,
-        )
-        self.assertIn("const hasCompleteMarketContext", send_body)
+        self.assertIn("body.attach_evidence = !attachedEvidence.length;", send_body)
+        self.assertNotIn("const hasCompleteMarketContext", send_body)
         self.assertIn("let extractedMarketProbability = null;", send_body)
 
     def test_prompt_window_exposes_builtin_chat_model_selector(self) -> None:

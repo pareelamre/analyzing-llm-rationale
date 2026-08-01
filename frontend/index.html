@@ -4231,14 +4231,8 @@ async function sendQuestion(options = {}) {
     }
     const attachedEvidence = [..._attachments];
     if (attachedEvidence.length) body.news_articles = attachedEvidence;
-    const shortFollowup = history.length > 0 && question.split(/\s+/).filter(Boolean).length <= 6;
-    const hasCompleteMarketContext = !!(
-      mCtx
-      && body.market_probability != null
-      && (body.resolution_criteria || body.description)
-    );
-    body.evidence_top_k = 3;
-    body.attach_evidence = !(shortFollowup || attachedEvidence.length || hasCompleteMarketContext);
+    body.evidence_top_k = 5;
+    body.attach_evidence = !attachedEvidence.length;
     if (activeModel) {
       body.openrouter_model = activeModel.model;
       if (activeModel.provider === 'ollama') {
@@ -4260,7 +4254,7 @@ async function sendQuestion(options = {}) {
     if (_agentEnabled() || options.forceAgent) {
       const agentBody = {
         question,
-        evidence_top_k: 3,
+        evidence_top_k: 5,
         history,  // full thread context — only a new brief resets it
         conversation_steer: conversationSteer,
         skills: _loadSkills().map(s => ({ name: s.name, instruction: s.instruction })),
@@ -4866,8 +4860,8 @@ async function _streamLandingQuestion(question) {
     question,
     variant: 'variant0_neutral_baseline',
     history: [],
-    attach_evidence: false,
-    evidence_top_k: 3,
+    attach_evidence: true,
+    evidence_top_k: 5,
     max_tokens: 384,
   };
   try {
