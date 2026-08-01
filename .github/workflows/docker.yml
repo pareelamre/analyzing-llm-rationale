@@ -131,6 +131,27 @@ jobs:
           SERVICE_URL: https://foresea.ink
         run: |
           curl -fsS "${SERVICE_URL}/health"
+          # `gcloud run deploy` reporting "100 percent of traffic" only means
+          # traffic is *routed* to the new revision -- with --min-instances 0
+          # the container itself is still cold-starting (loading the RAG
+          # embedding model, etc.) at that point, and the custom domain adds
+          # its own routing hop on top. Hitting /predict/stream immediately
+          # raced that cold start and got a transient 405 (the ASGI router
+          # not fully registered yet), not a real regression. /ready flips to
+          # 200 only once the app has actually finished initializing, so poll
+          # it first instead of assuming deploy-success means request-ready.
+          echo "Waiting for ${SERVICE_URL}/ready ..."
+          for attempt in $(seq 1 30); do
+            if curl -fsS "${SERVICE_URL}/ready" > /dev/null; then
+              echo "Service ready after ${attempt} attempt(s)."
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "::error::Service did not become ready within 150s."
+              exit 1
+            fi
+            sleep 5
+          done
           python scripts/measure_forecast_latency.py \
             --url "${SERVICE_URL}" \
             --mode stream \
