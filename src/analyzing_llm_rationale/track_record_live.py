@@ -1363,12 +1363,18 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         ]
         _first_idx_map: Dict[Tuple[Any, Any], int] = {}
         for _i, _b in enumerate(_scoped_bets_raw):
-            _k = (_b.get("platform"), _b.get("ident"))
-            if _k not in _first_idx_map:
-                _first_idx_map[_k] = _i
+            _p = _b.get("platform")
+            _id = _b.get("ident")
+            if _p and _id:
+                _k = (_p, _id)
+                if _k not in _first_idx_map:
+                    _first_idx_map[_k] = _i
+            else:
+                _first_idx_map[(_i, _i)] = _i
+
         _scoped_bets = [
             _b for _i, _b in enumerate(_scoped_bets_raw)
-            if _i == _first_idx_map.get((_b.get("platform"), _b.get("ident")))
+            if (not _b.get("platform") or not _b.get("ident")) or _i == _first_idx_map.get((_b.get("platform"), _b.get("ident")))
         ]
 
         # Precount planned exposure.
@@ -1535,12 +1541,18 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
     first_mkt_idx: Dict[Tuple[Any, Any], int] = {}
     sorted_resolved = sorted(resolved, key=lambda x: x.get("resolved_ts") or _now())
     for _i, r in enumerate(sorted_resolved):
-        _k = (r.get("platform"), r.get("ident"))
-        if _k not in first_mkt_idx:
-            first_mkt_idx[_k] = _i
+        _p = r.get("platform")
+        _id = r.get("ident")
+        if _p and _id:
+            _k = (_p, _id)
+            if _k not in first_mkt_idx:
+                first_mkt_idx[_k] = _i
+        else:
+            first_mkt_idx[(_i, _i)] = _i
+
     dedup_resolved = [
         r for _i, r in enumerate(sorted_resolved)
-        if _i == first_mkt_idx.get((r.get("platform"), r.get("ident")))
+        if (not r.get("platform") or not r.get("ident")) or _i == first_mkt_idx.get((r.get("platform"), r.get("ident")))
     ]
 
     cum = 0.0
