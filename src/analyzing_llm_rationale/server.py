@@ -4443,7 +4443,7 @@ async def _fetch_evidence_with_cache(
             _forecast_evidence_requests.add(1, {**attrs, "outcome": "unconfigured"})
             return [], f"Evidence pipeline is not configured on this server: {exc}", "unconfigured"
 
-    top_k = max(1, min(top_k, 10))
+    top_k = max(1, min(top_k, 100))
     evidence_cache_key = _cache_key("evidence", evidence_question, top_k)
     cached = _cache_get(evidence_cache_key)
     if cached is not None:
