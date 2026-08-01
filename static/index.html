@@ -6531,6 +6531,17 @@ function _renderMtmPage(d) {
   const _usd = v => Number.isFinite(Number(v))
     ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
     : 'building';
+  const pnl = d.paper_pnl || {};
+  const roi = s => (s && s.n_bets >= 5) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets') : `<span style="color:var(--text-dim);font-weight:500">building · n=${s ? s.n_bets : 0}</span>`;
+  const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
+
+  const growthCardsHtml = pnl.growth_1pct ? `
+    <div class="tr-stats" style="margin-bottom:16px">
+      <div class="tr-stat" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);border-top-left-radius:19px" title="Aggressive Capital Growth mode: 2% of bankroll per market ($200 initial stake)."><div class="v" id="eb-mtm-growth2-v">${roi(pnl.growth_2pct)}</div><div class="k label ui-icon-label">${uiIcon('star')} Growth 2% Mode</div>${_sub('2% Bankroll / $200')}</div>
+      <div class="tr-stat" style="border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.05)" title="Balanced Capital Growth mode: 1% of bankroll per market ($100 initial stake)."><div class="v" id="eb-mtm-growth1-v">${roi(pnl.growth_1pct)}</div><div class="k label ui-icon-label">Growth 1% Mode</div>${_sub('1% Bankroll / $100')}</div>
+      <div class="tr-stat" title="Calibrated Half-Kelly sizing plus data-driven filters ($1 flat bets)."><div class="v" id="eb-mtm-smart-v">${roi(pnl.smart)}</div><div class="k label">Smart ROI Mode</div>${_sub('$1 Flat Preservation')}</div>
+    </div>` : '';
+
   const curves = mtmModels.map((m, i) => {
     const account = m.account || {};
     const curvePoints = account.value_curve || [];
@@ -6551,9 +6562,6 @@ function _renderMtmPage(d) {
       points: values,
       color: _mtmModelColor(m.model, i),
       label,
-      // Without `head` _equitySvg skips the end-of-line bubble entirely, which
-      // is why the MTM chart used to render as bare lines while the model
-      // comparison chart (built by _ebModelCurves) showed its bubbles.
       head: _ebModelHead(m.model),
       headTitle: `${label} · ${_usd(account.account_value ?? m.account_value)}${ret == null ? '' : ' · ' + _roiPct(ret)}`,
     };
@@ -6565,7 +6573,7 @@ function _renderMtmPage(d) {
     const value = account.account_value ?? m.account_value;
     const ret = account.return ?? m.return;
     const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
-    return `<tr class="eb-row">
+    return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
       <td>${_usd(value)}</td>
@@ -6575,7 +6583,8 @@ function _renderMtmPage(d) {
       <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
     </tr>`;
   }).join('');
-  return `<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4>
+  return `<h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account & Capital Growth</h4>
+    ${growthCardsHtml}
     <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
 }
