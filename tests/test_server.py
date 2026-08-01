@@ -633,7 +633,7 @@ class ServerTests(unittest.TestCase):
         )
         self.assertEqual(
             self.evidence_pipeline.calls,
-            [("Will event X happen?", 5)],
+            [("Will event X happen?", 20)],
         )
 
     def test_predict_strips_html_from_returned_evidence(self):
@@ -2515,7 +2515,7 @@ class ServerTests(unittest.TestCase):
         query, top_k = self.evidence_pipeline.calls[0]
         self.assertIn("Who wins AL vs WE in the LPL series?", query)
         self.assertIn("Follow-up: WE is 90+", query)
-        self.assertEqual(top_k, 5)
+        self.assertEqual(top_k, 20)
 
     def test_substantive_question_with_history_still_retrieves(self):
         self.client.post(
