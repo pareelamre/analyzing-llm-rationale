@@ -36,6 +36,7 @@ from analyzing_llm_rationale import trackrec_store as _ds
 from analyzing_llm_rationale.accounting import (
     simulate_market_follow_mark_to_market_account,
     simulate_shadow_mark_to_market_account,
+    simulate_validated_kelly_account,
 )
 from analyzing_llm_rationale.entity_tagger import tag_question
 
@@ -1793,6 +1794,216 @@ def build_mark_to_market_accounts(
         ),
         reverse=True,
     )
+    return accounts
+
+
+def _attach_walk_forward_calibration(rows: List[Dict[str, Any]], *, min_history: int = 30) -> List[Dict[str, Any]]:
+    """Attach 'calibrated_model_probability' to each row, fit only on PRIOR
+    resolved rows in resolved_ts order (walk-forward, no lookahead) -- mirrors
+    paper_pnl's calibration exactly. Returns rows sorted by resolved_ts
+    (mutated in place and returned for convenience)."""
+    ordered = sorted(rows, key=lambda x: x.get("resolved_ts") or _now())
+    history: List[Dict[str, Any]] = []
+    for r in ordered:
+        raw_model_p = float(r.get("model_probability") or 0.5)
+        if len(history) >= min_history:
+            pairs = [(float(x["model_probability"]), int(x["outcome"])) for x in history]
+            bp = _fit_isotonic(pairs)
+            cal_p = _apply_isotonic(bp, raw_model_p)
+        else:
+            cal_p = raw_model_p
+        r["calibrated_model_probability"] = round(cal_p, 4)
+        history.append(r)
+    return ordered
+
+
+def build_validated_kelly_accounts(
+    rows: List[Dict[str, Any]],
+    latest_quotes: Dict[Any, Dict[str, Any]],
+    *,
+    default_model: str,
+    tracked_models: Optional[List[str]] = None,
+    kelly_fraction: float = 0.5,
+    max_concentration: float = 0.15,
+) -> List[Dict[str, Any]]:
+    """Per-model deployable strategy: a real position ledger (one settle per
+    market, per simulate_validated_kelly_account) sized by fractional Kelly on
+    walk-forward calibrated probability, gated on statistically-proven edge,
+    and capped per-market so no single miscalibrated call can dominate the
+    book. Unlike build_mark_to_market_accounts' fixed $1 diagnostic sizing,
+    this is meant to be the strategy actually traded going forward.
+
+    crowd-follow is skipped: it has no model-vs-market disagreement to
+    validate or size against (see build_models_comparison's identical
+    handling). Each account also gets 'recommended_weight': 0 for any model
+    without a validated positive return, otherwise proportional to its
+    realized return among the models that do -- capital only goes to models
+    with actual proven edge, not to whichever one merely looks best."""
+    resolved_only = [r for r in rows if r.get("resolved") and r.get("outcome") is not None]
+    by_model: Dict[str, List[Dict[str, Any]]] = {}
+    for row in resolved_only:
+        label = str(row.get("model") or default_model)
+        by_model.setdefault(label, []).append(row)
+
+    accounts: List[Dict[str, Any]] = []
+    for label in (tracked_models or list(by_model.keys())):
+        if label == "crowd-follow":
+            continue
+        model_rows = by_model.get(label) or []
+        if not model_rows:
+            continue
+        calibrated_rows = _attach_walk_forward_calibration([dict(r) for r in model_rows])
+        sig_buckets = {
+            b["edge_bucket"] for b in edge_calibration(calibrated_rows)
+            if b.get("skill_significant")
+        }
+        for r in calibrated_rows:
+            r["_edge_validated"] = _edge_label(_edge(r)) in sig_buckets
+
+        account = simulate_validated_kelly_account(
+            calibrated_rows,
+            latest_quotes=latest_quotes,
+            kelly_fraction=kelly_fraction,
+            max_concentration=max_concentration,
+            fee_fn=_bet_fee,
+        )
+        risk = _sharpe_and_max_drawdown(account.get("value_curve") or [])
+        accounts.append({
+            "model": label,
+            "account": account,
+            "account_value": account.get("account_value"),
+            "return": account.get("return"),
+            "n_trades": account.get("n_trades"),
+            "n_settlements": account.get("n_settlements"),
+            "n_skipped_not_validated": account.get("n_skipped_not_validated"),
+            "n_validated_buckets": len(sig_buckets),
+            "sharpe": risk["sharpe"],
+            "max_drawdown": risk["max_drawdown"],
+        })
+
+    positive = [a for a in accounts if (a.get("return") or 0.0) > 0]
+    total_positive_return = sum(a["return"] for a in positive)
+    for a in accounts:
+        a["recommended_weight"] = (
+            round(a["return"] / total_positive_return, 4)
+            if a in positive and total_positive_return > 0
+            else 0.0
+        )
+
+    accounts.sort(key=lambda a: (a.get("return") if a.get("return") is not None else -1.0), reverse=True)
+    return accounts
+
+
+_FADE_BUCKET = "20pp+"
+
+
+def _attach_fade_calibration(
+    rows: List[Dict[str, Any]], *, min_history: int = 10, fade_bucket: str = _FADE_BUCKET,
+) -> List[Dict[str, Any]]:
+    """Attach 'calibrated_model_probability' (calibrated P(YES), for whichever
+    side the fade strategy ends up trading) and '_edge_validated' for
+    simulate_validated_kelly_account(fade=True): it trades the *opposite* of
+    the model's implied side, restricted to fade_bucket -- the disagreement
+    size proven, across every tracked model, to have statistically
+    significant NEGATIVE model skill (edge_calibration's 20pp+ bucket).
+
+    Walk-forward, no lookahead: the fade win-rate used for a given row comes
+    only from this model's PRIOR resolved fade_bucket history. _edge_validated
+    is only True once min_history prior observations exist in that bucket --
+    below that the estimate isn't trusted yet and the row is skipped, exactly
+    like the 'not enough proven history' case in the follow strategy."""
+    ordered = sorted(rows, key=lambda x: x.get("resolved_ts") or _now())
+    fade_outcomes: List[bool] = []
+    for r in ordered:
+        model_p = float(r.get("model_probability") or 0.5)
+        market_p = float(r.get("market_probability") or 0.5)
+        in_bucket = _edge_label(abs(model_p - market_p)) == fade_bucket
+        # Matches accounting._row_edge_side's own direction convention exactly
+        # (model_p vs market_p, not model_p vs 0.5) so the "fade" side here is
+        # the same side simulate_validated_kelly_account(fade=True) will hold.
+        model_side_yes = model_p > market_p
+        fade_side_yes = not model_side_yes
+
+        r["_edge_validated"] = False
+        if in_bucket and len(fade_outcomes) >= min_history:
+            fade_win_rate = sum(fade_outcomes) / len(fade_outcomes)
+            r["calibrated_model_probability"] = round(
+                fade_win_rate if fade_side_yes else (1.0 - fade_win_rate), 4
+            )
+            r["_edge_validated"] = True
+
+        if in_bucket:
+            outcome = int(r.get("outcome") or 0)
+            fade_outcomes.append((outcome == 1) == fade_side_yes)
+    return ordered
+
+
+def build_fade_kelly_accounts(
+    rows: List[Dict[str, Any]],
+    latest_quotes: Dict[Any, Dict[str, Any]],
+    *,
+    default_model: str,
+    tracked_models: Optional[List[str]] = None,
+    kelly_fraction: float = 0.5,
+    max_concentration: float = 0.15,
+) -> List[Dict[str, Any]]:
+    """Per-model fade strategy: bet *against* the model's implied side, sized
+    by fractional Kelly, specifically in the disagreement regime proven --
+    for every tracked model, not just one -- to have significantly negative
+    model skill (see build_validated_kelly_accounts' docstring for why that
+    regime exists: models are consistently worse than the market once they
+    disagree with it by more than 20 percentage points). Complements, doesn't
+    replace, build_validated_kelly_accounts: that one only activates once a
+    model *proves* positive edge (currently: none has, yet); this one is
+    already actionable today, on the one edge the data has actually proven."""
+    resolved_only = [r for r in rows if r.get("resolved") and r.get("outcome") is not None]
+    by_model: Dict[str, List[Dict[str, Any]]] = {}
+    for row in resolved_only:
+        label = str(row.get("model") or default_model)
+        by_model.setdefault(label, []).append(row)
+
+    accounts: List[Dict[str, Any]] = []
+    for label in (tracked_models or list(by_model.keys())):
+        if label == "crowd-follow":
+            continue
+        model_rows = by_model.get(label) or []
+        if not model_rows:
+            continue
+        calibrated_rows = _attach_fade_calibration([dict(r) for r in model_rows])
+        n_eligible = sum(1 for r in calibrated_rows if r.get("_edge_validated"))
+
+        account = simulate_validated_kelly_account(
+            calibrated_rows,
+            latest_quotes=latest_quotes,
+            kelly_fraction=kelly_fraction,
+            max_concentration=max_concentration,
+            fade=True,
+            fee_fn=_bet_fee,
+        )
+        risk = _sharpe_and_max_drawdown(account.get("value_curve") or [])
+        accounts.append({
+            "model": label,
+            "account": account,
+            "account_value": account.get("account_value"),
+            "return": account.get("return"),
+            "n_trades": account.get("n_trades"),
+            "n_settlements": account.get("n_settlements"),
+            "n_skipped_not_validated": account.get("n_skipped_not_validated"),
+            "n_eligible_fade_rows": n_eligible,
+            "sharpe": risk["sharpe"],
+            "max_drawdown": risk["max_drawdown"],
+        })
+
+    positive = [a for a in accounts if (a.get("return") or 0.0) > 0]
+    total_positive_return = sum(a["return"] for a in positive)
+    for a in accounts:
+        a["recommended_weight"] = (
+            round(a["return"] / total_positive_return, 4)
+            if a in positive and total_positive_return > 0
+            else 0.0
+        )
+
+    accounts.sort(key=lambda a: (a.get("return") if a.get("return") is not None else -1.0), reverse=True)
     return accounts
 
 
