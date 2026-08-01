@@ -6135,6 +6135,8 @@ function _attachEquityHover(container) {
     }
     const lines = eq.curves.map((c, ci) => {
       let idx;
+      const cLen = c.points ? c.points.length : 0;
+      if (!cLen) { dots[ci].style.display = 'none'; return null; }
       if (eq.hasTimes && c.times && c.times.length) {
         const t = eq.tMin + frac * eq.tSpan;
         idx = 0; let best = Infinity;
@@ -6143,13 +6145,13 @@ function _attachEquityHover(container) {
           if (dd < best) { best = dd; idx = j; }
         }
       } else {
-        idx = Math.max(0, Math.min(c.points.length - 1, Math.round(frac * (eq.n - 1))));
+        idx = Math.max(0, Math.min(cLen - 1, Math.round(frac * (cLen - 1))));
       }
       const v = c.points[idx];
       if (v == null) { dots[ci].style.display = 'none'; return null; }
-      const dotX = eq.hasTimes && c.times
+      const dotX = (eq.hasTimes && c.times && c.times.length)
         ? eq.padL + eq.pointInsetX + ((c.times[idx] - eq.tMin) / eq.tSpan) * eq.innerW
-        : plotX;
+        : eq.padL + eq.pointInsetX + (cLen > 1 ? (idx / (cLen - 1)) * eq.innerW : eq.innerW / 2);
       const y = eq.padT + eq.cH - ((v - eq.lo) / eq.range) * eq.cH;
       dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));
       dots[ci].style.display = '';

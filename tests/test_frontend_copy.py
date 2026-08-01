@@ -166,6 +166,31 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertNotIn("chart heartbeat", index)
         self.assertNotIn("SCADS + baseline", index)
 
+    def test_server_compact_pnl_strategy_preserves_growth_curve_ts(self):
+        from analyzing_llm_rationale.server import _compact_pnl_strategy
+        strategy = {
+            "n_bets": 5,
+            "roi": 0.1,
+            "growth_curve": [10000, 10500],
+            "growth_curve_ts": ["2026-06-01T00:00:00+00:00", "2026-06-02T00:00:00+00:00"],
+            "equity_curve": [0, 500],
+            "equity_curve_ts": ["2026-06-01T00:00:00+00:00", "2026-06-02T00:00:00+00:00"],
+        }
+        compact = _compact_pnl_strategy(strategy)
+        self.assertIn("growth_curve_ts", compact)
+        self.assertEqual(len(compact["growth_curve"]), len(compact["growth_curve_ts"]))
+
+    def test_equity_hover_uses_per_curve_points_length_in_index_mode(self):
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        hover = index.split("function _attachEquityHover(container) {", 1)[1].split(
+            "function _attachEdgeBoardChartHovers", 1
+        )[0]
+
+        self.assertIn("const cLen = c.points ? c.points.length : 0;", hover)
+        self.assertIn("idx = Math.max(0, Math.min(cLen - 1, Math.round(frac * (cLen - 1))));", hover)
+
 
 if __name__ == "__main__":
     unittest.main()
