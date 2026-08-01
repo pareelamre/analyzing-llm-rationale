@@ -4100,6 +4100,7 @@ def _typing_instruction(
         "only whether that exact outcome resolves by its close date (not whether the "
         "event ever happens); consider arguments for and against, weigh the most "
         "important drivers, check relevant base rates, and adjust for overconfidence. "
+        "Ground your rationale directly in the provided evidence articles, citing their specific publisher or source name. "
         "Do not reveal the checklist; only return the requested JSON."
     )
     return instr
@@ -4429,8 +4430,18 @@ async def _fetch_evidence_with_cache(
     attrs = {"source": source}
     started = time.monotonic()
     if evidence_pipeline is None:
-        _forecast_evidence_requests.add(1, {**attrs, "outcome": "unconfigured"})
-        return [], "Evidence pipeline is not configured on this server.", "unconfigured"
+        try:
+            from analyzing_llm_rationale.news_pipeline import NewsPipeline
+            evidence_pipeline = NewsPipeline(
+                fetch_sources=("web", "gdelt", "google-news", "newsapi", "rss", "open-meteo"),
+                summarize_articles=False,
+                use_embeddings=False,
+                min_relevance=float(os.environ.get("EVIDENCE_MIN_RELEVANCE", "0.25")),
+            )
+            _state["evidence_pipeline"] = evidence_pipeline
+        except Exception as exc:
+            _forecast_evidence_requests.add(1, {**attrs, "outcome": "unconfigured"})
+            return [], f"Evidence pipeline is not configured on this server: {exc}", "unconfigured"
 
     top_k = max(1, min(top_k, 10))
     evidence_cache_key = _cache_key("evidence", evidence_question, top_k)
@@ -6771,8 +6782,7 @@ async def _finalize_predict_response(
     predict_cache_key: Optional[str] = None,
 ) -> None:
     """Apply best-effort side effects shared by blocking and streaming forecasts."""
-    if req.chat_mode:
-        _append_chat_source_attribution(response)
+    _append_chat_source_attribution(response)
 
     _forecast_counter.add(1, {
         "forecast.variant": req.variant or "unknown",
