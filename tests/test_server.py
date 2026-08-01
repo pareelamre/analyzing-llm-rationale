@@ -269,7 +269,7 @@ class ServerTests(unittest.TestCase):
         )
         self.assertNotIn("qwen3-vl-8b-instruct", by_key)
 
-    def test_predict_defaults_to_three_evidence_articles(self):
+    def test_predict_defaults_to_five_evidence_articles(self):
         response = self.client.post(
             "/predict",
             json={
@@ -282,7 +282,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             self.evidence_pipeline.calls,
-            [("Will the Fed cut rates before July 31, 2026?", 3)],
+            [("Will the Fed cut rates before July 31, 2026?", 5)],
         )
 
     def test_predict_times_out_slow_evidence_and_continues(self):
@@ -701,7 +701,7 @@ class ServerTests(unittest.TestCase):
         )
         self.assertEqual(
             self.evidence_pipeline.calls,
-            [("Will event X happen?", 3)],
+            [("Will event X happen?", 5)],
         )
 
     def test_predict_strips_html_from_returned_evidence(self):
@@ -1470,7 +1470,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Atlas enters final testing", prompt)
         self.assertEqual(
             self.evidence_pipeline.calls,
-            [("Will Project Atlas launch before December 31, 2026?", 3)],
+            [("Will Project Atlas launch before December 31, 2026?", 5)],
         )
         self.assertIn("Central bank signals policy shift", prompt)
 
@@ -2525,9 +2525,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(len(self.provider.calls), 2)
 
-    def test_short_followup_skips_fresh_evidence(self):
+    def test_short_followup_fetches_contextualized_fresh_evidence(self):
         # A short follow-up in a thread is too terse for standalone retrieval,
-        # so Foresea answers it from conversation context without adding lookup latency.
+        # but Foresea should still fetch raw evidence anchored to thread context.
         response = self.client.post(
             "/predict",
             json={
@@ -2540,7 +2540,11 @@ class ServerTests(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.evidence_pipeline.calls, [])
+        self.assertEqual(len(self.evidence_pipeline.calls), 1)
+        query, top_k = self.evidence_pipeline.calls[0]
+        self.assertIn("Who wins AL vs WE in the LPL series?", query)
+        self.assertIn("Follow-up: WE is 90+", query)
+        self.assertEqual(top_k, 5)
 
     def test_substantive_question_with_history_still_retrieves(self):
         self.client.post(
