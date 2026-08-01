@@ -103,10 +103,28 @@ jobs:
 
       - name: Smoke test staging
         shell: bash
+        env:
+          SERVICE_URL: ${{ steps.service.outputs.url }}
         run: |
-          curl -fsS "${{ steps.service.outputs.url }}/health"
+          curl -fsS "${SERVICE_URL}/health"
+          # See docker.yml's smoke test step: with --min-instances 0 the
+          # container is still cold-starting right after deploy reports
+          # success, so hit /ready (which only flips to 200 once actually
+          # initialized) before running the real smoke test.
+          echo "Waiting for ${SERVICE_URL}/ready ..."
+          for attempt in $(seq 1 30); do
+            if curl -fsS "${SERVICE_URL}/ready" | grep -q '"ready":true'; then
+              echo "Service ready after ${attempt} attempt(s)."
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "::error::Service did not become ready within 150s."
+              exit 1
+            fi
+            sleep 5
+          done
           python scripts/measure_forecast_latency.py \
-            --url "${{ steps.service.outputs.url }}" \
+            --url "${SERVICE_URL}" \
             --mode stream \
             --models minimax-m3 \
             --runs 3 \
