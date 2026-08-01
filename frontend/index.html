@@ -6583,9 +6583,37 @@ function _renderMtmPage(d) {
       <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
     </tr>`;
   }).join('');
-  return `<h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account & Capital Growth</h4>
+  const stratRows = [
+    { label: 'Growth 2% Mode ($200/mkt)', strat: pnl.growth_2pct, color: '#f59e0b', tag: '2% Bankroll / $200' },
+    { label: 'Growth 1% Mode ($100/mkt)', strat: pnl.growth_1pct, color: '#3b82f6', tag: '1% Bankroll / $100' },
+    { label: 'Smart ROI Mode ($1 Flat)', strat: pnl.smart, color: '#10b981', tag: '$1 Flat Preservation' },
+    { label: 'Half-Kelly Mode', strat: pnl.half_kelly, color: '#06b6d4', tag: 'Calibrated Half-Kelly' },
+    { label: 'Crowd-Follow Baseline', strat: pnl.crowd_baseline, color: '#94a3b8', tag: 'Zero-Edge Baseline' },
+  ].filter(s => s.strat && s.strat.bankroll != null).map(s => {
+    const startB = EB_STARTING_BANKROLL;
+    const endB = Number(s.strat.bankroll);
+    const pnlUsd = endB - startB;
+    const pnlPct = (pnlUsd / startB);
+    const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
+    return `<tr class="eb-row" data-model="${escHtml(s.label)}">
+      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px"></span><b>${escHtml(s.label)}</b><span style="display:block;color:var(--text-dim);font-size:11px">${s.tag}</span></td>
+      <td>${_usd(startB)}</td>
+      <td><b>${_usd(endB)}</b></td>
+      <td style="color:${pnlUsd >= 0 ? '#0a7' : '#c33'};font-weight:600">${pnlStr}</td>
+      <td style="color:${pnlPct >= 0 ? '#0a7' : '#c33'};font-weight:600">${_roiPct(pnlPct)}</td>
+      <td>${s.strat.n_bets || 0}</td>
+    </tr>`;
+  }).join('');
+
+  const stratTableHtml = stratRows ? `
+    <h4 class="eb-h" style="margin-top:24px">Capital growth &amp; principal return by strategy mode</h4>
+    <table class="eb-table"><thead><tr><th>Strategy / Position Sizing Mode</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades Placed</th></tr></thead><tbody>${stratRows}</tbody></table>` : '';
+
+  return `<h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
     ${growthCardsHtml}
     <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
+    ${stratTableHtml}
+    <h4 class="eb-h" style="margin-top:24px">Per-model shadow mark-to-market accounts</h4>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
 }
 
