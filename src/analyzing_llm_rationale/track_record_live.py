@@ -1560,11 +1560,7 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
         elif hasattr(ts, "isoformat"):
             ts = ts.isoformat()
         curve_ts.append(ts)
-<<<<<<< HEAD
         bets.append({"platform": r.get("platform"), "ident": r.get("ident"), "profit": profit, "ts": ts})
-=======
-        bets.append({"platform": r.get("platform"), "ident": r.get("ident"), "profit": profit})
->>>>>>> 64dba05f (Fix resolved-quality chart/table showing different numbers for the same model)
     if not n:
         return None
 
@@ -1587,10 +1583,6 @@ def crowd_baseline_equity(resolved: List[Dict[str, Any]]) -> Optional[Dict[str, 
             if idx != first_idx.get((b["platform"], b["ident"])):
                 continue
             bankroll *= max(0.0, 1.0 + (1.0 / dedup_staked) * b["profit"])
-<<<<<<< HEAD
-
-=======
->>>>>>> 64dba05f (Fix resolved-quality chart/table showing different numbers for the same model)
             growth_curve.append(round(bankroll, 6))
             growth_curve_ts.append(b["ts"])
     return {

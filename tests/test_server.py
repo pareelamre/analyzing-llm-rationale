@@ -218,6 +218,7 @@ class ServerTests(unittest.TestCase):
             "Evidence 1 — Example News: Central bank signals policy shift",
             messages[1]["content"],
         )
+        slow_pipeline = mock.Mock()
         def slow_fetch(question, top_k=5):
             time.sleep(0.05)
             return [{
