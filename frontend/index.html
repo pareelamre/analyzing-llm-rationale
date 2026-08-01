@@ -5959,6 +5959,10 @@ function _ebModelColor(model, index = 0) {
 }
 
 function _ebNormalizeBankrollCurve(s) {
+  // NOTE: growth_curve represents compound returns (reinvested bankroll) which
+  // is a different metric than the flat ROI displayed in the stat cards.
+  // _ebPnlCurve should use equity_curve / total_staked instead so that the
+  // chart values exactly match the stat card ROI numbers.
   const curve = s?.growth_curve;
   if (!Array.isArray(curve) || !curve.length) return null;
   const values = curve.map(Number).filter(Number.isFinite);
@@ -5976,12 +5980,16 @@ function _ebNormalizeBankrollCurve(s) {
 }
 
 function _ebPnlCurve(s) {
-  const growthCurve = _ebNormalizeBankrollCurve(s);
-  if (growthCurve) return growthCurve;
+  // Use equity_curve / total_staked — this produces values that exactly match
+  // the stat card ROI.  growth_curve is a compound-return curve built from a
+  // *different* bet cohort and compounding method, so preferring it caused the
+  // chart to diverge from the displayed numbers (e.g. chart showing −0.3% while
+  // the stat card showed +12.7%).
   if (!s?.equity_curve?.length) return null;
   const staked = s.total_staked || s.n_bets || 1;
   return s.equity_curve.map(v => EB_STARTING_BANKROLL + (v / staked) * EB_STARTING_BANKROLL);
 }
+
 
 function _ebCurveTimes(s) {
   return (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
