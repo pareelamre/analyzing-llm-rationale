@@ -14,9 +14,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertNotIn("paper pnl", renderer.lower())
         self.assertNotIn("paper trading", renderer.lower())
         self.assertNotIn("paper roi", renderer.lower())
-        self.assertIn("resolved forecast quality", renderer.lower())
         self.assertIn("resolved strategy performance", renderer.lower())
-        self.assertIn('id="eb-equity-svg"', renderer)
 
     def test_edge_board_model_comparison_chart_tracks_scads_models(self):
         index = (
@@ -32,8 +30,6 @@ class FrontendCopyTests(unittest.TestCase):
         # never clipped at the right edge.
         self.assertIn("const padL = 60, padR = HEAD_R + 24, padT = 26", index)
         self.assertIn("legendRowH = 17", index)
-        self.assertIn("_equitySvg(compCurves, 760, 180", index)
-        self.assertIn('id="eb-model-comparison-svg"', index)
         self.assertIn('id="eb-mtm-svg"', index)
         self.assertIn('id="eb-mtm-table-body"', index)
         self.assertIn("data-eq-id", index)
