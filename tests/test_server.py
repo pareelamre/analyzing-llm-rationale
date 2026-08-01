@@ -1137,11 +1137,12 @@ class ServerTests(unittest.TestCase):
     def test_fetch_evidence_auto_initializes_pipeline(self):
         import asyncio
 
-        from analyzing_llm_rationale.server import _fetch_evidence_with_cache, _state
+        from analyzing_llm_rationale.server import _fetch_evidence_with_cache, _local_cache, _state
         _state.pop("evidence_pipeline", None)
+        _local_cache.clear()
         # Should auto-initialize rather than returning 'unconfigured' error
         with unittest.mock.patch("analyzing_llm_rationale.news_pipeline.NewsPipeline.fetch_summarize_rank", return_value=[]):
-            articles, error, outcome = asyncio.run(_fetch_evidence_with_cache("Will X happen?", 3, source="test"))
+            articles, error, outcome = asyncio.run(_fetch_evidence_with_cache("Will X happen auto init?", 3, source="test"))
             self.assertIsNotNone(_state.get("evidence_pipeline"))
             self.assertNotIn("unconfigured", (error or "").lower())
 
