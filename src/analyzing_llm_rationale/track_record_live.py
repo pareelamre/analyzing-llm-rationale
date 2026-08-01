@@ -1398,7 +1398,10 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         growth_curve_ts: List[Any] = []
         bankroll = _COMPOUND_STARTING_BANKROLL
         for _idx, b in enumerate(_scoped_bets):
-            stake = sizing(b)
+            try:
+                stake = sizing(b, bankroll)
+            except TypeError:
+                stake = sizing(b)
             if stake <= 0.0:
                 continue
 
@@ -1479,7 +1482,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             return False
         return True
 
-    # ── Kelly sizing ─────────────────────────────────────────
+    # ── Kelly & Growth sizing ─────────────────────────────────
     def _half_kelly(b):
         """Half-Kelly criterion: f* = 0.5 * (p*b - q) / b
         where p = model's walk-forward calibrated probability of winning,
@@ -1508,6 +1511,14 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         # Clamp: no negative stakes, cap at $1 for comparability
         return max(0.0, min(half_kelly, 1.0))
 
+    def _growth_1pct(b, bk=_COMPOUND_STARTING_BANKROLL):
+        """Dynamic 1% bankroll sizing per trade for capital growth."""
+        return max(0.0, 0.01 * bk)
+
+    def _growth_2pct(b, bk=_COMPOUND_STARTING_BANKROLL):
+        """Dynamic 2% bankroll sizing per trade for aggressive capital growth."""
+        return max(0.0, 0.02 * bk)
+
     return {
         "min_edge": min_edge,
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; "
@@ -1516,6 +1527,8 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         "flat": flat,
         "half_kelly": _run(_half_kelly),
         "smart": _run(_half_kelly, filter_fn=_smart_filter),
+        "growth_1pct": _run(_growth_1pct),
+        "growth_2pct": _run(_growth_2pct),
         "bets": _public_bets(),
     }
 

@@ -5247,8 +5247,10 @@ async function refreshEdgeForecasts() {
         ? _roiDeltaPct(a.roi - b.roi)
         : _build(a && a.n_bets);
       const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
-      _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
+      _upd('eb-pnl-growth2-v', _roiVal(pnl.growth_2pct));
+      _upd('eb-pnl-growth1-v', _roiVal(pnl.growth_1pct));
       _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
+      _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
       _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
       _upd('eb-pnl-edge-v', _roiDeltaVal(pnl.smart, pnl.crowd_baseline));
       const _normCurve = s => {
@@ -5265,7 +5267,9 @@ async function refreshEdgeForecasts() {
         return curve;
       };
       const strategyCurves = [
-        _mk(pnl.smart, '#10b981', 'Smart ROI'),
+        _mk(pnl.growth_2pct, '#f59e0b', 'Growth 2% ($200/mkt)'),
+        _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% ($100/mkt)'),
+        _mk(pnl.smart, '#10b981', 'Smart ROI ($1 Flat)'),
         _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
         _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
       ].filter(Boolean);
@@ -6594,7 +6598,9 @@ function renderEdgeBoard(d) {
       return curve;
     };
     const strategyCurves = [
-      _mk(pnl.smart, '#10b981', 'Smart ROI'),
+      _mk(pnl.growth_2pct, '#f59e0b', 'Growth 2% ($200/mkt)'),
+      _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% ($100/mkt)'),
+      _mk(pnl.smart, '#10b981', 'Smart ROI ($1 Flat)'),
       _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
     ].filter(Boolean);
@@ -6603,10 +6609,10 @@ function renderEdgeBoard(d) {
       <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $${EB_STARTING_BANKROLL.toLocaleString()} starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
       ${svgChart}
       <div class="tr-stats">
-      <div class="tr-stat" style="border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);border-top-left-radius:19px" title="Calibrated Half-Kelly sizing plus data-driven filters tuned to known model failure modes."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label ui-icon-label">${uiIcon('star')} Smart ROI</div>${_sub('Kelly + filters')}</div>
-        <div class="tr-stat" title="Calibrated Half-Kelly sizing proportional to estimated edge and market odds."><div class="v" id="eb-pnl-kelly-v">${roi(pnl.half_kelly)}</div><div class="k label">Half-Kelly</div>${_sub('bet ∝ edge / odds')}</div>
-        <div class="tr-stat" title="Smart ROI minus the crowd-follow baseline over the same resolved cohort."><div class="v" id="eb-pnl-edge-v">${smartVsCrowd != null ? _roiDeltaPct(smartVsCrowd) : _build(pnl.smart && pnl.smart.n_bets)}</div><div class="k label">vs crowd-follow</div>${_sub('excess return')}</div>
-        <div class="tr-stat" title="Always betting the crowd's own direction as the zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">crowd-follow baseline</div>${_sub('agree with market')}</div>
+        <div class="tr-stat" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);border-top-left-radius:19px" title="Aggressive Capital Growth mode: 2% of bankroll per market ($200 initial stake)."><div class="v" id="eb-pnl-growth2-v">${roi(pnl.growth_2pct)}</div><div class="k label ui-icon-label">${uiIcon('star')} Growth 2%</div>${_sub('2% Bankroll / $200')}</div>
+        <div class="tr-stat" style="border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.05)" title="Balanced Capital Growth mode: 1% of bankroll per market ($100 initial stake)."><div class="v" id="eb-pnl-growth1-v">${roi(pnl.growth_1pct)}</div><div class="k label ui-icon-label">Growth 1%</div>${_sub('1% Bankroll / $100')}</div>
+        <div class="tr-stat" title="Calibrated Half-Kelly sizing plus data-driven filters."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">Smart ROI</div>${_sub('$1 Flat Preservation')}</div>
+        <div class="tr-stat" title="Always betting the crowd's own direction as the zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">crowd baseline</div>${_sub('agree with market')}</div>
       </div>
       <p class="text-xs text-gray-400" style="margin-top:8px">Historical simulation of forecasts saved before market close, net of venue trading fees. Excludes slippage and liquidity constraints; not actual trading results.</p>`;
   } else {
