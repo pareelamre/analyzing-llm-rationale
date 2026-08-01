@@ -1400,6 +1400,32 @@
       overflow-y: hidden;
     }
     #questionInput::placeholder { color: #8f8f8f; }
+    .prompt-model-select {
+      align-self: center;
+      background: #f7f7f8;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-dim);
+      cursor: pointer;
+      flex: 0 1 150px;
+      font-size: 12px;
+      height: 34px;
+      max-width: 34vw;
+      min-width: 112px;
+      padding: 0 24px 0 9px;
+    }
+    .prompt-model-select:focus-visible {
+      border-color: var(--ink);
+      box-shadow: 0 0 0 3px rgba(17, 17, 17, .08);
+      outline: none;
+    }
+    @media (max-width: 520px) {
+      .prompt-model-select {
+        flex-basis: 104px;
+        font-size: 11px;
+        min-width: 92px;
+      }
+    }
     .send-btn {
       width: 40px !important;
       height: 40px !important;
@@ -1892,7 +1918,8 @@
       .nav-collapse { display: none; }
       .btn-signin { padding: 7px 13px; }
     }
-  </style>
+  </style>
+  <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
 
@@ -2181,7 +2208,7 @@
     </div>
   </div>
 
-  <button type="button" class="new-chat-btn text-left" onclick="newConversation()">New market brief</button>
+  <button type="button" class="new-chat-btn text-left" onclick="newConversation()">New conversation</button>
 
   <!-- Primary navigation -->
   <nav class="side-nav" aria-label="Sections">
@@ -2484,6 +2511,9 @@
           oninput="autoResize(this); _updateSlashPalette(this.value)"
           onkeydown="handleKey(event)"
         ></textarea>
+        <select id="promptModelSelect" class="prompt-model-select" onchange="setBuiltinChatModel(this.value)" title="Chat model" aria-label="Chat model">
+          <option value="">Default</option>
+        </select>
         <button id="attachBtn" class="attach-btn" onclick="toggleAttachPanel()" title="Attach PDF or URL" aria-label="Attach file or URL" aria-expanded="false">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
@@ -2706,6 +2736,19 @@ const MARKET_EXAMPLES = [
   'What will US CPI inflation be in December 2026?',
   'When will SpaceX complete its next major Starship milestone?'
 ];
+const BUILTIN_CHAT_MODELS_FALLBACK = [
+  { key: 'scads-alias-code', label: 'Alias Code', model: 'alias-code', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-31B-it'] },
+  { key: 'scads-alias-ha', label: 'Alias HA', model: 'alias-ha', fallbacks: ['google/gemma-4-31B-it', 'openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'scads-alias-reasoning', label: 'Alias Reasoning', model: 'alias-reasoning', fallbacks: ['openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'gpt-oss-120b', label: 'GPT-OSS-120B', model: 'openai/gpt-oss-120b', fallbacks: ['google/gemma-4-31B-it'] },
+  { key: 'gemma-4-31b-it', label: 'Gemma-4-31B', model: 'google/gemma-4-31B-it', fallbacks: ['openai/gpt-oss-120b', 'meta-llama/Llama-3.3-70B-Instruct'] },
+  { key: 'llama-3.3-70b-instruct', label: 'Llama-3.3-70B', model: 'meta-llama/Llama-3.3-70B-Instruct', fallbacks: ['google/gemma-4-31B-it', 'openai/gpt-oss-120b'] },
+  { key: 'minimax-m3', label: 'MiniMax-M3', model: 'MiniMaxAI/MiniMax-M3-MXFP8', fallbacks: ['moonshotai/Kimi-K2.7-Code'] },
+  { key: 'kimi-k2.7-code', label: 'Kimi-K2.7-Code', model: 'moonshotai/Kimi-K2.7-Code', fallbacks: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'qwen3-coder-30b-a3b-instruct', label: 'Qwen3 Coder 30B', model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-31B-it'] },
+  { key: 'glm-5.2-fp8', label: 'GLM-5.2-FP8', model: 'zai-org/GLM-5.2-FP8', fallbacks: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
+];
+let builtinChatModels = BUILTIN_CHAT_MODELS_FALLBACK.slice();
 
 // ── State ────────────────────────────────────────────────────────────────────
 let storageKey = STORAGE_KEY;
@@ -2874,20 +2917,30 @@ function closeSidebar() {
 }
 
 // ── Conversation management ──────────────────────────────────────────────────
-function newConversation() {
-  closeSidebar();
-  const id = 'conv_' + Date.now();
-  upsertConv(id, { id, title: 'New market brief', createdAt: Date.now(), updatedAt: Date.now(), conversationSteer: '', messages: [] });
-  activateConv(id);
+const CHAT_HASH_PREFIX = '#chat/';
+function conversationHash(id) {
+  return CHAT_HASH_PREFIX + encodeURIComponent(id);
+}
+function conversationIdFromHash(hash = window.location.hash) {
+  return hash?.startsWith(CHAT_HASH_PREFIX) ? decodeURIComponent(hash.slice(CHAT_HASH_PREFIX.length)) : null;
 }
 
-function activateConv(id) {
+function newConversation(options = {}) {
+  closeSidebar();
+  const id = 'conv_' + Date.now();
+  upsertConv(id, { id, title: 'New conversation', createdAt: Date.now(), updatedAt: Date.now(), conversationSteer: '', messages: [] });
+  activateConv(id, options);
+}
+
+function activateConv(id, options = {}) {
+  const { updateHistory = true, historyMode = 'push' } = options;
   closeSidebar();
   activeId = id;
   renderSidebar();
   renderMessages();
-  document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New market brief';
+  document.getElementById('chatTitle').textContent = getConv(id)?.title || 'New conversation';
   renderConversationSteer();
+  if (updateHistory && currentView === 'app') setHistoryState('chat', historyMode, { convId: id });
 }
 
 function getConversationSteer() {
@@ -2968,52 +3021,6 @@ function renderMessages() {
   el.innerHTML = '';
 
   if (!conv || conv.messages.length === 0) {
-    el.innerHTML = `
-      <div id="emptyState" class="max-w-6xl mx-auto w-full pt-10 sm:pt-20 px-4">
-        <div class="market-empty">
-          <div class="empty-copy">
-            <p class="label mb-4">Foresea market desk</p>
-            <h2 class="display text-3xl sm:text-[44px] text-gray-900 leading-tight mb-3 font-semibold">
-              The intelligence layer for prediction markets.
-            </h2>
-            <p class="text-[15px] text-gray-500 leading-relaxed">
-              Price any market — yes/no, multiple-choice, numeric, or date — challenge the consensus, and turn resolution criteria into a source-backed forecast.
-            </p>
-            <div class="mt-8 grid gap-2.5 text-left">
-              ${MARKET_EXAMPLES.map(q => `
-            <button type="button" class="empty-suggestion" onclick="startExample('${escAttr(q)}')">
-              ${escHtml(q)}
-            </button>`).join('')}
-            </div>
-          </div>
-          <div class="empty-market-panel" aria-label="Foresea market intelligence format">
-            <div class="panel-bar">
-              <span>Intelligence stack</span>
-              <span>Live brief format</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Market</span>
-              <span class="intel-value">Will the Fed cut rates by Sep. 30, 2026?</span>
-              <span class="intel-note">binary</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Quote</span>
-              <span class="intel-value">42% implied Yes</span>
-              <span class="intel-note">supplied</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Foresea</span>
-              <span class="intel-value">56% Yes</span>
-              <span class="intel-note">+14 pp</span>
-            </div>
-            <div class="intel-row">
-              <span class="intel-key">Thesis</span>
-              <span class="intel-value">Policy path, inflation prints, and central-bank guidance.</span>
-              <span class="intel-note">sources</span>
-            </div>
-          </div>
-        </div>
-      </div>`;
     return;
   }
 
@@ -3542,6 +3549,13 @@ function sourceFeedHtml(sources, evidenceError = '') {
     </div>`;
 }
 
+function modelFooterLabel(data) {
+  const requested = data?.model_key || 'gpt-oss-120b';
+  const served = data?.served_model_name || '';
+  if (served && served !== requested) return `${requested} -> ${served}`;
+  return requested;
+}
+
 function makeAIBubble(data, variant, options = {}) {
   if (variant && !data.variant) data.variant = variant;
   const qtype = data.question_type || 'binary';
@@ -3549,7 +3563,7 @@ function makeAIBubble(data, variant, options = {}) {
   const sources   = data.evidence_sources || [];
   const variantLabel = VARIANT_DESCS[variant] || variant || '';
   const p = x => Math.round((x || 0) * 100);
-  const modelKey = data.model_key || 'gpt-oss-120b';
+  const modelKey = modelFooterLabel(data);
 
   // Plain conversational reply — no forecast chrome
   if (qtype === 'chat') {
@@ -3559,6 +3573,10 @@ function makeAIBubble(data, variant, options = {}) {
       <div class="msg-ai p-4 sm:p-5">
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         ${sourceFeedHtml(sources, data.evidence_error)}
+        <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
+          <span class="logo-dot" style="width:5px;height:5px"></span>
+          ${escHtml(modelKey)}
+        </div>
       </div>`;
     return div;
   }
@@ -3674,7 +3692,23 @@ function _parseSseBlock(block) {
   return { event, data };
 }
 
+function _trackForecastStreamTiming(surface, phase, startedAt, extra = {}) {
+  trackEvent('forecast_stream_timing', {
+    surface,
+    phase,
+    elapsed_ms: Math.round(performance.now() - startedAt),
+    ...extra,
+  });
+}
+
 async function streamPredict(body, variant, convId, typingEl, signal) {
+  const streamStartedAt = performance.now();
+  let firstDeltaTracked = false;
+  _trackForecastStreamTiming('predict', 'submit', streamStartedAt, {
+    attach_evidence: body.attach_evidence !== false,
+    evidence_top_k: body.evidence_top_k || 5,
+    has_market_context: !!(body.market_probability != null || body.market_url || body.market_ident),
+  });
   let resp;
   try {
     resp = await fetch('/predict/stream', {
@@ -3695,8 +3729,23 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   let bubble = null;
   let contentEl = null;
   let text = '';
+  let renderFrame = 0;
   let settled = false;
   let releaseStream = () => {};
+  const cancelPendingRender = () => {
+    if (!renderFrame) return;
+    cancelAnimationFrame(renderFrame);
+    renderFrame = 0;
+  };
+  const scheduleRender = () => {
+    if (!contentEl || renderFrame) return;
+    renderFrame = requestAnimationFrame(() => {
+      renderFrame = 0;
+      if (!contentEl) return;
+      contentEl.innerHTML = renderMarkdown(_chatText(text));
+      scrollBottom({ force: false });
+    });
+  };
   const removeTyping = () => {
     if (!typingRemoved) {
       typingEl.remove();
@@ -3724,6 +3773,7 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   const finish = (finalData, outcome = 'completed') => {
     if (settled) return;
     settled = true;
+    cancelPendingRender();
     releaseStream();
     const data = finalData || {
       question_type: 'chat',
@@ -3749,6 +3799,7 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
     }
     const saved = appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     if (!saved || activeId !== convId) {
+      cancelPendingRender();
       settleTyping(outcome);
       return;
     }
@@ -3797,15 +3848,29 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
         const { event, data } = _parseSseBlock(block);
         if (event === 'meta') {
           typingEl._setForecastProgress?.(data.status, data);
+          if (data.status === 'preparing' || data.status === 'streaming') {
+            _trackForecastStreamTiming('predict', `meta_${data.status}`, streamStartedAt, {
+              server_prepare_ms: data.prepare_ms ?? null,
+            });
+          }
         } else if (event === 'delta') {
           text += data.text || '';
+          if (!firstDeltaTracked) {
+            firstDeltaTracked = true;
+            _trackForecastStreamTiming('predict', 'first_delta', streamStartedAt, {
+              server_first_delta_ms: data.first_delta_ms ?? null,
+            });
+          }
           ensureBubble();
-          if (contentEl) contentEl.innerHTML = renderMarkdown(_chatText(text));
-          scrollBottom({ force: false });
+          scheduleRender();
         } else if (event === 'done') {
+          _trackForecastStreamTiming('predict', 'done', streamStartedAt, {
+            streamed_chars: text.length,
+          });
           finish(data.response);
           return { ok: true };
         } else if (event === 'error') {
+          cancelPendingRender();
           releaseStream();
           settleTyping('error');
           return { ok: false, fallback: false, detail: data.detail || 'Streaming error' };
@@ -3816,7 +3881,10 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
     releaseStream();
     if (err?.name === 'AbortError') {
       if (text) finish(null, 'cancelled');
-      else settleTyping('cancelled');
+      else {
+        cancelPendingRender();
+        settleTyping('cancelled');
+      }
       return { ok: true, stopped: true };
     }
     if (text) {
@@ -3829,7 +3897,10 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
   if (streamCancelled || signal.aborted) {
     releaseStream();
     if (text) finish(null, 'cancelled');
-    else settleTyping('cancelled');
+    else {
+      cancelPendingRender();
+      settleTyping('cancelled');
+    }
     return { ok: true, stopped: true };
   }
   if (buffer.trim()) {
@@ -3868,10 +3939,25 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   let bubble = null;
   let contentEl = null;
   let text = '';
+  let renderFrame = 0;
   let settled = false;
   let releaseStream = () => {};
   let streamedEvidenceSources = [];
   let streamedEvidenceError = '';
+  const cancelPendingRender = () => {
+    if (!renderFrame) return;
+    cancelAnimationFrame(renderFrame);
+    renderFrame = 0;
+  };
+  const scheduleRender = () => {
+    if (!contentEl || renderFrame) return;
+    renderFrame = requestAnimationFrame(() => {
+      renderFrame = 0;
+      if (!contentEl) return;
+      contentEl.innerHTML = renderMarkdown(_chatText(text));
+      scrollBottom({ force: false });
+    });
+  };
   const removeTyping = () => {
     if (!typingRemoved) {
       typingEl.remove();
@@ -3900,6 +3986,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   const finish = (report, outcome = 'completed') => {
     if (settled) return;
     settled = true;
+    cancelPendingRender();
     releaseStream();
     const data = outcome === 'completed'
       ? _agentReportData(report)
@@ -3927,6 +4014,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     }
     const saved = appendMessage(convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     if (!saved || activeId !== convId) {
+      cancelPendingRender();
       removeTyping();
       return;
     }
@@ -3983,12 +4071,12 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
         } else if (event === 'delta') {
           text += data.text || '';
           ensureBubble();
-          if (contentEl) contentEl.innerHTML = renderMarkdown(_chatText(text));
-          scrollBottom({ force: false });
+          scheduleRender();
         } else if (event === 'done') {
           finish(data.report);
           return { ok: true };
         } else if (event === 'error') {
+          cancelPendingRender();
           releaseStream();
           removeTyping();
           return { ok: false, fallback: false, detail: data.detail || 'Agent streaming error' };
@@ -3999,7 +4087,10 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
     releaseStream();
     if (err?.name === 'AbortError') {
       if (text) finish(null, 'cancelled');
-      else removeTyping();
+      else {
+        cancelPendingRender();
+        removeTyping();
+      }
       return { ok: true, stopped: true };
     }
     if (text) {
@@ -4011,7 +4102,10 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
   if (streamCancelled || signal.aborted) {
     releaseStream();
     if (text) finish(null, 'cancelled');
-    else removeTyping();
+    else {
+      cancelPendingRender();
+      removeTyping();
+    }
     return { ok: true, stopped: true };
   }
   releaseStream();
@@ -4103,9 +4197,11 @@ async function sendQuestion(options = {}) {
 
   try {
     const activeModel = getActiveModelConfig();
+    const builtinChatModel = getActiveBuiltinModelId();
     const conversationSteer = getConversationSteer();
     const chat_mode = options.forceChatMode === false ? false : isChatMode();
     const body = { question, variant, history, chat_mode };
+    if (chat_mode) body.max_tokens = 384;
     if (conversationSteer) body.conversation_steer = conversationSteer;
     const mCtx = _pendingMarketCtx;
     _pendingMarketCtx = null;
@@ -4124,16 +4220,19 @@ async function sendQuestion(options = {}) {
       if (mCtx.categories?.length)         body.categories = mCtx.categories;
       if (mCtx.model && !activeModel)       body.model = mCtx.model;
     }
+    let extractedMarketProbability = null;
     if (mCtx?.market_probability == null) {
-      const marketProbability = extractMarketProbability(question);
-      if (marketProbability != null) {
-        body.market_probability = marketProbability;
+      extractedMarketProbability = extractMarketProbability(question);
+      if (extractedMarketProbability != null) {
+        body.market_probability = extractedMarketProbability;
         const platform = detectMarketPlatform(question);
         if (platform) body.market_platform = platform;
       }
     }
     const attachedEvidence = [..._attachments];
     if (attachedEvidence.length) body.news_articles = attachedEvidence;
+    body.evidence_top_k = 5;
+    body.attach_evidence = !attachedEvidence.length;
     if (activeModel) {
       body.openrouter_model = activeModel.model;
       if (activeModel.provider === 'ollama') {
@@ -4144,6 +4243,9 @@ async function sendQuestion(options = {}) {
       if (activeModel.provider === 'custom' && activeModel.baseUrl) {
         body.provider_base_url = activeModel.baseUrl;
       }
+    }
+    if (builtinChatModel && !activeModel) {
+      body.model = builtinChatModel;
     }
     // Clear attachments after send
     _attachments = [];
@@ -4173,7 +4275,7 @@ async function sendQuestion(options = {}) {
         if (mCtx.description)                agentBody.description = mCtx.description;
         if (mCtx.resolution_criteria)        agentBody.resolution_criteria = mCtx.resolution_criteria;
         if (mCtx.categories?.length)         agentBody.categories = mCtx.categories;
-      } else if (marketProbability != null) agentBody.market_probability = marketProbability;
+      } else if (extractedMarketProbability != null) agentBody.market_probability = extractedMarketProbability;
       if (activeModel) {
         agentBody.openrouter_model = activeModel.model;
         if (activeModel.provider === 'ollama') {
@@ -4182,6 +4284,8 @@ async function sendQuestion(options = {}) {
           agentBody.openrouter_api_key = activeModel.apiKey;
         }
         if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
+      } else if (builtinChatModel) {
+        agentBody.model = builtinChatModel;
       }
       const streamed = await streamAgentAnalyze(agentBody, variant, request.convId, typingEl, request.controller.signal);
       if (streamed.ok) return;
@@ -4679,12 +4783,12 @@ const _VIEW_URL = {
 };
 const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
 
-function setHistoryState(view, mode = 'push') {
+function setHistoryState(view, mode = 'push', options = {}) {
   if (isApplyingHistory || !window.history) return;
-  const state = { view };
-  const url = _VIEW_URL[view] ?? '#ask';
+  const state = { view, convId: options.convId || null };
+  const url = view === 'chat' && options.convId ? conversationHash(options.convId) : (_VIEW_URL[view] ?? '#ask');
   if (mode === 'replace') history.replaceState(state, '', url);
-  else if (history.state?.view !== view) history.pushState(state, '', url);
+  else if (history.state?.view !== view || history.state?.convId !== state.convId) history.pushState(state, '', url);
 }
 function showLanding({ updateHistory = true } = {}) {
   closeSidebar();
@@ -4752,7 +4856,14 @@ async function _streamLandingQuestion(question) {
   answerEl.classList.add('visible');
   answerEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-  const body = { question, variant: 'variant0_neutral_baseline', history: [] };
+  const body = {
+    question,
+    variant: 'variant0_neutral_baseline',
+    history: [],
+    attach_evidence: true,
+    evidence_top_k: 5,
+    max_tokens: 384,
+  };
   try {
     const resp = await fetch('/predict/stream', {
       method: 'POST',
@@ -4764,6 +4875,19 @@ async function _streamLandingQuestion(question) {
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '', text = '';
+    let renderFrame = 0;
+    const cancelPendingRender = () => {
+      if (!renderFrame) return;
+      cancelAnimationFrame(renderFrame);
+      renderFrame = 0;
+    };
+    const scheduleRender = () => {
+      if (renderFrame) return;
+      renderFrame = requestAnimationFrame(() => {
+        renderFrame = 0;
+        contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing...</span>';
+      });
+    };
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -4775,8 +4899,9 @@ async function _streamLandingQuestion(question) {
         const { event, data } = _parseSseBlock(block);
         if (event === 'delta') {
           text += data.text || '';
-          contentEl.innerHTML = renderMarkdown(_chatText(text)) || '<span style="color:var(--text-dim);font-size:14px">Analyzing…</span>';
+          scheduleRender();
         } else if (event === 'done') {
+          cancelPendingRender();
           _landingLastData = data.response;
           contentEl.innerHTML = _landingForecastHtml(data.response, text);
           enhanceCard(contentEl);
@@ -4784,11 +4909,13 @@ async function _streamLandingQuestion(question) {
           btn.disabled = false;
           return;
         } else if (event === 'error') {
+          cancelPendingRender();
           throw new Error(data.detail || 'error');
         }
       }
     }
     // Stream ended without done event
+    cancelPendingRender();
     if (text) contentEl.innerHTML = renderMarkdown(_chatText(text));
     actionsEl.style.display = 'flex';
   } catch (_) {
@@ -5115,12 +5242,9 @@ async function refreshEdgeForecasts() {
       const EB_SMALL_N = 30;
       const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
       const _smallN = n => `<span style="color:var(--text-dim);font-size:0.75em;opacity:0.7"> (small n)</span>`;
-      // compound_return, not the flat `roi` -- matches what strategyCurves
-      // plots below via _ebPnlCurve (see the static-render copy of this logic
-      // in _renderMtmPage's sibling, renderEdgeBoard, for why).
-      const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.compound_return) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
-      const _roiDeltaVal = (a, b) => (a && b && a.n_bets >= EB_MIN_N && b.n_bets >= EB_MIN_N && a.compound_return != null && b.compound_return != null)
-        ? _roiDeltaPct(a.compound_return - b.compound_return)
+      const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
+      const _roiDeltaVal = (a, b) => (a && b && a.n_bets >= EB_MIN_N && b.n_bets >= EB_MIN_N && a.roi != null && b.roi != null)
+        ? _roiDeltaPct(a.roi - b.roi)
         : _build(a && a.n_bets);
       const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
       _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
@@ -5772,7 +5896,6 @@ function _slugKey(text) {
 
 function _sg(x) { return (x == null) ? '—' : (x > 0 ? '+' : '') + x.toFixed(3); }
 function _roiPct(x) { return x == null ? '—' : (x >= 0 ? '+' : '') + pct(x) + '%'; }
-function _ddPct(x) { return x == null ? '—' : (x * 100).toFixed(2) + '%'; }
 
 function _roiDeltaPct(x) { return x == null ? 'â€”' : (x >= 0 ? '+' : '') + (x * 100).toFixed(1).replace(/\.0$/, '') + 'pp'; }
 
@@ -5861,14 +5984,7 @@ function _ebPnlCurve(s) {
 }
 
 function _ebCurveTimes(s) {
-  // Must match whichever array _ebPnlCurve(s) actually returned: growth_curve
-  // (deduped to one point per market) needs growth_curve_ts, not the
-  // un-deduped equity_curve_ts (one per snapshot) -- a length mismatch there
-  // silently breaks the times/points pairing and desyncs hover tooltips from
-  // where the line is actually drawn.
-  const usedGrowthCurve = !!_ebNormalizeBankrollCurve(s);
-  const raw = (usedGrowthCurve ? s?.growth_curve_ts : null) || s?.equity_curve_ts || [];
-  return raw.map(v => new Date(v).getTime()).filter(t => !isNaN(t));
+  return (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
 }
 
 function _ebModelCurves(models, minBets = 5, limit = 6) {
@@ -5886,7 +6002,7 @@ function _ebModelCurves(models, minBets = 5, limit = 6) {
         color: _ebModelColor(model, index),
         label,
         head: _ebModelHead(model),
-        headTitle: `${label} ${isCrowd ? 'crowd-follow' : 'Smart ROI'} ${_roiPct(strategy.compound_return)} · ${strategy.n_bets || 0} bets`,
+        headTitle: `${label} ${isCrowd ? 'crowd-follow' : 'Smart ROI'} ${_roiPct(strategy.roi)} · ${strategy.n_bets || 0} bets`,
         opacity: 0.86,
         isCrowdBaseline: isCrowd,
       };
@@ -6394,16 +6510,12 @@ function _renderMtmPage(d) {
     const account = m.account || {};
     const value = account.account_value ?? m.account_value;
     const ret = account.return ?? m.return;
-    const sharpe = account.sharpe ?? m.sharpe;
-    const maxDd = account.max_drawdown ?? m.max_drawdown;
     const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
     return `<tr class="eb-row">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
       <td>${_usd(value)}</td>
       <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
-      <td title="Risk-adjusted return: mean/stdev of per-trade account-value returns">${sharpe == null ? '—' : _sg(sharpe)}</td>
-      <td title="Largest peak-to-trough decline in account value">${_ddPct(maxDd)}</td>
       <td>${account.n_trades ?? m.n_trades ?? 0}</td>
       <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
       <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
@@ -6411,7 +6523,7 @@ function _renderMtmPage(d) {
   }).join('');
   return `<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4>
     <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Sharpe</th><th>Max DD</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
 }
 
 function renderEdgeBoard(d) {
@@ -6436,20 +6548,14 @@ function renderEdgeBoard(d) {
     </div>`;
   let compHtml;
   if (comp.length) {
-    // Same metric the chart below plots (compound_return, deduped to one
-    // compounding step per real market) -- previously this read the flat,
-    // un-deduped `roi`, which scores every snapshot and can disagree in sign
-    // with the chart for models with many repeated snapshots per market.
-    const crowdRoi = ((pnl || {}).crowd_baseline || {}).compound_return;
+    const crowdRoi = ((pnl || {}).crowd_baseline || {}).roi;
     const compCurves = _ebModelCurves(comp, EB_MIN_N, 9);
     const compChart = compCurves.length
       ? `<div id="eb-model-comparison-svg">${_equitySvg(compCurves, 760, 180, {asPct: false, yPrefix: '$'})}</div>`
       : '';
     compHtml = `${compChart}<table class="eb-table"><thead><tr><th>Model</th><th>Resolved</th><th>Accuracy</th><th>Skill vs mkt</th><th>Smart ROI</th><th>vs crowd</th></tr></thead><tbody>` +
       comp.map(m => { const enough = (m.n_snapshots_resolved || 0) >= EB_MIN_N;
-        const isCrowd = m.model === 'crowd-follow';
-        const strategy = isCrowd ? (m.paper_pnl || {}).flat : ((m.paper_pnl || {}).smart || (m.paper_pnl || {}).flat);
-        const modelSmartRoi = strategy ? strategy.compound_return : null;
+        const modelSmartRoi = m.paper_roi_smart != null ? m.paper_roi_smart : (m.model === 'crowd-follow' ? m.paper_roi : null);
         const roiDelta = modelSmartRoi != null && crowdRoi != null ? modelSmartRoi - crowdRoi : null;
         return `<tr class="eb-row"><td><b>${escHtml(m.model)}</b></td><td>${m.n_snapshots_resolved}</td>` +
         `<td>${!enough || m.accuracy == null ? _build(m.n_snapshots_resolved) : pct(m.accuracy) + '%'}</td>` +
@@ -6460,15 +6566,11 @@ function renderEdgeBoard(d) {
   }
   let performanceHtml;
   if (pnl && pnl.flat) {
-    // compound_return (deduped to one compounding step per real market) --
-    // matches what strategyCurves/_mk below plots via _ebPnlCurve, unlike the
-    // flat, un-deduped `roi` this used to read (the caption below literally
-    // says "Compounded growth", so the number should be too).
-    const roi = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.compound_return) + ' · ' + s.n_bets + ' bets')
+    const roi = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets')
       : _build(s && s.n_bets);
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
-    const smartVsCrowd = (pnl.smart?.compound_return != null && pnl.crowd_baseline?.compound_return != null) ? pnl.smart.compound_return - pnl.crowd_baseline.compound_return : null;
+    const smartVsCrowd = (pnl.smart?.roi != null && pnl.crowd_baseline?.roi != null) ? pnl.smart.roi - pnl.crowd_baseline.roi : null;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const _normCurve = s => {
       return _ebPnlCurve(s);
@@ -6678,7 +6780,9 @@ function syncSidebarA11y() {
 function applyHistoryState(state) {
   isApplyingHistory = true;
   // Infer view from URL hash when state is missing (e.g. external link / fresh load)
+  const urlConversationId = state?.convId || conversationIdFromHash();
   const view = state?.view
+    || (urlConversationId ? 'chat' : null)
     || _URL_VIEW[window.location.hash]
     || (window.location.hash ? 'landing' : 'landing');
 
@@ -6687,7 +6791,12 @@ function applyHistoryState(state) {
   closeEdgeBoard({ updateHistory: false });
   closeWatchlistPage({ updateHistory: false });
 
-  if (view === 'app') {
+  if (view === 'chat') {
+    launchApp({ updateHistory: false });
+    if (urlConversationId && store.conversations[urlConversationId]) {
+      activateConv(urlConversationId, { updateHistory: false });
+    }
+  } else if (view === 'app') {
     launchApp({ updateHistory: false });
   } else if (view === 'track-app') {
     launchApp({ updateHistory: false });
@@ -6845,6 +6954,57 @@ function loadChatModeToggle() { /* toggle removed; chat is the default */ }
 // ── Custom model manager (Ollama-style) ───────────────────────────────────────
 // Models live in localStorage as `or_models` (array) with `or_active` (id, or
 // '' for the server default). Each model: {id, name, provider, baseUrl, apiKey, model}.
+function _activeBuiltinModel() { return localStorage.getItem('foresea_chat_model') || ''; }
+function _builtinModelByKey(key) {
+  return builtinChatModels.find(m => m.key === key) || null;
+}
+function _builtinModelLabel(key) {
+  const m = _builtinModelByKey(key);
+  return m ? (m.label || m.key) : 'gpt-oss-120b';
+}
+function getActiveBuiltinModelId() {
+  const key = _activeBuiltinModel();
+  return _builtinModelByKey(key) ? key : '';
+}
+function setBuiltinChatModel(key) {
+  if (key && !_builtinModelByKey(key)) key = '';
+  localStorage.setItem('foresea_chat_model', key || '');
+  if (key) localStorage.setItem('or_active', '');
+  renderBuiltinChatModelSelect();
+  renderModelList();
+  _updateModelLabel();
+}
+function renderBuiltinChatModelSelect() {
+  const select = document.getElementById('promptModelSelect');
+  if (!select) return;
+  const active = getActiveBuiltinModelId();
+  const options = [
+    '<option value="">Default</option>',
+    ...builtinChatModels.map(m => {
+      const suffix = (m.fallbacks || []).length ? ` (fallbacks: ${(m.fallbacks || []).join(' -> ')})` : '';
+      return `<option value="${escAttr(m.key)}" title="${escAttr((m.model || m.key) + suffix)}">${escHtml(m.label || m.key)}</option>`;
+    }),
+  ];
+  select.innerHTML = options.join('');
+  select.value = active;
+}
+async function loadBuiltinChatModels() {
+  renderBuiltinChatModelSelect();
+  try {
+    const resp = await _liveJsonFetch('/chat/models');
+    const data = await resp.json();
+    if (resp.ok && Array.isArray(data.models) && data.models.length) {
+      builtinChatModels = data.models.filter(m => m && m.key && m.label);
+      if (_activeBuiltinModel() && !getActiveBuiltinModelId()) {
+        localStorage.removeItem('foresea_chat_model');
+      }
+      renderBuiltinChatModelSelect();
+      _updateModelLabel();
+    }
+  } catch (err) {
+    console.warn('Could not load chat models:', err);
+  }
+}
 function _loadModels() {
   try { return JSON.parse(localStorage.getItem('or_models') || '[]') || []; }
   catch { return []; }
@@ -6853,6 +7013,7 @@ function _saveModels(models) { localStorage.setItem('or_models', JSON.stringify(
 function _activeModelId() { return localStorage.getItem('or_active') || ''; }
 
 function getActiveModelConfig() {
+  if (getActiveBuiltinModelId()) return null;
   const id = _activeModelId();
   if (!id) return null;
   const m = _loadModels().find(x => x.id === id);
@@ -6879,6 +7040,8 @@ function _migrateLegacyModel() {
 
 function setActiveModel(id) {
   localStorage.setItem('or_active', id || '');
+  if (id) localStorage.removeItem('foresea_chat_model');
+  renderBuiltinChatModelSelect();
   renderModelList();
   _updateModelLabel();
 }
@@ -6887,8 +7050,9 @@ function renderModelList() {
   const host = document.getElementById('modelList');
   if (!host) return;
   const active = _activeModelId();
+  const builtin = getActiveBuiltinModelId();
   const rows = [`
-    <div class="model-row ${!active ? 'active' : ''}" onclick="setActiveModel('')">
+    <div class="model-row ${!active && !builtin ? 'active' : ''}" onclick="setBuiltinChatModel('')">
       <span class="model-radio"></span>
       <div class="model-meta">
         <div class="model-name">Server default</div>
@@ -7032,6 +7196,7 @@ function deleteModel(id) {
 // Entry point at init (name kept for the existing call site).
 function loadOrSettings() {
   _migrateLegacyModel();
+  loadBuiltinChatModels();
   renderModelList();
   if (_loadModels().length) {
     const det = document.getElementById('configDetails');
@@ -7044,8 +7209,9 @@ function loadOrSettings() {
 
 function _updateModelLabel() {
   const m = getActiveModelConfig();
+  const builtin = getActiveBuiltinModelId();
   const label = document.getElementById('activeModelLabel');
-  if (label) label.textContent = m ? m.model.split('/').pop() : 'gpt-oss-120b';
+  if (label) label.textContent = m ? m.model.split('/').pop() : _builtinModelLabel(builtin);
 }
 
 // ── Exchange accounts (bring-your-own trading) ───────────────────────────────
@@ -8088,11 +8254,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const pp = d.paper_pnl || {};
       const smart = pp.smart || {};
       const crowd = pp.crowd_baseline || {};
-      // compound_return (deduped to one compounding step per real market) --
-      // matches what the chart below plots, unlike the flat, un-deduped `roi`.
-      const smartRoi = smart.compound_return;
-      const crowdRoi = crowd.compound_return;
-      const smartDelta = smartRoi != null && crowdRoi != null ? smartRoi - crowdRoi : null;
+      const smartDelta = smart.roi != null && crowd.roi != null ? smart.roi - crowd.roi : null;
       const _trackCurve = (s, color, label, dash) => {
         const points = _ebPnlCurve(s);
         if (!points) return null;
@@ -8109,16 +8271,13 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
       const trackChart = trackCurves.length
         ? `<div style="margin:0 0 12px">${_equitySvg(trackCurves, 460, 112, {asPct:false, yPrefix:'$'})}</div>`
         : '';
-      const rows = (d.models_comparison || []).slice(0,5).map(m => {
-        const isCrowd = m.model === 'crowd-follow';
-        const strategy = isCrowd ? (m.paper_pnl || {}).flat : ((m.paper_pnl || {}).smart || (m.paper_pnl || {}).flat);
-        const modelRoi = strategy ? strategy.compound_return : null;
-        return `<tr style="border-bottom:1px solid var(--border)">
+      const rows = (d.models_comparison || []).slice(0,5).map(m =>
+        `<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:5px 10px 5px 0;font-family:monospace;font-size:12px">${escHtml(m.model||'?')}</td>
           <td style="padding:5px 4px;text-align:right">${m.brier!=null?m.brier.toFixed(3):'—'}</td>
-          <td style="padding:5px 0 5px 8px;text-align:right;color:${(modelRoi ?? 0)>=0?'var(--accent)':'#e55'}">${modelRoi!=null?(modelRoi>=0?'+':'')+(modelRoi*100).toFixed(1)+'%':'—'}</td>
-        </tr>`;
-      }).join('');
+          <td style="padding:5px 0 5px 8px;text-align:right;color:${(m.paper_roi_smart ?? m.paper_roi ?? 0)>=0?'var(--accent)':'#e55'}">${m.paper_roi_smart!=null?(m.paper_roi_smart>=0?'+':'')+(m.paper_roi_smart*100).toFixed(1)+'%':(m.model==='crowd-follow'&&m.paper_roi!=null?(m.paper_roi>=0?'+':'')+(m.paper_roi*100).toFixed(1)+'%':'—')}</td>
+        </tr>`
+      ).join('');
       typing.remove();
       _appendInline(`
         <p style="margin-bottom:10px"><strong>Track record</strong></p>
@@ -8133,7 +8292,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
             <div style="font-size:12px;color:var(--text-dim)">Brier score</div>
           </div>
           <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:22px;font-weight:700;color:${(smartRoi||0)>=0?'var(--accent)':'#e55'}">${smartRoi!=null?(smartRoi>=0?'+':'')+(smartRoi*100).toFixed(1)+'%':'—'}</div>
+            <div style="font-size:22px;font-weight:700;color:${(smart.roi||0)>=0?'var(--accent)':'#e55'}">${smart.roi!=null?(smart.roi>=0?'+':'')+(smart.roi*100).toFixed(1)+'%':'—'}</div>
             <div style="font-size:12px;color:var(--text-dim)">Smart ROI</div>
           </div>
           <div style="background:var(--paper);border-radius:8px;padding:10px;text-align:center">
@@ -8743,8 +8902,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-const _initView = _URL_VIEW[window.location.hash || '/'] ?? 'app';
-setHistoryState(_initView, 'replace');
+const _initConversationId = conversationIdFromHash();
+const _initView = _initConversationId ? 'chat' : (_URL_VIEW[window.location.hash || '/'] ?? 'app');
+setHistoryState(_initView, 'replace', { convId: _initConversationId });
 syncSidebarA11y();
 recordPageVisit();
 updateVariantDesc();
@@ -8755,9 +8915,12 @@ loadKb();
 initAuth();
 loadLandingPanels();
 const ids = sortedIds();
-if (ids.length) activateConv(ids[0]);
-else newConversation();
-if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView });
+const _initialActiveId = _initConversationId && store.conversations[_initConversationId]
+  ? _initConversationId
+  : ids[0];
+if (_initialActiveId) activateConv(_initialActiveId, { updateHistory: false });
+else newConversation({ updateHistory: false });
+if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView, convId: _initConversationId });
 
 // ── Smooth scroll + entrance choreography ────────────────────────────────────
 (function initMotion() {
@@ -8803,7 +8966,5 @@ if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView });
   }
 })();
 </script>
-  <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </body>
 </html>
-
