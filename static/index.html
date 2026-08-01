@@ -6600,14 +6600,19 @@ function _renderMtmPage(d) {
     const values = curvePoints.map(p => {
       const rawVal = Number(p.account_value);
       if (!Number.isFinite(rawVal)) return null;
+      if (sizingMode === 'fixed') {
+        const rawPnl = rawVal - 10000;
+        return 100 + rawPnl / 100;
+      }
       return _getScaledMtmValue(rawVal, activeStrat, sizingMode);
     }).filter(Number.isFinite);
     const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
     if (!values.length) return null;
     const label = _ebModelLabel(m.model);
     const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    const scaledVal = _getScaledMtmValue(rawVal, activeStrat, sizingMode);
-    const ret = (scaledVal - EB_STARTING_BANKROLL) / EB_STARTING_BANKROLL;
+    const startP = sizingMode === 'fixed' ? 100 : EB_STARTING_BANKROLL;
+    const scaledVal = sizingMode === 'fixed' ? (100 + (rawVal - 10000) / 100) : _getScaledMtmValue(rawVal, activeStrat, sizingMode);
+    const ret = (scaledVal - startP) / startP;
     const curve = {
       points: values,
       color: _mtmModelColor(m.model, i),
@@ -6622,17 +6627,38 @@ function _renderMtmPage(d) {
   const rows = mtmModels.map((m, i) => {
     const account = m.account || {};
     const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    const scaledVal = _getScaledMtmValue(rawVal, activeStrat, sizingMode);
-    const ret = (scaledVal - EB_STARTING_BANKROLL) / EB_STARTING_BANKROLL;
+    const rawPnl = rawVal - 10000;
+    
+    let startPrincipal = EB_STARTING_BANKROLL;
+    let currentBankroll = 10000;
+    let pnlUsd = 0;
+    let pnlPct = 0;
+
+    if (sizingMode === 'fixed') {
+      startPrincipal = 100;
+      pnlUsd = rawPnl / 100;
+      currentBankroll = startPrincipal + pnlUsd;
+      pnlPct = pnlUsd / startPrincipal;
+    } else {
+      startPrincipal = EB_STARTING_BANKROLL;
+      currentBankroll = _getScaledMtmValue(rawVal, activeStrat, sizingMode);
+      pnlUsd = currentBankroll - startPrincipal;
+      pnlPct = pnlUsd / startPrincipal;
+    }
+
     const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
+    const pnlColor = pnlUsd >= 0 ? '#0a7' : '#c33';
+    const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
+
     return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
-      <td>${_usd(scaledVal)}</td>
-      <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
+      <td>${_usd(startPrincipal)}</td>
+      <td><b>${_usd(currentBankroll)}</b></td>
+      <td style="color:${pnlColor};font-weight:600">${pnlStr}</td>
+      <td style="color:${pnlColor};font-weight:600">${_roiPct(pnlPct)}</td>
       <td>${account.n_trades ?? m.n_trades ?? 0}</td>
       <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
-      <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
     </tr>`;
   }).join('');
 
@@ -6680,7 +6706,7 @@ function _renderMtmPage(d) {
   return `<h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
     ${sizingModeHtml}
     <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>
     ${stratTableHtml}`;
 }
 
