@@ -1105,6 +1105,7 @@ class ServerTests(unittest.TestCase):
             json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test"}},
         )
         self.assertEqual(response.status_code, 200)
+        time.sleep(0.02)
 
         summary = self.client.get("/analytics/events/summary")
         self.assertEqual(summary.status_code, 200)
