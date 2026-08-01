@@ -6523,6 +6523,20 @@ function _renderBoardPage(board, page) {
   return tableHtml + pagination;
 }
 
+let _activeMtmStrat = 'growth_2pct';
+
+function _selectMtmStrategy(key) {
+  _activeMtmStrat = key;
+  if (_ebLastData) {
+    const ov = document.getElementById('trackOverlay');
+    const host = document.getElementById('trackBody');
+    if (host) {
+      host.innerHTML = renderTrackRecord(_ebLastData);
+      _attachEdgeBoardChartHovers(host);
+    }
+  }
+}
+
 function _renderMtmPage(d) {
   const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
   if (!mtmModels.length) {
@@ -6534,27 +6548,54 @@ function _renderMtmPage(d) {
   const pnl = d.paper_pnl || {};
   const roi = s => (s && s.n_bets >= 5) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets') : `<span style="color:var(--text-dim);font-weight:500">building · n=${s ? s.n_bets : 0}</span>`;
   const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
+  const activeStrat = _activeMtmStrat || 'growth_2pct';
+
+  const cardConfig = [
+    { key: 'growth_2pct', label: 'Growth 2% Mode', sub: '2% Bankroll / $200', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.4)' },
+    { key: 'growth_1pct', label: 'Growth 1% Mode', sub: '1% Bankroll / $100', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.4)' },
+    { key: 'smart', label: 'Smart ROI Mode', sub: '$1 Flat Preservation', color: '#10b981', bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.4)' },
+  ];
 
   const growthCardsHtml = pnl.growth_1pct ? `
     <div class="tr-stats" style="margin-bottom:16px">
-      <div class="tr-stat" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);border-top-left-radius:19px" title="Aggressive Capital Growth mode: 2% of bankroll per market ($200 initial stake)."><div class="v" id="eb-mtm-growth2-v">${roi(pnl.growth_2pct)}</div><div class="k label ui-icon-label">${uiIcon('star')} Growth 2% Mode</div>${_sub('2% Bankroll / $200')}</div>
-      <div class="tr-stat" style="border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.05)" title="Balanced Capital Growth mode: 1% of bankroll per market ($100 initial stake)."><div class="v" id="eb-mtm-growth1-v">${roi(pnl.growth_1pct)}</div><div class="k label ui-icon-label">Growth 1% Mode</div>${_sub('1% Bankroll / $100')}</div>
-      <div class="tr-stat" title="Calibrated Half-Kelly sizing plus data-driven filters ($1 flat bets)."><div class="v" id="eb-mtm-smart-v">${roi(pnl.smart)}</div><div class="k label">Smart ROI Mode</div>${_sub('$1 Flat Preservation')}</div>
+      ${cardConfig.map(c => {
+        const strat = pnl[c.key];
+        const isActive = activeStrat === c.key;
+        const borderStyle = isActive ? `border:2px solid ${c.color};box-shadow:0 0 0 2px ${c.color}, 0 4px 14px rgba(0,0,0,0.12);background:${c.bg}` : `border:1px solid ${c.border}`;
+        const activeBadge = isActive ? `<span class="eb-badge" style="background:${c.color};color:#fff;margin-left:auto;font-weight:700">ACTIVE MODE</span>` : '';
+        return `<div class="tr-stat mtm-card ${isActive ? 'active' : ''}" style="${borderStyle};cursor:pointer;transition:all 0.15s ease" onclick="_selectMtmStrategy('${c.key}')" title="Click to activate ${c.label} bankroll growth curve">
+          <div style="display:flex;align-items:center"><div class="v" id="eb-mtm-${c.key}-v">${roi(strat)}</div>${activeBadge}</div>
+          <div class="k label ui-icon-label" style="margin-top:6px">${isActive ? uiIcon('check') : ''} ${c.label}</div>
+          ${_sub(c.sub)}
+        </div>`;
+      }).join('')}
     </div>` : '';
 
-  const curves = mtmModels.map((m, i) => {
+  const _normCurve = s => _ebPnlCurve(s);
+  const _times = s => _ebCurveTimes(s);
+  const _mk = (s, color, label, key, dash) => {
+    const points = _normCurve(s);
+    if (!points) return null;
+    const times = _times(s);
+    const curve = { points, color, label };
+    if (dash) curve.dash = true;
+    if (times.length === points.length) curve.times = times;
+    return curve;
+  };
+
+  const strategyCurves = [
+    _mk(pnl.growth_2pct, '#f59e0b', 'Growth 2% Mode ($200/mkt)', 'growth_2pct'),
+    _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% Mode ($100/mkt)', 'growth_1pct'),
+    _mk(pnl.smart, '#10b981', 'Smart ROI Mode ($1 Flat)', 'smart'),
+    _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly Mode', 'half_kelly'),
+    _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd-Follow Baseline', 'crowd_baseline', true),
+  ].filter(Boolean);
+
+  const modelCurves = mtmModels.map((m, i) => {
     const account = m.account || {};
     const curvePoints = account.value_curve || [];
     const values = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
     const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
-    const accountValue = Number(account.account_value ?? m.account_value);
-    const accountTime = new Date(account.ts || m.ts || d.generated_at).getTime();
-    const lastValue = values.length ? values[values.length - 1] : null;
-    const lastTime = times.length ? times[times.length - 1] : null;
-    if (Number.isFinite(accountValue) && Number.isFinite(accountTime) && (lastValue !== accountValue || lastTime !== accountTime)) {
-      values.push(accountValue);
-      times.push(accountTime);
-    }
     if (!values.length) return null;
     const label = _ebModelLabel(m.model);
     const ret = account.return ?? m.return;
@@ -6568,35 +6609,47 @@ function _renderMtmPage(d) {
     if (times.length === values.length) curve.times = times;
     return curve;
   }).filter(Boolean);
+
+  const displayCurves = strategyCurves.length ? strategyCurves : modelCurves;
+
   const rows = mtmModels.map((m, i) => {
     const account = m.account || {};
-    const value = account.account_value ?? m.account_value;
+    const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
+    let scaleMult = 1;
+    if (activeStrat === 'growth_2pct') scaleMult = 200 / 10000;
+    else if (activeStrat === 'growth_1pct') scaleMult = 100 / 10000;
+    const scaledVal = activeStrat.startsWith('growth') ? (EB_STARTING_BANKROLL + (rawVal - 10000) * scaleMult) : rawVal;
     const ret = account.return ?? m.return;
     const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
     return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
-      <td>${_usd(value)}</td>
+      <td>${_usd(scaledVal)}</td>
       <td style="color:${Number(ret) >= 0 ? '#0a7' : '#c33'}">${ret == null ? 'building' : _roiPct(ret)}</td>
       <td>${account.n_trades ?? m.n_trades ?? 0}</td>
       <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
       <td>${illiquid ? `<span class="eb-badge">${illiquid} illiquid</span>` : '0'}</td>
     </tr>`;
   }).join('');
-  const stratRows = [
-    { label: 'Growth 2% Mode ($200/mkt)', strat: pnl.growth_2pct, color: '#f59e0b', tag: '2% Bankroll / $200' },
-    { label: 'Growth 1% Mode ($100/mkt)', strat: pnl.growth_1pct, color: '#3b82f6', tag: '1% Bankroll / $100' },
-    { label: 'Smart ROI Mode ($1 Flat)', strat: pnl.smart, color: '#10b981', tag: '$1 Flat Preservation' },
-    { label: 'Half-Kelly Mode', strat: pnl.half_kelly, color: '#06b6d4', tag: 'Calibrated Half-Kelly' },
-    { label: 'Crowd-Follow Baseline', strat: pnl.crowd_baseline, color: '#94a3b8', tag: 'Zero-Edge Baseline' },
-  ].filter(s => s.strat && s.strat.bankroll != null).map(s => {
+
+  const stratList = [
+    { key: 'growth_2pct', label: 'Growth 2% Mode ($200/mkt)', strat: pnl.growth_2pct, color: '#f59e0b', tag: '2% Bankroll / $200' },
+    { key: 'growth_1pct', label: 'Growth 1% Mode ($100/mkt)', strat: pnl.growth_1pct, color: '#3b82f6', tag: '1% Bankroll / $100' },
+    { key: 'smart', label: 'Smart ROI Mode ($1 Flat)', strat: pnl.smart, color: '#10b981', tag: '$1 Flat Preservation' },
+    { key: 'half_kelly', label: 'Half-Kelly Mode', strat: pnl.half_kelly, color: '#06b6d4', tag: 'Calibrated Half-Kelly' },
+    { key: 'crowd_baseline', label: 'Crowd-Follow Baseline', strat: pnl.crowd_baseline, color: '#94a3b8', tag: 'Zero-Edge Baseline' },
+  ];
+
+  const stratRows = stratList.filter(s => s.strat && s.strat.bankroll != null).map(s => {
     const startB = EB_STARTING_BANKROLL;
     const endB = Number(s.strat.bankroll);
     const pnlUsd = endB - startB;
     const pnlPct = (pnlUsd / startB);
     const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
-    return `<tr class="eb-row" data-model="${escHtml(s.label)}">
-      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px"></span><b>${escHtml(s.label)}</b><span style="display:block;color:var(--text-dim);font-size:11px">${s.tag}</span></td>
+    const isActive = activeStrat === s.key;
+    const activeStyle = isActive ? 'background:rgba(16,185,129,0.1);font-weight:bold' : '';
+    return `<tr class="eb-row ${isActive ? 'active-strat-row' : ''}" style="${activeStyle};cursor:pointer" onclick="_selectMtmStrategy('${s.key}')" data-model="${escHtml(s.label)}">
+      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px"></span><b>${escHtml(s.label)}</b> ${isActive ? '<span class="eb-badge eb-sig">ACTIVE</span>' : ''}<span style="display:block;color:var(--text-dim);font-size:11px">${s.tag}</span></td>
       <td>${_usd(startB)}</td>
       <td><b>${_usd(endB)}</b></td>
       <td style="color:${pnlUsd >= 0 ? '#0a7' : '#c33'};font-weight:600">${pnlStr}</td>
@@ -6606,14 +6659,14 @@ function _renderMtmPage(d) {
   }).join('');
 
   const stratTableHtml = stratRows ? `
-    <h4 class="eb-h" style="margin-top:24px">Capital growth &amp; principal return by strategy mode</h4>
+    <h4 class="eb-h" style="margin-top:24px">Capital growth &amp; principal return by strategy mode (click any row to activate)</h4>
     <table class="eb-table"><thead><tr><th>Strategy / Position Sizing Mode</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades Placed</th></tr></thead><tbody>${stratRows}</tbody></table>` : '';
 
   return `<h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
     ${growthCardsHtml}
-    <div id="eb-mtm-svg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
+    <div id="eb-mtm-svg">${displayCurves.length ? _equitySvg(displayCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
     ${stratTableHtml}
-    <h4 class="eb-h" style="margin-top:24px">Per-model shadow mark-to-market accounts</h4>
+    <h4 class="eb-h" style="margin-top:24px">Per-model shadow mark-to-market accounts (${cardConfig.find(c => c.key === activeStrat)?.label || activeStrat})</h4>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
 }
 
