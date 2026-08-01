@@ -1032,7 +1032,7 @@ _evidence_prefetch_inflight: set[str] = set()
 _LOCAL_CACHE_MAX = int(os.environ.get("LOCAL_CACHE_MAX", "1024"))
 _EVIDENCE_CACHE_TTL = int(os.environ.get("EVIDENCE_CACHE_TTL", "900"))
 _EVIDENCE_PREFETCH_TOP_N = int(os.environ.get("EVIDENCE_PREFETCH_TOP_N", "3"))
-_EVIDENCE_TIMEOUT_S = float(os.environ.get("EVIDENCE_TIMEOUT_S", "15"))
+_EVIDENCE_TIMEOUT_S = float(os.environ.get("EVIDENCE_TIMEOUT_S", "0"))
 _EVIDENCE_MAX_CONCURRENCY = max(1, int(os.environ.get("EVIDENCE_MAX_CONCURRENCY", "4")))
 _evidence_fetch_slots = threading.BoundedSemaphore(_EVIDENCE_MAX_CONCURRENCY)
 _EXTRACT_CACHE_TTL = int(os.environ.get("EXTRACT_CACHE_TTL", "3600"))
@@ -4473,7 +4473,10 @@ async def _fetch_evidence_with_cache(
             None,
             fetch_articles,
         )
-        articles = await asyncio.wait_for(fetch_task, timeout=_EVIDENCE_TIMEOUT_S)
+        if _EVIDENCE_TIMEOUT_S and _EVIDENCE_TIMEOUT_S > 0:
+            articles = await asyncio.wait_for(fetch_task, timeout=_EVIDENCE_TIMEOUT_S)
+        else:
+            articles = await fetch_task
         articles = articles or []
         outcome = "fresh_nonempty" if articles else "fresh_empty"
         if articles:
