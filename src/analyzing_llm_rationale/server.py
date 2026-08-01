@@ -1032,7 +1032,7 @@ _evidence_prefetch_inflight: set[str] = set()
 _LOCAL_CACHE_MAX = int(os.environ.get("LOCAL_CACHE_MAX", "1024"))
 _EVIDENCE_CACHE_TTL = int(os.environ.get("EVIDENCE_CACHE_TTL", "900"))
 _EVIDENCE_PREFETCH_TOP_N = int(os.environ.get("EVIDENCE_PREFETCH_TOP_N", "3"))
-_EVIDENCE_TIMEOUT_S = float(os.environ.get("EVIDENCE_TIMEOUT_S", "6"))
+_EVIDENCE_TIMEOUT_S = float(os.environ.get("EVIDENCE_TIMEOUT_S", "15"))
 _EVIDENCE_MAX_CONCURRENCY = max(1, int(os.environ.get("EVIDENCE_MAX_CONCURRENCY", "4")))
 _evidence_fetch_slots = threading.BoundedSemaphore(_EVIDENCE_MAX_CONCURRENCY)
 _EXTRACT_CACHE_TTL = int(os.environ.get("EXTRACT_CACHE_TTL", "3600"))
@@ -4755,8 +4755,7 @@ async def _prepare_predict_messages(
         if not evidence_articles and evidence_error:
             system_prompt += (
                 "\n\nEvidence status: no relevant live sources were retrieved. "
-                "Start by explicitly labeling the answer as evidence-limited. This is a "
-                "retrieval failure, not evidence about the event. Do not say or imply "
+                "This is a retrieval failure, not evidence about the event. Do not say or imply "
                 "\"no current reporting\", \"no specific information\", \"no evidence "
                 "of\", \"nothing suggests\", or similar. Do not include an **Evidence "
                 "used** section; label supplied pricing as **Market context** instead. "

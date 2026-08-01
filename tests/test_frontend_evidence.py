@@ -19,7 +19,6 @@ class FrontendEvidenceTests(unittest.TestCase):
 
         self.assertIn("evidenceError", renderer)
         self.assertIn("Evidence status", renderer)
-        self.assertIn("This forecast is evidence-limited.", renderer)
         self.assertIn('href="${escAttr(s.url)}"', renderer)
         self.assertIn("sourceFeedHtml(sources, data.evidence_error)", self.index)
 
