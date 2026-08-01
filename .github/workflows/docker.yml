@@ -5,6 +5,10 @@ on:
     branches: [main]
     tags: ["v*"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GCP_REGION: us-central1
   GCP_PROJECT_ID: brave-drive-471109-d9
