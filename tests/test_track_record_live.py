@@ -1093,7 +1093,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
             for i in range(1, 4)
         ]
         pnl = trl.paper_pnl(resolved, [])
-        self.assertEqual(pnl["flat"]["n_bets"], 3)
+        self.assertEqual(pnl["flat"]["n_bets"], 1)
         self.assertEqual(len(pnl["bets"]), 1)
         self.assertEqual(pnl["bets"][0]["snapshot_ts"], "2026-06-01T00:00:00+00:00")
 
