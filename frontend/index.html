@@ -3532,7 +3532,7 @@ function sourceFeedHtml(sources, evidenceError = '') {
     return `
       <div class="mt-4 pt-3 border-t border-gray-200">
         <p class="label mb-1">Evidence status</p>
-        <p class="text-xs text-amber-800 leading-relaxed">${escHtml(evidenceError)} This forecast is evidence-limited.</p>
+        <p class="text-xs text-amber-800 leading-relaxed">${escHtml(evidenceError)}</p>
       </div>`;
   }
   const chips = list.map(s => {
