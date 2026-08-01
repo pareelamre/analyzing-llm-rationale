@@ -6581,33 +6581,33 @@ function _renderMtmPage(d) {
     return curve;
   };
 
-  const strategyCurves = [
-    _mk(pnl.growth_2pct, '#f59e0b', 'Growth 2% Mode ($200/mkt)', 'growth_2pct'),
-    _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% Mode ($100/mkt)', 'growth_1pct'),
-    _mk(pnl.smart, '#10b981', 'Smart ROI Mode ($1 Flat)', 'smart'),
-    _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly Mode', 'half_kelly'),
-    _mk(pnl.crowd_baseline, '#94a3b8', 'Crowd-Follow Baseline', 'crowd_baseline', true),
-  ].filter(Boolean);
+  const _getScaledMtmValue = (rawVal, stratKey, mode) => {
+    const val = Number(rawVal);
+    if (!Number.isFinite(val)) return 10000;
+    if (mode !== 'dynamic') return val;
+    let mult = 1;
+    if (stratKey === 'growth_2pct') mult = 200 / 10000;
+    else if (stratKey === 'growth_1pct') mult = 100 / 10000;
+    else if (stratKey === 'smart') mult = 1 / 10000;
+    else if (stratKey === 'half_kelly') mult = 100 / 10000;
+    else mult = 1 / 10000;
+    return EB_STARTING_BANKROLL + (val - 10000) * mult;
+  };
 
   const modelCurves = mtmModels.map((m, i) => {
     const account = m.account || {};
     const curvePoints = account.value_curve || [];
-    let scaleMult = 1;
-    if (sizingMode === 'dynamic') {
-      if (activeStrat === 'growth_2pct') scaleMult = 200 / 10000;
-      else if (activeStrat === 'growth_1pct') scaleMult = 100 / 10000;
-    }
     const values = curvePoints.map(p => {
       const rawVal = Number(p.account_value);
       if (!Number.isFinite(rawVal)) return null;
-      return (sizingMode === 'dynamic' && activeStrat.startsWith('growth')) ? (EB_STARTING_BANKROLL + (rawVal - 10000) * scaleMult) : rawVal;
+      return _getScaledMtmValue(rawVal, activeStrat, sizingMode);
     }).filter(Number.isFinite);
     const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
     if (!values.length) return null;
     const label = _ebModelLabel(m.model);
     const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    const scaledVal = (sizingMode === 'dynamic' && activeStrat.startsWith('growth')) ? (EB_STARTING_BANKROLL + (rawVal - 10000) * scaleMult) : rawVal;
-    const ret = account.return ?? m.return;
+    const scaledVal = _getScaledMtmValue(rawVal, activeStrat, sizingMode);
+    const ret = (scaledVal - EB_STARTING_BANKROLL) / EB_STARTING_BANKROLL;
     const curve = {
       points: values,
       color: _mtmModelColor(m.model, i),
@@ -6622,13 +6622,8 @@ function _renderMtmPage(d) {
   const rows = mtmModels.map((m, i) => {
     const account = m.account || {};
     const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    let scaleMult = 1;
-    if (sizingMode === 'dynamic') {
-      if (activeStrat === 'growth_2pct') scaleMult = 200 / 10000;
-      else if (activeStrat === 'growth_1pct') scaleMult = 100 / 10000;
-    }
-    const scaledVal = (sizingMode === 'dynamic' && activeStrat.startsWith('growth')) ? (EB_STARTING_BANKROLL + (rawVal - 10000) * scaleMult) : rawVal;
-    const ret = account.return ?? m.return;
+    const scaledVal = _getScaledMtmValue(rawVal, activeStrat, sizingMode);
+    const ret = (scaledVal - EB_STARTING_BANKROLL) / EB_STARTING_BANKROLL;
     const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
     return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
       <td><b>${i + 1}</b></td>
@@ -6655,7 +6650,7 @@ function _renderMtmPage(d) {
     const pnlUsd = endB - startB;
     const pnlPct = (pnlUsd / startB);
     const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
-    const isActive = activeStrat === s.key;
+    const isActive = activeStrat === s.key && sizingMode === 'dynamic';
     const activeStyle = isActive ? 'background:rgba(16,185,129,0.1);font-weight:bold' : '';
     return `<tr class="eb-row ${isActive ? 'active-strat-row' : ''}" style="${activeStyle};cursor:pointer" onclick="_selectMtmStrategy('${s.key}')" data-model="${escHtml(s.label)}">
       <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px"></span><b>${escHtml(s.label)}</b> ${isActive ? '<span class="eb-badge eb-sig">ACTIVE</span>' : ''}<span style="display:block;color:var(--text-dim);font-size:11px">${s.tag}</span></td>
@@ -6671,11 +6666,11 @@ function _renderMtmPage(d) {
     <h4 class="eb-h" style="margin-top:24px">Capital growth &amp; principal return by strategy mode (click any row to activate)</h4>
     <table class="eb-table"><thead><tr><th>Strategy / Position Sizing Mode</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades Placed</th></tr></thead><tbody>${stratRows}</tbody></table>` : '';
 
-  const activeLabel = cardConfig.find(c => c.key === activeStrat)?.label || activeStrat;
+  const activeLabel = stratList.find(c => c.key === activeStrat)?.label || activeStrat;
 
   const sizingModeHtml = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;margin-bottom:12px;flex-wrap:wrap;gap:10px">
-      <h4 class="eb-h" style="margin:0">Per-Model Shadow Mark-to-Market Accounts ${sizingMode === 'dynamic' ? '(' + escHtml(activeLabel) + ')' : '(Fixed Stake $1 Flat)'}</h4>
+      <h4 class="eb-h" style="margin:0">Per-Model Shadow Mark-to-Market Accounts ${sizingMode === 'dynamic' ? '(' + escHtml(activeLabel) + ')' : '(Fixed Stake $1 Flat Baseline)'}</h4>
       <div class="eb-view-tabs" style="margin:0" role="tablist">
         <button type="button" class="eb-view-tab ${sizingMode === 'fixed' ? 'active' : ''}" onclick="_setMtmModelSizing('fixed')">Fixed Stake ($1 Flat Baseline)</button>
         <button type="button" class="eb-view-tab ${sizingMode === 'dynamic' ? 'active' : ''}" onclick="_setMtmModelSizing('dynamic')">Dynamic Bankroll Sizing</button>
