@@ -6673,7 +6673,6 @@ function _renderMtmPage(d) {
 
   return `<h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
     ${growthCardsHtml}
-    ${strategyCurves.length ? `<div style="margin-bottom:20px"><h5 class="eb-h" style="font-size:13px;margin:8px 0;color:var(--text-dim)">Strategy Mode Bankroll Curves</h5><div id="eb-mtm-strat-svg">${_equitySvg(strategyCurves, 760, 260, {asPct: false, yPrefix: '$'})}</div></div>` : ''}
     <h4 class="eb-h" style="margin-top:24px">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeLabel)})</h4>
     <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>
