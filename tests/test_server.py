@@ -1133,6 +1133,40 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Will the Fed cut rates", page.text)
         self.assertIn("Evidence supports", page.text)
 
+    def test_fetch_evidence_auto_initializes_pipeline(self):
+        import asyncio
+
+        from analyzing_llm_rationale.server import _fetch_evidence_with_cache, _state
+        _state.pop("evidence_pipeline", None)
+        # Should auto-initialize rather than returning 'unconfigured' error
+        with unittest.mock.patch("analyzing_llm_rationale.news_pipeline.NewsPipeline.fetch_summarize_rank", return_value=[]):
+            articles, error, outcome = asyncio.run(_fetch_evidence_with_cache("Will X happen?", 3, source="test"))
+            self.assertIsNotNone(_state.get("evidence_pipeline"))
+            self.assertNotIn("unconfigured", (error or "").lower())
+
+    def test_source_attribution_appended_for_typed_predict(self):
+        import asyncio
+
+        from analyzing_llm_rationale.server import (
+            EvidenceSource,
+            PredictRequest,
+            PredictResponse,
+            _finalize_predict_response,
+        )
+        req = PredictRequest(question="Will X happen?", attach_evidence=True, chat_mode=False)
+        resp = PredictResponse(
+            question_type="binary",
+            predicted_answer="Yes",
+            confidence=0.7,
+            rationale="Initial rationale text.",
+            evidence_sources=[
+                EvidenceSource(source="Reuters", title="Event X update", relevance_score=0.9)
+            ]
+        )
+        asyncio.run(_finalize_predict_response(req, resp, None))
+        self.assertIn("**Sources provided to the forecast**", resp.rationale)
+        self.assertIn("Reuters", resp.rationale)
+
     def test_trading_accounts_requires_session(self):
         response = self.client.get("/trading/accounts")
         self.assertEqual(response.status_code, 401)
