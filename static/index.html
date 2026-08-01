@@ -6586,12 +6586,12 @@ function _renderMtmPage(d) {
     if (!Number.isFinite(val)) return 10000;
     if (mode !== 'dynamic') return val;
     let mult = 1;
-    if (stratKey === 'growth_2pct') mult = 200 / 10000;
-    else if (stratKey === 'growth_1pct') mult = 100 / 10000;
-    else if (stratKey === 'smart') mult = 1 / 10000;
-    else if (stratKey === 'half_kelly') mult = 100 / 10000;
-    else mult = 1 / 10000;
-    return EB_STARTING_BANKROLL + (val - 10000) * mult;
+    if (stratKey === 'growth_2pct') mult = 200;
+    else if (stratKey === 'growth_1pct') mult = 100;
+    else if (stratKey === 'smart') mult = 1;
+    else if (stratKey === 'half_kelly') mult = 50;
+    else mult = 1;
+    return Math.max(0, EB_STARTING_BANKROLL + (val - 10000) * mult);
   };
 
   const modelCurves = mtmModels.map((m, i) => {
