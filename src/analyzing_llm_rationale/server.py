@@ -1178,11 +1178,12 @@ def _compact_pnl_strategy(strategy: Any) -> Any:
         "compound_bankroll",
         "compound_return",
         "growth_curve",
+        "growth_curve_ts",
         "equity_curve",
         "equity_curve_ts",
     }
     compact = {k: strategy.get(k) for k in keep if k in strategy}
-    for curve_key in ("growth_curve", "equity_curve", "equity_curve_ts"):
+    for curve_key in ("growth_curve", "growth_curve_ts", "equity_curve", "equity_curve_ts"):
         if curve_key in compact:
             compact[curve_key] = _sample_list(compact[curve_key])
     return compact
