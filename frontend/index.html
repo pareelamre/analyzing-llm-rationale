@@ -6594,23 +6594,30 @@ function _renderMtmPage(d) {
   const modelCurves = mtmModels.map((m, i) => {
     const account = m.account || {};
     const curvePoints = account.value_curve || [];
-    const values = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
+    let scaleMult = 1;
+    if (activeStrat === 'growth_2pct') scaleMult = 200 / 10000;
+    else if (activeStrat === 'growth_1pct') scaleMult = 100 / 10000;
+    const values = curvePoints.map(p => {
+      const rawVal = Number(p.account_value);
+      if (!Number.isFinite(rawVal)) return null;
+      return activeStrat.startsWith('growth') ? (EB_STARTING_BANKROLL + (rawVal - 10000) * scaleMult) : rawVal;
+    }).filter(Number.isFinite);
     const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
     if (!values.length) return null;
     const label = _ebModelLabel(m.model);
+    const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
+    const scaledVal = activeStrat.startsWith('growth') ? (EB_STARTING_BANKROLL + (rawVal - 10000) * scaleMult) : rawVal;
     const ret = account.return ?? m.return;
     const curve = {
       points: values,
       color: _mtmModelColor(m.model, i),
       label,
       head: _ebModelHead(m.model),
-      headTitle: `${label} · ${_usd(account.account_value ?? m.account_value)}${ret == null ? '' : ' · ' + _roiPct(ret)}`,
+      headTitle: `${label} · ${_usd(scaledVal)}${ret == null ? '' : ' · ' + _roiPct(ret)}`,
     };
     if (times.length === values.length) curve.times = times;
     return curve;
   }).filter(Boolean);
-
-  const displayCurves = strategyCurves.length ? strategyCurves : modelCurves;
 
   const rows = mtmModels.map((m, i) => {
     const account = m.account || {};
@@ -6662,12 +6669,15 @@ function _renderMtmPage(d) {
     <h4 class="eb-h" style="margin-top:24px">Capital growth &amp; principal return by strategy mode (click any row to activate)</h4>
     <table class="eb-table"><thead><tr><th>Strategy / Position Sizing Mode</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades Placed</th></tr></thead><tbody>${stratRows}</tbody></table>` : '';
 
+  const activeLabel = cardConfig.find(c => c.key === activeStrat)?.label || activeStrat;
+
   return `<h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
     ${growthCardsHtml}
-    <div id="eb-mtm-svg">${displayCurves.length ? _equitySvg(displayCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
-    ${stratTableHtml}
-    <h4 class="eb-h" style="margin-top:24px">Per-model shadow mark-to-market accounts (${cardConfig.find(c => c.key === activeStrat)?.label || activeStrat})</h4>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>`;
+    ${strategyCurves.length ? `<div style="margin-bottom:20px"><h5 class="eb-h" style="font-size:13px;margin:8px 0;color:var(--text-dim)">Strategy Mode Bankroll Curves</h5><div id="eb-mtm-strat-svg">${_equitySvg(strategyCurves, 760, 260, {asPct: false, yPrefix: '$'})}</div></div>` : ''}
+    <h4 class="eb-h" style="margin-top:24px">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeLabel)})</h4>
+    <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account value</th><th>Return</th><th>Trades</th><th>Open</th><th>Illiquid</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>
+    ${stratTableHtml}`;
 }
 
 function renderEdgeBoard(d) {
