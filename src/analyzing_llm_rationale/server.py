@@ -2985,10 +2985,10 @@ class PredictRequest(BaseModel):
         description="If `true`, fetch live evidence and merge it with any supplied articles.",
     )
     evidence_top_k: int = Field(
-        5,
+        20,
         ge=1,
-        le=10,
-        description="Maximum number of evidence articles to retrieve (1–10).",
+        le=100,
+        description="Maximum number of evidence articles to retrieve (1–100).",
     )
     evidence_detail: str = Field(
         "full",
@@ -3506,7 +3506,7 @@ class AgentAnalyzeRequest(BaseModel):
     market_liquidity: Optional[float] = None
     resolve_time: Optional[str] = Field(None, max_length=50)
     variant: str = Field("variant0_neutral_baseline", max_length=64)
-    evidence_top_k: int = Field(5, ge=1, le=10)
+    evidence_top_k: int = Field(20, ge=1, le=100)
     skills: List[AgentSkill] = Field(default_factory=list, max_length=5, description="Up to 5 custom skills to run.")
     builtin_skills: bool = Field(False, description="Also run the built-in forecasting toolkit (base rate, scenario decomposition, red team, key drivers).")
     ground_in_record: bool = Field(False, description="Condition the forecast on the model's own live track-record calibration.")
@@ -7969,7 +7969,7 @@ async def agent_scan(
     venue = (platform or "polymarket").strip().lower()
     kw = (query or "").strip() or None
     limit = max(1, min(limit, 8))
-    evidence_top_k = max(1, min(evidence_top_k, 6))
+    evidence_top_k = max(1, evidence_top_k)
 
     if venue in ("all", "both") or ("poly" in venue and "kalshi" in venue):
         venues = ["polymarket", "kalshi"]

@@ -4231,8 +4231,8 @@ async function sendQuestion(options = {}) {
     }
     const attachedEvidence = [..._attachments];
     if (attachedEvidence.length) body.news_articles = attachedEvidence;
-    body.evidence_top_k = 5;
-    body.attach_evidence = !attachedEvidence.length;
+    body.evidence_top_k = 20;
+    body.attach_evidence = true;
     if (activeModel) {
       body.openrouter_model = activeModel.model;
       if (activeModel.provider === 'ollama') {
@@ -4254,7 +4254,7 @@ async function sendQuestion(options = {}) {
     if (_agentEnabled() || options.forceAgent) {
       const agentBody = {
         question,
-        evidence_top_k: 5,
+        evidence_top_k: 20,
         history,  // full thread context — only a new brief resets it
         conversation_steer: conversationSteer,
         skills: _loadSkills().map(s => ({ name: s.name, instruction: s.instruction })),
@@ -4861,7 +4861,7 @@ async function _streamLandingQuestion(question) {
     variant: 'variant0_neutral_baseline',
     history: [],
     attach_evidence: true,
-    evidence_top_k: 5,
+    evidence_top_k: 20,
     max_tokens: 384,
   };
   try {
