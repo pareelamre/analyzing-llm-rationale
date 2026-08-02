@@ -1852,6 +1852,8 @@ def build_validated_kelly_accounts(
     tracked_models: Optional[List[str]] = None,
     kelly_fraction: float = 0.5,
     max_concentration: float = 0.15,
+    require_validated: bool = True,
+    follow_model_call: bool = False,
 ) -> List[Dict[str, Any]]:
     """Per-model deployable strategy: a real position ledger (one settle per
     market, per simulate_validated_kelly_account) sized by fractional Kelly on
@@ -1912,6 +1914,8 @@ def build_validated_kelly_accounts(
             latest_quotes=latest_quotes,
             kelly_fraction=kelly_fraction,
             max_concentration=max_concentration,
+            require_validated=require_validated,
+            follow_model_call=follow_model_call,
             fee_fn=_bet_fee,
         )
         risk = _sharpe_and_max_drawdown(account.get("value_curve") or [])
@@ -1939,6 +1943,33 @@ def build_validated_kelly_accounts(
 
     accounts.sort(key=lambda a: (a.get("return") if a.get("return") is not None else -1.0), reverse=True)
     return accounts
+
+
+def build_half_kelly_20pct_accounts(
+    rows: List[Dict[str, Any]],
+    latest_quotes: Dict[Any, Dict[str, Any]],
+    *,
+    default_model: str,
+    tracked_models: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Replay every executable model call with walk-forward half-Kelly sizing.
+
+    This is the MTM counterpart to the historical growth views: it starts from
+    the same June forecast history, books each market once at settlement, and
+    caps every position at 20% of the current account. Unlike the guarded
+    deployable strategy, it does not require a significance-approved edge
+    bucket, so it can show the full historical sizing trajectory.
+    """
+    return build_validated_kelly_accounts(
+        rows,
+        latest_quotes,
+        default_model=default_model,
+        tracked_models=tracked_models,
+        kelly_fraction=0.5,
+        max_concentration=0.20,
+        require_validated=False,
+        follow_model_call=True,
+    )
 
 
 _FADE_BUCKET = "20pp+"
@@ -2702,13 +2733,11 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         default_model=model,
         tracked_models=tracked_models,
     )
-    half_kelly_20pct_by_model = build_validated_kelly_accounts(
+    half_kelly_20pct_by_model = build_half_kelly_20pct_accounts(
         mark_to_market_rows_all,
         latest_quotes,
         default_model=model,
         tracked_models=tracked_models,
-        kelly_fraction=0.5,
-        max_concentration=0.20,
     )
     primary_mark_to_market = next(
         (row.get("account") for row in mark_to_market_by_model if row.get("model") == model),
