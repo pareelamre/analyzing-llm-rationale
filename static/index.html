@@ -5266,6 +5266,7 @@ async function refreshEdgeForecasts() {
       const strategyCurves = [
         _mk(pnl.growth_2pct, '#f59e0b', 'Growth 2% ($200/mkt)'),
         _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% ($100/mkt)'),
+        _mk(pnl.half_kelly_20pct, '#06b6d4', 'Half-Kelly (20% cap)'),
         _mk(pnl.smart, '#10b981', 'Smart ROI ($1 Flat)'),
         _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
         _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
@@ -6536,39 +6537,39 @@ function _renderBoardPage(board, page) {
   return tableHtml + pagination;
 }
 
-let _activeMtmStrat = 'growth_2pct';
-let _mtmSizingMode = 'growth_2pct';
+let _activeMtmStrat = 'half_kelly_20pct';
+let _mtmSizingMode = 'half_kelly_20pct';
+
+function _mtmModelsForSizing(d, sizingMode) {
+  const source = sizingMode === 'half_kelly_20pct'
+    ? d.half_kelly_20pct_by_model
+    : d.mark_to_market_by_model;
+  return (source || []).filter(m => m && (m.account || m.account_value != null));
+}
 
 function _updateMtmViewInPlace() {
   if (!_ebLastData) return false;
   const d = _ebLastData;
-  const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
+  const sizingMode = _mtmSizingMode || 'half_kelly_20pct';
+  const mtmModels = _mtmModelsForSizing(d, sizingMode);
   if (!mtmModels.length) return false;
 
   const mtmContainer = document.getElementById('eb-mtm-container');
   if (!mtmContainer) return false;
 
-  const sizingMode = _mtmSizingMode || 'growth_2pct';
   const sizingLabels = {
-    'fixed': 'Fixed Stake ($1 Flat Baseline)',
+    'half_kelly_20pct': 'Half-Kelly (20% Position Cap)',
     'growth_1pct': 'Growth 1% Mode ($100/mkt)',
     'growth_2pct': 'Growth 2% Mode ($200/mkt)',
   };
-  const activeSizingLabel = sizingLabels[sizingMode] || 'Growth 2% Mode ($200/mkt)';
+  const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.half_kelly_20pct;
 
   const titleEl = document.getElementById('eb-mtm-header-title');
   if (titleEl) titleEl.textContent = `Per-Model Shadow Mark-to-Market Accounts (${activeSizingLabel})`;
 
   const tabs = mtmContainer.querySelectorAll('.eb-view-tab');
   tabs.forEach(tab => {
-    const isFixed = tab.textContent.includes('Fixed');
-    const isGrowth1 = tab.textContent.includes('Growth 1%');
-    const isGrowth2 = tab.textContent.includes('Growth 2%');
-    
-    tab.classList.remove('active');
-    if (sizingMode === 'fixed' && isFixed) tab.classList.add('active');
-    if (sizingMode === 'growth_1pct' && isGrowth1) tab.classList.add('active');
-    if (sizingMode === 'growth_2pct' && isGrowth2) tab.classList.add('active');
+    tab.classList.toggle('active', tab.dataset.mtmSizingMode === sizingMode);
   });
 
   const _usd = v => Number.isFinite(Number(v))
@@ -6577,9 +6578,9 @@ function _updateMtmViewInPlace() {
 
   const _getScaledMtmValue = (rawVal, m) => {
     const val = Number(rawVal);
-    if (!Number.isFinite(val)) return m === 'fixed' ? 100 : EB_STARTING_BANKROLL;
+    if (!Number.isFinite(val)) return EB_STARTING_BANKROLL;
+    if (m === 'half_kelly_20pct') return val;
     const rawPnl = val - 10000;
-    if (m === 'fixed') return 100 + rawPnl / 100;
     const mult = m === 'growth_2pct' ? 200 : 100;
     return Math.max(0, EB_STARTING_BANKROLL + rawPnl * mult);
   };
@@ -6596,7 +6597,7 @@ function _updateMtmViewInPlace() {
     if (!values.length) return null;
     const label = _ebModelLabel(m.model);
     const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    const startP = sizingMode === 'fixed' ? 100 : EB_STARTING_BANKROLL;
+    const startP = EB_STARTING_BANKROLL;
     const scaledVal = _getScaledMtmValue(rawVal, sizingMode);
     const ret = (scaledVal - startP) / startP;
     const curve = {
@@ -6620,7 +6621,7 @@ function _updateMtmViewInPlace() {
     tableBodyEl.innerHTML = mtmModels.map((m, i) => {
       const account = m.account || {};
       const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-      const startPrincipal = sizingMode === 'fixed' ? 100 : EB_STARTING_BANKROLL;
+      const startPrincipal = EB_STARTING_BANKROLL;
       const currentBankroll = _getScaledMtmValue(rawVal, sizingMode);
       const pnlUsd = currentBankroll - startPrincipal;
       const pnlPct = pnlUsd / startPrincipal;
@@ -6661,12 +6662,10 @@ function _refreshActiveEdgeBoardHost() {
 
 function _selectMtmStrategy(key) {
   _activeMtmStrat = key;
-  if (key === 'growth_2pct' || key === 'growth_1pct') {
+  if (key === 'half_kelly_20pct' || key === 'growth_2pct' || key === 'growth_1pct') {
     _mtmSizingMode = key;
-  } else if (key === 'smart') {
-    _mtmSizingMode = 'fixed';
   } else {
-    _mtmSizingMode = 'growth_1pct';
+    _mtmSizingMode = 'half_kelly_20pct';
   }
   if (!_updateMtmViewInPlace()) {
     _refreshActiveEdgeBoardHost();
@@ -6675,11 +6674,7 @@ function _selectMtmStrategy(key) {
 
 function _setMtmSizingMode(mode) {
   _mtmSizingMode = mode;
-  if (mode === 'fixed') {
-    _activeMtmStrat = 'smart';
-  } else {
-    _activeMtmStrat = mode;
-  }
+  _activeMtmStrat = mode;
   if (!_updateMtmViewInPlace()) {
     _refreshActiveEdgeBoardHost();
   }
@@ -6706,8 +6701,8 @@ document.addEventListener('click', (event) => {
 });
 
 function _renderMtmPage(d) {
-  const sizingMode = typeof _mtmSizingMode !== 'undefined' ? _mtmSizingMode : 'growth_2pct';
-  const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
+  const sizingMode = _mtmSizingMode || 'half_kelly_20pct';
+  const mtmModels = _mtmModelsForSizing(d, sizingMode);
   if (!mtmModels.length) {
     return '<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4><p class="text-sm text-gray-500">Shadow mark-to-market account values will appear after strategy snapshots are available.</p>';
   }
@@ -6717,13 +6712,12 @@ function _renderMtmPage(d) {
   const pnl = d.paper_pnl || {};
   const roi = s => (s && s.n_bets >= 5) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets') : `<span style="color:var(--text-dim);font-weight:500">building · n=${s ? s.n_bets : 0}</span>`;
   const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
-  const activeStrat = _activeMtmStrat || 'growth_2pct';
-  const sizingMode = _mtmSizingMode || 'growth_2pct';
+  const activeStrat = _activeMtmStrat || 'half_kelly_20pct';
 
   const cardConfig = [
     { key: 'growth_2pct', label: 'Growth 2% Mode', sub: '2% Bankroll / $200', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.4)' },
     { key: 'growth_1pct', label: 'Growth 1% Mode', sub: '1% Bankroll / $100', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.4)' },
-    { key: 'smart', label: 'Smart ROI Mode', sub: '$1 Flat Preservation', color: '#10b981', bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.4)' },
+    { key: 'half_kelly_20pct', label: 'Half-Kelly Mode', sub: '20% Position Cap', color: '#06b6d4', bg: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.4)' },
   ];
 
   const _normCurve = s => _ebPnlCurve(s);
@@ -6731,11 +6725,9 @@ function _renderMtmPage(d) {
 
   const _getScaledMtmValue = (rawVal, mode) => {
     const val = Number(rawVal);
-    if (!Number.isFinite(val)) return mode === 'fixed' ? 100 : EB_STARTING_BANKROLL;
+    if (!Number.isFinite(val)) return EB_STARTING_BANKROLL;
+    if (mode === 'half_kelly_20pct') return val;
     const rawPnl = val - 10000;
-    if (mode === 'fixed') {
-      return 100 + rawPnl / 100;
-    }
     const mult = mode === 'growth_2pct' ? 200 : 100;
     return Math.max(0, EB_STARTING_BANKROLL + rawPnl * mult);
   };
@@ -6752,7 +6744,7 @@ function _renderMtmPage(d) {
     if (!values.length) return null;
     const label = _ebModelLabel(m.model);
     const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    const startP = sizingMode === 'fixed' ? 100 : EB_STARTING_BANKROLL;
+    const startP = EB_STARTING_BANKROLL;
     const scaledVal = _getScaledMtmValue(rawVal, sizingMode);
     const ret = (scaledVal - startP) / startP;
     const curve = {
@@ -6770,7 +6762,7 @@ function _renderMtmPage(d) {
     const account = m.account || {};
     const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
     
-    const startPrincipal = sizingMode === 'fixed' ? 100 : EB_STARTING_BANKROLL;
+    const startPrincipal = EB_STARTING_BANKROLL;
     const currentBankroll = _getScaledMtmValue(rawVal, sizingMode);
     const pnlUsd = currentBankroll - startPrincipal;
     const pnlPct = pnlUsd / startPrincipal;
@@ -6792,16 +6784,15 @@ function _renderMtmPage(d) {
   }).join('');
 
   const stratList = [
+    { key: 'half_kelly_20pct', label: 'Half-Kelly (20% cap)', strat: pnl.half_kelly_20pct, color: '#06b6d4', tag: 'Calibrated and compounded' },
     { key: 'growth_2pct', label: 'Growth 2% Mode ($200/mkt)', strat: pnl.growth_2pct, color: '#f59e0b', tag: '2% Bankroll / $200' },
     { key: 'growth_1pct', label: 'Growth 1% Mode ($100/mkt)', strat: pnl.growth_1pct, color: '#3b82f6', tag: '1% Bankroll / $100' },
-    { key: 'smart', label: 'Smart ROI Mode ($1 Flat)', strat: pnl.smart, color: '#10b981', tag: '$1 Flat Preservation' },
-    { key: 'half_kelly', label: 'Half-Kelly Mode', strat: pnl.half_kelly, color: '#06b6d4', tag: 'Calibrated Half-Kelly' },
     { key: 'crowd_baseline', label: 'Crowd-Follow Baseline', strat: pnl.crowd_baseline, color: '#94a3b8', tag: 'Zero-Edge Baseline' },
   ];
 
-  const stratRows = stratList.filter(s => s.strat && s.strat.bankroll != null).map(s => {
+  const stratRows = stratList.filter(s => s.strat && (s.strat.compound_bankroll != null || s.strat.bankroll != null)).map(s => {
     const startB = EB_STARTING_BANKROLL;
-    const endB = Number(s.strat.bankroll);
+    const endB = Number(s.strat.compound_bankroll ?? s.strat.bankroll);
     const pnlUsd = endB - startB;
     const pnlPct = (pnlUsd / startB);
     const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
@@ -6822,17 +6813,17 @@ function _renderMtmPage(d) {
     <table class="eb-table"><thead><tr><th>Strategy / Position Sizing Mode</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades Placed</th></tr></thead><tbody>${stratRows}</tbody></table>` : '';
 
   const sizingLabels = {
-    'fixed': 'Fixed Stake ($1 Flat Baseline)',
+    'half_kelly_20pct': 'Half-Kelly (20% Position Cap)',
     'growth_1pct': 'Growth 1% Mode ($100/mkt)',
     'growth_2pct': 'Growth 2% Mode ($200/mkt)',
   };
-  const activeSizingLabel = sizingLabels[sizingMode] || 'Growth 2% Mode ($200/mkt)';
+  const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.half_kelly_20pct;
 
   const sizingButtonsHtml = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;margin-bottom:12px;flex-wrap:wrap;gap:10px">
       <h4 id="eb-mtm-header-title" class="eb-h" style="margin:0">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
       <div class="eb-view-tabs" style="margin:0" role="tablist" aria-label="Position sizing modes">
-        <button type="button" class="eb-view-tab ${sizingMode === 'fixed' ? 'active' : ''}" data-mtm-sizing-mode="fixed">Fixed Stake ($1 Flat)</button>
+        <button type="button" class="eb-view-tab ${sizingMode === 'half_kelly_20pct' ? 'active' : ''}" data-mtm-sizing-mode="half_kelly_20pct">Half-Kelly (20% cap)</button>
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Growth 1% ($100/mkt)</button>
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Growth 2% ($200/mkt)</button>
       </div>
@@ -6911,6 +6902,7 @@ function renderEdgeBoard(d) {
     const strategyCurves = [
       _mk(pnl.growth_2pct, '#f59e0b', 'Growth 2% ($200/mkt)'),
       _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% ($100/mkt)'),
+      _mk(pnl.half_kelly_20pct, '#06b6d4', 'Half-Kelly (20% cap)'),
       _mk(pnl.smart, '#10b981', 'Smart ROI ($1 Flat)'),
       _mk(pnl.half_kelly, '#06b6d4', 'Half-Kelly'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
