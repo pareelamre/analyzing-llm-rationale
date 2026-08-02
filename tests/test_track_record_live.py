@@ -935,7 +935,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertGreater(pnl["flat"]["pnl"], 0)
         self.assertEqual(len(pnl["flat"]["equity_curve"]), 10)
         self.assertEqual(
-            {"flat", "half_kelly", "half_kelly_20pct", "smart", "growth_1pct", "growth_2pct"},
+            {"flat", "half_kelly", "half_kelly_20pct", "kelly_conservative", "smart", "growth_1pct", "growth_2pct"},
             {k for k, v in pnl.items() if isinstance(v, dict) and "roi" in v},
         )
 
@@ -1159,7 +1159,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
         self.assertIsNotNone(pnl["flat"])
         self.assertEqual(
-            {"flat", "half_kelly", "half_kelly_20pct", "smart", "growth_1pct", "growth_2pct"},
+            {"flat", "half_kelly", "half_kelly_20pct", "kelly_conservative", "smart", "growth_1pct", "growth_2pct"},
             {k for k, v in pnl.items() if isinstance(v, dict) and "roi" in v},
         )
         for removed in ("edge_weighted", "validated_only", "mid_price_only", "fade_extreme", "yes_only"):
