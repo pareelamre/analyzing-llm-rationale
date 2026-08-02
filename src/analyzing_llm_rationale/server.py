@@ -1182,9 +1182,22 @@ def _compact_pnl_strategy(strategy: Any) -> Any:
         "growth_curve_ts",
         "equity_curve",
         "equity_curve_ts",
+        "compound_curve",
+        "compound_curve_ts",
+        "cumulative_curve",
+        "cumulative_curve_ts",
     }
     compact = {k: strategy.get(k) for k in keep if k in strategy}
-    for curve_key in ("growth_curve", "growth_curve_ts", "equity_curve", "equity_curve_ts"):
+    for curve_key in (
+        "growth_curve",
+        "growth_curve_ts",
+        "equity_curve",
+        "equity_curve_ts",
+        "compound_curve",
+        "compound_curve_ts",
+        "cumulative_curve",
+        "cumulative_curve_ts",
+    ):
         if curve_key in compact:
             compact[curve_key] = _sample_list(compact[curve_key])
     return compact
@@ -1196,7 +1209,11 @@ def _compact_paper_pnl(pnl: Any) -> Any:
     compact: Dict[str, Any] = {}
     for key, value in pnl.items():
         if isinstance(value, dict) and (
-            "growth_curve" in value or "equity_curve" in value or "n_bets" in value
+            "growth_curve" in value
+            or "equity_curve" in value
+            or "compound_curve" in value
+            or "cumulative_curve" in value
+            or "n_bets" in value
         ):
             compact[key] = _compact_pnl_strategy(value)
         elif key in {"disclaimer", "methodology", "notes"}:
