@@ -137,6 +137,12 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("v * EB_STARTING_BANKROLL", normalizer)
         self.assertIn("v * (EB_STARTING_BANKROLL / 100)", normalizer)
 
+    def test_edge_board_strategy_chart_uses_compound_growth_curve(self):
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        self.assertIn("function _ebPnlCurve(s)", index)
+
     def test_edge_board_equity_chart_insets_points_from_edges(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"

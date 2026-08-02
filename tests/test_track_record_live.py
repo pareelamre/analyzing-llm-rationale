@@ -962,6 +962,26 @@ class EdgeAnalyticsTests(unittest.TestCase):
             self.assertGreater(s["growth_curve"][0], trl._COMPOUND_STARTING_BANKROLL)
         self.assertGreater(pnl["flat"]["compound_return"], pnl["flat"]["roi"])
 
+    def test_growth_sizing_modes_keep_distinct_bankroll_exposure(self):
+        # Growth 2% must visibly diverge from Growth 1%; otherwise the frontend
+        # chart draws both labels over the same curve and the sizing control is
+        # not showing a real capital-growth comparison.
+        resolved = [
+            dict(self._res(0.8, 0.5, 1), platform="P", ident=f"m{i}")
+            for i in range(10)
+        ]
+
+        pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
+
+        self.assertGreater(
+            pnl["growth_2pct"]["compound_bankroll"],
+            pnl["growth_1pct"]["compound_bankroll"],
+        )
+        self.assertNotEqual(
+            pnl["growth_2pct"]["growth_curve"],
+            pnl["growth_1pct"]["growth_curve"],
+        )
+
     def test_growth_curve_compounds_once_per_market_not_per_snapshot(self):
         # Regression guard: a backlog (e.g. a stalled publish pipeline catching
         # up) can resolve dozens of snapshots of the SAME still-open market at
