@@ -582,6 +582,7 @@ def simulate_validated_kelly_account(
     kelly_fraction: float = 0.5,
     max_concentration: float = 0.15,
     require_validated: bool = True,
+    follow_model_call: bool = False,
     fade: bool = False,
     min_edge: float = 0.0,
     min_price: float = 0.20,
@@ -590,8 +591,8 @@ def simulate_validated_kelly_account(
     max_trades: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Real position ledger (one settle per market) sized by fractional Kelly
-    on the *current* account value, gated on statistically-proven edge, and
-    capped per-market to bound tail risk from any single miscalibrated call.
+    on the *current* account value and capped per-market to bound tail risk
+    from any single miscalibrated call.
 
     This is the strategy actually meant to be traded, unlike
     simulate_shadow_mark_to_market_account's fixed $1 target_contracts (a
@@ -639,6 +640,7 @@ def simulate_validated_kelly_account(
             "strategy.kelly_fraction": float(kelly_fraction),
             "strategy.max_concentration": float(max_concentration),
             "strategy.require_validated": bool(require_validated),
+            "strategy.follow_model_call": bool(follow_model_call),
             "strategy.fade": bool(fade),
         })
         try:
@@ -698,7 +700,7 @@ def simulate_validated_kelly_account(
                 row = payload
                 if market_key in settled_markets:
                     continue
-                model_side = _row_edge_side(row, min_edge)
+                model_side = _row_side(row) if follow_model_call else _row_edge_side(row, min_edge)
                 if not model_side:
                     skipped_no_edge += 1
                     continue
@@ -785,7 +787,10 @@ def simulate_validated_kelly_account(
 
             final = account.snapshot(current_quotes)
             final.update({
-                "strategy": "fade_kelly_ledger" if fade else "validated_kelly_ledger",
+                "strategy": (
+                    "fade_kelly_ledger" if fade else
+                    ("validated_kelly_ledger" if require_validated else "capped_half_kelly_ledger")
+                ),
                 "starting_cash": round(starting_cash, 6),
                 "return": round((final["account_value"] / starting_cash) - 1.0, 6)
                 if starting_cash else None,
@@ -813,9 +818,15 @@ def simulate_validated_kelly_account(
                         "in the regime proven to have significantly negative model "
                         "skill -- no other bets are taken."
                         if fade else
-                        "Only trades disagreement buckets with proven, statistically "
-                        "significant historical edge (edge_calibration skill_significant); "
-                        "no other bets are taken regardless of raw disagreement size."
+                        (
+                            "Only trades disagreement buckets with proven, statistically "
+                            "significant historical edge (edge_calibration skill_significant); "
+                            "no other bets are taken regardless of raw disagreement size."
+                            if require_validated else
+                            "Follows every executable model call using walk-forward calibrated "
+                            "probabilities; this is a historical sizing comparison, not a "
+                            "validated live-trading recommendation."
+                        )
                     ),
                     f"Skips trades priced outside [{min_price}, {max_price}]: a blended "
                     "calibrated probability isn't specific enough to size a bet near a "

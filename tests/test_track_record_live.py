@@ -1434,6 +1434,20 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(accounts[0]["n_trades"], 0)
         self.assertEqual(accounts[0]["recommended_weight"], 0.0)
 
+    def test_half_kelly_20pct_replays_historical_model_calls(self):
+        rows = [
+            self._resolved_row(ident=f"m{i}", model_p=0.65, market_p=0.5,
+                               outcome=1, day=i + 1)
+            for i in range(3)
+        ]
+        accounts = trl.build_half_kelly_20pct_accounts(
+            rows, {}, default_model="m", tracked_models=["m"],
+        )
+        account = accounts[0]["account"]
+        self.assertEqual(account["strategy"], "capped_half_kelly_ledger")
+        self.assertEqual(account["n_trades"], 3)
+        self.assertEqual(account["max_concentration"], 0.2)
+
     def test_validated_kelly_skips_crowd_follow(self):
         rows = [self._resolved_row(ident="m1", model_p=0.7, market_p=0.5, outcome=1,
                                     day=1, model="crowd-follow")]
