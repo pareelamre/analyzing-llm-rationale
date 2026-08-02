@@ -1525,8 +1525,8 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         return min(_half_kelly_fraction(b), 1.0)
 
     def _half_kelly_20pct(b, bk=_COMPOUND_STARTING_BANKROLL):
-        """Compounded half-Kelly position, capped at 20% of live bankroll."""
-        return min(_half_kelly_fraction(b), 0.20) * max(0.0, bk)
+        """Conservative Kelly: quarter-Kelly, market shrinkage, 5% cap."""
+        return _conservative_kelly(b, bk)
 
     def _conservative_kelly(b, bk=_COMPOUND_STARTING_BANKROLL):
         """Quarter-Kelly with 50% market shrinkage and a 5% risk cap."""
@@ -1556,8 +1556,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
                       "Signal check, not live PnL.",
         "flat": flat,
         "half_kelly": _run(_half_kelly),
-        "half_kelly_20pct": _run(_half_kelly_20pct, compound_actual_bankroll=True),
-        "kelly_conservative": _run(_conservative_kelly, compound_actual_bankroll=True, drawdown_throttle=True),
+        "half_kelly_20pct": _run(_half_kelly_20pct, compound_actual_bankroll=True, drawdown_throttle=True),
         "smart": _run(_half_kelly, filter_fn=_smart_filter),
         "growth_1pct": _run(_growth_1pct, compound_actual_bankroll=True),
         "growth_2pct": _run(_growth_2pct, compound_actual_bankroll=True),
@@ -1979,7 +1978,8 @@ def build_half_kelly_20pct_accounts(
 
     This is the MTM counterpart to the historical growth views: it starts from
     the same June forecast history, books each market once at settlement, and
-    caps every position at 20% of the current account. Unlike the guarded
+    caps every position at 5% of the current account and shrinks model
+    probabilities 50% toward market pricing. Unlike the guarded
     deployable strategy, it does not require a significance-approved edge
     bucket, so it can show the full historical sizing trajectory.
     """
@@ -1988,8 +1988,9 @@ def build_half_kelly_20pct_accounts(
         latest_quotes,
         default_model=default_model,
         tracked_models=tracked_models,
-        kelly_fraction=0.5,
-        max_concentration=0.20,
+        kelly_fraction=0.25,
+        max_concentration=0.05,
+        market_shrinkage=0.5,
         require_validated=False,
         follow_model_call=True,
     )

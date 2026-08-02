@@ -935,7 +935,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertGreater(pnl["flat"]["pnl"], 0)
         self.assertEqual(len(pnl["flat"]["equity_curve"]), 10)
         self.assertEqual(
-            {"flat", "half_kelly", "half_kelly_20pct", "kelly_conservative", "smart", "growth_1pct", "growth_2pct"},
+            {"flat", "half_kelly", "half_kelly_20pct", "smart", "growth_1pct", "growth_2pct"},
             {k for k, v in pnl.items() if isinstance(v, dict) and "roi" in v},
         )
 
@@ -982,7 +982,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
             pnl["growth_1pct"]["growth_curve"],
         )
 
-    def test_half_kelly_20pct_is_compounded_and_position_capped(self):
+    def test_half_kelly_is_compounded_and_conservatively_capped(self):
         resolved = [
             dict(self._res(1.0, 0.5, 1), platform="P", ident=f"m{i}")
             for i in range(3)
@@ -990,9 +990,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         strategy = trl.paper_pnl(resolved, trl.edge_calibration(resolved))["half_kelly_20pct"]
         self.assertEqual(strategy["n_bets"], 3)
         self.assertGreater(strategy["compound_bankroll"], trl._COMPOUND_STARTING_BANKROLL)
-        # At even odds a 100% calibrated probability has a 50% half-Kelly
-        # fraction, so the 20% concentration cap limits the first win to 20%.
-        self.assertLessEqual(strategy["growth_curve"][0], trl._COMPOUND_STARTING_BANKROLL * 1.20)
+        self.assertLessEqual(strategy["growth_curve"][0], trl._COMPOUND_STARTING_BANKROLL * 1.05)
 
     def test_growth_curve_compounds_once_per_market_not_per_snapshot(self):
         # Regression guard: a backlog (e.g. a stalled publish pipeline catching
@@ -1159,7 +1157,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
         self.assertIsNotNone(pnl["flat"])
         self.assertEqual(
-            {"flat", "half_kelly", "half_kelly_20pct", "kelly_conservative", "smart", "growth_1pct", "growth_2pct"},
+            {"flat", "half_kelly", "half_kelly_20pct", "smart", "growth_1pct", "growth_2pct"},
             {k for k, v in pnl.items() if isinstance(v, dict) and "roi" in v},
         )
         for removed in ("edge_weighted", "validated_only", "mid_price_only", "fade_extreme", "yes_only"):
@@ -1446,7 +1444,9 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         account = accounts[0]["account"]
         self.assertEqual(account["strategy"], "capped_half_kelly_ledger")
         self.assertEqual(account["n_trades"], 3)
-        self.assertEqual(account["max_concentration"], 0.2)
+        self.assertEqual(account["kelly_fraction"], 0.25)
+        self.assertEqual(account["max_concentration"], 0.05)
+        self.assertEqual(account["market_shrinkage"], 0.5)
 
     def test_validated_kelly_skips_crowd_follow(self):
         rows = [self._resolved_row(ident="m1", model_p=0.7, market_p=0.5, outcome=1,
