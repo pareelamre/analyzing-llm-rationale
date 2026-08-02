@@ -5045,6 +5045,7 @@ async function loadTrackRecord() {
     const r = await _liveJsonFetch('/track-record');
     if (!r.ok) throw new Error('unavailable');
     const d = await _readJson(r);
+    _ebLastData = d;
     host.innerHTML = renderTrackRecord(d);
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#trackBody .tr-stat',
@@ -6526,6 +6527,20 @@ function _renderBoardPage(board, page) {
 let _activeMtmStrat = 'growth_2pct';
 let _mtmSizingMode = 'growth_2pct';
 
+function _refreshActiveEdgeBoardHost() {
+  if (!_ebLastData) return;
+  const edgeHost = document.getElementById('edgeBody');
+  if (edgeHost) {
+    edgeHost.innerHTML = renderEdgeBoard(_ebLastData);
+    _attachEdgeBoardChartHovers(edgeHost);
+  }
+  const trackHost = document.getElementById('trackBody');
+  if (trackHost) {
+    trackHost.innerHTML = renderTrackRecord(_ebLastData);
+    _attachEdgeBoardChartHovers(trackHost);
+  }
+}
+
 function _selectMtmStrategy(key) {
   _activeMtmStrat = key;
   if (key === 'growth_2pct' || key === 'growth_1pct') {
@@ -6535,13 +6550,7 @@ function _selectMtmStrategy(key) {
   } else {
     _mtmSizingMode = 'growth_1pct';
   }
-  if (_ebLastData) {
-    const host = document.getElementById('trackBody');
-    if (host) {
-      host.innerHTML = renderTrackRecord(_ebLastData);
-      _attachEdgeBoardChartHovers(host);
-    }
-  }
+  _refreshActiveEdgeBoardHost();
 }
 
 function _setMtmSizingMode(mode) {
@@ -6551,13 +6560,7 @@ function _setMtmSizingMode(mode) {
   } else {
     _activeMtmStrat = mode;
   }
-  if (_ebLastData) {
-    const host = document.getElementById('trackBody');
-    if (host) {
-      host.innerHTML = renderTrackRecord(_ebLastData);
-      _attachEdgeBoardChartHovers(host);
-    }
-  }
+  _refreshActiveEdgeBoardHost();
 }
 
 function _renderMtmPage(d) {
