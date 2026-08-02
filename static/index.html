@@ -1918,8 +1918,8 @@
       .nav-collapse { display: none; }
       .btn-signin { padding: 7px 13px; }
     }
-  </style>
-  <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
+  </style>
+  <script type="module" src="/src/page-context.ts"></script>
 </head>
 <body>
 
@@ -6791,35 +6791,6 @@ function _renderMtmPage(d) {
     </tr>`;
   }).join('');
 
-  const stratList = [
-    { key: 'half_kelly_20pct', label: 'Half-Kelly (5% cap)', strat: pnl.half_kelly_20pct, color: '#06b6d4', tag: 'Market-shrunk, 30% drawdown floor' },
-    { key: 'growth_2pct', label: 'Growth 2% Mode ($200/mkt)', strat: pnl.growth_2pct, color: '#f59e0b', tag: '2% Bankroll / $200' },
-    { key: 'growth_1pct', label: 'Growth 1% Mode ($100/mkt)', strat: pnl.growth_1pct, color: '#3b82f6', tag: '1% Bankroll / $100' },
-    { key: 'crowd_baseline', label: 'Crowd-Follow Baseline', strat: pnl.crowd_baseline, color: '#94a3b8', tag: 'Zero-Edge Baseline' },
-  ];
-
-  const stratRows = stratList.filter(s => s.strat && (s.strat.compound_bankroll != null || s.strat.bankroll != null)).map(s => {
-    const startB = EB_STARTING_BANKROLL;
-    const endB = Number(s.strat.compound_bankroll ?? s.strat.bankroll);
-    const pnlUsd = endB - startB;
-    const pnlPct = (pnlUsd / startB);
-    const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
-    const isActive = activeStrat === s.key;
-    const activeStyle = isActive ? 'background:rgba(16,185,129,0.1);font-weight:bold' : '';
-    return `<tr class="eb-row ${isActive ? 'active-strat-row' : ''}" style="${activeStyle};cursor:pointer" data-mtm-strategy="${escAttr(s.key)}" data-model="${escHtml(s.label)}">
-      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px"></span><b>${escHtml(s.label)}</b> ${isActive ? '<span class="eb-badge eb-sig">ACTIVE</span>' : ''}<span style="display:block;color:var(--text-dim);font-size:11px">${s.tag}</span></td>
-      <td>${_usd(startB)}</td>
-      <td><b>${_usd(endB)}</b></td>
-      <td style="color:${pnlUsd >= 0 ? '#0a7' : '#c33'};font-weight:600">${pnlStr}</td>
-      <td style="color:${pnlPct >= 0 ? '#0a7' : '#c33'};font-weight:600">${_roiPct(pnlPct)}</td>
-      <td>${s.strat.n_bets || 0}</td>
-    </tr>`;
-  }).join('');
-
-  const stratTableHtml = stratRows ? `
-    <h4 class="eb-h" style="margin-top:24px">Capital growth &amp; principal return by strategy mode (click any row to activate)</h4>
-    <table class="eb-table"><thead><tr><th>Strategy / Position Sizing Mode</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades Placed</th></tr></thead><tbody>${stratRows}</tbody></table>` : '';
-
   const sizingLabels = {
     'half_kelly_20pct': 'Half-Kelly (5% Position Cap)',
     'growth_1pct': 'Growth 1% Mode ($100/mkt)',
@@ -6839,9 +6810,8 @@ function _renderMtmPage(d) {
 
   return `<div id="eb-mtm-container"><h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
     ${sizingButtonsHtml}
-    <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No positions yet for this sizing mode.</p>'}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>
-    ${stratTableHtml}</div>`;
+    <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table></div>`;
 }
 
 function renderEdgeBoard(d) {
