@@ -146,7 +146,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("half_kelly_20pct_by_model", index)
         self.assertIn("data-mtm-sizing-mode=\"growth_1pct\"", renderer)
         self.assertIn("data-mtm-sizing-mode=\"growth_2pct\"", renderer)
-        self.assertIn("data-mtm-strategy=", renderer)
+        self.assertNotIn("data-mtm-strategy=", renderer)
         self.assertIn("data-eb-view=\"mtm\"", edge_renderer)
         self.assertNotIn("onclick=\"_setMtmSizingMode", renderer)
         self.assertNotIn("onclick=\"_ebSetView", edge_renderer)

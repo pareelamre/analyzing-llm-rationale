@@ -5268,7 +5268,7 @@ async function refreshEdgeForecasts() {
         _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% ($100/mkt)'),
         _mk(pnl.half_kelly_20pct, '#06b6d4', 'Risk-Capped Half-Kelly (5% / 30% DD)'),
         _mk(pnl.smart, '#10b981', 'Smart ROI ($1 Flat)'),
-        _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly ($1 stake cap)'),
+        _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly (1% bankroll cap)'),
         _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
       ].filter(Boolean);
       const el = document.getElementById('eb-equity-svg');
@@ -6882,7 +6882,7 @@ function renderEdgeBoard(d) {
       _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% ($100/mkt)'),
       _mk(pnl.half_kelly_20pct, '#06b6d4', 'Risk-Capped Half-Kelly (5% / 30% DD)'),
       _mk(pnl.smart, '#10b981', 'Smart ROI ($1 Flat)'),
-      _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly ($1 stake cap)'),
+      _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly (1% bankroll cap)'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
     ].filter(Boolean);
     const svgChart = `<div id="eb-equity-svg">${strategyCurves.length ? _equitySvg(strategyCurves, 680, 160, {asPct: false, yPrefix: '$'}) : ''}</div>`;
