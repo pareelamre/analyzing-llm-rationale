@@ -5705,7 +5705,7 @@ function _renderWatchTable() {
       </td></tr>`;
   }).join('');
   wrap.innerHTML = `<div class="md-table-wrap"><table class="eb-table">
-    <thead><tr><th>Question</th><th>Venue</th><th>Council</th><th>Yes / No</th><th>Chg</th><th>Edge</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Question</th><th>Venue</th><th>Foresea odds</th><th>Yes / No</th><th>Chg</th><th>Edge</th><th>Actions</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -5923,7 +5923,7 @@ function _ebModelLabel(model) {
   if (raw === 'kimi-k2.5') return 'Kimi K2.5';
   if (raw === 'kimi-k2.6') return 'Kimi K2.6';
   if (raw === 'kimi-k2.7-code') return 'Kimi K2.7 Code';
-  if (raw === 'council') return 'Council';
+  if (raw === 'council' || raw === 'gemma-4-31b-it') return 'Foresea';
   return raw.split(/[-_]/g).filter(Boolean).map(w => w[0]?.toUpperCase() + w.slice(1)).join(' ');
 }
 
@@ -5947,7 +5947,7 @@ function _ebModelHead(model) {
   if (raw.includes('kimi-k2.6')) return 'K26';
   if (raw.includes('kimi-k2.5')) return 'K25';
   if (raw.includes('kimi')) return 'KIM';
-  if (raw.includes('council')) return 'C';
+  if (raw.includes('council') || raw.includes('gemma')) return 'FOR';
   return (String(model || 'AI').match(/[a-z0-9]/i)?.[0] || 'AI').toUpperCase();
 }
 
@@ -6522,7 +6522,7 @@ function _renderBoardPage(board, page) {
       `<td class="eb-live-trade" style="white-space:nowrap">${trade}</td>` +
       `<td style="white-space:nowrap">${lead}</td><td>${badge}</td></tr>`;
   }).join('');
-  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Council</th><th>Crowd</th><th>Edge</th><th>Signal</th><th>Lead</th><th>Skill at this lead</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const tableHtml = `<table class="eb-table"><thead><tr><th></th><th>Question</th><th>Venue</th><th>Foresea odds</th><th>Crowd</th><th>Edge</th><th>Signal</th><th>Lead</th><th>Skill at this lead</th></tr></thead><tbody>${rows}</tbody></table>`;
   let pagination = '';
   if (pages > 1) {
     const prev = page > 0
@@ -6868,7 +6868,7 @@ function renderEdgeBoard(d) {
       <div class="tr-stat"><div class="v">${(d.n_markets_tracked || 0)}</div><div class="k label">Markets tracked</div></div>
       <div class="tr-stat"><div class="v">${resolvedMarkets.toLocaleString()}</div><div class="k label">Resolved markets (P&amp;L)</div></div>
       <div class="tr-stat"><div class="v">${savedSnapshots.toLocaleString()}</div><div class="k label">Saved forecasts (research)</div></div>
-      <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Council follows market</div></div>
+      <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Foresea follows market</div></div>
     </div>
     <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">${coverageNote}</p>`;
   let compHtml;
@@ -6995,12 +6995,12 @@ function renderEdgeBoard(d) {
     <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging - risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
     <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift - does an early call pay?</h4>${calibHtml}
-    <h4 class="eb-h">Live council forecasts - ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
+    <h4 class="eb-h">Live Foresea forecasts - ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
   const mtmPageHtml = _renderMtmPage(d);
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced - and our track record of being right about it</h3>
-    <p class="tr-method">Live council-vs-market gaps, ranked. Accuracy, calibration, and lead-time skill are calculated from resolved forecasts saved before each market closed. ${gen ? 'Updated ' + gen + '.' : ''}</p>
+    <p class="tr-method">Live Foresea-vs-market gaps, ranked. Accuracy, calibration, and lead-time skill are calculated from resolved forecasts saved before each market closed. ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${viewTabs}
     <div style="margin-top:18px">${_ebView === 'mtm' ? mtmPageHtml : marketsPageHtml}</div>
   </div>`;
