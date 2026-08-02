@@ -1265,6 +1265,4 @@ class NewsPipeline:
             selected = self.select_diverse_sources(ranked, top_k)
             if selected:
                 return selected
-            if ranked:
-                return ranked[:top_k]
-        return []
+        return selected or ranked[:top_k]

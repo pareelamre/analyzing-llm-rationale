@@ -137,6 +137,8 @@ class FrontendCopyTests(unittest.TestCase):
         )[0]
 
         self.assertIn("document.addEventListener('click'", index)
+        self.assertIn('id="eb-mtm-container"', renderer)
+        self.assertIn('id="eb-mtm-header-title"', renderer)
         self.assertIn("data-mtm-sizing-mode=\"fixed\"", renderer)
         self.assertIn("data-mtm-sizing-mode=\"growth_1pct\"", renderer)
         self.assertIn("data-mtm-sizing-mode=\"growth_2pct\"", renderer)
