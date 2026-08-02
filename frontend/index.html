@@ -5494,7 +5494,7 @@ function _stopEdgeTimers() {
 function _startEdgeTimers() {
   _stopEdgeTimers();
   _edgePriceTimer  = setInterval(refreshEdgePrices, 60000);
-  _ebForecastTimer = setInterval(refreshEdgeForecasts, 2 * 60 * 1000);
+  _ebForecastTimer = setInterval(refreshEdgeForecasts, 5 * 60 * 1000);
   _crypto5mTimer   = setInterval(loadCrypto5mEquity, 30 * 1000);
 }
 
@@ -5724,8 +5724,8 @@ let _transparencyRefreshInFlight = null;
 let _transparencyLastResolved = null;
 
 function _transparencyCalibrationBin(bin) {
-  if (bin.bin) return String(bin.bin).replace(/-/g, ' - ');
-  const predicted = Number(bin.avg_predicted);
+  if (bin?.bin) return String(bin.bin).replace(/-/g, ' - ');
+  const predicted = Number(bin?.avg_predicted);
   if (!Number.isFinite(predicted)) return 'N/A';
   const low = Math.min(90, Math.floor(predicted * 10) * 10);
   return `${low}% - ${low + 10}%`;
