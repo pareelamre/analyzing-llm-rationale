@@ -6857,13 +6857,20 @@ function renderEdgeBoard(d) {
   const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
   const modelFollowsMkt = (ll && ll.n_markets >= EB_MIN_N && ll.market_converged_to_model_pct != null)
     ? pct(1 - ll.market_converged_to_model_pct) + '%' : _build(ll && ll.n_markets);
+  const resolvedMarkets = Number(d.n_markets_resolved || 0);
+  const savedSnapshots = Number(d.n_snapshots_resolved || 0);
+  const coverageNote = savedSnapshots && resolvedMarkets
+    ? `${savedSnapshots.toLocaleString()} saved forecasts across ${resolvedMarkets.toLocaleString()} resolved markets. A market can have many forecasts, but only one settlement.`
+    : 'Saved forecasts record research over time. Trading performance uses one settlement per market.';
   const stats = `
     <div class="tr-stats">
       <div class="tr-stat"><div class="v">${(d.n_markets_open || 0)}</div><div class="k label">On edge board</div></div>
       <div class="tr-stat"><div class="v">${(d.n_markets_tracked || 0)}</div><div class="k label">Markets tracked</div></div>
-      <div class="tr-stat"><div class="v">${(d.n_snapshots_resolved || 0)}</div><div class="k label">Resolved forecasts</div></div>
+      <div class="tr-stat"><div class="v">${resolvedMarkets.toLocaleString()}</div><div class="k label">Resolved markets (P&amp;L)</div></div>
+      <div class="tr-stat"><div class="v">${savedSnapshots.toLocaleString()}</div><div class="k label">Saved forecasts (research)</div></div>
       <div class="tr-stat"><div class="v">${modelFollowsMkt}</div><div class="k label">Council follows market</div></div>
-    </div>`;
+    </div>
+    <p class="text-xs" style="color:var(--text-dim);margin:10px 0 0">${coverageNote}</p>`;
   let compHtml;
   if (comp.length) {
     const crowdRoi = ((pnl || {}).crowd_baseline || {}).roi;
@@ -6888,6 +6895,7 @@ function renderEdgeBoard(d) {
       : _build(s && s.n_bets);
     const nBet = pnl.flat.n_bets || 0;
     const nRes = d.n_snapshots_resolved || 0;
+    const nMarkets = d.n_markets_resolved || nBet;
     const smartVsCrowd = (pnl.smart?.roi != null && pnl.crowd_baseline?.roi != null) ? pnl.smart.roi - pnl.crowd_baseline.roi : null;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const _mk = (s, color, label, dash) => {
@@ -6908,7 +6916,7 @@ function renderEdgeBoard(d) {
     ].filter(Boolean);
     const svgChart = `<div id="eb-equity-svg">${strategyCurves.length ? _equitySvg(strategyCurves, 680, 160, {asPct: false, yPrefix: '$'}) : ''}</div>`;
     performanceHtml = `
-      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $${EB_STARTING_BANKROLL.toLocaleString()} starting bankroll using each strategy's resolved forecast history (${nBet} of ${nRes} resolved markets).</p>
+      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $${EB_STARTING_BANKROLL.toLocaleString()} starting bankroll across ${nBet} settled positions from ${nMarkets} unique resolved markets. ${nRes} saved forecasts provide the research history; they are not extra trades.</p>
       ${svgChart}
       <div class="tr-stats">
         <div class="tr-stat" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);border-top-left-radius:19px" title="Aggressive Capital Growth mode: 2% of bankroll per market ($200 initial stake)."><div class="v" id="eb-pnl-growth2-v">${roi(pnl.growth_2pct)}</div><div class="k label ui-icon-label">${uiIcon('star')} Growth 2%</div>${_sub('2% Bankroll / $200')}</div>

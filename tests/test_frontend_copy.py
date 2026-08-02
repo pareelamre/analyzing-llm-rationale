@@ -15,6 +15,9 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertNotIn("paper trading", renderer.lower())
         self.assertNotIn("paper roi", renderer.lower())
         self.assertIn("resolved strategy performance", renderer.lower())
+        self.assertIn("resolved markets (p&amp;l)", renderer.lower())
+        self.assertIn("saved forecasts (research)", renderer.lower())
+        self.assertIn("one settlement", renderer.lower())
 
     def test_edge_board_model_comparison_chart_tracks_scads_models(self):
         index = (
