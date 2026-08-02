@@ -1874,6 +1874,7 @@ def build_validated_kelly_accounts(
     tracked_models: Optional[List[str]] = None,
     kelly_fraction: float = 0.5,
     max_concentration: float = 0.15,
+    market_shrinkage: float = 0.0,
     require_validated: bool = True,
     follow_model_call: bool = False,
 ) -> List[Dict[str, Any]]:
@@ -1936,6 +1937,7 @@ def build_validated_kelly_accounts(
             latest_quotes=latest_quotes,
             kelly_fraction=kelly_fraction,
             max_concentration=max_concentration,
+            market_shrinkage=market_shrinkage,
             require_validated=require_validated,
             follow_model_call=follow_model_call,
             fee_fn=_bet_fee,
