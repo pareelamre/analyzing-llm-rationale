@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import concurrent.futures
 import os
 import re
+import threading
 from typing import Callable, List, Optional, Sequence
 from urllib.parse import urlencode, urlparse, urlunparse
 from xml.etree import ElementTree
@@ -1225,22 +1227,30 @@ class NewsPipeline:
         """Full pipeline: fetch → summarize → rank → return top_k."""
         search_queries = self.plan_search_queries(question)
         raw: List[dict] = []
+        raw_lock = threading.Lock()
 
         def fetch_query(search_query: str, limit: int) -> None:
-            for article in self.fetch(search_query, top_k=limit):
+            articles = list(self.fetch(search_query, top_k=limit))
+            for article in articles:
                 article.setdefault("search_query", search_query)
-                raw.append(article)
+            with raw_lock:
+                raw.extend(articles)
 
-        for search_query in search_queries:
-            fetch_query(search_query, max(top_k, 5))
+        if search_queries:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(search_queries), 4)) as executor:
+                futures = [executor.submit(fetch_query, q, max(top_k, 5)) for q in search_queries]
+                concurrent.futures.wait(futures, timeout=8.0)
+
         for article in raw:
             if self._summarize_articles:
                 article["summary"] = self.summarize(article)
-            article.setdefault("search_query", search_queries[0])
+            article.setdefault("search_query", search_queries[0] if search_queries else question)
         ranked = self.rank(question, raw)
         selected = self.select_diverse_sources(ranked, top_k)
         if selected:
             return selected
+        if ranked:
+            return ranked[:top_k]
 
         # Broad searches can return candidates that are all filtered as irrelevant.
         # Retry with forecasting-specific keywords rather than silently returning none.
@@ -1253,4 +1263,8 @@ class NewsPipeline:
                     article["summary"] = self.summarize(article)
             ranked = self.rank(question, raw)
             selected = self.select_diverse_sources(ranked, top_k)
-        return selected
+            if selected:
+                return selected
+            if ranked:
+                return ranked[:top_k]
+        return []

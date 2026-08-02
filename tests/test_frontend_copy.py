@@ -125,6 +125,26 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("_attachEdgeBoardChartHovers(host)", refresher)
         self.assertIn("refreshEdgePrices()", refresher)
 
+    def test_mtm_sizing_controls_use_delegated_button_handlers(self):
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        renderer = index.split("function _renderMtmPage(d) {", 1)[1].split(
+            "function renderEdgeBoard", 1
+        )[0]
+        edge_renderer = index.split("function renderEdgeBoard(d) {", 1)[1].split(
+            "function _fmtDate", 1
+        )[0]
+
+        self.assertIn("document.addEventListener('click'", index)
+        self.assertIn("data-mtm-sizing-mode=\"fixed\"", renderer)
+        self.assertIn("data-mtm-sizing-mode=\"growth_1pct\"", renderer)
+        self.assertIn("data-mtm-sizing-mode=\"growth_2pct\"", renderer)
+        self.assertIn("data-mtm-strategy=", renderer)
+        self.assertIn("data-eb-view=\"mtm\"", edge_renderer)
+        self.assertNotIn("onclick=\"_setMtmSizingMode", renderer)
+        self.assertNotIn("onclick=\"_ebSetView", edge_renderer)
+
     def test_edge_board_growth_curve_normalizes_multiplier_to_bankroll(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
