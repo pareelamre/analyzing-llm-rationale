@@ -1514,15 +1514,14 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             return 0.0
         return max(0.0, 0.5 * ((p_win * odds - (1.0 - p_win)) / odds))
 
-    def _half_kelly(b):
+    def _half_kelly(b, bk=_COMPOUND_STARTING_BANKROLL):
         """Half-Kelly criterion: f* = 0.5 * (p*b - q) / b
         where p = model's walk-forward calibrated probability of winning,
               b = payout odds (decimal, e.g. 1.5 means you get $1.50 on $1),
               q = 1 - p.
-        Capped at $1 to keep comparable to flat-stake.
+        Capped at 1% of the reference bankroll per market.
         """
-        # Clamp: no negative stakes, cap at $1 for comparability
-        return min(_half_kelly_fraction(b), 1.0)
+        return min(_half_kelly_fraction(b), 0.01) * max(0.0, bk)
 
     def _half_kelly_20pct(b, bk=_COMPOUND_STARTING_BANKROLL):
         """Conservative Kelly: quarter-Kelly, market shrinkage, 5% cap."""
