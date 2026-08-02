@@ -1248,9 +1248,9 @@ def paper_pnl(resolved: List[Dict[str, Any]],
     ``resolved_ts``: a winning $1 of exposure returns ``(1 - p)/p``, a loser
     returns ``-1``. This avoids double-counting repeated snapshots of the same
     real question while still preserving the public signal log for analysis.
-    Three sizings: flat (pure signal), edge-weighted (stake the model-vs-market
-    gap), and validated-only (flat, but only in disagreement buckets whose
-    resolved track record is statistically significant).
+    Sizing modes include a flat diagnostic, a calibrated half-Kelly diagnostic,
+    and compounded growth strategies. Every curve is one settled trade per
+    market, not one return per forecast snapshot.
 
     Returns are **net of venue trading fees** (``_bet_fee``: Kalshi's
     price-dependent taker fee; Polymarket fee-free), so ``roi`` is the real,
@@ -1487,6 +1487,24 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         return True
 
     # ── Kelly & Growth sizing ─────────────────────────────────
+    def _half_kelly_fraction(b):
+        """Return the calibrated half-Kelly fraction before any stake cap."""
+        mkt_p = b["market_probability"]
+        model_p = b["calibrated_model_probability"]
+        side = b["side"]
+        if side == "YES":
+            p_win = model_p
+            p_side = mkt_p
+        else:
+            p_win = 1.0 - model_p
+            p_side = 1.0 - mkt_p
+        if p_side <= 0.0 or p_side >= 1.0:
+            return 0.0
+        odds = (1.0 - p_side) / p_side
+        if odds <= 0:
+            return 0.0
+        return max(0.0, 0.5 * ((p_win * odds - (1.0 - p_win)) / odds))
+
     def _half_kelly(b):
         """Half-Kelly criterion: f* = 0.5 * (p*b - q) / b
         where p = model's walk-forward calibrated probability of winning,
@@ -1494,26 +1512,12 @@ def paper_pnl(resolved: List[Dict[str, Any]],
               q = 1 - p.
         Capped at $1 to keep comparable to flat-stake.
         """
-        mkt_p = b["market_probability"]
-        model_p = b["calibrated_model_probability"]
-        side = b["side"]
-        # Probability of the bet winning according to the *model*
-        if side == "YES":
-            p_win = model_p          # model thinks YES wins with prob model_p
-            p_side = mkt_p           # market price of YES contract
-        else:
-            p_win = 1.0 - model_p    # model thinks NO wins with prob 1-model_p
-            p_side = 1.0 - mkt_p     # market price of NO contract
-        if p_side <= 0.0 or p_side >= 1.0:
-            return 0.0
-        odds = (1.0 - p_side) / p_side   # decimal payout per $1 staked
-        if odds <= 0:
-            return 0.0
-        q_win = 1.0 - p_win
-        kelly_f = (p_win * odds - q_win) / odds
-        half_kelly = 0.5 * kelly_f
         # Clamp: no negative stakes, cap at $1 for comparability
-        return max(0.0, min(half_kelly, 1.0))
+        return min(_half_kelly_fraction(b), 1.0)
+
+    def _half_kelly_20pct(b, bk=_COMPOUND_STARTING_BANKROLL):
+        """Compounded half-Kelly position, capped at 20% of live bankroll."""
+        return min(_half_kelly_fraction(b), 0.20) * max(0.0, bk)
 
     def _growth_1pct(b, bk=_COMPOUND_STARTING_BANKROLL):
         """Dynamic 1% bankroll sizing per trade for capital growth."""
@@ -1530,6 +1534,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
                       "Signal check, not live PnL.",
         "flat": flat,
         "half_kelly": _run(_half_kelly),
+        "half_kelly_20pct": _run(_half_kelly_20pct, compound_actual_bankroll=True),
         "smart": _run(_half_kelly, filter_fn=_smart_filter),
         "growth_1pct": _run(_growth_1pct, compound_actual_bankroll=True),
         "growth_2pct": _run(_growth_2pct, compound_actual_bankroll=True),
@@ -1861,9 +1866,8 @@ def build_validated_kelly_accounts(
     without a validated positive return, otherwise proportional to its
     realized return among the models that do -- capital only goes to models
     with actual proven edge, not to whichever one merely looks best."""
-    resolved_only = [r for r in rows if r.get("resolved") and r.get("outcome") is not None]
     by_model: Dict[str, List[Dict[str, Any]]] = {}
-    for row in resolved_only:
+    for row in rows:
         label = str(row.get("model") or default_model)
         by_model.setdefault(label, []).append(row)
 
@@ -1872,15 +1876,36 @@ def build_validated_kelly_accounts(
         if label == "crowd-follow":
             continue
         model_rows = by_model.get(label) or []
-        if not model_rows:
+        resolved_rows = [r for r in model_rows if r.get("resolved") and r.get("outcome") is not None]
+        if not resolved_rows:
             continue
-        calibrated_rows = _attach_walk_forward_calibration([dict(r) for r in model_rows])
+        calibrated_rows = _attach_walk_forward_calibration([dict(r) for r in resolved_rows])
         sig_buckets = {
             b["edge_bucket"] for b in edge_calibration(calibrated_rows)
             if b.get("skill_significant")
         }
         for r in calibrated_rows:
             r["_edge_validated"] = _edge_label(_edge(r)) in sig_buckets
+
+        # Open rows occur after the resolved calibration history. Apply the
+        # current calibration so their account value can be marked to market;
+        # historical rows above remain strictly walk-forward.
+        history_pairs = [
+            (float(r["model_probability"]), int(r["outcome"]))
+            for r in calibrated_rows
+        ]
+        calibration = _fit_isotonic(history_pairs) if len(history_pairs) >= 30 else None
+        for row in model_rows:
+            if row.get("resolved") and row.get("outcome") is not None:
+                continue
+            live_row = dict(row)
+            raw_p = float(live_row.get("model_probability") or 0.5)
+            live_row["calibrated_model_probability"] = round(
+                _apply_isotonic(calibration, raw_p) if calibration else raw_p,
+                4,
+            )
+            live_row["_edge_validated"] = _edge_label(_edge(live_row)) in sig_buckets
+            calibrated_rows.append(live_row)
 
         account = simulate_validated_kelly_account(
             calibrated_rows,
@@ -2677,6 +2702,14 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         default_model=model,
         tracked_models=tracked_models,
     )
+    half_kelly_20pct_by_model = build_validated_kelly_accounts(
+        mark_to_market_rows_all,
+        latest_quotes,
+        default_model=model,
+        tracked_models=tracked_models,
+        kelly_fraction=0.5,
+        max_concentration=0.20,
+    )
     primary_mark_to_market = next(
         (row.get("account") for row in mark_to_market_by_model if row.get("model") == model),
         None,
@@ -2873,6 +2906,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "primary_paper_pnl": paper_pnl(resolved_primary, edge_calibration(resolved_primary)),
         "mark_to_market_account": primary_mark_to_market,
         "mark_to_market_by_model": mark_to_market_by_model,
+        "half_kelly_20pct_by_model": half_kelly_20pct_by_model,
         "mark_to_market_cycle_minutes": cycle_minutes,
         "edge_board": edge_board_result,
         "discrepancy_monitor": {
