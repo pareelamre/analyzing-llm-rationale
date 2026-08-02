@@ -5530,7 +5530,7 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   }
-  if (!edgeLoaded) { edgeLoaded = true; await loadEdgeBoard(); }
+  if (!edgeLoaded) { edgeLoaded = true; loadEdgeBoard(); }
   refreshEdgePrices();
   loadCrypto5mEquity();
   _startEdgeTimers();

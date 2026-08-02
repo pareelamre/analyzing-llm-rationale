@@ -29,6 +29,7 @@ from urllib.parse import urlparse
 import duckdb
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
     JSONResponse,
@@ -1229,7 +1230,7 @@ def _compact_models_comparison(models: Any) -> List[Dict[str, Any]]:
     return compact_models
 
 
-def _compact_mark_to_market_account(account: Any) -> Any:
+def _compact_mark_to_market_account(account: Any, max_points: int = _EDGE_BOARD_CURVE_MAX_POINTS) -> Any:
     if not isinstance(account, dict):
         return account
     compact = {
@@ -1252,7 +1253,7 @@ def _compact_mark_to_market_account(account: Any) -> Any:
         if key in account
     }
     if "value_curve" in account:
-        compact["value_curve"] = _sample_list(account.get("value_curve"))
+        compact["value_curve"] = _sample_list(account.get("value_curve"), max_points=max_points)
     return compact
 
 
@@ -1278,7 +1279,7 @@ def _compact_mark_to_market_by_model(rows: Any) -> List[Dict[str, Any]]:
             )
             if key in row
         }
-        compact["account"] = _compact_mark_to_market_account(row.get("account"))
+        compact["account"] = _compact_mark_to_market_account(row.get("account"), max_points=40)
         compact_rows.append(compact)
     return compact_rows
 
@@ -1499,6 +1500,8 @@ app.add_middleware(
     ],
     expose_headers=["Mcp-Session-Id", "X-Request-ID"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 
 
 def _mount_public_mcp_endpoint() -> None:
