@@ -6829,7 +6829,7 @@ function _renderMtmPage(d) {
 
   const sizingButtonsHtml = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;margin-bottom:12px;flex-wrap:wrap;gap:10px">
-      <h4 class="eb-h" style="margin:0">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
+      <h4 id="eb-mtm-header-title" class="eb-h" style="margin:0">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
       <div class="eb-view-tabs" style="margin:0" role="tablist" aria-label="Position sizing modes">
         <button type="button" class="eb-view-tab ${sizingMode === 'fixed' ? 'active' : ''}" data-mtm-sizing-mode="fixed">Fixed Stake ($1 Flat)</button>
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Growth 1% ($100/mkt)</button>
@@ -6837,11 +6837,11 @@ function _renderMtmPage(d) {
       </div>
     </div>`;
 
-  return `<h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
+  return `<div id="eb-mtm-container"><h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
     ${sizingButtonsHtml}
     <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>
-    ${stratTableHtml}`;
+    ${stratTableHtml}</div>`;
 }
 
 function renderEdgeBoard(d) {
