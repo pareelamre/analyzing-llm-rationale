@@ -1349,6 +1349,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         filter_fn=None,
         fade: bool = False,
         compound_actual_bankroll: bool = False,
+        drawdown_throttle: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Run a paper-PnL simulation over all resolved bets.
 
@@ -1399,6 +1400,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         growth_curve: List[float] = []
         growth_curve_ts: List[Any] = []
         bankroll = _COMPOUND_STARTING_BANKROLL
+        peak_bankroll = bankroll
         for _idx, b in enumerate(_scoped_bets):
             try:
                 stake = sizing(b, bankroll)
@@ -1406,6 +1408,12 @@ def paper_pnl(resolved: List[Dict[str, Any]],
                 stake = sizing(b)
             if stake <= 0.0:
                 continue
+            if drawdown_throttle:
+                drawdown = 1.0 - (bankroll / peak_bankroll) if peak_bankroll else 0.0
+                if drawdown >= 0.25:
+                    continue
+                if drawdown >= 0.15:
+                    stake *= 0.5
 
             mkt_p = b["market_probability"]
             side = b["side"]
@@ -1435,6 +1443,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             curve_ts.append(b["resolved_ts"])
             if compound_actual_bankroll:
                 bankroll = max(0.0, bankroll + profit)
+                peak_bankroll = max(peak_bankroll, bankroll)
             elif _pre_staked > 0:
                 stake_fraction = stake / _pre_staked
                 bankroll *= max(0.0, 1.0 + stake_fraction * (profit / stake))
@@ -1516,8 +1525,21 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         return min(_half_kelly_fraction(b), 1.0)
 
     def _half_kelly_20pct(b, bk=_COMPOUND_STARTING_BANKROLL):
-        """Compounded half-Kelly position, capped at 20% of live bankroll."""
-        return min(_half_kelly_fraction(b), 0.20) * max(0.0, bk)
+        """Conservative Kelly: quarter-Kelly, market shrinkage, 5% cap."""
+        return _conservative_kelly(b, bk)
+
+    def _conservative_kelly(b, bk=_COMPOUND_STARTING_BANKROLL):
+        """Quarter-Kelly with 50% market shrinkage and a 5% risk cap."""
+        market_p = b["market_probability"]
+        model_p = b["calibrated_model_probability"]
+        if b["side"] == "NO":
+            market_p, model_p = 1.0 - market_p, 1.0 - model_p
+        p_win = market_p + 0.5 * (model_p - market_p)
+        if not (0.0 < market_p < 1.0):
+            return 0.0
+        odds = (1.0 - market_p) / market_p
+        full_kelly = (p_win * odds - (1.0 - p_win)) / odds
+        return min(max(0.0, 0.25 * full_kelly), 0.05) * max(0.0, bk)
 
     def _growth_1pct(b, bk=_COMPOUND_STARTING_BANKROLL):
         """Dynamic 1% bankroll sizing per trade for capital growth."""
@@ -1534,7 +1556,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
                       "Signal check, not live PnL.",
         "flat": flat,
         "half_kelly": _run(_half_kelly),
-        "half_kelly_20pct": _run(_half_kelly_20pct, compound_actual_bankroll=True),
+        "half_kelly_20pct": _run(_half_kelly_20pct, compound_actual_bankroll=True, drawdown_throttle=True),
         "smart": _run(_half_kelly, filter_fn=_smart_filter),
         "growth_1pct": _run(_growth_1pct, compound_actual_bankroll=True),
         "growth_2pct": _run(_growth_2pct, compound_actual_bankroll=True),
@@ -1956,7 +1978,8 @@ def build_half_kelly_20pct_accounts(
 
     This is the MTM counterpart to the historical growth views: it starts from
     the same June forecast history, books each market once at settlement, and
-    caps every position at 20% of the current account. Unlike the guarded
+    caps every position at 5% of the current account and shrinks model
+    probabilities 50% toward market pricing. Unlike the guarded
     deployable strategy, it does not require a significance-approved edge
     bucket, so it can show the full historical sizing trajectory.
     """
@@ -1965,8 +1988,9 @@ def build_half_kelly_20pct_accounts(
         latest_quotes,
         default_model=default_model,
         tracked_models=tracked_models,
-        kelly_fraction=0.5,
-        max_concentration=0.20,
+        kelly_fraction=0.25,
+        max_concentration=0.05,
+        market_shrinkage=0.5,
         require_validated=False,
         follow_model_call=True,
     )

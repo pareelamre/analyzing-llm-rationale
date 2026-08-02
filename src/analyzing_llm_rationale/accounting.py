@@ -581,6 +581,7 @@ def simulate_validated_kelly_account(
     starting_cash: float = 10_000.0,
     kelly_fraction: float = 0.5,
     max_concentration: float = 0.15,
+    market_shrinkage: float = 0.0,
     require_validated: bool = True,
     follow_model_call: bool = False,
     fade: bool = False,
@@ -592,7 +593,8 @@ def simulate_validated_kelly_account(
 ) -> Dict[str, Any]:
     """Real position ledger (one settle per market) sized by fractional Kelly
     on the *current* account value and capped per-market to bound tail risk
-    from any single miscalibrated call.
+    from any single miscalibrated call. ``market_shrinkage`` tempers the
+    calibrated probability toward the executable market price before sizing.
 
     This is the strategy actually meant to be traded, unlike
     simulate_shadow_mark_to_market_account's fixed $1 target_contracts (a
@@ -639,6 +641,7 @@ def simulate_validated_kelly_account(
             "account.value_method": "bid_liquidation",
             "strategy.kelly_fraction": float(kelly_fraction),
             "strategy.max_concentration": float(max_concentration),
+            "strategy.market_shrinkage": float(market_shrinkage),
             "strategy.require_validated": bool(require_validated),
             "strategy.follow_model_call": bool(follow_model_call),
             "strategy.fade": bool(fade),
@@ -739,8 +742,10 @@ def simulate_validated_kelly_account(
                     else (row.get("model_probability") or 0.5)
                 )
                 market_p = float(row.get("market_probability") or 0.5)
-                p_win = model_p if side == YES else (1.0 - model_p)
                 p_side_mkt = market_p if side == YES else (1.0 - market_p)
+                p_side_model = model_p if side == YES else (1.0 - model_p)
+                shrinkage = max(0.0, min(float(market_shrinkage), 1.0))
+                p_win = p_side_model + shrinkage * (p_side_mkt - p_side_model)
                 raw_kelly = _kelly_fraction(p_win, p_side_mkt)
                 sized_fraction = max(0.0, min(kelly_fraction * raw_kelly, max_concentration))
                 if sized_fraction <= 1e-9 or account_value <= 0:
@@ -796,6 +801,7 @@ def simulate_validated_kelly_account(
                 if starting_cash else None,
                 "kelly_fraction": round(float(kelly_fraction), 6),
                 "max_concentration": round(float(max_concentration), 6),
+                "market_shrinkage": round(max(0.0, min(float(market_shrinkage), 1.0)), 6),
                 "min_edge": round(float(min_edge), 6),
                 "min_price": round(float(min_price), 6),
                 "max_price": round(float(max_price), 6),
@@ -834,6 +840,10 @@ def simulate_validated_kelly_account(
                     "stronger signal than the bucket-wide average.",
                     "Open positions are valued at bid-side liquidation prices.",
                     "Resolved markets settle into cash once per market before later trades are considered.",
+                    (
+                        f"Sizing shrinks calibrated probabilities {max(0.0, min(float(market_shrinkage), 1.0)):.0%} "
+                        "toward the executable market price."
+                    ),
                     "Kalshi-style exits are represented as buying the opposite contract and netting YES/NO pairs at $1.00.",
                 ],
             })
