@@ -5254,14 +5254,10 @@ async function refreshEdgeForecasts() {
       _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
       _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
       _upd('eb-pnl-edge-v', _roiDeltaVal(pnl.smart, pnl.crowd_baseline));
-      const _normCurve = s => {
-        return _ebPnlCurve(s);
-      };
-      const _times = s => _ebCurveTimes(s);
       const _mk = (s, color, label, dash) => {
-        const points = _normCurve(s);
-        if (!points) return null;
-        const times = _times(s);
+        const series = _ebStrategyGrowthCurve(s);
+        if (!series) return null;
+        const { points, times } = series;
         const curve = { points, color, label };
         if (dash) curve.dash = true;
         if (times.length === points.length) curve.times = times;
@@ -5995,6 +5991,22 @@ function _ebPnlCurve(s) {
   return s.equity_curve.map(v => EB_STARTING_BANKROLL + (v / staked) * EB_STARTING_BANKROLL);
 }
 
+function _ebStrategyGrowthCurve(s) {
+  const growth = _ebNormalizeBankrollCurve(s);
+  if (growth) {
+    return {
+      points: growth,
+      times: (s?.growth_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t)),
+    };
+  }
+  const pnl = _ebPnlCurve(s);
+  if (!pnl) return null;
+  return {
+    points: pnl,
+    times: _ebCurveTimes(s),
+  };
+}
+
 
 function _ebCurveTimes(s) {
   return (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
@@ -6673,6 +6685,26 @@ function _setMtmSizingMode(mode) {
   }
 }
 
+document.addEventListener('click', (event) => {
+  const viewBtn = event.target.closest('[data-eb-view]');
+  if (viewBtn) {
+    event.preventDefault();
+    _ebSetView(viewBtn.dataset.ebView);
+    return;
+  }
+  const sizingBtn = event.target.closest('[data-mtm-sizing-mode]');
+  if (sizingBtn) {
+    event.preventDefault();
+    _setMtmSizingMode(sizingBtn.dataset.mtmSizingMode);
+    return;
+  }
+  const strategyRow = event.target.closest('[data-mtm-strategy]');
+  if (strategyRow) {
+    event.preventDefault();
+    _selectMtmStrategy(strategyRow.dataset.mtmStrategy);
+  }
+});
+
 function _renderMtmPage(d) {
   const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
   if (!mtmModels.length) {
@@ -6774,7 +6806,7 @@ function _renderMtmPage(d) {
     const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
     const isActive = activeStrat === s.key;
     const activeStyle = isActive ? 'background:rgba(16,185,129,0.1);font-weight:bold' : '';
-    return `<tr class="eb-row ${isActive ? 'active-strat-row' : ''}" style="${activeStyle};cursor:pointer" onclick="_selectMtmStrategy('${s.key}')" data-model="${escHtml(s.label)}">
+    return `<tr class="eb-row ${isActive ? 'active-strat-row' : ''}" style="${activeStyle};cursor:pointer" data-mtm-strategy="${escAttr(s.key)}" data-model="${escHtml(s.label)}">
       <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};margin-right:6px"></span><b>${escHtml(s.label)}</b> ${isActive ? '<span class="eb-badge eb-sig">ACTIVE</span>' : ''}<span style="display:block;color:var(--text-dim);font-size:11px">${s.tag}</span></td>
       <td>${_usd(startB)}</td>
       <td><b>${_usd(endB)}</b></td>
@@ -6799,9 +6831,9 @@ function _renderMtmPage(d) {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;margin-bottom:12px;flex-wrap:wrap;gap:10px">
       <h4 class="eb-h" style="margin:0">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
       <div class="eb-view-tabs" style="margin:0" role="tablist" aria-label="Position sizing modes">
-        <button type="button" class="eb-view-tab ${sizingMode === 'fixed' ? 'active' : ''}" onclick="_setMtmSizingMode('fixed')">Fixed Stake ($1 Flat)</button>
-        <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" onclick="_setMtmSizingMode('growth_1pct')">Growth 1% ($100/mkt)</button>
-        <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" onclick="_setMtmSizingMode('growth_2pct')">Growth 2% ($200/mkt)</button>
+        <button type="button" class="eb-view-tab ${sizingMode === 'fixed' ? 'active' : ''}" data-mtm-sizing-mode="fixed">Fixed Stake ($1 Flat)</button>
+        <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Growth 1% ($100/mkt)</button>
+        <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Growth 2% ($200/mkt)</button>
       </div>
     </div>`;
 
@@ -6858,14 +6890,10 @@ function renderEdgeBoard(d) {
     const nRes = d.n_snapshots_resolved || 0;
     const smartVsCrowd = (pnl.smart?.roi != null && pnl.crowd_baseline?.roi != null) ? pnl.smart.roi - pnl.crowd_baseline.roi : null;
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
-    const _normCurve = s => {
-      return _ebPnlCurve(s);
-    };
-    const _times = s => _ebCurveTimes(s);
     const _mk = (s, color, label, dash) => {
-      const points = _normCurve(s);
-      if (!points) return null;
-      const times = _times(s);
+      const series = _ebStrategyGrowthCurve(s);
+      if (!series) return null;
+      const { points, times } = series;
       const curve = { points, color, label };
       if (dash) curve.dash = true;
       if (times.length === points.length) curve.times = times;
@@ -6952,8 +6980,8 @@ function renderEdgeBoard(d) {
   }
   const boardHtml = `<div id="eb-board-section">${_renderBoardPage(board, 0)}</div>`;
   const viewTabs = `<div class="eb-view-tabs" role="tablist" aria-label="Edge board views">
-    <button type="button" class="eb-view-tab ${_ebView === 'markets' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'markets'}" onclick="_ebSetView('markets')">Markets</button>
-    <button type="button" class="eb-view-tab ${_ebView === 'mtm' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'mtm'}" onclick="_ebSetView('mtm')">MTM</button>
+    <button type="button" class="eb-view-tab ${_ebView === 'markets' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'markets'}" data-eb-view="markets">Markets</button>
+    <button type="button" class="eb-view-tab ${_ebView === 'mtm' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'mtm'}" data-eb-view="mtm">MTM</button>
   </div>`;
   const marketsPageHtml = `${stats}
     <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging - risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}

@@ -89,7 +89,7 @@ class ChatUiTests(unittest.TestCase):
         self.assertNotIn("<th>Flat ROI</th>", self.index_html)
 
     def test_edge_board_renders_mtm_chart_without_summary_cards(self) -> None:
-        self.assertIn("_ebSetView('mtm')", self.index_html)
+        self.assertIn('data-eb-view="mtm"', self.index_html)
         self.assertIn("Shadow mark-to-market account", self.index_html)
         self.assertIn('id="eb-mtm-svg"', self.index_html)
         self.assertIn('id="eb-mtm-table-body"', self.index_html)
