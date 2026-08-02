@@ -1239,18 +1239,18 @@ def paper_pnl(resolved: List[Dict[str, Any]],
               edge_calib: Optional[List[Dict[str, Any]]] = None,
               *, min_edge: float = _EDGE_MIN, stake_cap: float = 0.25) -> Optional[Dict[str, Any]]:
     """Hypothetical paper PnL of *following the model's own call* over resolved
-    snapshots — the edge is how far ahead of time the model calls the right shot.
+    markets.
 
-    For each resolved snapshot, place a hypothetical bet on the model's own
-    predicted side (its >50% answer — the same side ``accuracy`` scores, never
-    against the model) at that day's market price; at resolution a winning $1 of
-    exposure returns ``(1 − p)/p``, a loser returns −1. Because every daily
-    snapshot is a bet, a model that locks the correct answer early wins on more
-    days — and usually at better (less-settled) prices — so calling right *early*
-    is rewarded. ``win_rate`` therefore equals the model's accuracy. Three
-    sizings: flat (pure signal), edge-weighted (stake the model-vs-market gap),
-    and validated-only (flat, but only in disagreement buckets whose resolved
-    track record is statistically significant).
+    A resolved snapshot becomes an eligible paper signal only after the market's
+    outcome is known. The PnL/account curves then deduplicate those signals to
+    one settled trade per platform+market, using the earliest eligible
+    point-in-time call before close. Profit/loss is booked once at
+    ``resolved_ts``: a winning $1 of exposure returns ``(1 - p)/p``, a loser
+    returns ``-1``. This avoids double-counting repeated snapshots of the same
+    real question while still preserving the public signal log for analysis.
+    Three sizings: flat (pure signal), edge-weighted (stake the model-vs-market
+    gap), and validated-only (flat, but only in disagreement buckets whose
+    resolved track record is statistically significant).
 
     Returns are **net of venue trading fees** (``_bet_fee``: Kalshi's
     price-dependent taker fee; Polymarket fee-free), so ``roi`` is the real,

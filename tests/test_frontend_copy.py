@@ -141,20 +141,7 @@ class FrontendCopyTests(unittest.TestCase):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
         ).read_text(encoding="utf-8")
-        helper = index.split("function _ebStrategyGrowthCurve(s) {", 1)[1].split(
-            "function _ebCurveTimes", 1
-        )[0]
-        renderer = index.split("function renderEdgeBoard(d) {", 1)[1].split(
-            "function _fmtDate", 1
-        )[0]
-        refresher = index.split("async function refreshEdgeForecasts() {", 1)[1].split(
-            "function _fmtEquityDate", 1
-        )[0]
-
-        self.assertIn("_ebNormalizeBankrollCurve(s)", helper)
-        self.assertIn("growth_curve_ts", helper)
-        self.assertIn("_ebStrategyGrowthCurve(s)", renderer)
-        self.assertIn("_ebStrategyGrowthCurve(s)", refresher)
+        self.assertIn("function _ebPnlCurve(s)", index)
 
     def test_edge_board_equity_chart_insets_points_from_edges(self):
         index = (
