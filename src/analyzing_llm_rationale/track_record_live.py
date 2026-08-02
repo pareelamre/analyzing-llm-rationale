@@ -1875,6 +1875,7 @@ def build_validated_kelly_accounts(
     kelly_fraction: float = 0.5,
     max_concentration: float = 0.15,
     market_shrinkage: float = 0.0,
+    max_drawdown: Optional[float] = None,
     require_validated: bool = True,
     follow_model_call: bool = False,
 ) -> List[Dict[str, Any]]:
@@ -1938,6 +1939,7 @@ def build_validated_kelly_accounts(
             kelly_fraction=kelly_fraction,
             max_concentration=max_concentration,
             market_shrinkage=market_shrinkage,
+            max_drawdown=max_drawdown,
             require_validated=require_validated,
             follow_model_call=follow_model_call,
             fee_fn=_bet_fee,
@@ -1980,8 +1982,9 @@ def build_half_kelly_20pct_accounts(
 
     This is the MTM counterpart to the historical growth views: it starts from
     the same June forecast history, books each market once at settlement, and
-    caps every position at 5% of the current account and shrinks model
-    probabilities 50% toward market pricing. Unlike the guarded
+    caps every position at 5% of the current account, shrinks model
+    probabilities 50% toward market pricing, and reserves a 30% maximum
+    high-watermark loss budget. Unlike the guarded
     deployable strategy, it does not require a significance-approved edge
     bucket, so it can show the full historical sizing trajectory.
     """
@@ -1993,6 +1996,7 @@ def build_half_kelly_20pct_accounts(
         kelly_fraction=0.25,
         max_concentration=0.05,
         market_shrinkage=0.5,
+        max_drawdown=0.30,
         require_validated=False,
         follow_model_call=True,
     )
