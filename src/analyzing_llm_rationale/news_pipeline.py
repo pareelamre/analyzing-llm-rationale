@@ -1249,6 +1249,8 @@ class NewsPipeline:
         selected = self.select_diverse_sources(ranked, top_k)
         if selected:
             return selected
+        if ranked:
+            return ranked[:top_k]
 
         # Broad searches can return candidates that are all filtered as irrelevant.
         # Retry with forecasting-specific keywords rather than silently returning none.
