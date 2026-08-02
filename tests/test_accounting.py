@@ -252,6 +252,24 @@ class ValidatedKellyAccountTests(unittest.TestCase):
         stake = account["trades"][0]["quantity"] * account["trades"][0]["price"]
         self.assertLessEqual(stake, 10_000.0 * 0.10 + 1e-6)
 
+    def test_drawdown_limit_reserves_cash_for_all_open_positions(self):
+        base = datetime(2026, 7, 1, tzinfo=timezone.utc)
+        rows = [
+            self._row(
+                ident=f"m{i}", model_p=0.99, market_p=0.5, calibrated_p=0.99,
+                outcome=0, ts=base + timedelta(days=2 * i),
+                resolved_ts=base + timedelta(days=2 * i + 1),
+            )
+            for i in range(10)
+        ]
+        account = simulate_validated_kelly_account(
+            rows, starting_cash=10_000.0, kelly_fraction=1.0,
+            max_concentration=0.05, max_drawdown=0.30,
+        )
+        values = [point["account_value"] for point in account["value_curve"]]
+        self.assertGreaterEqual(min(values), 7_000.0 - 1e-4)
+        self.assertGreater(account["n_skipped_drawdown_limit"], 0)
+
     def test_skips_prices_outside_the_default_band(self):
         # market_p=0.05 -> ask for the model's YES-implied side sits near 0.06,
         # well outside the default [0.20, 0.80] band -- must be skipped even

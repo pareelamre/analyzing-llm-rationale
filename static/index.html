@@ -6725,7 +6725,7 @@ function _renderMtmPage(d) {
   const cardConfig = [
     { key: 'growth_2pct', label: 'Growth 2% Mode', sub: '2% Bankroll / $200', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.4)' },
     { key: 'growth_1pct', label: 'Growth 1% Mode', sub: '1% Bankroll / $100', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.4)' },
-    { key: 'half_kelly_20pct', label: 'Half-Kelly Mode', sub: '5% cap / market-shrunk', color: '#06b6d4', bg: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.4)' },
+    { key: 'half_kelly_20pct', label: 'Half-Kelly Mode', sub: '5% cap / 30% drawdown floor', color: '#06b6d4', bg: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.4)' },
   ];
 
   const _normCurve = s => _ebPnlCurve(s);
@@ -6792,7 +6792,7 @@ function _renderMtmPage(d) {
   }).join('');
 
   const stratList = [
-    { key: 'half_kelly_20pct', label: 'Half-Kelly (5% cap)', strat: pnl.half_kelly_20pct, color: '#06b6d4', tag: 'Market-shrunk and compounded' },
+    { key: 'half_kelly_20pct', label: 'Half-Kelly (5% cap)', strat: pnl.half_kelly_20pct, color: '#06b6d4', tag: 'Market-shrunk, 30% drawdown floor' },
     { key: 'growth_2pct', label: 'Growth 2% Mode ($200/mkt)', strat: pnl.growth_2pct, color: '#f59e0b', tag: '2% Bankroll / $200' },
     { key: 'growth_1pct', label: 'Growth 1% Mode ($100/mkt)', strat: pnl.growth_1pct, color: '#3b82f6', tag: '1% Bankroll / $100' },
     { key: 'crowd_baseline', label: 'Crowd-Follow Baseline', strat: pnl.crowd_baseline, color: '#94a3b8', tag: 'Zero-Edge Baseline' },

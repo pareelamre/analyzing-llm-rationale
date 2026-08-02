@@ -582,6 +582,7 @@ def simulate_validated_kelly_account(
     kelly_fraction: float = 0.5,
     max_concentration: float = 0.15,
     market_shrinkage: float = 0.0,
+    max_drawdown: Optional[float] = None,
     require_validated: bool = True,
     follow_model_call: bool = False,
     fade: bool = False,
@@ -595,6 +596,9 @@ def simulate_validated_kelly_account(
     on the *current* account value and capped per-market to bound tail risk
     from any single miscalibrated call. ``market_shrinkage`` tempers the
     calibrated probability toward the executable market price before sizing.
+    When ``max_drawdown`` is set, new purchases must leave enough cash that
+    every open position could settle at zero without crossing that account
+    high-watermark drawdown limit.
 
     This is the strategy actually meant to be traded, unlike
     simulate_shadow_mark_to_market_account's fixed $1 target_contracts (a
@@ -642,12 +646,18 @@ def simulate_validated_kelly_account(
             "strategy.kelly_fraction": float(kelly_fraction),
             "strategy.max_concentration": float(max_concentration),
             "strategy.market_shrinkage": float(market_shrinkage),
+            "strategy.max_drawdown": float(max_drawdown) if max_drawdown is not None else -1.0,
             "strategy.require_validated": bool(require_validated),
             "strategy.follow_model_call": bool(follow_model_call),
             "strategy.fade": bool(fade),
         })
         try:
             account = PredictionMarketAccount(starting_cash=starting_cash)
+            drawdown_limit = (
+                max(0.0, min(float(max_drawdown), 0.99))
+                if max_drawdown is not None else None
+            )
+            peak_account_value = float(starting_cash)
             current_quotes = _quote_map(latest_quotes)
             settlements_by_market: Dict[Tuple[str, str], Dict[str, Any]] = {}
             events: List[Tuple[str, int, int, Dict[str, Any]]] = []
@@ -675,6 +685,7 @@ def simulate_validated_kelly_account(
             skipped_no_edge = 0
             skipped_not_validated = 0
             skipped_unexecutable = 0
+            skipped_drawdown_limit = 0
             settled_markets: set[Tuple[str, str]] = set()
             settlements: List[Dict[str, Any]] = []
             value_curve: List[Dict[str, Any]] = []
@@ -698,6 +709,7 @@ def simulate_validated_kelly_account(
                     snap["event_type"] = "settlement"
                     snap["event_market"] = {"platform": platform, "ident": ident}
                     value_curve.append(snap)
+                    peak_account_value = max(peak_account_value, float(snap["account_value"]))
                     continue
 
                 row = payload
@@ -736,6 +748,7 @@ def simulate_validated_kelly_account(
                 # into this stake, then cap at max_concentration.
                 liq_value, _illiquid = account.liquidation_value(current_quotes)
                 account_value = account.cash + liq_value
+                peak_account_value = max(peak_account_value, account_value)
                 model_p = float(
                     row.get("calibrated_model_probability")
                     if row.get("calibrated_model_probability") is not None
@@ -769,9 +782,37 @@ def simulate_validated_kelly_account(
 
                 notional = buy_qty * ask
                 explicit_fee = row.get("fee")
-                fee = float(explicit_fee) if explicit_fee not in (None, "") else (
-                    float(fee_fn(platform, notional, ask)) if fee_fn else 0.0
-                )
+                def _fee_for(
+                    notional_value: float,
+                    explicit_fee: Any = explicit_fee,
+                    platform: str = platform,
+                    ask: float = ask,
+                    fee_fn: Optional[Callable[[Any, float, float], float]] = fee_fn,
+                ) -> float:
+                    return float(explicit_fee) if explicit_fee not in (None, "") else (
+                        float(fee_fn(platform, notional_value, ask)) if fee_fn else 0.0
+                    )
+
+                if drawdown_limit is not None:
+                    # Cash is the account's worst-case terminal value when all
+                    # binary contracts expire worthless. Preserve the floor
+                    # before opening another position, including its fee.
+                    drawdown_floor = peak_account_value * (1.0 - drawdown_limit)
+                    spending_budget = max(0.0, account.cash - drawdown_floor)
+                    if notional + _fee_for(notional) > spending_budget:
+                        low, high = 0.0, notional
+                        for _ in range(32):
+                            candidate = (low + high) / 2.0
+                            if candidate + _fee_for(candidate) <= spending_budget:
+                                low = candidate
+                            else:
+                                high = candidate
+                        notional = low
+                        buy_qty = notional / ask
+                        if buy_qty <= 1e-9:
+                            skipped_drawdown_limit += 1
+                            continue
+                fee = _fee_for(notional)
                 fill = account.buy(
                     platform=platform,
                     ident=ident,
@@ -789,6 +830,7 @@ def simulate_validated_kelly_account(
                 snap["event_market"] = {"platform": platform, "ident": ident, "side": side}
                 snap["sized_fraction"] = round(sized_fraction, 6)
                 value_curve.append(snap)
+                peak_account_value = max(peak_account_value, float(snap["account_value"]))
 
             final = account.snapshot(current_quotes)
             final.update({
@@ -802,6 +844,7 @@ def simulate_validated_kelly_account(
                 "kelly_fraction": round(float(kelly_fraction), 6),
                 "max_concentration": round(float(max_concentration), 6),
                 "market_shrinkage": round(max(0.0, min(float(market_shrinkage), 1.0)), 6),
+                "max_drawdown": drawdown_limit,
                 "min_edge": round(float(min_edge), 6),
                 "min_price": round(float(min_price), 6),
                 "max_price": round(float(max_price), 6),
@@ -813,6 +856,7 @@ def simulate_validated_kelly_account(
                 "n_skipped_no_edge": skipped_no_edge,
                 "n_skipped_not_validated": skipped_not_validated,
                 "n_skipped_unexecutable": skipped_unexecutable,
+                "n_skipped_drawdown_limit": skipped_drawdown_limit,
                 "trades": [t.as_dict() for t in account.trades],
                 "settlements": settlements,
                 "value_curve": value_curve,
@@ -840,6 +884,12 @@ def simulate_validated_kelly_account(
                     "stronger signal than the bucket-wide average.",
                     "Open positions are valued at bid-side liquidation prices.",
                     "Resolved markets settle into cash once per market before later trades are considered.",
+                    (
+                        f"New positions preserve a {drawdown_limit:.0%} high-watermark drawdown floor, "
+                        "assuming every open contract can expire worthless."
+                        if drawdown_limit is not None else
+                        "No portfolio-level drawdown floor is configured."
+                    ),
                     (
                         f"Sizing shrinks calibrated probabilities {max(0.0, min(float(market_shrinkage), 1.0)):.0%} "
                         "toward the executable market price."
