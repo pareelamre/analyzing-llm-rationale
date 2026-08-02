@@ -2278,6 +2278,7 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
             ),
             "edge": round(signed, 3),
             "abs_edge": round(abs(signed), 3),
+            "is_genuine_edge": discrepancy_status in ("genuine_candidate", "normal"),
             "needs_discrepancy_review": huge_gap,
             "discrepancy_status": discrepancy_status,
             "review_reasons": review_reasons,
@@ -2304,7 +2305,13 @@ def build_edge_board(open_rows: List[Dict[str, Any]],
                 "skill_significant": lead_tr.get("skill_significant"),
             } if lead_tr else None,
         })
-    board.sort(key=lambda x: x["abs_edge"], reverse=True)
+    board.sort(
+        key=lambda x: (
+            1 if x.get("is_genuine_edge") else 0,
+            x["abs_edge"],
+        ),
+        reverse=True,
+    )
 
     # Deduplicate correlated markets: cap entries sharing the same platform and
     # close-week (e.g. 7 World Cup team markets → keep the top max_per_close_window).

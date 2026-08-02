@@ -6492,6 +6492,33 @@ function _attachCrypto5mHover(container) {
   svg.addEventListener('mouseleave', hide);
 }
 
+
+let _ebGenuineOnly = true;
+
+function _toggleGenuineEdges(checked) {
+  _ebGenuineOnly = !!checked;
+  _ebPage = 0;
+  if (typeof _ebBoardData !== 'undefined' && _ebBoardData) {
+    const sec = document.getElementById('eb-board-section');
+    if (sec) sec.innerHTML = _renderBoardPage(_ebBoardData, 0);
+  }
+}
+
+function _discrepancyBadge(e) {
+  const status = e.discrepancy_status || (e.is_genuine_edge ? 'genuine_candidate' : 'normal');
+  if (e.is_genuine_edge || status === 'genuine_candidate' || status === 'normal') {
+    return `<span class="eb-badge" style="background:rgba(16,185,129,0.15);color:#10b981;font-weight:600;padding:2px 6px;border-radius:4px;font-size:0.7rem">Genuine Edge</span>`;
+  }
+  const labels = {
+    'thin_market': 'Thin Market',
+    'stale_forecast': 'Stale Price',
+    'context_incomplete': 'Missing Context',
+    'extreme_forecast': 'Extreme Model'
+  };
+  const txt = labels[status] || 'Review Edge';
+  return `<span class="eb-badge" style="background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:600;padding:2px 6px;border-radius:4px;font-size:0.7rem">${txt}</span>`;
+}
+
 function _renderBoardPage(board, page) {
   if (!board.length) return '<p class="text-sm text-gray-500">No open markets tracked yet.</p>';
   const pages = Math.ceil(board.length / _EB_PAGE_SIZE);
