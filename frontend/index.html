@@ -6547,6 +6547,12 @@ function _mtmModelsForSizing(d, sizingMode) {
   return (source || []).filter(m => m && (m.account || m.account_value != null));
 }
 
+function _mtmCurvePoints(account) {
+  const points = account?.value_curve || [];
+  const firstTrade = points.findIndex(point => point.event_type === 'trade');
+  return firstTrade >= 0 ? points.slice(firstTrade) : [];
+}
+
 function _updateMtmViewInPlace() {
   if (!_ebLastData) return false;
   const d = _ebLastData;
@@ -6587,7 +6593,7 @@ function _updateMtmViewInPlace() {
 
   const modelCurves = mtmModels.map((m, i) => {
     const account = m.account || {};
-    const curvePoints = account.value_curve || [];
+    const curvePoints = _mtmCurvePoints(account);
     const values = curvePoints.map(p => {
       const rawVal = Number(p.account_value);
       if (!Number.isFinite(rawVal)) return null;
@@ -6613,7 +6619,9 @@ function _updateMtmViewInPlace() {
 
   const svgEl = document.getElementById('eb-mtm-svg');
   if (svgEl) {
-    svgEl.innerHTML = modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : '';
+    svgEl.innerHTML = modelCurves.length
+      ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'})
+      : '<p class="text-sm text-gray-500">No positions yet for this sizing mode.</p>';
   }
 
   const tableBodyEl = document.getElementById('eb-mtm-table-body');
@@ -6734,7 +6742,7 @@ function _renderMtmPage(d) {
 
   const modelCurves = mtmModels.map((m, i) => {
     const account = m.account || {};
-    const curvePoints = account.value_curve || [];
+    const curvePoints = _mtmCurvePoints(account);
     const values = curvePoints.map(p => {
       const rawVal = Number(p.account_value);
       if (!Number.isFinite(rawVal)) return null;
@@ -6831,7 +6839,7 @@ function _renderMtmPage(d) {
 
   return `<div id="eb-mtm-container"><h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
     ${sizingButtonsHtml}
-    <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
+    <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No positions yet for this sizing mode.</p>'}</div>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table>
     ${stratTableHtml}</div>`;
 }
