@@ -6527,8 +6527,114 @@ function _renderBoardPage(board, page) {
 let _activeMtmStrat = 'growth_2pct';
 let _mtmSizingMode = 'growth_2pct';
 
+function _updateMtmViewInPlace() {
+  if (!_ebLastData) return false;
+  const d = _ebLastData;
+  const mtmModels = (d.mark_to_market_by_model || []).filter(m => m && (m.account || m.account_value != null));
+  if (!mtmModels.length) return false;
+
+  const mtmContainer = document.getElementById('eb-mtm-container');
+  if (!mtmContainer) return false;
+
+  const sizingMode = _mtmSizingMode || 'growth_2pct';
+  const sizingLabels = {
+    'fixed': 'Fixed Stake ($1 Flat Baseline)',
+    'growth_1pct': 'Growth 1% Mode ($100/mkt)',
+    'growth_2pct': 'Growth 2% Mode ($200/mkt)',
+  };
+  const activeSizingLabel = sizingLabels[sizingMode] || 'Growth 2% Mode ($200/mkt)';
+
+  const titleEl = document.getElementById('eb-mtm-header-title');
+  if (titleEl) titleEl.textContent = `Per-Model Shadow Mark-to-Market Accounts (${activeSizingLabel})`;
+
+  const tabs = mtmContainer.querySelectorAll('.eb-view-tab');
+  tabs.forEach(tab => {
+    const isFixed = tab.textContent.includes('Fixed');
+    const isGrowth1 = tab.textContent.includes('Growth 1%');
+    const isGrowth2 = tab.textContent.includes('Growth 2%');
+    
+    tab.classList.remove('active');
+    if (sizingMode === 'fixed' && isFixed) tab.classList.add('active');
+    if (sizingMode === 'growth_1pct' && isGrowth1) tab.classList.add('active');
+    if (sizingMode === 'growth_2pct' && isGrowth2) tab.classList.add('active');
+  });
+
+  const _usd = v => Number.isFinite(Number(v))
+    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+    : 'building';
+
+  const _getScaledMtmValue = (rawVal, m) => {
+    const val = Number(rawVal);
+    if (!Number.isFinite(val)) return m === 'fixed' ? 100 : EB_STARTING_BANKROLL;
+    const rawPnl = val - 10000;
+    if (m === 'fixed') return 100 + rawPnl / 100;
+    const mult = m === 'growth_2pct' ? 200 : 100;
+    return Math.max(0, EB_STARTING_BANKROLL + rawPnl * mult);
+  };
+
+  const modelCurves = mtmModels.map((m, i) => {
+    const account = m.account || {};
+    const curvePoints = account.value_curve || [];
+    const values = curvePoints.map(p => {
+      const rawVal = Number(p.account_value);
+      if (!Number.isFinite(rawVal)) return null;
+      return _getScaledMtmValue(rawVal, sizingMode);
+    }).filter(Number.isFinite);
+    const times = curvePoints.map(p => new Date(p.ts).getTime()).filter(t => !isNaN(t));
+    if (!values.length) return null;
+    const label = _ebModelLabel(m.model);
+    const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
+    const startP = sizingMode === 'fixed' ? 100 : EB_STARTING_BANKROLL;
+    const scaledVal = _getScaledMtmValue(rawVal, sizingMode);
+    const ret = (scaledVal - startP) / startP;
+    const curve = {
+      points: values,
+      color: _mtmModelColor(m.model, i),
+      label,
+      head: _ebModelHead(m.model),
+      headTitle: `${label} · ${_usd(scaledVal)}${ret == null ? '' : ' · ' + _roiPct(ret)}`,
+    };
+    if (times.length === values.length) curve.times = times;
+    return curve;
+  }).filter(Boolean);
+
+  const svgEl = document.getElementById('eb-mtm-svg');
+  if (svgEl) {
+    svgEl.innerHTML = modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : '';
+  }
+
+  const tableBodyEl = document.getElementById('eb-mtm-table-body');
+  if (tableBodyEl) {
+    tableBodyEl.innerHTML = mtmModels.map((m, i) => {
+      const account = m.account || {};
+      const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
+      const startPrincipal = sizingMode === 'fixed' ? 100 : EB_STARTING_BANKROLL;
+      const currentBankroll = _getScaledMtmValue(rawVal, sizingMode);
+      const pnlUsd = currentBankroll - startPrincipal;
+      const pnlPct = pnlUsd / startPrincipal;
+      const pnlColor = pnlUsd >= 0 ? '#0a7' : '#c33';
+      const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
+
+      return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
+        <td><b>${i + 1}</b></td>
+        <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
+        <td>${_usd(startPrincipal)}</td>
+        <td><b>${_usd(currentBankroll)}</b></td>
+        <td style="color:${pnlColor};font-weight:600">${pnlStr}</td>
+        <td style="color:${pnlColor};font-weight:600">${_roiPct(pnlPct)}</td>
+        <td>${account.n_trades ?? m.n_trades ?? 0}</td>
+        <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  _attachEdgeBoardChartHovers(mtmContainer);
+  return true;
+}
+
 function _refreshActiveEdgeBoardHost() {
   if (!_ebLastData) return;
+  if (_updateMtmViewInPlace()) return;
   const edgeHost = document.getElementById('edgeBody');
   if (edgeHost) {
     edgeHost.innerHTML = renderEdgeBoard(_ebLastData);
@@ -6550,7 +6656,9 @@ function _selectMtmStrategy(key) {
   } else {
     _mtmSizingMode = 'growth_1pct';
   }
-  _refreshActiveEdgeBoardHost();
+  if (!_updateMtmViewInPlace()) {
+    _refreshActiveEdgeBoardHost();
+  }
 }
 
 function _setMtmSizingMode(mode) {
@@ -6560,7 +6668,9 @@ function _setMtmSizingMode(mode) {
   } else {
     _activeMtmStrat = mode;
   }
-  _refreshActiveEdgeBoardHost();
+  if (!_updateMtmViewInPlace()) {
+    _refreshActiveEdgeBoardHost();
+  }
 }
 
 function _renderMtmPage(d) {

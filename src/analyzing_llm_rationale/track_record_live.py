@@ -1342,7 +1342,14 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             key=lambda b: (b.get("resolved_ts") or "", b.get("snapshot_ts") or ""),
         )
 
-    def _run(sizing, *, validated: bool = False, filter_fn=None, fade: bool = False) -> Optional[Dict[str, Any]]:
+    def _run(
+        sizing,
+        *,
+        validated: bool = False,
+        filter_fn=None,
+        fade: bool = False,
+        compound_actual_bankroll: bool = False,
+    ) -> Optional[Dict[str, Any]]:
         """Run a paper-PnL simulation over all resolved bets.
 
         Args:
@@ -1426,9 +1433,12 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             cum += profit
             curve.append(round(cum, 4))
             curve_ts.append(b["resolved_ts"])
-            if _pre_staked > 0:
+            if compound_actual_bankroll:
+                bankroll = max(0.0, bankroll + profit)
+            elif _pre_staked > 0:
                 stake_fraction = stake / _pre_staked
                 bankroll *= max(0.0, 1.0 + stake_fraction * (profit / stake))
+            if compound_actual_bankroll or _pre_staked > 0:
                 growth_curve.append(round(bankroll, 6))
                 growth_curve_ts.append(b["resolved_ts"])
         if not n:
@@ -1521,8 +1531,8 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         "flat": flat,
         "half_kelly": _run(_half_kelly),
         "smart": _run(_half_kelly, filter_fn=_smart_filter),
-        "growth_1pct": _run(_growth_1pct),
-        "growth_2pct": _run(_growth_2pct),
+        "growth_1pct": _run(_growth_1pct, compound_actual_bankroll=True),
+        "growth_2pct": _run(_growth_2pct, compound_actual_bankroll=True),
         "bets": _public_bets(),
     }
 
