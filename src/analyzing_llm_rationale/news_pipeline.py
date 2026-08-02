@@ -1249,11 +1249,12 @@ class NewsPipeline:
         selected = self.select_diverse_sources(ranked, top_k)
         if selected:
             return selected
-        if ranked:
-            return ranked[:top_k]
 
-        # Broad searches can return candidates that are all filtered as irrelevant.
-        # Retry with forecasting-specific keywords rather than silently returning none.
+        # Broad searches can return candidates that are all filtered as irrelevant
+        # (non-empty `ranked`, empty `selected`). Retry with forecasting-specific
+        # keywords before falling back to the low-relevance ranked list --
+        # returning ranked[:top_k] here would skip the retry entirely and hand
+        # back whatever irrelevant junk the broad search found.
         fallback_query = _keyword_search_query(question)
         if fallback_query not in search_queries:
             previous_count = len(raw)
