@@ -6563,7 +6563,7 @@ let _mtmSizingMode = 'half_kelly_20pct';
 function _mtmModelsForSizing(d, sizingMode) {
   const source = sizingMode === 'half_kelly_20pct'
     ? d.half_kelly_20pct_by_model
-    : d.mark_to_market_by_model;
+    : d[`${sizingMode}_by_model`];
   return (source || []).filter(m => (
     m
     && m.model !== 'crowd-follow'
@@ -6574,8 +6574,8 @@ function _mtmModelsForSizing(d, sizingMode) {
 
 function _mtmCurvePoints(account) {
   const points = account?.value_curve || [];
-  const firstTrade = points.findIndex(point => point.event_type === 'trade');
-  return firstTrade >= 0 ? points.slice(firstTrade) : [];
+  const firstEvent = points.findIndex(point => point.event_type === 'trade' || point.event_type === 'settlement');
+  return firstEvent >= 0 ? points.slice(firstEvent) : [];
 }
 
 function _updateMtmViewInPlace() {
@@ -6590,8 +6590,8 @@ function _updateMtmViewInPlace() {
 
   const sizingLabels = {
     'half_kelly_20pct': 'Half-Kelly (5% Position Cap)',
-    'growth_1pct': 'Growth 1% Mode ($100/mkt)',
-    'growth_2pct': 'Growth 2% Mode ($200/mkt)',
+    'growth_1pct': 'Growth 1% Mode (compounded)',
+    'growth_2pct': 'Growth 2% Mode (compounded)',
   };
   const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.half_kelly_20pct;
 
@@ -6610,10 +6610,7 @@ function _updateMtmViewInPlace() {
   const _getScaledMtmValue = (rawVal, m) => {
     const val = Number(rawVal);
     if (!Number.isFinite(val)) return EB_STARTING_BANKROLL;
-    if (m === 'half_kelly_20pct') return val;
-    const rawPnl = val - 10000;
-    const mult = m === 'growth_2pct' ? 200 : 100;
-    return Math.max(0, EB_STARTING_BANKROLL + rawPnl * mult);
+    return val;
   };
 
   const modelCurves = mtmModels.map((m, i) => {
@@ -6759,10 +6756,7 @@ function _renderMtmPage(d) {
   const _getScaledMtmValue = (rawVal, mode) => {
     const val = Number(rawVal);
     if (!Number.isFinite(val)) return EB_STARTING_BANKROLL;
-    if (mode === 'half_kelly_20pct') return val;
-    const rawPnl = val - 10000;
-    const mult = mode === 'growth_2pct' ? 200 : 100;
-    return Math.max(0, EB_STARTING_BANKROLL + rawPnl * mult);
+    return val;
   };
 
   const modelCurves = mtmModels.map((m, i) => {
@@ -6819,8 +6813,8 @@ function _renderMtmPage(d) {
 
   const sizingLabels = {
     'half_kelly_20pct': 'Half-Kelly (5% Position Cap)',
-    'growth_1pct': 'Growth 1% Mode ($100/mkt)',
-    'growth_2pct': 'Growth 2% Mode ($200/mkt)',
+    'growth_1pct': 'Growth 1% Mode (compounded)',
+    'growth_2pct': 'Growth 2% Mode (compounded)',
   };
   const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.half_kelly_20pct;
 
@@ -6829,8 +6823,8 @@ function _renderMtmPage(d) {
       <h4 id="eb-mtm-header-title" class="eb-h" style="margin:0">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
       <div class="eb-view-tabs" style="margin:0" role="tablist" aria-label="Position sizing modes">
         <button type="button" class="eb-view-tab ${sizingMode === 'half_kelly_20pct' ? 'active' : ''}" data-mtm-sizing-mode="half_kelly_20pct">Half-Kelly (5% cap)</button>
-        <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Growth 1% ($100/mkt)</button>
-        <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Growth 2% ($200/mkt)</button>
+        <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Growth 1% (compounded)</button>
+        <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Growth 2% (compounded)</button>
       </div>
     </div>`;
 
