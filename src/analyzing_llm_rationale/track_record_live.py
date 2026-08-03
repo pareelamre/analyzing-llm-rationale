@@ -2032,6 +2032,72 @@ def build_half_kelly_20pct_accounts(
     )
 
 
+def build_growth_accounts(
+    rows: List[Dict[str, Any]],
+    *,
+    default_model: str,
+    tracked_models: Optional[List[str]] = None,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Build per-model 1% and 2% compounded accounts from resolved markets.
+
+    Growth P&L is booked once at resolution. Open markets intentionally do not
+    move these accounts because this strategy has no liquidation estimate.
+    """
+    by_model: Dict[str, List[Dict[str, Any]]] = {}
+    for row in rows:
+        label = str(row.get("model") or default_model)
+        by_model.setdefault(label, []).append(row)
+
+    labels = list(dict.fromkeys([*(tracked_models or []), *by_model.keys()]))
+    accounts = {"growth_1pct": [], "growth_2pct": []}
+    for label in labels:
+        if label == "crowd-follow":
+            continue
+        resolved_rows = [
+            row for row in (by_model.get(label) or [])
+            if row.get("resolved") and row.get("outcome") is not None
+        ]
+        result = paper_pnl(resolved_rows, edge_calibration(resolved_rows)) if resolved_rows else None
+        for strategy_key, values in accounts.items():
+            strategy = (result or {}).get(strategy_key) or {}
+            curve = [
+                {"ts": ts, "account_value": value, "event_type": "settlement"}
+                for value, ts in zip(
+                    strategy.get("growth_curve") or [],
+                    strategy.get("growth_curve_ts") or [],
+                )
+            ]
+            account_value = strategy.get("compound_bankroll", _COMPOUND_STARTING_BANKROLL)
+            n_trades = int(strategy.get("n_bets") or 0)
+            account = {
+                "strategy": strategy_key,
+                "starting_cash": _COMPOUND_STARTING_BANKROLL,
+                "account_value": account_value,
+                "return": strategy.get("compound_return", 0.0),
+                "n_trades": n_trades,
+                "n_settlements": n_trades,
+                "n_open_positions": 0,
+                "n_illiquid_positions": 0,
+                "value_curve": curve,
+            }
+            risk = _sharpe_and_max_drawdown(curve)
+            values.append({
+                "model": label,
+                "account": account,
+                "account_value": account_value,
+                "return": account["return"],
+                "n_trades": n_trades,
+                "n_settlements": n_trades,
+                "sharpe": risk["sharpe"],
+                "max_drawdown": risk["max_drawdown"],
+                "status": "active" if resolved_rows else "collecting_history",
+            })
+
+    for values in accounts.values():
+        values.sort(key=lambda item: float(item.get("account_value") or 0.0), reverse=True)
+    return accounts
+
+
 _FADE_BUCKET = "20pp+"
 
 
@@ -2799,6 +2865,11 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         default_model=model,
         tracked_models=tracked_models,
     )
+    growth_by_model = build_growth_accounts(
+        mark_to_market_rows_all,
+        default_model=model,
+        tracked_models=tracked_models,
+    )
     primary_mark_to_market = next(
         (row.get("account") for row in mark_to_market_by_model if row.get("model") == model),
         None,
@@ -2996,6 +3067,8 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "mark_to_market_account": primary_mark_to_market,
         "mark_to_market_by_model": mark_to_market_by_model,
         "half_kelly_20pct_by_model": half_kelly_20pct_by_model,
+        "growth_1pct_by_model": growth_by_model["growth_1pct"],
+        "growth_2pct_by_model": growth_by_model["growth_2pct"],
         "mark_to_market_cycle_minutes": cycle_minutes,
         "edge_board": edge_board_result,
         "discrepancy_monitor": {

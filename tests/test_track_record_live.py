@@ -1477,6 +1477,23 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(by_model["retired-model"]["status"], "active")
         self.assertEqual(by_model["retired-model"]["n_trades"], 1)
 
+    def test_growth_accounts_compound_at_resolution_per_model(self):
+        rows = [
+            self._resolved_row(ident=f"m{i}", model_p=0.65, market_p=0.5,
+                               outcome=1, day=i + 1)
+            for i in range(3)
+        ]
+        accounts = trl.build_growth_accounts(
+            rows, default_model="m", tracked_models=["m", "collecting"],
+        )
+        one_percent = {entry["model"]: entry for entry in accounts["growth_1pct"]}
+        account = one_percent["m"]["account"]
+        self.assertEqual(account["n_trades"], 3)
+        self.assertEqual(account["n_open_positions"], 0)
+        self.assertGreater(account["account_value"], 10_000)
+        self.assertEqual(len(account["value_curve"]), 3)
+        self.assertEqual(one_percent["collecting"]["status"], "collecting_history")
+
     def test_validated_kelly_skips_crowd_follow(self):
         rows = [self._resolved_row(ident="m1", model_p=0.7, market_p=0.5, outcome=1,
                                     day=1, model="crowd-follow")]

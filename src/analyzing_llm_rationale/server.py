@@ -1293,6 +1293,7 @@ def _compact_mark_to_market_by_model(rows: Any) -> List[Dict[str, Any]]:
                 "n_illiquid_positions",
                 "n_settlements",
                 "n_trades",
+                "status",
             )
             if key in row
         }
@@ -1361,6 +1362,8 @@ _MARK_TO_MARKET_MERGE_KEYS = (
     "mark_to_market_account",
     "mark_to_market_by_model",
     "half_kelly_20pct_by_model",
+    "growth_1pct_by_model",
+    "growth_2pct_by_model",
     "mark_to_market_cycle_minutes",
     "n_markets_open",
     "n_markets_tracked",
@@ -2455,6 +2458,8 @@ async def edge_board():
             "mark_to_market_account": _compact_mark_to_market_account(live.get("mark_to_market_account")),
             "mark_to_market_by_model": _compact_mark_to_market_by_model(live.get("mark_to_market_by_model", [])),
             "half_kelly_20pct_by_model": _compact_mark_to_market_by_model(live.get("half_kelly_20pct_by_model", [])),
+            "growth_1pct_by_model": _compact_mark_to_market_by_model(live.get("growth_1pct_by_model", [])),
+            "growth_2pct_by_model": _compact_mark_to_market_by_model(live.get("growth_2pct_by_model", [])),
             "mark_to_market_cycle_minutes": live.get("mark_to_market_cycle_minutes"),
             "models_comparison": _compact_models_comparison(live.get("models_comparison", [])),
             "resolved_log": live.get("resolved_log", []),
@@ -3846,6 +3851,9 @@ class RadarResponse(BaseModel):
     primary_paper_pnl: Optional[Any] = None
     mark_to_market_account: Optional[Any] = None
     mark_to_market_by_model: List[Dict[str, Any]] = Field(default_factory=list)
+    half_kelly_20pct_by_model: List[Dict[str, Any]] = Field(default_factory=list)
+    growth_1pct_by_model: List[Dict[str, Any]] = Field(default_factory=list)
+    growth_2pct_by_model: List[Dict[str, Any]] = Field(default_factory=list)
     mark_to_market_cycle_minutes: Optional[int] = None
     lead_lag: Optional[Any] = None
     calibration: Optional[Any] = None
