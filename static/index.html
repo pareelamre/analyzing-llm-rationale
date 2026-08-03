@@ -6564,7 +6564,12 @@ function _mtmModelsForSizing(d, sizingMode) {
   const source = sizingMode === 'half_kelly_20pct'
     ? d.half_kelly_20pct_by_model
     : d.mark_to_market_by_model;
-  return (source || []).filter(m => m && (m.account || m.account_value != null));
+  return (source || []).filter(m => (
+    m
+    && m.model !== 'crowd-follow'
+    && m.model !== 'market-follow'
+    && (m.account || m.account_value != null)
+  ));
 }
 
 function _mtmCurvePoints(account) {

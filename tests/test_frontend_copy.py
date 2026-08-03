@@ -144,6 +144,8 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn('id="eb-mtm-header-title"', renderer)
         self.assertIn("data-mtm-sizing-mode=\"half_kelly_20pct\"", renderer)
         self.assertIn("half_kelly_20pct_by_model", index)
+        self.assertIn("m.model !== 'crowd-follow'", index)
+        self.assertIn("m.model !== 'market-follow'", index)
         self.assertIn("data-mtm-sizing-mode=\"growth_1pct\"", renderer)
         self.assertIn("data-mtm-sizing-mode=\"growth_2pct\"", renderer)
         self.assertNotIn("data-mtm-strategy=", renderer)
