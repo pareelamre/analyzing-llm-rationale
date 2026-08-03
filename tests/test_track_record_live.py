@@ -1461,6 +1461,22 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(account["max_concentration"], 0.05)
         self.assertEqual(account["market_shrinkage"], 0.5)
 
+    def test_half_kelly_20pct_keeps_collecting_and_historical_models_visible(self):
+        rows = [
+            self._resolved_row(
+                ident="retired-1", model_p=0.65, market_p=0.5,
+                outcome=1, day=1, model="retired-model",
+            ),
+        ]
+        accounts = trl.build_half_kelly_20pct_accounts(
+            rows, {}, default_model="active-model", tracked_models=["active-model"],
+        )
+        by_model = {account["model"]: account for account in accounts}
+        self.assertEqual(by_model["active-model"]["status"], "collecting_history")
+        self.assertEqual(by_model["active-model"]["n_trades"], 0)
+        self.assertEqual(by_model["retired-model"]["status"], "active")
+        self.assertEqual(by_model["retired-model"]["n_trades"], 1)
+
     def test_validated_kelly_skips_crowd_follow(self):
         rows = [self._resolved_row(ident="m1", model_p=0.7, market_p=0.5, outcome=1,
                                     day=1, model="crowd-follow")]

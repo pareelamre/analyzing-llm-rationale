@@ -1877,6 +1877,7 @@ def build_validated_kelly_accounts(
     max_drawdown: Optional[float] = None,
     require_validated: bool = True,
     follow_model_call: bool = False,
+    include_collecting_models: bool = False,
 ) -> List[Dict[str, Any]]:
     """Per-model deployable strategy: a real position ledger (one settle per
     market, per simulate_validated_kelly_account) sized by fractional Kelly on
@@ -1897,12 +1898,40 @@ def build_validated_kelly_accounts(
         by_model.setdefault(label, []).append(row)
 
     accounts: List[Dict[str, Any]] = []
-    for label in (tracked_models or list(by_model.keys())):
+    # Keep the configured roster visible, but also retain historical labels
+    # when a model has since been retired from the forecasting rotation.
+    labels = list(dict.fromkeys([*(tracked_models or []), *by_model.keys()]))
+    for label in labels:
         if label == "crowd-follow":
             continue
         model_rows = by_model.get(label) or []
         resolved_rows = [r for r in model_rows if r.get("resolved") and r.get("outcome") is not None]
         if not resolved_rows:
+            if include_collecting_models:
+                account = simulate_validated_kelly_account(
+                    [],
+                    latest_quotes=latest_quotes,
+                    kelly_fraction=kelly_fraction,
+                    max_concentration=max_concentration,
+                    market_shrinkage=market_shrinkage,
+                    max_drawdown=max_drawdown,
+                    require_validated=require_validated,
+                    follow_model_call=follow_model_call,
+                    fee_fn=_bet_fee,
+                )
+                accounts.append({
+                    "model": label,
+                    "account": account,
+                    "account_value": account.get("account_value"),
+                    "return": account.get("return"),
+                    "n_trades": 0,
+                    "n_settlements": 0,
+                    "n_skipped_not_validated": 0,
+                    "n_validated_buckets": 0,
+                    "sharpe": None,
+                    "max_drawdown": None,
+                    "status": "collecting_history",
+                })
             continue
         calibrated_rows = _attach_walk_forward_calibration([dict(r) for r in resolved_rows])
         sig_buckets = {
@@ -1955,6 +1984,7 @@ def build_validated_kelly_accounts(
             "n_validated_buckets": len(sig_buckets),
             "sharpe": risk["sharpe"],
             "max_drawdown": risk["max_drawdown"],
+            "status": "active",
         })
 
     positive = [a for a in accounts if (a.get("return") or 0.0) > 0]
@@ -1998,6 +2028,7 @@ def build_half_kelly_20pct_accounts(
         max_drawdown=0.30,
         require_validated=False,
         follow_model_call=True,
+        include_collecting_models=True,
     )
 
 
