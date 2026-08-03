@@ -578,7 +578,7 @@ class TrackRecordTickTests(unittest.TestCase):
             variant=track_record_tick.VARIANT,
             temperature=track_record_tick.TEMPERATURE,
             cycle_minutes=track_record_tick.CYCLE_INTERVAL_MINUTES,
-            tracked_models=["gpt-oss-120b", "council"],
+            tracked_models=track_record_tick.ALL_TRACK_MODELS,
         )
 
     def test_main_retries_snapshot_pass_when_first_pass_has_only_failures(self):

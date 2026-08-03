@@ -984,7 +984,9 @@ async def main() -> int:
             variant=VARIANT,
             temperature=TEMPERATURE,
             cycle_minutes=CYCLE_INTERVAL_MINUTES,
-            tracked_models=TRACK_MODELS,
+            # Forecasting can be sharded, but the public board must retain the
+            # complete roster across every shard and tick.
+            tracked_models=ALL_TRACK_MODELS,
         )
     after_primary = _model_progress(store, primary_model)
 

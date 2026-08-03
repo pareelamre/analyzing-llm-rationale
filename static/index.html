@@ -6658,7 +6658,7 @@ function _updateMtmViewInPlace() {
 
       return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
         <td><b>${i + 1}</b></td>
-        <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
+        <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span>${m.status === 'collecting_history' ? '<span style="display:block;color:var(--text-dim);font-size:11px">Collecting resolved history</span>' : ''}</td>
         <td>${_usd(startPrincipal)}</td>
         <td><b>${_usd(currentBankroll)}</b></td>
         <td style="color:${pnlColor};font-weight:600">${pnlStr}</td>
@@ -6802,7 +6802,7 @@ function _renderMtmPage(d) {
 
     return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
       <td><b>${i + 1}</b></td>
-      <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span></td>
+      <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span>${m.status === 'collecting_history' ? '<span style="display:block;color:var(--text-dim);font-size:11px">Collecting resolved history</span>' : ''}</td>
       <td>${_usd(startPrincipal)}</td>
       <td><b>${_usd(currentBankroll)}</b></td>
       <td style="color:${pnlColor};font-weight:600">${pnlStr}</td>
