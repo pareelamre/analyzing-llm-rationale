@@ -747,6 +747,8 @@ _LIVE_MARKET_KEYS = (
     "arbitrage_signals",
     "mark_to_market_account",
     "mark_to_market_by_model",
+    "growth_1pct_by_model",
+    "growth_2pct_by_model",
     "mark_to_market_cycle_minutes",
 )
 _RESOLVED_PUBLIC_OMIT_KEYS = {
@@ -755,6 +757,8 @@ _RESOLVED_PUBLIC_OMIT_KEYS = {
     "arbitrage_signals",
     "mark_to_market_account",
     "mark_to_market_by_model",
+    "growth_1pct_by_model",
+    "growth_2pct_by_model",
     "mark_to_market_cycle_minutes",
     "n_markets_open",
     "n_markets_tracked",
