@@ -6024,6 +6024,7 @@ function _ebModelCurves(models, minBets = 5, limit = 6) {
       const times = _ebCurveTimes(strategy);
       const label = _ebModelLabel(model);
       const curve = {
+        model,
         points,
         color: _ebModelColor(model, index),
         label,
@@ -6144,7 +6145,7 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
     const solo = len === 1
       ? `<circle cx="${toX(0, c.times && c.times[0], 1).toFixed(1)}" cy="${toY(c.points[0]).toFixed(1)}" r="2" fill="${c.color}"/>`
       : '';
-    return `<polyline class="eq-curve-path" data-label="${escAttr(c.label || '')}" points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>${solo}`;
+    return `<polyline class="eq-curve-path" data-model="${escAttr(c.model || '')}" data-label="${escAttr(c.label || '')}" points="${pts}" fill="none" stroke="${c.color}"${dashAttr} stroke-linejoin="round" stroke-linecap="round"/>${solo}`;
   }).join('');
   // Every head lands on the same right-hand edge, so with more than a handful
   // of models they'd stack into an unreadable pile. Resolve collisions by
@@ -6349,7 +6350,9 @@ function _bindMtmTableAndChartHovers(root = document) {
     const rows = tbody.querySelectorAll('tr.eb-row');
     rows.forEach(row => {
       const modelCell = row.querySelector('td:nth-child(2)');
-      const label = (row.getAttribute('data-model') || (modelCell ? modelCell.textContent : '')).trim();
+      const rawModel = (row.getAttribute('data-model') || '').trim();
+      const modelText = (modelCell ? modelCell.textContent : '').trim();
+      const label = rawModel || modelText;
       if (!label) return;
 
       row.addEventListener('mouseenter', () => {
@@ -6358,12 +6361,28 @@ function _bindMtmTableAndChartHovers(root = document) {
         svgs.forEach(svg => {
           const paths = svg.querySelectorAll('.eq-curve-path');
           paths.forEach(p => {
-            const pLabel = p.getAttribute('data-label') || '';
-            if (pLabel.toLowerCase().includes(label.toLowerCase()) || label.toLowerCase().includes(pLabel.toLowerCase())) {
-              p.setAttribute('stroke-width', '3.5');
+            const pModel = (p.getAttribute('data-model') || '').trim();
+            const pLabel = (p.getAttribute('data-label') || '').trim();
+
+            const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const nRawModel = norm(rawModel);
+            const nModelText = norm(modelText);
+            const nPModel = norm(pModel);
+            const nPLabel = norm(pLabel);
+
+            const isMatch = (nPModel && nRawModel && nPModel === nRawModel) ||
+              (nPLabel && nRawModel && (nPLabel.includes(nRawModel) || nRawModel.includes(nPLabel))) ||
+              (nPLabel && nModelText && (nPLabel.includes(nModelText) || nModelText.includes(nPLabel))) ||
+              (nPModel && nModelText && (nPModel.includes(nModelText) || nModelText.includes(nPModel)));
+
+            if (isMatch) {
+              p.setAttribute('stroke-width', '3.8');
               p.style.opacity = '1';
+              p.style.filter = 'drop-shadow(0 0 3px ' + (p.getAttribute('stroke') || '#06b6d4') + ')';
             } else {
-              p.style.opacity = '0.2';
+              p.setAttribute('stroke-width', p.getAttribute('stroke-dasharray') ? '1.2' : '1.4');
+              p.style.opacity = '0.18';
+              p.style.filter = '';
             }
           });
         });
@@ -6377,6 +6396,7 @@ function _bindMtmTableAndChartHovers(root = document) {
           paths.forEach(p => {
             p.setAttribute('stroke-width', p.getAttribute('stroke-dasharray') ? '1.4' : '1.8');
             p.style.opacity = '1';
+            p.style.filter = '';
           });
         });
       });
@@ -6756,6 +6776,7 @@ function _renderMtmPage(d) {
     const scaledVal = _getScaledMtmValue(rawVal, sizingMode);
     const ret = (scaledVal - startP) / startP;
     const curve = {
+      model: m.model,
       points: values,
       color: _mtmModelColor(m.model, i),
       label,
