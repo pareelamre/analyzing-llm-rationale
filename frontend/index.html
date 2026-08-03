@@ -5267,7 +5267,7 @@ async function refreshEdgeForecasts() {
         _mk(pnl.growth_2pct, '#f59e0b', 'Growth 2% ($200/mkt)'),
         _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% ($100/mkt)'),
         _mk(pnl.half_kelly_20pct, '#06b6d4', 'Risk-Capped Half-Kelly (5% / 30% DD)'),
-        _mk(pnl.smart, '#10b981', 'Smart ROI ($1 Flat)'),
+        _mk(pnl.smart, '#10b981', 'Smart ROI (1% bankroll)'),
         _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly (1% bankroll cap)'),
         _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
       ].filter(Boolean);
@@ -6881,7 +6881,7 @@ function renderEdgeBoard(d) {
       _mk(pnl.growth_2pct, '#f59e0b', 'Growth 2% ($200/mkt)'),
       _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% ($100/mkt)'),
       _mk(pnl.half_kelly_20pct, '#06b6d4', 'Risk-Capped Half-Kelly (5% / 30% DD)'),
-      _mk(pnl.smart, '#10b981', 'Smart ROI ($1 Flat)'),
+      _mk(pnl.smart, '#10b981', 'Smart ROI (1% bankroll)'),
       _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly (1% bankroll cap)'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
     ].filter(Boolean);
@@ -6892,7 +6892,7 @@ function renderEdgeBoard(d) {
       <div class="tr-stats">
         <div class="tr-stat" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);border-top-left-radius:19px" title="Aggressive Capital Growth mode: 2% of bankroll per market ($200 initial stake)."><div class="v" id="eb-pnl-growth2-v">${roi(pnl.growth_2pct)}</div><div class="k label ui-icon-label">${uiIcon('star')} Growth 2%</div>${_sub('2% Bankroll / $200')}</div>
         <div class="tr-stat" style="border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.05)" title="Balanced Capital Growth mode: 1% of bankroll per market ($100 initial stake)."><div class="v" id="eb-pnl-growth1-v">${roi(pnl.growth_1pct)}</div><div class="k label ui-icon-label">Growth 1%</div>${_sub('1% Bankroll / $100')}</div>
-        <div class="tr-stat" title="Calibrated Half-Kelly sizing plus data-driven filters."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">Smart ROI</div>${_sub('$1 Flat Preservation')}</div>
+        <div class="tr-stat" title="Filtered 1% bankroll sizing."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">Smart ROI</div>${_sub('1% Bankroll / $100')}</div>
         <div class="tr-stat" title="Smart ROI minus the crowd-follow baseline over the same resolved cohort."><div class="v" id="eb-pnl-edge-v">${smartVsCrowd != null ? _roiDeltaPct(smartVsCrowd) : _build(pnl.smart && pnl.smart.n_bets)}</div><div class="k label">vs crowd-follow</div>${_sub('excess return')}</div>
         <div class="tr-stat" title="Always betting the crowd's own direction as the zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">crowd-follow baseline</div>${_sub('agree with market')}</div>
       </div>

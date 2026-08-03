@@ -998,6 +998,13 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertEqual(strategy["n_bets"], 1)
         self.assertAlmostEqual(strategy["total_staked"], 100.0)
 
+    def test_smart_roi_uses_one_percent_bankroll_stakes(self):
+        resolved = [dict(self._res(0.8, 0.5, 1), platform="P", ident="m1")]
+        strategy = trl.paper_pnl(resolved, trl.edge_calibration(resolved))["smart"]
+        self.assertEqual(strategy["n_bets"], 1)
+        self.assertAlmostEqual(strategy["total_staked"], 100.0)
+        self.assertGreater(strategy["compound_bankroll"], trl._COMPOUND_STARTING_BANKROLL)
+
     def test_growth_curve_compounds_once_per_market_not_per_snapshot(self):
         # Regression guard: a backlog (e.g. a stalled publish pipeline catching
         # up) can resolve dozens of snapshots of the SAME still-open market at
