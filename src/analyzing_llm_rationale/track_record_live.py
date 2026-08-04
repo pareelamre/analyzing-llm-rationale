@@ -2034,14 +2034,16 @@ def build_half_kelly_20pct_accounts(
 
 def build_growth_accounts(
     rows: List[Dict[str, Any]],
+    latest_quotes: Dict[Any, Dict[str, Any]],
     *,
     default_model: str,
     tracked_models: Optional[List[str]] = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Build per-model 1% and 2% compounded accounts from resolved markets.
+    """Build live 1% and 2% fixed-fraction model accounts.
 
-    Growth P&L is booked once at resolution. Open markets intentionally do not
-    move these accounts because this strategy has no liquidation estimate.
+    Each model follows its executable calls into a real shadow ledger. Open
+    positions are bid-marked between entry and resolution, while realized P&L
+    is still booked exactly once when the market settles.
     """
     by_model: Dict[str, List[Dict[str, Any]]] = {}
     for row in rows:
@@ -2053,44 +2055,35 @@ def build_growth_accounts(
     for label in labels:
         if label == "crowd-follow":
             continue
-        resolved_rows = [
-            row for row in (by_model.get(label) or [])
-            if row.get("resolved") and row.get("outcome") is not None
-        ]
-        result = paper_pnl(resolved_rows, edge_calibration(resolved_rows)) if resolved_rows else None
-        for strategy_key, values in accounts.items():
-            strategy = (result or {}).get(strategy_key) or {}
-            curve = [
-                {"ts": ts, "account_value": value, "event_type": "settlement"}
-                for value, ts in zip(
-                    strategy.get("growth_curve") or [],
-                    strategy.get("growth_curve_ts") or [],
-                )
-            ]
-            account_value = strategy.get("compound_bankroll", _COMPOUND_STARTING_BANKROLL)
-            n_trades = int(strategy.get("n_bets") or 0)
-            account = {
-                "strategy": strategy_key,
-                "starting_cash": _COMPOUND_STARTING_BANKROLL,
-                "account_value": account_value,
-                "return": strategy.get("compound_return", 0.0),
-                "n_trades": n_trades,
-                "n_settlements": n_trades,
-                "n_open_positions": 0,
-                "n_illiquid_positions": 0,
-                "value_curve": curve,
-            }
-            risk = _sharpe_and_max_drawdown(curve)
+        model_rows = [dict(row) for row in (by_model.get(label) or [])]
+        for row in model_rows:
+            row["calibrated_model_probability"] = float(row.get("model_probability") or 0.5)
+            row["_edge_validated"] = True
+        for strategy_key, fraction in (("growth_1pct", 0.01), ("growth_2pct", 0.02)):
+            values = accounts[strategy_key]
+            account = simulate_validated_kelly_account(
+                model_rows,
+                latest_quotes=latest_quotes,
+                fixed_fraction=fraction,
+                strategy_name=f"live_{strategy_key}_ledger",
+                max_concentration=fraction,
+                require_validated=False,
+                follow_model_call=True,
+                min_price=0.000001,
+                max_price=0.999999,
+                fee_fn=_bet_fee,
+            )
+            risk = _sharpe_and_max_drawdown(account.get("value_curve") or [])
             values.append({
                 "model": label,
                 "account": account,
-                "account_value": account_value,
-                "return": account["return"],
-                "n_trades": n_trades,
-                "n_settlements": n_trades,
+                "account_value": account.get("account_value"),
+                "return": account.get("return"),
+                "n_trades": account.get("n_trades"),
+                "n_settlements": account.get("n_settlements"),
                 "sharpe": risk["sharpe"],
                 "max_drawdown": risk["max_drawdown"],
-                "status": "active" if resolved_rows else "collecting_history",
+                "status": "active" if model_rows else "collecting_history",
             })
 
     for values in accounts.values():
@@ -2867,6 +2860,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     )
     growth_by_model = build_growth_accounts(
         mark_to_market_rows_all,
+        latest_quotes,
         default_model=model,
         tracked_models=tracked_models,
     )

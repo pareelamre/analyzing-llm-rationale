@@ -1484,14 +1484,14 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
             for i in range(3)
         ]
         accounts = trl.build_growth_accounts(
-            rows, default_model="m", tracked_models=["m", "collecting"],
+            rows, {}, default_model="m", tracked_models=["m", "collecting"],
         )
         one_percent = {entry["model"]: entry for entry in accounts["growth_1pct"]}
         account = one_percent["m"]["account"]
         self.assertEqual(account["n_trades"], 3)
         self.assertEqual(account["n_open_positions"], 0)
         self.assertGreater(account["account_value"], 10_000)
-        self.assertEqual(len(account["value_curve"]), 3)
+        self.assertEqual(len(account["value_curve"]), 6)
         self.assertEqual(one_percent["collecting"]["status"], "collecting_history")
 
     def test_validated_kelly_skips_crowd_follow(self):

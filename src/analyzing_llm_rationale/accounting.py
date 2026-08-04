@@ -580,6 +580,8 @@ def simulate_validated_kelly_account(
     latest_quotes: Optional[Mapping[Any, MarketQuote | Mapping[str, Any]]] = None,
     starting_cash: float = 10_000.0,
     kelly_fraction: float = 0.5,
+    fixed_fraction: Optional[float] = None,
+    strategy_name: Optional[str] = None,
     max_concentration: float = 0.15,
     market_shrinkage: float = 0.0,
     max_drawdown: Optional[float] = None,
@@ -759,8 +761,11 @@ def simulate_validated_kelly_account(
                 p_side_model = model_p if side == YES else (1.0 - model_p)
                 shrinkage = max(0.0, min(float(market_shrinkage), 1.0))
                 p_win = p_side_model + shrinkage * (p_side_mkt - p_side_model)
-                raw_kelly = _kelly_fraction(p_win, p_side_mkt)
-                sized_fraction = max(0.0, min(kelly_fraction * raw_kelly, max_concentration))
+                if fixed_fraction is None:
+                    raw_kelly = _kelly_fraction(p_win, p_side_mkt)
+                    sized_fraction = max(0.0, min(kelly_fraction * raw_kelly, max_concentration))
+                else:
+                    sized_fraction = max(0.0, min(float(fixed_fraction), max_concentration))
                 if sized_fraction <= 1e-9 or account_value <= 0:
                     skipped_no_edge += 1
                     continue
@@ -834,7 +839,7 @@ def simulate_validated_kelly_account(
 
             final = account.snapshot(current_quotes)
             final.update({
-                "strategy": (
+                "strategy": strategy_name or (
                     "fade_kelly_ledger" if fade else
                     ("validated_kelly_ledger" if require_validated else "capped_half_kelly_ledger")
                 ),
@@ -842,6 +847,10 @@ def simulate_validated_kelly_account(
                 "return": round((final["account_value"] / starting_cash) - 1.0, 6)
                 if starting_cash else None,
                 "kelly_fraction": round(float(kelly_fraction), 6),
+                "fixed_fraction": (
+                    round(max(0.0, float(fixed_fraction)), 6)
+                    if fixed_fraction is not None else None
+                ),
                 "max_concentration": round(float(max_concentration), 6),
                 "market_shrinkage": round(max(0.0, min(float(market_shrinkage), 1.0)), 6),
                 "max_drawdown": drawdown_limit,

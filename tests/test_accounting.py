@@ -252,6 +252,19 @@ class ValidatedKellyAccountTests(unittest.TestCase):
         stake = account["trades"][0]["quantity"] * account["trades"][0]["price"]
         self.assertLessEqual(stake, 10_000.0 * 0.10 + 1e-6)
 
+    def test_fixed_fraction_sizing_ignores_model_edge_size(self):
+        rows = [
+            self._row(ident="m1", model_p=0.55, market_p=0.5, calibrated_p=0.55,
+                      outcome=1, ts=datetime(2026, 7, 1, tzinfo=timezone.utc))
+        ]
+        account = simulate_validated_kelly_account(
+            rows, starting_cash=10_000.0, fixed_fraction=0.01,
+            max_concentration=0.01, require_validated=False, follow_model_call=True,
+        )
+        stake = account["trades"][0]["quantity"] * account["trades"][0]["price"]
+        self.assertLessEqual(stake, 100.0 + 1e-6)
+        self.assertEqual(account["fixed_fraction"], 0.01)
+
     def test_drawdown_limit_reserves_cash_for_all_open_positions(self):
         base = datetime(2026, 7, 1, tzinfo=timezone.utc)
         rows = [
