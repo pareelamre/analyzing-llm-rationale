@@ -765,6 +765,41 @@ _RESOLVED_PUBLIC_OMIT_KEYS = {
     "n_markets_open",
     "n_markets_tracked",
 }
+_MTM_STRATEGY_KEYS = (
+    "mark_to_market_by_model",
+    "half_kelly_20pct_by_model",
+    "growth_1pct_by_model",
+    "growth_2pct_by_model",
+)
+_MTM_VALUE_CURVE_MAX_POINTS = 80
+
+
+def _sample_curve(curve: object, *, max_points: int = _MTM_VALUE_CURVE_MAX_POINTS) -> object:
+    if not isinstance(curve, list) or len(curve) <= max_points or max_points < 2:
+        return curve
+    last_index = len(curve) - 1
+    return [
+        curve[round(index * last_index / (max_points - 1))]
+        for index in range(max_points)
+    ]
+
+
+def _compact_mtm_strategy_rows(rows: object) -> object:
+    if not isinstance(rows, list):
+        return rows
+    compact_rows = []
+    for row in rows:
+        if not isinstance(row, dict):
+            compact_rows.append(row)
+            continue
+        compact_row = dict(row)
+        account = compact_row.get("account")
+        if isinstance(account, dict) and "value_curve" in account:
+            compact_account = dict(account)
+            compact_account["value_curve"] = _sample_curve(account.get("value_curve"))
+            compact_row["account"] = compact_account
+        compact_rows.append(compact_row)
+    return compact_rows
 
 
 def _mark_to_market_payload(aggregate: dict) -> dict:
@@ -775,6 +810,9 @@ def _mark_to_market_payload(aggregate: dict) -> dict:
     }
     payload["source"] = "mark_to_market_live"
     payload["generated_at"] = aggregate.get("generated_at")
+    for key in _MTM_STRATEGY_KEYS:
+        if key in payload:
+            payload[key] = _compact_mtm_strategy_rows(payload[key])
     return payload
 
 
