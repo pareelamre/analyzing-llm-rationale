@@ -2069,8 +2069,8 @@ def build_growth_accounts(
                 max_concentration=fraction,
                 require_validated=False,
                 follow_model_call=True,
-                min_price=0.000001,
-                max_price=0.999999,
+                min_price=0.2,
+                max_price=0.8,
                 fee_fn=_bet_fee,
             )
             risk = _sharpe_and_max_drawdown(account.get("value_curve") or [])
