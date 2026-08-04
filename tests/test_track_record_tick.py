@@ -211,6 +211,7 @@ class TrackRecordTickTests(unittest.TestCase):
             "n_markets_tracked": 8,
             "mark_to_market_account": {"account_value": 9999.5},
             "mark_to_market_by_model": [{"model": "council"}],
+            "half_kelly_20pct_by_model": [{"model": "council"}],
             "growth_1pct_by_model": [{"model": "council"}],
             "growth_2pct_by_model": [{"model": "council"}],
             "mark_to_market_cycle_minutes": 15,
@@ -223,10 +224,12 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertEqual(resolved["overall"]["accuracy"], 0.7)
         self.assertEqual(resolved["models_comparison"][0]["model"], "council")
         self.assertNotIn("mark_to_market_account", resolved)
+        self.assertNotIn("half_kelly_20pct_by_model", resolved)
         self.assertNotIn("growth_1pct_by_model", resolved)
         self.assertNotIn("edge_board", resolved)
         self.assertEqual(mtm["source"], "mark_to_market_live")
         self.assertEqual(mtm["mark_to_market_account"]["account_value"], 9999.5)
+        self.assertEqual(mtm["half_kelly_20pct_by_model"][0]["model"], "council")
         self.assertEqual(mtm["growth_1pct_by_model"][0]["model"], "council")
         self.assertEqual(mtm["growth_2pct_by_model"][0]["model"], "council")
         self.assertEqual(mtm["edge_board"][0]["question"], "Live edge?")
