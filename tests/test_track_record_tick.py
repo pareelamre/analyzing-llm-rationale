@@ -202,6 +202,10 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("git push --force-with-lease", helper)
 
     def test_public_payloads_split_mtm_from_resolved_quality(self):
+        long_curve = [
+            {"ts": f"2026-07-29T{i:02d}:00:00+00:00", "account_value": 10000 + i}
+            for i in range(120)
+        ]
         aggregate = {
             "generated_at": "2026-07-29T04:00:00+00:00",
             "overall": {"accuracy": 0.7},
@@ -210,8 +214,12 @@ class TrackRecordTickTests(unittest.TestCase):
             "n_markets_open": 3,
             "n_markets_tracked": 8,
             "mark_to_market_account": {"account_value": 9999.5},
-            "mark_to_market_by_model": [{"model": "council"}],
-            "half_kelly_20pct_by_model": [{"model": "council"}],
+            "mark_to_market_by_model": [
+                {"model": "council", "account": {"value_curve": long_curve}},
+            ],
+            "half_kelly_20pct_by_model": [
+                {"model": "council", "account": {"value_curve": long_curve}},
+            ],
             "growth_1pct_by_model": [{"model": "council"}],
             "growth_2pct_by_model": [{"model": "council"}],
             "mark_to_market_cycle_minutes": 15,
@@ -230,6 +238,10 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertEqual(mtm["source"], "mark_to_market_live")
         self.assertEqual(mtm["mark_to_market_account"]["account_value"], 9999.5)
         self.assertEqual(mtm["half_kelly_20pct_by_model"][0]["model"], "council")
+        half_curve = mtm["half_kelly_20pct_by_model"][0]["account"]["value_curve"]
+        self.assertEqual(len(half_curve), 80)
+        self.assertEqual(half_curve[0], long_curve[0])
+        self.assertEqual(half_curve[-1], long_curve[-1])
         self.assertEqual(mtm["growth_1pct_by_model"][0]["model"], "council")
         self.assertEqual(mtm["growth_2pct_by_model"][0]["model"], "council")
         self.assertEqual(mtm["edge_board"][0]["question"], "Live edge?")
