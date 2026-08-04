@@ -6512,6 +6512,26 @@ function _attachCrypto5mHover(container) {
   svg.addEventListener('mouseleave', hide);
 }
 
+function _discrepancyBadge(e) {
+  const status = e.discrepancy_status;
+  if (status === 'genuine_candidate') {
+    return ' <span class="eb-badge eb-sig" style="background:rgba(16,185,129,0.15);color:#059669;border:1px solid rgba(16,185,129,0.4);font-size:10px;padding:1px 5px;margin-left:4px" title="Verified genuine edge candidate: context complete, liquid venue, active crowd price">GENUINE EDGE</span>';
+  }
+  if (status === 'stale_forecast') {
+    return ' <span class="eb-badge" style="background:rgba(245,158,11,0.12);color:#d97706;border:1px solid rgba(245,158,11,0.3);font-size:10px;padding:1px 5px;margin-left:4px" title="Crowd price moved >=10% since forecast snapshot">STALE</span>';
+  }
+  if (status === 'context_incomplete') {
+    return ' <span class="eb-badge" style="background:rgba(239,68,68,0.12);color:#dc2626;border:1px solid rgba(239,68,68,0.3);font-size:10px;padding:1px 5px;margin-left:4px" title="Missing resolution criteria rules or news context">INCOMPLETE CONTEXT</span>';
+  }
+  if (status === 'thin_market') {
+    return ' <span class="eb-badge" style="background:rgba(148,163,184,0.12);color:#64748b;border:1px solid rgba(148,163,184,0.3);font-size:10px;padding:1px 5px;margin-left:4px" title="Thin venue liquidity (<$1,000)">THIN MARKET</span>';
+  }
+  if (status === 'extreme_forecast') {
+    return ' <span class="eb-badge" style="background:rgba(168,85,247,0.12);color:#9333ea;border:1px solid rgba(168,85,247,0.3);font-size:10px;padding:1px 5px;margin-left:4px" title="Extreme model probability (<=10% or >=90%)">EXTREME</span>';
+  }
+  return '';
+}
+
 function _renderBoardPage(board, page) {
   if (!board.length) return '<p class="text-sm text-gray-500">No open markets tracked yet.</p>';
   const pages = Math.ceil(board.length / _EB_PAGE_SIZE);
@@ -6536,7 +6556,7 @@ function _renderBoardPage(board, page) {
       : '';
     return `<tr class="eb-row" data-ident="${escAttr(e.ident||e.market_url||'')}" data-platform="${escAttr(e.platform||'')}" data-model-p="${e.model_probability||0}" data-lead-skill="${_leadSkillState(tr).key}" data-lead-n="${tr && tr.n != null ? escAttr(String(tr.n)) : ''}">` +
       `<td style="width:24px;text-align:center">${star}</td>` +
-      `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}</td>` +
+      `<td style="max-width:260px"><button type="button" class="eb-q-btn" onclick="_ebAskQuestion('${qIdent}')">${escHtml((e.question || '').slice(0, 90))}</button>${extLink}${_discrepancyBadge(e)}</td>` +
       `<td>${escHtml(e.platform || '')}</td><td class="eb-live-model">${pct(e.model_probability)}%</td>` +
       `<td class="eb-live-market">${pct(e.market_probability)}%</td>` +
       `<td class="eb-live-edge"><b style="color:${e.edge >= 0 ? '#0a7' : '#c33'}">${_sg(e.edge)}</b></td>` +
