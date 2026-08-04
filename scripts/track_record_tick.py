@@ -772,16 +772,63 @@ _MTM_STRATEGY_KEYS = (
     "growth_2pct_by_model",
 )
 _MTM_VALUE_CURVE_MAX_POINTS = 80
+_MTM_ACCOUNT_SUMMARY_KEYS = (
+    "account_value",
+    "cash",
+    "liquidation_value",
+    "return",
+    "realized_pnl",
+    "unrealized_pnl",
+    "n_open_positions",
+    "n_illiquid_positions",
+    "n_settlements",
+    "n_trades",
+    "notes",
+    "ts",
+    "value_method",
+)
+_MTM_VALUE_CURVE_POINT_KEYS = (
+    "ts",
+    "account_value",
+    "event_type",
+    "sized_fraction",
+    "trade_status",
+)
+
+
+def _compact_curve_point(point: object) -> object:
+    if not isinstance(point, dict):
+        return point
+    return {
+        key: point.get(key)
+        for key in _MTM_VALUE_CURVE_POINT_KEYS
+        if key in point
+    }
 
 
 def _sample_curve(curve: object, *, max_points: int = _MTM_VALUE_CURVE_MAX_POINTS) -> object:
-    if not isinstance(curve, list) or len(curve) <= max_points or max_points < 2:
+    if not isinstance(curve, list):
         return curve
+    if len(curve) <= max_points or max_points < 2:
+        return [_compact_curve_point(point) for point in curve]
     last_index = len(curve) - 1
     return [
-        curve[round(index * last_index / (max_points - 1))]
+        _compact_curve_point(curve[round(index * last_index / (max_points - 1))])
         for index in range(max_points)
     ]
+
+
+def _compact_mtm_account(account: object) -> object:
+    if not isinstance(account, dict):
+        return account
+    compact_account = {
+        key: account.get(key)
+        for key in _MTM_ACCOUNT_SUMMARY_KEYS
+        if key in account
+    }
+    if "value_curve" in account:
+        compact_account["value_curve"] = _sample_curve(account.get("value_curve"))
+    return compact_account
 
 
 def _compact_mtm_strategy_rows(rows: object) -> object:
@@ -794,10 +841,8 @@ def _compact_mtm_strategy_rows(rows: object) -> object:
             continue
         compact_row = dict(row)
         account = compact_row.get("account")
-        if isinstance(account, dict) and "value_curve" in account:
-            compact_account = dict(account)
-            compact_account["value_curve"] = _sample_curve(account.get("value_curve"))
-            compact_row["account"] = compact_account
+        if isinstance(account, dict):
+            compact_row["account"] = _compact_mtm_account(account)
         compact_rows.append(compact_row)
     return compact_rows
 
@@ -810,6 +855,10 @@ def _mark_to_market_payload(aggregate: dict) -> dict:
     }
     payload["source"] = "mark_to_market_live"
     payload["generated_at"] = aggregate.get("generated_at")
+    if "mark_to_market_account" in payload:
+        payload["mark_to_market_account"] = _compact_mtm_account(
+            payload["mark_to_market_account"]
+        )
     for key in _MTM_STRATEGY_KEYS:
         if key in payload:
             payload[key] = _compact_mtm_strategy_rows(payload[key])

@@ -203,7 +203,12 @@ class TrackRecordTickTests(unittest.TestCase):
 
     def test_public_payloads_split_mtm_from_resolved_quality(self):
         long_curve = [
-            {"ts": f"2026-07-29T{i:02d}:00:00+00:00", "account_value": 10000 + i}
+            {
+                "ts": f"2026-07-29T{i:02d}:00:00+00:00",
+                "account_value": 10000 + i,
+                "event_type": "trade",
+                "open_positions": [{"ident": "heavy", "quantity": i}],
+            }
             for i in range(120)
         ]
         aggregate = {
@@ -240,8 +245,9 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertEqual(mtm["half_kelly_20pct_by_model"][0]["model"], "council")
         half_curve = mtm["half_kelly_20pct_by_model"][0]["account"]["value_curve"]
         self.assertEqual(len(half_curve), 80)
-        self.assertEqual(half_curve[0], long_curve[0])
-        self.assertEqual(half_curve[-1], long_curve[-1])
+        self.assertEqual(half_curve[0]["ts"], long_curve[0]["ts"])
+        self.assertEqual(half_curve[-1]["ts"], long_curve[-1]["ts"])
+        self.assertNotIn("open_positions", half_curve[0])
         self.assertEqual(mtm["growth_1pct_by_model"][0]["model"], "council")
         self.assertEqual(mtm["growth_2pct_by_model"][0]["model"], "council")
         self.assertEqual(mtm["edge_board"][0]["question"], "Live edge?")
