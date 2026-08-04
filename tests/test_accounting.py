@@ -283,6 +283,34 @@ class ValidatedKellyAccountTests(unittest.TestCase):
         self.assertGreaterEqual(min(values), 7_000.0 - 1e-4)
         self.assertGreater(account["n_skipped_drawdown_limit"], 0)
 
+    def test_open_kelly_ledger_appends_live_mark_to_market_curve_point(self):
+        rows = [{
+            "platform": "Polymarket",
+            "ident": "open-market",
+            "snapshot_ts": datetime(2026, 7, 1, tzinfo=timezone.utc),
+            "model_probability": 0.70,
+            "calibrated_model_probability": 0.70,
+            "market_probability": 0.50,
+            "market_bid": 0.49,
+            "market_ask": 0.51,
+            "resolved": False,
+            "_edge_validated": True,
+        }]
+        account = simulate_validated_kelly_account(
+            rows,
+            latest_quotes={
+                ("Polymarket", "open-market"): {
+                    "market_bid": 0.59,
+                    "market_ask": 0.61,
+                },
+            },
+            starting_cash=10_000.0,
+        )
+
+        self.assertEqual(account["n_open_positions"], 1)
+        self.assertEqual(account["value_curve"][-1]["event_type"], "mark_to_market")
+        self.assertEqual(account["value_curve"][-1]["account_value"], account["account_value"])
+
     def test_skips_prices_outside_the_default_band(self):
         # market_p=0.05 -> ask for the model's YES-implied side sits near 0.06,
         # well outside the default [0.20, 0.80] band -- must be skipped even

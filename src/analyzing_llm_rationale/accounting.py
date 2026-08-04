@@ -530,6 +530,10 @@ def simulate_shadow_mark_to_market_account(
                 value_curve.append(snap)
 
             final = account.snapshot(current_quotes)
+            if final.get("open_positions"):
+                mtm_snap = dict(final)
+                mtm_snap["event_type"] = "mark_to_market"
+                value_curve.append(mtm_snap)
             final.update({
                 "strategy": "edge_shadow_ledger",
                 "starting_cash": round(starting_cash, 6),
@@ -838,6 +842,10 @@ def simulate_validated_kelly_account(
                 peak_account_value = max(peak_account_value, float(snap["account_value"]))
 
             final = account.snapshot(current_quotes)
+            if final.get("open_positions"):
+                mtm_snap = dict(final)
+                mtm_snap["event_type"] = "mark_to_market"
+                value_curve.append(mtm_snap)
             final.update({
                 "strategy": strategy_name or (
                     "fade_kelly_ledger" if fade else
