@@ -5248,8 +5248,8 @@ async function refreshEdgeForecasts() {
         ? _roiDeltaPct(a.roi - b.roi)
         : _build(a && a.n_bets);
       const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
-      _upd('eb-pnl-growth2-v', _roiVal(_ebStrategyDisplaySummary(d, pnl, 'growth_2pct')));
-      _upd('eb-pnl-growth1-v', _roiVal(_ebStrategyDisplaySummary(d, pnl, 'growth_1pct')));
+      _upd('eb-pnl-growth2-v', _roiVal(pnl.growth_2pct));
+      _upd('eb-pnl-growth1-v', _roiVal(pnl.growth_1pct));
       _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
       _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
       _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
@@ -6007,47 +6007,6 @@ function _ebStrategyGrowthCurve(s) {
     times: _ebCurveTimes(s),
   };
 }
-
-function _ebLiveSizingSummary(d, key) {
-  const rows = _mtmModelsForSizing(d || {}, key);
-  const settledRows = rows.filter(row => Number((row.account || {}).n_trades ?? row.n_trades ?? 0) > 0);
-  if (!settledRows.length) return null;
-  const returns = settledRows
-    .map(row => Number((row.account || {}).return ?? row.return))
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b);
-  if (!returns.length) return null;
-  const values = settledRows
-    .map(row => Number((row.account || {}).account_value ?? row.account_value))
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b);
-  const totalTrades = settledRows.reduce((sum, row) => (
-    sum + Number((row.account || {}).n_trades ?? row.n_trades ?? 0)
-  ), 0);
-  const mid = Math.floor(returns.length / 2);
-  const medianReturn = returns.length % 2
-    ? returns[mid]
-    : (returns[mid - 1] + returns[mid]) / 2;
-  const valueMid = Math.floor(values.length / 2);
-  const medianValue = values.length % 2
-    ? values[valueMid]
-    : (values[valueMid - 1] + values[valueMid]) / 2;
-  return {
-    roi: medianReturn,
-    n_bets: totalTrades,
-    n_agents: settledRows.length,
-    account_value: medianValue,
-    source: 'live_mtm',
-  };
-}
-
-function _ebStrategyDisplaySummary(d, pnl, key) {
-  if (key === 'growth_1pct' || key === 'growth_2pct') {
-    return _ebLiveSizingSummary(d, key) || pnl?.[key];
-  }
-  return pnl?.[key];
-}
-
 
 function _ebCurveTimes(s) {
   return (s?.equity_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t));
@@ -6947,8 +6906,6 @@ function renderEdgeBoard(d) {
     const nRes = d.n_snapshots_resolved || 0;
     const nMarkets = d.n_markets_resolved || nBet;
     const smartVsCrowd = (pnl.smart?.roi != null && pnl.crowd_baseline?.roi != null) ? pnl.smart.roi - pnl.crowd_baseline.roi : null;
-    const growth2Summary = _ebStrategyDisplaySummary(d, pnl, 'growth_2pct');
-    const growth1Summary = _ebStrategyDisplaySummary(d, pnl, 'growth_1pct');
     const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
     const _mk = (s, color, label, dash) => {
       const series = _ebStrategyGrowthCurve(s);
@@ -6972,8 +6929,8 @@ function renderEdgeBoard(d) {
       <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $${EB_STARTING_BANKROLL.toLocaleString()} starting bankroll across ${nBet} settled positions from ${nMarkets} unique resolved markets. ${nRes} saved forecasts provide the research history; they are not extra trades.</p>
       ${svgChart}
       <div class="tr-stats">
-        <div class="tr-stat" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);border-top-left-radius:19px" title="Aggressive live Growth mode: median account return across agents, using the same bounded MTM ledger as the chart."><div class="v" id="eb-pnl-growth2-v">${roi(growth2Summary)}</div><div class="k label ui-icon-label">${uiIcon('star')} Growth 2%</div>${_sub('live bounded MTM')}</div>
-        <div class="tr-stat" style="border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.05)" title="Balanced live Growth mode: median account return across agents, using the same bounded MTM ledger as the chart."><div class="v" id="eb-pnl-growth1-v">${roi(growth1Summary)}</div><div class="k label ui-icon-label">Growth 1%</div>${_sub('live bounded MTM')}</div>
+        <div class="tr-stat" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);border-top-left-radius:19px" title="Aggressive Capital Growth mode: 2% of bankroll per settled market in the pooled resolved simulation."><div class="v" id="eb-pnl-growth2-v">${roi(pnl.growth_2pct)}</div><div class="k label ui-icon-label">${uiIcon('star')} Growth 2%</div>${_sub('2% Bankroll / $200')}</div>
+        <div class="tr-stat" style="border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.05)" title="Balanced Capital Growth mode: 1% of bankroll per settled market in the pooled resolved simulation."><div class="v" id="eb-pnl-growth1-v">${roi(pnl.growth_1pct)}</div><div class="k label ui-icon-label">Growth 1%</div>${_sub('1% Bankroll / $100')}</div>
         <div class="tr-stat" title="Filtered 1% bankroll sizing."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">Smart ROI</div>${_sub('1% Bankroll / $100')}</div>
         <div class="tr-stat" title="Smart ROI minus the crowd-follow baseline over the same resolved cohort."><div class="v" id="eb-pnl-edge-v">${smartVsCrowd != null ? _roiDeltaPct(smartVsCrowd) : _build(pnl.smart && pnl.smart.n_bets)}</div><div class="k label">vs crowd-follow</div>${_sub('excess return')}</div>
         <div class="tr-stat" title="Always betting the crowd's own direction as the zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">crowd-follow baseline</div>${_sub('agree with market')}</div>
