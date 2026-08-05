@@ -92,13 +92,16 @@ class TrackRecordTickTests(unittest.TestCase):
             "gemma-4-31b-it",
             "minimax-m3",
             "kimi-k2.7-code",
+            "kimi-k2.5",
+            "kimi-k2.6",
+            "llama-4-scout-17b-16e-instruct",
+            "qwen3-vl-8b-instruct",
             "qwen3-coder-30b-a3b-instruct",
             "glm-5.2-fp8",
+            "deepseek-v3",
             "crowd-follow",
         ):
             self.assertIn(model, track_record_tick.TRACK_MODELS)
-        self.assertNotIn("deepseek-v3", track_record_tick.TRACK_MODELS)
-        self.assertNotIn("kimi-k2.6", track_record_tick.TRACK_MODELS)
 
     def test_model_sharding_rotates_models_and_keeps_always_models(self):
         models = [

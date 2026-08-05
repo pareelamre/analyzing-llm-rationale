@@ -1455,7 +1455,7 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
             rows, {}, default_model="m", tracked_models=["m"],
         )
         account = accounts[0]["account"]
-        self.assertEqual(account["strategy"], "capped_half_kelly_ledger")
+        self.assertEqual(account["strategy"], "risk_capped_quarter_kelly_ledger")
         self.assertEqual(account["n_trades"], 3)
         self.assertEqual(account["kelly_fraction"], 0.25)
         self.assertEqual(account["max_concentration"], 0.05)
