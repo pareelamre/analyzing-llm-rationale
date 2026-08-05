@@ -1053,6 +1053,14 @@
     .eb-view-tab { border: 0; border-radius: 5px; background: transparent; color: var(--text-dim); cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 6px 12px; }
     .eb-view-tab.active { background: var(--ink); color: #fff; }
     .eb-view-tab:not(.active):hover { background: var(--paper); color: var(--text); }
+    .eb-mtm-heading-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: start; margin-top: 20px; margin-bottom: 12px; }
+    .eb-mtm-title { margin: 0; min-height: 2.9em; display: flex; align-items: flex-end; }
+    .eb-view-tabs.eb-sizing-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; max-width: 500px; margin: 0; }
+    .eb-sizing-tabs .eb-view-tab { width: 100%; min-width: 0; padding-left: 8px; padding-right: 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media (min-width: 760px) {
+      .eb-mtm-heading-row { grid-template-columns: minmax(0, 1fr) minmax(420px, 500px); align-items: center; }
+      .eb-mtm-title { min-height: 1.45em; align-items: center; }
+    }
     .eb-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; justify-content: center; }
     .eb-page-btn { padding: 5px 16px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 12.5px; cursor: pointer; color: var(--text-dim); transition: background .15s; }
     .eb-page-btn:hover:not(:disabled) { background: var(--paper); color: var(--text); }
@@ -6608,7 +6616,7 @@ function _updateMtmViewInPlace() {
   if (!mtmContainer) return false;
 
   const sizingLabels = {
-    'half_kelly_20pct': 'Quarter-Kelly (5% Position Cap)',
+    'half_kelly_20pct': 'Quarter-Kelly 5% Cap',
     'growth_1pct': 'Edge Kelly 5% Cap',
     'growth_2pct': 'Edge Kelly 8% Cap',
   };
@@ -6831,16 +6839,16 @@ function _renderMtmPage(d) {
   }).join('');
 
   const sizingLabels = {
-    'half_kelly_20pct': 'Quarter-Kelly (5% Position Cap)',
+    'half_kelly_20pct': 'Quarter-Kelly 5% Cap',
     'growth_1pct': 'Edge Kelly 5% Cap',
     'growth_2pct': 'Edge Kelly 8% Cap',
   };
   const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.half_kelly_20pct;
 
   const sizingButtonsHtml = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;margin-bottom:12px;flex-wrap:wrap;gap:10px">
-      <h4 id="eb-mtm-header-title" class="eb-h" style="margin:0">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
-      <div class="eb-view-tabs" style="margin:0" role="tablist" aria-label="Position sizing modes">
+    <div class="eb-mtm-heading-row">
+      <h4 id="eb-mtm-header-title" class="eb-h eb-mtm-title">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
+      <div class="eb-view-tabs eb-sizing-tabs" role="tablist" aria-label="Position sizing modes">
         <button type="button" class="eb-view-tab ${sizingMode === 'half_kelly_20pct' ? 'active' : ''}" data-mtm-sizing-mode="half_kelly_20pct">Quarter-Kelly (5% cap)</button>
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Edge Kelly 5%</button>
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Edge Kelly 8%</button>
