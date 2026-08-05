@@ -1477,7 +1477,7 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(by_model["retired-model"]["status"], "active")
         self.assertEqual(by_model["retired-model"]["n_trades"], 1)
 
-    def test_growth_accounts_compound_at_resolution_per_model(self):
+    def test_growth_accounts_are_edge_kelly_ledgers_per_model(self):
         rows = [
             self._resolved_row(ident=f"m{i}", model_p=0.65, market_p=0.5,
                                outcome=1, day=i + 1)
@@ -1490,6 +1490,10 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         account = one_percent["m"]["account"]
         self.assertEqual(account["n_trades"], 3)
         self.assertEqual(account["n_open_positions"], 0)
+        self.assertEqual(account["strategy"], "live_edge_kelly_5pct_ewma_ledger")
+        self.assertEqual(account["kelly_fraction"], 0.5)
+        self.assertEqual(account["max_concentration"], 0.05)
+        self.assertEqual(account["min_edge"], 0.1)
         self.assertGreater(account["account_value"], 10_000)
         self.assertEqual(len(account["value_curve"]), 6)
         self.assertEqual(one_percent["collecting"]["status"], "collecting_history")
@@ -1517,7 +1521,38 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         one_percent = {entry["model"]: entry for entry in accounts["growth_1pct"]}
         account = one_percent["m"]["account"]
         self.assertEqual(account["n_trades"], 1)
-        self.assertLess(account["account_value"], 10_200)
+        self.assertEqual(account["n_skipped_unexecutable"], 1)
+
+    def test_growth_accounts_require_ewma_trend_alignment(self):
+        adverse_rows = [
+            {
+                "platform": "P", "ident": "trend", "model": "m",
+                "model_probability": 0.45, "market_probability": 0.45,
+                "market_bid": 0.43, "market_ask": 0.47,
+                "resolved": False, "snapshot_ts": "2026-01-01T00:00:00+00:00",
+            },
+            {
+                "platform": "P", "ident": "trend", "model": "m",
+                "model_probability": 0.55, "market_probability": 0.40,
+                "market_bid": 0.38, "market_ask": 0.42,
+                "resolved": False, "snapshot_ts": "2026-01-02T00:00:00+00:00",
+            },
+        ]
+        favorable_rows = [
+            dict(adverse_rows[0], ident="trend-up", model_probability=0.35,
+                 market_probability=0.35, market_bid=0.33, market_ask=0.37),
+            dict(adverse_rows[1], ident="trend-up", market_probability=0.40, market_bid=0.38, market_ask=0.42),
+        ]
+
+        adverse = trl.build_growth_accounts(
+            adverse_rows, {}, default_model="m", tracked_models=["m"],
+        )["growth_1pct"][0]["account"]
+        favorable = trl.build_growth_accounts(
+            favorable_rows, {}, default_model="m", tracked_models=["m"],
+        )["growth_1pct"][0]["account"]
+
+        self.assertEqual(adverse["n_trades"], 0)
+        self.assertEqual(favorable["n_trades"], 1)
 
     def test_validated_kelly_skips_crowd_follow(self):
         rows = [self._resolved_row(ident="m1", model_p=0.7, market_p=0.5, outcome=1,
