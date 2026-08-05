@@ -1919,7 +1919,7 @@
       .btn-signin { padding: 7px 13px; }
     }
   </style>
-  <script type="module" src="/src/page-context.ts"></script>
+  <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
 
@@ -5264,8 +5264,8 @@ async function refreshEdgeForecasts() {
         return curve;
       };
       const strategyCurves = [
-        _mk(pnl.growth_2pct, '#f59e0b', 'Growth 2% ($200/mkt)'),
-        _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% ($100/mkt)'),
+        _mk(pnl.growth_2pct, '#f59e0b', 'Legacy Growth 2% ($200/mkt)'),
+        _mk(pnl.growth_1pct, '#3b82f6', 'Legacy Growth 1% ($100/mkt)'),
         _mk(pnl.half_kelly_20pct, '#06b6d4', 'Risk-Capped Half-Kelly (5% / 30% DD)'),
         _mk(pnl.smart, '#10b981', 'Smart ROI (1% bankroll)'),
         _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly (1% bankroll cap)'),
@@ -6609,8 +6609,8 @@ function _updateMtmViewInPlace() {
 
   const sizingLabels = {
     'half_kelly_20pct': 'Half-Kelly (5% Position Cap)',
-    'growth_1pct': 'Growth 1% Mode (compounded)',
-    'growth_2pct': 'Growth 2% Mode (compounded)',
+    'growth_1pct': 'Edge Kelly 5% Cap',
+    'growth_2pct': 'Edge Kelly 8% Cap',
   };
   const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.half_kelly_20pct;
 
@@ -6764,8 +6764,8 @@ function _renderMtmPage(d) {
   const activeStrat = _activeMtmStrat || 'half_kelly_20pct';
 
   const cardConfig = [
-    { key: 'growth_2pct', label: 'Growth 2% Mode', sub: '2% Bankroll / $200', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.4)' },
-    { key: 'growth_1pct', label: 'Growth 1% Mode', sub: '1% Bankroll / $100', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.4)' },
+    { key: 'growth_2pct', label: 'Edge Kelly 8% Cap', sub: '50% Kelly / 10pp EWMA', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.4)' },
+    { key: 'growth_1pct', label: 'Edge Kelly 5% Cap', sub: '50% Kelly / 10pp EWMA', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.4)' },
     { key: 'half_kelly_20pct', label: 'Half-Kelly Mode', sub: '5% cap / 30% drawdown floor', color: '#06b6d4', bg: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.4)' },
   ];
 
@@ -6832,8 +6832,8 @@ function _renderMtmPage(d) {
 
   const sizingLabels = {
     'half_kelly_20pct': 'Half-Kelly (5% Position Cap)',
-    'growth_1pct': 'Growth 1% Mode (compounded)',
-    'growth_2pct': 'Growth 2% Mode (compounded)',
+    'growth_1pct': 'Edge Kelly 5% Cap',
+    'growth_2pct': 'Edge Kelly 8% Cap',
   };
   const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.half_kelly_20pct;
 
@@ -6842,8 +6842,8 @@ function _renderMtmPage(d) {
       <h4 id="eb-mtm-header-title" class="eb-h" style="margin:0">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
       <div class="eb-view-tabs" style="margin:0" role="tablist" aria-label="Position sizing modes">
         <button type="button" class="eb-view-tab ${sizingMode === 'half_kelly_20pct' ? 'active' : ''}" data-mtm-sizing-mode="half_kelly_20pct">Half-Kelly (5% cap)</button>
-        <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Growth 1% (compounded)</button>
-        <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Growth 2% (compounded)</button>
+        <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Edge Kelly 5%</button>
+        <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Edge Kelly 8%</button>
       </div>
     </div>`;
 
@@ -6917,8 +6917,8 @@ function renderEdgeBoard(d) {
       return curve;
     };
     const strategyCurves = [
-      _mk(pnl.growth_2pct, '#f59e0b', 'Growth 2% ($200/mkt)'),
-      _mk(pnl.growth_1pct, '#3b82f6', 'Growth 1% ($100/mkt)'),
+      _mk(pnl.growth_2pct, '#f59e0b', 'Legacy Growth 2% ($200/mkt)'),
+      _mk(pnl.growth_1pct, '#3b82f6', 'Legacy Growth 1% ($100/mkt)'),
       _mk(pnl.half_kelly_20pct, '#06b6d4', 'Risk-Capped Half-Kelly (5% / 30% DD)'),
       _mk(pnl.smart, '#10b981', 'Smart ROI (1% bankroll)'),
       _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly (1% bankroll cap)'),
@@ -6929,8 +6929,8 @@ function renderEdgeBoard(d) {
       <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $${EB_STARTING_BANKROLL.toLocaleString()} starting bankroll across ${nBet} settled positions from ${nMarkets} unique resolved markets. ${nRes} saved forecasts provide the research history; they are not extra trades.</p>
       ${svgChart}
       <div class="tr-stats">
-        <div class="tr-stat" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);border-top-left-radius:19px" title="Aggressive Capital Growth mode: 2% of bankroll per settled market in the pooled resolved simulation."><div class="v" id="eb-pnl-growth2-v">${roi(pnl.growth_2pct)}</div><div class="k label ui-icon-label">${uiIcon('star')} Growth 2%</div>${_sub('2% Bankroll / $200')}</div>
-        <div class="tr-stat" style="border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.05)" title="Balanced Capital Growth mode: 1% of bankroll per settled market in the pooled resolved simulation."><div class="v" id="eb-pnl-growth1-v">${roi(pnl.growth_1pct)}</div><div class="k label ui-icon-label">Growth 1%</div>${_sub('1% Bankroll / $100')}</div>
+        <div class="tr-stat" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);border-top-left-radius:19px" title="Legacy Growth benchmark: 2% of bankroll per settled market in the pooled resolved simulation."><div class="v" id="eb-pnl-growth2-v">${roi(pnl.growth_2pct)}</div><div class="k label ui-icon-label">${uiIcon('star')} Legacy Growth 2%</div>${_sub('2% Bankroll / $200')}</div>
+        <div class="tr-stat" style="border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.05)" title="Legacy Growth benchmark: 1% of bankroll per settled market in the pooled resolved simulation."><div class="v" id="eb-pnl-growth1-v">${roi(pnl.growth_1pct)}</div><div class="k label ui-icon-label">Legacy Growth 1%</div>${_sub('1% Bankroll / $100')}</div>
         <div class="tr-stat" title="Filtered 1% bankroll sizing."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">Smart ROI</div>${_sub('1% Bankroll / $100')}</div>
         <div class="tr-stat" title="Smart ROI minus the crowd-follow baseline over the same resolved cohort."><div class="v" id="eb-pnl-edge-v">${smartVsCrowd != null ? _roiDeltaPct(smartVsCrowd) : _build(pnl.smart && pnl.smart.n_bets)}</div><div class="k label">vs crowd-follow</div>${_sub('excess return')}</div>
         <div class="tr-stat" title="Always betting the crowd's own direction as the zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">crowd-follow baseline</div>${_sub('agree with market')}</div>

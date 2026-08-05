@@ -2032,6 +2032,62 @@ def build_half_kelly_20pct_accounts(
     )
 
 
+def _probability_value(value: Any) -> Optional[float]:
+    try:
+        probability = float(value)
+    except (TypeError, ValueError):
+        return None
+    if probability < 0.0 or probability > 1.0:
+        return None
+    return probability
+
+
+def _edge_kelly_ewma_filtered_rows(
+    rows: List[Dict[str, Any]],
+    *,
+    min_edge: float = 0.10,
+    ewma_alpha: float = 0.45,
+) -> List[Dict[str, Any]]:
+    """Return rows whose market trend agrees with the model-vs-market edge.
+
+    The EWMA is computed from the point-in-time market probabilities available
+    for each market in the aggregate rows. A rising market trend must support a
+    YES edge, while a falling market trend must support a NO edge. Markets with
+    no prior price movement are allowed through with a neutral trend.
+    """
+    grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    for row in rows:
+        platform = str(row.get("platform") or "")
+        ident = str(row.get("ident") or "")
+        grouped.setdefault((platform, ident), []).append(row)
+
+    allowed_row_ids: set[int] = set()
+    alpha = max(0.0, min(float(ewma_alpha), 1.0))
+    for market_rows in grouped.values():
+        previous_market_p: Optional[float] = None
+        ewma_delta = 0.0
+        has_trend = False
+        ordered_rows = sorted(market_rows, key=lambda r: str(r.get("snapshot_ts") or r.get("ts") or ""))
+        for row in ordered_rows:
+            model_p = _probability_value(row.get("model_probability"))
+            market_p = _probability_value(row.get("market_probability"))
+            if market_p is not None and previous_market_p is not None:
+                delta = market_p - previous_market_p
+                ewma_delta = (alpha * delta) + ((1.0 - alpha) * ewma_delta)
+                has_trend = True
+            if market_p is not None:
+                previous_market_p = market_p
+            if model_p is None or market_p is None:
+                continue
+            edge = model_p - market_p
+            if abs(edge) < min_edge or abs(edge) <= 1e-12:
+                continue
+            if has_trend and ((edge > 0 and ewma_delta < 0.0) or (edge < 0 and ewma_delta > 0.0)):
+                continue
+            allowed_row_ids.add(id(row))
+    return [row for row in rows if id(row) in allowed_row_ids]
+
+
 def build_growth_accounts(
     rows: List[Dict[str, Any]],
     latest_quotes: Dict[Any, Dict[str, Any]],
@@ -2039,11 +2095,13 @@ def build_growth_accounts(
     default_model: str,
     tracked_models: Optional[List[str]] = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Build live 1% and 2% fixed-fraction model accounts.
+    """Build live EWMA-filtered edge-Kelly model accounts.
 
-    Each model follows its executable calls into a real shadow ledger. Open
-    positions are bid-marked between entry and resolution, while realized P&L
-    is still booked exactly once when the market settles.
+    The public payload keeps the legacy ``growth_1pct`` and ``growth_2pct``
+    keys so existing clients keep working, but those slots now represent the
+    two selected candidates:
+    - growth_1pct: 50% Kelly, 5% cap, 10pp edge, EWMA trend gate.
+    - growth_2pct: 50% Kelly, 8% cap, 10pp edge, EWMA trend gate.
     """
     by_model: Dict[str, List[Dict[str, Any]]] = {}
     for row in rows:
@@ -2051,6 +2109,16 @@ def build_growth_accounts(
         by_model.setdefault(label, []).append(row)
 
     labels = list(dict.fromkeys([*(tracked_models or []), *by_model.keys()]))
+    strategies = {
+        "growth_1pct": {
+            "strategy_name": "live_edge_kelly_5pct_ewma_ledger",
+            "max_concentration": 0.05,
+        },
+        "growth_2pct": {
+            "strategy_name": "live_edge_kelly_8pct_ewma_ledger",
+            "max_concentration": 0.08,
+        },
+    }
     accounts = {"growth_1pct": [], "growth_2pct": []}
     for label in labels:
         if label == "crowd-follow":
@@ -2059,16 +2127,20 @@ def build_growth_accounts(
         for row in model_rows:
             row["calibrated_model_probability"] = float(row.get("model_probability") or 0.5)
             row["_edge_validated"] = True
-        for strategy_key, fraction in (("growth_1pct", 0.01), ("growth_2pct", 0.02)):
+        executable_rows = _edge_kelly_ewma_filtered_rows(model_rows, min_edge=0.10)
+        for strategy_key, config in strategies.items():
             values = accounts[strategy_key]
             account = simulate_validated_kelly_account(
-                model_rows,
+                executable_rows,
                 latest_quotes=latest_quotes,
-                fixed_fraction=fraction,
-                strategy_name=f"live_{strategy_key}_ledger",
-                max_concentration=fraction,
+                kelly_fraction=0.50,
+                strategy_name=str(config["strategy_name"]),
+                max_concentration=float(config["max_concentration"]),
+                market_shrinkage=0.25,
+                max_drawdown=0.30,
                 require_validated=False,
-                follow_model_call=True,
+                follow_model_call=False,
+                min_edge=0.10,
                 min_price=0.2,
                 max_price=0.8,
                 fee_fn=_bet_fee,
