@@ -571,8 +571,8 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("scads-alias-code", scads_models)
         self.assertIn("scads-alias-reasoning", scads_models)
         self.assertIn("kimi-k2.7-code", scads_track_model_labels(repo_root / "configs" / "models.yaml"))
-        self.assertNotIn("deepseek-v3", scads_models)
-        self.assertFalse(models["deepseek-v3"].forecasting_enabled)
+        self.assertIn("deepseek-v3", scads_models)
+        self.assertTrue(all(cfg.forecasting_enabled for cfg in models.values()))
         self.assertNotIn("gpt-5", scads_models)
         self.assertEqual(
             models["scads-alias-code"].fallback_model_chain,

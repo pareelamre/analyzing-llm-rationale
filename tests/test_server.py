@@ -1097,7 +1097,8 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(server_module._SCADS_MODEL_ALLOWLIST, expected)
         self.assertIn("scads-alias-reasoning", server_module._SCADS_MODEL_ALLOWLIST)
         self.assertIn("kimi-k2.7-code", server_module._SCADS_MODEL_ALLOWLIST)
-        self.assertNotIn("deepseek-v3", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertIn("deepseek-v3", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertIn("kimi-k2.6", server_module._SCADS_MODEL_ALLOWLIST)
 
     def test_analytics_event_summary_counts_events(self):
         response = self.client.post(

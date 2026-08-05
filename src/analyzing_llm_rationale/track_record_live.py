@@ -1878,6 +1878,7 @@ def build_validated_kelly_accounts(
     require_validated: bool = True,
     follow_model_call: bool = False,
     include_collecting_models: bool = False,
+    strategy_name: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Per-model deployable strategy: a real position ledger (one settle per
     market, per simulate_validated_kelly_account) sized by fractional Kelly on
@@ -1915,6 +1916,7 @@ def build_validated_kelly_accounts(
                     max_concentration=max_concentration,
                     market_shrinkage=market_shrinkage,
                     max_drawdown=max_drawdown,
+                    strategy_name=strategy_name,
                     require_validated=require_validated,
                     follow_model_call=follow_model_call,
                     fee_fn=_bet_fee,
@@ -1968,6 +1970,7 @@ def build_validated_kelly_accounts(
             max_concentration=max_concentration,
             market_shrinkage=market_shrinkage,
             max_drawdown=max_drawdown,
+            strategy_name=strategy_name,
             require_validated=require_validated,
             follow_model_call=follow_model_call,
             fee_fn=_bet_fee,
@@ -2007,11 +2010,11 @@ def build_half_kelly_20pct_accounts(
     default_model: str,
     tracked_models: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Replay every executable model call with walk-forward half-Kelly sizing.
+    """Replay every executable model call with walk-forward quarter-Kelly sizing.
 
     This is the MTM counterpart to the historical growth views: it starts from
     the same June forecast history, books each market once at settlement, and
-    caps every position at 5% of the current account, shrinks model
+    sizes at 25% Kelly, caps every position at 5% of the current account, shrinks model
     probabilities 50% toward market pricing, and reserves a 30% maximum
     high-watermark loss budget. Unlike the guarded
     deployable strategy, it does not require a significance-approved edge
@@ -2023,6 +2026,7 @@ def build_half_kelly_20pct_accounts(
         default_model=default_model,
         tracked_models=tracked_models,
         kelly_fraction=0.25,
+        strategy_name="risk_capped_quarter_kelly_ledger",
         max_concentration=0.05,
         market_shrinkage=0.5,
         max_drawdown=0.30,
