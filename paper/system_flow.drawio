@@ -1,98 +1,86 @@
-<mxfile host="65bd71144e">
-  <diagram id="system-flow-v2" name="Page-1">
+<mxfile host="app.diagrams.net" modified="2026-08-04T03:20:00.000Z" agent="Codex" version="31.1.5" type="device">
+  <diagram id="representative-prompt-comparison" name="Representative Prompt Comparison">
     <mxGraphModel dx="1427" dy="820" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1500" pageHeight="820" math="0" shadow="0">
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
-        <mxCell id="title" value="LLM rationale forecasting system" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=30;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="380" y="18" width="740" height="42" as="geometry"/>
+        <mxCell id="page_background" value="" style="whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=none;" parent="1" vertex="1">
+          <mxGeometry x="0" y="0" width="1500" height="820" as="geometry"/>
         </mxCell>
-        <mxCell id="subtitle" value="A config-driven runner varies prompt rationale, model, and temperature while holding the forecasting record fixed." style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=17;fontColor=#555555;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="260" y="62" width="980" height="28" as="geometry"/>
+
+        <mxCell id="title" value="A representative rationale comparison" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=30;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="250" y="22" width="1000" height="42" as="geometry"/>
         </mxCell>
-        <mxCell id="generation_band" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7f9fb;strokeColor=#c7d0d9;strokeWidth=1.2;arcSize=4;" parent="1" vertex="1">
-          <mxGeometry x="22" y="114" width="1456" height="286" as="geometry"/>
+        <mxCell id="subtitle" value="The same forecasting question and evidence are passed through different rationale parameters" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=17;fontColor=#555555;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="280" y="66" width="940" height="28" as="geometry"/>
         </mxCell>
-        <mxCell id="generation_label" value="(a) Forecast generation and orchestration" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=23;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="42" y="128" width="520" height="34" as="geometry"/>
+
+        <mxCell id="case_label" value="1  Concrete forecasting case" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="240" y="124" width="370" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="spec_box" value="Experiment specification&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;dataset + configs + prompt variants&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=21;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="54" y="208" width="210" height="92" as="geometry"/>
+        <mxCell id="question" value="&lt;b&gt;Will China mass-produce humanoid robots by the end of 2025?&lt;/b&gt;&lt;br&gt;&lt;br&gt;Resolves Yes if a China-based company produces &amp;gt;1,000 identical units by 31 Dec 2025." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f7fa;strokeColor=#20262e;strokeWidth=1.5;fontSize=18;fontColor=#111111;align=left;verticalAlign=middle;spacing=14;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="240" y="162" width="370" height="156" as="geometry"/>
         </mxCell>
-        <mxCell id="spec_note" value="fixed question, metadata, evidence summaries, FRS fields" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontColor=#666666;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="42" y="310" width="234" height="38" as="geometry"/>
+        <mxCell id="evidence" value="&lt;b&gt;Retrieved evidence&lt;/b&gt;&lt;br&gt;Robot Report, Sep. 2025: Chinese manufacturers target &amp;gt;1,000 units by the end of 2025.&lt;br&gt;&lt;br&gt;Other reports describe plans without confirming the threshold." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f3ee;strokeColor=#2f6f58;strokeWidth=1.4;fontSize=17;fontColor=#111111;align=left;verticalAlign=middle;spacing=12;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="240" y="340" width="370" height="174" as="geometry"/>
         </mxCell>
-        <mxCell id="cli_box" value="CLI resolves RunConfig&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;variant, model, temperature, shard, paths&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7d6;strokeColor=#111111;strokeWidth=2;fontSize=21;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="342" y="208" width="236" height="92" as="geometry"/>
+
+        <mxCell id="prompt_label" value="2  Rationale parameters" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="690" y="124" width="410" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="provider_box" value="Provider abstraction&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;local Qwen or OpenAI-compatible endpoint&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=21;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="656" y="208" width="254" height="92" as="geometry"/>
+        <mxCell id="same_inputs" value="Same question, resolution criterion, and evidence" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef1f7;strokeColor=#4b5c78;strokeWidth=1.4;fontSize=18;fontColor=#111111;align=center;verticalAlign=middle;spacing=12;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="690" y="162" width="390" height="70" as="geometry"/>
         </mxCell>
-        <mxCell id="provider_note" value="loads local model, resolves API keys, enforces context/window limits" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontColor=#666666;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="662" y="310" width="242" height="38" as="geometry"/>
+        <mxCell id="v0" value="&lt;b&gt;V0 Neutral&lt;/b&gt;&lt;br&gt;Brief rationale" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4b5c78;strokeWidth=1.3;fontSize=17;fontColor=#111111;align=center;verticalAlign=middle;spacing=10;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="690" y="270" width="176" height="78" as="geometry"/>
         </mxCell>
-        <mxCell id="loop_box" value="Resilient batch loop&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;resume completed IDs, shard work, retry/backoff, trim article text after context failures, parse and normalize JSON&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dff3ff;strokeColor=#111111;strokeWidth=2;fontSize=21;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="986" y="188" width="260" height="132" as="geometry"/>
+        <mxCell id="v4" value="&lt;b&gt;V4 Credibility&lt;/b&gt;&lt;br&gt;Assess source reliability" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4b5c78;strokeWidth=1.3;fontSize=17;fontColor=#111111;align=center;verticalAlign=middle;spacing=10;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="886" y="270" width="176" height="78" as="geometry"/>
         </mxCell>
-        <mxCell id="outputs_box" value="Auditable run files&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;results JSON, error JSONL, run metadata with prompt hashes&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=21;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="1310" y="208" width="144" height="92" as="geometry"/>
+        <mxCell id="v8" value="&lt;b&gt;V8 Temporal&lt;/b&gt;&lt;br&gt;Check event and deadline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4b5c78;strokeWidth=1.3;fontSize=17;fontColor=#111111;align=center;verticalAlign=middle;spacing=10;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="1082" y="270" width="176" height="78" as="geometry"/>
         </mxCell>
-        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.7;" parent="1" source="spec_box" target="cli_box" edge="1">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="condition_note" value="Only the requested rationale structure changes" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=15;fontStyle=1;fontColor=#4b5c78;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="690" y="370" width="568" height="26" as="geometry"/>
         </mxCell>
-        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.7;" parent="1" source="cli_box" target="provider_box" edge="1">
-          <mxGeometry relative="1" as="geometry"/>
+
+        <mxCell id="outcome_label" value="3  Forecasts for this case" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="690" y="416" width="350" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.7;" parent="1" source="provider_box" target="loop_box" edge="1">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="o0" value="&lt;b&gt;No | 0.35&lt;/b&gt;&lt;br&gt;Treats reports as plans" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f7fa;strokeColor=#20262e;strokeWidth=1.4;fontSize=17;fontColor=#111111;align=center;verticalAlign=middle;spacing=10;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="690" y="454" width="176" height="82" as="geometry"/>
         </mxCell>
-        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.7;" parent="1" source="loop_box" target="outputs_box" edge="1">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="o4" value="&lt;b&gt;Yes | 0.68&lt;/b&gt;&lt;br&gt;Selects threshold-relevant report" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f3ee;strokeColor=#2f6f58;strokeWidth=1.4;fontSize=17;fontColor=#111111;align=center;verticalAlign=middle;spacing=10;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="886" y="454" width="176" height="82" as="geometry"/>
         </mxCell>
-        <mxCell id="eval_band" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbfbf8;strokeColor=#d2d2c9;strokeWidth=1.2;arcSize=4;" parent="1" vertex="1">
-          <mxGeometry x="22" y="436" width="1456" height="250" as="geometry"/>
+        <mxCell id="o8" value="&lt;b&gt;Yes | 0.66&lt;/b&gt;&lt;br&gt;Checks the 2025 deadline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f3ee;strokeColor=#2f6f58;strokeWidth=1.4;fontSize=17;fontColor=#111111;align=center;verticalAlign=middle;spacing=10;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="1082" y="454" width="176" height="82" as="geometry"/>
         </mxCell>
-        <mxCell id="eval_label" value="(b) Evaluation, rationale analysis, and paper assets" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=23;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="42" y="450" width="620" height="34" as="geometry"/>
+        <mxCell id="truth" value="&lt;b&gt;Ground truth: YES&lt;/b&gt;  |  resolved outcome" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dff1e4;strokeColor=#2f6f58;strokeWidth=1.4;fontSize=17;fontColor=#1f5534;align=center;verticalAlign=middle;spacing=8;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="690" y="560" width="568" height="42" as="geometry"/>
         </mxCell>
-        <mxCell id="verify_box" value="Schema and result checks&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;dataset validation, missing IDs, duplicates, incomplete rows&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=20;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="84" y="532" width="238" height="88" as="geometry"/>
+
+        <mxCell id="study_label" value="4  Study-level evaluation" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;fontColor=#111111;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="240" y="554" width="350" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="metrics_box" value="Forecast metrics&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;accuracy, Brier score, ECE across model x temperature x variant&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7d6;strokeColor=#111111;strokeWidth=2;fontSize=20;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="394" y="532" width="250" height="88" as="geometry"/>
+        <mxCell id="study" value="&lt;b&gt;1,580 questions x 9 prompt conditions&lt;br&gt;x 3 models x 6 temperatures&lt;/b&gt;&lt;br&gt;&lt;br&gt;Primary: Brier score, log loss&lt;br&gt;Diagnostics: accuracy, ECE, validity, rationale quality" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffdf5;strokeColor=#9b7a3d;strokeWidth=1.4;fontSize=17;fontColor=#111111;align=center;verticalAlign=middle;spacing=12;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="240" y="592" width="370" height="146" as="geometry"/>
         </mxCell>
-        <mxCell id="judge_box" value="Rationale scoring&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;LLM judge attributes for explanation quality&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=20;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="716" y="532" width="226" height="88" as="geometry"/>
+        <mxCell id="interpretation" value="&lt;b&gt;Interpretation&lt;/b&gt;&lt;br&gt;The example shows forecast variation under matched prompts. Aggregate metrics test whether structured rationales improve forecasting." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f7fa;strokeColor=#20262e;strokeWidth=1.4;fontSize=17;fontColor=#111111;align=center;verticalAlign=middle;spacing=12;arcSize=6;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="690" y="630" width="568" height="108" as="geometry"/>
         </mxCell>
-        <mxCell id="shap_box" value="Attribution analysis&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;SHAP over rationale attributes predicts forecast correctness&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dff3ff;strokeColor=#111111;strokeWidth=2;fontSize=20;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="1014" y="532" width="238" height="88" as="geometry"/>
+        <mxCell id="caption" value="Figure 1: Representative case from the forecasting study (Metaculus 39523; GPT-OSS-120B). The example is illustrative; the paper's main claims are based on paired aggregate evaluation." style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=15;fontColor=#444444;fontFamily=Helvetica;" parent="1" vertex="1">
+          <mxGeometry x="190" y="766" width="1120" height="34" as="geometry"/>
         </mxCell>
-        <mxCell id="paper_box" value="Tables, figures, case studies&lt;br&gt;&lt;font style=&quot;font-size: 14px&quot;&gt;analysis CSV/JSON and paper-ready PDF/PNG assets&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#111111;strokeWidth=2;fontSize=20;fontColor=#111111;align=center;verticalAlign=middle;arcSize=8;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="1300" y="532" width="150" height="88" as="geometry"/>
-        </mxCell>
-        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#666666;strokeWidth=1.5;" parent="1" source="outputs_box" target="verify_box" edge="1">
-          <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="1382" y="420"/>
-              <mxPoint x="203" y="420"/>
-            </Array>
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.5;" parent="1" source="verify_box" target="metrics_box" edge="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.5;" parent="1" source="metrics_box" target="judge_box" edge="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.5;" parent="1" source="judge_box" target="shap_box" edge="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=0;strokeColor=#111111;strokeWidth=1.5;" parent="1" source="shap_box" target="paper_box" edge="1">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="footer" value="Mental model: configs choose what to vary; the batch loop makes generation resumable and auditable; downstream scripts turn structured outputs into forecast and rationale evidence." style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontStyle=1;fontColor=#222222;fontFamily=Helvetica;" parent="1" vertex="1">
-          <mxGeometry x="130" y="724" width="1240" height="52" as="geometry"/>
-        </mxCell>
+
+        <mxCell id="e_question_evidence" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#20262e;strokeWidth=1.4;" parent="1" source="question" target="evidence" edge="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_evidence_inputs" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#20262e;strokeWidth=1.4;" parent="1" source="evidence" target="same_inputs" edge="1"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="630" y="427"/><mxPoint x="630" y="197"/></Array></mxGeometry></mxCell>
+        <mxCell id="e_inputs_v0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#4b5c78;strokeWidth=1.2;" parent="1" source="same_inputs" target="v0" edge="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_inputs_v4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#4b5c78;strokeWidth=1.2;" parent="1" source="same_inputs" target="v4" edge="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_inputs_v8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#4b5c78;strokeWidth=1.2;" parent="1" source="same_inputs" target="v8" edge="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_v0_o0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#20262e;strokeWidth=1.2;" parent="1" source="v0" target="o0" edge="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_v4_o4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#20262e;strokeWidth=1.2;" parent="1" source="v4" target="o4" edge="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e_v8_o8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#20262e;strokeWidth=1.2;" parent="1" source="v8" target="o8" edge="1"><mxGeometry relative="1" as="geometry"/></mxCell>
       </root>
     </mxGraphModel>
   </diagram>
