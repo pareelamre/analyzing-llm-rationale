@@ -243,9 +243,9 @@ ALLOW_RESOLVED_BACKFILL = (
 # crowd-follow is instant (no LLM) and doesn't consume a slot.
 PREDICT_CONCURRENCY = int(os.environ.get("PREDICT_CONCURRENCY", "4"))
 # Minimum wall-clock gap between any two calls dispatched to the executor.
-# With PREDICT_CONCURRENCY=4 and 1s spacing the peak outbound rate is 4 req/s,
-# comfortably under SCADS AI limits. Raise PREDICT_CONCURRENCY to go faster;
-# lower PREDICT_MIN_INTERVAL_S if the server proves tolerant.
+# GitHub forecast jobs must also account for matrix fan-out in the workflow:
+# SCADS has returned max_parallel_requests=2 for the shared key, so the
+# scheduled workflow pins per-job concurrency to 1 and matrix fan-out to 2.
 _PREDICT_MIN_INTERVAL_S = float(os.environ.get("PREDICT_MIN_INTERVAL_S", "1.0"))
 _PREDICT_TIMEOUT_S = max(
     1.0, float(os.environ.get("PREDICT_TIMEOUT_S", "120") or 120)

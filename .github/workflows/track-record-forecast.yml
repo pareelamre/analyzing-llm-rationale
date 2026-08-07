@@ -31,6 +31,10 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: track-record-forecast
+  cancel-in-progress: false
+
 jobs:
   forecast:
     name: forecast (${{ matrix.model }})
@@ -39,7 +43,10 @@ jobs:
     continue-on-error: true
     strategy:
       fail-fast: false
-      max-parallel: 15
+      # SCADS currently caps this API key at 2 simultaneous requests. Each
+      # matrix job below is limited to one in-flight /predict call, so two
+      # jobs is the safe global fan-out.
+      max-parallel: 2
       matrix:
         include:
           - model: crowd-follow
@@ -137,8 +144,8 @@ jobs:
           PROVIDER_BACKOFF_BASE_S: "4"
           COUNCIL_MEMBER_TIMEOUT_S: "180"
           PREDICT_TIMEOUT_S: "300"
-          PREDICT_CONCURRENCY: "2"
-          PREDICT_MIN_INTERVAL_S: "4.0"
+          PREDICT_CONCURRENCY: "1"
+          PREDICT_MIN_INTERVAL_S: "8.0"
           PREDICT_RETRIES: "2"
           PREDICT_RETRY_BACKOFF_BASE_S: "20"
           PREDICT_RETRY_BACKOFF_MAX_S: "300"

@@ -384,6 +384,152 @@ def main() -> None:
     fig_c.savefig(out_combined, dpi=150, bbox_inches="tight")
     print(f"Wrote {out_combined}")
 
+    # Replace the legacy combined chart with compact model small multiples.
+    # Model identity is carried by panel titles; the shared legend only explains lead time.
+    LEAD_ORDER_COMPACT = ["90", "30", "7", "none"]
+    LEAD_MARKER_COMPACT = {"90": "s", "30": "^", "7": "o", "none": "D"}
+    LEAD_COLOR_COMPACT = {
+        "90": "#2563eb",
+        "30": "#0f766e",
+        "7": "#d97706",
+        "none": "#334155",
+    }
+    LEAD_LABEL_COMPACT = {"90": "90d", "30": "30d", "7": "7d", "none": "Full evidence"}
+
+    model_order = list(by_model.keys())
+    fig_compact, axes = plt.subplots(
+        1, len(model_order), figsize=(9.2, 3.7), sharex=True, sharey=True
+    )
+    fig_compact.patch.set_facecolor("white")
+    if len(model_order) == 1:
+        axes = [axes]
+
+    for ax_compact, model in zip(axes, model_order):
+        mrows = by_model[model]
+        ordered = sorted(mrows, key=lambda r: LEAD_ORDER_COMPACT.index(r["lead_days"]))
+        _style_panel(ax_compact)
+        ax_compact.xaxis.grid(True, color="#e2e8f0", linewidth=0.8, zorder=0)
+        ax_compact.set_title(model, color="#0f172a", fontsize=10.5, fontweight="600", pad=9)
+        ax_compact.set_xlim(0.56, 0.84)
+        ax_compact.set_ylim(0.355, 0.145)
+        ax_compact.set_xticks([0.60, 0.70, 0.80])
+        ax_compact.set_yticks([0.15, 0.20, 0.25, 0.30, 0.35])
+        ax_compact.tick_params(axis="both", which="both", length=0, colors="#64748b", labelsize=8.5)
+        ax_compact.plot(
+            [r["accuracy"] for r in ordered],
+            [r["brier"] for r in ordered],
+            color="#94a3b8", linewidth=1.2, alpha=0.75, zorder=1,
+            solid_capstyle="round", solid_joinstyle="round",
+        )
+        for row in ordered:
+            lead = row["lead_days"]
+            ax_compact.scatter(
+                row["accuracy"], row["brier"],
+                marker=LEAD_MARKER_COMPACT[lead],
+                s=58 if lead != "none" else 72,
+                color=LEAD_COLOR_COMPACT[lead], edgecolors="white", linewidths=1.2,
+                zorder=3, clip_on=False,
+            )
+    axes[0].set_ylabel("Brier score (lower is better)", color="#64748b", fontsize=9.5, labelpad=8)
+    fig_compact.supxlabel("Accuracy (higher is better)", color="#64748b", fontsize=9.5, y=0.035)
+    fig_compact.suptitle(
+        "Forecast quality across evidence cutoffs",
+        color="#0f172a", fontsize=13.5, fontweight="600", x=0.08, ha="left", y=0.99,
+    )
+    lead_handles_compact = [
+        mlines.Line2D(
+            [0], [0], marker=LEAD_MARKER_COMPACT[lead], color="w",
+            markerfacecolor=LEAD_COLOR_COMPACT[lead], markeredgecolor="white",
+            markeredgewidth=0.8, markersize=7, label=LEAD_LABEL_COMPACT[lead],
+        )
+        for lead in LEAD_ORDER_COMPACT
+    ]
+    fig_compact.legend(
+        handles=lead_handles_compact, title="Evidence available at forecast time",
+        title_fontsize=8.5, fontsize=8.5, frameon=False, ncol=4,
+        loc="upper right", bbox_to_anchor=(0.98, 0.995), columnspacing=1.0,
+        handletextpad=0.3,
+    )
+    fig_compact.subplots_adjust(left=0.09, right=0.98, top=0.78, bottom=0.19, wspace=0.08)
+    fig_compact.savefig(out_combined, dpi=150, bbox_inches="tight")
+    fig_compact.savefig(out_combined.with_suffix(".pdf"), bbox_inches="tight")
+    print(f"Wrote polished {out_combined}")
+
+    # Final combined view: one shared accuracy/Brier coordinate system for direct comparison.
+    MODEL_COLORS = {
+        "GPT-OSS-120B": "#2563eb",
+        "Qwen2.5-7b-instruct": "#ea580c",
+        "Qwen3-32B": "#059669",
+    }
+    fig_single, ax_single = plt.subplots(figsize=(8.8, 5.2))
+    fig_single.patch.set_facecolor("white")
+    _style_panel(ax_single)
+    ax_single.xaxis.grid(True, color="#e2e8f0", linewidth=0.85, zorder=0)
+    ax_single.yaxis.grid(True, color="#e2e8f0", linewidth=0.85, zorder=0)
+    ax_single.set_xlim(0.56, 0.84)
+    ax_single.set_ylim(0.355, 0.145)
+    ax_single.set_xticks([0.60, 0.70, 0.80])
+    ax_single.set_yticks([0.15, 0.20, 0.25, 0.30, 0.35])
+    ax_single.tick_params(axis="both", which="both", length=0, colors="#64748b", labelsize=9.5)
+
+    for model in model_order:
+        mrows = by_model[model]
+        ordered = sorted(mrows, key=lambda r: LEAD_ORDER_COMPACT.index(r["lead_days"]))
+        color = MODEL_COLORS.get(model, "#475569")
+        ax_single.plot(
+            [r["accuracy"] for r in ordered],
+            [r["brier"] for r in ordered],
+            color=color, linewidth=1.4, alpha=0.34, zorder=1,
+            solid_capstyle="round", solid_joinstyle="round",
+        )
+        for row in ordered:
+            lead = row["lead_days"]
+            ax_single.scatter(
+                row["accuracy"], row["brier"],
+                marker=LEAD_MARKER_COMPACT[lead],
+                s=62 if lead != "none" else 82,
+                color=color, edgecolors="white", linewidths=1.4,
+                zorder=3, clip_on=False,
+            )
+
+    ax_single.set_xlabel("Accuracy (higher is better)", color="#64748b", fontsize=10, labelpad=10)
+    ax_single.set_ylabel("Brier score (lower is better)", color="#64748b", fontsize=10, labelpad=10)
+    ax_single.set_title(
+        "Forecast quality across evidence cutoffs",
+        color="#0f172a", fontsize=14, fontweight="600", pad=15, loc="left",
+    )
+
+    model_handles_single = [
+        mlines.Line2D(
+            [0], [0], marker="o", color="w", markerfacecolor=MODEL_COLORS.get(model, "#475569"),
+            markeredgecolor="white", markeredgewidth=0.8, markersize=7, label=model,
+        )
+        for model in model_order
+    ]
+    lead_handles_single = [
+        mlines.Line2D(
+            [0], [0], marker=LEAD_MARKER_COMPACT[lead], color="w",
+            markerfacecolor="#64748b", markeredgecolor="white", markeredgewidth=0.8,
+            markersize=7, label=LEAD_LABEL_COMPACT[lead],
+        )
+        for lead in LEAD_ORDER_COMPACT
+    ]
+    legend_models = fig_single.legend(
+        handles=model_handles_single, title="Model", title_fontsize=8.5, fontsize=8.5,
+        frameon=False, ncol=3, loc="upper left", bbox_to_anchor=(0.08, 0.995),
+        columnspacing=1.0, handletextpad=0.3,
+    )
+    fig_single.legend(
+        handles=lead_handles_single, title="Evidence available at forecast time",
+        title_fontsize=8.5, fontsize=8.5, frameon=False, ncol=4,
+        loc="upper right", bbox_to_anchor=(0.98, 0.995), columnspacing=0.9,
+        handletextpad=0.3,
+    )
+    fig_single.subplots_adjust(left=0.11, right=0.98, top=0.76, bottom=0.16)
+    fig_single.savefig(out_combined, dpi=150, bbox_inches="tight")
+    fig_single.savefig(out_combined.with_suffix(".pdf"), bbox_inches="tight")
+    print(f"Wrote final shared-scale {out_combined}")
+
 
 if __name__ == "__main__":
     main()
