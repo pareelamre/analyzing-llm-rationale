@@ -487,6 +487,26 @@ class ServerTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 503)
 
+    def test_predict_structured_503_names_the_failed_model(self):
+        # Structured (chat_mode=False) requests intentionally skip the chat
+        # fallback chain to keep the served model identity stable, so a
+        # requested model's own outage must surface as-is -- but the caller
+        # still needs to know *which* model failed, not just "unavailable".
+        failing = FailingProvider("gpt-oss-120b")
+        with mock.patch.dict(_state, {"provider": failing}):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates before July 31, 2026?",
+                    "attach_evidence": False,
+                    "chat_mode": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("gpt-oss-120b", response.json()["detail"])
+        self.assertNotIn("upstream unavailable", response.json()["detail"])
+
     def test_predict_allows_anonymous_when_api_key_unset(self):
         with mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
             response = self.client.post(
