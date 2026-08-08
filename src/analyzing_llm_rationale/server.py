@@ -1915,7 +1915,7 @@ async def _provider_stream_chat(
         yield str(item)
 
 
-def _provider_http_error(exc: Exception) -> HTTPException:
+def _provider_http_error(exc: Exception, *, model_name: Optional[str] = None) -> HTTPException:
     """Map a provider exception to a clean, non-leaky HTTPException.
 
     The raw exception text (which can include upstream URLs/keys/prompts) is
@@ -1933,9 +1933,20 @@ def _provider_http_error(exc: Exception) -> HTTPException:
             detail="The question plus evidence is too long for the model's context window. Try a shorter question or fewer attachments.",
         )
     if isinstance(exc, (RetryableProviderError, asyncio.TimeoutError)):
+        # Structured (non-chat_mode) requests intentionally skip the chat
+        # fallback chain -- see _chat_fallback_providers -- so a requested
+        # model's own outage surfaces as-is instead of being silently masked
+        # by a substituted model. Name the model so that's diagnosable
+        # instead of reading as a generic, unexplained "forecasting is down".
+        detail = "The forecasting model is temporarily unavailable. Please retry in a moment."
+        if model_name:
+            detail = (
+                f"The '{model_name}' forecasting model is temporarily unavailable. "
+                "Please retry in a moment, or pass a different `model` in the request."
+            )
         return HTTPException(
             status_code=503,
-            detail="The forecasting model is temporarily unavailable. Please retry in a moment.",
+            detail=detail,
             headers={"Retry-After": "10"},
         )
     return HTTPException(status_code=502, detail="The forecasting model returned an unexpected response.")
@@ -6755,7 +6766,7 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
             "forecast.variant": req.variant or "unknown",
             "error.type": type(exc).__name__,
         })
-        raise _provider_http_error(exc) from exc
+        raise _provider_http_error(exc, model_name=getattr(provider, "model_name", None)) from exc
 
     parsed = _parse_json_dict(content)
     if req.chat_mode:
