@@ -58,8 +58,6 @@ key.pem
 mlruns/
 *.duckdb
 *.duckdb.wal
-# Exception: track record entity store is committed (git-scraping pattern)
-!data/track_record_store.duckdb
 data/crypto_5m_signals.sqlite
 # Backfill working files — only the compact gzipped seed is committed
 data/crypto_5m_backfill_log.jsonl

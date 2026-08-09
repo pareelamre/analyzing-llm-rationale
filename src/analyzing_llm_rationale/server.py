@@ -2494,11 +2494,17 @@ class ExplainShiftRequest(BaseModel):
 
 @app.get("/market/history", tags=["System"], summary="Get historical forecast snapshots for a market")
 async def market_history(
+    request: Request,
     platform: str = Query(..., max_length=20),
     ident: str = Query(..., max_length=200),
 ) -> Dict[str, Any]:
     """Retrieve historical forecasts for a given market (platform + ident)."""
+    _check_rate_limit(request)
+    from analyzing_llm_rationale import gcs_store
+
     store_path = Path(os.environ.get("TRACK_STORE_PATH") or _REPO_ROOT / "data" / "track_record_store.duckdb")
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, gcs_store.ensure_local_copy, store_path)
     if not store_path.exists():
         return {"history": []}
 
@@ -2539,7 +2545,6 @@ async def market_history(
         finally:
             store.close()
 
-    loop = asyncio.get_running_loop()
     history = await loop.run_in_executor(None, _fetch_history)
     return {"history": history}
 
@@ -2548,8 +2553,11 @@ async def market_history(
 async def explain_shift(req: ExplainShiftRequest, request: Request) -> Dict[str, Any]:
     """Compare the latest forecast snapshot to the previous one and explain the probability shift using the default LLM."""
     _check_rate_limit(request)
+    from analyzing_llm_rationale import gcs_store
 
     store_path = Path(os.environ.get("TRACK_STORE_PATH") or _REPO_ROOT / "data" / "track_record_store.duckdb")
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, gcs_store.ensure_local_copy, store_path)
     if not store_path.exists():
         raise HTTPException(status_code=404, detail="Track record store not found.")
 
@@ -2572,7 +2580,6 @@ async def explain_shift(req: ExplainShiftRequest, request: Request) -> Dict[str,
         finally:
             store.close()
 
-    loop = asyncio.get_running_loop()
     snapshots = await loop.run_in_executor(None, _fetch_snaps)
 
     if len(snapshots) < 2:
