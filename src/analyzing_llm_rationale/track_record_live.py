@@ -64,12 +64,54 @@ def _sql_rows(con, sql: str, params: Optional[list] = None) -> List[Dict[str, An
     return rows
 
 
+def _snapshot_cols_sql(alias: str = "fs") -> str:
+    """Column list for forecast_snapshot with MARKET_FIELDS (question,
+    market_url, description, resolution_criteria, publish_time, close_time,
+    category, domain) hydrated from the normalized `markets` table -- old
+    rows keep their own stored value (COALESCE prefers it whenever it's
+    non-null); rows written after normalization fall back to the join. Pair
+    with ``LEFT JOIN markets m ON m.platform = {alias}.platform AND
+    m.ident = {alias}.ident`` in the FROM clause."""
+    return ", ".join(
+        f"COALESCE({alias}.{c}, m.{c}) AS {c}" if c in _ds.MARKET_FIELDS else f"{alias}.{c}"
+        for c in _ds._SNAPSHOT_COLS
+    )
+
+
 def _is_backfill_snapshot(row: Dict[str, Any]) -> bool:
     key = row.get("key")
     if key is None:
         ent_key = getattr(row, "key", None)
         key = getattr(ent_key, "id", None) or getattr(ent_key, "name", None)
     return str(key or "").endswith("_backfill")
+
+
+def _upsert_market(client, platform: Optional[str], ident: Optional[str], *,
+                    question=None, market_url=None, description=None,
+                    resolution_criteria=None, publish_time=None, close_time=None,
+                    category=None, domain=None) -> None:
+    """Upsert the (platform, ident) row in the normalized `markets` table.
+    Only overwrites a field when the new value is non-empty, so a tick whose
+    live quote is momentarily thinner than usual doesn't blank out
+    previously-captured detail (mirrors the stored_ctx fallback in
+    record_snapshots)."""
+    key = client.key("Market", f"{platform}:{ident}")
+    existing = client.get(key) or {}
+    entity = _ds.Entity(key, exclude_from_indexes=(
+        "question", "market_url", "description", "resolution_criteria"))
+    entity.update(
+        platform=platform, ident=ident,
+        question=question or existing.get("question"),
+        market_url=market_url or existing.get("market_url"),
+        description=description or existing.get("description"),
+        resolution_criteria=resolution_criteria or existing.get("resolution_criteria"),
+        publish_time=publish_time or existing.get("publish_time"),
+        close_time=close_time or existing.get("close_time"),
+        category=category or existing.get("category"),
+        domain=domain or existing.get("domain"),
+        updated_ts=_now(),
+    )
+    client.put(entity)
 
 
 SNAPSHOT_KIND = "ForecastSnapshot"
@@ -452,13 +494,17 @@ def record_convergence_trades(store) -> int:
         return 0
 
     rows = con.execute("""
-        SELECT fs.platform, fs.ident, fs.model, fs.question, fs.market_url,
+        SELECT fs.platform, fs.ident, fs.model,
+               COALESCE(fs.question, m.question) AS question,
+               COALESCE(fs.market_url, m.market_url) AS market_url,
                fs.snapshot_ts, fs.lead_time_days,
                fs.model_probability, fs.market_probability,
                fs.outcome, fs.resolved_ts
         FROM forecast_snapshot fs
         LEFT JOIN convergence_trade ct
             ON ct.key = fs.platform || ':' || fs.ident || ':' || fs.model
+        LEFT JOIN markets m
+            ON m.platform = fs.platform AND m.ident = fs.ident
         WHERE fs.horizon = '7-14d'
           AND fs.resolved = TRUE
           AND fs.outcome IS NOT NULL
@@ -724,6 +770,17 @@ async def record_snapshots(
             entities=tags["entities"],
             rationale=scored.get("rationale"),
         )
+        if _sql_con(client) is not None:
+            # Real DuckDBStore: keep one copy of the market-level text in
+            # `markets` instead of duplicating it onto every snapshot row.
+            _upsert_market(
+                client, entity["platform"], ident,
+                question=entity.pop("question"), market_url=entity.pop("market_url"),
+                description=entity.pop("description"),
+                resolution_criteria=entity.pop("resolution_criteria"),
+                publish_time=entity.pop("publish_time"), close_time=entity.pop("close_time"),
+                category=entity.pop("category"), domain=entity.pop("domain"),
+            )
         client.put(entity)
 
     # Phase 1: instant crowd-follow writes + collect LLM tasks.
@@ -769,11 +826,19 @@ async def record_snapshots(
                 # Capture loop variables for the async closure.
                 # Enrich with stored context fields (description/resolution_criteria) if
                 # not already in the live quote — avoids re-fetching on re-forecasts.
+                # `existing` may be a normalized row with these fields NULL on the
+                # row itself; hydrate from `markets` (read-only use, never put()
+                # back) so the fallback still works once `existing` postdates
+                # normalization.
                 stored_ctx: Dict[str, Any] = {}
-                if existing is not None:
+                existing_hydrated = (
+                    getattr(client, "hydrate_market", lambda e: e)(existing)
+                    if existing is not None else None
+                )
+                if existing_hydrated is not None:
                     for _f in ("description", "resolution_criteria", "publish_time"):
-                        if not quote.get(_f) and existing.get(_f):
-                            stored_ctx[_f] = existing[_f]
+                        if not quote.get(_f) and existing_hydrated.get(_f):
+                            stored_ctx[_f] = existing_hydrated[_f]
                 quote_with_history = {**quote, **stored_ctx,
                                       "market_price_history": _get_price_history(client, ident),
                                       "forecast_history": _get_forecast_history(
@@ -889,6 +954,12 @@ def record_price_points(client, market_data) -> int:
             close_time=quote.get("close_time"),
             lead_time_days=lead,
         )
+        if _sql_con(client) is not None:
+            # Nothing reads market_url/close_time back off market_price_point
+            # (checked: only model_probability/bid/ask/volume/liquidity/
+            # last_trade_price/ts are ever queried) -- stop duplicating them.
+            entity.pop("market_url", None)
+            entity.pop("close_time", None)
         client.put(entity)
         recorded += 1
     return recorded
@@ -924,32 +995,34 @@ async def backfill_missing_model_snapshots(
     # forecast time.
     refs: Dict[Tuple[str, str], Dict[str, Any]] = {}
     ref_priority: Dict[Tuple[str, str], int] = {}
-    for r in _sql_rows(con, """
-        SELECT *,
+    for r in _sql_rows(con, f"""
+        SELECT {_snapshot_cols_sql('fs')},
                CASE
-                 WHEN model = ? THEN 0
-                 WHEN model != 'crowd-follow' THEN 1
+                 WHEN fs.model = ? THEN 0
+                 WHEN fs.model != 'crowd-follow' THEN 1
                  ELSE 2
                END AS ref_priority
-        FROM forecast_snapshot
-        WHERE resolved = true AND outcome IS NOT NULL AND model = ?
-        ORDER BY ref_priority, snapshot_ts
+        FROM forecast_snapshot fs
+        LEFT JOIN markets m ON m.platform = fs.platform AND m.ident = fs.ident
+        WHERE fs.resolved = true AND fs.outcome IS NOT NULL AND fs.model = ?
+        ORDER BY ref_priority, fs.snapshot_ts
     """, [default_model, default_model]):
         key = (r.get("platform") or "", r.get("ident") or "")
         if key not in refs:
             refs[key] = r
             ref_priority[key] = int(r.get("ref_priority") or 0)
 
-    for r in _sql_rows(con, """
-        SELECT *,
+    for r in _sql_rows(con, f"""
+        SELECT {_snapshot_cols_sql('fs')},
                CASE
-                 WHEN model = ? THEN 0
-                 WHEN model != 'crowd-follow' THEN 1
+                 WHEN fs.model = ? THEN 0
+                 WHEN fs.model != 'crowd-follow' THEN 1
                  ELSE 2
                END AS ref_priority
-        FROM forecast_snapshot
-        WHERE resolved = true AND outcome IS NOT NULL
-        ORDER BY ref_priority, snapshot_ts
+        FROM forecast_snapshot fs
+        LEFT JOIN markets m ON m.platform = fs.platform AND m.ident = fs.ident
+        WHERE fs.resolved = true AND fs.outcome IS NOT NULL
+        ORDER BY ref_priority, fs.snapshot_ts
     """, [default_model]):
         key = (r.get("platform") or "", r.get("ident") or "")
         pri = int(r.get("ref_priority") or 0)
@@ -1060,6 +1133,17 @@ async def backfill_missing_model_snapshots(
             entity["model_brier"] = brier(mp, outcome)
             entity["market_brier"] = brier(float(mkt_prob), outcome)
             entity["model_correct"] = (mp >= 0.5) == bool(outcome)
+        # `ref` is already hydrated from `markets` (via _snapshot_cols_sql above),
+        # so this just re-affirms the existing row rather than writing new
+        # detail -- upsert is cheap and defends against a missing markets row.
+        _upsert_market(
+            client, entity["platform"], entity["ident"],
+            question=entity.pop("question"), market_url=entity.pop("market_url"),
+            description=entity.pop("description"),
+            resolution_criteria=entity.pop("resolution_criteria"),
+            publish_time=entity.pop("publish_time"), close_time=entity.pop("close_time"),
+            category=entity.pop("category"), domain=entity.pop("domain"),
+        )
         client.put(entity)
         return True
 
@@ -2816,16 +2900,18 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     con = _sql_con(client)
     if con is not None:
         # DuckDB fast path: two targeted queries instead of a full scan + Python split.
-        resolved = _sql_rows(con, """
-            SELECT * FROM forecast_snapshot
-            WHERE resolved = true AND outcome IS NOT NULL
-              AND key NOT LIKE '%_backfill'
-            ORDER BY resolved_ts
+        resolved = _sql_rows(con, f"""
+            SELECT {_snapshot_cols_sql('fs')} FROM forecast_snapshot fs
+            LEFT JOIN markets m ON m.platform = fs.platform AND m.ident = fs.ident
+            WHERE fs.resolved = true AND fs.outcome IS NOT NULL
+              AND fs.key NOT LIKE '%_backfill'
+            ORDER BY fs.resolved_ts
         """)
-        open_rows = _sql_rows(con, """
-            SELECT * FROM forecast_snapshot
-            WHERE resolved = false
-            ORDER BY snapshot_ts DESC
+        open_rows = _sql_rows(con, f"""
+            SELECT {_snapshot_cols_sql('fs')} FROM forecast_snapshot fs
+            LEFT JOIN markets m ON m.platform = fs.platform AND m.ident = fs.ident
+            WHERE fs.resolved = false
+            ORDER BY fs.snapshot_ts DESC
         """)
         # Latest price per ident: arg_max picks the market_probability at max(ts).
         latest_price: Dict[str, float] = {

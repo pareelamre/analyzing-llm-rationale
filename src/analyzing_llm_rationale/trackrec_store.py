@@ -10,6 +10,13 @@ Two implementations with the same API (both mimic the minimal
 append-only ledger events in typed tables. The public aggregate
 (``static/track_record_live.json``) is written by the tick as before and served
 by Cloud Run unchanged.
+
+Market-level fields (question, description, resolution_criteria, market_url,
+publish_time, close_time, category, domain -- properties of a (platform,
+ident) question, not of any one snapshot) live in a separate ``markets`` table
+(kind ``"Market"``, one row per market) instead of being duplicated onto every
+``ForecastSnapshot``/``MarketPricePoint`` row. See ``MARKET_FIELDS`` and
+``DuckDBStore.hydrate_markets()``.
 """
 from __future__ import annotations
 
@@ -157,6 +164,15 @@ class FileStore:
     def count(self, kind: str) -> int:
         return sum(1 for (k, _i) in self._data if k == kind)
 
+    # -- market-field hydration (no-op: FileStore rows always carry their own
+    #    values, there is no separate `markets` table in this backend) --
+
+    def hydrate_markets(self, entities: List[Entity]) -> List[Entity]:
+        return list(entities)
+
+    def hydrate_market(self, entity: Optional[Entity]) -> Optional[Entity]:
+        return entity
+
 
 # ── DuckDBStore ───────────────────────────────────────────────────────────────
 
@@ -164,6 +180,16 @@ _SNAPSHOT_TABLE = "forecast_snapshot"
 _PRICE_TABLE = "market_price_point"
 _CONVERGENCE_TABLE = "convergence_trade"
 _LEDGER_EVENT_TABLE = "forecast_ledger_event"
+_MARKET_TABLE = "markets"
+
+# Market-level fields (a property of the (platform, ident) question itself, not
+# of any one snapshot) that used to be duplicated onto every forecast_snapshot
+# row. New rows leave these columns NULL and store one copy per market here
+# instead; historical rows keep their own already-stored values untouched.
+MARKET_FIELDS: Tuple[str, ...] = (
+    "question", "market_url", "description", "resolution_criteria",
+    "publish_time", "close_time", "category", "domain",
+)
 
 # Columns and their DuckDB types for each table.
 _SNAPSHOT_COLS: Dict[str, str] = {
@@ -223,11 +249,23 @@ _LEDGER_EVENT_COLS: Dict[str, str] = {
     "payload": "TEXT",
 }
 
+# One row per (platform, ident) -- the normalized home for MARKET_FIELDS.
+_MARKET_COLS: Dict[str, str] = {
+    "key": "TEXT",                          # {platform}:{ident}
+    "platform": "TEXT", "ident": "TEXT",
+    "question": "TEXT", "market_url": "TEXT",
+    "description": "TEXT", "resolution_criteria": "TEXT",
+    "publish_time": "TEXT", "close_time": "TEXT",
+    "category": "TEXT", "domain": "TEXT",
+    "updated_ts": "TEXT",
+}
+
 _KIND_TABLE = {
     "ForecastSnapshot": (_SNAPSHOT_TABLE, _SNAPSHOT_COLS),
     "MarketPricePoint": (_PRICE_TABLE, _PRICE_COLS),
     "ConvergenceTrade": (_CONVERGENCE_TABLE, _CONVERGENCE_COLS),
     "ForecastLedgerEvent": (_LEDGER_EVENT_TABLE, _LEDGER_EVENT_COLS),
+    "Market": (_MARKET_TABLE, _MARKET_COLS),
 }
 
 # Fields that hold datetime objects — serialised as ISO strings in DuckDB.
@@ -317,6 +355,7 @@ class DuckDBStore:
                 (_PRICE_TABLE, _PRICE_COLS),
                 (_CONVERGENCE_TABLE, _CONVERGENCE_COLS),
                 (_LEDGER_EVENT_TABLE, _LEDGER_EVENT_COLS),
+                (_MARKET_TABLE, _MARKET_COLS),
         )):
             col_defs = ", ".join(f"{c} {t}" for c, t in cols.items())
             self._con.execute(
@@ -423,6 +462,47 @@ class DuckDBStore:
             return 0
         table, _ = info
         return self._con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+
+    # -- market-field hydration --
+    #
+    # get()/query().fetch()/items() intentionally stay raw (never joined):
+    # some callers fetch an entity, mutate a couple of fields, and put() the
+    # *same* object back (e.g. resolve_open_snapshots). If fetch() silently
+    # filled in question/market_url/etc. from `markets`, that put() would
+    # write the joined-in value back onto the row itself -- quietly
+    # re-duplicating exactly the data this table split out. hydrate_markets()
+    # is opt-in: call it only where the result is read-only (API responses,
+    # LLM prompts, aggregation), never on an entity you intend to put() back.
+
+    def hydrate_markets(self, entities: List[Entity]) -> List[Entity]:
+        """Return NEW entities with MARKET_FIELDS filled in from `markets`
+        wherever the row's own copy is empty. Never mutates the inputs, and
+        always returns copies (even when nothing needed filling) so callers
+        can rely on the result being safe to hold onto independently of the
+        input -- the same guarantee callers depend on to avoid the
+        crystallization hazard this method exists to prevent."""
+        if not entities:
+            return []
+        rows = self._con.execute(
+            f"SELECT platform, ident, {', '.join(MARKET_FIELDS)} FROM {_MARKET_TABLE}"
+        ).fetchall()
+        by_key = {(r[0], r[1]): r[2:] for r in rows}
+        out: List[Entity] = []
+        for e in entities:
+            merged = Entity(e.key, exclude_from_indexes=getattr(e, "exclude_from_indexes", ()))
+            merged.update(e)
+            market = by_key.get((e.get("platform"), e.get("ident")))
+            if market is not None:
+                for field, value in zip(MARKET_FIELDS, market):
+                    if not merged.get(field):
+                        merged[field] = _from_db(value, field)
+            out.append(merged)
+        return out
+
+    def hydrate_market(self, entity: Optional[Entity]) -> Optional[Entity]:
+        if entity is None:
+            return None
+        return self.hydrate_markets([entity])[0]
 
     # -- helpers --
 

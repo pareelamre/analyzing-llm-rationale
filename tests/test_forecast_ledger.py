@@ -77,6 +77,45 @@ class ForecastLedgerTests(unittest.TestCase):
         self.assertIsNotNone(resolved[0]["ledger_ingested_at"])
         self.assertFalse(resolved[0]["ledger_audit_grade"])
 
+    def test_sync_hydrates_question_domain_close_time_for_normalized_rows(self):
+        # A snapshot written after market-level fields stopped being
+        # duplicated per row -- question/domain/close_time are NULL on the
+        # row itself, only present in `markets`. The ledger event is
+        # immutable once written, so getting this right matters: a naive
+        # blanket join would risk crystallizing values back onto the row on
+        # a later put(), but the ledger only ever reads snapshots, never
+        # writes them back -- confirm the sync still produces a real event,
+        # not "" / "other" / "unknown" / a broken post_close signal.
+        market = Entity(self.store.key("Market", "Kalshi:RATE-26"))
+        market.update(platform="Kalshi", ident="RATE-26", question="Will the rate be cut?",
+                       domain="economics", close_time=self.forecasted_at + timedelta(days=30))
+        self.store.put(market)
+
+        snapshot = Entity(self.store.key("ForecastSnapshot", "kalshi:RATE-26:council:2026-07-27"))
+        snapshot.update(
+            platform="Kalshi", ident="RATE-26", model="council",
+            snapshot_ts=self.forecasted_at,
+            model_probability=0.7, market_probability=0.5,
+            market_bid=0.49, market_ask=0.51,
+            horizon="14-30d",
+            resolved=True, outcome=1,
+            resolved_ts=self.forecasted_at + timedelta(days=31),
+        )
+        self.store.put(snapshot)
+
+        result = sync_snapshot_ledger(self.store)
+        resolved = ForecastLedger(self.store).resolved_forecasts()
+
+        self.assertEqual(result["forecast_events_appended"], 1)
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(resolved[0]["question"], "Will the rate be cut?")
+        self.assertEqual(resolved[0]["domain"], "economics")
+        self.assertIsNotNone(resolved[0]["close_time"])
+        # forecasted well before close_time -> post_close detection intact
+        # (this is the exact signal that silently breaks -- always False --
+        # if close_time isn't hydrated and comes through as None).
+        self.assertTrue(resolved[0]["ledger_forecast_before_close"])
+
     def test_replaced_snapshot_preserves_each_forecast_revision(self):
         first = self._snapshot(resolved=False)
         self.store.put(first)

@@ -353,7 +353,14 @@ def sync_snapshot_ledger(store: LedgerStore) -> Dict[str, int]:
     started = time.perf_counter()
     with tracer.start_as_current_span("forecast_ledger.sync") as span:
         try:
-            snapshots = list(store.query(kind="ForecastSnapshot").fetch())
+            # Read-only: hydrate question/domain/close_time/etc. from `markets`
+            # for rows written after those fields stopped being duplicated onto
+            # every snapshot. Safe here because these objects are only ever
+            # passed into record_forecast()/record_resolution(), never put()
+            # back onto forecast_snapshot.
+            snapshots = getattr(store, "hydrate_markets", lambda rows: rows)(
+                list(store.query(kind="ForecastSnapshot").fetch())
+            )
             ledger = ForecastLedger(store)
             forecast_events = 0
             resolution_events = 0

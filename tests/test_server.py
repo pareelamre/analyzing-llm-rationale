@@ -1906,6 +1906,93 @@ class ServerTests(unittest.TestCase):
 
         temp_dir.cleanup()
 
+    def test_market_history_and_explain_shift_hydrate_from_markets_table(self):
+        # Rows written after market-level fields stopped being duplicated per
+        # snapshot carry question/market_url as NULL on the row itself --
+        # confirm both endpoints still return the real values, joined in from
+        # the normalized `markets` table.
+        import tempfile
+        from datetime import datetime, timezone
+        from pathlib import Path
+
+        from analyzing_llm_rationale.trackrec_store import DuckDBStore, Entity
+
+        temp_dir = tempfile.TemporaryDirectory()
+        db_path = Path(temp_dir.name) / "test_track_record.duckdb"
+        store = DuckDBStore(db_path)
+        try:
+            market = Entity(store.key("Market", "Polymarket:fed-sept-26"))
+            market.update(
+                platform="Polymarket",
+                ident="fed-sept-26",
+                question="Will the Fed cut rates?",
+                market_url="https://polymarket.com/fed-sept-26",
+            )
+            store.put(market)
+
+            snap1 = Entity(store.key("ForecastSnapshot", "Polymarket:fed-sept-26:gpt-oss-120b:2026-06-03"))
+            snap1.update(
+                platform="Polymarket",
+                ident="fed-sept-26",
+                model="gpt-oss-120b",
+                snapshot_date="2026-06-03",
+                snapshot_ts=datetime(2026, 6, 3, 12, 0, tzinfo=timezone.utc),
+                model_probability=0.40,
+                market_probability=0.42,
+                rationale="Interest rate cuts are unlikely in June given high CPI.",
+                resolved=False,
+            )
+            store.put(snap1)
+
+            snap2 = Entity(store.key("ForecastSnapshot", "Polymarket:fed-sept-26:gpt-oss-120b:2026-06-04"))
+            snap2.update(
+                platform="Polymarket",
+                ident="fed-sept-26",
+                model="gpt-oss-120b",
+                snapshot_date="2026-06-04",
+                snapshot_ts=datetime(2026, 6, 4, 12, 0, tzinfo=timezone.utc),
+                model_probability=0.55,
+                market_probability=0.52,
+                rationale="Retrieved news confirming CPI dropped, opening path for rate cut.",
+                resolved=False,
+            )
+            store.put(snap2)
+            store.save()
+
+            # The snapshots themselves never carry question/market_url directly.
+            raw = store._con.execute(
+                "SELECT question, market_url FROM forecast_snapshot WHERE key = ?",
+                ["Polymarket:fed-sept-26:gpt-oss-120b:2026-06-03"],
+            ).fetchone()
+            self.assertEqual(raw, (None, None))
+        finally:
+            store.close()
+
+        with (
+            mock.patch.dict("os.environ", {"TRACK_STORE_PATH": str(db_path)}),
+            mock.patch("analyzing_llm_rationale.gcs_store.ensure_local_copy", return_value=True),
+        ):
+            r_hist = self.client.get("/market/history", params={"platform": "polymarket", "ident": "fed-sept-26"})
+            self.assertEqual(r_hist.status_code, 200)
+            hist_data = r_hist.json()["history"]
+            self.assertEqual(len(hist_data), 2)
+            self.assertEqual(hist_data[0]["question"], "Will the Fed cut rates?")
+            self.assertEqual(hist_data[0]["market_url"], "https://polymarket.com/fed-sept-26")
+            self.assertEqual(hist_data[1]["question"], "Will the Fed cut rates?")
+
+            self.provider.response = "The model raised its cut probability after fresh CPI data."
+            r_explain = self.client.post("/market/explain-shift", json={"platform": "polymarket", "ident": "fed-sept-26"})
+            self.assertEqual(r_explain.status_code, 200)
+            exp_data = r_explain.json()
+            self.assertEqual(exp_data["latest_prob"], 0.55)
+            self.assertEqual(exp_data["previous_prob"], 0.40)
+            # The LLM prompt itself must carry the real question, not "None" --
+            # the exact regression this hydration fix addresses.
+            sent_prompt = self.provider.calls[-1][-1]["content"]
+            self.assertIn("Question: Will the Fed cut rates?", sent_prompt)
+
+        temp_dir.cleanup()
+
     def test_market_history_is_rate_limited(self):
         # This endpoint didn't do any real I/O in production before the GCS
         # migration (Dockerfile never bundled data/, so it always hit the
