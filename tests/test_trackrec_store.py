@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from analyzing_llm_rationale.trackrec_store import DuckDBStore, Entity, FileStore, MARKET_FIELDS
+from analyzing_llm_rationale.trackrec_store import MARKET_FIELDS, DuckDBStore, Entity, FileStore
 
 
 class MarketKindTests(unittest.TestCase):
