@@ -299,6 +299,116 @@ class TrajectoryTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_duckdb_backend_normalizes_market_fields_into_markets_table(self):
+        # Against the real DuckDBStore (production's backend), question/
+        # market_url/description/resolution_criteria/publish_time/close_time/
+        # category/domain must land in `markets`, not be duplicated onto every
+        # forecast_snapshot row -- and aggregate()'s public output must still
+        # show the real values via the join.
+        far = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+
+        async def forecast_fn(quote, top_k, model=None):
+            return {"model_probability": self.model_probs[quote["question"]],
+                    "market_probability": quote["probability"], "evidence_count": 2}
+
+        with tempfile.TemporaryDirectory() as td:
+            store = DuckDBStore(Path(td) / "track.duckdb")
+            try:
+                with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, tzinfo=timezone.utc)):
+                    self.assertEqual(asyncio.run(trl.record_snapshots(
+                        store, md, forecast_fn, default_model="m", per_venue=1)), 2)
+
+                raw = store._con.execute(
+                    "SELECT question, market_url, category, domain FROM forecast_snapshot"
+                ).fetchall()
+                self.assertTrue(raw)
+                for question, market_url, category, domain in raw:
+                    self.assertIsNone(question)
+                    self.assertIsNone(market_url)
+                    self.assertIsNone(category)
+                    self.assertIsNone(domain)
+
+                markets = {
+                    r[0]: r[1:] for r in store._con.execute(
+                        "SELECT ident, question, market_url, category FROM markets"
+                    ).fetchall()
+                }
+                self.assertEqual(markets["slug-a"][0], "Will A happen?")
+                self.assertEqual(markets["slug-a"][1], "https://polymarket.com/market/slug-a")
+                self.assertEqual(markets["slug-a"][2], "World")
+
+                with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, 1, tzinfo=timezone.utc)):
+                    self.assertEqual(trl.record_price_points(store, md), 2)
+                raw_pp = store._con.execute(
+                    "SELECT market_url, close_time FROM market_price_point"
+                ).fetchall()
+                for market_url, close_time in raw_pp:
+                    self.assertIsNone(market_url)
+                    self.assertIsNone(close_time)
+
+                agg = trl.aggregate(store, model="m", variant="v", temperature=0.0)
+                questions = {e["question"] for e in agg["edge_board"]}
+                self.assertIn("Will A happen?", questions)
+                urls = {e["market_url"] for e in agg["edge_board"]}
+                self.assertIn("https://polymarket.com/market/slug-a", urls)
+            finally:
+                store.close()
+
+    def test_reforecast_stored_ctx_fallback_survives_normalized_existing_row(self):
+        # Tick 1 captures a description via the live quote (goes to `markets`,
+        # not onto the snapshot row). Tick 2's live quote is thinner (venue
+        # response missing description) -- the re-forecast prompt must still
+        # get it back via hydration of `existing`, even though `existing`'s
+        # own row has no description column value to fall back to directly.
+        far = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        md._poly["description"] = "A description of A."
+        seen_quotes = []
+
+        async def forecast_fn(quote, top_k, model=None):
+            seen_quotes.append(dict(quote))
+            return {"model_probability": 0.70,
+                    "market_probability": quote["probability"], "evidence_count": 2}
+
+        with tempfile.TemporaryDirectory() as td:
+            store = DuckDBStore(Path(td) / "track.duckdb")
+            try:
+                with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, tzinfo=timezone.utc)):
+                    asyncio.run(trl.record_snapshots(
+                        store, md, forecast_fn, default_model="m", per_venue=1))
+
+                self.assertEqual(
+                    store._con.execute(
+                        "SELECT description FROM markets WHERE ident = 'slug-a'"
+                    ).fetchone(),
+                    ("A description of A.",),
+                )
+                self.assertIsNone(
+                    store._con.execute(
+                        "SELECT description FROM forecast_snapshot WHERE ident = 'slug-a'"
+                    ).fetchone()[0]
+                )
+
+                del md._poly["description"]  # venue response now thinner
+                # Same slot (same day) with reforecast_each_tick=True, so
+                # `existing` resolves to the row _write_snapshot just put --
+                # the stored_ctx fallback only applies within a slot's
+                # re-forecast, not across days (a new day is a new slot with
+                # no `existing` at all).
+                with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, tzinfo=timezone.utc)):
+                    asyncio.run(trl.record_snapshots(
+                        store, md, forecast_fn, default_model="m", per_venue=1,
+                        reforecast_each_tick=True))
+
+                second_poly = next(
+                    q for q in seen_quotes
+                    if q.get("question") == "Will A happen?" and q.get("forecast_history")
+                )
+                self.assertEqual(second_poly.get("description"), "A description of A.")
+            finally:
+                store.close()
+
     def test_short_horizon_markets_get_intraday_slots(self):
         ref = datetime(2026, 6, 3, 1, tzinfo=timezone.utc)
         # 5-day close: inside the 6h tier but outside the 1h expiry tier (≤3d).
@@ -544,6 +654,101 @@ class TrajectoryTests(unittest.TestCase):
                 self.assertEqual(agg["primary_n_snapshots_resolved"], 0)
                 self.assertEqual(agg["primary_n_markets_resolved"], 0)
                 self.assertIsNone(agg["overall"])
+            finally:
+                store.close()
+
+    def test_backfill_hydrates_reference_question_for_new_format_rows(self):
+        # `ref` here has NO market-level fields of its own (as real rows written
+        # after normalization won't) -- only `markets` carries them. The
+        # backfill's LLM prompt must still see the real question, and the new
+        # backfilled entity must not re-duplicate the fields onto its own row.
+        with tempfile.TemporaryDirectory() as td:
+            store = DuckDBStore(Path(td) / "track.duckdb")
+            try:
+                market = Entity(store.key("Market", "Polymarket:slug-a"))
+                market.update(platform="Polymarket", ident="slug-a", question="Will A happen?",
+                              market_url="https://polymarket.com/market/slug-a", category="World",
+                              domain="world")
+                store.put(market)
+
+                ref = Entity(store.key(trl.SNAPSHOT_KIND, "Polymarket:slug-a:crowd-follow:2026-06-03"))
+                ref.update(
+                    platform="Polymarket", ident="slug-a", model="crowd-follow",
+                    snapshot_ts="2026-06-03T00:00:00+00:00", snapshot_date="2026-06-03",
+                    model_probability=0.4, market_probability=0.4,
+                    lead_time_days=1.0, horizon="1-3d",
+                    market_volume=100.0, market_liquidity=50.0, evidence_count=0,
+                    resolved=True, outcome=1, resolved_ts="2026-06-04T01:00:00+00:00",
+                    model_brier=0.36, market_brier=0.36, model_correct=False,
+                    entities=[], rationale="",
+                )
+                store.put(ref)
+
+                seen_quotes = []
+
+                async def forecast_fn(quote, top_k, model=None):
+                    seen_quotes.append(dict(quote))
+                    return {"model_probability": 0.65, "market_probability": quote["probability"],
+                            "evidence_count": 2, "rationale": f"{model} backfill"}
+
+                wrote = asyncio.run(trl.backfill_missing_model_snapshots(
+                    store, forecast_fn, models=["council"], default_model="crowd-follow",
+                ))
+                self.assertEqual(wrote, 1)
+                self.assertEqual(seen_quotes[0]["question"], "Will A happen?")
+                self.assertEqual(seen_quotes[0]["market_url"], "https://polymarket.com/market/slug-a")
+
+                raw = store._con.execute(
+                    "SELECT question, market_url, category, domain FROM forecast_snapshot "
+                    "WHERE model = 'council'"
+                ).fetchone()
+                self.assertEqual(raw, (None, None, None, None))
+
+                agg = trl.aggregate(store, model="crowd-follow", variant="v", temperature=0.0)
+                trajectory_questions = {t["question"] for t in agg["trajectories"]}
+                self.assertIn("Will A happen?", trajectory_questions)
+            finally:
+                store.close()
+
+
+class ConvergenceTradeTests(unittest.TestCase):
+    def test_convergence_trade_hydrates_question_for_new_format_rows(self):
+        # fs.question/fs.market_url are NULL on new-format rows -- the
+        # convergence-trade writer must still populate them via `markets`.
+        with tempfile.TemporaryDirectory() as td:
+            store = DuckDBStore(Path(td) / "track.duckdb")
+            try:
+                market = Entity(store.key("Market", "Polymarket:slug-a"))
+                market.update(platform="Polymarket", ident="slug-a", question="Will A happen?",
+                              market_url="https://polymarket.com/market/slug-a")
+                store.put(market)
+
+                snap = Entity(store.key(trl.SNAPSHOT_KIND, "Polymarket:slug-a:m:2026-06-03"))
+                snap.update(
+                    platform="Polymarket", ident="slug-a", model="m",
+                    snapshot_ts="2026-06-03T00:00:00+00:00", snapshot_date="2026-06-03",
+                    model_probability=0.65, market_probability=0.50,
+                    lead_time_days=10.0, horizon="7-14d",
+                    resolved=True, outcome=1, resolved_ts="2026-06-10T00:00:00+00:00",
+                )
+                store.put(snap)
+
+                point = Entity(store.key(trl.PRICE_KIND, "Polymarket:slug-a:2026-06-07T00"))
+                point.update(
+                    platform="Polymarket", ident="slug-a",
+                    ts="2026-06-07T00:00:00+00:00", hour="2026-06-07T00",
+                    market_probability=0.58, lead_time_days=3.0,
+                )
+                store.put(point)
+                store.save()
+
+                written = trl.record_convergence_trades(store)
+                self.assertEqual(written, 1)
+
+                row = store._con.execute(
+                    "SELECT question, market_url FROM convergence_trade WHERE ident = 'slug-a'"
+                ).fetchone()
+                self.assertEqual(row, ("Will A happen?", "https://polymarket.com/market/slug-a"))
             finally:
                 store.close()
 

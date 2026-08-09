@@ -2521,6 +2521,10 @@ async def market_history(
                 if (s.get("platform") or "").lower() == plat
             ]
             filtered.sort(key=lambda s: s.get("snapshot_ts") or "")
+            # Read-only response building (never put() back) -- safe to hydrate
+            # question/market_url from `markets` for rows that no longer carry
+            # their own copy.
+            filtered = store.hydrate_markets(filtered)
 
             history = []
             for s in filtered:
@@ -2576,7 +2580,10 @@ async def explain_shift(req: ExplainShiftRequest, request: Request) -> Dict[str,
                 if (s.get("platform") or "").lower() == plat
             ]
             filtered.sort(key=lambda s: s.get("snapshot_ts") or "")
-            return [dict(s) for s in filtered]
+            # Read-only (used to build an LLM prompt, never put() back) --
+            # safe to hydrate `question` from `markets` for rows that no
+            # longer carry their own copy.
+            return [dict(s) for s in store.hydrate_markets(filtered)]
         finally:
             store.close()
 
