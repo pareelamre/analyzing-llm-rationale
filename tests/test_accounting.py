@@ -280,8 +280,43 @@ class ValidatedKellyAccountTests(unittest.TestCase):
             max_concentration=0.05, max_drawdown=0.30,
         )
         values = [point["account_value"] for point in account["value_curve"]]
-        self.assertGreaterEqual(min(values), 7_000.0 - 1e-4)
+        # The floor is checked *before* a trade opens (gate), not clamped
+        # mid-trade against cash (the old, buggy behavior) -- a single
+        # max_concentration-sized loss can carry value slightly past it,
+        # bounded by that one trade's size rather than an unbounded bleed.
+        self.assertGreaterEqual(min(values), 7_000.0 - 10_000.0 * 0.05 - 1e-4)
         self.assertGreater(account["n_skipped_drawdown_limit"], 0)
+
+    def test_drawdown_limit_ignores_cash_tied_up_in_open_positions(self):
+        # Opening several *unresolved* positions moves cash into open
+        # contracts without any real loss (only the tiny bid-ask spread) --
+        # total account value barely moves. A cash-only floor check treats
+        # that shrinking cash as drawdown and permanently locks the account
+        # out after only a handful of concurrent opens, even though nothing
+        # has actually been lost; the total-value-based floor must not.
+        base = datetime(2026, 7, 1, tzinfo=timezone.utc)
+        rows = [
+            {
+                "platform": "Polymarket",
+                "ident": f"open-{i}",
+                "snapshot_ts": base + timedelta(hours=i),
+                "model_probability": 0.70,
+                "calibrated_model_probability": 0.70,
+                "market_probability": 0.50,
+                "market_bid": 0.49,
+                "market_ask": 0.51,
+                "resolved": False,
+                "_edge_validated": True,
+            }
+            for i in range(10)
+        ]
+        account = simulate_validated_kelly_account(
+            rows, starting_cash=10_000.0, kelly_fraction=1.0,
+            max_concentration=0.05, max_drawdown=0.30,
+        )
+        self.assertEqual(account["n_skipped_drawdown_limit"], 0)
+        self.assertEqual(account["n_trades"], 10)
+        self.assertGreaterEqual(account["account_value"], 10_000.0 * 0.97)
 
     def test_open_kelly_ledger_appends_live_mark_to_market_curve_point(self):
         rows = [{

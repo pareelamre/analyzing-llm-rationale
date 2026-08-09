@@ -602,9 +602,10 @@ def simulate_validated_kelly_account(
     on the *current* account value and capped per-market to bound tail risk
     from any single miscalibrated call. ``market_shrinkage`` tempers the
     calibrated probability toward the executable market price before sizing.
-    When ``max_drawdown`` is set, new purchases must leave enough cash that
-    every open position could settle at zero without crossing that account
-    high-watermark drawdown limit.
+    When ``max_drawdown`` is set, new purchases halt once the account's
+    current total value (cash plus open positions marked to market) has
+    drawn down past that fraction of its running high-watermark peak,
+    resuming automatically once value recovers above the floor.
 
     This is the strategy actually meant to be traded, unlike
     simulate_shadow_mark_to_market_account's fixed $1 target_contracts (a
@@ -803,24 +804,18 @@ def simulate_validated_kelly_account(
                     )
 
                 if drawdown_limit is not None:
-                    # Cash is the account's worst-case terminal value when all
-                    # binary contracts expire worthless. Preserve the floor
-                    # before opening another position, including its fee.
+                    # Gate on *total* account value (cash + open positions
+                    # marked to market), not cash alone -- cash alone falls
+                    # every time a position opens even though that value
+                    # never left the account, which falsely and permanently
+                    # locked out accounts simply for holding several
+                    # concurrent positions. Halt new positions only once
+                    # realized/marked value has actually drawn down past the
+                    # floor; trading resumes automatically once it recovers.
                     drawdown_floor = peak_account_value * (1.0 - drawdown_limit)
-                    spending_budget = max(0.0, account.cash - drawdown_floor)
-                    if notional + _fee_for(notional) > spending_budget:
-                        low, high = 0.0, notional
-                        for _ in range(32):
-                            candidate = (low + high) / 2.0
-                            if candidate + _fee_for(candidate) <= spending_budget:
-                                low = candidate
-                            else:
-                                high = candidate
-                        notional = low
-                        buy_qty = notional / ask
-                        if buy_qty <= 1e-9:
-                            skipped_drawdown_limit += 1
-                            continue
+                    if account_value < drawdown_floor:
+                        skipped_drawdown_limit += 1
+                        continue
                 fee = _fee_for(notional)
                 fill = account.buy(
                     platform=platform,
@@ -902,8 +897,9 @@ def simulate_validated_kelly_account(
                     "Open positions are valued at bid-side liquidation prices.",
                     "Resolved markets settle into cash once per market before later trades are considered.",
                     (
-                        f"New positions preserve a {drawdown_limit:.0%} high-watermark drawdown floor, "
-                        "assuming every open contract can expire worthless."
+                        f"New positions halt once total account value draws down "
+                        f"{drawdown_limit:.0%} from its high-watermark peak, resuming "
+                        "automatically once value recovers above that floor."
                         if drawdown_limit is not None else
                         "No portfolio-level drawdown floor is configured."
                     ),
