@@ -27,6 +27,11 @@ on:
         required: false
         default: "15"
 
+env:
+  GCP_PROJECT_ID: brave-drive-471109-d9
+  TRACK_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
+  TRACK_STORE_OBJECT: track_record_store.duckdb
+
 permissions:
   contents: write
   pull-requests: write
@@ -104,10 +109,16 @@ jobs:
             exit 1
           fi
 
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
       - name: Prepare isolated model store
         run: |
           mkdir -p tmp/model-forecast
-          cp data/track_record_store.duckdb "tmp/model-forecast/${{ matrix.artifact }}.duckdb"
+          gcloud storage cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" "tmp/model-forecast/${{ matrix.artifact }}.duckdb"
 
       - name: Advance model forecast snapshots
         env:
@@ -168,10 +179,19 @@ jobs:
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    concurrency:
+      group: track-record-store-gcs-write
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
 
       - uses: actions/setup-python@v5
         with:
@@ -224,11 +244,13 @@ jobs:
           for attempt in 1 2 3 4 5 6 7 8; do
             git fetch origin main
             git checkout -B "forecast-publish-batch" origin/main
+            gcloud storage cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb
             python scripts/merge_track_record_store.py \
               --target data/track_record_store.duckdb \
               "${forecast_stores[@]}"
             python scripts/track_record_tick.py --mtm-only
-            git add data/track_record_store.duckdb static/mark_to_market_live.json
+            gcloud storage cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"
+            git add static/mark_to_market_live.json
             if git diff --cached --quiet; then
               echo "No forecast snapshot changes to commit."
               exit 0

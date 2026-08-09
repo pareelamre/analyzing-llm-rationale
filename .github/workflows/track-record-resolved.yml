@@ -9,6 +9,11 @@ on:
     - cron: "7 * * * *"
   workflow_dispatch: {}
 
+env:
+  GCP_PROJECT_ID: brave-drive-471109-d9
+  TRACK_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
+  TRACK_STORE_OBJECT: track_record_store.duckdb
+
 permissions:
   contents: write
   pull-requests: write
@@ -21,6 +26,9 @@ jobs:
   resolved-quality:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: track-record-store-gcs-write
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +44,15 @@ jobs:
           opentelemetry-instrumentation-logging
           opentelemetry-instrumentation-requests
 
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download track record store
+        run: gcloud storage cp "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT" data/track_record_store.duckdb
+
       - name: Score resolved forecasts
         env:
           FORESEA_BASE_URL: https://foresea.ink
@@ -43,9 +60,12 @@ jobs:
           CYCLE_INTERVAL_MINUTES: "15"
         run: python scripts/track_record_tick.py --resolved-only
 
+      - name: Upload track record store
+        run: gcloud storage cp data/track_record_store.duckdb "$TRACK_STORE_BUCKET/$TRACK_STORE_OBJECT"
+
       - name: Commit resolved-quality artifacts
         env:
-          GIT_REBASE_KEEP_THEIRS: "data/track_record_store.duckdb,static/track_record_live.json,static/forecast_evaluation.json"
+          GIT_REBASE_KEEP_THEIRS: "static/track_record_live.json,static/forecast_evaluation.json"
           MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
         run: |
           git config user.name  "github-actions[bot]"
@@ -56,7 +76,7 @@ jobs:
           ssh-keyscan github.com >> ~/.ssh/known_hosts
           git config core.sshCommand "ssh -i ~/.ssh/mtm_publish_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
           git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
-          git add data/track_record_store.duckdb static/track_record_live.json static/forecast_evaluation.json
+          git add static/track_record_live.json static/forecast_evaluation.json
           if git diff --cached --quiet; then
             echo "No resolved-quality changes to commit."
             exit 0

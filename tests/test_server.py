@@ -1883,7 +1883,10 @@ class ServerTests(unittest.TestCase):
         finally:
             store.close()
 
-        with mock.patch.dict("os.environ", {"TRACK_STORE_PATH": str(db_path)}):
+        with (
+            mock.patch.dict("os.environ", {"TRACK_STORE_PATH": str(db_path)}),
+            mock.patch("analyzing_llm_rationale.gcs_store.ensure_local_copy", return_value=True),
+        ):
             r_hist = self.client.get("/market/history", params={"platform": "polymarket", "ident": "fed-sept-26"})
             self.assertEqual(r_hist.status_code, 200)
             hist_data = r_hist.json()["history"]
@@ -1902,6 +1905,24 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(exp_data["explanation"], "The model increased cuts probability to 55.0% due to CPI dropping.")
 
         temp_dir.cleanup()
+
+    def test_market_history_is_rate_limited(self):
+        # This endpoint didn't do any real I/O in production before the GCS
+        # migration (Dockerfile never bundled data/, so it always hit the
+        # store_path.exists() guard instantly) -- now ensure_local_copy makes
+        # a live GCS call per request, so it must be rate limited like every
+        # other endpoint that does real work.
+        import analyzing_llm_rationale.server as srv
+
+        with (
+            mock.patch.object(srv._rate_limiter, "_calls", 1),
+            mock.patch("analyzing_llm_rationale.gcs_store.ensure_local_copy", return_value=False),
+        ):
+            first = self.client.get("/market/history", params={"platform": "polymarket", "ident": "anything"})
+            second = self.client.get("/market/history", params={"platform": "polymarket", "ident": "anything"})
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
 
     def test_crypto_5m_equity_endpoint_returns_candidate_curves(self):
         import analyzing_llm_rationale.server as srv

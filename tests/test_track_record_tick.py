@@ -76,11 +76,17 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("python scripts/merge_track_record_store.py", workflow)
         self.assertIn('"${forecast_stores[@]}"', workflow)
         self.assertIn("python scripts/track_record_tick.py --mtm-only", workflow)
-        self.assertIn("git add data/track_record_store.duckdb static/mark_to_market_live.json", workflow)
+        self.assertIn("git add static/mark_to_market_live.json", workflow)
         self.assertIn("pull-requests: write", workflow)
         self.assertNotIn("forecast-publish-${{ matrix.artifact }}", workflow)
         self.assertNotIn("track record: forecast ${{ matrix.model }} [skip ci]", workflow)
         self.assertNotIn("static/track_record_live.json static/forecast_evaluation.json", workflow)
+        # Store persistence moved off git into GCS (the file outgrew GitHub's
+        # 100MB push limit) -- these lock in the new plumbing.
+        self.assertIn("google-github-actions/auth@v2", workflow)
+        self.assertIn("gcloud storage cp", workflow)
+        self.assertIn("track-record-store-gcs-write", workflow)
+        self.assertNotIn("git add data/track_record_store.duckdb", workflow)
         for model in (
             "council",
             "scads-alias-code",
