@@ -1700,7 +1700,13 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(account["max_concentration"], 0.05)
         self.assertEqual(account["min_edge"], 0.1)
         self.assertGreater(account["account_value"], 10_000)
-        self.assertEqual(len(account["value_curve"]), 6)
+        # 3 trades + 3 settlements + a trailing mark-to-market point extending
+        # the curve to "now" even though every position has since settled --
+        # otherwise a fully-flat account's chart marker freezes at its last
+        # settlement time instead of tracking alongside still-open accounts.
+        self.assertEqual(len(account["value_curve"]), 7)
+        self.assertEqual(account["value_curve"][-1]["event_type"], "mark_to_market")
+        self.assertEqual(account["value_curve"][-1]["account_value"], account["account_value"])
         self.assertEqual(one_percent["collecting"]["status"], "collecting_history")
 
     def test_growth_accounts_skip_extreme_prices(self):

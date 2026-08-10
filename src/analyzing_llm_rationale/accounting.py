@@ -530,7 +530,13 @@ def simulate_shadow_mark_to_market_account(
                 value_curve.append(snap)
 
             final = account.snapshot(current_quotes)
-            if final.get("open_positions"):
+            if trade_count > 0:
+                # Extend the curve to right now even when every position has
+                # already settled -- otherwise an account that's fully in
+                # cash freezes its last plotted point at its last trade/
+                # settlement time, which can be days old, and looks
+                # (wrongly) stale/behind next to accounts still holding open
+                # positions (which always get marked to the current moment).
                 mtm_snap = dict(final)
                 mtm_snap["event_type"] = "mark_to_market"
                 value_curve.append(mtm_snap)
@@ -837,7 +843,13 @@ def simulate_validated_kelly_account(
                 peak_account_value = max(peak_account_value, float(snap["account_value"]))
 
             final = account.snapshot(current_quotes)
-            if final.get("open_positions"):
+            if trade_count > 0:
+                # Extend the curve to right now even when every position has
+                # already settled -- otherwise an account that's fully in
+                # cash freezes its last plotted point at its last trade/
+                # settlement time, which can be days old, and looks
+                # (wrongly) stale/behind next to accounts still holding open
+                # positions (which always get marked to the current moment).
                 mtm_snap = dict(final)
                 mtm_snap["event_type"] = "mark_to_market"
                 value_curve.append(mtm_snap)
