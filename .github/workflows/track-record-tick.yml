@@ -1,12 +1,12 @@
 name: Track record MTM tick
 
-# Cheap 15-minute heartbeat: records price points, scores newly-resolved markets,
+# Cheap 5-minute heartbeat: records price points, scores newly-resolved markets,
 # and refreshes the public aggregate. No LLM calls — always completes in < 10 min.
 # LLM forecast snapshots are handled by track-record-forecast.yml (hourly).
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -40,7 +40,7 @@ jobs:
         env:
           FORESEA_BASE_URL: https://foresea.ink
           TRACK_MODEL: "council"
-          CYCLE_INTERVAL_MINUTES: "15"
+          CYCLE_INTERVAL_MINUTES: "5"
         run: python scripts/track_record_tick.py --mtm-only
 
       - name: Commit updated MTM artifact

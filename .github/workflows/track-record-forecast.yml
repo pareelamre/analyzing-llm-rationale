@@ -7,7 +7,7 @@ name: Track record forecast snapshots
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       reforecast_each_tick:
@@ -19,7 +19,7 @@ on:
         required: false
         default: "4"
       target_shard_index:
-        description: "0-based target shard to run; blank rotates from the 15-minute slot"
+        description: "0-based target shard to run; blank rotates from the 5-minute slot"
         required: false
         default: ""
       max_targets:
@@ -122,16 +122,16 @@ jobs:
           TRACK_MODEL_SHARD_COUNT: "1"
           TRACK_MODEL_SHARD_INDEX: "0"
           TRACK_MODEL_SHARD_ALWAYS: ""
-          TRACK_MODEL_SHARD_SLOT_MINUTES: "15"
+          TRACK_MODEL_SHARD_SLOT_MINUTES: "5"
           TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '4' }}
           TRACK_TARGET_SHARD_INDEX: ${{ github.event.inputs.target_shard_index || '' }}
-          TRACK_TARGET_SHARD_SLOT_MINUTES: "15"
+          TRACK_TARGET_SHARD_SLOT_MINUTES: "5"
           TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '15' }}
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
           REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '1' }}
-          CYCLE_INTERVAL_MINUTES: "15"
-          SNAPSHOT_SLOT_MINUTES: "15"
+          CYCLE_INTERVAL_MINUTES: "5"
+          SNAPSHOT_SLOT_MINUTES: "5"
           TRACK_RECORD_EVIDENCE_DETAIL: "summary"
           PRICE_DRIFT_THRESHOLD: "0.10"
           SHORT_HORIZON_REFORECAST_LEAD_DAYS: "90"
@@ -198,7 +198,7 @@ jobs:
         env:
           FORESEA_BASE_URL: https://foresea.ink
           TRACK_MODEL: "council"
-          CYCLE_INTERVAL_MINUTES: "15"
+          CYCLE_INTERVAL_MINUTES: "5"
           MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
         run: |
           set -euo pipefail

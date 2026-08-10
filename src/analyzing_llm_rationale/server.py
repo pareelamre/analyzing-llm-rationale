@@ -165,17 +165,19 @@ _CHAT_SYSTEM_PROMPT = (
     "numbered lists when they help. Ground your answer in the provided evidence "
     "summaries and any prediction-market context when relevant, and be honest about "
     "uncertainty. Treat the provided Current Time as today's date/time for temporal "
-    "phrases and deadlines. If the question implies a probability, express it in prose "
-    "(e.g., \"around 60%\") and, when a market price is given, briefly note whether "
-    "you lean above or below it. When evidence summaries are provided, include a short "
+    "phrases and deadlines. If the user asks for a forecast, prediction, likelihood, "
+    "odds, or whether a future event will happen, give a clear conclusion and, when a "
+    "market price is given, briefly note whether you lean above or below it. Foresea "
+    "will render your probability as part of the reply, so do not use bracketed tags "
+    "or a rigid forecast template in your prose. When evidence summaries are provided, include a short "
     "**Evidence used** section naming one to three provided sources by publisher or "
     "domain and article title, followed by the concrete facts that affected your "
     "estimate. Never refer to evidence only as \"Article 1\", \"Article 2\", or another "
     "bare item number. Never invent a source or claim that you checked current reporting "
     "when no evidence was retrieved. "
-    "Whenever you give a probability estimate, append a machine-readable tag on its own "
-    "line at the very end of your response: [p:0.XX] where 0.XX is your estimate as a "
-    "decimal (e.g. [p:0.65]). Omit the tag if you give no probability. "
+    "For every forecast, append the internal machine-readable marker on its own final "
+    "line: [p:0.XX] where 0.XX is your estimate as a decimal (e.g. [p:0.65]). This "
+    "marker is hidden from the user. Omit it only for non-forecast conversation. "
     "Do NOT output JSON, key/value objects, or a rigid forecast template — just talk to the user."
 )
 
@@ -903,6 +905,58 @@ def _delete_favorite(user_id: str, key: str) -> None:
         _state.setdefault("favorites", {}).setdefault(user_id, {}).pop(key, None)
         return
     client.delete(_favorite_key(client, user_id, key))
+
+
+_PERSONAL_LEDGER_KIND = "PersonalLedgerEntry"
+_PERSONAL_LEDGER_FIELDS = (
+    "id", "conversation_id", "message_id", "question", "predicted_answer",
+    "probability", "rationale", "model", "createdAt",
+)
+
+
+def _personal_ledger_key(client: Any, user_id: str, entry_id: str) -> Any:
+    return client.key("User", user_id, _PERSONAL_LEDGER_KIND, entry_id)
+
+
+def _personal_ledger_from_entity(entity: Any) -> Dict[str, Any]:
+    entry = {field: entity.get(field) for field in _PERSONAL_LEDGER_FIELDS}
+    entry["id"] = entity.key.name
+    return entry
+
+
+def _list_personal_ledger(user_id: str) -> List[Dict[str, Any]]:
+    """List a user's explicit chat-forecast saves in newest-first order."""
+    client = _get_datastore()
+    if client is None:
+        entries = list(_state.setdefault("personal_ledger", {}).get(user_id, {}).values())
+        return sorted(entries, key=lambda entry: entry.get("createdAt") or 0, reverse=True)
+    query = client.query(kind=_PERSONAL_LEDGER_KIND, ancestor=client.key("User", user_id))
+    entries = [_personal_ledger_from_entity(entity) for entity in query.fetch(limit=500)]
+    entries.sort(key=lambda entry: entry.get("createdAt") or 0, reverse=True)
+    return entries
+
+
+def _put_personal_ledger_entry(user_id: str, entry: Dict[str, Any]) -> Dict[str, Any]:
+    entry = {field: entry.get(field) for field in _PERSONAL_LEDGER_FIELDS}
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("personal_ledger", {}).setdefault(user_id, {})[entry["id"]] = entry
+        return entry
+    from google.cloud import datastore as _ds
+    key = _personal_ledger_key(client, user_id, entry["id"])
+    indexed = {"id", "conversation_id", "message_id", "probability", "model", "createdAt"}
+    entity = _ds.Entity(key=key, exclude_from_indexes=tuple(field for field in entry if field not in indexed))
+    entity.update(entry)
+    client.put(entity)
+    return entry
+
+
+def _delete_personal_ledger_entry(user_id: str, entry_id: str) -> None:
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("personal_ledger", {}).setdefault(user_id, {}).pop(entry_id, None)
+        return
+    client.delete(_personal_ledger_key(client, user_id, entry_id))
 
 
 # ── RAG knowledge base (per-user vector store on Datastore) ──────────────────
@@ -1636,6 +1690,11 @@ _market_context_counter = _meter.create_counter(
     "market.context_enrichments",
     unit="1",
     description="Prediction-market context enrichment outcomes",
+)
+_personal_ledger_actions = _meter.create_counter(
+    "personal_ledger.actions",
+    unit="1",
+    description="Personal-ledger actions by type and outcome",
 )
 
 
@@ -3640,6 +3699,12 @@ class PredictResponse(BaseModel):
     question_type: str = Field("binary", description="Detected type: `binary`, `multiple_choice`, `numeric`, or `date`.")
     predicted_answer: Optional[str] = Field(None, description="Headline answer: Yes/No, the top option, or the median estimate.")
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Confidence in the headline answer (binary/MC). Null for numeric.")
+    model_probability: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=1.0,
+        description="Explicit model probability for conversational forecasts, when one was provided.",
+    )
     options: List[OptionProb] = Field(default_factory=list, description="Per-option probabilities for `multiple_choice`.")
     range_forecast: Optional[RangeForecast] = Field(None, description="p10/p50/p90 estimate for `numeric` and `date`.")
     rationale: Optional[str] = Field(None, description="2–4 sentence explanation of the prediction.")
@@ -3819,6 +3884,23 @@ class FavoriteMarket(BaseModel):
 
 class FavoriteList(BaseModel):
     favorites: List[FavoriteMarket]
+
+
+class PersonalLedgerEntry(BaseModel):
+    """One forecast a signed-in user explicitly saved from a chat response."""
+    id: str = Field(..., min_length=1, max_length=120, pattern=r"^[A-Za-z0-9:_\-]+$")
+    conversation_id: str = Field("", max_length=120)
+    message_id: str = Field("", max_length=120)
+    question: str = Field(..., min_length=1, max_length=800)
+    predicted_answer: str = Field("", max_length=120)
+    probability: float = Field(..., ge=0.0, le=1.0)
+    rationale: str = Field("", max_length=8000)
+    model: str = Field("", max_length=160)
+    createdAt: int = Field(..., ge=0)
+
+
+class PersonalLedgerList(BaseModel):
+    entries: List[PersonalLedgerEntry]
 
 
 class RadarMarket(BaseModel):
@@ -4337,6 +4419,53 @@ def _build_typed_response(
             req, "binary", predicted_answer, confidence, []
         ),
         **base,
+    )
+
+
+def _build_chat_response(
+    req: "PredictRequest",
+    content: str,
+    evidence_articles: List[Dict[str, Any]],
+    evidence_error: Optional[str],
+    served_model_name: Optional[str] = None,
+) -> "PredictResponse":
+    """Build the natural-language response while preserving a forecast probability."""
+    text = content.strip()
+    chat_prob: Optional[float] = None
+    match = _CHAT_PROB_RE.search(text)
+    if match:
+        try:
+            chat_prob = float(match.group(1))
+        except ValueError:
+            pass
+        text = _CHAT_PROB_RE.sub("", text).rstrip()
+    if chat_prob is not None:
+        text = f"**Forecast: {chat_prob:.0%}**\n\n{text}"
+
+    chat_market_analysis: Optional[MarketAnalysis] = None
+    if chat_prob is not None:
+        _purl = _parse_market_url(req.question or "")
+        _url_m = re.search(r"https?://\S+", req.question or "")
+        if _purl and _url_m:
+            _venue, _kind, _mid = _purl
+            chat_market_analysis = MarketAnalysis(
+                platform=_venue,
+                market_url=_url_m.group(0).rstrip("),."),
+                model_probability=chat_prob,
+            )
+
+    return PredictResponse(
+        question_type="chat",
+        rationale=text,
+        model_rationale=text,
+        model_probability=chat_prob,
+        variant=req.variant,
+        model_key=_model_key_for_request(req),
+        served_model_name=served_model_name,
+        evidence_sources=_evidence_sources(evidence_articles),
+        evidence_articles=_news_articles(evidence_articles),
+        evidence_error=evidence_error,
+        market_analysis=chat_market_analysis,
     )
 
 
@@ -5980,6 +6109,67 @@ async def delete_chat_conversation(conversation_id: str, request: Request) -> Di
     return {"ok": True}
 
 
+@app.get("/personal-ledger", tags=["Auth"], response_model=PersonalLedgerList)
+async def list_personal_ledger(request: Request) -> PersonalLedgerList:
+    """Return the current user's explicitly saved chat forecasts."""
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("personal_ledger.list") as span:
+        span.set_attribute("user.id", claims["sub"])
+        loop = asyncio.get_running_loop()
+        entries = await loop.run_in_executor(None, _list_personal_ledger, claims["sub"])
+        span.set_attribute("personal_ledger.entries.count", len(entries))
+        return PersonalLedgerList(entries=[PersonalLedgerEntry(**entry) for entry in entries])
+
+
+@app.put("/personal-ledger/{entry_id}", tags=["Auth"], response_model=PersonalLedgerEntry)
+async def save_personal_ledger_entry(
+    entry_id: str,
+    entry: PersonalLedgerEntry,
+    request: Request,
+) -> PersonalLedgerEntry:
+    """Save a forecast to the current user's private personal ledger."""
+    claims = _require_session(request)
+    if entry.id != entry_id:
+        raise HTTPException(status_code=400, detail="Ledger entry path/body mismatch.")
+    with _tracer.start_as_current_span("personal_ledger.add") as span:
+        span.set_attribute("user.id", claims["sub"])
+        span.set_attribute("personal_ledger.action", "add")
+        try:
+            loop = asyncio.get_running_loop()
+            saved = await loop.run_in_executor(
+                None, _put_personal_ledger_entry, claims["sub"], entry.model_dump()
+            )
+            _personal_ledger_actions.add(1, {"action": "add", "outcome": "success"})
+            logger.info("personal ledger entry saved")
+            return PersonalLedgerEntry(**saved)
+        except Exception as exc:
+            _personal_ledger_actions.add(1, {"action": "add", "outcome": "failure"})
+            span.record_exception(exc)
+            span.set_status(otel_trace.Status(otel_trace.StatusCode.ERROR, type(exc).__name__))
+            logger.exception("personal ledger entry could not be saved")
+            raise
+
+
+@app.delete("/personal-ledger/{entry_id}", tags=["Auth"])
+async def delete_personal_ledger_entry(entry_id: str, request: Request) -> Dict[str, bool]:
+    """Remove one saved forecast from the current user's personal ledger."""
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("personal_ledger.remove") as span:
+        span.set_attribute("user.id", claims["sub"])
+        span.set_attribute("personal_ledger.action", "remove")
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, _delete_personal_ledger_entry, claims["sub"], entry_id)
+            _personal_ledger_actions.add(1, {"action": "remove", "outcome": "success"})
+            return {"ok": True}
+        except Exception as exc:
+            _personal_ledger_actions.add(1, {"action": "remove", "outcome": "failure"})
+            span.record_exception(exc)
+            span.set_status(otel_trace.Status(otel_trace.StatusCode.ERROR, type(exc).__name__))
+            logger.exception("personal ledger entry could not be removed")
+            raise
+
+
 @app.get("/chat/models", tags=["System"], include_in_schema=False)
 async def chat_models(request: Request) -> Dict[str, Any]:
     """Chat-capable server-hosted models exposed in the prompt selector."""
@@ -6757,43 +6947,16 @@ async def predict(req: PredictRequest, request: Request = None, kb_user_id: Opti
         })
         raise _provider_http_error(exc) from exc
 
-    parsed = _parse_json_dict(content)
     if req.chat_mode:
-        text = content.strip()
-        # Extract and strip the hidden probability tag so it never reaches the user.
-        chat_prob: Optional[float] = None
-        m = _CHAT_PROB_RE.search(text)
-        if m:
-            try:
-                chat_prob = float(m.group(1))
-            except ValueError:
-                pass
-            text = _CHAT_PROB_RE.sub("", text).rstrip()
-        model_key = _model_key_for_request(req)
-        # Build a minimal market_analysis when we have a probability + a market URL
-        # in the question so _finalize_predict_response can enroll it in the track record.
-        chat_market_analysis: Optional[MarketAnalysis] = None
-        if chat_prob is not None:
-            _purl = _parse_market_url(req.question or "")
-            _url_m = re.search(r"https?://\S+", req.question or "")
-            if _purl and _url_m:
-                _venue, _kind, _mid = _purl
-                chat_market_analysis = MarketAnalysis(
-                    platform=_venue,
-                    market_url=_url_m.group(0).rstrip(").,"),
-                    model_probability=chat_prob,
-                )
-        response = PredictResponse(
-            question_type="chat",
-            rationale=text, model_rationale=text,
-            variant=req.variant, model_key=model_key,
-            served_model_name=_provider_served_model_name(served_provider),
-            evidence_sources=_evidence_sources(evidence_articles),
-            evidence_articles=_news_articles(evidence_articles),
-            evidence_error=evidence_error,
-            market_analysis=chat_market_analysis,
+        response = _build_chat_response(
+            req,
+            content,
+            evidence_articles,
+            evidence_error,
+            _provider_served_model_name(served_provider),
         )
     else:
+        parsed = _parse_json_dict(content)
         response = _build_typed_response(
             req,
             parsed,
@@ -7086,16 +7249,26 @@ async def predict_stream(req: PredictRequest, request: Request) -> StreamingResp
             return
 
         text = "".join(chunks).strip()
-        parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
-                                             "rationale", "options", "p10", "p50", "p90", "unit"))
-        response = _build_typed_response(
-            req,
-            parsed,
-            text,
-            evidence_articles,
-            evidence_error,
-            _provider_served_model_name(used_provider_ref.get("provider")),
-        )
+        served_model_name = _provider_served_model_name(used_provider_ref.get("provider"))
+        if req.chat_mode:
+            response = _build_chat_response(
+                req,
+                text,
+                evidence_articles,
+                evidence_error,
+                served_model_name,
+            )
+        else:
+            parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
+                                                 "rationale", "options", "p10", "p50", "p90", "unit"))
+            response = _build_typed_response(
+                req,
+                parsed,
+                text,
+                evidence_articles,
+                evidence_error,
+                served_model_name,
+            )
         await _finalize_predict_response(req, response, rag_user_id, predict_cache_key)
         yield _sse_event("done", {"response": response.model_dump(mode="json")})
 
