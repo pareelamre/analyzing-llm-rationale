@@ -1607,7 +1607,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         """
         return min(_half_kelly_fraction(b), 0.01) * max(0.0, bk)
 
-    def _half_kelly_20pct(b, bk=_COMPOUND_STARTING_BANKROLL):
+    def _quarter_kelly(b, bk=_COMPOUND_STARTING_BANKROLL):
         """Conservative Kelly: quarter-Kelly, market shrinkage, 5% cap."""
         return _conservative_kelly(b, bk)
 
@@ -1639,7 +1639,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
                       "Signal check, not live PnL.",
         "flat": flat,
         "half_kelly": _run(_half_kelly),
-        "half_kelly_20pct": _run(_half_kelly_20pct, compound_actual_bankroll=True, drawdown_throttle=True),
+        "quarter_kelly": _run(_quarter_kelly, compound_actual_bankroll=True, drawdown_throttle=True),
         "smart": _run(_growth_1pct, filter_fn=_smart_filter, compound_actual_bankroll=True),
         "growth_1pct": _run(_growth_1pct, compound_actual_bankroll=True),
         "growth_2pct": _run(_growth_2pct, compound_actual_bankroll=True),
@@ -2087,7 +2087,7 @@ def build_validated_kelly_accounts(
     return accounts
 
 
-def build_half_kelly_20pct_accounts(
+def build_quarter_kelly_accounts(
     rows: List[Dict[str, Any]],
     latest_quotes: Dict[Any, Dict[str, Any]],
     *,
@@ -3014,7 +3014,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         default_model=model,
         tracked_models=tracked_models,
     )
-    half_kelly_20pct_by_model = build_half_kelly_20pct_accounts(
+    quarter_kelly_by_model = build_quarter_kelly_accounts(
         mark_to_market_rows_all,
         latest_quotes,
         default_model=model,
@@ -3222,7 +3222,7 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         "primary_paper_pnl": paper_pnl(resolved_primary, edge_calibration(resolved_primary)),
         "mark_to_market_account": primary_mark_to_market,
         "mark_to_market_by_model": mark_to_market_by_model,
-        "half_kelly_20pct_by_model": half_kelly_20pct_by_model,
+        "quarter_kelly_by_model": quarter_kelly_by_model,
         "growth_1pct_by_model": growth_by_model["growth_1pct"],
         "growth_2pct_by_model": growth_by_model["growth_2pct"],
         "mark_to_market_cycle_minutes": cycle_minutes,

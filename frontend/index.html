@@ -5379,7 +5379,7 @@ async function refreshEdgeForecasts() {
       const strategyCurves = [
         _mk(pnl.growth_2pct, '#f59e0b', 'Legacy Growth 2% ($200/mkt)'),
         _mk(pnl.growth_1pct, '#3b82f6', 'Legacy Growth 1% ($100/mkt)'),
-        _mk(pnl.half_kelly_20pct, '#06b6d4', 'Risk-Capped Quarter-Kelly (5% / 30% DD)'),
+        _mk(pnl.quarter_kelly, '#06b6d4', 'Risk-Capped Quarter-Kelly (5% / 30% DD)'),
         _mk(pnl.smart, '#10b981', 'Smart ROI (1% bankroll)'),
         _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly (1% bankroll cap)'),
         _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
@@ -6784,12 +6784,12 @@ function _renderBoardPage(board, page) {
   return tableHtml + pagination;
 }
 
-let _activeMtmStrat = 'half_kelly_20pct';
-let _mtmSizingMode = 'half_kelly_20pct';
+let _activeMtmStrat = 'quarter_kelly';
+let _mtmSizingMode = 'quarter_kelly';
 
 function _mtmModelsForSizing(d, sizingMode) {
-  const source = sizingMode === 'half_kelly_20pct'
-    ? d.half_kelly_20pct_by_model
+  const source = sizingMode === 'quarter_kelly'
+    ? d.quarter_kelly_by_model
     : d[`${sizingMode}_by_model`];
   return (source || []).filter(m => (
     m
@@ -6808,7 +6808,7 @@ function _mtmCurvePoints(account) {
 function _updateMtmViewInPlace() {
   if (!_ebLastData) return false;
   const d = _ebLastData;
-  const sizingMode = _mtmSizingMode || 'half_kelly_20pct';
+  const sizingMode = _mtmSizingMode || 'quarter_kelly';
   const mtmModels = _mtmModelsForSizing(d, sizingMode);
   if (!mtmModels.length) return false;
 
@@ -6816,11 +6816,11 @@ function _updateMtmViewInPlace() {
   if (!mtmContainer) return false;
 
   const sizingLabels = {
-    'half_kelly_20pct': 'Quarter-Kelly 5% Cap',
+    'quarter_kelly': 'Quarter-Kelly 5% Cap',
     'growth_1pct': 'Edge Kelly 5% Cap',
     'growth_2pct': 'Edge Kelly 8% Cap',
   };
-  const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.half_kelly_20pct;
+  const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.quarter_kelly;
 
   const titleEl = document.getElementById('eb-mtm-header-title');
   if (titleEl) titleEl.textContent = `Per-Model Shadow Mark-to-Market Accounts (${activeSizingLabel})`;
@@ -6919,10 +6919,10 @@ function _refreshActiveEdgeBoardHost() {
 
 function _selectMtmStrategy(key) {
   _activeMtmStrat = key;
-  if (key === 'half_kelly_20pct' || key === 'growth_2pct' || key === 'growth_1pct') {
+  if (key === 'quarter_kelly' || key === 'growth_2pct' || key === 'growth_1pct') {
     _mtmSizingMode = key;
   } else {
-    _mtmSizingMode = 'half_kelly_20pct';
+    _mtmSizingMode = 'quarter_kelly';
   }
   if (!_updateMtmViewInPlace()) {
     _refreshActiveEdgeBoardHost();
@@ -6958,7 +6958,7 @@ document.addEventListener('click', (event) => {
 });
 
 function _renderMtmPage(d) {
-  const sizingMode = _mtmSizingMode || 'half_kelly_20pct';
+  const sizingMode = _mtmSizingMode || 'quarter_kelly';
   const mtmModels = _mtmModelsForSizing(d, sizingMode);
   if (!mtmModels.length) {
     return '<h4 class="eb-h" style="margin-top:0">Shadow mark-to-market account</h4><p class="text-sm text-gray-500">Shadow mark-to-market account values will appear after strategy snapshots are available.</p>';
@@ -6969,12 +6969,12 @@ function _renderMtmPage(d) {
   const pnl = d.paper_pnl || {};
   const roi = s => (s && s.n_bets >= 5) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets') : `<span style="color:var(--text-dim);font-weight:500">building · n=${s ? s.n_bets : 0}</span>`;
   const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
-  const activeStrat = _activeMtmStrat || 'half_kelly_20pct';
+  const activeStrat = _activeMtmStrat || 'quarter_kelly';
 
   const cardConfig = [
     { key: 'growth_2pct', label: 'Edge Kelly 8% Cap', sub: '50% Kelly / 10pp EWMA', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.4)' },
     { key: 'growth_1pct', label: 'Edge Kelly 5% Cap', sub: '50% Kelly / 10pp EWMA', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.4)' },
-    { key: 'half_kelly_20pct', label: 'Quarter-Kelly Mode', sub: '25% Kelly / 5% cap / 30% DD', color: '#06b6d4', bg: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.4)' },
+    { key: 'quarter_kelly', label: 'Quarter-Kelly Mode', sub: '25% Kelly / 5% cap / 30% DD', color: '#06b6d4', bg: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.4)' },
   ];
 
   const _normCurve = s => _ebPnlCurve(s);
@@ -7039,17 +7039,17 @@ function _renderMtmPage(d) {
   }).join('');
 
   const sizingLabels = {
-    'half_kelly_20pct': 'Quarter-Kelly 5% Cap',
+    'quarter_kelly': 'Quarter-Kelly 5% Cap',
     'growth_1pct': 'Edge Kelly 5% Cap',
     'growth_2pct': 'Edge Kelly 8% Cap',
   };
-  const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.half_kelly_20pct;
+  const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.quarter_kelly;
 
   const sizingButtonsHtml = `
     <div class="eb-mtm-heading-row">
       <h4 id="eb-mtm-header-title" class="eb-h eb-mtm-title">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
       <div class="eb-view-tabs eb-sizing-tabs" role="tablist" aria-label="Position sizing modes">
-        <button type="button" class="eb-view-tab ${sizingMode === 'half_kelly_20pct' ? 'active' : ''}" data-mtm-sizing-mode="half_kelly_20pct">Quarter-Kelly (5% cap)</button>
+        <button type="button" class="eb-view-tab ${sizingMode === 'quarter_kelly' ? 'active' : ''}" data-mtm-sizing-mode="quarter_kelly">Quarter-Kelly (5% cap)</button>
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Edge Kelly 5%</button>
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Edge Kelly 8%</button>
       </div>
@@ -7127,7 +7127,7 @@ function renderEdgeBoard(d) {
     const strategyCurves = [
       _mk(pnl.growth_2pct, '#f59e0b', 'Legacy Growth 2% ($200/mkt)'),
       _mk(pnl.growth_1pct, '#3b82f6', 'Legacy Growth 1% ($100/mkt)'),
-      _mk(pnl.half_kelly_20pct, '#06b6d4', 'Risk-Capped Quarter-Kelly (5% / 30% DD)'),
+      _mk(pnl.quarter_kelly, '#06b6d4', 'Risk-Capped Quarter-Kelly (5% / 30% DD)'),
       _mk(pnl.smart, '#10b981', 'Smart ROI (1% bankroll)'),
       _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly (1% bankroll cap)'),
       _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),

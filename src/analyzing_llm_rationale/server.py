@@ -1415,7 +1415,7 @@ _MARK_TO_MARKET_MERGE_KEYS = (
     "arbitrage_signals",
     "mark_to_market_account",
     "mark_to_market_by_model",
-    "half_kelly_20pct_by_model",
+    "quarter_kelly_by_model",
     "growth_1pct_by_model",
     "growth_2pct_by_model",
     "mark_to_market_cycle_minutes",
@@ -2527,7 +2527,7 @@ async def edge_board():
             "primary_paper_pnl": _compact_paper_pnl(live.get("primary_paper_pnl")),
             "mark_to_market_account": _compact_mark_to_market_account(live.get("mark_to_market_account")),
             "mark_to_market_by_model": _compact_mark_to_market_by_model(live.get("mark_to_market_by_model", [])),
-            "half_kelly_20pct_by_model": _compact_mark_to_market_by_model(live.get("half_kelly_20pct_by_model", [])),
+            "quarter_kelly_by_model": _compact_mark_to_market_by_model(live.get("quarter_kelly_by_model", [])),
             "growth_1pct_by_model": _compact_mark_to_market_by_model(live.get("growth_1pct_by_model", [])),
             "growth_2pct_by_model": _compact_mark_to_market_by_model(live.get("growth_2pct_by_model", [])),
             "mark_to_market_cycle_minutes": live.get("mark_to_market_cycle_minutes"),
@@ -3958,7 +3958,7 @@ class RadarResponse(BaseModel):
     primary_paper_pnl: Optional[Any] = None
     mark_to_market_account: Optional[Any] = None
     mark_to_market_by_model: List[Dict[str, Any]] = Field(default_factory=list)
-    half_kelly_20pct_by_model: List[Dict[str, Any]] = Field(default_factory=list)
+    quarter_kelly_by_model: List[Dict[str, Any]] = Field(default_factory=list)
     growth_1pct_by_model: List[Dict[str, Any]] = Field(default_factory=list)
     growth_2pct_by_model: List[Dict[str, Any]] = Field(default_factory=list)
     mark_to_market_cycle_minutes: Optional[int] = None
