@@ -1140,7 +1140,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertGreater(pnl["flat"]["pnl"], 0)
         self.assertEqual(len(pnl["flat"]["equity_curve"]), 10)
         self.assertEqual(
-            {"flat", "half_kelly", "half_kelly_20pct", "smart", "growth_1pct", "growth_2pct"},
+            {"flat", "half_kelly", "quarter_kelly", "smart", "growth_1pct", "growth_2pct"},
             {k for k, v in pnl.items() if isinstance(v, dict) and "roi" in v},
         )
 
@@ -1187,12 +1187,12 @@ class EdgeAnalyticsTests(unittest.TestCase):
             pnl["growth_1pct"]["growth_curve"],
         )
 
-    def test_half_kelly_is_compounded_and_conservatively_capped(self):
+    def test_quarter_kelly_is_compounded_and_conservatively_capped(self):
         resolved = [
             dict(self._res(1.0, 0.5, 1), platform="P", ident=f"m{i}")
             for i in range(3)
         ]
-        strategy = trl.paper_pnl(resolved, trl.edge_calibration(resolved))["half_kelly_20pct"]
+        strategy = trl.paper_pnl(resolved, trl.edge_calibration(resolved))["quarter_kelly"]
         self.assertEqual(strategy["n_bets"], 3)
         self.assertGreater(strategy["compound_bankroll"], trl._COMPOUND_STARTING_BANKROLL)
         self.assertLessEqual(strategy["growth_curve"][0], trl._COMPOUND_STARTING_BANKROLL * 1.05)
@@ -1375,7 +1375,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         pnl = trl.paper_pnl(resolved, trl.edge_calibration(resolved))
         self.assertIsNotNone(pnl["flat"])
         self.assertEqual(
-            {"flat", "half_kelly", "half_kelly_20pct", "smart", "growth_1pct", "growth_2pct"},
+            {"flat", "half_kelly", "quarter_kelly", "smart", "growth_1pct", "growth_2pct"},
             {k for k, v in pnl.items() if isinstance(v, dict) and "roi" in v},
         )
         for removed in ("edge_weighted", "validated_only", "mid_price_only", "fade_extreme", "yes_only"):
@@ -1650,13 +1650,13 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(accounts[0]["n_trades"], 0)
         self.assertEqual(accounts[0]["recommended_weight"], 0.0)
 
-    def test_half_kelly_20pct_replays_historical_model_calls(self):
+    def test_quarter_kelly_replays_historical_model_calls(self):
         rows = [
             self._resolved_row(ident=f"m{i}", model_p=0.65, market_p=0.5,
                                outcome=1, day=i + 1)
             for i in range(3)
         ]
-        accounts = trl.build_half_kelly_20pct_accounts(
+        accounts = trl.build_quarter_kelly_accounts(
             rows, {}, default_model="m", tracked_models=["m"],
         )
         account = accounts[0]["account"]
@@ -1666,14 +1666,14 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(account["max_concentration"], 0.05)
         self.assertEqual(account["market_shrinkage"], 0.5)
 
-    def test_half_kelly_20pct_keeps_collecting_and_historical_models_visible(self):
+    def test_quarter_kelly_keeps_collecting_and_historical_models_visible(self):
         rows = [
             self._resolved_row(
                 ident="retired-1", model_p=0.65, market_p=0.5,
                 outcome=1, day=1, model="retired-model",
             ),
         ]
-        accounts = trl.build_half_kelly_20pct_accounts(
+        accounts = trl.build_quarter_kelly_accounts(
             rows, {}, default_model="active-model", tracked_models=["active-model"],
         )
         by_model = {account["model"]: account for account in accounts}

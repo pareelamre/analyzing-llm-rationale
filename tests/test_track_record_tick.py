@@ -243,7 +243,7 @@ class TrackRecordTickTests(unittest.TestCase):
             "mark_to_market_by_model": [
                 {"model": "council", "account": {"value_curve": long_curve}},
             ],
-            "half_kelly_20pct_by_model": [
+            "quarter_kelly_by_model": [
                 {"model": "council", "account": {"value_curve": long_curve}},
             ],
             "growth_1pct_by_model": [{"model": "council"}],
@@ -258,17 +258,17 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertEqual(resolved["overall"]["accuracy"], 0.7)
         self.assertEqual(resolved["models_comparison"][0]["model"], "council")
         self.assertNotIn("mark_to_market_account", resolved)
-        self.assertNotIn("half_kelly_20pct_by_model", resolved)
+        self.assertNotIn("quarter_kelly_by_model", resolved)
         self.assertNotIn("growth_1pct_by_model", resolved)
         self.assertNotIn("edge_board", resolved)
         self.assertEqual(mtm["source"], "mark_to_market_live")
         self.assertEqual(mtm["mark_to_market_account"]["account_value"], 9999.5)
-        self.assertEqual(mtm["half_kelly_20pct_by_model"][0]["model"], "council")
-        half_curve = mtm["half_kelly_20pct_by_model"][0]["account"]["value_curve"]
-        self.assertEqual(len(half_curve), 80)
-        self.assertEqual(half_curve[0]["ts"], long_curve[0]["ts"])
-        self.assertEqual(half_curve[-1]["ts"], long_curve[-1]["ts"])
-        self.assertNotIn("open_positions", half_curve[0])
+        self.assertEqual(mtm["quarter_kelly_by_model"][0]["model"], "council")
+        quarter_curve = mtm["quarter_kelly_by_model"][0]["account"]["value_curve"]
+        self.assertEqual(len(quarter_curve), 80)
+        self.assertEqual(quarter_curve[0]["ts"], long_curve[0]["ts"])
+        self.assertEqual(quarter_curve[-1]["ts"], long_curve[-1]["ts"])
+        self.assertNotIn("open_positions", quarter_curve[0])
         self.assertEqual(mtm["growth_1pct_by_model"][0]["model"], "council")
         self.assertEqual(mtm["growth_2pct_by_model"][0]["model"], "council")
         self.assertEqual(mtm["edge_board"][0]["question"], "Live edge?")
