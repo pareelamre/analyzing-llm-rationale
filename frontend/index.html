@@ -4535,7 +4535,12 @@ function _mdInline(s) {
 // If a model returns a forecast JSON object in chat mode, show its prose instead
 // of raw braces. Falls back to the original string for normal text.
 function _chatText(s) {
-  const t = String(s ?? '').trim();
+  const raw = String(s ?? '');
+  const markerIndex = raw.lastIndexOf('[p');
+  const withoutMarker = markerIndex >= Math.max(0, raw.length - 24)
+    ? raw.slice(0, markerIndex)
+    : raw.replace(/\s*\[$/, '');
+  const t = withoutMarker.replace(/\[p:(?:0(?:\.\d+)?|1(?:\.0+)?)\]\s*$/, '').trim();
   if (t.startsWith('{')) {
     // Complete JSON — extract prose only
     if (t.endsWith('}')) {
@@ -4545,7 +4550,8 @@ function _chatText(s) {
         if (prose) {
           let prefix = '';
           if (o.predicted_answer) {
-            const conf = o.confidence != null ? ` · ${Math.round(o.confidence * 100)}% confidence` : '';
+            const probability = o.model_probability ?? o.confidence;
+            const conf = probability != null ? ` · ${Math.round(probability * 100)}% probability` : '';
             prefix = `**${o.predicted_answer}**${conf}\n\n`;
           }
           return prefix + prose;
@@ -4557,7 +4563,7 @@ function _chatText(s) {
     // while the JSON preamble streams before the rationale field begins.
     let prefix = '';
     const ansM = t.match(/"predicted_answer"\s*:\s*"([^"\\]*)"/);
-    const confM = t.match(/"confidence"\s*:\s*([\d.]+)/);
+    const confM = t.match(/"(?:model_probability|confidence)"\s*:\s*([\d.]+)/);
     if (ansM) {
       const confStr = confM ? ` · ${Math.round(parseFloat(confM[1]) * 100)}% confidence` : '';
       prefix = `**${ansM[1]}**${confStr}\n\n`;
@@ -8358,6 +8364,10 @@ function _agentReportData(report) {
     question_type: 'chat',
     rationale: _agentReportToMarkdown(d, { includeSources: false }),
     model_key: 'agent',
+    model_probability: d.model_probability ?? null,
+    confidence: d.confidence ?? null,
+    market_probability: d.market_probability ?? null,
+    edge: d.edge ?? null,
     evidence_sources: d.evidence_sources || [],
     evidence_error: d.evidence_error || '',
   };

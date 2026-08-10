@@ -224,7 +224,7 @@ EXPIRY_REFORECAST_LEAD_DAYS = float(
     os.environ.get("EXPIRY_REFORECAST_LEAD_DAYS") or trl.EXPIRY_REFORECAST_LEAD_DAYS)
 EXPIRY_SLOT_HOURS = int(
     os.environ.get("EXPIRY_SLOT_HOURS") or trl.EXPIRY_SLOT_HOURS)
-CYCLE_INTERVAL_MINUTES = max(1, int(os.environ.get("CYCLE_INTERVAL_MINUTES", "15") or 15))
+CYCLE_INTERVAL_MINUTES = max(1, int(os.environ.get("CYCLE_INTERVAL_MINUTES", "5") or 5))
 SNAPSHOT_SLOT_MINUTES = int(os.environ.get("SNAPSHOT_SLOT_MINUTES", "0") or 0) or None
 # Re-run the LLM forecast for every tracked-open market on every tick (not just
 # the daily first pass / price-drift), so the edge board always reflects the
