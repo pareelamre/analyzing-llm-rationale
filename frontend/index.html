@@ -2223,8 +2223,8 @@
     <button type="button" class="side-nav-link" onclick="openEdgeBoard()">
       <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-edge"></use></svg></span>Edge board
     </button>
-    <button type="button" class="side-nav-link" onclick="openTrackRecord()">
-      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-chart"></use></svg></span>Track record
+    <button type="button" class="side-nav-link" onclick="openPersonalLedger()">
+      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-chart"></use></svg></span>Personal ledger
     </button>
     <button type="button" class="side-nav-link" onclick="openWatchlist()">
       <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-star"></use></svg></span>Watchlist
@@ -2718,6 +2718,20 @@
   <div id="watchBody" class="tr-body" data-lenis-prevent></div>
 </div>
 
+<div id="ledgerOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="ledgerDialogTitle" aria-hidden="true" tabindex="-1">
+  <div class="tr-head">
+    <div class="flex items-center gap-2">
+      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
+        <span class="logo-dot"></span>
+        <span class="brand text-lg">Foresea</span>
+      </button>
+      <h2 id="ledgerDialogTitle" class="sr-only">Your personal ledger</h2>
+    </div>
+    <button id="ledgerCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closePersonalLedger()">Close</button>
+  </div>
+  <div id="ledgerBody" class="tr-body" data-lenis-prevent></div>
+</div>
+
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
 function uiIcon(name, className = '') {
@@ -3033,10 +3047,16 @@ function renderMessages() {
   }
 
   let i = 0;
+  let lastUserQuestion = '';
   for (const msg of conv.messages) {
+    if (msg.role === 'user') lastUserQuestion = msg.content || '';
     const node = msg.role === 'user'
       ? makeUserBubble(msg.content, msg)
-      : makeAIBubble(msg.data, msg.variant);
+      : makeAIBubble(msg.data, msg.variant, {
+          question: msg.data?.question || lastUserQuestion,
+          conversationId: conv.id,
+          messageId: msg.id,
+        });
     el.appendChild(node);
     animateIn(node, Math.min(i, 8) * 0.04);
     if (msg.role !== 'user') enhanceCard(node);
@@ -3351,12 +3371,68 @@ function forecastFavoritePayload(data) {
   };
 }
 
-function forecastActionsHtml(data) {
+function ledgerProbability(data) {
+  const explicit = clamp01(Number(data?.model_probability));
+  if (explicit != null) return explicit;
+  return binaryYesProbability(data);
+}
+
+function forecastActionsHtml(data, { ledgerOnly = false } = {}) {
   const fav = forecastFavoritePayload(data);
-  return `<div class="market-actions pt-2">` +
+  const probability = ledgerProbability(data);
+  const save = probability == null ? '' :
+    `<button type="button" class="market-action ui-icon-label" onclick="addForecastToPersonalLedger(this)">${uiIcon('plus')} Add to personal ledger</button>`;
+  if (ledgerOnly) return save ? `<div class="market-actions pt-2">${save}</div>` : '';
+  return `<div class="market-actions pt-2">${save}` +
     `<button type="button" class="market-action ui-icon-label" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"forecast_card",platform:${JSON.stringify(fav.platform || '')}})'>${uiIcon('star')} Track</button>` +
     `<button type="button" class="market-action" onclick='shareForecastFromButton(this);trackEvent("share_clicked",{source:"forecast_card"})'>Share</button>` +
     `</div>`;
+}
+
+async function addForecastToPersonalLedger(btn) {
+  if (!currentUser) {
+    openAuthModal('login');
+    return;
+  }
+  const wrap = btn.closest('.max-w-2xl');
+  const data = wrap?._forecastData;
+  const context = wrap?._ledgerContext || {};
+  const probability = ledgerProbability(data);
+  const question = context.question || data?.question || '';
+  if (!data || probability == null || !question) return;
+  const entryId = ('ledger_' + (context.conversationId || activeId || 'chat') + '_' + (context.messageId || newMessageId()))
+    .replace(/[^A-Za-z0-9:_-]/g, '_').slice(0, 120);
+  const payload = {
+    id: entryId,
+    conversation_id: context.conversationId || activeId || '',
+    message_id: context.messageId || '',
+    question,
+    predicted_answer: data.predicted_answer || '',
+    probability,
+    rationale: _chatText(data.rationale || data.model_rationale || ''),
+    model: modelFooterLabel(data),
+    createdAt: Date.now(),
+  };
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = 'Saving...';
+  try {
+    const r = await fetch('/personal-ledger/' + encodeURIComponent(entryId), {
+      method: 'PUT',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    const saved = await _readJson(r);
+    if (!r.ok) throw new Error(saved.detail || 'Could not save this forecast.');
+    personalLedgerEntries = [saved, ...personalLedgerEntries.filter(entry => entry.id !== saved.id)];
+    btn.textContent = 'Saved to ledger';
+    trackEvent('personal_ledger_add', { source: 'forecast_card', question_type: data.question_type || 'chat' });
+  } catch (_) {
+    btn.textContent = 'Retry save';
+    btn.disabled = false;
+    return;
+  }
+  setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1800);
 }
 
 async function shareForecastFromButton(btn) {
@@ -3575,12 +3651,21 @@ function makeAIBubble(data, variant, options = {}) {
 
   // Plain conversational reply — no forecast chrome
   if (qtype === 'chat') {
+    const probability = ledgerProbability(data);
     const div = document.createElement('div');
     div.className = 'max-w-2xl mx-auto w-full';
+    div._forecastData = data;
+    div._ledgerContext = {
+      question: options.question || data.question || '',
+      conversationId: options.conversationId || activeId || '',
+      messageId: options.messageId || '',
+    };
     div.innerHTML = `
       <div class="msg-ai p-4 sm:p-5">
+        ${probability != null ? `<div class="market-lens mb-3"><div class="market-lens-grid"><div class="market-lens-cell"><div class="k">Forecast probability</div><div class="v">${fmtPct01(probability)}</div><div class="sub">Foresea estimate</div></div></div></div>` : ''}
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         ${sourceFeedHtml(sources, data.evidence_error)}
+        ${options.includeActions === false ? '' : forecastActionsHtml(data, { ledgerOnly: true })}
         <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
           <span class="logo-dot" style="width:5px;height:5px"></span>
           ${escHtml(modelKey)}
@@ -3650,6 +3735,11 @@ function makeAIBubble(data, variant, options = {}) {
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
   div._forecastData = data;
+  div._ledgerContext = {
+    question: options.question || data.question || '',
+    conversationId: options.conversationId || activeId || '',
+    messageId: options.messageId || '',
+  };
   div.innerHTML = `
     <div class="msg-ai p-4 sm:p-5 space-y-3">
       ${verdict}
@@ -3811,7 +3901,9 @@ async function streamPredict(body, variant, convId, typingEl, signal) {
       settleTyping(outcome);
       return;
     }
-    const finalNode = makeAIBubble(data, variant);
+    const finalNode = makeAIBubble(data, variant, {
+      question: data.question || body.question || '', conversationId: convId, messageId: saved.id,
+    });
     if (outcome !== 'completed') {
       const endLabel = outcome === 'cancelled'
         ? 'Response stopped'
@@ -4006,6 +4098,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
           evidence_error: streamedEvidenceError,
           generation_stopped: true,
         };
+    data.question = agentBody.question || data.question || '';
     if (outcome === 'completed') {
       trackEvent('forecast_completed', {
         question_type: 'chat',
@@ -4026,7 +4119,9 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
       removeTyping();
       return;
     }
-    const finalNode = makeAIBubble(data, variant);
+    const finalNode = makeAIBubble(data, variant, {
+      question: data.question, conversationId: convId, messageId: saved.id,
+    });
     if (outcome !== 'completed') {
       const endLabel = outcome === 'cancelled'
         ? 'Response stopped'
@@ -4345,7 +4440,9 @@ async function sendQuestion(options = {}) {
     });
     const saved = appendMessage(request.convId, { role: 'assistant', data, variant, content: data.rationale || '' });
     if (saved && activeId === request.convId) {
-      const aiNode = makeAIBubble(data, variant);
+      const aiNode = makeAIBubble(data, variant, {
+        question: data.question || question || '', conversationId: request.convId, messageId: saved.id,
+      });
       document.getElementById('messages').appendChild(aiNode);
       animateIn(aiNode);
       enhanceCard(aiNode);
@@ -4794,6 +4891,8 @@ const _VIEW_URL = {
   'edge-app':      '#edge-app',
   'watch-landing': '#watchlist',
   'watch-app':     '#watchlist-app',
+  'ledger-landing': '#ledger',
+  'ledger-app':     '#ledger-app',
 };
 const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
 
@@ -5660,6 +5759,101 @@ function closeWatchlistPage({ updateHistory = true } = {}) {
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
+}
+
+let personalLedgerEntries = [];
+async function openPersonalLedger({ updateHistory = true } = {}) {
+  const ov = document.getElementById('ledgerOverlay');
+  if (ov.classList.contains('open')) return;
+  lastFocusedBeforeDialog = document.activeElement;
+  ov.classList.add('open');
+  ov.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  if (updateHistory) setHistoryState(currentView === 'app' ? 'ledger-app' : 'ledger-landing');
+  if (window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
+  renderPersonalLedger();
+  if (currentUser) {
+    try {
+      const r = await fetch('/personal-ledger', { headers: authHeaders() });
+      const d = await _readJson(r);
+      if (!r.ok) throw new Error(d.detail || 'Could not load your ledger.');
+      personalLedgerEntries = d.entries || [];
+    } catch (err) {
+      console.warn(err);
+    }
+  }
+  renderPersonalLedger();
+  setTimeout(() => document.getElementById('ledgerCloseBtn')?.focus(), 0);
+}
+
+function closePersonalLedger({ updateHistory = true } = {}) {
+  const ov = document.getElementById('ledgerOverlay');
+  if (!ov.classList.contains('open')) return;
+  if (updateHistory && (history.state?.view === 'ledger-app' || history.state?.view === 'ledger-landing')) {
+    history.back();
+    return;
+  }
+  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
+  const finish = () => {
+    ov.classList.remove('open');
+    ov.setAttribute('aria-hidden', 'true');
+    ov.style.opacity = '';
+    document.body.style.overflow = inApp ? 'hidden' : 'auto';
+    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
+  };
+  if (window.Motion && !prefersReduced()) {
+    Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
+  } else { finish(); }
+}
+
+function renderPersonalLedger() {
+  const host = document.getElementById('ledgerBody');
+  if (!host) return;
+  if (!currentUser) {
+    host.innerHTML = `<div class="tr-inner" style="max-width:460px;margin:8vh auto 0;text-align:center">
+      <h3 class="eb-h" style="margin-top:0">Your personal ledger</h3>
+      <p class="text-sm text-gray-500" style="margin-bottom:18px">Save a forecast from any chat response to build your own record over time.</p>
+      <button type="button" class="hero-action primary" style="justify-content:center" onclick="openAuthModal('login')">Sign in to continue</button>
+    </div>`;
+    return;
+  }
+  const entries = personalLedgerEntries || [];
+  const rows = entries.map(entry => {
+    const date = entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '';
+    const answer = entry.predicted_answer ? `${escHtml(entry.predicted_answer)} · ` : '';
+    return `<article class="msg-ai p-4 sm:p-5" style="margin-bottom:12px">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="label mb-1">Saved forecast</p>
+          <h4 class="text-base font-medium text-gray-900">${escHtml(entry.question)}</h4>
+        </div>
+        <button type="button" class="market-action" title="Remove from ledger" onclick="removePersonalLedgerEntry('${escAttr(entry.id)}', this)">${uiIcon('x')}<span class="sr-only">Remove</span></button>
+      </div>
+      <p class="text-sm text-gray-600 mt-3"><strong>${answer}${fmtPct01(entry.probability)}</strong> forecast${entry.model ? ` · ${escHtml(entry.model)}` : ''}${date ? ` · ${escHtml(date)}` : ''}</p>
+      ${entry.rationale ? `<div class="chat-md text-[15px] text-gray-700 leading-relaxed mt-3">${renderMarkdown(_chatText(entry.rationale))}</div>` : ''}
+    </article>`;
+  }).join('');
+  host.innerHTML = `<div class="tr-inner" style="max-width:760px">
+    <h3 class="eb-h" style="margin-top:0">Your personal ledger</h3>
+    <p class="tr-method" style="margin-top:0">Forecasts you explicitly save from chat. Private to your account; Foresea uses ledger activity in aggregate to improve the product.</p>
+    ${rows || '<p class="text-sm text-gray-500">No saved forecasts yet. Ask a forecasting question, then choose “Add to personal ledger.”</p>'}
+  </div>`;
+}
+
+async function removePersonalLedgerEntry(entryId, btn) {
+  if (!entryId) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/personal-ledger/' + encodeURIComponent(entryId), {
+      method: 'DELETE', headers: authHeaders(),
+    });
+    if (!r.ok) throw new Error('Could not remove ledger entry.');
+    personalLedgerEntries = personalLedgerEntries.filter(entry => entry.id !== entryId);
+    trackEvent('personal_ledger_remove', { source: 'ledger' });
+    renderPersonalLedger();
+  } catch (_) {
+    btn.disabled = false;
+  }
 }
 // Full page = a persistent add-browser shell + a separately-rendered watched
 // table (so adding/removing doesn't reset the search box).
@@ -7164,6 +7358,12 @@ function applyHistoryState(state) {
   } else if (view === 'watch-landing') {
     showLanding({ updateHistory: false });
     openWatchlistPage({ updateHistory: false });
+  } else if (view === 'ledger-app') {
+    launchApp({ updateHistory: false });
+    openPersonalLedger({ updateHistory: false });
+  } else if (view === 'ledger-landing') {
+    showLanding({ updateHistory: false });
+    openPersonalLedger({ updateHistory: false });
   } else {
     showLanding({ updateHistory: false });
   }
@@ -7175,10 +7375,12 @@ document.addEventListener('keydown', event => {
   const track = document.getElementById('trackOverlay');
   const edge = document.getElementById('edgeOverlay');
   const watch = document.getElementById('watchOverlay');
+  const ledger = document.getElementById('ledgerOverlay');
   const sidebar = document.getElementById('sidebar');
   const trackOpen = track.classList.contains('open');
   const edgeOpen = edge.classList.contains('open');
   const watchOpen = watch.classList.contains('open');
+  const ledgerOpen = ledger.classList.contains('open');
   const sidebarOpen = sidebar.classList.contains('open');
 
   if (event.key === 'Escape') {
@@ -7191,6 +7393,9 @@ document.addEventListener('keydown', event => {
     } else if (watchOpen) {
       event.preventDefault();
       closeWatchlistPage();
+    } else if (ledgerOpen) {
+      event.preventDefault();
+      closePersonalLedger();
     } else if (sidebarOpen) {
       event.preventDefault();
       closeSidebar();
@@ -7204,6 +7409,8 @@ document.addEventListener('keydown', event => {
     trapFocus(event, edge);
   } else if (watchOpen) {
     trapFocus(event, watch);
+  } else if (ledgerOpen) {
+    trapFocus(event, ledger);
   } else if (sidebarOpen) {
     trapFocus(event, sidebar);
   }
