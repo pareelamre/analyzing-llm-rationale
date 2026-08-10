@@ -28,6 +28,7 @@ class ModelConfig:
     request_timeout_cap_s: float | None = None
     forecasting_enabled: bool = True
     chat_interface_enabled: bool = False
+    track_record_enabled: bool = True
     fallback_model_chain: Tuple[str, ...] = ()
 
 
@@ -81,6 +82,7 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
         request_timeout_cap_s = payload.get("request_timeout_cap_s")
         forecasting_enabled = payload.get("forecasting_enabled", True)
         chat_interface_enabled = payload.get("chat_interface_enabled", False)
+        track_record_enabled = payload.get("track_record_enabled", True)
         fallback_model_chain = payload.get("fallback_model_chain", [])
         if not all(isinstance(value, str) for value in (result_label, provider, local_model_name, router_model_name)):
             raise ValueError(
@@ -104,6 +106,8 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             raise ValueError(f"Model '{name}' forecasting_enabled must be boolean when provided")
         if not isinstance(chat_interface_enabled, bool):
             raise ValueError(f"Model '{name}' chat_interface_enabled must be boolean when provided")
+        if not isinstance(track_record_enabled, bool):
+            raise ValueError(f"Model '{name}' track_record_enabled must be boolean when provided")
         if not isinstance(fallback_model_chain, Sequence) or isinstance(fallback_model_chain, (str, bytes)):
             raise ValueError(f"Model '{name}' fallback_model_chain must be a list when provided")
         fallback_chain = tuple(str(model) for model in fallback_model_chain)
@@ -122,6 +126,7 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             ),
             forecasting_enabled=forecasting_enabled,
             chat_interface_enabled=chat_interface_enabled,
+            track_record_enabled=track_record_enabled,
             fallback_model_chain=fallback_chain,
         )
     return models
@@ -144,8 +149,20 @@ def scads_hosted_model_allowlist(path: Path) -> Dict[str, str]:
 
 
 def scads_track_model_labels(path: Path) -> Tuple[str, ...]:
-    """Default non-synthetic model labels for the track-record comparison board."""
-    return tuple(scads_hosted_model_allowlist(path).keys())
+    """Default non-synthetic model labels for the track-record comparison board.
+
+    A model can be `forecasting_enabled` (usable via /predict, the council
+    ensemble, and chat) without being tracked on the live MTM/edge-board
+    comparison -- e.g. one the tracking CI matrix no longer schedules, or one
+    whose SCADS API key currently lacks access (`track_record_enabled:
+    false`). Without this, such a model's paper-trading account sits frozen
+    at the starting balance forever instead of being excluded from the board.
+    """
+    models = load_model_configs(path)
+    return tuple(
+        name for name in scads_hosted_model_allowlist(path)
+        if models[name].track_record_enabled
+    )
 
 
 def scads_chat_model_options(path: Path) -> Tuple[ModelConfig, ...]:

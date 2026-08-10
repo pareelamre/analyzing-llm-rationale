@@ -42,6 +42,11 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    # SCADS team access to this model was revoked (500 "team not allowed to
+    # access model") -- every forecast attempt fails, so its MTM/edge-Kelly
+    # accounts sat frozen at the starting balance forever. Re-enable once
+    # SCADS access is restored.
+    track_record_enabled: false
   llama-4-scout-17b-16e-instruct:
     result_label: Llama-4-Scout-17B-16E-Instruct
     provider: openai-compatible
@@ -51,6 +56,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    # Not in the active track-record-forecast.yml CI matrix -- never gets a
+    # snapshot, so it sat frozen at the starting balance on the MTM board.
+    track_record_enabled: false
   scads-alias-code:
     result_label: SCADS Alias Code
     provider: openai-compatible
@@ -118,6 +126,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    # Not in the active track-record-forecast.yml CI matrix -- never gets a
+    # snapshot, so it sat frozen at the starting balance on the MTM board.
+    track_record_enabled: false
   qwen3-coder-30b-a3b-instruct:
     result_label: Qwen3-Coder-30B-A3B-Instruct
     provider: openai-compatible
@@ -186,6 +197,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    # Not in the active track-record-forecast.yml CI matrix -- never gets a
+    # snapshot, so it sat frozen at the starting balance on the MTM board.
+    track_record_enabled: false
   gpt-5:
     result_label: GPT-5
     provider: openai-compatible
@@ -229,6 +243,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    # Not in the active track-record-forecast.yml CI matrix -- never gets a
+    # snapshot, so it sat frozen at the starting balance on the MTM board.
+    track_record_enabled: false
   kimi-k2.6:
     result_label: Kimi-K2.6
     provider: openai-compatible
