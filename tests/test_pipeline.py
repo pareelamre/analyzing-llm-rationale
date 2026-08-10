@@ -570,9 +570,17 @@ class PipelineTests(unittest.TestCase):
         scads_models = scads_hosted_model_allowlist(repo_root / "configs" / "models.yaml")
         self.assertIn("scads-alias-code", scads_models)
         self.assertIn("scads-alias-reasoning", scads_models)
-        self.assertIn("kimi-k2.7-code", scads_track_model_labels(repo_root / "configs" / "models.yaml"))
+        track_model_labels = scads_track_model_labels(repo_root / "configs" / "models.yaml")
+        self.assertIn("kimi-k2.7-code", track_model_labels)
         self.assertIn("deepseek-v3", scads_models)
         self.assertTrue(all(cfg.forecasting_enabled for cfg in models.values()))
+        # deepseek-v3 stays /predict-able and chat-eligible (forecasting_enabled
+        # is untouched) but is excluded from the live track-record/MTM
+        # comparison board -- it's not in the active CI tracking matrix and
+        # would otherwise sit frozen at the starting balance forever.
+        self.assertFalse(models["deepseek-v3"].track_record_enabled)
+        self.assertNotIn("deepseek-v3", track_model_labels)
+        self.assertTrue(models["kimi-k2.7-code"].track_record_enabled)
         self.assertNotIn("gpt-5", scads_models)
         self.assertEqual(
             models["scads-alias-code"].fallback_model_chain,

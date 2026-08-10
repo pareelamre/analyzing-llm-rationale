@@ -94,22 +94,32 @@ class TrackRecordTickTests(unittest.TestCase):
             "scads-alias-reasoning",
             "scads-alias-huge",
             "scads-alias-huge-no-thinking",
-            "llama-3.1-8b-instruct",
             "llama-3.3-70b-instruct",
             "gpt-oss-120b",
             "gemma-4-31b-it",
             "minimax-m3",
             "kimi-k2.7-code",
-            "kimi-k2.5",
             "kimi-k2.6",
-            "llama-4-scout-17b-16e-instruct",
-            "qwen3-vl-8b-instruct",
             "qwen3-coder-30b-a3b-instruct",
             "glm-5.2-fp8",
-            "deepseek-v3",
             "crowd-follow",
         ):
             self.assertIn(model, track_record_tick.TRACK_MODELS)
+        # These carry `track_record_enabled: false` in configs/models.yaml --
+        # either not in the active CI matrix (llama-4-scout-17b-16e-instruct,
+        # qwen3-vl-8b-instruct, deepseek-v3, kimi-k2.5) or actively failing on
+        # every attempt due to a SCADS AI team-permission error
+        # (llama-3.1-8b-instruct) -- so their MTM/edge-Kelly accounts would
+        # otherwise sit frozen at the starting balance forever.
+        for model in (
+            "llama-3.1-8b-instruct",
+            "llama-4-scout-17b-16e-instruct",
+            "qwen3-vl-8b-instruct",
+            "deepseek-v3",
+            "kimi-k2.5",
+        ):
+            self.assertNotIn(model, track_record_tick.TRACK_MODELS)
+        self.assertNotIn("model: llama-3.1-8b-instruct", workflow)
 
     def test_model_sharding_rotates_models_and_keeps_always_models(self):
         models = [
