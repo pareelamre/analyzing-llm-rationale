@@ -346,6 +346,46 @@ class ValidatedKellyAccountTests(unittest.TestCase):
         self.assertEqual(account["value_curve"][-1]["event_type"], "mark_to_market")
         self.assertEqual(account["value_curve"][-1]["account_value"], account["account_value"])
 
+    def test_fully_settled_kelly_ledger_still_appends_a_live_mark_to_market_point(self):
+        # A model that traded but currently holds zero open positions (every
+        # bet already resolved) must still get a trailing mark-to-market
+        # point dated "now" -- otherwise its plotted curve (and the chart's
+        # end-of-line marker) freezes at its last settlement time, which can
+        # be days stale, and looks wrongly behind accounts that still hold
+        # open positions (always marked to the current moment).
+        rows = [{
+            "platform": "Polymarket",
+            "ident": "closed-market",
+            "snapshot_ts": datetime(2026, 7, 1, tzinfo=timezone.utc),
+            "model_probability": 0.70,
+            "calibrated_model_probability": 0.70,
+            "market_probability": 0.50,
+            "market_bid": 0.49,
+            "market_ask": 0.51,
+            "resolved": True,
+            "outcome": 1,
+            "resolved_ts": datetime(2026, 7, 2, tzinfo=timezone.utc),
+            "_edge_validated": True,
+        }]
+        account = simulate_validated_kelly_account(rows, starting_cash=10_000.0)
+
+        self.assertEqual(account["n_trades"], 1)
+        self.assertEqual(account["n_open_positions"], 0)
+        self.assertEqual(account["value_curve"][-1]["event_type"], "mark_to_market")
+        self.assertEqual(account["value_curve"][-1]["account_value"], account["account_value"])
+        # The trailing point is genuinely "now", not the July settlement time.
+        self.assertGreater(
+            datetime.fromisoformat(account["value_curve"][-1]["ts"]),
+            datetime(2026, 7, 3, tzinfo=timezone.utc),
+        )
+
+    def test_fully_untraded_kelly_ledger_has_no_trailing_mark_to_market_point(self):
+        # No trades at all -- nothing to extend to "now"; the curve stays
+        # empty rather than growing a synthetic point out of thin air.
+        account = simulate_validated_kelly_account([], starting_cash=10_000.0)
+        self.assertEqual(account["n_trades"], 0)
+        self.assertEqual(account["value_curve"], [])
+
     def test_skips_prices_outside_the_default_band(self):
         # market_p=0.05 -> ask for the model's YES-implied side sits near 0.06,
         # well outside the default [0.20, 0.80] band -- must be skipped even
