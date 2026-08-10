@@ -45,6 +45,8 @@ class FakeProvider:
     def chat_completion(self, messages, temperature, max_tokens):
         self.calls.append(messages)
         self.max_tokens.append(max_tokens)
+        if isinstance(self.response, str):
+            return self.response
         return json.dumps(self.response)
 
     def stream_chat_completion(self, messages, temperature, max_tokens):
@@ -219,6 +221,7 @@ class ServerTests(unittest.TestCase):
             "Evidence 1 — Example News: Central bank signals policy shift",
             messages[1]["content"],
         )
+
         slow_pipeline = mock.Mock()
         def slow_fetch(question, top_k=5):
             time.sleep(0.05)
@@ -247,6 +250,26 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["evidence_sources"], [])
         self.assertIn("Evidence retrieval timed out", payload["evidence_error"])
         self.assertEqual(slow_pipeline.fetch_summarize_rank.call_count, 1)
+
+    def test_chat_predict_returns_probability_score(self):
+        self.provider.response = "I estimate a 65% chance.\n[p:0.65]"
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "Will the Fed cut rates before July 31, 2026?",
+                "variant": "variant0_neutral_baseline",
+                "attach_evidence": False,
+                "chat_mode": True,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["question_type"], "chat")
+        self.assertEqual(payload["model_probability"], 0.65)
+        self.assertNotIn("[p:0.65]", payload["rationale"])
+        self.assertTrue(payload["rationale"].startswith("**Forecast: 65%**"))
+        self.assertIn("marker is hidden from the user", self.provider.calls[0][0]["content"])
 
     def test_predict_skips_evidence_when_fetch_pool_is_busy(self):
         busy_slots = server_module.threading.BoundedSemaphore(1)
@@ -546,6 +569,22 @@ class ServerTests(unittest.TestCase):
         self.assertIn("event: done", body)
         self.assertIn("Streaming answer.", body)
         self._require_auth_mock.assert_not_called()
+
+    def test_predict_stream_chat_returns_probability_score(self):
+        self.provider.stream_response = "Streaming forecast.\n[p:0.64]"
+        response = self.client.post(
+            "/predict/stream",
+            json={
+                "question": "Will the Fed cut rates before July 31, 2026?",
+                "chat_mode": True,
+                "attach_evidence": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"question_type": "chat"', response.text)
+        self.assertIn('"model_probability": 0.64', response.text)
+        self.assertIn('"rationale": "**Forecast: 64%**\\n\\nStreaming forecast."', response.text)
 
     def test_predict_stream_uses_response_cache_for_repeated_request(self):
         payload = {
@@ -2291,6 +2330,129 @@ class ServerTests(unittest.TestCase):
         delete_response = self.client.delete("/chat/conversations/conv_test", headers=headers)
         self.assertEqual(delete_response.status_code, 200)
         self.assertEqual(self.client.get("/chat/conversations", headers=headers).json()["conversations"], [])
+
+    def test_authenticated_user_can_manage_a_personal_ledger(self):
+        token = _issue_session("user-ledger", "ledger@example.com", "Ledger User", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        entry = {
+            "id": "ledger_conv_test_msg_assistant",
+            "conversation_id": "conv_test",
+            "message_id": "msg_assistant",
+            "question": "Will the Fed cut rates before July 2026?",
+            "predicted_answer": "YES",
+            "probability": 0.65,
+            "rationale": "Inflation is easing.",
+            "model": "gpt-oss-120b",
+            "createdAt": 1002,
+        }
+
+        save_response = self.client.put(
+            "/personal-ledger/ledger_conv_test_msg_assistant", json=entry, headers=headers
+        )
+        self.assertEqual(save_response.status_code, 200)
+        self.assertEqual(save_response.json()["probability"], 0.65)
+
+        list_response = self.client.get("/personal-ledger", headers=headers)
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.json()["entries"], [entry])
+
+        delete_response = self.client.delete(
+            "/personal-ledger/ledger_conv_test_msg_assistant", headers=headers
+        )
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(self.client.get("/personal-ledger", headers=headers).json()["entries"], [])
+
+    def test_personal_ledger_isolated_between_authenticated_users(self):
+        owner_headers = {"Authorization": f"Bearer {_issue_session('ledger-owner', 'owner@example.com', 'Owner', '')}"}
+        other_headers = {"Authorization": f"Bearer {_issue_session('ledger-other', 'other@example.com', 'Other', '')}"}
+        entry = {
+            "id": "ledger_private_forecast",
+            "conversation_id": "conv_owner_only",
+            "message_id": "msg_owner_only",
+            "question": "Private forecast question",
+            "predicted_answer": "YES",
+            "probability": 0.72,
+            "rationale": "Private rationale.",
+            "model": "gpt-oss-120b",
+            "createdAt": 1002,
+        }
+        self.assertEqual(
+            self.client.put("/personal-ledger/ledger_private_forecast", json=entry, headers=owner_headers).status_code,
+            200,
+        )
+
+        self.assertEqual(self.client.get("/personal-ledger", headers=other_headers).json()["entries"], [])
+        self.assertEqual(
+            self.client.delete("/personal-ledger/ledger_private_forecast", headers=other_headers).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.get("/personal-ledger", headers=owner_headers).json()["entries"], [entry]
+        )
+
+    def test_personal_ledger_rejects_tampered_or_invalid_entries(self):
+        headers = {"Authorization": f"Bearer {_issue_session('ledger-validate', 'validate@example.com', 'Validate', '')}"}
+        entry = {
+            "id": "ledger_valid_entry",
+            "conversation_id": "conv_test",
+            "message_id": "msg_test",
+            "question": "Will the test pass?",
+            "predicted_answer": "YES",
+            "probability": 0.65,
+            "rationale": "Test rationale.",
+            "model": "gpt-oss-120b",
+            "createdAt": 1002,
+        }
+
+        mismatch = dict(entry, id="ledger_other_entry")
+        response = self.client.put("/personal-ledger/ledger_valid_entry", json=mismatch, headers=headers)
+        self.assertEqual(response.status_code, 400)
+
+        for probability in (-0.01, 1.01):
+            response = self.client.put(
+                "/personal-ledger/ledger_valid_entry",
+                json=dict(entry, probability=probability),
+                headers=headers,
+            )
+            self.assertEqual(response.status_code, 422)
+
+        response = self.client.put(
+            "/personal-ledger/ledger_valid_entry",
+            json=dict(entry, question="x" * 801),
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 422)
+
+        response = self.client.put(
+            "/personal-ledger/ledger_valid_entry",
+            json=dict(entry, rationale="x" * 8001),
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_personal_ledger_retries_are_idempotent(self):
+        headers = {"Authorization": f"Bearer {_issue_session('ledger-retry', 'retry@example.com', 'Retry', '')}"}
+        entry = {
+            "id": "ledger_retry_entry",
+            "conversation_id": "conv_retry",
+            "message_id": "msg_retry",
+            "question": "Will retry deduplicate?",
+            "predicted_answer": "YES",
+            "probability": 0.51,
+            "rationale": "First save.",
+            "model": "gpt-oss-120b",
+            "createdAt": 1002,
+        }
+        self.assertEqual(
+            self.client.put("/personal-ledger/ledger_retry_entry", json=entry, headers=headers).status_code,
+            200,
+        )
+        retried = dict(entry, probability=0.61, rationale="Retry save.")
+        self.assertEqual(
+            self.client.put("/personal-ledger/ledger_retry_entry", json=retried, headers=headers).status_code,
+            200,
+        )
+        self.assertEqual(self.client.get("/personal-ledger", headers=headers).json()["entries"], [retried])
 
     def test_chat_conversation_sync_requires_session(self):
         response = self.client.get("/chat/conversations")

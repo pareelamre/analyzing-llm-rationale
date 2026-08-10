@@ -25,9 +25,9 @@ class TrackRecordTickTests(unittest.TestCase):
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "track-record-forecast.yml"
         ).read_text()
-        self.assertIn('cron: "*/15 * * * *"', workflow)
-        self.assertIn('CYCLE_INTERVAL_MINUTES: "15"', workflow)
-        self.assertIn('SNAPSHOT_SLOT_MINUTES: "15"', workflow)
+        self.assertIn('cron: "*/5 * * * *"', workflow)
+        self.assertIn('CYCLE_INTERVAL_MINUTES: "5"', workflow)
+        self.assertIn('SNAPSHOT_SLOT_MINUTES: "5"', workflow)
         self.assertIn('TRACK_RECORD_PREDICT_MODE: "local"', workflow)
         self.assertIn("strategy:", workflow)
         self.assertIn("continue-on-error: true", workflow)
@@ -43,10 +43,10 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn('TRACK_MODEL_SHARD_COUNT: "1"', workflow)
         self.assertIn('TRACK_MODEL_SHARD_INDEX: "0"', workflow)
         self.assertIn('TRACK_MODEL_SHARD_ALWAYS: ""', workflow)
-        self.assertIn('TRACK_MODEL_SHARD_SLOT_MINUTES: "15"', workflow)
+        self.assertIn('TRACK_MODEL_SHARD_SLOT_MINUTES: "5"', workflow)
         self.assertIn("TRACK_TARGET_SHARD_COUNT:", workflow)
         self.assertIn("TRACK_TARGET_SHARD_INDEX:", workflow)
-        self.assertIn('TRACK_TARGET_SHARD_SLOT_MINUTES: "15"', workflow)
+        self.assertIn('TRACK_TARGET_SHARD_SLOT_MINUTES: "5"', workflow)
         self.assertIn("TRACK_FORECAST_MAX_TARGETS:", workflow)
         self.assertIn("SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}", workflow)
         self.assertIn("Verify forecast secrets", workflow)
@@ -197,7 +197,7 @@ class TrackRecordTickTests(unittest.TestCase):
             root / ".github" / "workflows" / "track-record-resolved.yml"
         ).read_text()
 
-        self.assertIn('cron: "*/15 * * * *"', mtm_workflow)
+        self.assertIn('cron: "*/5 * * * *"', mtm_workflow)
         self.assertIn("track-record-mtm", mtm_workflow)
         self.assertIn("python scripts/track_record_tick.py --mtm-only", mtm_workflow)
         self.assertIn("static/mark_to_market_live.json", mtm_workflow)

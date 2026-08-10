@@ -55,6 +55,16 @@ class ChatUiTests(unittest.TestCase):
             self.index_html,
         )
 
+    def test_chat_forecast_renders_probability_score(self) -> None:
+        self.assertIn("model_probability: d.model_probability ?? null", self.index_html)
+        self.assertIn("raw.lastIndexOf('[p')", self.index_html)
+
+    def test_chat_forecast_can_be_saved_to_a_personal_ledger(self) -> None:
+        self.assertIn(">Personal ledger", self.index_html)
+        self.assertIn("Add to personal ledger", self.index_html)
+        self.assertIn("/personal-ledger/", self.index_html)
+        self.assertIn("function openPersonalLedger", self.index_html)
+
     def test_auth_providers_refresh_after_async_config_load(self) -> None:
         self.assertIn(
             "const authProvidersReady = _ensureAuthProviders();",
