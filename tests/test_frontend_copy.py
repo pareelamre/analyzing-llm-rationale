@@ -226,5 +226,71 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("idx = Math.max(0, Math.min(cLen - 1, Math.round(frac * (cLen - 1))));", hover)
 
 
+class AgentTradingBoardFrontendTests(unittest.TestCase):
+    """The agentic shadow-trading page (Milestone 2) -- checked against both
+    frontend/index.html (source) and static/index.html (served copy), since
+    they're kept in sync by hand and have previously drifted."""
+
+    def _both(self):
+        root = Path(__file__).resolve().parents[1]
+        return {
+            "frontend": (root / "frontend" / "index.html").read_text(encoding="utf-8"),
+            "static": (root / "static" / "index.html").read_text(encoding="utf-8"),
+        }
+
+    def test_side_nav_link_and_overlay_markup_present(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                self.assertIn('onclick="openAgentTradingBoard()"', index)
+                self.assertIn('id="agentTradingOverlay"', index)
+                self.assertIn('id="agentTradingBody"', index)
+                self.assertIn('onclick="closeAgentTradingBoard()"', index)
+
+    def test_shadow_only_banner_is_unconditional_not_derived_from_fetched_data(self):
+        # The safety banner must be a literal string baked into every render
+        # path (including the loading/error states), never something read off
+        # the fetched payload -- a compromised or stale artifact must not be
+        # able to make this text disappear.
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                renderer = index.split("function renderAgentTradingBoard(d) {", 1)[1].split(
+                    "async function removePersonalLedgerEntry", 1
+                )[0]
+                self.assertIn("Shadow / paper trading only", renderer)
+                self.assertIn("const banner = ", renderer)
+                # Present in the loading and error early-return branches too.
+                self.assertIn("host.innerHTML = `${banner}<p", renderer)
+
+    def test_fetches_the_dedicated_board_endpoint(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                opener = index.split("async function openAgentTradingBoard(", 1)[1].split(
+                    "function closeAgentTradingBoard", 1
+                )[0]
+                self.assertIn("_liveJsonFetch('/agent-trading/board')", opener)
+
+    def test_history_state_and_url_routing_wired(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                self.assertIn("'agent-trading-landing': '#agent-trading'", index)
+                self.assertIn("'agent-trading-app':     '#agent-trading-app'", index)
+                self.assertIn("view === 'agent-trading-app'", index)
+                self.assertIn("view === 'agent-trading-landing'", index)
+                self.assertIn("closeAgentTradingBoard({ updateHistory: false })", index)
+
+    def test_leaderboard_and_activity_render_real_fields(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                renderer = index.split("function renderAgentTradingBoard(d) {", 1)[1].split(
+                    "async function removePersonalLedgerEntry", 1
+                )[0]
+                self.assertIn("d.leaderboard", renderer)
+                self.assertIn("d.equity_curves", renderer)
+                self.assertIn("d.recent_activity", renderer)
+                self.assertIn("row.win_rate", renderer)
+                self.assertIn("row.trade_count", renderer)
+                self.assertIn("_equitySvg(curves", renderer)
+
+
 if __name__ == "__main__":
     unittest.main()

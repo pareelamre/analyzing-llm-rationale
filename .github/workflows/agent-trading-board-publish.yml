@@ -1,0 +1,89 @@
+name: Agent trading board publish
+
+# Cheap aggregation-only heartbeat: no LLM calls, just reads all 10 agent
+# models' own GCS-synced shadow-account stores, fetches live Kalshi quotes for
+# whatever they currently hold, and republishes the public leaderboard/equity
+# curve/transparency-feed JSON that GET /agent-trading/board serves. Runs less
+# often than the per-model trade crons (staggered minutes 0-9) to avoid adding
+# back the schedule pressure that agent-trading-cron-stagger and the
+# crypto-5m-tick removal were meant to relieve.
+
+on:
+  schedule:
+    - cron: "12,27,42,57 * * * *"
+  workflow_dispatch: {}
+
+env:
+  GCP_PROJECT_ID: brave-drive-471109-d9
+  AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: agent-trading-board-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: >-
+          pip install --quiet -e ".[serve,pipeline]" requests pyyaml
+          opentelemetry-sdk
+          opentelemetry-exporter-otlp-proto-http
+          opentelemetry-instrumentation-logging
+          opentelemetry-instrumentation-requests
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download every model's shadow account store
+        run: |
+          set -u
+          models="gemma-4-31b-it glm-5.2-fp8 gpt-oss-120b kimi-k2.7-code llama-3.3-70b-instruct minimax-m3 qwen3-coder-30b-a3b-instruct scads-alias-code scads-alias-ha scads-alias-reasoning"
+          for model in $models; do
+            mkdir -p "tmp/agent-trading-board/$model"
+            gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${model}.sqlite" \
+              "tmp/agent-trading-board/$model/store.sqlite" \
+              || echo "no store yet for $model, board builder will use an empty account for it"
+            gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${model}.json" \
+              "tmp/agent-trading-board/$model/notes.json" \
+              || echo "no notes yet for $model"
+          done
+
+      - name: Build the public agent-trading board
+        run: python scripts/build_agent_trading_board.py
+
+      - name: Commit updated board artifact
+        env:
+          GIT_REBASE_KEEP_THEIRS: "static/agent_trading_live.json"
+          MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p ~/.ssh
+          printf '%s' "$MTM_PUBLISH_DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/mtm_publish_deploy_key
+          chmod 600 ~/.ssh/mtm_publish_deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git config core.sshCommand "ssh -i ~/.ssh/mtm_publish_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          git remote set-url origin git@github.com:pareelamre/analyzing-llm-rationale.git
+          git add static/agent_trading_live.json
+          if git diff --cached --quiet; then
+            echo "No agent-trading board changes to commit."
+            exit 0
+          fi
+          git commit -m "agent trading: board publish [skip ci]"
+          bash .github/scripts/push_with_rebase_retry.sh origin main
