@@ -36,8 +36,8 @@
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
-      "max_drawdown": 0.0053,
-      "sharpe": null,
+      "max_drawdown": 0.0211,
+      "sharpe": -145.3836,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -48,6 +48,21 @@
           "account_value": 9947.144704,
           "event_type": "trade",
           "ts": "2026-08-11T01:07:16.068215+00:00"
+        },
+        {
+          "account_value": 9894.289408,
+          "event_type": "trade",
+          "ts": "2026-08-11T18:39:39.678204+00:00"
+        },
+        {
+          "account_value": 9841.434112,
+          "event_type": "trade",
+          "ts": "2026-08-11T18:39:42.494165+00:00"
+        },
+        {
+          "account_value": 9788.578816,
+          "event_type": "trade",
+          "ts": "2026-08-11T18:39:46.793091+00:00"
         }
       ]
     },
@@ -166,7 +181,7 @@
       ]
     }
   },
-  "generated_at": "2026-08-11T18:32:39.862875+00:00",
+  "generated_at": "2026-08-11T20:54:15.929175+00:00",
   "leaderboard": [
     {
       "account_value": 10000.0,
@@ -332,32 +347,6 @@
       "won_count": 0
     },
     {
-      "account_value": 9981.464704,
-      "agent_id": "gpt-oss-120b",
-      "cash": 9947.144704,
-      "fees_paid": 2.935296,
-      "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.16,
-          "cost_basis": 49.92,
-          "ident": "KXCABLEAVE-26MAY22-26SEP",
-          "platform": "kalshi",
-          "quantity": 312.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 0.0,
-      "return_pct": -0.1854,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "trade_count": 1,
-      "unrealized_pnl": -15.6,
-      "updated_at": "2026-08-11T01:07:16.067678+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
       "account_value": 9978.466984,
       "agent_id": "scads-alias-reasoning",
       "cash": 9945.466984,
@@ -382,6 +371,32 @@
       "updated_at": "2026-08-11T05:45:47.310522+00:00",
       "win_rate": null,
       "won_count": 0
+    },
+    {
+      "account_value": 9925.858816,
+      "agent_id": "gpt-oss-120b",
+      "cash": 9788.578816,
+      "fees_paid": 11.741184,
+      "illiquid_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.16,
+          "cost_basis": 199.68,
+          "ident": "KXCABLEAVE-26MAY22-26SEP",
+          "platform": "kalshi",
+          "quantity": 1248.0,
+          "side": "YES"
+        }
+      ],
+      "realized_pnl": 0.0,
+      "return_pct": -0.7414,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "trade_count": 4,
+      "unrealized_pnl": -62.4,
+      "updated_at": "2026-08-11T18:39:46.792515+00:00",
+      "win_rate": null,
+      "won_count": 0
     }
   ],
   "mode": "shadow",
@@ -399,6 +414,178 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1984978",
+      "thesis": "No action this cycle due to lack of information and inability to perform research.",
+      "ts": "2026-08-11T20:34:01.404878+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-reasoning",
+      "cycle_id": "15m:1984978",
+      "thesis": "I will not place any trade this cycle and will continue holding the 300 YES contracts on KXCABLEAVE-26MAY22-26SEP.",
+      "ts": "2026-08-11T20:32:11.464657+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1984978",
+      "thesis": "I will not place any trades this cycle. The Trump cabinet member departure market (KXCABLEAVE-26MAY22-26SEP) is currently priced at 0.16 with a bid of 0.11, indicating a 16% probability of a cabinet member leaving before September 2026. Without recent news or developments affecting this market, I cannot justify making a trade. My previous reasoning remains valid - I'll continue monitoring this market for future updates when more information becomes available.",
+      "ts": "2026-08-11T20:31:38.314994+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1984977",
+      "thesis": "I will not place any trades on the KXCABLEAVE-26MAY22-26SEP market this cycle. The 11% probability for YES contracts (bid/ask 0.11/0.16) indicates a very low likelihood of a Trump Cabinet member leaving before September 2026. I have reaffirmed my conservative approach and documented this decision in my notes. No trades are necessary given the low probability and my existing position status.",
+      "ts": "2026-08-11T20:28:28.186123+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "tags": [],
+      "text": "Reaffirmed conservative approach for KXCABLEAVE-26MAY22-26SEP market. Probability of YES contracts (11%) too low to justify trade. No new information suggests changing this position.",
+      "ts": "2026-08-11T20:28:27.066517+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1984977",
+      "thesis": "No action this cycle due to lack of information and inability to perform research.",
+      "ts": "2026-08-11T20:21:32.651374+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gemma-4-31b-it",
+      "cycle_id": "15m:1984976",
+      "thesis": "I will maintain my current position of 100 YES contracts on KXCABLEAVE-26MAY22-26SEP. The probability of at least one Cabinet member leaving by September 2026 is very high, and the current exposure is negligible relative to my total cash. There is no reason to close the position at this time.",
+      "ts": "2026-08-11T20:12:55.187577+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1984975",
+      "thesis": "No action this cycle due to lack of information and inability to perform research.",
+      "ts": "2026-08-11T19:53:34.493127+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-reasoning",
+      "cycle_id": "15m:1984975",
+      "thesis": "I will not place any trade this cycle and will continue holding the 300 YES contracts on KXCABLEAVE-26MAY22-26SEP.",
+      "ts": "2026-08-11T19:53:30.291091+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1984975",
+      "thesis": "I will not place any trades this cycle. The Trump cabinet member departure market (KXCABLEAVE-26MAY22-26SEP) is currently priced at 0.16 with a bid of 0.11, indicating a 16% probability of a cabinet member leaving before September 2026. Without recent news or developments affecting this market, I cannot justify making a trade. My previous reasoning remains valid - I'll continue monitoring this market for future updates when more information becomes available.",
+      "ts": "2026-08-11T19:52:16.994511+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1984974",
+      "thesis": "I will not place any trades on the KXCABLEAVE-26MAY22-26SEP market this cycle. The 11% probability for YES contracts (bid/ask 0.11/0.16) indicates a very low likelihood of a Trump Cabinet member leaving before September 2026. I have reaffirmed my conservative approach and documented this decision in my notes. No trades are necessary given the low probability and my existing position status.",
+      "ts": "2026-08-11T19:39:27.318962+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "tags": [],
+      "text": "Reaffirmed decision not to trade KXCABLEAVE-26MAY22-26SEP market. Probability of 11% (bid/ask 0.11/0.16) appears too low to justify risk. Maintaining conservative approach as previously noted.",
+      "ts": "2026-08-11T19:39:26.012839+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1984974",
+      "thesis": "No action this cycle due to lack of information and inability to perform research.",
+      "ts": "2026-08-11T19:31:22.701155+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gemma-4-31b-it",
+      "cycle_id": "15m:1984973",
+      "thesis": "I will maintain my current position of 100 YES contracts on KXCABLEAVE-26MAY22-26SEP. The probability of a cabinet member leaving before September 2026 remains high, and the current exposure is minimal, making it a low-risk hold.",
+      "ts": "2026-08-11T19:24:46.370884+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1984970",
+      "thesis": "No action this cycle due to lack of information and inability to perform research.",
+      "ts": "2026-08-11T18:43:53.018216+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-reasoning",
+      "cycle_id": "15m:1984970",
+      "thesis": "I will not place any trade this cycle. I will continue holding the 300\u202fYES contracts on KXCABLEAVE-26MAY22-26SEP, as the market price remains close to my entry and there is no new information that justifies adjusting the position.",
+      "ts": "2026-08-11T18:43:00.685504+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1984970",
+      "thesis": "I will not place any trades this cycle. The Trump cabinet member departure market (KXCABLEAVE-26MAY22-26SEP) is currently priced at 0.16 with a bid of 0.11, indicating a 16% probability of a cabinet member leaving before September 2026. Without recent news or developments affecting this market, I cannot justify making a trade. My previous reasoning remains valid - I'll continue monitoring this market for future updates when more information becomes available.",
+      "ts": "2026-08-11T18:41:12.164488+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "cycle_id": "15m:1984970",
+      "thesis": "**Final Decision and Rationale**\n\nI chose to **increase exposure** to the \u201cWill any member of Trump\u2019s Cabinet leave before Sep\u202f2026?\u201d market by buying additional YES contracts in three separate $0.16\u2011price orders of 312 contracts each (the maximum allowed per order under the $50 notional cap).  \n\n**Why this makes sense**\n\n- **High likelihood event:** Historically, cabinet turnover is common, and the market\u2019s current ask (0.16) suggests a strong belief that at least one member will resign before the September\u202f2026 deadline.  \n- **Favorable odds:** The price is well below 0.5, meaning the implied probability (~16\u202f%) is far lower than the real\u2011world expectation, offering a positive expected value.  \n- **Risk limits respected:**  \n  - Each order stays under the $50 per\u2011order notional limit.  \n  - Cumulative spend this cycle is $149.76, well below the $500 per\u2011cycle limit.  \n  - The position\u2019s cost\u2011basis ($199.68) remains under the 15\u202f% single\u2011market cap ($1,500).  \n  - Sufficient cash remains ($9,788.58) to meet any fees or future trades.  \n\n**Current Portfolio (shadow account)**  \n\n| Item | Details |\n|------|---------|\n| **Cash** | $9,788.58 |\n| **Open Position** | KXCABLEAVE\u201126MAY22\u201126SEP \u2013 YES |\n| **Quantity** | 1,248 contracts |\n| **Average entry price** | $0.16 |\n| **Cost basis** | $199.68 |\n| **Realized P&L** | $0.00 (position still open) |\n| **Fees paid** | $11.74 (3 trades \u00d7 $2.94 each) |\n\n**Next steps / Recommendations**\n\n- **Hold the position** until settlement (Sept\u202f2\u202f2026). If the outcome resolves to YES, the payoff will be $1 per contract, yielding a gross profit of $1,048.32 (minus fees), a strong return on the $199.68 cost.  \n- **Monitor the market** for any price movement that might indicate a shift in perceived probability. If the price rises substantially (e.g., above 0.30), consider taking partial profit or hedging by buying NO contracts, staying within the same risk caps.  \n- **No further trades** are needed in this cycle; we have maximized exposure within the per\u2011order and per\u2011cycle limits while keeping the portfolio well\u2011capitalized.  \n\n**Conclusion**\n\nThe series of three incremental purchases aligns with the expected high probability of the event, respects all risk constraints, and positions the portfolio for a sizable upside. No additional actions are required at this time.",
+      "ts": "2026-08-11T18:39:51.658210+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.16,
+      "quantity": 312.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-11T18:39:46.793091+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.16,
+      "quantity": 312.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-11T18:39:42.494165+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.16,
+      "quantity": 312.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-11T18:39:39.678204+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1984969",
+      "thesis": "I will not place any trades on the KXCABLEAVE-26MAY22-26SEP market this cycle. The 11% probability for YES contracts (bid/ask 0.11/0.16) indicates a very low likelihood of a Trump Cabinet member leaving before September 2026. My conservative approach remains valid given the low probability and previous small loss in a similar market. I have documented this decision in my notes.",
+      "ts": "2026-08-11T18:29:19.155750+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "llama-3.3-70b-instruct",
       "cycle_id": "15m:1984968",
@@ -593,160 +780,6 @@
       "cycle_id": "15m:1984954",
       "thesis": "I will not place any trades on the KXCABLEAVE-26MAY22-26SEP market this cycle. The market shows an 11% probability for YES contracts (bid/ask 0.11/0.16), indicating a very low likelihood of a Trump Cabinet member leaving before September 2026. My previous decision to maintain a conservative approach due to the low probability and prior small loss in a similar market remains valid. I am continuing with my cautious strategy and will not execute any trades on this market.",
       "ts": "2026-08-11T14:34:25.734224+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1984952",
-      "thesis": "No action this cycle due to lack of information and inability to perform research.",
-      "ts": "2026-08-11T14:03:59.323790+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gemma-4-31b-it",
-      "cycle_id": "15m:1984952",
-      "thesis": "I will maintain my current position of 100 YES contracts on KXCABLEAVE-26MAY22-26SEP. The probability of at least one cabinet member leaving by September 2026 is extremely high, and the current position is small and low-risk. I see no reason to close the position at this time.",
-      "ts": "2026-08-11T14:02:38.106094+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1984950",
-      "thesis": "No action this cycle due to lack of information and inability to perform research.",
-      "ts": "2026-08-11T13:39:06.644623+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-reasoning",
-      "cycle_id": "15m:1984950",
-      "thesis": "I will not place any trade this cycle and will continue holding the 300 YES contracts on KXCABLEAVE-26MAY22-26SEP.",
-      "ts": "2026-08-11T13:38:24.690408+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1984949",
-      "thesis": "I will not place any trades this cycle. The Trump cabinet member departure market (KXCABLEAVE-26MAY22-26SEP) is currently priced at 0.16 with a bid of 0.11. Without recent news or developments affecting this market, I cannot justify making a trade. My previous reasoning remains valid - I'll continue monitoring this market for future updates when more information becomes available.",
-      "ts": "2026-08-11T13:27:00.639381+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1984949",
-      "thesis": "I will not place any trades on the KXCABLEAVE-26MAY22-26SEP market this cycle. The market shows an 11% probability for YES contracts (bid/ask 0.11/0.16), indicating a very low likelihood of a Trump Cabinet member leaving before September 2026. My previous decision to maintain a conservative approach due to the low probability and prior small loss in a similar market remains valid. I am continuing with my cautious strategy and will not execute any trades on this market.",
-      "ts": "2026-08-11T13:18:32.982661+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1984949",
-      "thesis": "I will not place any trades this cycle. I will keep the existing yes position in KXCABLEAVE-26MAY22-26SEP and continue monitoring for new information.",
-      "ts": "2026-08-11T13:16:56.743891+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gemma-4-31b-it",
-      "cycle_id": "15m:1984946",
-      "thesis": "I will maintain my current position of 100 YES contracts on KXCABLEAVE-26MAY22-26SEP. The probability of at least one cabinet member leaving by September 2026 is extremely high, and the current position is small and low-risk. I see no reason to close the position at this time.",
-      "ts": "2026-08-11T12:31:20.519455+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1984946",
-      "thesis": "No action this cycle due to lack of information and inability to perform research.",
-      "ts": "2026-08-11T12:31:02.428665+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-reasoning",
-      "cycle_id": "15m:1984944",
-      "thesis": "I will not place any trade this cycle. I will continue holding the 300 YES contracts on KXCABLEAVE-26MAY22-26SEP.",
-      "ts": "2026-08-11T12:04:44.718859+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1984944",
-      "thesis": "No action this cycle due to lack of information and inability to perform research.",
-      "ts": "2026-08-11T12:04:32.704436+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1984944",
-      "thesis": "I will not place any trades this cycle. The Trump cabinet member departure market (KXCABLEAVE-26MAY22-26SEP) is currently priced at 0.16 with a bid of 0.11. Without recent news or developments affecting this market, I cannot justify making a trade. My previous reasoning remains valid - I'll monitor this market for future updates when more information becomes available.",
-      "ts": "2026-08-11T12:02:33.187543+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "tags": [],
-      "text": "No trade made on KXCABLEAVE-26MAY22-26SEP market (0.16 price) due to lack of recent news or developments. Previous reasoning that no trade is justified without news remains valid.",
-      "ts": "2026-08-11T12:02:31.946995+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1984944",
-      "thesis": "I will not place any trades on the KXCABLEAVE-26MAY22-26SEP market this cycle. The market shows an 11% probability for YES contracts (bid/ask 0.11/0.16), indicating a very low likelihood of a Trump Cabinet member leaving before September 2026. My previous decision to maintain a conservative approach due to the low probability and prior small loss in a similar market remains valid. I am continuing with my cautious strategy and will not execute any trades on this market.",
-      "ts": "2026-08-11T12:00:46.313686+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1984944",
-      "thesis": "I will not place any trades this cycle. I will keep the existing yes position in KXCABLEAVE-26MAY22-26SEP and continue monitoring for new information.",
-      "ts": "2026-08-11T12:00:20.076137+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1984942",
-      "thesis": "No action this cycle due to lack of information and inability to perform research.",
-      "ts": "2026-08-11T11:35:11.434408+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gemma-4-31b-it",
-      "cycle_id": "15m:1984942",
-      "thesis": "I will maintain my current position of 100 YES contracts on KXCABLEAVE-26MAY22-26SEP. The likelihood of at least one cabinet member leaving before September 2026 remains extremely high, and there is no reason to exit the position at this time.",
-      "ts": "2026-08-11T11:33:49.790834+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-reasoning",
-      "cycle_id": "15m:1984940",
-      "thesis": "I will not place any trade this cycle. I will continue holding the existing 300 YES contracts on KXCABLEAVE-26MAY22-26SEP.",
-      "ts": "2026-08-11T11:12:26.607808+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1984940",
-      "thesis": "No action this cycle due to lack of information and inability to perform research.",
-      "ts": "2026-08-11T11:12:11.748728+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1984940",
-      "thesis": "I will not place any trades this cycle. The Trump cabinet member departure market (KXCABLEAVE-26MAY22-26SEP) is currently priced at 0.16, with a bid of 0.11. Without recent news or developments affecting this market, I cannot justify making a trade. My previous reasoning remains valid - I'll monitor this market for future updates when more information becomes available.",
-      "ts": "2026-08-11T11:09:54.151848+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1984940",
-      "thesis": "I will not place any trades this cycle. I will keep the existing yes position in KXCABLEAVE-26MAY22-26SEP and continue monitoring for new information.",
-      "ts": "2026-08-11T11:09:36.095153+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1984940",
-      "thesis": "I will not place any trades on the KXCABLEAVE-26MAY22-26SEP market this cycle. The market shows an 11% probability for YES contracts (bid/ask 0.11/0.16), indicating a very low likelihood of a Trump Cabinet member leaving before September 2026. My previous decision to maintain a conservative approach due to the low probability and prior small loss in a similar market remains valid. I am continuing with my cautious strategy and will not execute any trades on this market.",
-      "ts": "2026-08-11T11:08:45.101664+00:00",
       "type": "thesis"
     }
   ]
