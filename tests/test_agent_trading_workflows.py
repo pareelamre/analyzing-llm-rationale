@@ -3,6 +3,7 @@ mirrors tests/test_track_record_tick.py's approach to locking in workflow
 plumbing without actually running GitHub Actions."""
 from __future__ import annotations
 
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -14,6 +15,7 @@ from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
 _ROOT = Path(__file__).resolve().parents[1]
 _WORKFLOWS_DIR = _ROOT / ".github" / "workflows"
 _REUSABLE_PATH = _WORKFLOWS_DIR / "_agent-trading-tick-reusable.yml"
+_CRON_RE = re.compile(r'cron:\s*"(\d+),(\d+),(\d+),(\d+) \* \* \* \*"')
 
 
 def _chat_capable_models() -> list[str]:
@@ -86,8 +88,32 @@ class AgentTradingPerModelWorkflowTests(unittest.TestCase):
             self.assertIn("uses: ./.github/workflows/_agent-trading-tick-reusable.yml", text)
             self.assertIn(f"model: {model}", text)
             self.assertIn("secrets: inherit", text)
-            self.assertIn('cron: "*/15 * * * *"', text)
+            self.assertRegex(text, _CRON_RE, f"no recognizable cron stagger in {path}")
             self.assertIn("workflow_dispatch:", text)
+
+    def test_cron_offsets_are_staggered_across_models_to_avoid_a_rate_limit_thundering_herd(self):
+        # Regression test: all 10 wrapper workflows originally shared the
+        # identical "*/15 * * * *" cron, so every 15-minute tick fired all 10
+        # SCADS calls at the same wall-clock minute -- observed live to cause
+        # 429 RateLimitErrors on roughly half the fleet during manual
+        # dispatch verification. Each model now gets its own minute offset
+        # within the 15-minute window, still ticking every 15 minutes.
+        offsets: dict[str, int] = {}
+        for model in _chat_capable_models():
+            path = _WORKFLOWS_DIR / f"agent-trading-tick-{model}.yml"
+            text = path.read_text(encoding="utf-8")
+            match = _CRON_RE.search(text)
+            self.assertIsNotNone(match, f"no recognizable cron stagger in {path}")
+            minutes = [int(g) for g in match.groups()]
+            self.assertEqual(
+                minutes, [minutes[0], minutes[0] + 15, minutes[0] + 30, minutes[0] + 45],
+                f"{model}'s cron minutes aren't a 15-minute-cadence stagger: {minutes}",
+            )
+            offsets[model] = minutes[0]
+        self.assertEqual(
+            len(set(offsets.values())), len(offsets),
+            f"two or more models share a cron offset, defeating the stagger: {offsets}",
+        )
 
 
 if __name__ == "__main__":
