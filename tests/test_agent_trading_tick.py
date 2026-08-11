@@ -68,6 +68,16 @@ class CandidateSelectionTests(unittest.TestCase):
             found = agent_trading_tick._discover_candidates(set())
         self.assertEqual(found, [])
 
+    def test_discover_candidates_paginates_kalshi_listing(self):
+        # Regression test: Kalshi's /events page isn't sorted by close_time, so
+        # without paginate=True the unpaginated first page can (and, observed
+        # live, does) contain zero markets in the close-day window even though
+        # thousands of qualifying markets exist on later pages -- silently
+        # starving every cycle of candidates.
+        with mock.patch.object(market_data, "list_kalshi", return_value=[_quote("KXA")]) as mocked:
+            agent_trading_tick._discover_candidates(set())
+        self.assertTrue(mocked.call_args.kwargs.get("paginate") is True)
+
     def test_requote_held_skips_failed_lookups(self):
         def fake_fetch(ticker):
             if ticker == "KXBAD":
