@@ -7966,13 +7966,21 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     cleanly to a no-edge report if no forecast tool was used."""
     from analyzing_llm_rationale import market_data
 
-    provider, temperature, max_tokens = _select_provider(
-        req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
-        getattr(req, "ollama_base_url", None),
-    )
+    alt_provider = _scads_alt_provider(req.model) if req.model else None
+    if alt_provider is not None:
+        provider, temperature, max_tokens = (
+            alt_provider,
+            _state.get("temperature", 0.0),
+            _state.get("max_tokens", 1024),
+        )
+    else:
+        provider, temperature, max_tokens = _select_provider(
+            req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
+            getattr(req, "ollama_base_url", None),
+        )
     loop = asyncio.get_running_loop()
     last: Dict[str, Any] = {}
-    agent_id = str(req.openrouter_model or _state.get("model_key") or "agent")
+    agent_id = str(req.model or req.openrouter_model or _state.get("model_key") or "agent")
     tool_ctx = benchmark_tools.ToolContext(
         agent_id=agent_id,
         user_id=_optional_user_id(request),

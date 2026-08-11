@@ -1,0 +1,13 @@
+name: Agent trading tick (qwen3-coder-30b-a3b-instruct)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trade:
+    uses: ./.github/workflows/_agent-trading-tick-reusable.yml
+    with:
+      model: qwen3-coder-30b-a3b-instruct
+    secrets: inherit
