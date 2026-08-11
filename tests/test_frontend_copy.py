@@ -238,13 +238,21 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
             "static": (root / "static" / "index.html").read_text(encoding="utf-8"),
         }
 
-    def test_side_nav_link_and_overlay_markup_present(self):
+    def test_side_nav_link_opens_edge_board_agentic_tab_not_its_own_overlay(self):
+        # The agentic board lives inside the Edge board's "Agentic" tab, not a
+        # standalone overlay -- confirm the old overlay is gone and the
+        # side-nav button now routes through openEdgeBoard()/_ebSetView().
         for name, index in self._both().items():
             with self.subTest(file=name):
                 self.assertIn('onclick="openAgentTradingBoard()"', index)
-                self.assertIn('id="agentTradingOverlay"', index)
-                self.assertIn('id="agentTradingBody"', index)
-                self.assertIn('onclick="closeAgentTradingBoard()"', index)
+                self.assertNotIn('id="agentTradingOverlay"', index)
+                self.assertNotIn('id="agentTradingBody"', index)
+                self.assertNotIn("closeAgentTradingBoard", index)
+                opener = index.split("async function openAgentTradingBoard()", 1)[1].split(
+                    "async function loadAgentTradingSection", 1
+                )[0]
+                self.assertIn("await openEdgeBoard()", opener)
+                self.assertIn("_ebSetView('agentic')", opener)
 
     def test_shadow_only_banner_is_unconditional_not_derived_from_fetched_data(self):
         # The safety banner must be a literal string baked into every render
@@ -264,19 +272,43 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
     def test_fetches_the_dedicated_board_endpoint(self):
         for name, index in self._both().items():
             with self.subTest(file=name):
-                opener = index.split("async function openAgentTradingBoard(", 1)[1].split(
-                    "function closeAgentTradingBoard", 1
+                loader = index.split("async function loadAgentTradingSection() {", 1)[1].split(
+                    "function _agentTradingActivityLine", 1
                 )[0]
-                self.assertIn("_liveJsonFetch('/agent-trading/board')", opener)
+                self.assertIn("_liveJsonFetch('/agent-trading/board')", loader)
 
-    def test_history_state_and_url_routing_wired(self):
+    def test_agentic_is_a_real_edge_board_tab(self):
         for name, index in self._both().items():
             with self.subTest(file=name):
-                self.assertIn("'agent-trading-landing': '#agent-trading'", index)
-                self.assertIn("'agent-trading-app':     '#agent-trading-app'", index)
-                self.assertIn("view === 'agent-trading-app'", index)
-                self.assertIn("view === 'agent-trading-landing'", index)
-                self.assertIn("closeAgentTradingBoard({ updateHistory: false })", index)
+                self.assertIn('data-eb-view="agentic">Agentic</button>', index)
+                self.assertIn("['mtm', 'agentic'].includes(view)", index)
+                self.assertIn('id="eb-agentic-section"', index)
+                # _ebSetView triggers the fetch when switching onto the tab.
+                setview = index.split("function _ebSetView(view) {", 1)[1].split(
+                    "function _equitySvg", 1
+                )[0]
+                self.assertIn("loadAgentTradingSection()", setview)
+
+    def test_periodic_refresh_and_initial_load_both_repopulate_the_agentic_tab(self):
+        # Regression test: renderEdgeBoard() only ever emits a "Loading…"
+        # placeholder for the Agentic tab (its data isn't part of the
+        # /edge-board payload), so both loadEdgeBoard()'s first-open fetch
+        # and refreshEdgeForecasts()'s 5-minute poll fully replace #edgeBody
+        # via renderEdgeBoard() -- each must independently re-trigger
+        # loadAgentTradingSection() or the tab gets stuck loading forever
+        # (hit exactly this in manual browser verification: openEdgeBoard()
+        # doesn't await its own data load, so _ebSetView('agentic') can run
+        # before _ebLastData exists and silently no-ops).
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                load_edge_board = index.split("async function loadEdgeBoard() {", 1)[1].split(
+                    "// ── Watchlist full page", 1
+                )[0]
+                self.assertIn("if (_ebView === 'agentic') loadAgentTradingSection();", load_edge_board)
+                refresher = index.split("async function refreshEdgeForecasts() {", 1)[1].split(
+                    "function _fmtEquityDate", 1
+                )[0]
+                self.assertIn("if (_ebView === 'agentic') loadAgentTradingSection();", refresher)
 
     def test_leaderboard_and_activity_render_real_fields(self):
         for name, index in self._both().items():
