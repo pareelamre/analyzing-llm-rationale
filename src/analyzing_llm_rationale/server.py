@@ -22,7 +22,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import quote as url_quote
 from urllib.parse import urlparse
 
@@ -910,7 +910,7 @@ def _delete_favorite(user_id: str, key: str) -> None:
 _PERSONAL_LEDGER_KIND = "PersonalLedgerEntry"
 _PERSONAL_LEDGER_FIELDS = (
     "id", "conversation_id", "message_id", "question", "predicted_answer",
-    "probability", "rationale", "model", "createdAt",
+    "probability", "rationale", "model", "createdAt", "user_verdict", "judgedAt",
 )
 
 
@@ -936,8 +936,24 @@ def _list_personal_ledger(user_id: str) -> List[Dict[str, Any]]:
     return entries
 
 
+def _get_personal_ledger_entry(user_id: str, entry_id: str) -> Optional[Dict[str, Any]]:
+    """Return one ledger entry only when it belongs to the signed-in user."""
+    client = _get_datastore()
+    if client is None:
+        return _state.setdefault("personal_ledger", {}).setdefault(user_id, {}).get(entry_id)
+    entity = client.get(_personal_ledger_key(client, user_id, entry_id))
+    return _personal_ledger_from_entity(entity) if entity is not None else None
+
+
 def _put_personal_ledger_entry(user_id: str, entry: Dict[str, Any]) -> Dict[str, Any]:
     entry = {field: entry.get(field) for field in _PERSONAL_LEDGER_FIELDS}
+    existing = _get_personal_ledger_entry(user_id, entry["id"])
+    if existing is not None:
+        # Adding the same chat response is idempotent; never erase the user's
+        # explicit correctness judgement during an add/retry.
+        for field in ("user_verdict", "judgedAt"):
+            if entry.get(field) is None:
+                entry[field] = existing.get(field)
     client = _get_datastore()
     if client is None:
         _state.setdefault("personal_ledger", {}).setdefault(user_id, {})[entry["id"]] = entry
@@ -3922,10 +3938,18 @@ class PersonalLedgerEntry(BaseModel):
     rationale: str = Field("", max_length=8000)
     model: str = Field("", max_length=160)
     createdAt: int = Field(..., ge=0)
+    user_verdict: Optional[Literal["correct", "wrong"]] = None
+    judgedAt: Optional[int] = Field(None, ge=0)
 
 
 class PersonalLedgerList(BaseModel):
     entries: List[PersonalLedgerEntry]
+
+
+class PersonalLedgerVerdict(BaseModel):
+    """A user's explicit assessment of one of their saved forecasts."""
+
+    verdict: Literal["correct", "wrong"]
 
 
 class RadarMarket(BaseModel):
@@ -6134,7 +6158,12 @@ async def delete_chat_conversation(conversation_id: str, request: Request) -> Di
     return {"ok": True}
 
 
-@app.get("/personal-ledger", tags=["Auth"], response_model=PersonalLedgerList)
+@app.get(
+    "/personal-ledger",
+    tags=["Auth"],
+    response_model=PersonalLedgerList,
+    response_model_exclude_none=True,
+)
 async def list_personal_ledger(request: Request) -> PersonalLedgerList:
     """Return the current user's explicitly saved chat forecasts."""
     claims = _require_session(request)
@@ -6146,7 +6175,12 @@ async def list_personal_ledger(request: Request) -> PersonalLedgerList:
         return PersonalLedgerList(entries=[PersonalLedgerEntry(**entry) for entry in entries])
 
 
-@app.put("/personal-ledger/{entry_id}", tags=["Auth"], response_model=PersonalLedgerEntry)
+@app.put(
+    "/personal-ledger/{entry_id}",
+    tags=["Auth"],
+    response_model=PersonalLedgerEntry,
+    response_model_exclude_none=True,
+)
 async def save_personal_ledger_entry(
     entry_id: str,
     entry: PersonalLedgerEntry,
@@ -6172,6 +6206,53 @@ async def save_personal_ledger_entry(
             span.record_exception(exc)
             span.set_status(otel_trace.Status(otel_trace.StatusCode.ERROR, type(exc).__name__))
             logger.exception("personal ledger entry could not be saved")
+            raise
+
+
+@app.patch(
+    "/personal-ledger/{entry_id}/verdict",
+    tags=["Auth"],
+    response_model=PersonalLedgerEntry,
+    response_model_exclude_none=True,
+)
+async def judge_personal_ledger_entry(
+    entry_id: str,
+    verdict: PersonalLedgerVerdict,
+    request: Request,
+) -> PersonalLedgerEntry:
+    """Mark one of the current user's saved forecasts correct or wrong."""
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("personal_ledger.feedback") as span:
+        span.set_attribute("user.id", claims["sub"])
+        span.set_attribute("personal_ledger.action", "feedback")
+        span.set_attribute("personal_ledger.verdict", verdict.verdict)
+        try:
+            loop = asyncio.get_running_loop()
+            entry = await loop.run_in_executor(
+                None, _get_personal_ledger_entry, claims["sub"], entry_id
+            )
+            if entry is None:
+                _personal_ledger_actions.add(
+                    1, {"action": "feedback", "verdict": verdict.verdict, "outcome": "missing"}
+                )
+                raise HTTPException(status_code=404, detail="Ledger entry not found.")
+            entry["user_verdict"] = verdict.verdict
+            entry["judgedAt"] = int(time.time() * 1000)
+            saved = await loop.run_in_executor(None, _put_personal_ledger_entry, claims["sub"], entry)
+            _personal_ledger_actions.add(
+                1, {"action": "feedback", "verdict": verdict.verdict, "outcome": "success"}
+            )
+            logger.info("personal ledger entry feedback saved")
+            return PersonalLedgerEntry(**saved)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            _personal_ledger_actions.add(
+                1, {"action": "feedback", "verdict": verdict.verdict, "outcome": "failure"}
+            )
+            span.record_exception(exc)
+            span.set_status(otel_trace.Status(otel_trace.StatusCode.ERROR, type(exc).__name__))
+            logger.exception("personal ledger entry feedback could not be saved")
             raise
 
 
