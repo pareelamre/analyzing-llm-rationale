@@ -432,6 +432,16 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
             checked_at TEXT NOT NULL,
             PRIMARY KEY (agent_id, cycle_id)
         );
+        CREATE TABLE IF NOT EXISTS agent_cycles (
+            agent_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            ts TEXT NOT NULL,
+            thesis TEXT,
+            transcript_json TEXT,
+            steps INTEGER,
+            truncated INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (agent_id, cycle_id)
+        );
         """
     )
 

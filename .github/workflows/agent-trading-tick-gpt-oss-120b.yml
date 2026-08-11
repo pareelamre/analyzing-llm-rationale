@@ -1,0 +1,13 @@
+name: Agent trading tick (gpt-oss-120b)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trade:
+    uses: ./.github/workflows/_agent-trading-tick-reusable.yml
+    with:
+      model: gpt-oss-120b
+    secrets: inherit

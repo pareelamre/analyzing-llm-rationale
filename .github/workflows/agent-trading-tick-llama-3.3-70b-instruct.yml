@@ -1,0 +1,13 @@
+name: Agent trading tick (llama-3.3-70b-instruct)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trade:
+    uses: ./.github/workflows/_agent-trading-tick-reusable.yml
+    with:
+      model: llama-3.3-70b-instruct
+    secrets: inherit

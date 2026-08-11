@@ -444,6 +444,43 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertAlmostEqual(settlement[2], 5.86)
         self.assertEqual(remaining, 0)
 
+    def test_agent_cycles_table_round_trips(self):
+        # Stores per-cycle thesis/transcript/candidates -- the source for the
+        # agentic-trading transparency feed. Not written by any existing
+        # function yet, so this just locks in the schema itself.
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            with mock.patch.dict(
+                os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path)}, clear=False
+            ):
+                conn = benchmark_tools._account_conn()
+                try:
+                    conn.execute(
+                        """
+                        INSERT OR REPLACE INTO agent_cycles
+                        (agent_id, cycle_id, ts, thesis, transcript_json, steps, truncated)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            "gpt-oss-120b", "2026-08-11T00:00", "2026-08-11T00:00:05+00:00",
+                            "Held flat this cycle.", '{"candidates_offered": ["KXTEST"]}',
+                            2, 0,
+                        ),
+                    )
+                    conn.commit()
+                    row = conn.execute(
+                        "SELECT agent_id, cycle_id, thesis, steps, truncated FROM agent_cycles"
+                        " WHERE agent_id = ? AND cycle_id = ?",
+                        ("gpt-oss-120b", "2026-08-11T00:00"),
+                    ).fetchone()
+                finally:
+                    conn.close()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["thesis"], "Held flat this cycle.")
+        self.assertEqual(row["steps"], 2)
+        self.assertEqual(row["truncated"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

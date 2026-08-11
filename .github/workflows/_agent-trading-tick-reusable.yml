@@ -1,0 +1,110 @@
+name: Agent trading tick (reusable)
+
+# Called by the 10 per-model agent-trading-tick-*.yml workflows (one model
+# each, on its own schedule trigger) -- not run directly. Each caller drives
+# exactly one model's shadow-trading cycle via scripts/agent_trading_tick.py,
+# which gives the model real tool access (place_trade/web_search/manage_notes)
+# instead of just scoring a probability.
+#
+# Each model gets its OWN GCS object (agent_trading_store__<model>.sqlite /
+# agent_trading_notes__<model>.json) rather than sharing one file across all
+# 10 -- with 10 independent, identically-scheduled runs, a shared file would
+# need a cross-workflow concurrency lock, and 10 serialized runs (pip install
+# + a multi-step LLM tool loop each) can plausibly take longer than the
+# 15-minute cadence, growing an ever-deepening queue. Separate objects mean
+# every model's read-modify-write cycle is independent -- no lock, no queue,
+# no risk of one model's upload clobbering another's concurrent change.
+#
+# Shadow (paper) trading only. FORESEA_AGENT_PLACE_TRADE_MODE is hard-pinned
+# to "shadow" below and is never a workflow input -- no caller can override it.
+# FORESEA_ENABLE_TRADING / FORESEA_ENABLE_BYO_TRADING (the real-money gates in
+# trading.py) are intentionally never defined anywhere in this file.
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: "configs/models.yaml key to trade as this cycle."
+        required: true
+        type: string
+
+env:
+  GCP_PROJECT_ID: brave-drive-471109-d9
+  AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
+
+jobs:
+  trade:
+    name: trade (${{ inputs.model }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: >-
+          pip install --quiet -e ".[serve,pipeline]"
+          requests duckdb pyyaml
+          opentelemetry-sdk
+          opentelemetry-exporter-otlp-proto-http
+          opentelemetry-instrumentation-logging
+          opentelemetry-instrumentation-requests
+
+      - name: Verify secrets
+        env:
+          SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
+        run: |
+          if [ -z "$SCADS_AI_API_KEY" ]; then
+            echo "::error::SCADS_AI_API_KEY must be configured as a GitHub Actions secret."
+            exit 1
+          fi
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download this model's shadow account store (tolerant of first run)
+        env:
+          MODEL: ${{ inputs.model }}
+        run: |
+          mkdir -p tmp/agent-trading
+          gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite" \
+            tmp/agent-trading/store.sqlite \
+            || echo "No existing store for ${MODEL} yet -- starting fresh."
+          gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json" \
+            tmp/agent-trading/notes.json \
+            || echo '{}' > tmp/agent-trading/notes.json
+
+      - name: Run one shadow-trading cycle
+        env:
+          AGENT_TRADING_MODEL: ${{ inputs.model }}
+          FORESEA_AGENT_PLACE_TRADE_MODE: shadow
+          FORESEA_AGENT_ACCOUNT_DB_PATH: tmp/agent-trading/store.sqlite
+          FORESEA_AGENT_NOTES_PATH: tmp/agent-trading/notes.json
+          FORESEA_AGENT_TOOL_LEDGER_PATH: tmp/agent-trading/tool_ledger.jsonl
+          FORESEA_AGENT_CYCLE_MINUTES: "15"
+          FORESEA_AGENT_ACCOUNT_VALUE: "10000"
+          SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          MAX_TOOL_STEPS: "4"
+          CANDIDATE_COUNT: "3"
+        run: python scripts/agent_trading_tick.py
+
+      - name: Upload this model's shadow account store
+        # Runs even if the tick step above failed partway through (e.g. a
+        # trade was placed before a later step errored) so no successfully
+        # recorded shadow trade is ever lost -- the job itself still reports
+        # failure via the tick script's exit code.
+        if: always()
+        env:
+          MODEL: ${{ inputs.model }}
+        run: |
+          gcloud storage cp tmp/agent-trading/store.sqlite \
+            "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite"
+          gcloud storage cp tmp/agent-trading/notes.json \
+            "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json"

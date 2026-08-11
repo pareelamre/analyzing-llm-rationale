@@ -1445,6 +1445,52 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn("forecast(", system_prompt)
         self.assertNotIn("scan_markets(", system_prompt)
 
+    def test_agent_analyze_tool_loop_routes_via_scads_alt_provider_for_model(self):
+        # `req.model` (the field every other /agent/analyze and /predict path
+        # uses for SCADS model selection) used to be silently ignored by
+        # _agent_tool_loop -- it only consulted req.openrouter_model, so
+        # passing model="minimax-m3" ran on the server's default model and
+        # every model's agent_id collapsed onto the same shared identity.
+        alt_provider = FakeProvider()
+        alt_provider.response = {
+            "thought": "remember this",
+            "action": "manage_notes",
+            "args": {"action": "add", "text": "Track Fed dates."},
+        }
+        with (
+            mock.patch.object(
+                server_module,
+                "_SCADS_MODEL_ALLOWLIST",
+                {"minimax-m3": "MiniMaxAI/MiniMax-M3-MXFP8"},
+            ),
+            mock.patch.object(server_module, "_scads_alt_provider", return_value=alt_provider) as alt_provider_mock,
+            tempfile.TemporaryDirectory() as td,
+            mock.patch.dict(
+                os.environ,
+                {"FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json")},
+                clear=False,
+            ),
+        ):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Will the Fed cut rates tomorrow?",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                    "model": "minimax-m3",
+                    "max_tool_steps": 1,
+                },
+            )
+
+            self.assertEqual(response.status_code, 200)
+            alt_provider_mock.assert_called_once_with("minimax-m3")
+            self.assertGreater(len(alt_provider.calls), 0)
+            self.assertEqual(len(self.provider.calls), 0)  # server default was never used
+
+            notes = json.loads((Path(td) / "notes.json").read_text())
+        self.assertIn("minimax-m3", notes)
+        self.assertNotIn("agent", notes)
+
     def test_agent_analyze_fetches_market_and_recommends(self):
         import analyzing_llm_rationale.market_data as md
 
