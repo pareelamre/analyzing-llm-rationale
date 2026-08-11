@@ -2735,20 +2735,6 @@
   <div id="ledgerBody" class="tr-body" data-lenis-prevent></div>
 </div>
 
-<div id="agentTradingOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="agentTradingDialogTitle" aria-hidden="true" tabindex="-1">
-  <div class="tr-head">
-    <div class="flex items-center gap-2">
-      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
-        <span class="logo-dot"></span>
-        <span class="brand text-lg">Foresea</span>
-      </button>
-      <h2 id="agentTradingDialogTitle" class="sr-only">Agentic shadow trading</h2>
-    </div>
-    <button id="agentTradingCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeAgentTradingBoard()">Close</button>
-  </div>
-  <div id="agentTradingBody" class="tr-body" data-lenis-prevent></div>
-</div>
-
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
 function uiIcon(name, className = '') {
@@ -4936,8 +4922,6 @@ const _VIEW_URL = {
   'watch-app':     '#watchlist-app',
   'ledger-landing': '#ledger',
   'ledger-app':     '#ledger-app',
-  'agent-trading-landing': '#agent-trading',
-  'agent-trading-app':     '#agent-trading-app',
 };
 const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
 
@@ -5373,6 +5357,10 @@ async function refreshEdgeForecasts() {
       _attachEdgeBoardChartHovers(host);
       host.scrollTop = scrollTop;
       refreshEdgePrices();
+      // renderEdgeBoard() only emits a "Loading…" placeholder for the
+      // Agentic tab (its data isn't part of this /edge-board payload), so
+      // the periodic re-render above wipes it -- re-fetch to repopulate.
+      if (_ebView === 'agentic') loadAgentTradingSection();
       return;
     }
     const pnl = d.paper_pnl;
@@ -5760,6 +5748,11 @@ async function loadEdgeBoard() {
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
         { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
     }
+    // openAgentTradingBoard() calls _ebSetView('agentic') right after
+    // openEdgeBoard() without awaiting this fetch, so on a fresh open
+    // _ebLastData isn't populated yet and that call bails out early --
+    // this covers that race once the data (and the placeholder div) exist.
+    if (_ebView === 'agentic') loadAgentTradingSection();
   } catch (e) {
     host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Edge board is not available yet.</p></div>';
   }
@@ -5955,16 +5948,18 @@ async function markPersonalLedgerVerdict(entryId, verdict, btn) {
   }
 }
 
-async function openAgentTradingBoard({ updateHistory = true } = {}) {
-  const ov = document.getElementById('agentTradingOverlay');
-  if (ov.classList.contains('open')) return;
-  lastFocusedBeforeDialog = document.activeElement;
-  ov.classList.add('open');
-  ov.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
-  if (updateHistory) setHistoryState(currentView === 'app' ? 'agent-trading-app' : 'agent-trading-landing');
-  if (window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
-  renderAgentTradingBoard({ loading: true });
+// The agentic trading board lives inside the Edge board's "Agentic" tab
+// (see _ebSetView) rather than its own overlay -- this just opens Edge board
+// and switches to that tab, mirroring openArbitrage()/openForecastDrift().
+async function openAgentTradingBoard() {
+  await openEdgeBoard();
+  _ebSetView('agentic');
+  setTimeout(() => document.getElementById('eb-agentic-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+}
+
+async function loadAgentTradingSection() {
+  const host = document.getElementById('eb-agentic-section');
+  if (!host) return;
   try {
     const r = await _liveJsonFetch('/agent-trading/board');
     const d = await _readJson(r);
@@ -5974,27 +5969,6 @@ async function openAgentTradingBoard({ updateHistory = true } = {}) {
     console.warn(err);
     renderAgentTradingBoard({ error: err.message || 'Could not load the agentic trading board.' });
   }
-  setTimeout(() => document.getElementById('agentTradingCloseBtn')?.focus(), 0);
-}
-
-function closeAgentTradingBoard({ updateHistory = true } = {}) {
-  const ov = document.getElementById('agentTradingOverlay');
-  if (!ov.classList.contains('open')) return;
-  if (updateHistory && (history.state?.view === 'agent-trading-app' || history.state?.view === 'agent-trading-landing')) {
-    history.back();
-    return;
-  }
-  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
-  const finish = () => {
-    ov.classList.remove('open');
-    ov.setAttribute('aria-hidden', 'true');
-    ov.style.opacity = '';
-    document.body.style.overflow = inApp ? 'hidden' : 'auto';
-    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
-  };
-  if (window.Motion && !prefersReduced()) {
-    Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
-  } else { finish(); }
 }
 
 function _agentTradingActivityLine(a) {
@@ -6019,18 +5993,12 @@ function _agentTradingActivityLine(a) {
 }
 
 function renderAgentTradingBoard(d) {
-  const host = document.getElementById('agentTradingBody');
+  const host = document.getElementById('eb-agentic-section');
   if (!host) return;
-  const banner = `<div class="tr-inner" style="max-width:900px">
-    <h3 class="eb-h" style="margin-top:0">Agentic shadow trading</h3>
-    <p class="tr-method" style="margin-top:0">SCADS-hosted models given real tool-use trading agency — each decides for itself whether and how much to trade, with genuine cash/position accounting and risk guards, unlike the fixed Kelly-sizing ledgers on the Edge board.</p>
+  const banner = `<p class="tr-method" style="margin-top:0">SCADS-hosted models given real tool-use trading agency — each decides for itself whether and how much to trade, with genuine cash/position accounting and risk guards, unlike the fixed Kelly-sizing ledgers on the MTM tab.</p>
     <p class="text-sm" style="margin:0 0 16px;padding:8px 12px;border-radius:8px;background:#fef3c7;color:#92400e;font-weight:600">Shadow / paper trading only — no real money is ever at risk.</p>`;
-  if (d && d.loading) {
-    host.innerHTML = `${banner}<p class="text-sm text-gray-500">Loading…</p></div>`;
-    return;
-  }
   if (d && d.error) {
-    host.innerHTML = `${banner}<p class="text-sm text-gray-500">${escHtml(d.error)}</p></div>`;
+    host.innerHTML = `${banner}<p class="text-sm text-gray-500">${escHtml(d.error)}</p>`;
     return;
   }
   const leaderboard = d.leaderboard || [];
@@ -6083,8 +6051,7 @@ function renderAgentTradingBoard(d) {
     <div id="agentTradingSvg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th></tr></thead><tbody>${tableRows}</tbody></table>
     <h4 class="eb-h" style="margin-top:24px">Recent activity</h4>
-    ${activityRows || '<p class="text-sm text-gray-500">No activity yet.</p>'}
-  </div>`;
+    ${activityRows || '<p class="text-sm text-gray-500">No activity yet.</p>'}`;
   const svgEl = document.getElementById('agentTradingSvg');
   if (svgEl) _attachEquityHover(svgEl);
 }
@@ -6510,12 +6477,13 @@ function _ebGoPage(n) {
 }
 
 function _ebSetView(view) {
-  _ebView = view === 'mtm' ? 'mtm' : 'markets';
+  _ebView = ['mtm', 'agentic'].includes(view) ? view : 'markets';
   const host = document.getElementById('edgeBody');
   if (!host || !_ebLastData) return;
   host.innerHTML = renderEdgeBoard(_ebLastData);
   _attachEdgeBoardChartHovers(host);
   refreshEdgePrices();
+  if (_ebView === 'agentic') loadAgentTradingSection();
 }
 
 function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}) {
@@ -7457,6 +7425,7 @@ function renderEdgeBoard(d) {
   const viewTabs = `<div class="eb-view-tabs" role="tablist" aria-label="Edge board views">
     <button type="button" class="eb-view-tab ${_ebView === 'markets' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'markets'}" data-eb-view="markets">Markets</button>
     <button type="button" class="eb-view-tab ${_ebView === 'mtm' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'mtm'}" data-eb-view="mtm">MTM</button>
+    <button type="button" class="eb-view-tab ${_ebView === 'agentic' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'agentic'}" data-eb-view="agentic">Agentic</button>
   </div>`;
   const marketsPageHtml = `${stats}
     <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging - risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
@@ -7464,12 +7433,14 @@ function renderEdgeBoard(d) {
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift - does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live Foresea forecasts - ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
   const mtmPageHtml = _renderMtmPage(d);
+  const agenticPageHtml = `<div id="eb-agentic-section"><p class="text-sm text-gray-500">Loading…</p></div>`;
+  const activePageHtml = _ebView === 'mtm' ? mtmPageHtml : _ebView === 'agentic' ? agenticPageHtml : marketsPageHtml;
   return `<div class="tr-inner">
     <p class="label">Edge board</p>
     <h3 class="text-xl font-semibold mb-1">Markets we think are mispriced - and our track record of being right about it</h3>
     <p class="tr-method">Live Foresea-vs-market gaps, ranked. Accuracy, calibration, and lead-time skill are calculated from resolved forecasts saved before each market closed. ${gen ? 'Updated ' + gen + '.' : ''}</p>
     ${viewTabs}
-    <div style="margin-top:18px">${_ebView === 'mtm' ? mtmPageHtml : marketsPageHtml}</div>
+    <div style="margin-top:18px">${activePageHtml}</div>
   </div>`;
 }
 function _fmtDate(value) {
@@ -7581,7 +7552,6 @@ function applyHistoryState(state) {
   closeTrackRecord({ updateHistory: false });
   closeEdgeBoard({ updateHistory: false });
   closeWatchlistPage({ updateHistory: false });
-  closeAgentTradingBoard({ updateHistory: false });
 
   if (view === 'chat') {
     launchApp({ updateHistory: false });
@@ -7614,12 +7584,6 @@ function applyHistoryState(state) {
   } else if (view === 'ledger-landing') {
     showLanding({ updateHistory: false });
     openPersonalLedger({ updateHistory: false });
-  } else if (view === 'agent-trading-app') {
-    launchApp({ updateHistory: false });
-    openAgentTradingBoard({ updateHistory: false });
-  } else if (view === 'agent-trading-landing') {
-    showLanding({ updateHistory: false });
-    openAgentTradingBoard({ updateHistory: false });
   } else {
     showLanding({ updateHistory: false });
   }
@@ -7632,13 +7596,11 @@ document.addEventListener('keydown', event => {
   const edge = document.getElementById('edgeOverlay');
   const watch = document.getElementById('watchOverlay');
   const ledger = document.getElementById('ledgerOverlay');
-  const agentTrading = document.getElementById('agentTradingOverlay');
   const sidebar = document.getElementById('sidebar');
   const trackOpen = track.classList.contains('open');
   const edgeOpen = edge.classList.contains('open');
   const watchOpen = watch.classList.contains('open');
   const ledgerOpen = ledger.classList.contains('open');
-  const agentTradingOpen = agentTrading.classList.contains('open');
   const sidebarOpen = sidebar.classList.contains('open');
 
   if (event.key === 'Escape') {
@@ -7654,9 +7616,6 @@ document.addEventListener('keydown', event => {
     } else if (ledgerOpen) {
       event.preventDefault();
       closePersonalLedger();
-    } else if (agentTradingOpen) {
-      event.preventDefault();
-      closeAgentTradingBoard();
     } else if (sidebarOpen) {
       event.preventDefault();
       closeSidebar();
@@ -7672,8 +7631,6 @@ document.addEventListener('keydown', event => {
     trapFocus(event, watch);
   } else if (ledgerOpen) {
     trapFocus(event, ledger);
-  } else if (agentTradingOpen) {
-    trapFocus(event, agentTrading);
   } else if (sidebarOpen) {
     trapFocus(event, sidebar);
   }
