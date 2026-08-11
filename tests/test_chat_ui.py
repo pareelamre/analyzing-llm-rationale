@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -61,6 +62,37 @@ class ChatUiTests(unittest.TestCase):
         self.assertIn("function normalizedProbability", self.index_html)
         self.assertIn("function statedForecastProbability", self.index_html)
         self.assertIn("data?.model_probability", self.index_html)
+
+    def test_chat_probability_fallback_rejects_market_quotes_and_invalid_values(self) -> None:
+        script = r'''
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync('frontend/index.html', 'utf8');
+const helpers = source.match(/function clamp01[\s\S]*?function extractMarketProbability/)[0]
+  .replace(/function extractMarketProbability$/, '');
+const ledger = source.match(/function ledgerProbability[\s\S]*?\n}\r?\n\r?\nfunction forecastActionsHtml/)[0]
+  .replace(/\r?\n\r?\nfunction forecastActionsHtml$/, '');
+const sandbox = {};
+vm.runInNewContext(`${helpers}\n${ledger}`, sandbox);
+const cases = [
+  ["I estimate there's a strong probability—around **75%**—that this happens.", null, 0.75],
+  ['The market probability is 20%, but I cannot make a forecast.', null, null],
+  ['The market is at 20%. I estimate the chance is around 75%.', null, 0.75],
+  ['I estimate a 125% chance.', null, null],
+  ['I estimate a 75% chance.', 0, 0],
+];
+for (const [rationale, explicit, expected] of cases) {
+  const actual = sandbox.ledgerProbability({ model_probability: explicit, confidence: null, rationale });
+  if (actual !== expected) throw new Error(`expected ${expected}, got ${actual}`);
+}
+'''
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_chat_forecast_can_be_saved_to_a_personal_ledger(self) -> None:
         self.assertIn(">Personal ledger", self.index_html)

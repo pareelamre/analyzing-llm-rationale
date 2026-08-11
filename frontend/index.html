@@ -3169,16 +3169,21 @@ function binaryYesProbability(data) {
 }
 
 function statedForecastProbability(text) {
+  const sentences = String(text || '').split(/(?<=[.!?])\s+|\n+/);
   const patterns = [
     /(?:i\s+)?(?:estimate|forecast|predict|put|place|price)[\s\S]{0,72}?(\d{1,3}(?:\.\d+)?)\s*%/i,
-    /(?:probability|chance|likelihood|odds)[\s\S]{0,56}?(\d{1,3}(?:\.\d+)?)\s*%/i,
-    /(?:around|about|approximately|roughly)\s*\**\s*(\d{1,3}(?:\.\d+)?)\s*\**\s*%/i,
+    /\b(?:there(?:'s| is)|this|it)\s+(?:a\s+)?(?:\w+\s+){0,3}?(?:probability|chance|likelihood)\b[\s\S]{0,56}?(\d{1,3}(?:\.\d+)?)\s*%/i,
+    /\b(?:strong|moderate(?:\s+to\s+high)?|high|low)\s+(?:probability|chance|likelihood)\b[\s\S]{0,48}?(\d{1,3}(?:\.\d+)?)\s*%/i,
   ];
-  for (const pattern of patterns) {
-    const match = String(text || '').match(pattern);
-    if (!match) continue;
-    const probability = normalizedProbability(Number(match[1]) / 100);
-    if (probability != null) return probability;
+  for (const sentence of sentences) {
+    const hasModelCue = /(?:i\s+)?(?:estimate|forecast|predict|put|place|price)\b/i.test(sentence);
+    if (/\b(?:market|crowd|quote|priced|trading|implied)\b/i.test(sentence) && !hasModelCue) continue;
+    for (const pattern of patterns) {
+      const match = sentence.match(pattern);
+      if (!match) continue;
+      const percent = Number(match[1]);
+      if (Number.isFinite(percent) && percent >= 0 && percent <= 100) return percent / 100;
+    }
   }
   return null;
 }
