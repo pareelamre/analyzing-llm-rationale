@@ -2226,6 +2226,9 @@
     <button type="button" class="side-nav-link" onclick="openPersonalLedger()">
       <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-chart"></use></svg></span>Personal ledger
     </button>
+    <button type="button" class="side-nav-link" onclick="openAgentTradingBoard()">
+      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-chart"></use></svg></span>Agentic trading
+    </button>
     <button type="button" class="side-nav-link" onclick="openWatchlist()">
       <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-star"></use></svg></span>Watchlist
     </button>
@@ -2730,6 +2733,20 @@
     <button id="ledgerCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closePersonalLedger()">Close</button>
   </div>
   <div id="ledgerBody" class="tr-body" data-lenis-prevent></div>
+</div>
+
+<div id="agentTradingOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="agentTradingDialogTitle" aria-hidden="true" tabindex="-1">
+  <div class="tr-head">
+    <div class="flex items-center gap-2">
+      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
+        <span class="logo-dot"></span>
+        <span class="brand text-lg">Foresea</span>
+      </button>
+      <h2 id="agentTradingDialogTitle" class="sr-only">Agentic shadow trading</h2>
+    </div>
+    <button id="agentTradingCloseBtn" type="button" class="new-chat-btn" style="width:auto;padding:8px 16px" onclick="closeAgentTradingBoard()">Close</button>
+  </div>
+  <div id="agentTradingBody" class="tr-body" data-lenis-prevent></div>
 </div>
 
 <script>
@@ -4919,6 +4936,8 @@ const _VIEW_URL = {
   'watch-app':     '#watchlist-app',
   'ledger-landing': '#ledger',
   'ledger-app':     '#ledger-app',
+  'agent-trading-landing': '#agent-trading',
+  'agent-trading-app':     '#agent-trading-app',
 };
 const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
 
@@ -5934,6 +5953,140 @@ async function markPersonalLedgerVerdict(entryId, verdict, btn) {
   } catch (_) {
     btn.disabled = false;
   }
+}
+
+async function openAgentTradingBoard({ updateHistory = true } = {}) {
+  const ov = document.getElementById('agentTradingOverlay');
+  if (ov.classList.contains('open')) return;
+  lastFocusedBeforeDialog = document.activeElement;
+  ov.classList.add('open');
+  ov.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  if (updateHistory) setHistoryState(currentView === 'app' ? 'agent-trading-app' : 'agent-trading-landing');
+  if (window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
+  renderAgentTradingBoard({ loading: true });
+  try {
+    const r = await _liveJsonFetch('/agent-trading/board');
+    const d = await _readJson(r);
+    if (!r.ok) throw new Error(d.detail || 'Could not load the agentic trading board.');
+    renderAgentTradingBoard(d);
+  } catch (err) {
+    console.warn(err);
+    renderAgentTradingBoard({ error: err.message || 'Could not load the agentic trading board.' });
+  }
+  setTimeout(() => document.getElementById('agentTradingCloseBtn')?.focus(), 0);
+}
+
+function closeAgentTradingBoard({ updateHistory = true } = {}) {
+  const ov = document.getElementById('agentTradingOverlay');
+  if (!ov.classList.contains('open')) return;
+  if (updateHistory && (history.state?.view === 'agent-trading-app' || history.state?.view === 'agent-trading-landing')) {
+    history.back();
+    return;
+  }
+  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
+  const finish = () => {
+    ov.classList.remove('open');
+    ov.setAttribute('aria-hidden', 'true');
+    ov.style.opacity = '';
+    document.body.style.overflow = inApp ? 'hidden' : 'auto';
+    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
+  };
+  if (window.Motion && !prefersReduced()) {
+    Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
+  } else { finish(); }
+}
+
+function _agentTradingActivityLine(a) {
+  if (a.type === 'trade') {
+    return `<b>${escHtml((a.side || '').toUpperCase())}</b> ${a.quantity ?? ''} ${escHtml(a.ticker || '')} @ ${a.price ?? ''}`;
+  }
+  if (a.type === 'settlement') {
+    const pnl = Number(a.realized_pnl) || 0;
+    const pnlColor = pnl >= 0 ? '#0a7' : '#c33';
+    return `Settled ${escHtml(a.ticker || '')} — <span style="color:${pnlColor};font-weight:600">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span>`;
+  }
+  if (a.type === 'rejected_trade') {
+    return `Trade rejected: ${escHtml(a.ticker || '')}`;
+  }
+  if (a.type === 'thesis') {
+    return escHtml(a.thesis || '');
+  }
+  if (a.type === 'note') {
+    return `Note: ${escHtml(a.text || '')}`;
+  }
+  return '';
+}
+
+function renderAgentTradingBoard(d) {
+  const host = document.getElementById('agentTradingBody');
+  if (!host) return;
+  const banner = `<div class="tr-inner" style="max-width:900px">
+    <h3 class="eb-h" style="margin-top:0">Agentic shadow trading</h3>
+    <p class="tr-method" style="margin-top:0">SCADS-hosted models given real tool-use trading agency — each decides for itself whether and how much to trade, with genuine cash/position accounting and risk guards, unlike the fixed Kelly-sizing ledgers on the Edge board.</p>
+    <p class="text-sm" style="margin:0 0 16px;padding:8px 12px;border-radius:8px;background:#fef3c7;color:#92400e;font-weight:600">Shadow / paper trading only — no real money is ever at risk.</p>`;
+  if (d && d.loading) {
+    host.innerHTML = `${banner}<p class="text-sm text-gray-500">Loading…</p></div>`;
+    return;
+  }
+  if (d && d.error) {
+    host.innerHTML = `${banner}<p class="text-sm text-gray-500">${escHtml(d.error)}</p></div>`;
+    return;
+  }
+  const leaderboard = d.leaderboard || [];
+  const equityCurves = d.equity_curves || {};
+  const activity = d.recent_activity || [];
+
+  const _usd = v => Number.isFinite(Number(v))
+    ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+    : '—';
+
+  const curves = leaderboard.map((row, i) => {
+    const curvePoints = (equityCurves[row.agent_id]?.value_curve || []).filter(p => p.ts);
+    const points = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
+    if (!points.length) return null;
+    const times = curvePoints.map(p => new Date(p.ts).getTime());
+    const label = _ebModelLabel(row.agent_id);
+    return {
+      points, times, color: _mtmModelColor(row.agent_id, i), label, head: true,
+      headTitle: `${label} · ${_usd(row.account_value)}`,
+    };
+  }).filter(Boolean);
+
+  const tableRows = leaderboard.map((row, i) => {
+    const pnl = (Number(row.realized_pnl) || 0) + (Number(row.unrealized_pnl) || 0);
+    const pnlColor = pnl >= 0 ? '#0a7' : '#c33';
+    const winRate = row.win_rate == null ? '—' : `${Math.round(row.win_rate * 100)}%`;
+    return `<tr class="eb-row" data-model="${escAttr(row.agent_id || '')}">
+      <td><b>${i + 1}</b></td>
+      <td><b>${escHtml(_ebModelHead(row.agent_id || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(row.agent_id || '')}</span></td>
+      <td><b>${_usd(row.account_value)}</b></td>
+      <td style="color:${pnlColor};font-weight:600">${pnl >= 0 ? '+' : ''}${_usd(pnl)}</td>
+      <td style="color:${pnlColor};font-weight:600">${_roiPct((Number(row.return_pct) || 0) / 100)}</td>
+      <td>${winRate}</td>
+      <td>${row.trade_count ?? 0}</td>
+      <td>${(row.open_positions || []).length}</td>
+    </tr>`;
+  }).join('');
+
+  const activityRows = activity.slice(0, 30).map(a => {
+    const when = a.ts ? new Date(a.ts).toLocaleString() : '';
+    const body = _agentTradingActivityLine(a);
+    if (!body) return '';
+    return `<article class="msg-ai p-3" style="margin-bottom:8px">
+      <p class="text-sm text-gray-600"><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b> · ${escHtml(a.type || '')} · ${escHtml(when)}</p>
+      <p class="text-sm text-gray-800 mt-1">${body}</p>
+    </article>`;
+  }).join('');
+
+  host.innerHTML = `${banner}
+    <div id="agentTradingSvg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th></tr></thead><tbody>${tableRows}</tbody></table>
+    <h4 class="eb-h" style="margin-top:24px">Recent activity</h4>
+    ${activityRows || '<p class="text-sm text-gray-500">No activity yet.</p>'}
+  </div>`;
+  const svgEl = document.getElementById('agentTradingSvg');
+  if (svgEl) _attachEquityHover(svgEl);
 }
 
 async function removePersonalLedgerEntry(entryId, btn) {
@@ -7428,6 +7581,7 @@ function applyHistoryState(state) {
   closeTrackRecord({ updateHistory: false });
   closeEdgeBoard({ updateHistory: false });
   closeWatchlistPage({ updateHistory: false });
+  closeAgentTradingBoard({ updateHistory: false });
 
   if (view === 'chat') {
     launchApp({ updateHistory: false });
@@ -7460,6 +7614,12 @@ function applyHistoryState(state) {
   } else if (view === 'ledger-landing') {
     showLanding({ updateHistory: false });
     openPersonalLedger({ updateHistory: false });
+  } else if (view === 'agent-trading-app') {
+    launchApp({ updateHistory: false });
+    openAgentTradingBoard({ updateHistory: false });
+  } else if (view === 'agent-trading-landing') {
+    showLanding({ updateHistory: false });
+    openAgentTradingBoard({ updateHistory: false });
   } else {
     showLanding({ updateHistory: false });
   }
@@ -7472,11 +7632,13 @@ document.addEventListener('keydown', event => {
   const edge = document.getElementById('edgeOverlay');
   const watch = document.getElementById('watchOverlay');
   const ledger = document.getElementById('ledgerOverlay');
+  const agentTrading = document.getElementById('agentTradingOverlay');
   const sidebar = document.getElementById('sidebar');
   const trackOpen = track.classList.contains('open');
   const edgeOpen = edge.classList.contains('open');
   const watchOpen = watch.classList.contains('open');
   const ledgerOpen = ledger.classList.contains('open');
+  const agentTradingOpen = agentTrading.classList.contains('open');
   const sidebarOpen = sidebar.classList.contains('open');
 
   if (event.key === 'Escape') {
@@ -7492,6 +7654,9 @@ document.addEventListener('keydown', event => {
     } else if (ledgerOpen) {
       event.preventDefault();
       closePersonalLedger();
+    } else if (agentTradingOpen) {
+      event.preventDefault();
+      closeAgentTradingBoard();
     } else if (sidebarOpen) {
       event.preventDefault();
       closeSidebar();
@@ -7507,6 +7672,8 @@ document.addEventListener('keydown', event => {
     trapFocus(event, watch);
   } else if (ledgerOpen) {
     trapFocus(event, ledger);
+  } else if (agentTradingOpen) {
+    trapFocus(event, agentTrading);
   } else if (sidebarOpen) {
     trapFocus(event, sidebar);
   }

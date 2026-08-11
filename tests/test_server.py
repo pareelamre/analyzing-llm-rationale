@@ -1055,6 +1055,46 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])
 
+    def test_agent_trading_board_endpoint_returns_leaderboard_and_freshness(self):
+        live = {
+            "generated_at": "2026-08-11T18:00:00+00:00",
+            "models": ["gpt-oss-120b"],
+            "leaderboard": [{"agent_id": "gpt-oss-120b", "account_value": 9981.46}],
+            "equity_curves": {"gpt-oss-120b": {"value_curve": [{"account_value": 10000.0}]}},
+            "recent_activity": [{"agent_id": "gpt-oss-120b", "type": "trade"}],
+        }
+        with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
+            response = self.client.get("/agent-trading/board")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["mode"], "shadow")
+        self.assertEqual(payload["models"], ["gpt-oss-120b"])
+        self.assertEqual(payload["leaderboard"][0]["agent_id"], "gpt-oss-120b")
+        self.assertEqual(payload["equity_curves"]["gpt-oss-120b"]["value_curve"][0]["account_value"], 10000.0)
+        self.assertEqual(payload["recent_activity"][0]["type"], "trade")
+        self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
+        self.assertIn("no-cache", response.headers["cache-control"])
+
+    def test_agent_trading_board_endpoint_is_never_influenced_by_a_live_mode_field(self):
+        # Shadow-only is a hard product guarantee for this feature -- the
+        # endpoint must report "shadow" regardless of whatever the published
+        # artifact itself might (incorrectly) claim, not pass through a
+        # "mode" field from the live payload.
+        live = {"generated_at": "now", "mode": "live", "leaderboard": []}
+        with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
+            response = self.client.get("/agent-trading/board")
+        self.assertEqual(response.json()["mode"], "shadow")
+
+    def test_agent_trading_board_endpoint_defaults_to_empty_when_no_live_file(self):
+        with mock.patch.object(server_module, "_read_agent_trading_board", return_value=None):
+            response = self.client.get("/agent-trading/board")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["leaderboard"], [])
+        self.assertEqual(payload["equity_curves"], {})
+        self.assertEqual(payload["recent_activity"], [])
+        self.assertEqual(payload["mode"], "shadow")
+
     def test_edge_board_endpoint_compacts_large_chart_payloads(self):
         long_curve = list(range(server_module._EDGE_BOARD_CURVE_MAX_POINTS + 40))
         live = {

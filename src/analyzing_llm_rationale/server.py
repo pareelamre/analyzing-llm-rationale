@@ -122,6 +122,26 @@ _MARK_TO_MARKET_LIVE_TIMEOUT = int(
 _MARK_TO_MARKET_STALE_AFTER_S = int(
     os.environ.get("MARK_TO_MARKET_STALE_AFTER_S", str(_EDGE_BOARD_STALE_AFTER_S))
 )
+# Agentic shadow-trading board (scripts/build_agent_trading_board.py, published by
+# .github/workflows/agent-trading-board-publish.yml on its own cadence, separate
+# from the deterministic-Kelly mark-to-market ledgers above). Shadow/paper only.
+_AGENT_TRADING_BOARD_URL = os.environ.get(
+    "AGENT_TRADING_BOARD_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/agent_trading_live.json",
+)
+_AGENT_TRADING_BOARD_TTL = int(
+    os.environ.get("AGENT_TRADING_BOARD_TTL", str(_TRACK_RECORD_LIVE_TTL))
+)
+_AGENT_TRADING_BOARD_TIMEOUT = int(
+    os.environ.get("AGENT_TRADING_BOARD_TIMEOUT", str(_TRACK_RECORD_LIVE_TIMEOUT))
+)
+_AGENT_TRADING_BOARD_STALE_AFTER_S = int(
+    # The board publishes far less often than the MTM ledgers (every ~15 min,
+    # best-effort under GitHub's scheduler) -- default staleness threshold is
+    # correspondingly looser so a normal publish gap isn't flagged as stale.
+    os.environ.get("AGENT_TRADING_BOARD_STALE_AFTER_S", "3600")
+)
 # Shared secret gating the evolution-loop bridge endpoints (pending-markets /
 # mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
 _TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
@@ -1424,6 +1444,25 @@ _MARK_TO_MARKET_READER = live_track_record_support.LiveTrackRecordReader(
     logger=logger,
 )
 _read_mark_to_market_record = _MARK_TO_MARKET_READER.read
+_AGENT_TRADING_BOARD_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_AGENT_TRADING_BOARD_URL,
+        ttl_seconds=_AGENT_TRADING_BOARD_TTL,
+        stale_after_seconds=_AGENT_TRADING_BOARD_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "agent_trading_live.json",
+        request_timeout_seconds=_AGENT_TRADING_BOARD_TIMEOUT,
+        cache_namespace="agent_trading_live",
+        cache_version="v1",
+        resource_label="agent trading board",
+        user_agent="Foresea/agent-trading-board",
+    ),
+    logger=logger,
+)
+_read_agent_trading_board = _AGENT_TRADING_BOARD_READER.read
+_agent_trading_board_freshness = _AGENT_TRADING_BOARD_READER.freshness
 
 _MARK_TO_MARKET_MERGE_KEYS = (
     "edge_board",
@@ -2557,6 +2596,47 @@ async def edge_board():
             "n_markets_tracked": live.get("n_markets_tracked", 0),
             "n_snapshots_resolved": live.get("n_snapshots_resolved", 0),
             "arbitrage_signals": live.get("arbitrage_signals", []),
+        },
+        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
+    )
+
+
+@app.get(
+    "/agent-trading/board",
+    tags=["System"],
+    summary="Agentic shadow-trading board (paper only)",
+)
+async def agent_trading_board():
+    """SCADS-hosted models given real tool-use trading agency -- unlike the
+    ``/edge-board`` Kelly-sizing ledgers (a probability sized by a fixed
+    formula after the fact), each model here decides for itself whether and
+    how much to trade with genuine cash/position accounting, real risk
+    guards, and the same bounded ReAct tool loop PredictionArena-style
+    agentic boards use. Shadow (paper) trading only -- no real money is ever
+    placed; see ``scripts/agent_trading_tick.py`` for the enforcement.
+
+    - ``leaderboard``: one row per model -- account value, cash, realized/
+      unrealized P&L, return %, win rate over settled markets, open
+      positions, trade count.
+    - ``equity_curves``: per-model cash-only book-value curve (see
+      ``agent_trading_stats.agent_equity_curve`` for exactly what this
+      approximates and why) plus Sharpe/max-drawdown computed over it.
+    - ``recent_activity``: a merged, newest-first transparency feed of
+      trades, settlements, per-cycle theses, and notes across every model.
+    """
+    live = await asyncio.get_running_loop().run_in_executor(None, _read_agent_trading_board)
+    live = live or {}
+    freshness = _agent_trading_board_freshness(live)
+    return JSONResponse(
+        {
+            "generated_at": live.get("generated_at"),
+            "freshness": freshness,
+            "mode": "shadow",
+            "note": live.get("note") or "Paper trading only -- no real money is ever at risk.",
+            "models": live.get("models", []),
+            "leaderboard": live.get("leaderboard", []),
+            "equity_curves": live.get("equity_curves", {}),
+            "recent_activity": live.get("recent_activity", []),
         },
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
