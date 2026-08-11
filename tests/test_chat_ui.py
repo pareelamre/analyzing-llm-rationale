@@ -58,6 +58,9 @@ class ChatUiTests(unittest.TestCase):
     def test_chat_forecast_renders_probability_score(self) -> None:
         self.assertIn("model_probability: d.model_probability ?? null", self.index_html)
         self.assertIn("raw.lastIndexOf('[p')", self.index_html)
+        self.assertIn("function normalizedProbability", self.index_html)
+        self.assertIn("function statedForecastProbability", self.index_html)
+        self.assertIn("data?.model_probability", self.index_html)
 
     def test_chat_forecast_can_be_saved_to_a_personal_ledger(self) -> None:
         self.assertIn(">Personal ledger", self.index_html)

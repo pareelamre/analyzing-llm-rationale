@@ -3154,12 +3154,32 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
+function normalizedProbability(value) {
+  if (value == null || value === '') return null;
+  return clamp01(Number(value));
+}
+
 function binaryYesProbability(data) {
-  const conf = clamp01(Number(data?.confidence));
+  const conf = normalizedProbability(data?.confidence);
   const answer = String(data?.predicted_answer || '').trim().toUpperCase();
   if (conf == null || !answer) return null;
   if (answer === 'YES') return conf;
   if (answer === 'NO') return clamp01(1 - conf);
+  return null;
+}
+
+function statedForecastProbability(text) {
+  const patterns = [
+    /(?:i\s+)?(?:estimate|forecast|predict|put|place|price)[\s\S]{0,72}?(\d{1,3}(?:\.\d+)?)\s*%/i,
+    /(?:probability|chance|likelihood|odds)[\s\S]{0,56}?(\d{1,3}(?:\.\d+)?)\s*%/i,
+    /(?:around|about|approximately|roughly)\s*\**\s*(\d{1,3}(?:\.\d+)?)\s*\**\s*%/i,
+  ];
+  for (const pattern of patterns) {
+    const match = String(text || '').match(pattern);
+    if (!match) continue;
+    const probability = normalizedProbability(Number(match[1]) / 100);
+    if (probability != null) return probability;
+  }
   return null;
 }
 
@@ -3372,9 +3392,10 @@ function forecastFavoritePayload(data) {
 }
 
 function ledgerProbability(data) {
-  const explicit = clamp01(Number(data?.model_probability));
+  const explicit = normalizedProbability(data?.model_probability);
   if (explicit != null) return explicit;
-  return binaryYesProbability(data);
+  return binaryYesProbability(data)
+    ?? statedForecastProbability(data?.rationale || data?.model_rationale || '');
 }
 
 function forecastActionsHtml(data, { ledgerOnly = false } = {}) {
