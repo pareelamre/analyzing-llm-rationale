@@ -159,6 +159,7 @@ def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
             limit=CANDIDATE_COUNT * 3,
             min_close_days=MIN_CLOSE_DAYS,
             max_close_days=MAX_CLOSE_DAYS,
+            paginate=True,
         )
     except market_data.MarketDataError as exc:
         print(f"  candidate discovery failed: {exc}", file=sys.stderr)
