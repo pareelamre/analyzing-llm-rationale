@@ -3171,12 +3171,37 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
+function normalizedProbability(value) {
+  if (value == null || value === '') return null;
+  return clamp01(Number(value));
+}
+
 function binaryYesProbability(data) {
-  const conf = clamp01(Number(data?.confidence));
+  const conf = normalizedProbability(data?.confidence);
   const answer = String(data?.predicted_answer || '').trim().toUpperCase();
   if (conf == null || !answer) return null;
   if (answer === 'YES') return conf;
   if (answer === 'NO') return clamp01(1 - conf);
+  return null;
+}
+
+function statedForecastProbability(text) {
+  const sentences = String(text || '').split(/(?<=[.!?])\s+|\n+/);
+  const patterns = [
+    /(?:i\s+)?(?:estimate|forecast|predict|put|place|price)[\s\S]{0,72}?(\d{1,3}(?:\.\d+)?)\s*%/i,
+    /\b(?:there(?:'s| is)|this|it)\s+(?:a\s+)?(?:\w+\s+){0,3}?(?:probability|chance|likelihood)\b[\s\S]{0,56}?(\d{1,3}(?:\.\d+)?)\s*%/i,
+    /\b(?:strong|moderate(?:\s+to\s+high)?|high|low)\s+(?:probability|chance|likelihood)\b[\s\S]{0,48}?(\d{1,3}(?:\.\d+)?)\s*%/i,
+  ];
+  for (const sentence of sentences) {
+    const hasModelCue = /(?:i\s+)?(?:estimate|forecast|predict|put|place|price)\b/i.test(sentence);
+    if (/\b(?:market|crowd|quote|priced|trading|implied)\b/i.test(sentence) && !hasModelCue) continue;
+    for (const pattern of patterns) {
+      const match = sentence.match(pattern);
+      if (!match) continue;
+      const percent = Number(match[1]);
+      if (Number.isFinite(percent) && percent >= 0 && percent <= 100) return percent / 100;
+    }
+  }
   return null;
 }
 
@@ -3389,9 +3414,10 @@ function forecastFavoritePayload(data) {
 }
 
 function ledgerProbability(data) {
-  const explicit = clamp01(Number(data?.model_probability));
+  const explicit = normalizedProbability(data?.model_probability);
   if (explicit != null) return explicit;
-  return binaryYesProbability(data);
+  return binaryYesProbability(data)
+    ?? statedForecastProbability(data?.rationale || data?.model_rationale || '');
 }
 
 function forecastActionsHtml(data, { ledgerOnly = false } = {}) {
@@ -5781,27 +5807,59 @@ function closeWatchlistPage({ updateHistory = true } = {}) {
 }
 
 let personalLedgerEntries = [];
+let _pendingLedgerAfterSignIn = false;
+const _PENDING_LEDGER_SIGNIN_KEY = 'foresea_pending_ledger_after_signin';
+
+function beginPersonalLedgerSignIn() {
+  _pendingLedgerAfterSignIn = true;
+  try { sessionStorage.setItem(_PENDING_LEDGER_SIGNIN_KEY, '1'); } catch {}
+  trackEvent('personal_ledger_sign_in_started', { source: 'ledger' });
+  openAuthModal('login');
+}
+
+function consumePersonalLedgerSignInIntent() {
+  let persisted = false;
+  try {
+    persisted = sessionStorage.getItem(_PENDING_LEDGER_SIGNIN_KEY) === '1';
+    sessionStorage.removeItem(_PENDING_LEDGER_SIGNIN_KEY);
+  } catch {}
+  const shouldResume = _pendingLedgerAfterSignIn || persisted;
+  _pendingLedgerAfterSignIn = false;
+  return shouldResume;
+}
+
+function clearPersonalLedgerSignInIntent() {
+  _pendingLedgerAfterSignIn = false;
+  try { sessionStorage.removeItem(_PENDING_LEDGER_SIGNIN_KEY); } catch {}
+}
+
+async function refreshPersonalLedger() {
+  renderPersonalLedger();
+  if (!currentUser) return;
+  try {
+    const r = await fetch('/personal-ledger', { headers: authHeaders() });
+    const d = await _readJson(r);
+    if (!r.ok) throw new Error(d.detail || 'Could not load your ledger.');
+    personalLedgerEntries = d.entries || [];
+  } catch (err) {
+    console.warn(err);
+  }
+  renderPersonalLedger();
+}
+
 async function openPersonalLedger({ updateHistory = true } = {}) {
   const ov = document.getElementById('ledgerOverlay');
-  if (ov.classList.contains('open')) return;
+  if (ov.classList.contains('open')) {
+    await refreshPersonalLedger();
+    return;
+  }
   lastFocusedBeforeDialog = document.activeElement;
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
   if (updateHistory) setHistoryState(currentView === 'app' ? 'ledger-app' : 'ledger-landing');
   if (window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
-  renderPersonalLedger();
-  if (currentUser) {
-    try {
-      const r = await fetch('/personal-ledger', { headers: authHeaders() });
-      const d = await _readJson(r);
-      if (!r.ok) throw new Error(d.detail || 'Could not load your ledger.');
-      personalLedgerEntries = d.entries || [];
-    } catch (err) {
-      console.warn(err);
-    }
-  }
-  renderPersonalLedger();
+  await refreshPersonalLedger();
   setTimeout(() => document.getElementById('ledgerCloseBtn')?.focus(), 0);
 }
 
@@ -5825,6 +5883,12 @@ function closePersonalLedger({ updateHistory = true } = {}) {
   } else { finish(); }
 }
 
+function personalLedgerRationalePreview(rationale, maxLength = 220) {
+  const text = _chatText(rationale || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength).replace(/\s+\S*$/, '').trim() + '…';
+}
+
 function renderPersonalLedger() {
   const host = document.getElementById('ledgerBody');
   if (!host) return;
@@ -5832,7 +5896,7 @@ function renderPersonalLedger() {
     host.innerHTML = `<div class="tr-inner" style="max-width:460px;margin:8vh auto 0;text-align:center">
       <h3 class="eb-h" style="margin-top:0">Your personal ledger</h3>
       <p class="text-sm text-gray-500" style="margin-bottom:18px">Save a forecast from any chat response to build your own record over time.</p>
-      <button type="button" class="hero-action primary" style="justify-content:center" onclick="openAuthModal('login')">Sign in to continue</button>
+      <button type="button" class="hero-action primary" style="justify-content:center" onclick="beginPersonalLedgerSignIn()">Sign in to continue</button>
     </div>`;
     return;
   }
@@ -5840,6 +5904,18 @@ function renderPersonalLedger() {
   const rows = entries.map(entry => {
     const date = entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '';
     const answer = entry.predicted_answer ? `${escHtml(entry.predicted_answer)} · ` : '';
+    const verdict = entry.user_verdict || '';
+    const rationale = _chatText(entry.rationale || '').trim();
+    const rationalePreview = personalLedgerRationalePreview(rationale);
+    const rationaleDetails = rationale ? `<div class="mt-3">
+      <p class="text-sm text-gray-600 leading-relaxed">${escHtml(rationalePreview)}</p>
+      ${rationale.length > rationalePreview.length ? `<details class="mt-2"><summary class="text-sm text-gray-500 cursor-pointer">View full reasoning</summary><div class="chat-md text-[15px] text-gray-700 leading-relaxed mt-3">${renderMarkdown(rationale)}</div></details>` : ''}
+    </div>` : '';
+    const feedback = `<div class="mt-4 pt-3 border-t border-gray-200 flex flex-wrap items-center gap-2">
+      <span class="text-xs text-gray-500 mr-1">Was this forecast correct?</span>
+      <button type="button" class="market-action${verdict === 'correct' ? ' bg-green-50 text-green-700 border-green-200' : ''}" aria-pressed="${verdict === 'correct'}" onclick="markPersonalLedgerVerdict('${escAttr(entry.id)}', 'correct', this)">${uiIcon('check')} Correct</button>
+      <button type="button" class="market-action${verdict === 'wrong' ? ' bg-red-50 text-red-700 border-red-200' : ''}" aria-pressed="${verdict === 'wrong'}" onclick="markPersonalLedgerVerdict('${escAttr(entry.id)}', 'wrong', this)">${uiIcon('x')} Wrong</button>
+    </div>`;
     return `<article class="msg-ai p-4 sm:p-5" style="margin-bottom:12px">
       <div class="flex items-start justify-between gap-3">
         <div>
@@ -5849,7 +5925,8 @@ function renderPersonalLedger() {
         <button type="button" class="market-action" title="Remove from ledger" onclick="removePersonalLedgerEntry('${escAttr(entry.id)}', this)">${uiIcon('x')}<span class="sr-only">Remove</span></button>
       </div>
       <p class="text-sm text-gray-600 mt-3"><strong>${answer}${fmtPct01(entry.probability)}</strong> forecast${entry.model ? ` · ${escHtml(entry.model)}` : ''}${date ? ` · ${escHtml(date)}` : ''}</p>
-      ${entry.rationale ? `<div class="chat-md text-[15px] text-gray-700 leading-relaxed mt-3">${renderMarkdown(_chatText(entry.rationale))}</div>` : ''}
+      ${rationaleDetails}
+      ${feedback}
     </article>`;
   }).join('');
   host.innerHTML = `<div class="tr-inner" style="max-width:760px">
@@ -5857,6 +5934,25 @@ function renderPersonalLedger() {
     <p class="tr-method" style="margin-top:0">Forecasts you explicitly save from chat. Private to your account; Foresea uses ledger activity in aggregate to improve the product.</p>
     ${rows || '<p class="text-sm text-gray-500">No saved forecasts yet. Ask a forecasting question, then choose “Add to personal ledger.”</p>'}
   </div>`;
+}
+
+async function markPersonalLedgerVerdict(entryId, verdict, btn) {
+  if (!entryId || !['correct', 'wrong'].includes(verdict)) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/personal-ledger/' + encodeURIComponent(entryId) + '/verdict', {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ verdict }),
+    });
+    const saved = await _readJson(r);
+    if (!r.ok) throw new Error(saved.detail || 'Could not save feedback.');
+    personalLedgerEntries = personalLedgerEntries.map(entry => entry.id === saved.id ? saved : entry);
+    trackEvent('personal_ledger_feedback', { verdict });
+    renderPersonalLedger();
+  } catch (_) {
+    btn.disabled = false;
+  }
 }
 
 async function openAgentTradingBoard({ updateHistory = true } = {}) {
@@ -9194,7 +9290,7 @@ async function _maybeCompleteGitHubLogin() {
     const user = { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
     _saveSession(d.token, user);
     updateAuthUI(user);
-    closeAuthModal({ clearPendingForecast: false });
+    closeAuthModal({ preserveLedgerIntent: true });
     await _afterSignIn(user, 'github');
   } catch (e) { console.error('GitHub auth error:', e); }
 }
@@ -9220,7 +9316,10 @@ async function _afterSignIn(user, source = 'auth') {
   await syncConversationsAfterSignIn(user);
   await _syncFavoritesFromServer();
 
-  if (currentView === 'landing' || !currentView) {
+  if (consumePersonalLedgerSignInIntent()) {
+    await openPersonalLedger();
+    trackEvent('personal_ledger_sign_in_resumed', { source });
+  } else if (currentView === 'landing' || !currentView) {
     launchApp();
   }
   
@@ -9415,11 +9514,12 @@ function openAuthModal(mode) {
   setTimeout(() => document.getElementById('authEmail').focus(), 60);
 }
 
-function closeAuthModal(_options = {}) {
+function closeAuthModal({ preserveLedgerIntent = false } = {}) {
   const overlay = document.getElementById('authOverlay');
   overlay.classList.remove('show');
   overlay.setAttribute('aria-hidden', 'true');
   _authBusy = false;
+  if (!preserveLedgerIntent) clearPersonalLedgerSignInIntent();
 }
 
 // ── Feedback modal ──────────────────────────────────────────────────────────
@@ -9521,7 +9621,7 @@ async function submitAuthForm(event) {
     };
     _saveSession(d.token, user);
     updateAuthUI(user);
-    closeAuthModal({ clearPendingForecast: false });
+    closeAuthModal({ preserveLedgerIntent: true });
     document.getElementById('authForm').reset();
     await _afterSignIn(user, _authMode === 'register' ? 'register' : 'password');
   } catch (e) {
@@ -9552,7 +9652,7 @@ async function handleGoogleCredential(response) {
     const user = { user_id: d.user_id, name: d.name, email: d.email, picture: d.picture };
     _saveSession(d.token, user);
     updateAuthUI(user);
-    closeAuthModal({ clearPendingForecast: false });
+    closeAuthModal({ preserveLedgerIntent: true });
     await _afterSignIn(user, 'google');
   } catch (e) { console.error('Auth error:', e); }
 }
