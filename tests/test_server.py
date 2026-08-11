@@ -2500,6 +2500,65 @@ class ServerTests(unittest.TestCase):
         )
         self.assertEqual(self.client.get("/personal-ledger", headers=headers).json()["entries"], [retried])
 
+    def test_personal_ledger_feedback_is_private_validated_and_durable(self):
+        owner_headers = {"Authorization": f"Bearer {_issue_session('ledger-feedback-owner', 'owner@example.com', 'Owner', '')}"}
+        other_headers = {"Authorization": f"Bearer {_issue_session('ledger-feedback-other', 'other@example.com', 'Other', '')}"}
+        entry = {
+            "id": "ledger_feedback_entry",
+            "conversation_id": "conv_feedback",
+            "message_id": "msg_feedback",
+            "question": "Will feedback remain private?",
+            "predicted_answer": "YES",
+            "probability": 0.73,
+            "rationale": "The entry belongs only to its owner.",
+            "model": "gpt-oss-120b",
+            "createdAt": 1002,
+        }
+        self.assertEqual(
+            self.client.put("/personal-ledger/ledger_feedback_entry", json=entry, headers=owner_headers).status_code,
+            200,
+        )
+
+        invalid = self.client.patch(
+            "/personal-ledger/ledger_feedback_entry/verdict",
+            json={"verdict": "maybe"},
+            headers=owner_headers,
+        )
+        self.assertEqual(invalid.status_code, 422)
+
+        private = self.client.patch(
+            "/personal-ledger/ledger_feedback_entry/verdict",
+            json={"verdict": "wrong"},
+            headers=other_headers,
+        )
+        self.assertEqual(private.status_code, 404)
+
+        correct = self.client.patch(
+            "/personal-ledger/ledger_feedback_entry/verdict",
+            json={"verdict": "correct"},
+            headers=owner_headers,
+        )
+        self.assertEqual(correct.status_code, 200)
+        self.assertEqual(correct.json()["user_verdict"], "correct")
+        self.assertGreaterEqual(correct.json()["judgedAt"], entry["createdAt"])
+
+        # A duplicate add from the chat card must not erase a verdict the user set.
+        retry = self.client.put(
+            "/personal-ledger/ledger_feedback_entry",
+            json=dict(entry, rationale="Retry did not erase feedback."),
+            headers=owner_headers,
+        )
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(retry.json()["user_verdict"], "correct")
+
+        changed = self.client.patch(
+            "/personal-ledger/ledger_feedback_entry/verdict",
+            json={"verdict": "wrong"},
+            headers=owner_headers,
+        )
+        self.assertEqual(changed.status_code, 200)
+        self.assertEqual(changed.json()["user_verdict"], "wrong")
+
     def test_chat_conversation_sync_requires_session(self):
         response = self.client.get("/chat/conversations")
         self.assertEqual(response.status_code, 401)

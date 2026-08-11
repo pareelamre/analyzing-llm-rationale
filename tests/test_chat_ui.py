@@ -64,6 +64,15 @@ class ChatUiTests(unittest.TestCase):
         self.assertIn("Add to personal ledger", self.index_html)
         self.assertIn("/personal-ledger/", self.index_html)
         self.assertIn("function openPersonalLedger", self.index_html)
+        self.assertIn("function personalLedgerRationalePreview", self.index_html)
+        self.assertIn("View full reasoning", self.index_html)
+        self.assertIn("function beginPersonalLedgerSignIn", self.index_html)
+        self.assertIn("foresea_pending_ledger_after_signin", self.index_html)
+        self.assertIn("await openPersonalLedger();", self.index_html)
+        self.assertIn("function markPersonalLedgerVerdict", self.index_html)
+        self.assertIn("/verdict", self.index_html)
+        self.assertIn("Correct</button>", self.index_html)
+        self.assertIn("Wrong</button>", self.index_html)
 
     def test_auth_providers_refresh_after_async_config_load(self) -> None:
         self.assertIn(
