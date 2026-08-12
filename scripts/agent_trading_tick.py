@@ -50,6 +50,10 @@ MIN_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MIN_CLOSE_DAYS", "1"))
 MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "30"))
 AGENT_ANALYZE_RETRIES = max(1, int(os.environ.get("AGENT_TRADING_RETRIES", "2")))
 AGENT_ANALYZE_RETRY_BACKOFF_S = float(os.environ.get("AGENT_TRADING_RETRY_BACKOFF_S", "10"))
+# AgentAnalyzeRequest.question has a hard 2000-char server-side limit; a
+# single verbose thesis echoed back verbatim can exceed that on its own
+# (observed live: 2334 chars), so it's excerpted, not replayed in full.
+MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS_CHARS", "500")))
 
 
 def _assert_shadow_mode() -> None:
@@ -125,7 +129,11 @@ def _build_portfolio_block(conn, agent_id: str, last_thesis: Optional[str]) -> s
     else:
         lines.append("Open positions: none.")
     if last_thesis:
-        lines.append(f"Your own reasoning from the previous cycle: {last_thesis}")
+        excerpt = (
+            last_thesis if len(last_thesis) <= MAX_LAST_THESIS_CHARS
+            else last_thesis[:MAX_LAST_THESIS_CHARS].rstrip() + "…"
+        )
+        lines.append(f"Your own reasoning from the previous cycle: {excerpt}")
     return "\n".join(lines)
 
 
