@@ -84,6 +84,48 @@ class MaxOrderNotionalTests(unittest.TestCase):
         self.assertEqual(trading.DEFAULT_MAX_ORDER_NOTIONAL, Decimal("50"))
 
 
+class CurrentAccountValueTests(unittest.TestCase):
+    def test_no_open_positions_is_just_cash(self):
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.dict(
+                os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}, clear=False
+            ):
+                with benchmark_tools._account_transaction() as conn:
+                    value = agent_trading_tick._current_account_value(conn, "model-a", [])
+        self.assertAlmostEqual(value, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
+
+    def test_marks_an_open_position_to_the_live_bid_not_cost_basis(self):
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.dict(
+                os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}, clear=False
+            ):
+                ctx = benchmark_tools.ToolContext(agent_id="model-a")
+                # Opens 10 contracts @ 0.40 (cost basis $4); the market has
+                # since moved to a 0.60 bid -- the guards must see the
+                # current $6 mark, not the stale $4 cost basis.
+                benchmark_tools.place_trade({"ticker": "KXTEST", "side": "yes", "price": 0.40, "quantity": 10}, ctx)
+                with benchmark_tools._account_transaction() as conn:
+                    value = agent_trading_tick._current_account_value(
+                        conn, "model-a", [_quote("KXTEST", bid=0.60, ask=0.62)]
+                    )
+        # starting cash ($10000) - cost basis ($4) - fee ($0.168), plus the
+        # position marked to the live $6 bid (10 contracts @ 0.60).
+        self.assertGreater(value, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE - 4.0)
+        self.assertAlmostEqual(value, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE - 4.0 - 0.168 + 6.0, places=2)
+
+    def test_falls_back_to_cost_basis_when_no_live_quote_is_available(self):
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.dict(
+                os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}, clear=False
+            ):
+                ctx = benchmark_tools.ToolContext(agent_id="model-a")
+                benchmark_tools.place_trade({"ticker": "KXTEST", "side": "yes", "price": 0.40, "quantity": 10}, ctx)
+                with benchmark_tools._account_transaction() as conn:
+                    # held_quotes is empty -- as if the re-quote fetch failed.
+                    value = agent_trading_tick._current_account_value(conn, "model-a", [])
+        self.assertAlmostEqual(value, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE - 0.168)
+
+
 class CandidateSelectionTests(unittest.TestCase):
     def test_discover_candidates_excludes_known_tickers_and_caps_count(self):
         listed = [_quote("KXA"), _quote("KXB"), _quote("KXC"), _quote("KXD")]
@@ -213,6 +255,36 @@ class RunCycleTests(unittest.TestCase):
         question_arg = call_mock.call_args[0][0]
         self.assertIn("KXNEW", question_arg)
         self.assertIn("Your portfolio", question_arg)
+
+    def test_run_cycle_configures_order_notional_from_current_account_value_before_the_tool_loop(self):
+        # Regression: _configure_max_order_notional() used to run before
+        # held_quotes existed, reading the static starting-cash baseline --
+        # it must now run after held_quotes is available and reflect the
+        # account's real current value (so a profitable agent's order cap
+        # actually grows, and a losing agent's actually shrinks).
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json"),
+                "FORESEA_AGENT_CYCLE_ID": "test-cycle-2",
+            }
+            seen = {}
+
+            async def _capture_env(question):
+                seen["FORESEA_MAX_ORDER_NOTIONAL"] = os.environ.get("FORESEA_MAX_ORDER_NOTIONAL")
+                seen["FORESEA_AGENT_ACCOUNT_VALUE"] = os.environ.get("FORESEA_AGENT_ACCOUNT_VALUE")
+                return self._fake_report()
+
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch.object(agent_trading_tick, "_init_local_agent"),
+                mock.patch.object(market_data, "list_kalshi", return_value=[]),
+                mock.patch.object(agent_trading_tick, "_call_agent_analyze", side_effect=_capture_env),
+            ):
+                agent_trading_tick.run_cycle("model-d")
+
+        self.assertEqual(seen["FORESEA_AGENT_ACCOUNT_VALUE"], str(benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE))
+        self.assertEqual(seen["FORESEA_MAX_ORDER_NOTIONAL"], "800.0")
 
     def test_run_cycle_offers_held_positions_for_exit(self):
         with tempfile.TemporaryDirectory() as td:

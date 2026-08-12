@@ -46,7 +46,12 @@ WEB_SEARCH_SOURCES = ("web", "gdelt", "google-news", "rss", "newsapi", "open-met
 WEB_SEARCH_TOP_K = 5
 DEFAULT_AGENT_ACCOUNT_VALUE = 10_000.0
 DEFAULT_CONCENTRATION_LIMIT = 0.15
-DEFAULT_PER_CYCLE_SPEND_LIMIT = 500.0
+# Deliberately larger than agent_trading_tick.py's order-notional cap (8% of
+# account value) so one cycle has room for more than a single max-sized
+# order -- a per-cycle cap stricter than the single-order cap would make the
+# order cap meaningless. Hit exactly this with the old flat $500/cycle limit
+# once the order cap was raised past it.
+DEFAULT_PER_CYCLE_SPEND_LIMIT_PCT = 0.20
 DEFAULT_CYCLE_MINUTES = 15
 KALSHI_FEE_COEFFICIENT = 0.07
 DEFAULT_SETTLEMENT_FEE_RATE = 0.014
@@ -193,14 +198,16 @@ def _risk_guard_policy() -> RiskGuardPolicy:
     concentration_limit = _env_float("FORESEA_AGENT_CONCENTRATION_LIMIT", DEFAULT_CONCENTRATION_LIMIT)
     if not 0 < concentration_limit <= 1:
         raise ValueError("FORESEA_AGENT_CONCENTRATION_LIMIT must be between 0 and 1")
-    per_cycle_spend_limit = _env_float(
-        "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT",
-        DEFAULT_PER_CYCLE_SPEND_LIMIT,
+    per_cycle_spend_limit_pct = _env_float(
+        "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT",
+        DEFAULT_PER_CYCLE_SPEND_LIMIT_PCT,
     )
+    if per_cycle_spend_limit_pct <= 0:
+        raise ValueError("FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT must be greater than 0")
     return RiskGuardPolicy(
         account_value=account_value,
         concentration_limit=concentration_limit,
-        per_cycle_spend_limit=per_cycle_spend_limit,
+        per_cycle_spend_limit=account_value * per_cycle_spend_limit_pct,
         cycle_id=_current_cycle_id(),
     )
 
