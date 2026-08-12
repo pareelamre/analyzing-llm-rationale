@@ -36,8 +36,8 @@
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
-      "max_drawdown": 0.0211,
-      "sharpe": -145.3836,
+      "max_drawdown": 0.0264,
+      "sharpe": -143.6531,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -63,6 +63,11 @@
           "account_value": 9788.578816,
           "event_type": "trade",
           "ts": "2026-08-11T18:39:46.793091+00:00"
+        },
+        {
+          "account_value": 9736.003072,
+          "event_type": "trade",
+          "ts": "2026-08-12T06:02:23.817469+00:00"
         }
       ]
     },
@@ -81,7 +86,7 @@
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
       "max_drawdown": 0.0053,
-      "sharpe": null,
+      "sharpe": 0.4008,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -92,6 +97,16 @@
           "account_value": 9946.948738,
           "event_type": "trade",
           "ts": "2026-08-12T04:32:49.658598+00:00"
+        },
+        {
+          "account_value": 10391.24585,
+          "event_type": "trade",
+          "ts": "2026-08-12T06:04:19.249594+00:00"
+        },
+        {
+          "account_value": 10341.01593,
+          "event_type": "trade",
+          "ts": "2026-08-12T06:04:30.812862+00:00"
         }
       ]
     },
@@ -171,7 +186,7 @@
     "scads-alias-reasoning": {
       "agent_id": "scads-alias-reasoning",
       "max_drawdown": 0.0055,
-      "sharpe": -0.3224,
+      "sharpe": 0.3689,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -192,12 +207,68 @@
           "account_value": 9945.466984,
           "event_type": "trade",
           "ts": "2026-08-11T05:45:47.310933+00:00"
+        },
+        {
+          "account_value": 10239.055384,
+          "event_type": "trade",
+          "ts": "2026-08-12T06:05:39.663741+00:00"
         }
       ]
     }
   },
-  "generated_at": "2026-08-12T04:46:15.387827+00:00",
+  "generated_at": "2026-08-12T06:11:44.398676+00:00",
   "leaderboard": [
+    {
+      "account_value": 10341.01593,
+      "agent_id": "llama-3.3-70b-instruct",
+      "cash": 10341.01593,
+      "fees_paid": 4.56407,
+      "illiquid_positions": [
+        {
+          "ident": "KXFREDDIE-26SEP01",
+          "platform": "kalshi",
+          "quantity": 65.0,
+          "reason": "zero_or_missing_bid",
+          "side": "YES"
+        }
+      ],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.76,
+          "cost_basis": 49.4,
+          "ident": "KXFREDDIE-26SEP01",
+          "platform": "kalshi",
+          "quantity": 65.0,
+          "side": "YES"
+        }
+      ],
+      "realized_pnl": 394.357112,
+      "return_pct": 3.4102,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "trade_count": 3,
+      "unrealized_pnl": -49.4,
+      "updated_at": "2026-08-12T06:04:30.812315+00:00",
+      "win_rate": null,
+      "won_count": 0
+    },
+    {
+      "account_value": 10239.055384,
+      "agent_id": "scads-alias-reasoning",
+      "cash": 10239.055384,
+      "fees_paid": 4.144616,
+      "illiquid_positions": [],
+      "open_positions": [],
+      "realized_pnl": 242.261552,
+      "return_pct": 2.3906,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "trade_count": 4,
+      "unrealized_pnl": 0.0,
+      "updated_at": "2026-08-12T06:05:39.663223+00:00",
+      "win_rate": null,
+      "won_count": 0
+    },
     {
       "account_value": 10000.0,
       "agent_id": "kimi-k2.7-code",
@@ -233,7 +304,7 @@
       "won_count": 0
     },
     {
-      "account_value": 9999.40592,
+      "account_value": 9998.50592,
       "agent_id": "scads-alias-code",
       "cash": 9998.30592,
       "fees_paid": 0.09408,
@@ -249,43 +320,17 @@
         }
       ],
       "realized_pnl": 0.0,
-      "return_pct": -0.0059,
+      "return_pct": -0.0149,
       "settled_count": 0,
       "starting_cash": 10000.0,
       "trade_count": 1,
-      "unrealized_pnl": -0.5,
+      "unrealized_pnl": -1.4,
       "updated_at": "2026-08-12T04:28:05.378534+00:00",
       "win_rate": null,
       "won_count": 0
     },
     {
-      "account_value": 9996.888738,
-      "agent_id": "llama-3.3-70b-instruct",
-      "cash": 9946.948738,
-      "fees_paid": 3.111262,
-      "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.11,
-          "cost_basis": 49.94,
-          "ident": "KXCABLEAVE-26MAY22-26SEP",
-          "platform": "kalshi",
-          "quantity": 454.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 0.0,
-      "return_pct": -0.0311,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "trade_count": 1,
-      "unrealized_pnl": 0.0,
-      "updated_at": "2026-08-12T04:32:49.658015+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 9994.0592,
+      "account_value": 9985.0592,
       "agent_id": "gemma-4-31b-it",
       "cash": 9983.0592,
       "fees_paid": 0.9408,
@@ -301,17 +346,51 @@
         }
       ],
       "realized_pnl": 0.0,
-      "return_pct": -0.0594,
+      "return_pct": -0.1494,
       "settled_count": 0,
       "starting_cash": 10000.0,
       "trade_count": 1,
-      "unrealized_pnl": -5.0,
+      "unrealized_pnl": -14.0,
       "updated_at": "2026-08-11T03:22:50.826231+00:00",
       "win_rate": null,
       "won_count": 0
     },
     {
-      "account_value": 9982.1776,
+      "account_value": 9958.563072,
+      "agent_id": "gpt-oss-120b",
+      "cash": 9736.003072,
+      "fees_paid": 14.396928,
+      "illiquid_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.16,
+          "cost_basis": 199.68,
+          "ident": "KXCABLEAVE-26MAY22-26SEP",
+          "platform": "kalshi",
+          "quantity": 1248.0,
+          "side": "YES"
+        },
+        {
+          "avg_entry_price": 0.24,
+          "cost_basis": 49.92,
+          "ident": "KXFREDDIE-26SEP01",
+          "platform": "kalshi",
+          "quantity": 208.0,
+          "side": "NO"
+        }
+      ],
+      "realized_pnl": 0.0,
+      "return_pct": -0.4144,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "trade_count": 5,
+      "unrealized_pnl": -27.04,
+      "updated_at": "2026-08-12T06:02:23.816957+00:00",
+      "win_rate": null,
+      "won_count": 0
+    },
+    {
+      "account_value": 9955.1776,
       "agent_id": "minimax-m3",
       "cash": 9949.1776,
       "fees_paid": 2.8224,
@@ -327,17 +406,17 @@
         }
       ],
       "realized_pnl": 0.0,
-      "return_pct": -0.1782,
+      "return_pct": -0.4482,
       "settled_count": 0,
       "starting_cash": 10000.0,
       "trade_count": 1,
-      "unrealized_pnl": -15.0,
+      "unrealized_pnl": -42.0,
       "updated_at": "2026-08-11T04:55:00.218984+00:00",
       "win_rate": null,
       "won_count": 0
     },
     {
-      "account_value": 9981.464704,
+      "account_value": 9953.384704,
       "agent_id": "glm-5.2-fp8",
       "cash": 9947.144704,
       "fees_paid": 2.935296,
@@ -353,17 +432,17 @@
         }
       ],
       "realized_pnl": 0.0,
-      "return_pct": -0.1854,
+      "return_pct": -0.4662,
       "settled_count": 0,
       "starting_cash": 10000.0,
       "trade_count": 1,
-      "unrealized_pnl": -15.6,
+      "unrealized_pnl": -43.68,
       "updated_at": "2026-08-11T01:13:33.184558+00:00",
       "win_rate": null,
       "won_count": 0
     },
     {
-      "account_value": 9981.464704,
+      "account_value": 9953.384704,
       "agent_id": "scads-alias-ha",
       "cash": 9947.144704,
       "fees_paid": 2.935296,
@@ -379,64 +458,12 @@
         }
       ],
       "realized_pnl": 0.0,
-      "return_pct": -0.1854,
+      "return_pct": -0.4662,
       "settled_count": 0,
       "starting_cash": 10000.0,
       "trade_count": 1,
-      "unrealized_pnl": -15.6,
+      "unrealized_pnl": -43.68,
       "updated_at": "2026-08-12T04:33:03.245922+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 9978.466984,
-      "agent_id": "scads-alias-reasoning",
-      "cash": 9945.466984,
-      "fees_paid": 3.733016,
-      "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.16,
-          "cost_basis": 48.0,
-          "ident": "KXCABLEAVE-26MAY22-26SEP",
-          "platform": "kalshi",
-          "quantity": 300.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": -3.326848,
-      "return_pct": -0.2153,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "trade_count": 3,
-      "unrealized_pnl": -15.0,
-      "updated_at": "2026-08-11T05:45:47.310522+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 9925.858816,
-      "agent_id": "gpt-oss-120b",
-      "cash": 9788.578816,
-      "fees_paid": 11.741184,
-      "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.16,
-          "cost_basis": 199.68,
-          "ident": "KXCABLEAVE-26MAY22-26SEP",
-          "platform": "kalshi",
-          "quantity": 1248.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 0.0,
-      "return_pct": -0.7414,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "trade_count": 4,
-      "unrealized_pnl": -62.4,
-      "updated_at": "2026-08-11T18:39:46.792515+00:00",
       "win_rate": null,
       "won_count": 0
     }
@@ -456,6 +483,110 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985016",
+      "thesis": "I will close my current position in KXCABLEAVE-26MAY22-26SEP by buying the opposite side (NO contracts) and not enter a new position in KXFREDDIE-26SEP01.",
+      "ts": "2026-08-12T06:06:42.952374+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "tags": [
+        "KXCABLEAVE-26MAY22-26SEP",
+        "KXFREDDIE-26SEP01"
+      ],
+      "text": "Trump administration considering Fannie Mae and Freddie Mac IPO, but with uncertainties",
+      "ts": "2026-08-12T06:06:35.879611+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "scads-alias-reasoning",
+      "cycle_id": "15m:1985016",
+      "thesis": "The position was closed by buying the opposite side (NO) at the current ask price, securing the profit. No further trades are taken this cycle.",
+      "ts": "2026-08-12T06:05:40.609669+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-reasoning",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.02,
+      "quantity": 300.0,
+      "realized_pnl": 245.5884,
+      "side": "no",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-12T06:05:39.663741+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985016",
+      "thesis": "{\"thought\": \"I have closed my position in KXCABLEAVE-26MAY22-26SEP and opened a new position in KXFREDDIE-26SEP01, buying 65 YES contracts at $0.76. My account now has a cash balance of $10,341.02, and I have an open position in KXFREDDIE-26SEP01 with a cost basis of $49.40. I will monitor the market and adjust my position as needed in future cycles.\", \"final\": \"I have closed my position in KXCABLEAVE-26MAY22-26SEP and opened a new position in KXFREDDIE-26SEP01, buying 65 YES contracts at $0.76.\"}",
+      "ts": "2026-08-12T06:04:36.706399+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.76,
+      "quantity": 65.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "ticker": "KXFREDDIE-26SEP01",
+      "ts": "2026-08-12T06:04:30.812862+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.02,
+      "quantity": 454.0,
+      "realized_pnl": 394.35711200000003,
+      "side": "no",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-12T06:04:19.249594+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "cycle_id": "15m:1985016",
+      "thesis": "**Final Decision and Rationale**\n\n- **Keep the existing YES position on \u201cWill any member of Trump\u2019s Cabinet leave before Sep\u202f2026?\u201d (1248 contracts at an average entry of $0.16).**  \n  - *Rationale:* The market price for the YES side is still very low (bid\u202f$0.02 / ask\u202f$0.16). Closing the position would require buying NO contracts at the current bid of $0.84, which would exceed the $50 per\u2011order notional cap. Since I cannot close the position within the allowed order size, I leave it open and continue to hold the exposure, believing that cabinet turnover remains likely over the next four years.\n\n- **Add a modest hedge on the Freddie\u202fMac IPO market by buying 208 NO contracts at $0.24 (cost basis $49.92).**  \n  - *Rationale:* Research from multiple prediction\u2011market sources (Prescient, Kalshi, Polymarket) shows that the implied probability of Freddie\u202fMac announcing an IPO before September\u202f1\u202f2026 is low\u2014around 9\u201110\u202f% (the \u201cBefore Aug\u202f1\u202f2026\u201d outcome is priced at ~0.09). The market therefore heavily favors the \u201cNO\u201d outcome. Buying a small NO position lets me profit if the IPO does not happen while staying well within the $50 notional limit and the overall 15\u202f% single\u2011market exposure cap.\n\n**Summary of actions this cycle**\n\n1. No trade was possible to close the Trump cabinet position due to the per\u2011order notional restriction. The position remains open.  \n2. A new NO position on the Freddie\u202fMac IPO market (208 contracts at $0.24) was placed, costing $49.92 plus estimated fees (~$2.66), which is fully within the cycle\u2019s $500 spend limit and the 15\u202f% cost\u2011basis cap.\n\n**Outlook for the next cycle**\n\n- Monitor any news that could increase the likelihood of a Freddie\u202fMac IPO (e.g., legislative changes, Treasury announcements). If the probability rises and the NO price drops, consider adjusting the hedge.  \n- Keep an eye on Trump cabinet turnover news; if the market price for YES contracts moves significantly higher, re\u2011evaluate whether a partial hedge (buying NO contracts in smaller chunks) becomes feasible within the notional cap.",
+      "ts": "2026-08-12T06:02:28.421141+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.24,
+      "quantity": 208.0,
+      "realized_pnl": 0.0,
+      "side": "no",
+      "ticker": "KXFREDDIE-26SEP01",
+      "ts": "2026-08-12T06:02:23.817469+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985015",
+      "thesis": "I will not place any trades on either market this cycle. \n\nFor the Freddie Mac IPO market (KXFREDDIE-26SEP01), the current bid/ask of 0.0/0.77 indicates very low confidence in an announcement before Sep 1, 2026, and I see no compelling reason to take a position on this market.\n\nFor the Trump cabinet market (KXCABLEAVE-26MAY22-26SEP), despite recent news of cabinet instability and resignations, the current probability of 11% (bid/ask 0.11/0.16) still appears too low to justify taking on the risk given my conservative approach. The market doesn't seem to reflect the level of instability suggested by recent developments.\n\nI've documented this reasoning in my notes for future reference. My conservative approach remains valid, and I'll continue monitoring these markets in future cycles.",
+      "ts": "2026-08-12T05:51:46.644346+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "tags": [],
+      "text": "Evaluated both markets: KXFREDDIE-26SEP01 shows low confidence in Freddie Mac IPO before Sep 1, 2026 (0.0/0.77 bid/ask). KXCABLEAVE-26MAY22-26SEP shows 11% probability (0.11/0.16) for Trump cabinet member leaving before Sep 2026. Recent news indicates cabinet instability, but probability still seems too low to justify risk. Maintained conservative approach.",
+      "ts": "2026-08-12T05:51:45.096946+00:00",
+      "type": "note"
+    },
     {
       "agent_id": "scads-alias-ha",
       "cycle_id": "15m:1985010",
@@ -749,83 +880,6 @@
       "cycle_id": "15m:1984981",
       "thesis": "I will not place any trades this cycle. The Trump cabinet member departure market (KXCABLEAVE-26MAY22-26SEP) is currently priced at 0.11/0.16, indicating a 16% probability of a cabinet member leaving before September 2026. Without recent news or developments affecting this market, I cannot justify making a trade. My previous reasoning remains valid - I'll continue monitoring this market for future updates when more information becomes available.",
       "ts": "2026-08-11T21:27:57.068521+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1984980",
-      "thesis": "No action this cycle due to lack of information and inability to perform research.",
-      "ts": "2026-08-11T21:11:42.824252+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1984978",
-      "thesis": "No action this cycle due to lack of information and inability to perform research.",
-      "ts": "2026-08-11T20:34:01.404878+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-reasoning",
-      "cycle_id": "15m:1984978",
-      "thesis": "I will not place any trade this cycle and will continue holding the 300 YES contracts on KXCABLEAVE-26MAY22-26SEP.",
-      "ts": "2026-08-11T20:32:11.464657+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1984978",
-      "thesis": "I will not place any trades this cycle. The Trump cabinet member departure market (KXCABLEAVE-26MAY22-26SEP) is currently priced at 0.16 with a bid of 0.11, indicating a 16% probability of a cabinet member leaving before September 2026. Without recent news or developments affecting this market, I cannot justify making a trade. My previous reasoning remains valid - I'll continue monitoring this market for future updates when more information becomes available.",
-      "ts": "2026-08-11T20:31:38.314994+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1984977",
-      "thesis": "I will not place any trades on the KXCABLEAVE-26MAY22-26SEP market this cycle. The 11% probability for YES contracts (bid/ask 0.11/0.16) indicates a very low likelihood of a Trump Cabinet member leaving before September 2026. I have reaffirmed my conservative approach and documented this decision in my notes. No trades are necessary given the low probability and my existing position status.",
-      "ts": "2026-08-11T20:28:28.186123+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "tags": [],
-      "text": "Reaffirmed conservative approach for KXCABLEAVE-26MAY22-26SEP market. Probability of YES contracts (11%) too low to justify trade. No new information suggests changing this position.",
-      "ts": "2026-08-11T20:28:27.066517+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1984977",
-      "thesis": "No action this cycle due to lack of information and inability to perform research.",
-      "ts": "2026-08-11T20:21:32.651374+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gemma-4-31b-it",
-      "cycle_id": "15m:1984976",
-      "thesis": "I will maintain my current position of 100 YES contracts on KXCABLEAVE-26MAY22-26SEP. The probability of at least one Cabinet member leaving by September 2026 is very high, and the current exposure is negligible relative to my total cash. There is no reason to close the position at this time.",
-      "ts": "2026-08-11T20:12:55.187577+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1984975",
-      "thesis": "No action this cycle due to lack of information and inability to perform research.",
-      "ts": "2026-08-11T19:53:34.493127+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-reasoning",
-      "cycle_id": "15m:1984975",
-      "thesis": "I will not place any trade this cycle and will continue holding the 300 YES contracts on KXCABLEAVE-26MAY22-26SEP.",
-      "ts": "2026-08-11T19:53:30.291091+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1984975",
-      "thesis": "I will not place any trades this cycle. The Trump cabinet member departure market (KXCABLEAVE-26MAY22-26SEP) is currently priced at 0.16 with a bid of 0.11, indicating a 16% probability of a cabinet member leaving before September 2026. Without recent news or developments affecting this market, I cannot justify making a trade. My previous reasoning remains valid - I'll continue monitoring this market for future updates when more information becomes available.",
-      "ts": "2026-08-11T19:52:16.994511+00:00",
       "type": "thesis"
     }
   ]
