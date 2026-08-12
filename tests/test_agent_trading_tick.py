@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -42,6 +43,45 @@ class ShadowModeAssertionTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"FORESEA_AGENT_PLACE_TRADE_MODE": "live"}, clear=False):
             with self.assertRaises(RuntimeError):
                 agent_trading_tick._assert_shadow_mode()
+
+
+class MaxOrderNotionalTests(unittest.TestCase):
+    def test_defaults_to_8pct_of_the_10k_default_account_value(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            for key in ("FORESEA_AGENT_ACCOUNT_VALUE", "FORESEA_MAX_ORDER_NOTIONAL"):
+                os.environ.pop(key, None)
+            result = agent_trading_tick._configure_max_order_notional()
+            self.assertAlmostEqual(result, 800.0)
+            self.assertEqual(os.environ["FORESEA_MAX_ORDER_NOTIONAL"], "800.0")
+
+    def test_scales_with_a_custom_account_value(self):
+        with mock.patch.dict(os.environ, {"FORESEA_AGENT_ACCOUNT_VALUE": "20000"}, clear=False):
+            result = agent_trading_tick._configure_max_order_notional()
+        self.assertAlmostEqual(result, 1600.0)
+
+    def test_pct_itself_is_env_overridable(self):
+        # MAX_ORDER_NOTIONAL_PCT is a module-level constant read once at
+        # import time (like every other env-derived constant in this file:
+        # CANDIDATE_COUNT, MAX_TOOL_STEPS, ...), so overriding it per-test
+        # means patching the loaded attribute directly, not os.environ.
+        with (
+            mock.patch.dict(os.environ, {"FORESEA_AGENT_ACCOUNT_VALUE": "10000"}, clear=False),
+            mock.patch.object(agent_trading_tick, "MAX_ORDER_NOTIONAL_PCT", 0.05),
+        ):
+            result = agent_trading_tick._configure_max_order_notional()
+        self.assertAlmostEqual(result, 500.0)
+
+    def test_scoped_to_this_process_not_a_global_trading_default(self):
+        # This must override trading.py's own module-level default only via
+        # the env var it reads live at guard-check time -- never mutate the
+        # shared DEFAULT_MAX_ORDER_NOTIONAL constant itself, or every other
+        # trading path (human BYO trading included) would inherit it too.
+        from analyzing_llm_rationale import trading
+
+        with mock.patch.dict(os.environ, {"FORESEA_AGENT_ACCOUNT_VALUE": "10000"}, clear=False):
+            agent_trading_tick._configure_max_order_notional()
+            self.assertEqual(trading._max_order_notional(), Decimal("800.0"))
+        self.assertEqual(trading.DEFAULT_MAX_ORDER_NOTIONAL, Decimal("50"))
 
 
 class CandidateSelectionTests(unittest.TestCase):

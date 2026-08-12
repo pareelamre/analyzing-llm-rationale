@@ -54,6 +54,14 @@ AGENT_ANALYZE_RETRY_BACKOFF_S = float(os.environ.get("AGENT_TRADING_RETRY_BACKOF
 # single verbose thesis echoed back verbatim can exceed that on its own
 # (observed live: 2334 chars), so it's excerpted, not replayed in full.
 MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS_CHARS", "500")))
+# trading.py's FORESEA_MAX_ORDER_NOTIONAL is a flat-dollar cap shared by every
+# order path (human BYO trading included), so it can't be changed here without
+# affecting those too. Instead this driver overrides it per-cycle, scoped to
+# this one process, as a percentage of the agent's own account value --
+# consistent with how benchmark_tools' own concentration/per-cycle-spend
+# guards already define "account value" (FORESEA_AGENT_ACCOUNT_VALUE, the
+# static starting baseline, not a fluctuating mark-to-market figure).
+MAX_ORDER_NOTIONAL_PCT = float(os.environ.get("FORESEA_AGENT_MAX_ORDER_NOTIONAL_PCT", "0.08"))
 
 
 def _assert_shadow_mode() -> None:
@@ -215,9 +223,24 @@ async def _call_agent_analyze(question: str):
     raise last_exc
 
 
+def _configure_max_order_notional() -> float:
+    """Override trading.py's flat-dollar FORESEA_MAX_ORDER_NOTIONAL for this
+    process only, as MAX_ORDER_NOTIONAL_PCT of the agent's account value.
+    Scoped to this one cycle's process (each cycle is a fresh process), so
+    every other trading path -- human BYO trading, other scripts -- stays at
+    trading.py's own unmodified default."""
+    account_value = benchmark_tools._env_float(
+        "FORESEA_AGENT_ACCOUNT_VALUE", benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE
+    )
+    max_notional = round(account_value * MAX_ORDER_NOTIONAL_PCT, 2)
+    os.environ["FORESEA_MAX_ORDER_NOTIONAL"] = str(max_notional)
+    return max_notional
+
+
 def run_cycle(model: str) -> None:
     _assert_shadow_mode()
     _init_local_agent(model)
+    _configure_max_order_notional()
 
     agent_id = model
     cycle_id = benchmark_tools._current_cycle_id()
