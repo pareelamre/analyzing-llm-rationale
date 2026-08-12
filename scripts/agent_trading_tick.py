@@ -24,6 +24,14 @@ Env:
   MAX_TOOL_STEPS                   tool-loop step cap per cycle (default 4)
   AGENT_TRADING_MIN_CLOSE_DAYS     candidate discovery window, days (default 1)
   AGENT_TRADING_MAX_CLOSE_DAYS     candidate discovery window, days (default 30)
+  FORESEA_AGENT_MAX_ORDER_NOTIONAL_PCT   per-order cap, fraction of current
+                                          account value (default 0.08)
+  FORESEA_AGENT_CONCENTRATION_LIMIT      per-ticker cap, fraction of current
+                                          account value (default 0.15, read by
+                                          benchmark_tools.py)
+  FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT   per-cycle cap, fraction of current
+                                             account value (default 0.20, read
+                                             by benchmark_tools.py)
 """
 from __future__ import annotations
 
@@ -41,6 +49,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
+from analyzing_llm_rationale.accounting import MarketQuote  # noqa: E402
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -201,6 +210,24 @@ def _requote_held(tickers: List[str]) -> List[Dict[str, Any]]:
     return quotes
 
 
+def _current_account_value(conn, agent_id: str, held_quotes: List[Dict[str, Any]]) -> float:
+    """Cash + mark-to-market value of open positions, using the freshest bid
+    quote for each held ticker -- so every agent-trading risk guard (order
+    size, concentration, per-cycle spend) scales with the account's REAL
+    performance, not a frozen starting baseline."""
+    summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
+    quotes_by_ticker = {q["ident"]: MarketQuote.from_mapping(q) for q in held_quotes if q.get("ident")}
+    liquidation_value = 0.0
+    for pos in summary["open_positions"]:
+        quote = quotes_by_ticker.get(pos["ticker"])
+        bid = quote.bid(pos["side"]) if quote else None
+        # No live bid (re-quote failed, or the position isn't in held_quotes)
+        # -- fall back to cost basis rather than dropping it from the total,
+        # so a stale quote never silently shrinks what the guards see.
+        liquidation_value += pos["quantity"] * bid if bid is not None else pos["cost_basis"]
+    return summary["cash"] + liquidation_value
+
+
 async def _call_agent_analyze(question: str):
     from analyzing_llm_rationale.server import AgentAnalyzeRequest, agent_analyze
 
@@ -225,9 +252,12 @@ async def _call_agent_analyze(question: str):
 
 def _configure_max_order_notional() -> float:
     """Override trading.py's flat-dollar FORESEA_MAX_ORDER_NOTIONAL for this
-    process only, as MAX_ORDER_NOTIONAL_PCT of the agent's account value.
-    Scoped to this one cycle's process (each cycle is a fresh process), so
-    every other trading path -- human BYO trading, other scripts -- stays at
+    process only, as MAX_ORDER_NOTIONAL_PCT of the agent's account value
+    (FORESEA_AGENT_ACCOUNT_VALUE -- by the time this runs in run_cycle(),
+    already set to the current mark-to-market value, not the static
+    starting baseline, so this scales with real performance). Scoped to
+    this one cycle's process (each cycle is a fresh process), so every
+    other trading path -- human BYO trading, other scripts -- stays at
     trading.py's own unmodified default."""
     account_value = benchmark_tools._env_float(
         "FORESEA_AGENT_ACCOUNT_VALUE", benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE
@@ -240,7 +270,6 @@ def _configure_max_order_notional() -> float:
 def run_cycle(model: str) -> None:
     _assert_shadow_mode()
     _init_local_agent(model)
-    _configure_max_order_notional()
 
     agent_id = model
     cycle_id = benchmark_tools._current_cycle_id()
@@ -263,6 +292,14 @@ def run_cycle(model: str) -> None:
     held_quotes = _requote_held(held_tickers)
     known = {q.get("ident") for q in held_quotes if q.get("ident")}
     new_quotes = _discover_candidates(known)
+
+    # Every agent-trading risk guard scales off FORESEA_AGENT_ACCOUNT_VALUE,
+    # so it must reflect the account's real, current mark-to-market value
+    # here -- computed after held_quotes exist, before any place_trade call
+    # in this cycle's tool loop could read a guard.
+    with benchmark_tools._account_transaction() as conn:
+        os.environ["FORESEA_AGENT_ACCOUNT_VALUE"] = str(_current_account_value(conn, agent_id, held_quotes))
+    _configure_max_order_notional()
 
     question = "\n\n".join([
         portfolio_block,

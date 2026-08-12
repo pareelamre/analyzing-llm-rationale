@@ -193,7 +193,7 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_PLACE_TRADE_MODE": "live",
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
-                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
@@ -248,7 +248,7 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "0.15",
-                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
@@ -278,7 +278,7 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "10",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
-                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
@@ -302,7 +302,7 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "10",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
-                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
@@ -332,7 +332,7 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
-                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "0.9",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "0.009",  # $0.90 at $100 account value
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
@@ -355,6 +355,33 @@ class BenchmarkToolTests(unittest.TestCase):
             second["risk_guard"]["per_cycle_spend_limit"],
         )
 
+    def test_per_cycle_spend_limit_scales_with_account_value(self):
+        # Regression: this used to be a flat dollar amount (DEFAULT was
+        # $500/cycle regardless of account size) -- now it's a percentage, so
+        # the same FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT must yield a
+        # bigger dollar limit for a bigger account, not a fixed number.
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        def _cap_at(account_value: str) -> float:
+            with tempfile.TemporaryDirectory() as td:
+                env = {
+                    "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                    "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                    "FORESEA_AGENT_ACCOUNT_VALUE": account_value,
+                    "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                    "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "0.2",
+                    "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+                }
+                with mock.patch.dict(os.environ, env, clear=False):
+                    result = benchmark_tools.place_trade(
+                        {"ticker": "KXSCALE", "side": "yes", "price": 0.10, "quantity": 1},
+                        ctx,
+                    )
+            return result["risk_guard"]["per_cycle_spend_limit"]
+
+        self.assertAlmostEqual(_cap_at("100"), 20.0)
+        self.assertAlmostEqual(_cap_at("10000"), 2000.0)
+
     def test_place_trade_updates_weighted_average_entry_in_positions_table(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
@@ -365,7 +392,7 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
-                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
@@ -409,7 +436,7 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
-                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT": "1000",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
                 "FORESEA_AGENT_SETTLEMENT_FEE_RATE": "0.014",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
