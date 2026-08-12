@@ -99,6 +99,12 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("Add to personal ledger", self.index_html)
         self.assertIn("/personal-ledger/", self.index_html)
         self.assertIn("function openPersonalLedger", self.index_html)
+
+    def test_browser_history_closes_personal_ledger_overlay(self) -> None:
+        history_body = self.index_html.split("function applyHistoryState", 1)[1].split(
+            "window.addEventListener('popstate'", 1
+        )[0]
+        self.assertIn("closePersonalLedger({ updateHistory: false });", history_body)
         self.assertIn("function personalLedgerRationalePreview", self.index_html)
         self.assertIn("View full reasoning", self.index_html)
         self.assertIn("function beginPersonalLedgerSignIn", self.index_html)
