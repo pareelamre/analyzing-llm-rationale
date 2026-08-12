@@ -1243,6 +1243,20 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "warnings": execution_warnings + result.get("warnings", []),
             }
         except Exception as exc:
+            from analyzing_llm_rationale.trading import TradingValidationError
+
+            if isinstance(exc, TradingValidationError):
+                # Local guardrails (e.g. notional limit) raising TradingValidationError
+                # are expected rejections, not system failures — don't mark the span ERROR.
+                span.set_attribute("outcome", "validation_error")
+                _finish_tool(tool, start, "rejected")
+                return {
+                    "ok": False,
+                    "tool": tool,
+                    "rejected": True,
+                    "reason": "validation_error",
+                    "message": str(exc),
+                }
             span.record_exception(exc)
             span.set_status(Status(StatusCode.ERROR))
             span.set_attribute("outcome", "failure")

@@ -462,6 +462,31 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertAlmostEqual(settlement[2], 5.86)
         self.assertEqual(remaining, 0)
 
+    def test_place_trade_notional_limit_returns_structured_rejection_not_error(self):
+        # Regression: exceeding FORESEA_MAX_ORDER_NOTIONAL raised TradingValidationError
+        # which was caught by the broad except-Exception handler and emitted as an ERROR
+        # span, causing noisy incidents. It should now return a structured rejection.
+        ctx = benchmark_tools.ToolContext(agent_id="minimax-m3")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_MAX_ORDER_NOTIONAL": "50",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                # price=0.80, quantity=1000 → notional $800 > $50 limit
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXTEST", "side": "yes", "price": 0.80, "quantity": 1000},
+                    ctx,
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result.get("rejected"))
+        self.assertEqual(result.get("reason"), "validation_error")
+        self.assertIn("800", result["message"])
+        self.assertNotIn("error", result)
+
     def test_agent_cycles_table_round_trips(self):
         # Stores per-cycle thesis/transcript/candidates -- the source for the
         # agentic-trading transparency feed. Not written by any existing
