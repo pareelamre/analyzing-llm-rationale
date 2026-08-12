@@ -3,7 +3,9 @@
 The tool names intentionally match the benchmark spec:
 
 - place_trade: Kalshi YES/NO buy tool. Default mode is shadow, not live funds.
-- web_search: OpenAI Responses API web_search wrapper with a small blacklist.
+- web_search: multi-source news search (news_pipeline.NewsPipeline) with a
+  small blacklist. Uses SCADS_AI_API_KEY, already required elsewhere in this
+  codebase -- no separate key is needed.
 - manage_notes: bounded persistent notes per agent.
 """
 from __future__ import annotations
@@ -21,7 +23,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 from urllib.parse import urlparse
 
-import requests
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
 
@@ -41,7 +42,8 @@ fill_actions = meter.create_counter("benchmark_tools.place_trade.fills", unit="1
 BLACKLISTED_WEB_DOMAINS = ("coinmarketcap.com",)
 MAX_NOTES_PER_AGENT = 50
 MAX_NOTE_CHARS = 1200
-WEB_SEARCH_TIMEOUT_S = 120
+WEB_SEARCH_SOURCES = ("web", "gdelt", "google-news", "rss", "newsapi", "open-meteo")
+WEB_SEARCH_TOP_K = 5
 DEFAULT_AGENT_ACCOUNT_VALUE = 10_000.0
 DEFAULT_CONCENTRATION_LIMIT = 0.15
 DEFAULT_PER_CYCLE_SPEND_LIMIT = 500.0
@@ -1254,44 +1256,12 @@ def _domain_blacklisted(url: str, blacklist: Iterable[str] = BLACKLISTED_WEB_DOM
     return any(host == domain or host.endswith("." + domain) for domain in blacklist)
 
 
-def _extract_text(payload: Mapping[str, Any]) -> str:
-    output_text = payload.get("output_text")
-    if isinstance(output_text, str):
-        return output_text
-    chunks: List[str] = []
-    for item in payload.get("output") or []:
-        if not isinstance(item, dict):
-            continue
-        for content in item.get("content") or []:
-            if isinstance(content, dict):
-                text = content.get("text")
-                if isinstance(text, str):
-                    chunks.append(text)
-    return "\n".join(chunks).strip()
-
-
-def _extract_citations(payload: Mapping[str, Any]) -> List[Dict[str, str]]:
-    citations: List[Dict[str, str]] = []
-    for item in payload.get("output") or []:
-        if not isinstance(item, dict):
-            continue
-        for content in item.get("content") or []:
-            if not isinstance(content, dict):
-                continue
-            for ann in content.get("annotations") or []:
-                if not isinstance(ann, dict):
-                    continue
-                url = ann.get("url")
-                if isinstance(url, str) and url:
-                    citations.append({
-                        "title": str(ann.get("title") or url),
-                        "url": url,
-                    })
-    return citations
-
-
 def web_search(args: Mapping[str, Any]) -> Dict[str, Any]:
-    """Run a bounded OpenAI web search with blacklist guidance and filtering."""
+    """Run a bounded multi-source news search (the open web, GDELT, Google
+    News, RSS, and NewsAPI when NEWSAPI_KEY is set) with blacklist filtering.
+    Query planning and per-article summarization use SCADS_AI_API_KEY,
+    already required elsewhere in this codebase -- no separate (e.g. OpenAI)
+    key is needed."""
     start = time.perf_counter()
     tool = "web_search"
     query = str(args.get("query") or "").strip()
@@ -1304,44 +1274,28 @@ def web_search(args: Mapping[str, Any]) -> Dict[str, Any]:
         try:
             if not query:
                 raise ValueError("query is required")
-            api_key = os.environ.get("OPENAI_API_KEY")
-            if not api_key:
-                raise RuntimeError("OPENAI_API_KEY is required for web_search")
-            model = str(os.environ.get("FORESEA_WEB_SEARCH_MODEL") or "gpt-5-mini")
-            payload = {
-                "model": model,
-                "tools": [{"type": "web_search", "search_context_size": "low"}],
-                "input": query,
-                "instructions": (
-                    "Search the web for concise current evidence. Do not use results from "
-                    + ", ".join(BLACKLISTED_WEB_DOMAINS)
-                    + ". Return source-grounded facts and links."
-                ),
-            }
-            response = requests.post(
-                "https://api.openai.com/v1/responses",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=WEB_SEARCH_TIMEOUT_S,
+            from analyzing_llm_rationale.news_pipeline import NewsPipeline
+
+            pipeline = NewsPipeline(fetch_sources=WEB_SEARCH_SOURCES)
+            articles = pipeline.fetch_summarize_rank(query, top_k=WEB_SEARCH_TOP_K)
+            sources: List[Dict[str, str]] = []
+            blocked: List[Dict[str, Any]] = []
+            for article in articles:
+                url = str(article.get("url") or "")
+                if not url:
+                    continue
+                entry = {"title": str(article.get("title") or url), "url": url}
+                (blocked if _domain_blacklisted(url) else sources).append(entry)
+            summary = "\n\n".join(
+                f"{article.get('title') or article.get('url')}: {article['summary']}"
+                for article in articles
+                if article.get("summary") and article.get("url")
+                and not _domain_blacklisted(str(article["url"]))
             )
-            response.raise_for_status()
-            body = response.json()
-            citations = [
-                c for c in _extract_citations(body)
-                if not _domain_blacklisted(c.get("url", ""))
-            ]
-            blocked = [
-                c for c in _extract_citations(body)
-                if _domain_blacklisted(c.get("url", ""))
-            ]
             span.set_attributes({
                 "outcome": "success",
-                "gen_ai.provider.name": "openai",
-                "gen_ai.request.model": model,
-                "web.citations.count": len(citations),
+                "gen_ai.provider.name": "scads",
+                "web.citations.count": len(sources),
                 "web.blocked_results.count": len(blocked),
             })
             _finish_tool(tool, start, "success")
@@ -1349,8 +1303,8 @@ def web_search(args: Mapping[str, Any]) -> Dict[str, Any]:
                 "ok": True,
                 "tool": tool,
                 "query": query,
-                "summary": _extract_text(body),
-                "sources": citations,
+                "summary": summary,
+                "sources": sources,
                 "blacklisted_domains": list(BLACKLISTED_WEB_DOMAINS),
                 "blocked_results": len(blocked),
             }

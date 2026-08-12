@@ -56,33 +56,51 @@ class BenchmarkToolTests(unittest.TestCase):
             self.assertFalse(too_long["ok"])
 
     def test_web_search_filters_blacklisted_citations(self):
-        response = mock.Mock()
-        response.raise_for_status.return_value = None
-        response.json.return_value = {
-            "output": [{
-                "content": [{
-                    "text": "Search summary.",
-                    "annotations": [
-                        {"title": "Bad", "url": "https://coinmarketcap.com/currencies/x"},
-                        {"title": "Good", "url": "https://example.com/story"},
-                    ],
-                }]
-            }]
-        }
+        from analyzing_llm_rationale import news_pipeline
+
+        articles = [
+            {"title": "Bad", "url": "https://coinmarketcap.com/currencies/x", "summary": "Bad summary."},
+            {"title": "Good", "url": "https://example.com/story", "summary": "Good summary."},
+        ]
+        mock_pipeline = mock.Mock()
+        mock_pipeline.fetch_summarize_rank.return_value = articles
+
+        with mock.patch.object(news_pipeline, "NewsPipeline", return_value=mock_pipeline) as pipeline_cls:
+            result = benchmark_tools.web_search({"query": "test market"})
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["sources"], [{"title": "Good", "url": "https://example.com/story"}])
+        self.assertEqual(result["blocked_results"], 1)
+        self.assertIn("Good summary.", result["summary"])
+        self.assertNotIn("Bad summary.", result["summary"])
+        pipeline_cls.assert_called_once_with(fetch_sources=benchmark_tools.WEB_SEARCH_SOURCES)
+        mock_pipeline.fetch_summarize_rank.assert_called_once_with(
+            "test market", top_k=benchmark_tools.WEB_SEARCH_TOP_K
+        )
+
+    def test_web_search_does_not_require_an_openai_key(self):
+        # Regression: web_search used to hit api.openai.com and required
+        # OPENAI_API_KEY, which was never configured as a repo secret, so
+        # every single call failed. It now runs through the keyless
+        # multi-source news pipeline instead (SCADS_AI_API_KEY, already
+        # required elsewhere, covers query planning/summarization).
+        from analyzing_llm_rationale import news_pipeline
+
+        mock_pipeline = mock.Mock()
+        mock_pipeline.fetch_summarize_rank.return_value = []
 
         with (
-            mock.patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False),
-            mock.patch.object(benchmark_tools.requests, "post", return_value=response) as post,
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch.object(news_pipeline, "NewsPipeline", return_value=mock_pipeline),
         ):
             result = benchmark_tools.web_search({"query": "test market"})
 
         self.assertTrue(result["ok"])
-        self.assertEqual(result["summary"], "Search summary.")
-        self.assertEqual(result["sources"], [{"title": "Good", "url": "https://example.com/story"}])
-        self.assertEqual(result["blocked_results"], 1)
-        payload = post.call_args.kwargs["json"]
-        self.assertEqual(payload["tools"][0]["type"], "web_search")
-        self.assertIn("coinmarketcap.com", payload["instructions"])
+
+    def test_web_search_requires_a_query(self):
+        result = benchmark_tools.web_search({"query": "  "})
+        self.assertFalse(result["ok"])
+        self.assertIn("query is required", result["error"])
 
     def test_place_trade_defaults_to_shadow_kalshi_buy(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")

@@ -238,21 +238,18 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
             "static": (root / "static" / "index.html").read_text(encoding="utf-8"),
         }
 
-    def test_side_nav_link_opens_edge_board_agentic_tab_not_its_own_overlay(self):
+    def test_no_dedicated_agentic_nav_entry_point_left(self):
         # The agentic board lives inside the Edge board's "Agentic" tab, not a
-        # standalone overlay -- confirm the old overlay is gone and the
-        # side-nav button now routes through openEdgeBoard()/_ebSetView().
+        # standalone overlay or its own side-nav link -- Edge board's existing
+        # nav button is the only way in now (user-requested: a separate
+        # "Agentic trading" side-nav entry was redundant with it).
         for name, index in self._both().items():
             with self.subTest(file=name):
-                self.assertIn('onclick="openAgentTradingBoard()"', index)
+                self.assertNotIn("openAgentTradingBoard", index)
+                self.assertNotIn("Agentic trading", index)
                 self.assertNotIn('id="agentTradingOverlay"', index)
                 self.assertNotIn('id="agentTradingBody"', index)
                 self.assertNotIn("closeAgentTradingBoard", index)
-                opener = index.split("async function openAgentTradingBoard()", 1)[1].split(
-                    "async function loadAgentTradingSection", 1
-                )[0]
-                self.assertIn("await openEdgeBoard()", opener)
-                self.assertIn("_ebSetView('agentic')", opener)
 
     def test_shadow_only_banner_is_unconditional_not_derived_from_fetched_data(self):
         # The safety banner must be a literal string baked into every render
@@ -289,22 +286,25 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
                 )[0]
                 self.assertIn("loadAgentTradingSection()", setview)
 
-    def test_periodic_refresh_and_initial_load_both_repopulate_the_agentic_tab(self):
+    def test_periodic_refresh_repopulates_the_agentic_tab(self):
         # Regression test: renderEdgeBoard() only ever emits a "Loading…"
         # placeholder for the Agentic tab (its data isn't part of the
-        # /edge-board payload), so both loadEdgeBoard()'s first-open fetch
-        # and refreshEdgeForecasts()'s 5-minute poll fully replace #edgeBody
-        # via renderEdgeBoard() -- each must independently re-trigger
-        # loadAgentTradingSection() or the tab gets stuck loading forever
-        # (hit exactly this in manual browser verification: openEdgeBoard()
-        # doesn't await its own data load, so _ebSetView('agentic') can run
-        # before _ebLastData exists and silently no-ops).
+        # /edge-board payload), and refreshEdgeForecasts()'s 5-minute poll
+        # fully replaces #edgeBody via renderEdgeBoard() -- without this it
+        # would wipe the tab back to that placeholder forever once it's the
+        # active view.
+        #
+        # loadEdgeBoard() (the first-ever Edge board open) does NOT need the
+        # same trigger: the Agentic tab button can't exist -- let alone be
+        # clicked -- until renderEdgeBoard() has produced real markup at
+        # least once, and that only happens after loadEdgeBoard()'s own
+        # fetch resolves. So _ebView can't already be 'agentic' the first
+        # time loadEdgeBoard() runs; adding the same trigger there would be
+        # dead code (this was true before, and became load-bearing-false
+        # once the side-nav shortcut that could open Edge board and
+        # immediately switch tabs -- racing this same fetch -- was removed).
         for name, index in self._both().items():
             with self.subTest(file=name):
-                load_edge_board = index.split("async function loadEdgeBoard() {", 1)[1].split(
-                    "// ── Watchlist full page", 1
-                )[0]
-                self.assertIn("if (_ebView === 'agentic') loadAgentTradingSection();", load_edge_board)
                 refresher = index.split("async function refreshEdgeForecasts() {", 1)[1].split(
                     "function _fmtEquityDate", 1
                 )[0]
