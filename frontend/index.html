@@ -2226,9 +2226,6 @@
     <button type="button" class="side-nav-link" onclick="openPersonalLedger()">
       <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-chart"></use></svg></span>Personal ledger
     </button>
-    <button type="button" class="side-nav-link" onclick="openAgentTradingBoard()">
-      <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-chart"></use></svg></span>Agentic trading
-    </button>
     <button type="button" class="side-nav-link" onclick="openWatchlist()">
       <span class="side-nav-ico"><svg class="ui-icon" aria-hidden="true"><use href="#ui-star"></use></svg></span>Watchlist
     </button>
@@ -5748,11 +5745,6 @@ async function loadEdgeBoard() {
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
         { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
     }
-    // openAgentTradingBoard() calls _ebSetView('agentic') right after
-    // openEdgeBoard() without awaiting this fetch, so on a fresh open
-    // _ebLastData isn't populated yet and that call bails out early --
-    // this covers that race once the data (and the placeholder div) exist.
-    if (_ebView === 'agentic') loadAgentTradingSection();
   } catch (e) {
     host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Edge board is not available yet.</p></div>';
   }
@@ -5946,15 +5938,6 @@ async function markPersonalLedgerVerdict(entryId, verdict, btn) {
   } catch (_) {
     btn.disabled = false;
   }
-}
-
-// The agentic trading board lives inside the Edge board's "Agentic" tab
-// (see _ebSetView) rather than its own overlay -- this just opens Edge board
-// and switches to that tab, mirroring openArbitrage()/openForecastDrift().
-async function openAgentTradingBoard() {
-  await openEdgeBoard();
-  _ebSetView('agentic');
-  setTimeout(() => document.getElementById('eb-agentic-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
 }
 
 async function loadAgentTradingSection() {
