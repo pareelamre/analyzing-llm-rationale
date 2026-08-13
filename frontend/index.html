@@ -5686,10 +5686,6 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   _startEdgeTimers();
   setTimeout(() => document.getElementById('edgeCloseBtn')?.focus(), 0);
 }
-async function openArbitrage() {
-  await openEdgeBoard();
-  setTimeout(() => document.getElementById('arbitragePanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
-}
 async function openForecastDrift() {
   await openEdgeBoard();
   setTimeout(() => document.getElementById('forecastDriftPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
@@ -7312,92 +7308,6 @@ function renderEdgeBoard(d) {
   } else {
     compHtml = `<p class="text-sm text-gray-500">Model comparison across SCADS-hosted models fills in as forecasts resolve.</p>`;
   }
-  let performanceHtml;
-  if (pnl && pnl.flat) {
-    const roi = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets')
-      : _build(s && s.n_bets);
-    const nBet = pnl.flat.n_bets || 0;
-    const nRes = d.n_snapshots_resolved || 0;
-    const nMarkets = d.n_markets_resolved || nBet;
-    const smartVsCrowd = (pnl.smart?.roi != null && pnl.crowd_baseline?.roi != null) ? pnl.smart.roi - pnl.crowd_baseline.roi : null;
-    const _sub = t => `<div class="k" style="font-size:11px;color:var(--text-dim)">${t}</div>`;
-    const _mk = (s, color, label, dash) => {
-      const series = _ebStrategyGrowthCurve(s);
-      if (!series) return null;
-      const { points, times } = series;
-      const curve = { points, color, label };
-      if (dash) curve.dash = true;
-      if (times.length === points.length) curve.times = times;
-      return curve;
-    };
-    const strategyCurves = [
-      _mk(pnl.growth_2pct, '#f59e0b', 'Legacy Growth 2% ($200/mkt)'),
-      _mk(pnl.growth_1pct, '#3b82f6', 'Legacy Growth 1% ($100/mkt)'),
-      _mk(pnl.quarter_kelly, '#06b6d4', 'Risk-Capped Quarter-Kelly (5% / 30% DD)'),
-      _mk(pnl.smart, '#10b981', 'Smart ROI (1% bankroll)'),
-      _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly (1% bankroll cap)'),
-      _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
-    ].filter(Boolean);
-    const svgChart = `<div id="eb-equity-svg">${strategyCurves.length ? _equitySvg(strategyCurves, 680, 160, {asPct: false, yPrefix: '$'}) : ''}</div>`;
-    performanceHtml = `
-      <p class="text-xs" style="color:var(--text-dim);margin-bottom:10px">Compounded growth of a $${EB_STARTING_BANKROLL.toLocaleString()} starting bankroll across ${nBet} settled positions from ${nMarkets} unique resolved markets. ${nRes} saved forecasts provide the research history; they are not extra trades.</p>
-      ${svgChart}
-      <div class="tr-stats">
-        <div class="tr-stat" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);border-top-left-radius:19px" title="Legacy Growth benchmark: 2% of bankroll per settled market in the pooled resolved simulation."><div class="v" id="eb-pnl-growth2-v">${roi(pnl.growth_2pct)}</div><div class="k label ui-icon-label">${uiIcon('star')} Legacy Growth 2%</div>${_sub('2% Bankroll / $200')}</div>
-        <div class="tr-stat" style="border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.05)" title="Legacy Growth benchmark: 1% of bankroll per settled market in the pooled resolved simulation."><div class="v" id="eb-pnl-growth1-v">${roi(pnl.growth_1pct)}</div><div class="k label ui-icon-label">Legacy Growth 1%</div>${_sub('1% Bankroll / $100')}</div>
-        <div class="tr-stat" title="Filtered 1% bankroll sizing."><div class="v" id="eb-pnl-smart-v">${roi(pnl.smart)}</div><div class="k label">Smart ROI</div>${_sub('1% Bankroll / $100')}</div>
-        <div class="tr-stat" title="Smart ROI minus the crowd-follow baseline over the same resolved cohort."><div class="v" id="eb-pnl-edge-v">${smartVsCrowd != null ? _roiDeltaPct(smartVsCrowd) : _build(pnl.smart && pnl.smart.n_bets)}</div><div class="k label">vs crowd-follow</div>${_sub('excess return')}</div>
-        <div class="tr-stat" title="Always betting the crowd's own direction as the zero-edge baseline."><div class="v" id="eb-pnl-crowd-v">${roi(pnl.crowd_baseline)}</div><div class="k label">crowd-follow baseline</div>${_sub('agree with market')}</div>
-      </div>
-      <p class="text-xs text-gray-400" style="margin-top:8px">Historical simulation of forecasts saved before market close, net of venue trading fees. Excludes slippage and liquidity constraints; not actual trading results.</p>`;
-  } else {
-    performanceHtml = `<p class="text-sm text-gray-500">Strategy performance will appear as tracked markets resolve.</p>`;
-  }
-  const arbitrage = d.arbitrage_signals || [];
-  let arbitrageHtml = '';
-  if (arbitrage.length) {
-    arbitrageHtml = `
-      <div class="md-table-wrap">
-        <table class="eb-table">
-          <thead>
-            <tr>
-              <th>Platform 1</th>
-              <th>Platform 2</th>
-              <th>Spread</th>
-              <th>Total Cost</th>
-              <th>Net Profit</th>
-              <th>Risk-Free ROI</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${arbitrage.map(sig => `
-              <tr class="eb-row">
-                <td style="max-width:300px">
-                  <span class="eb-badge" style="background:var(--accent-dim);color:var(--accent);margin-right:6px">${escHtml(sig.platform1)}</span>
-                  <a href="${escHtml(sig.market_url1)}" target="_blank" rel="noopener" class="wl-q-link" style="font-size:12px;font-weight:600;text-decoration:none;color:var(--accent)">${escHtml(sig.question1)}</a>
-                  <div style="font-size:11px;color:var(--text-dim);margin-top:2px">YES price: <b>${Math.round(sig.price1 * 100)}¢</b></div>
-                </td>
-                <td style="max-width:300px">
-                  <span class="eb-badge" style="background:var(--accent-dim);color:var(--accent);margin-right:6px">${escHtml(sig.platform2)}</span>
-                  <a href="${escHtml(sig.market_url2)}" target="_blank" rel="noopener" class="wl-q-link" style="font-size:12px;font-weight:600;text-decoration:none;color:var(--accent)">${escHtml(sig.question2)}</a>
-                  <div style="font-size:11px;color:var(--text-dim);margin-top:2px">YES price: <b>${Math.round(sig.price2 * 100)}¢</b></div>
-                </td>
-                <td style="font-weight:600;color:#10b981">${Math.round(sig.arbitrage_gap * 100)}¢</td>
-                <td>${Math.round(sig.total_cost * 100)}¢</td>
-                <td style="font-weight:600">${Math.round(sig.net_profit * 100)}¢</td>
-                <td>
-                  <span class="eb-badge eb-sig" style="background:#10b981;color:#fff;font-weight:700">${(sig.roi * 100).toFixed(1)}%</span>
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    `;
-  } else {
-    arbitrageHtml = `<p class="text-sm text-gray-500">No active arbitrage opportunities found between Polymarket and Kalshi.</p>`;
-  }
-
   const byHorizon = d.by_horizon || [];
   const _hOrder = { '30d+': 0, '14-30d': 1, '7-14d': 2, '3-7d': 3, '1-3d': 4, '<1d': 5 };
   let calibHtml;
@@ -7417,8 +7327,6 @@ function renderEdgeBoard(d) {
     <button type="button" class="eb-view-tab ${_ebView === 'agentic' ? 'active' : ''}" role="tab" aria-selected="${_ebView === 'agentic'}" data-eb-view="agentic">Agentic</button>
   </div>`;
   const marketsPageHtml = `${stats}
-    <h4 id="arbitragePanel" class="eb-h">Cross-platform arbitrage &amp; hedging - risk-free spreads between Polymarket &amp; Kalshi</h4>${arbitrageHtml}
-    <h4 class="eb-h">Resolved strategy performance <span id="eb-pnl-ts" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${performanceHtml}
     <h4 id="forecastDriftPanel" class="eb-h">Forecast drift - does an early call pay?</h4>${calibHtml}
     <h4 class="eb-h">Live Foresea forecasts - ranked by disagreement, linked to saved-call skill at that lead <span id="edgeLiveTs" style="font-weight:400;font-size:0.75rem;color:#999;margin-left:8px"></span></h4>${boardHtml}`;
   const mtmPageHtml = _renderMtmPage(d);
