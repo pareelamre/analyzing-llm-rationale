@@ -1194,7 +1194,7 @@ Common runner and verification commands:
 - `python scripts/run_variant.py --variant variant4_credibility --model llama-3.3-70b-instruct`
 - `python scripts/verify_results.py --variant variant3_reasoning_type`
 - `python download_qwen_model.py`
-- `python test_local_inference.py`
+- `python check_local_inference.py`
 
 Repo layout:
 
