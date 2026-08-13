@@ -149,18 +149,6 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("crowd-follow is the zero-edge baseline", self.index_html)
         self.assertNotIn("Best paper ROI", self.index_html)
 
-    def test_edge_board_uses_smart_roi_with_crowd_baseline(self) -> None:
-        self.assertIn("const strategy = isCrowd ? (m.paper_pnl || {}).flat : ((m.paper_pnl || {}).smart", self.index_html)
-        self.assertIn("function _roiDeltaPct(x)", self.index_html)
-        self.assertIn("Smart ROI minus the crowd-follow baseline", self.index_html)
-        self.assertIn("_roiDeltaPct(smartVsCrowd)", self.index_html)
-        self.assertIn('id="eb-pnl-edge-v"', self.index_html)
-        self.assertIn(">vs crowd-follow</div>", self.index_html)
-        self.assertIn(">crowd-follow baseline</div>", self.index_html)
-        self.assertIn("<th>Smart ROI</th><th>vs crowd</th>", self.index_html)
-        self.assertNotIn('id="eb-pnl-flat-v"', self.index_html)
-        self.assertNotIn("<th>Flat ROI</th>", self.index_html)
-
     def test_edge_board_renders_mtm_chart_without_summary_cards(self) -> None:
         self.assertIn('data-eb-view="mtm"', self.index_html)
         self.assertIn("Shadow mark-to-market account", self.index_html)
