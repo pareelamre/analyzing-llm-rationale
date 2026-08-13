@@ -110,7 +110,15 @@ def agent_equity_curve(conn: sqlite3.Connection, agent_id: str) -> Dict[str, Any
     recovers once that position settles and cash comes back in. True
     historical bid-marks for every past cycle aren't stored, so this proxy
     trades precision for being exactly reconstructable from data that is.
+
+    Only ``trade``/``settlement`` rows actually move cash. A rejected order
+    never reaches the exchange, so its row is included as a zero-height
+    marker rather than trusted for ``cash_delta`` -- defends against old rows
+    written before a bug fix stored the rejected order's hypothetical delta
+    there instead of 0, which cratered this curve for every future point.
     """
+    CASH_MOVING_ACTION_TYPES = {"trade", "settlement"}
+
     acct_row = conn.execute(
         "SELECT starting_cash FROM agent_accounts WHERE agent_id = ?", (agent_id,),
     ).fetchone()
@@ -127,7 +135,8 @@ def agent_equity_curve(conn: sqlite3.Connection, agent_id: str) -> Dict[str, Any
         "WHERE agent_id = ? ORDER BY ts ASC",
         (agent_id,),
     ):
-        running_cash += float(row["cash_delta"])
+        if row["action_type"] in CASH_MOVING_ACTION_TYPES:
+            running_cash += float(row["cash_delta"])
         points.append({
             "ts": row["ts"],
             "account_value": round(running_cash, 6),
