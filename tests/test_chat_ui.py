@@ -59,6 +59,19 @@ class ChatUiTests(unittest.TestCase):
     def test_chat_forecast_renders_probability_score(self) -> None:
         self.assertIn("model_probability: d.model_probability ?? null", self.index_html)
         self.assertIn("raw.lastIndexOf('[p')", self.index_html)
+
+    def test_plain_chat_replies_do_not_render_forecast_card(self) -> None:
+        chat_reply = self.index_html.split("if (qtype === 'chat')", 1)[1].split(
+            "if (qtype === 'multiple_choice'", 1
+        )[0]
+        self.assertIn(
+            "const chatForecastProbability = normalizedProbability(data.model_probability);",
+            chat_reply,
+        )
+        self.assertIn("const isChatForecast = chatForecastProbability != null;", chat_reply)
+        self.assertNotIn("ledgerProbability(data)", chat_reply)
+        self.assertIn("isChatForecast ? `<div class=\"market-lens", chat_reply)
+        self.assertIn("isChatForecast && options.includeActions !== false", chat_reply)
         self.assertIn("function normalizedProbability", self.index_html)
         self.assertIn("function statedForecastProbability", self.index_html)
         self.assertIn("data?.model_probability", self.index_html)

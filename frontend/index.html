@@ -3677,21 +3677,27 @@ function makeAIBubble(data, variant, options = {}) {
 
   // Plain conversational reply — no forecast chrome
   if (qtype === 'chat') {
-    const probability = ledgerProbability(data);
+    // Chat-mode forecasts carry an explicit value from the response parser.
+    // Do not infer a forecast from prose: ordinary answers can mention odds,
+    // while an explicit model_probability is the reliable forecast signal.
+    const chatForecastProbability = normalizedProbability(data.model_probability);
+    const isChatForecast = chatForecastProbability != null;
     const div = document.createElement('div');
     div.className = 'max-w-2xl mx-auto w-full';
-    div._forecastData = data;
-    div._ledgerContext = {
-      question: options.question || data.question || '',
-      conversationId: options.conversationId || activeId || '',
-      messageId: options.messageId || '',
-    };
+    if (isChatForecast) {
+      div._forecastData = data;
+      div._ledgerContext = {
+        question: options.question || data.question || '',
+        conversationId: options.conversationId || activeId || '',
+        messageId: options.messageId || '',
+      };
+    }
     div.innerHTML = `
       <div class="msg-ai p-4 sm:p-5">
-        ${probability != null ? `<div class="market-lens mb-3"><div class="market-lens-grid"><div class="market-lens-cell"><div class="k">Forecast probability</div><div class="v">${fmtPct01(probability)}</div><div class="sub">Foresea estimate</div></div></div></div>` : ''}
+        ${isChatForecast ? `<div class="market-lens mb-3"><div class="market-lens-grid"><div class="market-lens-cell"><div class="k">Forecast probability</div><div class="v">${fmtPct01(chatForecastProbability)}</div><div class="sub">Foresea estimate</div></div></div></div>` : ''}
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         ${sourceFeedHtml(sources, data.evidence_error)}
-        ${options.includeActions === false ? '' : forecastActionsHtml(data, { ledgerOnly: true })}
+        ${isChatForecast && options.includeActions !== false ? forecastActionsHtml(data, { ledgerOnly: true }) : ''}
         <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
           <span class="logo-dot" style="width:5px;height:5px"></span>
           ${escHtml(modelKey)}
