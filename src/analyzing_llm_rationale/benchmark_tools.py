@@ -642,7 +642,11 @@ def _record_rejected_account_action(
             fee=_as_float(guard.get("fee")),
             netting_payout=_as_float(guard.get("netting_payout")),
             cash_required=_as_float(guard.get("cash_required")),
-            cash_delta=_as_float(guard.get("cash_delta")),
+            # A rejected order never touches the account -- cash_delta must
+            # be 0, not the hypothetical delta the guard preview computed
+            # before rejecting it. That hypothetical value is still visible
+            # to callers under cash_required/metadata.risk_guard for context.
+            cash_delta=0.0,
             realized_pairs=_as_float(guard.get("netting_payout")),
             cycle_id=str(guard.get("cycle_id") or ""),
             client_order_id=normalized.get("exchange_order", {}).get("client_order_id"),

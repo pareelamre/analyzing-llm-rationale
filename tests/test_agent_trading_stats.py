@@ -186,6 +186,29 @@ class EquityCurveTests(unittest.TestCase):
         self.assertIn("max_drawdown", curve)
         self.assertGreater(curve["max_drawdown"], 0.0)
 
+    def test_rejected_trade_never_moves_the_curve_even_if_its_stored_cash_delta_is_nonzero(self):
+        # A rejected order never reaches the exchange, so no cash moves --
+        # but rows written before this fix stored the guard's hypothetical
+        # pre-rejection delta anyway. The curve must ignore it regardless of
+        # what's on the row, both for that old data and as a defense against
+        # any future write-side regression.
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a", starting_cash=10_000.0)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-11T00:00:00+00:00", cash_delta=-50.0)
+            _insert_action(conn, "model-a", action_type="rejected_trade",
+                            ts="2026-08-11T00:15:00+00:00", cash_delta=-847.04)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-11T00:30:00+00:00", cash_delta=-30.0)
+            conn.commit()
+
+            curve = agent_trading_stats.agent_equity_curve(conn, "model-a")
+
+        values = [p["account_value"] for p in curve["value_curve"]]
+        event_types = [p["event_type"] for p in curve["value_curve"]]
+        self.assertEqual(event_types, ["starting_cash", "trade", "rejected_trade", "trade"])
+        self.assertEqual(values, [10_000.0, 9_950.0, 9_950.0, 9_920.0])
+
 
 class RecentActivityTests(unittest.TestCase):
     def test_merges_trades_theses_and_notes_sorted_newest_first(self):

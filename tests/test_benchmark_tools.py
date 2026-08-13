@@ -269,6 +269,58 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(second["risk_guard"]["concentration_cap"], 15.0)
         self.assertEqual(second["risk_guard"]["market_cost_basis_after"], 16.0)
 
+    def test_rejected_trade_stores_zero_cash_delta_not_the_hypothetical_amount(self):
+        # A rejected order never reaches the exchange -- no cash moves, so
+        # its agent_actions row must record cash_delta=0, not the delta the
+        # risk-guard preview computed before rejecting it. Storing that
+        # hypothetical value here previously corrupted every downstream
+        # cash-delta-based reconstruction (agent_trading_stats.agent_equity_curve).
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "0.15",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                first = benchmark_tools.place_trade(
+                    {"ticker": "KXCONC", "side": "yes", "price": 0.10, "quantity": 100},
+                    ctx,
+                )
+                second = benchmark_tools.place_trade(
+                    {"ticker": "KXCONC", "side": "yes", "price": 0.10, "quantity": 60},
+                    ctx,
+                )
+            conn = sqlite3.connect(db_path)
+            try:
+                cash_after = conn.execute(
+                    "SELECT cash FROM agent_accounts WHERE agent_id = 'model-a'"
+                ).fetchone()[0]
+                rejected_row = conn.execute(
+                    "SELECT cash_delta, cash_required FROM agent_actions "
+                    "WHERE agent_id = 'model-a' AND action_type = 'rejected_trade'"
+                ).fetchone()
+            finally:
+                conn.close()
+
+        self.assertTrue(first["ok"])
+        self.assertFalse(second["ok"])
+        # The would-be cost stays visible in risk_guard/cash_required (the
+        # tool's own response and the audit row) -- only cash_delta, which
+        # readers trust as "cash that actually moved", must be zero.
+        self.assertGreater(second["risk_guard"]["cash_required"], 0.0)
+        self.assertIsNotNone(rejected_row)
+        self.assertEqual(rejected_row[0], 0.0)
+        self.assertGreater(rejected_row[1], 0.0)
+        # Confirms the rejection genuinely never touched cash.
+        self.assertAlmostEqual(cash_after, 100.0 - first["risk_guard"]["cash_required"])
+
     def test_place_trade_rejects_orders_that_are_insolvent_after_fees(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
