@@ -5925,7 +5925,7 @@ function renderAgentTradingBoard(d) {
     const times = curvePoints.map(p => new Date(p.ts).getTime());
     const label = _ebModelLabel(row.agent_id);
     return {
-      points, times, color: _mtmModelColor(row.agent_id, i), label, head: true,
+      points, times, color: _mtmModelColor(row.agent_id, i), label, head: _ebModelHead(row.agent_id),
       headTitle: `${label} · ${_usd(row.account_value)}`,
     };
   }).filter(Boolean);
