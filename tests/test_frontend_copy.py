@@ -14,7 +14,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertNotIn("paper pnl", renderer.lower())
         self.assertNotIn("paper trading", renderer.lower())
         self.assertNotIn("paper roi", renderer.lower())
-        self.assertIn("resolved strategy performance", renderer.lower())
+        self.assertIn("live foresea forecasts", renderer.lower())
         self.assertIn("resolved markets (p&amp;l)", renderer.lower())
         self.assertIn("saved forecasts (research)", renderer.lower())
         self.assertIn("one settlement", renderer.lower())
@@ -86,7 +86,7 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("function _startEdgeTimers()", index)
         self.assertIn("function _stopEdgeTimers()", index)
         opener = index.split("async function openEdgeBoard(", 1)[1].split(
-            "async function openArbitrage", 1
+            "async function openForecastDrift", 1
         )[0]
         self.assertIn("_startEdgeTimers()", opener)
         # The early-return path must still revive the timers.
