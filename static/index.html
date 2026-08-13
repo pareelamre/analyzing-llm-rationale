@@ -5364,82 +5364,6 @@ async function refreshEdgeForecasts() {
       // Agentic tab (its data isn't part of this /edge-board payload), so
       // the periodic re-render above wipes it -- re-fetch to repopulate.
       if (_ebView === 'agentic') loadAgentTradingSection();
-      return;
-    }
-    const pnl = d.paper_pnl;
-    const comp = d.models_comparison || [];
-    const modelCompSvg = document.getElementById('eb-model-comparison-svg');
-    if (modelCompSvg) {
-      const modelCurves = _ebModelCurves(comp, 5, 9);
-      modelCompSvg.innerHTML = modelCurves.length ? _equitySvg(modelCurves, 760, 180, {asPct: false, yPrefix: '$'}) : '';
-      if (modelCurves.length) _attachEquityHover(modelCompSvg);
-    }
-    // The MTM view lives on the same payload; without this it kept whatever it
-    // was first rendered with while the other two charts ticked along.
-    const mtmHost = document.getElementById('eb-mtm-svg');
-    if (mtmHost && _ebView === 'mtm') {
-      const wrap = document.createElement('div');
-      wrap.innerHTML = _renderMtmPage(d);
-      const freshSvg = wrap.querySelector('#eb-mtm-svg');
-      const freshRows = wrap.querySelector('#eb-mtm-table-body');
-      const tableBody = document.getElementById('eb-mtm-table-body');
-      if (freshSvg) mtmHost.innerHTML = freshSvg.innerHTML;
-      if (freshRows && tableBody) tableBody.innerHTML = freshRows.innerHTML;
-      _attachEquityHover(mtmHost);
-    }
-    if (pnl) {
-      const EB_MIN_N = 5;
-      const EB_SMALL_N = 30;
-      const _build = n => `<span style="color:var(--text-dim);font-weight:500">building · n=${n || 0}</span>`;
-      const _smallN = n => `<span style="color:var(--text-dim);font-size:0.75em;opacity:0.7"> (small n)</span>`;
-      const _roiVal = s => (s && s.n_bets >= EB_MIN_N) ? (_roiPct(s.roi) + ' · ' + s.n_bets + ' bets' + (s.n_bets < EB_SMALL_N ? _smallN(s.n_bets) : '')) : _build(s && s.n_bets);
-      const _roiDeltaVal = (a, b) => (a && b && a.n_bets >= EB_MIN_N && b.n_bets >= EB_MIN_N && a.roi != null && b.roi != null)
-        ? _roiDeltaPct(a.roi - b.roi)
-        : _build(a && a.n_bets);
-      const _upd = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
-      _upd('eb-pnl-growth2-v', _roiVal(pnl.growth_2pct));
-      _upd('eb-pnl-growth1-v', _roiVal(pnl.growth_1pct));
-      _upd('eb-pnl-smart-v', _roiVal(pnl.smart));
-      _upd('eb-pnl-kelly-v', _roiVal(pnl.half_kelly));
-      _upd('eb-pnl-crowd-v', _roiVal(pnl.crowd_baseline));
-      _upd('eb-pnl-edge-v', _roiDeltaVal(pnl.smart, pnl.crowd_baseline));
-      const _mk = (s, color, label, dash) => {
-        const series = _ebStrategyGrowthCurve(s);
-        if (!series) return null;
-        const { points, times } = series;
-        const curve = { points, color, label };
-        if (dash) curve.dash = true;
-        if (times.length === points.length) curve.times = times;
-        return curve;
-      };
-      const strategyCurves = [
-        _mk(pnl.growth_2pct, '#f59e0b', 'Legacy Growth 2% ($200/mkt)'),
-        _mk(pnl.growth_1pct, '#3b82f6', 'Legacy Growth 1% ($100/mkt)'),
-        _mk(pnl.quarter_kelly, '#06b6d4', 'Risk-Capped Quarter-Kelly (5% / 30% DD)'),
-        _mk(pnl.smart, '#10b981', 'Smart ROI (1% bankroll)'),
-        _mk(pnl.half_kelly, '#64748b', 'Legacy Half-Kelly (1% bankroll cap)'),
-        _mk(pnl.crowd_baseline, '#94a3b8', 'crowd-follow baseline', true),
-      ].filter(Boolean);
-      const el = document.getElementById('eb-equity-svg');
-      if (el) {
-        el.innerHTML = strategyCurves.length ? _equitySvg(strategyCurves, 680, 160, {asPct: false, yPrefix: '$'}) : '';
-        if (strategyCurves.length) _attachEquityHover(el);
-      }
-      const ts = document.getElementById('eb-pnl-ts');
-      if (ts) ts.textContent = '· ' + new Date().toLocaleTimeString();
-    }
-    // Patch model probabilities from fresh board data (tick commits new forecasts every 15 min)
-    const freshBoard = d.edge_board || [];
-    if (freshBoard.length) {
-      _ebBoardData = freshBoard;
-      const byIdent = Object.fromEntries(freshBoard.map(e => [e.ident || e.market_url || '', e]));
-      document.querySelectorAll('#edgeBody .eb-row[data-ident]').forEach(row => {
-        const entry = byIdent[row.dataset.ident];
-        if (!entry || entry.model_probability == null) return;
-        row.dataset.modelP = entry.model_probability;
-        const mdlEl = row.querySelector('.eb-live-model');
-        if (mdlEl) mdlEl.textContent = pct(entry.model_probability) + '%';
-      });
     }
   } catch (_) {}
 }
@@ -6369,27 +6293,6 @@ function _ebModelColor(model, index = 0) {
   return EB_MODEL_COLORS[index % EB_MODEL_COLORS.length];
 }
 
-function _ebNormalizeBankrollCurve(s) {
-  // NOTE: growth_curve represents compound returns (reinvested bankroll) which
-  // is a different metric than the flat ROI displayed in the stat cards.
-  // _ebPnlCurve should use equity_curve / total_staked instead so that the
-  // chart values exactly match the stat card ROI numbers.
-  const curve = s?.growth_curve;
-  if (!Array.isArray(curve) || !curve.length) return null;
-  const values = curve.map(Number).filter(Number.isFinite);
-  if (!values.length) return null;
-  const first = values[0];
-  if (!Number.isFinite(first)) return null;
-  const maxAbs = Math.max(...values.map(v => Math.abs(v)));
-  // Supported historical encodings:
-  //  - account value curve: 10000 -> 10000
-  //  - indexed-to-100 curve: 100 -> 10000
-  //  - multiplier curve: 1.0 -> 10000
-  if (maxAbs <= 10) return values.map(v => v * EB_STARTING_BANKROLL);
-  if (maxAbs < 1000) return values.map(v => v * (EB_STARTING_BANKROLL / 100));
-  return values;
-}
-
 function _ebPnlCurve(s) {
   // Use equity_curve / total_staked — this produces values that exactly match
   // the stat card ROI.  growth_curve is a compound-return curve built from a
@@ -6399,22 +6302,6 @@ function _ebPnlCurve(s) {
   if (!s?.equity_curve?.length) return null;
   const staked = s.total_staked || s.n_bets || 1;
   return s.equity_curve.map(v => EB_STARTING_BANKROLL + (v / staked) * EB_STARTING_BANKROLL);
-}
-
-function _ebStrategyGrowthCurve(s) {
-  const growth = _ebNormalizeBankrollCurve(s);
-  if (growth) {
-    return {
-      points: growth,
-      times: (s?.growth_curve_ts || []).map(v => new Date(v).getTime()).filter(t => !isNaN(t)),
-    };
-  }
-  const pnl = _ebPnlCurve(s);
-  if (!pnl) return null;
-  return {
-    points: pnl,
-    times: _ebCurveTimes(s),
-  };
 }
 
 function _ebCurveTimes(s) {
