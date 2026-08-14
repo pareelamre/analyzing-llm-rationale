@@ -1453,20 +1453,30 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             if not (validated and not _b["in_validated"])
             and not (filter_fn is not None and not filter_fn(_b))
         ]
-        _first_idx_map: Dict[Tuple[Any, Any], int] = {}
-        for _i, _b in enumerate(_scoped_bets_raw):
+        # Pick the winner by earliest snapshot_ts (matching _public_bets()'s
+        # convention), not by which entry happens to come first in
+        # resolved_ts order: resolve_open_snapshots() stamps every snapshot
+        # that resolves in the same batch with its own fresh _now() call, so
+        # a market's several re-forecast snapshots can get resolved_ts
+        # values within milliseconds of each other -- "first seen in
+        # resolved_ts order" was then an effectively arbitrary tiebreak
+        # among them, not a guarantee of picking the earliest, most
+        # information-honest call.
+        _earliest_by_key: Dict[Tuple[Any, Any], Dict[str, Any]] = {}
+        for _b in _scoped_bets_raw:
             _p = _b.get("platform")
             _id = _b.get("ident")
-            if _p and _id:
-                _k = (_p, _id)
-                if _k not in _first_idx_map:
-                    _first_idx_map[_k] = _i
-            else:
-                _first_idx_map[(_i, _i)] = _i
+            if not _p or not _id:
+                continue
+            _k = (_p, _id)
+            _cur = _earliest_by_key.get(_k)
+            if _cur is None or (_b.get("snapshot_ts") or "") < (_cur.get("snapshot_ts") or ""):
+                _earliest_by_key[_k] = _b
 
         _scoped_bets = [
-            _b for _i, _b in enumerate(_scoped_bets_raw)
-            if (not _b.get("platform") or not _b.get("ident")) or _i == _first_idx_map.get((_b.get("platform"), _b.get("ident")))
+            _b for _b in _scoped_bets_raw
+            if (not _b.get("platform") or not _b.get("ident"))
+            or _b is _earliest_by_key.get((_b.get("platform"), _b.get("ident")))
         ]
 
         # Precount planned exposure.
