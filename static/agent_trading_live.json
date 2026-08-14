@@ -82,7 +82,7 @@
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
       "max_drawdown": 0.2079,
-      "sharpe": 0.153,
+      "sharpe": 0.1525,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -163,6 +163,11 @@
           "account_value": 12600.863197,
           "event_type": "trade",
           "ts": "2026-08-14T17:32:50.199073+00:00"
+        },
+        {
+          "account_value": 12726.083655,
+          "event_type": "trade",
+          "ts": "2026-08-14T23:26:22.361731+00:00"
         }
       ]
     },
@@ -181,7 +186,7 @@
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
       "max_drawdown": 0.0666,
-      "sharpe": 0.2643,
+      "sharpe": 0.297,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -352,6 +357,11 @@
           "account_value": 13971.460735,
           "event_type": "trade",
           "ts": "2026-08-14T20:03:14.490033+00:00"
+        },
+        {
+          "account_value": 14802.052735,
+          "event_type": "trade",
+          "ts": "2026-08-14T23:35:48.155098+00:00"
         }
       ]
     },
@@ -622,7 +632,7 @@
     "scads-alias-code": {
       "agent_id": "scads-alias-code",
       "max_drawdown": 0.0005,
-      "sharpe": 0.3353,
+      "sharpe": 0.3267,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -748,6 +758,11 @@
           "account_value": 10037.04156,
           "event_type": "trade",
           "ts": "2026-08-14T22:55:51.019073+00:00"
+        },
+        {
+          "account_value": 10036.914168,
+          "event_type": "trade",
+          "ts": "2026-08-14T23:32:33.716011+00:00"
         }
       ]
     },
@@ -1026,23 +1041,15 @@
       ]
     }
   },
-  "generated_at": "2026-08-14T23:19:10.285397+00:00",
+  "generated_at": "2026-08-14T23:48:49.427815+00:00",
   "leaderboard": [
     {
-      "account_value": 14511.460735,
+      "account_value": 15232.052735,
       "agent_id": "llama-3.3-70b-instruct",
-      "cash": 13971.460735,
-      "fees_paid": 226.169265,
+      "cash": 14802.052735,
+      "fees_paid": 235.577265,
       "illiquid_positions": [],
       "open_positions": [
-        {
-          "avg_entry_price": 0.16,
-          "cost_basis": 160.0,
-          "ident": "KXCABLEAVE-26MAY22-26SEP",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "side": "YES"
-        },
         {
           "avg_entry_price": 0.1,
           "cost_basis": 100.0,
@@ -1052,39 +1059,39 @@
           "side": "YES"
         }
       ],
-      "realized_pnl": 4359.352212,
-      "return_pct": 45.1146,
+      "realized_pnl": 5029.944212,
+      "return_pct": 52.3205,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "trade_count": 33,
-      "unrealized_pnl": 280.0,
-      "updated_at": "2026-08-14T20:03:14.489471+00:00",
+      "trade_count": 34,
+      "unrealized_pnl": 330.0,
+      "updated_at": "2026-08-14T23:35:48.154685+00:00",
       "win_rate": null,
       "won_count": 0
     },
     {
-      "account_value": 13509.353197,
+      "account_value": 13501.033655,
       "agent_id": "gpt-oss-120b",
-      "cash": 12600.863197,
-      "fees_paid": 178.946803,
+      "cash": 12726.083655,
+      "fees_paid": 187.266345,
       "illiquid_positions": [],
       "open_positions": [
         {
           "avg_entry_price": 0.16,
-          "cost_basis": 1321.44,
+          "cost_basis": 1127.2,
           "ident": "KXCABLEAVE-26MAY22-26SEP",
           "platform": "kalshi",
-          "quantity": 8259.0,
+          "quantity": 7045.0,
           "side": "YES"
         }
       ],
-      "realized_pnl": 4063.995741,
-      "return_pct": 35.0935,
+      "realized_pnl": 3994.976199,
+      "return_pct": 35.0103,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "trade_count": 15,
-      "unrealized_pnl": -412.95,
-      "updated_at": "2026-08-14T17:32:50.198559+00:00",
+      "trade_count": 16,
+      "unrealized_pnl": -352.25,
+      "updated_at": "2026-08-14T23:26:22.361190+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -1166,19 +1173,28 @@
       "won_count": 0
     },
     {
-      "account_value": 10037.04156,
+      "account_value": 10036.974168,
       "agent_id": "scads-alias-code",
-      "cash": 10037.04156,
-      "fees_paid": 2.35844,
+      "cash": 10036.914168,
+      "fees_paid": 2.365832,
       "illiquid_positions": [],
-      "open_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.12,
+          "cost_basis": 0.12,
+          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
+          "platform": "kalshi",
+          "quantity": 1.0,
+          "side": "YES"
+        }
+      ],
       "realized_pnl": 38.24983,
-      "return_pct": 0.3704,
+      "return_pct": 0.3697,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "trade_count": 24,
-      "unrealized_pnl": 0.0,
-      "updated_at": "2026-08-14T22:55:51.018525+00:00",
+      "trade_count": 25,
+      "unrealized_pnl": -0.06,
+      "updated_at": "2026-08-14T23:32:33.715480+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -1309,6 +1325,104 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985279",
+      "thesis": "No further action will be taken this cycle.",
+      "ts": "2026-08-14T23:46:07.353858+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "tags": [
+        "Kade Anderson",
+        "MLB debut"
+      ],
+      "text": "Kade Anderson has made his minor league debut and is progressing towards his MLB debut. His MLB debut is expected to happen before September 1, 2026.",
+      "ts": "2026-08-14T23:46:03.413140+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985278",
+      "thesis": "No further action will be taken this cycle.",
+      "ts": "2026-08-14T23:35:53.348387+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.16,
+      "quantity": 1000.0,
+      "realized_pnl": 670.592,
+      "side": "no",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-14T23:35:48.155098+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985278",
+      "thesis": "I've decided to take a small position in the Franklin Arias market. I bought 1 YES contract at $0.12 in the market \"Franklin Arias: Debut Date \u2014 Before Sep 1, 2026\" (ticker: KXMLBDEBUT-FARIAS-26SEP01). \n\nMy reasoning is that Franklin Arias has already made his 2026 debut at Double-A, which means this market should resolve as YES (he did debut before September 1, 2026). The current price of $0.12 represents a relatively low probability, so buying at this price offers potential upside if the market resolves as expected. \n\nI did not take any action on the Kade Anderson market because his appearance in the 2026 MLB All-Star Futures Game occurred outside the current market's resolution window (which began August 14, 2026). \n\nThis is a small, conservative trade in shadow mode (paper trading) with a cost basis of $0.12, representing less than 1% of my total cash position. I'm keeping this position open for potential profit as the market should resolve as YES.",
+      "ts": "2026-08-14T23:32:37.668479+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.12,
+      "quantity": 1.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
+      "ts": "2026-08-14T23:32:33.716011+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985278",
+      "thesis": "Looking at my position and the current market state:\n\n**Position Analysis:**\n- I hold 8,936 YES contracts on KXCABLEAVE-26MAY22-26SEP at avg entry 0.16\n- Current bid/ask: 0.11/0.16\n- I'm near the 15% single-market cap (cost basis $1,429.76 out of ~$1,487 max)\n- The market is asking about Cabinet departures in a specific ~3.5-month window (May 22 - Sep 2, 2026)\n\n**Assessment:**\nAt 0.16, the market implies ~16% probability of any Cabinet departure in that window. Given:\n- Trump's second-term Cabinet has already experienced notable turnover\n- Historical second-term Cabinets tend to have higher turnover rates\n- The window is relatively short (~3.5 months)\n- 16% seems reasonable but possibly slightly low\n\nHowever, I'm already near the position cap, and the price appears fairly valued. Adding more would require strong conviction that the true probability is materially higher than 16%. The new Kade Anderson MLB debut market is outside my research scope this cycle.\n\n**Decision: Hold.** The position is fairly priced, I'm near the cap, and I don't have strong enough evidence to add or close. Let me record my reasoning.<tool_call>\n<invoke name=\"manage_notes\"><action>save</action>\n<text>Cycle 2: KXCABLEAVE-26MAY22-26SEP position held. 8936 YES @ 0.16 avg. Market at 0.11/0.16. Near 15% single-market cap. Window is May 22 - Sep 2, 2026 (~3.5 months). Trump's 2nd-term Cabinet has had turnover; 16% implied prob seems fair. No action this cycle - hold and reassess next cycle.</text>\n</invoke>\n</tool_call>",
+      "ts": "2026-08-14T23:32:17.927054+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985277",
+      "thesis": "I will not place any trades this cycle. After analyzing both markets, I don't have sufficient conviction to enter new positions. For Kade Anderson, while his market shows a moderate probability (0.43/0.45) of making his MLB debut before September 1, 2026, I don't want to re-enter a market where I already have experience. For Franklin Arias, the market shows an extremely low probability (0.06/0.12) of debut before the deadline, and I lack enough information to confidently trade on his prospects. I've recorded this analysis in my notes for future reference.",
+      "ts": "2026-08-14T23:29:17.280567+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "tags": [],
+      "text": "Analyzed Kade Anderson (0.43/0.45) and Franklin Arias (0.06/0.12) markets. User decided against trading both due to lack of conviction and previous experience with Anderson.",
+      "ts": "2026-08-14T23:29:16.269710+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "cycle_id": "15m:1985277",
+      "thesis": "No further trades this cycle. Keep the remaining KXCABLEAVE-26MAY22-26SEP yes position and do not open any new markets.",
+      "ts": "2026-08-14T23:26:33.928484+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.89,
+      "quantity": 1214.0,
+      "realized_pnl": -69.01954200000004,
+      "side": "no",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-14T23:26:22.361731+00:00",
+      "type": "trade"
+    },
     {
       "agent_id": "scads-alias-ha",
       "cycle_id": "15m:1985276",
@@ -1640,101 +1754,6 @@
       "cycle_id": "15m:1985268",
       "thesis": "I have placed a trade on the 'KXMLBDEBUT-KANDERSON-26SEP01' market, buying 100 YES contracts at $0.45.",
       "ts": "2026-08-14T21:15:09.360932+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.45,
-      "quantity": 100.0,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
-      "ts": "2026-08-14T21:15:04.125658+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1985268",
-      "thesis": "I will keep the existing YES position on the Trump\u2011Cabinet market unchanged and open a new YES position on the Kade\u202fAnderson debut market, because recent reports show he will be debuting in Double\u2011A in March\u202f2026\u2014well before the Sep\u202f1\u202f2026 deadline, making the \u201cbefore Sep\u202f1\u202f2026\u201d proposition very likely to resolve YES.\n\nTo stay within the per\u2011cycle spend limit ($1,080.75) I will buy **2,400 YES contracts** at the current ask price of **$0.45**, for a total notional of **$1,080.00**. This also respects the 15\u202f% single\u2011market cost\u2011basis cap.\n\n**Action:** place_trade(ticker=\"KXMLBDEBUT-KANDERSON-26SEP01\", side=\"yes\", price=0.45, quantity=2400)",
-      "ts": "2026-08-14T21:13:44.888732+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985268",
-      "thesis": "I will not make any trades this cycle.",
-      "ts": "2026-08-14T21:13:02.854055+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985268",
-      "thesis": "Looking at this situation, I need to decide whether to hold, add to, or close my KXCABLEAVE-26MAY22-26SEP YES position.\n\n**Position Analysis:**\n- 8,936 YES contracts at avg entry 0.16, cost basis $1,429.76\n- Current bid/ask: 0.11/0.16\n- Resolution window: 2026-05-22 to 2026-09-02 (future window)\n\n**Expected Value Calculation:**\n\nIf I sell at bid (0.11): Locked loss = 8,936 \u00d7 ($0.11 - $0.16) = **-$446.80**\n\nIf I hold to resolution at market-implied ~13% probability:\n- 13% \u00d7 $1.00 + 87% \u00d7 $0 = $0.13 expected payout per contract\n- vs. $0.16 cost \u2192 expected loss of ~$0.03/contract\n- Total expected loss: ~$268\n\n**Holding beats selling by ~$178 in expected value.**\n\n**Constraints check:**\n- Cost basis ($1,429.76) is at/near the 15% single-market cap, so I can't meaningfully add\n- The resolution window is still months away \u2014 plenty of time for cabinet news to move the price\n- Any actual cabinet departure during the window would resolve YES at $1.00 (massive gain)\n\n**Decision: HOLD.** No trade this cycle.\n\nThe expected value of holding exceeds the certain loss of selling at the bid. The position is small enough relative to my cash that the variance is manageable, and the asymmetric upside (8,936 \u00d7 $0.84 = ~$7,500 profit if YES) justifies waiting for the resolution window to play out. I'll reassess if there's significant cabinet turnover news or if the market price moves materially.",
-      "ts": "2026-08-14T21:10:32.652405+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985268",
-      "thesis": "I've decided to take a strategic position in the Franklin Arias MLB debut market. Based on my analysis, I purchased 10 YES contracts at $0.12 each in the market KXMLBDEBUT-FARIAS-26SEP01, which represents the question \"Franklin Arias: Debut Date \u2014 Before Sep 1, 2026.\"\n\nThis decision was based on several factors:\n1. Research indicates Franklin Arias is a top prospect who could potentially make his MLB debut in 2026\n2. The market is currently pricing his debut probability at only 6-12% (0.06/0.12 bid/ask), which seems undervalued given his prospect status\n3. I have no existing positions to exit, so this represents a clean entry into what I believe is a potentially mispriced market\n4. The position size is conservative (10 contracts) with a total investment of $1.20\n\nMy cash balance is now $10,027.46, and I have one open position in the Franklin Arias market. This represents a small, calculated risk position that could provide significant upside if Arias does indeed debut in 2026, while limiting downside to the initial investment.",
-      "ts": "2026-08-14T21:09:18.363540+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.12,
-      "quantity": 10.0,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
-      "ts": "2026-08-14T21:09:16.442025+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985268",
-      "thesis": "I have placed 10 YES contracts on Kade Anderson's MLB debut market (KXMLBDEBUT-KANDERSON-26SEP01) at $0.45 each, bringing my position to 10 YES contracts at an average entry price of $0.45. I've recorded this trade in my notes for monitoring. No further action is needed as I am now positioned in the market and have no other trades to make.",
-      "ts": "2026-08-14T21:06:18.487283+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "tags": [],
-      "text": "Placed 10 YES contracts on KXMLBDEBUT-KANDERSON-26SEP01 at $0.45 each. Current position: 10 YES contracts at avg entry $0.45. Market shows increasing optimism for Anderson's debut before Sep 1, 2026. Need to monitor for potential exit opportunities.",
-      "ts": "2026-08-14T21:06:17.086883+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.45,
-      "quantity": 10.0,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
-      "ts": "2026-08-14T21:06:14.687372+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1985267",
-      "thesis": "I will not place any new trades this cycle. I will keep the existing YES position on the Trump\u2011Cabinet market (KXCABLEAVE-26MAY22-26SEP) unchanged, as there are no compelling new opportunities within the resolution window.",
-      "ts": "2026-08-14T20:49:10.574305+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985266",
-      "thesis": "I do not want to take any further action this cycle, as I don't have enough information to make an informed decision about Franklin Arias' debut date.",
-      "ts": "2026-08-14T20:44:10.452584+00:00",
       "type": "thesis"
     }
   ]
