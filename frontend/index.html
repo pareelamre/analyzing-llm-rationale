@@ -3002,12 +3002,20 @@ function closeSidebar() {
 }
 
 // ── Conversation management ──────────────────────────────────────────────────
-const CHAT_HASH_PREFIX = '#chat/';
-function conversationHash(id) {
-  return CHAT_HASH_PREFIX + encodeURIComponent(id);
+const CHAT_PATH_PREFIX = '/chat/';
+function conversationPath(id) {
+  return CHAT_PATH_PREFIX + encodeURIComponent(id);
 }
-function conversationIdFromHash(hash = window.location.hash) {
-  return hash?.startsWith(CHAT_HASH_PREFIX) ? decodeURIComponent(hash.slice(CHAT_HASH_PREFIX.length)) : null;
+function conversationIdFromPath(pathname = window.location.pathname) {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  if (!path.startsWith(CHAT_PATH_PREFIX)) return null;
+  const id = path.slice(CHAT_PATH_PREFIX.length);
+  if (!id || id.includes('/')) return null;
+  try { return decodeURIComponent(id); } catch { return null; }
+}
+function conversationIdFromLegacyHash(hash = window.location.hash) {
+  if (!hash?.startsWith('#chat/')) return null;
+  try { return decodeURIComponent(hash.slice('#chat/'.length)); } catch { return null; }
 }
 
 function newConversation(options = {}) {
@@ -4980,22 +4988,52 @@ function updateVariantDesc() {
 }
 const _VIEW_URL = {
   'landing':       '/',
-  'app':           '#ask',
-  'track-landing': '#track',
-  'track-app':     '#track-app',
-  'edge-landing':  '#edge',
-  'edge-app':      '#edge-app',
-  'watch-landing': '#watchlist',
-  'watch-app':     '#watchlist-app',
-  'ledger-landing': '#ledger',
-  'ledger-app':     '#ledger-app',
+  'app':           '/ask',
+  'track-landing': '/track',
+  'track-app':     '/track',
+  'edge-landing':  '/edge',
+  'edge-app':      '/edge',
+  'watch-landing': '/watchlist',
+  'watch-app':     '/watchlist',
+  'ledger-landing': '/ledger',
+  'ledger-app':     '/ledger',
 };
-const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
+const _PATH_VIEW = {
+  '/': 'landing',
+  '/ask': 'app',
+  '/track': 'track-landing',
+  '/edge': 'edge-landing',
+  '/watchlist': 'watch-landing',
+  '/ledger': 'ledger-landing',
+};
+const _LEGACY_HASH_VIEW = {
+  '#ask': 'app',
+  '#track': 'track-landing',
+  '#track-app': 'track-app',
+  '#edge': 'edge-landing',
+  '#edge-app': 'edge-app',
+  '#watchlist': 'watch-landing',
+  '#watchlist-app': 'watch-app',
+  '#ledger': 'ledger-landing',
+  '#ledger-app': 'ledger-app',
+};
+function normaliseAppPath(pathname = window.location.pathname) {
+  return pathname.replace(/\/+$/, '') || '/';
+}
+function historyUrlFor(view, convId = null) {
+  return view === 'chat' && convId ? conversationPath(convId) : (_VIEW_URL[view] ?? '/ask');
+}
+function legacyRouteFromHash(hash = window.location.hash) {
+  const convId = conversationIdFromLegacyHash(hash);
+  if (convId) return { view: 'chat', convId };
+  const view = _LEGACY_HASH_VIEW[hash];
+  return view ? { view, convId: null } : null;
+}
 
 function setHistoryState(view, mode = 'push', options = {}) {
   if (isApplyingHistory || !window.history) return;
   const state = { view, convId: options.convId || null };
-  const url = view === 'chat' && options.convId ? conversationHash(options.convId) : (_VIEW_URL[view] ?? '#ask');
+  const url = historyUrlFor(view, state.convId);
   if (mode === 'replace') history.replaceState(state, '', url);
   else if (history.state?.view !== view || history.state?.convId !== state.convId) history.pushState(state, '', url);
 }
@@ -7601,12 +7639,14 @@ function syncSidebarA11y() {
 }
 function applyHistoryState(state) {
   isApplyingHistory = true;
-  // Infer view from URL hash when state is missing (e.g. external link / fresh load)
-  const urlConversationId = state?.convId || conversationIdFromHash();
+  // Infer a route from the path when state is missing (e.g. a direct link or refresh).
+  const legacyRoute = legacyRouteFromHash();
+  const urlConversationId = state?.convId || conversationIdFromPath() || legacyRoute?.convId;
   const view = state?.view
     || (urlConversationId ? 'chat' : null)
-    || _URL_VIEW[window.location.hash]
-    || (window.location.hash ? 'landing' : 'landing');
+    || legacyRoute?.view
+    || _PATH_VIEW[normaliseAppPath()]
+    || 'landing';
 
   // Close all overlays first — avoids every case having to enumerate which to close
   closeTrackRecord({ updateHistory: false });
@@ -9180,7 +9220,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>` : ''}
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. Smart ROI uses the filtered strategy; crowd-follow is the zero-edge baseline. <a href="#track-app" class="ui-icon-label" style="color:var(--accent)" onclick="showView('track-app')">Full track record ${uiIcon('arrow-right')}</a></p>`);
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. Smart ROI uses the filtered strategy; crowd-follow is the zero-edge baseline. <a href="/track" class="ui-icon-label" style="color:var(--accent)">Full track record ${uiIcon('arrow-right')}</a></p>`);
     } catch(e) { typing.remove(); _appendError('Could not load track record: ' + e.message); }
     return true;
   }
@@ -9779,8 +9819,18 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-const _initConversationId = conversationIdFromHash();
-const _initView = _initConversationId ? 'chat' : (_URL_VIEW[window.location.hash || '/'] ?? 'app');
+const _legacyInitialRoute = legacyRouteFromHash();
+if (_legacyInitialRoute) {
+  history.replaceState(
+    { view: _legacyInitialRoute.view, convId: _legacyInitialRoute.convId },
+    '',
+    historyUrlFor(_legacyInitialRoute.view, _legacyInitialRoute.convId),
+  );
+}
+const _initConversationId = conversationIdFromPath();
+const _initView = _initConversationId
+  ? 'chat'
+  : (history.state?.view || _PATH_VIEW[normaliseAppPath()] || 'landing');
 setHistoryState(_initView, 'replace', { convId: _initConversationId });
 syncSidebarA11y();
 recordPageVisit();

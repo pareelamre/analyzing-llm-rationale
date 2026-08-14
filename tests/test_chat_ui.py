@@ -123,6 +123,16 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("/personal-ledger/", self.index_html)
         self.assertIn("function openPersonalLedger", self.index_html)
 
+    def test_app_uses_refresh_safe_paths_and_migrates_legacy_hash_links(self) -> None:
+        self.assertIn("const CHAT_PATH_PREFIX = '/chat/';", self.index_html)
+        self.assertIn("'app':           '/ask'", self.index_html)
+        self.assertIn("'edge-landing':  '/edge'", self.index_html)
+        self.assertIn("'watch-landing': '/watchlist'", self.index_html)
+        self.assertIn("'ledger-landing': '/ledger'", self.index_html)
+        self.assertIn("function legacyRouteFromHash", self.index_html)
+        self.assertIn("history.replaceState(", self.index_html)
+        self.assertIn("const _initConversationId = conversationIdFromPath();", self.index_html)
+
     def test_workspace_panel_uses_plain_language_controls(self) -> None:
         self.assertIn(">Your workspace<", self.index_html)
         self.assertIn("Your saved context", self.index_html)
