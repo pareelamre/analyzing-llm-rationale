@@ -1345,6 +1345,41 @@ class EdgeAnalyticsTests(unittest.TestCase):
         self.assertEqual(len(pnl["bets"]), 1)
         self.assertEqual(pnl["bets"][0]["snapshot_ts"], "2026-06-01T00:00:00+00:00")
 
+    def test_run_dedup_picks_earliest_snapshot_ts_not_earliest_resolved_ts(self):
+        # Regression: resolve_open_snapshots() stamps every snapshot that
+        # resolves in the same batch with its own fresh _now() call, so a
+        # market's several re-forecast snapshots can get resolved_ts values
+        # that don't track snapshot_ts order at all -- e.g. an earlier,
+        # more information-honest forecast call can get its resolved_ts
+        # stamped AFTER a later re-forecast's. _run() (which every strategy's
+        # actual P&L is computed from) used to dedupe by "whichever entry
+        # comes first once all_bets is sorted by resolved_ts", effectively
+        # arbitrary among same-batch resolutions, instead of picking the
+        # earliest snapshot_ts the way _public_bets() already correctly does.
+        # Two snapshots of the same market: the earlier forecast call (by
+        # snapshot_ts) is a WIN; a later re-forecast (also by snapshot_ts) is
+        # a LOSS -- but its resolved_ts got stamped first.
+        later_forecast_losing_bet = dict(
+            self._res(0.3, 0.5, 1), platform="P", ident="m1",
+            snapshot_ts="2026-01-05T00:00:00+00:00",
+            resolved_ts="2026-01-10T00:00:00+00:00",
+        )
+        earlier_forecast_winning_bet = dict(
+            self._res(0.8, 0.5, 1), platform="P", ident="m1",
+            snapshot_ts="2026-01-01T00:00:00+00:00",
+            resolved_ts="2026-01-10T00:05:00+00:00",
+        )
+        pnl = trl.paper_pnl([later_forecast_losing_bet, earlier_forecast_winning_bet], [])
+
+        # _public_bets() (pnl["bets"]) already picked the earlier snapshot correctly.
+        self.assertEqual(len(pnl["bets"]), 1)
+        self.assertEqual(pnl["bets"][0]["snapshot_ts"], "2026-01-01T00:00:00+00:00")
+
+        # _run()'s strategies must now agree with it, not with resolved_ts order.
+        self.assertEqual(pnl["flat"]["n_bets"], 1)
+        self.assertEqual(pnl["flat"]["win_rate"], 1.0)
+        self.assertGreater(pnl["flat"]["pnl"], 0)
+
     def test_edge_board_links_to_lead_time_track_record(self):
         now = datetime.now(timezone.utc)
         # Open market closing ~40 days out → "30d+" horizon bucket.
