@@ -82,7 +82,7 @@
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
       "max_drawdown": 0.1348,
-      "sharpe": -0.4494,
+      "sharpe": -0.3428,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -138,6 +138,16 @@
           "account_value": 8651.815517,
           "event_type": "trade",
           "ts": "2026-08-12T22:45:36.295486+00:00"
+        },
+        {
+          "account_value": 8730.898317,
+          "event_type": "trade",
+          "ts": "2026-08-14T07:45:53.700043+00:00"
+        },
+        {
+          "account_value": 8809.981117,
+          "event_type": "trade",
+          "ts": "2026-08-14T07:45:59.160418+00:00"
         }
       ]
     },
@@ -394,8 +404,8 @@
     },
     "qwen3-coder-30b-a3b-instruct": {
       "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "max_drawdown": 0.0002,
-      "sharpe": 0.523,
+      "max_drawdown": 0.0009,
+      "sharpe": 0.3767,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -511,13 +521,18 @@
           "account_value": 10056.330788,
           "event_type": "trade",
           "ts": "2026-08-13T23:54:59.263851+00:00"
+        },
+        {
+          "account_value": 10046.797538,
+          "event_type": "trade",
+          "ts": "2026-08-14T07:03:11.075754+00:00"
         }
       ]
     },
     "scads-alias-code": {
       "agent_id": "scads-alias-code",
       "max_drawdown": 0.0002,
-      "sharpe": 0.373,
+      "sharpe": 0.3352,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -563,6 +578,11 @@
           "account_value": 10013.37291,
           "event_type": "trade",
           "ts": "2026-08-14T04:27:52.110997+00:00"
+        },
+        {
+          "account_value": 10012.83966,
+          "event_type": "trade",
+          "ts": "2026-08-14T07:48:06.718756+00:00"
         }
       ]
     },
@@ -741,10 +761,10 @@
       ]
     }
   },
-  "generated_at": "2026-08-14T06:07:16.358873+00:00",
+  "generated_at": "2026-08-14T07:51:19.621224+00:00",
   "leaderboard": [
     {
-      "account_value": 13419.441735,
+      "account_value": 13409.441735,
       "agent_id": "llama-3.3-70b-instruct",
       "cash": 13359.441735,
       "fees_paid": 168.188265,
@@ -760,17 +780,17 @@
         }
       ],
       "realized_pnl": 4404.237212,
-      "return_pct": 34.1944,
+      "return_pct": 34.0944,
       "settled_count": 0,
       "starting_cash": 10000.0,
       "trade_count": 28,
-      "unrealized_pnl": -890.0,
+      "unrealized_pnl": -900.0,
       "updated_at": "2026-08-14T03:05:19.234636+00:00",
       "win_rate": null,
       "won_count": 0
     },
     {
-      "account_value": 10954.823412,
+      "account_value": 10953.823412,
       "agent_id": "scads-alias-ha",
       "cash": 10948.823412,
       "fees_paid": 27.216588,
@@ -786,17 +806,17 @@
         }
       ],
       "realized_pnl": 1058.493704,
-      "return_pct": 9.5482,
+      "return_pct": 9.5382,
       "settled_count": 0,
       "starting_cash": 10000.0,
       "trade_count": 22,
-      "unrealized_pnl": -89.0,
+      "unrealized_pnl": -90.0,
       "updated_at": "2026-08-14T06:06:20.970289+00:00",
       "win_rate": null,
       "won_count": 0
     },
     {
-      "account_value": 10230.318724,
+      "account_value": 10230.218724,
       "agent_id": "scads-alias-reasoning",
       "cash": 10219.718724,
       "fees_paid": 5.281276,
@@ -820,46 +840,64 @@
         }
       ],
       "realized_pnl": 249.493022,
-      "return_pct": 2.3032,
+      "return_pct": 2.3022,
       "settled_count": 0,
       "starting_cash": 10000.0,
       "trade_count": 8,
-      "unrealized_pnl": -14.9,
+      "unrealized_pnl": -15.0,
       "updated_at": "2026-08-14T06:06:05.848139+00:00",
       "win_rate": null,
       "won_count": 0
     },
     {
-      "account_value": 10056.330788,
+      "account_value": 10047.297538,
       "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cash": 10056.330788,
-      "fees_paid": 1.689212,
+      "cash": 10046.797538,
+      "fees_paid": 1.722462,
       "illiquid_positions": [],
-      "open_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.95,
+          "cost_basis": 9.5,
+          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
+          "platform": "kalshi",
+          "quantity": 10.0,
+          "side": "YES"
+        }
+      ],
       "realized_pnl": 57.283985,
-      "return_pct": 0.5633,
+      "return_pct": 0.473,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "trade_count": 22,
-      "unrealized_pnl": 0.0,
-      "updated_at": "2026-08-13T23:54:59.263328+00:00",
+      "trade_count": 23,
+      "unrealized_pnl": -9.0,
+      "updated_at": "2026-08-14T07:03:11.075175+00:00",
       "win_rate": null,
       "won_count": 0
     },
     {
-      "account_value": 10013.37291,
+      "account_value": 10013.33966,
       "agent_id": "scads-alias-code",
-      "cash": 10013.37291,
-      "fees_paid": 0.72709,
+      "cash": 10012.83966,
+      "fees_paid": 0.76034,
       "illiquid_positions": [],
-      "open_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.05,
+          "cost_basis": 0.5,
+          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
+          "platform": "kalshi",
+          "quantity": 10.0,
+          "side": "YES"
+        }
+      ],
       "realized_pnl": 13.74923,
-      "return_pct": 0.1337,
+      "return_pct": 0.1334,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "trade_count": 8,
+      "trade_count": 9,
       "unrealized_pnl": 0.0,
-      "updated_at": "2026-08-14T04:27:52.110458+00:00",
+      "updated_at": "2026-08-14T07:48:06.718227+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -923,28 +961,28 @@
       "won_count": 0
     },
     {
-      "account_value": 9497.515517,
+      "account_value": 9486.881117,
       "agent_id": "gpt-oss-120b",
-      "cash": 8651.815517,
-      "fees_paid": 97.594483,
+      "cash": 8809.981117,
+      "fees_paid": 108.228883,
       "illiquid_positions": [],
       "open_positions": [
         {
           "avg_entry_price": 0.16,
-          "cost_basis": 1353.12,
+          "cost_basis": 1083.04,
           "ident": "KXCABLEAVE-26MAY22-26SEP",
           "platform": "kalshi",
-          "quantity": 8457.0,
+          "quantity": 6769.0,
           "side": "YES"
         }
       ],
-      "realized_pnl": 95.650141,
-      "return_pct": -5.0248,
+      "realized_pnl": -16.264259,
+      "return_pct": -5.1312,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "trade_count": 10,
-      "unrealized_pnl": -507.42,
-      "updated_at": "2026-08-12T22:45:36.294960+00:00",
+      "trade_count": 12,
+      "unrealized_pnl": -406.14,
+      "updated_at": "2026-08-14T07:45:59.159870+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -1016,6 +1054,126 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-reasoning",
+      "cycle_id": "15m:1985215",
+      "thesis": "I will not place any trades this cycle. The existing Yes position on **KXCABLEAVE\u201126MAY22\u201126SEP** (Trump cabinet turnover) remains open, as the news sources do not provide a specific resignation or dismissal date that falls between the market\u2019s resolution window of\u202fMay\u202f22\u202f2026\u202f\u2013\u202fSeptember\u202f2\u202f2026. Likewise, the small Yes position on **KXMLBDEBUT\u2011FARIAS\u201126SEP01** (Franklin\u202fArias MLB debut) stays unchanged; there is no new information indicating a debut before September\u202f1\u202f2026, and the market\u2019s ask price (0.95) makes additional buying unattractive. Therefore, I take no action this cycle.",
+      "ts": "2026-08-14T07:50:18.655318+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985215",
+      "thesis": "I will close my position in KXMLBDEBUT-FARIAS-26SEP01 by buying 100 NO contracts at the current ask price of 0.95.",
+      "ts": "2026-08-14T07:49:17.104303+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985215",
+      "thesis": "I placed 10 YES contracts on the Franklin Arias market (KXMLBDEBUT-FARIAS-26SEP01) because he made his Triple-A debut in July 2026, which is before the September 1, 2026 cutoff. The market has a bid/ask of 0.05/0.95, and I bought at the bid price of 0.05 for a total cost of $0.50. Since the market should resolve as YES, this trade should be profitable. I've recorded this decision in my notes for future reference. No action was taken on the Trump cabinet market as there was insufficient evidence of a cabinet member leaving before September 2026.",
+      "ts": "2026-08-14T07:48:10.909164+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.05,
+      "quantity": 10.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
+      "ts": "2026-08-14T07:48:06.718756+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "cycle_id": "15m:1985215",
+      "thesis": "I placed two shadow trades to reduce my exposure on the existing **KXCABLEAVE-26MAY22-26SEP** YES position:\n\n1. Bought 844 NO contracts at the current ask price of\u202f0.90 (notional\u202f\u2248\u202f$759.60).  \n2. Bought another 844\u202fNO contracts at the same price (again \u2248\u202f$759.60).\n\nBoth trades respect the per\u2011order notional cap ($759.80) and the per\u2011cycle spend limit, and they were executed in shadow mode (no real money was moved). After these trades the remaining open position is:\n\n- **YES**\u202f6769 contracts at an average entry price of\u202f0.16 (cost basis\u202f\u2248\u202f$1,083.04).  \n- Cash has risen to about\u202f$8,810, with a small realized loss of roughly\u202f$\u201116.26.\n\nI did **not** enter the new market (KXMLBDEBUT\u2011FARIAS\u201126SEP01) because there is no clear, timely evidence that the event (Franklin Arias\u2019s debut) will occur before the market\u2019s resolution window, and I prefer to keep capital available for higher\u2011conviction opportunities.\n\n**Summary of this cycle:**  \n- Reduced the original position by 1,688 contracts (\u2248\u202f20\u202f% of the original size) to limit further downside while staying within risk limits.  \n- No new positions were opened.  \n\nI will monitor the remaining KXCABLEAVE position and any future news that could affect it, and I will consider new trades in upcoming cycles when a clear edge emerges.",
+      "ts": "2026-08-14T07:46:02.444257+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.9,
+      "quantity": 844.0,
+      "realized_pnl": -55.957199999999986,
+      "side": "no",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-14T07:45:59.160418+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.9,
+      "quantity": 844.0,
+      "realized_pnl": -55.957199999999986,
+      "side": "no",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-14T07:45:53.700043+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "glm-5.2-fp8",
+      "cycle_id": "15m:1985213",
+      "thesis": "**Decision: HOLD - No action this cycle.**\n\n**Analysis:**\n- I hold 9224 YES contracts on KXCABLEAVE-26MAY22-26SEP at avg entry 0.16 (cost basis $1,475.84)\n- Current market: YES bid/ask 0.10/0.16\n- Gabbard's resignation was announced May 22, 2026 at ~21:12 UTC (after the window opened at 17:52 UTC), effective June 30, 2026 \u2014 confirmed as the 4th Cabinet departure\n- The market should resolve YES at 1.00, yielding ~$7,733 profit (minus fees)\n\n**Why no trade:**\n1. **Cannot add more YES**: Cost basis ($1,475.84) is already 17.5% of cash ($8,437.38), exceeding the 15% single-market cap\n2. **Cannot sell (buy NO)**: NO at 0.10 implies YES value of 0.90, which would lock in a ~$6,800 loss vs. waiting for the likely 1.00 resolution\n3. **Market is mispriced**: The 0.10 YES bid appears to reflect uncertainty about Gabbard's Cabinet status or timing, but multiple sources confirm she is a Cabinet-rank DNI and her resignation falls within the window\n\n**Action:** Hold position and wait for resolution. Recorded analysis in notes for future reference.",
+      "ts": "2026-08-14T07:27:18.800846+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "glm-5.2-fp8",
+      "tags": [
+        "kalshi",
+        "KXCABLEAVE",
+        "cabinet",
+        "gabbard"
+      ],
+      "text": "KXCABLEAVE-26MAY22-26SEP: Gabbard resignation announced May 22, 2026 (after window opened 17:52 UTC), effective June 30, 2026. 4th Cabinet departure. Market should resolve YES. Hold position: 9224 YES @ 0.16 avg. Do NOT add more (likely at 15% cap). Do NOT close (would lock in loss at 0.10 bid vs 0.16 entry).",
+      "ts": "2026-08-14T07:27:09.724541+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985212",
+      "thesis": "I successfully placed a trade buying 10 YES contracts in the Franklin Arias market (KXMLBDEBUT-FARIAS-26SEP01) at 0.95 price in shadow mode. The trade cost $9.53325 (including $0.03325 in fees). My position is now open with an average entry price of 0.95. No action needed on the Trump cabinet market as there's no new compelling information.",
+      "ts": "2026-08-14T07:03:12.612653+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.95,
+      "quantity": 10.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
+      "ts": "2026-08-14T07:03:11.075754+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985209",
+      "thesis": "**Decision: HOLD position - no action this cycle**\n\n**Analysis:**\n\n1. **Gabbard resignation confirmed**: Multiple sources (USA Today, Jewish Insider, Times Now) confirm Tulsi Gabbard's resignation as DNI is effective **June 30, 2026**. She has not yet left the position, but her departure date falls squarely within this market's resolution window (May 22 - Sep 2, 2026).\n\n2. **DNI is Cabinet-level**: Sources explicitly describe Gabbard as \"Trump's 4th Cabinet Departure,\" confirming the DNI qualifies as a Cabinet member for this market's purposes.\n\n3. **Position sizing constraint**: My current cost basis is $1,429.76, which already exceeds the 15% single-market cap (~$1,272.93 of $8,486.17 cash). I cannot add to this position even if I wanted to.\n\n4. **Expected payoff**: At avg entry of 0.16, if YES resolves (which it should when Gabbard leaves June 30), each contract pays $1.00, yielding ~$7,506 profit on the 8936 contracts. This is a strong expected value.\n\n5. **Risk**: The only risk is if Gabbard's resignation is rescinded or delayed past Sep 2, 2026, which appears unlikely given the personal circumstances (husband's cancer) and Trump's public acceptance.\n\n**Action**: Hold the position and wait for resolution around June 30, 2026.",
+      "ts": "2026-08-14T06:25:12.129734+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985209",
+      "thesis": "I will not place a trade this cycle.",
+      "ts": "2026-08-14T06:24:07.244557+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "scads-alias-ha",
       "cycle_id": "15m:1985208",
@@ -1319,112 +1477,6 @@
       "cycle_id": "15m:1985184",
       "thesis": "{\"thought\": \"I have closed my position on the KXCABLEAVE-26MAY22-26SEP market by buying the 'no' side. My final answer is that I chose to close the position to avoid potential further losses, considering the current market conditions and the information I gathered about recent Cabinet departures.\", \"final\": \"I closed my position on the KXCABLEAVE-26MAY22-26SEP market.\"}",
       "ts": "2026-08-14T00:13:32.867154+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "mode": "shadow",
-      "outcome": "realized",
-      "platform": "kalshi",
-      "price": 0.11,
-      "quantity": 1000.0,
-      "realized_pnl": 723.147,
-      "side": "no",
-      "ticker": "KXCABLEAVE-26MAY22-26SEP",
-      "ts": "2026-08-14T00:13:29.338190+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "tags": [
-        "KXCABLEAVE-26MAY22-26SEP",
-        "Trump Cabinet"
-      ],
-      "text": "Recent Cabinet departures may impact KXCABLEAVE-26MAY22-26SEP market",
-      "ts": "2026-08-14T00:13:22.255550+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985184",
-      "thesis": "**No trade this cycle. Hold position.**\n\n**Reasoning:**\n- Position: 8,936 YES @ 0.16 avg entry, cost basis $1,429.76\n- Current market: YES bid/ask 0.11/0.16\n- Expected settlement payout: $8,936.00 (at $1.00 resolution)\n- Expected profit at settlement: +$7,506.24\n\n**Why hold:**\n1. The triggering event has unambiguously occurred \u2014 multiple Trump Cabinet members have departed in 2026 (Noem on March 5, Bondi in April, Chavez-DeRemer, Gabbard on April 20). YES should settle at $1.00 on 2026-09-02.\n2. Selling now (buying NO at ~0.84) would lock in a ~$1,400 loss versus the $7,506 gain available at settlement.\n3. The 15% single-market cost-basis cap is already saturated by this position; adding more YES would breach guardrails, and there's no reason to add given the position is already maxed for this thesis.\n4. No new information would change the resolution outcome \u2014 the event is in the past.\n\n**Action:** Continue holding 8,936 YES to settlement.",
-      "ts": "2026-08-14T00:12:51.120028+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985184",
-      "thesis": "No action is taken this cycle.",
-      "ts": "2026-08-14T00:06:07.914431+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985184",
-      "thesis": "{\"thought\": \"Based on the information gathered, I see that the market KXCABLEAVE-26MAY22-26SEP is about when a member of Trump's Cabinet will leave before September 2026. The current bid/ask is 0.11/0.16, meaning the market is pricing in a 11% chance of a cabinet member leaving before September 2026. \n\nLooking at recent developments, I see there have been resignations in Trump's second term, but I don't have specific information about a cabinet member leaving before September 2026. The market is currently trading at a very low probability (11%), which suggests either:\n1. There's little expectation of resignations in the near term, or\n2. The market is underpriced if there are significant risks of resignations\n\nSince I don't have strong conviction either way and the market is already quite cheap, and I don't want to risk my capital on uncertain timing, I'll keep my position closed for now. The market is trading at 11 cents for a YES contract, which seems reasonable given the timeframe and lack of clear signals about imminent resignations.\", \"action\": \"manage_notes\", \"args\": {\"action\": \"store\", \"text\": \"KXCABLEAVE-26MAY22-26SEP market trading at 0.11 bid/0.16 ask. Current probability of cabinet member leaving before Sep 2026 is 11%. No clear recent developments suggesting imminent resignations. Maintaining no position.\"}}",
-      "ts": "2026-08-14T00:05:43.785986+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-reasoning",
-      "cycle_id": "15m:1985184",
-      "thesis": "I will not place any trade this cycle. I will hold the existing 100\u2011contract YES position on KXCABLEAVE-26MAY22-26SEP.",
-      "ts": "2026-08-14T00:05:07.055571+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "cycle_id": "15m:1985184",
-      "thesis": "Based on my research, I'm holding my YES position but with reduced confidence. Here's my analysis:\n\n**Key finding:** The market ticker KXCABLEAVE-**26MAY22**-26SEP indicates the resolution window starts **May 22, 2026**. The most prominent Cabinet departure \u2014 Labor Secretary Lori Chavez-DeRemer \u2014 resigned on **April 20, 2026**, which is *before* the market window opened. This likely explains why YES is still priced at only 0.11/0.16 despite multiple total departures during Trump's second term.\n\n**Ballotpedia (Aug 8, 2026)** confirms 2 Cabinet members removed and 2 resigned total, but I haven't verified whether any of those departures occurred *after* May 22, 2026 (within the market window).\n\n**Constraint check:** My cost basis is already $1,475.84 (~17.5% of cash), which exceeds the 15% single-market cap. I cannot buy NO contracts to hedge or close the position.\n\n**Decision:** Hold the YES position. The market may be correctly pricing that no Cabinet departure occurred within the May 22 \u2013 Sep 2 window, which would mean YES resolves to 0 and I lose my $1,475.84 cost basis. However, with ~2 weeks until the Sep 2 close, there's still time for a departure, and the asymmetric payoff (potential $9,224 payout vs. $1,476 cost) justifies holding. If a Cabinet member departs before Sep 2, this position pays out in full.\n\n**Action:** No trade this cycle. Recording this analysis for next cycle.",
-      "ts": "2026-08-14T00:04:54.721601+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1985184",
-      "thesis": "I will not place any trades this cycle and will continue holding the existing YES position on KXCABLEAVE-26MAY22-26SEP.",
-      "ts": "2026-08-14T00:02:07.311336+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gemma-4-31b-it",
-      "cycle_id": "15m:1985184",
-      "thesis": "I will hold my current positions. For KXCABLEAVE-26MAY22-26SEP, the current bid of 0.11 is below my entry price of 0.16, and the long timeframe until September 2026 maintains a significant probability of a cabinet member leaving. For KXFREDDIE-26SEP01, the bid remains 0.0, making it impossible to exit the position at this time.",
-      "ts": "2026-08-14T00:01:33.885318+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985183",
-      "thesis": "I exited my position in the KXCABLEAVE-26MAY22-26SEP market by buying 10 NO contracts at $0.11, closing my previous 10 YES contracts at $0.16. This resulted in a profit of $57.28. The decision was based on the recent resignation of Labor Secretary Lori Chavez-DeRemer, which increased the probability of further Cabinet resignations beyond what the market was pricing in. My reasoning that recent resignations indicated a higher probability than the current market price of 11% was confirmed as the event occurred. I've recorded this decision in my notes for future reference.",
-      "ts": "2026-08-13T23:55:03.306534+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "tags": [],
-      "text": "Exited KXCABLEAVE-26MAY22-26SEP position (10 YES contracts at $0.16) by buying 10 NO contracts at $0.11 after Labor Secretary Lori Chavez-DeRemer resigned, realizing $57.28 profit. Market moved from 11% to 100% probability of event occurring, confirming original reasoning about increasing Cabinet resignations.",
-      "ts": "2026-08-13T23:55:02.172670+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "mode": "shadow",
-      "outcome": "realized",
-      "platform": "kalshi",
-      "price": 0.11,
-      "quantity": 10.0,
-      "realized_pnl": 7.231470000000001,
-      "side": "no",
-      "ticker": "KXCABLEAVE-26MAY22-26SEP",
-      "ts": "2026-08-13T23:54:59.263851+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985181",
-      "thesis": "No action will be taken this cycle.",
-      "ts": "2026-08-13T23:24:27.662786+00:00",
       "type": "thesis"
     }
   ]
