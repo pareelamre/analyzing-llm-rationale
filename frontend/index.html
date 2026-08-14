@@ -532,51 +532,6 @@
     }
     .hero-action.primary { background: var(--ink); color: #fff; }
     .hero-action:hover { background: var(--ink); color: #fff; }
-    .landing-question {
-      margin-top: 30px;
-      max-width: 720px;
-      width: 100%;
-      border: 1px solid var(--border-2);
-      border-radius: 30px;
-      background: #fff;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: end;
-      gap: 10px;
-      padding: 10px 10px 10px 16px;
-      box-shadow: 0 18px 50px rgba(15,15,16,.08);
-    }
-    .landing-question textarea {
-      min-height: 44px;
-      max-height: 112px;
-      padding: 8px 6px;
-      font-size: 16px;
-      line-height: 1.45;
-      border: none;
-      outline: none;
-    }
-    .landing-question:focus-within {
-      border-color: #c8c8d0;
-      box-shadow: 0 20px 58px rgba(15,15,16,.12);
-    }
-    .landing-answer {
-      max-width: 720px;
-      width: 100%;
-      margin-top: 18px;
-      border: 1px solid var(--border-2);
-      border-radius: 18px;
-      background: #fff;
-      padding: 20px 24px;
-      box-shadow: 0 8px 28px rgba(15,15,16,.06);
-      display: none;
-    }
-    .landing-answer.visible { display: block; }
-    .landing-answer-content { font-size: 15px; line-height: 1.65; color: var(--text); }
-    .landing-answer-actions { display: flex; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--paper); }
-    .landing-answer-btn { font-size: 13px; padding: 7px 18px; border-radius: 20px; border: 1px solid var(--border-2); background: #fff; cursor: pointer; color: var(--text-dim); transition: background .15s; }
-    .landing-answer-btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
-    .landing-answer-btn:hover { background: var(--paper); }
-    .landing-answer-btn.primary:hover { background: #111; }
     .quiet-link {
       margin-top: 10px;
       font-size: 12px;
@@ -590,35 +545,6 @@
       cursor: pointer;
     }
     .quiet-link:hover { color: var(--ink); }
-    .market-prompt-row {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
-      margin-top: 14px;
-      max-width: 720px;
-    }
-    .market-prompt-lead {
-      align-self: center;
-      font-size: 12px;
-      color: var(--text-mute);
-      margin-right: 2px;
-    }
-    .market-prompt {
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: #fff;
-      color: var(--text);
-      font-size: 12px;
-      padding: 8px 11px;
-      cursor: pointer;
-      transition: background var(--dur-med), border-color var(--dur-med), color var(--dur-med), transform var(--dur-med);
-    }
-    .market-prompt:hover {
-      border-color: var(--ink);
-      color: var(--ink);
-      transform: translateY(-1px);
-    }
     .market-sources {
       margin-top: 14px;
       font-size: 12px;
@@ -929,8 +855,6 @@
       .landing-data-links { gap: 12px; }
       .landing-shell { padding-top: 28px; }
       .hero-title { font-size: 36px; }
-      .landing-question { grid-template-columns: 1fr; }
-      .landing-question .hero-action { width: 100%; }
       .market-table { grid-template-columns: 1fr 1fr; }
       .market-table > div:nth-child(4n) { border-right: 1px solid var(--border); }
       .market-table > div:nth-child(2n) { border-right: 0; }
@@ -2031,38 +1955,16 @@
 
   <div class="landing-shell">
     <div class="hero-grid">
-      <!-- Left Column: Copy & Input -->
+      <!-- Left Column: Product proposition -->
       <div class="hero-copy">
         <p class="label mb-4" style="align-self: flex-start;">AI forecasts, scored in public</p>
         <h1 class="display hero-title" style="text-align: left; align-self: flex-start; max-width: 100%;">The intelligence layer for prediction markets</h1>
         <p class="hero-text" style="text-align: left; align-self: flex-start; max-width: 100%; margin-top: 14px;">
-          Ask any yes-or-no question about the future. Foresea runs real-time searches to gather evidence, weighs facts via an LLM council, and calculates calibrated probabilities compared with live prediction markets.
+          Foresea turns fresh evidence and live market signals into calibrated forecasts you can examine, compare, and hold to account over time.
         </p>
-        
-        <form class="landing-question" onsubmit="submitLandingQuestion(event)" style="max-width: 100%; margin-top: 24px;">
-          <textarea
-            id="landingQuestionInput"
-            rows="2"
-            placeholder="Paste a market question or ask for a forecast"
-            oninput="autoResize(this)"
-            onkeydown="handleLandingKey(event)"
-          ></textarea>
-          <button class="hero-action primary" type="submit" id="landingSubmitBtn">Analyze</button>
-        </form>
-
-        <div id="landingAnswer" class="landing-answer" aria-live="polite" style="max-width: 100%;">
-          <div class="landing-answer-content chat-md" id="landingAnswerContent"></div>
-          <div class="landing-answer-actions" id="landingAnswerActions" style="display:none">
-            <button class="landing-answer-btn primary ui-icon-label" onclick="_landingOpenInApp()">Continue in app <svg class="ui-icon" aria-hidden="true"><use href="#ui-arrow-right"></use></svg></button>
-            <button class="landing-answer-btn" onclick="_landingReset()">Ask another</button>
-          </div>
-        </div>
-
-        <div class="market-prompt-row" aria-label="Example market prompts" style="max-width: 100%; justify-content: flex-start; margin-top: 20px;">
-          <span class="market-prompt-lead">Try one:</span>
-          <button type="button" class="market-prompt" onclick="startExample('Market at 42%: Will the Fed cut rates before September 30, 2026?')">Fed Rate Cut</button>
-          <button type="button" class="market-prompt" onclick="startExample('Compare the evidence for this market: Will US CPI inflation be at least 3.0% in December 2026?')">US Inflation</button>
-          <button type="button" class="market-prompt" onclick="startExample('What probability should this market trade at: Will SpaceX complete a major Starship milestone before December 31, 2026?')">SpaceX Milestone</button>
+        <div class="hero-actions" style="align-self: flex-start;">
+          <button class="hero-action primary" type="button" onclick="launchApp()">Open the forecast desk</button>
+          <button class="hero-action" type="button" onclick="openEdgeBoard()">Explore the edge board</button>
         </div>
 
         <p class="market-sources" style="align-self: flex-start; text-align: left; margin-top: 20px;">
