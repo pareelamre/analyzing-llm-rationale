@@ -63,6 +63,10 @@ AGENT_ANALYZE_RETRY_BACKOFF_S = float(os.environ.get("AGENT_TRADING_RETRY_BACKOF
 # single verbose thesis echoed back verbatim can exceed that on its own
 # (observed live: 2334 chars), so it's excerpted, not replayed in full.
 MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS_CHARS", "500")))
+# Same hard 2000-char limit -- kept below it with margin, since the candidate
+# block also scales with how many tickers an agent currently holds (each now
+# carries an extra resolution-window date pair) and isn't otherwise bounded.
+MAX_QUESTION_CHARS = 1900
 # trading.py's FORESEA_MAX_ORDER_NOTIONAL is a flat-dollar cap shared by every
 # order path (human BYO trading included), so it can't be changed here without
 # affecting those too. Instead this driver overrides it per-cycle, scoped to
@@ -155,12 +159,13 @@ def _build_portfolio_block(conn, agent_id: str, last_thesis: Optional[str]) -> s
 
 
 def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
+    opens = quote.get("created_time") or "unknown"
     close = quote.get("close_time") or "unknown"
     bid = quote.get("yes_bid")
     ask = quote.get("yes_ask")
     return (
         f"  - {quote.get('ident')}: \"{quote.get('question')}\" "
-        f"(yes bid/ask {bid}/{ask}, closes {close})"
+        f"(yes bid/ask {bid}/{ask}, resolution window {opens} -> {close})"
     )
 
 
@@ -250,6 +255,35 @@ async def _call_agent_analyze(question: str):
     raise last_exc
 
 
+_TRADING_INSTRUCTION = (
+    "Decide what, if anything, to do this cycle. You may place_trade on any "
+    "ticker listed above (buying the opposite side of a held position "
+    "closes it), use web_search for research, and manage_notes to record "
+    "anything worth remembering next cycle. Before betting on news you find, "
+    "check that the event's date actually falls within THIS market's "
+    "resolution window (shown above for each ticker) -- many Kalshi tickers "
+    "are one of several in a recurring dated series (e.g. one ending "
+    "'-26APR' and another '-26MAY22-26SEP' for the same underlying "
+    "question), so real evidence of something that already happened before "
+    "this window opened does not resolve this specific contract. If you "
+    "don't want to act, just explain why in your final answer."
+)
+
+
+def _build_question(portfolio_block: str, candidates_block: str) -> str:
+    question = "\n\n".join([portfolio_block, candidates_block, _TRADING_INSTRUCTION])
+    if len(question) <= MAX_QUESTION_CHARS:
+        return question
+    # Over the server's hard 2000-char limit -- trim the candidates block
+    # first, since it's the part that scales with how many tickers an agent
+    # currently holds; the portfolio summary and the instruction (which the
+    # model needs on every cycle) stay intact.
+    overage = len(question) - MAX_QUESTION_CHARS
+    keep = max(0, len(candidates_block) - overage - 1)
+    trimmed_candidates = candidates_block[:keep].rstrip() + "…"
+    return "\n\n".join([portfolio_block, trimmed_candidates, _TRADING_INSTRUCTION])
+
+
 def _configure_max_order_notional() -> float:
     """Override trading.py's flat-dollar FORESEA_MAX_ORDER_NOTIONAL for this
     process only, as MAX_ORDER_NOTIONAL_PCT of the agent's account value
@@ -301,15 +335,7 @@ def run_cycle(model: str) -> None:
         os.environ["FORESEA_AGENT_ACCOUNT_VALUE"] = str(_current_account_value(conn, agent_id, held_quotes))
     _configure_max_order_notional()
 
-    question = "\n\n".join([
-        portfolio_block,
-        _build_candidates_block(held_quotes, new_quotes),
-        "Decide what, if anything, to do this cycle. You may place_trade on any "
-        "ticker listed above (buying the opposite side of a held position "
-        "closes it), use web_search for research, and manage_notes to record "
-        "anything worth remembering next cycle. If you don't want to act, "
-        "just explain why in your final answer.",
-    ])
+    question = _build_question(portfolio_block, _build_candidates_block(held_quotes, new_quotes))
 
     report = asyncio.run(_call_agent_analyze(question))
 

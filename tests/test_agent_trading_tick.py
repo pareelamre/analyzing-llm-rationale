@@ -21,11 +21,12 @@ _SPEC.loader.exec_module(agent_trading_tick)
 from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 
 
-def _quote(ident, question="Q?", bid=0.4, ask=0.45, close="2026-09-01T00:00:00Z"):
+def _quote(ident, question="Q?", bid=0.4, ask=0.45, close="2026-09-01T00:00:00Z",
+           opens="2026-05-01T00:00:00Z"):
     return {
         "platform": "Kalshi", "ident": ident, "question": question,
         "probability": (bid + ask) / 2, "yes_bid": bid, "yes_ask": ask,
-        "close_time": close,
+        "close_time": close, "created_time": opens,
     }
 
 
@@ -169,6 +170,55 @@ class CandidateSelectionTests(unittest.TestCase):
         with mock.patch.object(market_data, "fetch_kalshi", side_effect=fake_fetch):
             quotes = agent_trading_tick._requote_held(["KXGOOD", "KXBAD"])
         self.assertEqual([q["ident"] for q in quotes], ["KXGOOD"])
+
+
+class CandidateLineFormattingTests(unittest.TestCase):
+    def test_candidate_line_shows_both_ends_of_the_resolution_window(self):
+        # Regression: a real live trade found the ticker's close date but not
+        # its open date, so agents couldn't tell that real news they found
+        # (e.g. a cabinet departure) happened *before* this specific market's
+        # window started -- and bought a losing position on real-but-stale
+        # evidence that actually belonged to an earlier, already-resolved
+        # ticker in the same recurring series (KXFOO-26APR vs
+        # KXFOO-26MAY22-26SEP).
+        line = agent_trading_tick._fmt_candidate_line(
+            _quote("KXFOO", opens="2026-05-22T18:00:00Z", close="2026-09-02T03:59:00Z")
+        )
+        self.assertIn("2026-05-22T18:00:00Z", line)
+        self.assertIn("2026-09-02T03:59:00Z", line)
+        self.assertIn("resolution window", line)
+
+    def test_candidate_line_handles_a_missing_open_date(self):
+        quote = _quote("KXBAR")
+        del quote["created_time"]
+        line = agent_trading_tick._fmt_candidate_line(quote)
+        self.assertIn("unknown", line)
+
+
+class BuildQuestionTests(unittest.TestCase):
+    def test_instructs_checking_the_resolution_window_before_trading_on_news(self):
+        question = agent_trading_tick._build_question("PORTFOLIO", "CANDIDATES")
+        self.assertIn("resolution window", question)
+        self.assertIn("recurring dated series", question)
+
+    def test_fits_under_the_hard_server_limit_in_the_normal_case(self):
+        candidates = agent_trading_tick._build_candidates_block(
+            [], [_quote(f"KX{i}") for i in range(3)],
+        )
+        question = agent_trading_tick._build_question("PORTFOLIO", candidates)
+        self.assertLessEqual(len(question), 2000)
+
+    def test_trims_the_candidates_block_not_the_instruction_when_over_budget(self):
+        # Regression: AgentAnalyzeRequest.question has a hard 2000-char
+        # server-side limit. A verbose candidates block (many held tickers,
+        # each now carrying an extra resolution-window date pair) must not
+        # be allowed to silently break every subsequent cycle the way an
+        # overlong thesis once did -- trim the variable-length part instead.
+        huge_candidates = "x" * 3000
+        question = agent_trading_tick._build_question("PORTFOLIO", huge_candidates)
+        self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
+        self.assertIn(agent_trading_tick._TRADING_INSTRUCTION, question)
+        self.assertIn("…", question)
 
 
 class PortfolioBlockTests(unittest.TestCase):
