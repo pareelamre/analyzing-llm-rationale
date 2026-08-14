@@ -193,6 +193,15 @@ class MiddlewareAndProbeTests(unittest.TestCase):
             r = self.client.post("/predict", json={"question": "Will this very long body be rejected?"})
         self.assertEqual(r.status_code, 413)
 
+    def test_oversized_chunked_body_rejected(self):
+        with mock.patch.object(server, "_MAX_BODY_BYTES", 10):
+            r = self.client.post(
+                "/predict",
+                content=b"x" * 11,
+                headers={"Transfer-Encoding": "chunked"},
+            )
+        self.assertEqual(r.status_code, 413)
+
     def test_ready_ok_when_provider_configured(self):
         r = self.client.get("/ready")
         self.assertEqual(r.status_code, 200)

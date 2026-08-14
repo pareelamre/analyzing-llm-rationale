@@ -1408,30 +1408,63 @@
       overflow-y: hidden;
     }
     #questionInput::placeholder { color: #8f8f8f; }
-    .prompt-model-select {
-      align-self: center;
+    .composer-shell {
+      align-items: end;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: 10px 12px !important;
+    }
+    .composer-shell #questionInput {
+      min-width: 0;
+      padding: 5px 3px !important;
+    }
+    .composer-actions { align-items: center; display: flex; flex-shrink: 0; gap: 5px; }
+    .composer-model-picker {
+      align-items: center;
       background: #f7f7f8;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
+      display: flex;
+      height: 40px;
+      padding: 0 8px 0 10px;
+    }
+    .composer-model-label {
+      color: var(--text-mute);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .prompt-model-select {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
       color: var(--text-dim);
       cursor: pointer;
-      flex: 0 1 150px;
+      flex: 0 1 132px;
       font-size: 12px;
-      height: 34px;
-      max-width: 34vw;
-      min-width: 112px;
-      padding: 0 24px 0 9px;
+      height: 38px;
+      max-width: 30vw;
+      min-width: 104px;
+      padding: 0 20px 0 6px;
     }
     .prompt-model-select:focus-visible {
       border-color: var(--ink);
       box-shadow: 0 0 0 3px rgba(17, 17, 17, .08);
       outline: none;
     }
-    @media (max-width: 520px) {
+    @media (max-width: 640px) {
+      .composer-shell { gap: 7px; grid-template-columns: 1fr; padding: 10px 12px 9px !important; }
+      .composer-shell #questionInput { min-height: 48px; padding: 4px 3px !important; }
+      .composer-actions { border-top: 1px solid #eeeeef; justify-content: flex-end; padding-top: 7px; }
+      .composer-model-picker { height: 36px; }
       .prompt-model-select {
-        flex-basis: 104px;
+        flex-basis: 130px;
         font-size: 11px;
-        min-width: 92px;
+        height: 34px;
+        max-width: 42vw;
+        min-width: 118px;
       }
     }
     .send-btn {
@@ -1701,6 +1734,19 @@
     }
     .config-body { padding: 4px 10px 8px; display: flex; flex-direction: column; gap: 16px; }
     .config-group { display: flex; flex-direction: column; gap: 6px; }
+    .workspace-group { display: flex; flex-direction: column; gap: 7px; }
+    .workspace-title { margin: 0; font-size: 12px; font-weight: 650; color: var(--ink); }
+    .workspace-copy { margin: 0; font-size: 11px; line-height: 1.45; color: var(--text-mute); }
+    .workspace-action {
+      appearance: none; cursor: pointer; width: 100%; text-align: left; padding: 9px 10px;
+      border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--ink);
+      transition: background var(--dur-med), border-color var(--dur-med);
+    }
+    .workspace-action:hover { background: #f7f7f6; border-color: var(--text-mute); }
+    .workspace-action strong, .workspace-action span { display: block; }
+    .workspace-action strong { font-size: 12px; font-weight: 600; }
+    .workspace-action span { margin-top: 2px; color: var(--text-mute); font-size: 10px; line-height: 1.35; }
+    .workspace-preferences { margin-top: 2px; }
 
     /* ── Glass surfaces ──────────────────────────────────────────────────── */
     .glass {
@@ -2237,13 +2283,12 @@
     <div id="convList"></div>
   </div>
 
-  <!-- Account: one control at the bottom; clicking it opens a menu with
-       Config / Connect exchange / Advanced + account actions (Prism-style). -->
+  <!-- Account: one control at the bottom; it opens workspace, preferences, and account actions. -->
   <div class="acct" id="acctWrap">
   <div id="acctMenu" class="acct-menu" hidden onclick="event.stopPropagation()">
 
   <details class="advanced-panel">
-    <summary role="button" aria-label="Show advanced forecast settings">Advanced</summary>
+    <summary role="button" aria-label="Show forecast preferences">Forecast preferences</summary>
     <div>
       <p class="label px-1 mb-2">Prompt variant</p>
       <select id="variantSelect" class="variant-select" onchange="updateVariantDesc()">
@@ -2274,16 +2319,33 @@
     </div>
   </details>
 
-  <!-- Config: model + agent skills, collapsed to keep the sidebar clean -->
+  <!-- Workspace: everyday choices first; technical controls stay available below. -->
   <details class="config-panel" id="configDetails">
     <summary class="config-summary">
       <svg class="config-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
         <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <span>Config</span>
-      <span id="activeModelLabel" class="config-active">gpt-oss-120b</span>
+      <span>Your workspace</span>
+      <span class="config-active">Personal</span>
     </summary>
     <div class="config-body" onclick="event.stopPropagation()">
+      <section class="workspace-group" aria-labelledby="workspace-context-title">
+        <p class="workspace-title" id="workspace-context-title">Your saved context</p>
+        <p id="workspaceContextSummary" class="workspace-copy">No notes added</p>
+        <button type="button" class="workspace-action" onclick="openWorkspaceContext()">
+          <strong>Add a note or link</strong>
+          <span>Use it as evidence in future forecasts.</span>
+        </button>
+      </section>
+
+      <section class="workspace-group" aria-labelledby="workspace-record-title">
+        <p class="workspace-title" id="workspace-record-title">Your record</p>
+        <p id="workspaceLedgerSummary" class="workspace-copy">Sign in to see your saved forecasts.</p>
+      </section>
+
+      <details class="advanced-panel workspace-preferences" id="workspacePreferences">
+        <summary role="button" aria-label="Show preferences and advanced controls">Preferences</summary>
+        <div>
 
       <!-- Model -->
       <div class="config-group">
@@ -2342,15 +2404,9 @@
         </div>
       </div>
 
-      <!-- Agent skills -->
+      <!-- Research skills -->
       <div class="config-group">
-        <div class="flex items-center justify-between">
-          <p class="label" style="margin:0">Agent skills</p>
-          <label class="flex items-center gap-1.5 cursor-pointer select-none" title="Route questions through the analysis agent">
-            <input type="checkbox" id="agentToggle" onchange="toggleAgent()" />
-            <span class="text-xs" style="color:var(--text-dim)">Use</span>
-          </label>
-        </div>
+        <p class="label" style="margin:0">Research skills</p>
         <div id="skillList" class="model-list"></div>
         <button type="button" id="addSkillBtn" class="model-add-btn ui-icon-label" onclick="startAddSkill()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-plus"></use></svg>Add a skill</button>
         <div id="skillForm" class="model-form" hidden>
@@ -2368,7 +2424,7 @@
             <button type="button" class="model-cancel" onclick="cancelSkillForm()">Cancel</button>
           </div>
         </div>
-        <p class="text-gray-400" style="font-size:10px;margin-top:2px">When “Use” is on, the agent fetches evidence, forecasts, prices the edge, and runs your skills.</p>
+        <p class="text-gray-400" style="font-size:10px;margin-top:2px">Foresea uses these alongside evidence gathering, forecasting, and edge analysis.</p>
       </div>
 
       <!-- Knowledge base -->
@@ -2391,6 +2447,8 @@
         <a href="/agents" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs ui-icon-label">Agent integration <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></a><br />
         <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs ui-icon-label">API docs <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></a>
       </div>
+        </div>
+      </details>
     </div>
   </details>
 
@@ -2509,27 +2567,32 @@
       <div style="position:relative">
         <div id="slashPalette" class="slash-palette" role="listbox" aria-label="Commands"></div>
       </div>
-      <div class="input-box flex gap-2 sm:gap-3 items-end p-2 sm:p-3">
+      <div class="input-box composer-shell">
         <textarea
           id="questionInput"
           rows="1"
-          placeholder="Ask anything, or type / for commands"
-          class="flex-1 bg-transparent border-none py-1 px-1"
+          placeholder="What would you like to forecast?"
+          class="bg-transparent border-none"
           style="font-size: 16px;"
           oninput="autoResize(this); _updateSlashPalette(this.value)"
           onkeydown="handleKey(event)"
         ></textarea>
-        <select id="promptModelSelect" class="prompt-model-select" onchange="setBuiltinChatModel(this.value)" title="Chat model" aria-label="Chat model">
-          <option value="gpt-oss-120b">GPT-OSS-120B</option>
-        </select>
-        <button id="attachBtn" class="attach-btn" onclick="toggleAttachPanel()" title="Attach PDF or URL" aria-label="Attach file or URL" aria-expanded="false">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
-          </svg>
-        </button>
-        <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="handleSendButton()" title="Send" aria-label="Send">
-          <svg class="ui-icon send-btn-icon" aria-hidden="true"><use href="#ui-arrow-up"></use></svg>
-        </button>
+        <div class="composer-actions">
+          <div class="composer-model-picker">
+            <span class="composer-model-label">Model</span>
+            <select id="promptModelSelect" class="prompt-model-select" onchange="setBuiltinChatModel(this.value)" title="Choose chat model" aria-label="Choose chat model">
+              <option value="gpt-oss-120b">GPT-OSS-120B</option>
+            </select>
+          </div>
+          <button id="attachBtn" class="attach-btn" onclick="toggleAttachPanel()" title="Attach PDF or URL" aria-label="Attach file or URL" aria-expanded="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+            </svg>
+          </button>
+          <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="handleSendButton()" title="Send" aria-label="Send">
+            <svg class="ui-icon send-btn-icon" aria-hidden="true"><use href="#ui-arrow-up"></use></svg>
+          </button>
+        </div>
       </div>
       <!-- Attach panel -->
       <div id="attachPanel" class="attach-panel" hidden>
@@ -2939,12 +3002,20 @@ function closeSidebar() {
 }
 
 // ── Conversation management ──────────────────────────────────────────────────
-const CHAT_HASH_PREFIX = '#chat/';
-function conversationHash(id) {
-  return CHAT_HASH_PREFIX + encodeURIComponent(id);
+const CHAT_PATH_PREFIX = '/chat/';
+function conversationPath(id) {
+  return CHAT_PATH_PREFIX + encodeURIComponent(id);
 }
-function conversationIdFromHash(hash = window.location.hash) {
-  return hash?.startsWith(CHAT_HASH_PREFIX) ? decodeURIComponent(hash.slice(CHAT_HASH_PREFIX.length)) : null;
+function conversationIdFromPath(pathname = window.location.pathname) {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  if (!path.startsWith(CHAT_PATH_PREFIX)) return null;
+  const id = path.slice(CHAT_PATH_PREFIX.length);
+  if (!id || id.includes('/')) return null;
+  try { return decodeURIComponent(id); } catch { return null; }
+}
+function conversationIdFromLegacyHash(hash = window.location.hash) {
+  if (!hash?.startsWith('#chat/')) return null;
+  try { return decodeURIComponent(hash.slice('#chat/'.length)); } catch { return null; }
 }
 
 function newConversation(options = {}) {
@@ -3453,6 +3524,7 @@ async function addForecastToPersonalLedger(btn) {
     personalLedgerEntries = [saved, ...personalLedgerEntries.filter(entry => entry.id !== saved.id)];
     btn.textContent = 'Saved to ledger';
     trackEvent('personal_ledger_add', { source: 'forecast_card', question_type: data.question_type || 'chat' });
+    renderWorkspacePanel();
   } catch (_) {
     btn.textContent = 'Retry save';
     btn.disabled = false;
@@ -4916,22 +4988,52 @@ function updateVariantDesc() {
 }
 const _VIEW_URL = {
   'landing':       '/',
-  'app':           '#ask',
-  'track-landing': '#track',
-  'track-app':     '#track-app',
-  'edge-landing':  '#edge',
-  'edge-app':      '#edge-app',
-  'watch-landing': '#watchlist',
-  'watch-app':     '#watchlist-app',
-  'ledger-landing': '#ledger',
-  'ledger-app':     '#ledger-app',
+  'app':           '/ask',
+  'track-landing': '/track',
+  'track-app':     '/track',
+  'edge-landing':  '/edge',
+  'edge-app':      '/edge',
+  'watch-landing': '/watchlist',
+  'watch-app':     '/watchlist',
+  'ledger-landing': '/ledger',
+  'ledger-app':     '/ledger',
 };
-const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
+const _PATH_VIEW = {
+  '/': 'landing',
+  '/ask': 'app',
+  '/track': 'track-landing',
+  '/edge': 'edge-landing',
+  '/watchlist': 'watch-landing',
+  '/ledger': 'ledger-landing',
+};
+const _LEGACY_HASH_VIEW = {
+  '#ask': 'app',
+  '#track': 'track-landing',
+  '#track-app': 'track-app',
+  '#edge': 'edge-landing',
+  '#edge-app': 'edge-app',
+  '#watchlist': 'watch-landing',
+  '#watchlist-app': 'watch-app',
+  '#ledger': 'ledger-landing',
+  '#ledger-app': 'ledger-app',
+};
+function normaliseAppPath(pathname = window.location.pathname) {
+  return pathname.replace(/\/+$/, '') || '/';
+}
+function historyUrlFor(view, convId = null) {
+  return view === 'chat' && convId ? conversationPath(convId) : (_VIEW_URL[view] ?? '/ask');
+}
+function legacyRouteFromHash(hash = window.location.hash) {
+  const convId = conversationIdFromLegacyHash(hash);
+  if (convId) return { view: 'chat', convId };
+  const view = _LEGACY_HASH_VIEW[hash];
+  return view ? { view, convId: null } : null;
+}
 
 function setHistoryState(view, mode = 'push', options = {}) {
   if (isApplyingHistory || !window.history) return;
   const state = { view, convId: options.convId || null };
-  const url = view === 'chat' && options.convId ? conversationHash(options.convId) : (_VIEW_URL[view] ?? '#ask');
+  const url = historyUrlFor(view, state.convId);
   if (mode === 'replace') history.replaceState(state, '', url);
   else if (history.state?.view !== view || history.state?.convId !== state.convId) history.pushState(state, '', url);
 }
@@ -5746,7 +5848,11 @@ function clearPersonalLedgerSignInIntent() {
 
 async function refreshPersonalLedger() {
   renderPersonalLedger();
-  if (!currentUser) return;
+  if (!currentUser) {
+    personalLedgerEntries = [];
+    renderWorkspacePanel();
+    return;
+  }
   try {
     const r = await fetch('/personal-ledger', { headers: authHeaders() });
     const d = await _readJson(r);
@@ -5756,6 +5862,7 @@ async function refreshPersonalLedger() {
     console.warn(err);
   }
   renderPersonalLedger();
+  renderWorkspacePanel();
 }
 
 async function openPersonalLedger({ updateHistory = true } = {}) {
@@ -5861,6 +5968,7 @@ async function markPersonalLedgerVerdict(entryId, verdict, btn) {
     personalLedgerEntries = personalLedgerEntries.map(entry => entry.id === saved.id ? saved : entry);
     trackEvent('personal_ledger_feedback', { verdict });
     renderPersonalLedger();
+    renderWorkspacePanel();
   } catch (_) {
     btn.disabled = false;
   }
@@ -5976,6 +6084,7 @@ async function removePersonalLedgerEntry(entryId, btn) {
     personalLedgerEntries = personalLedgerEntries.filter(entry => entry.id !== entryId);
     trackEvent('personal_ledger_remove', { source: 'ledger' });
     renderPersonalLedger();
+    renderWorkspacePanel();
   } catch (_) {
     btn.disabled = false;
   }
@@ -7325,12 +7434,14 @@ function syncSidebarA11y() {
 }
 function applyHistoryState(state) {
   isApplyingHistory = true;
-  // Infer view from URL hash when state is missing (e.g. external link / fresh load)
-  const urlConversationId = state?.convId || conversationIdFromHash();
+  // Infer a route from the path when state is missing (e.g. a direct link or refresh).
+  const legacyRoute = legacyRouteFromHash();
+  const urlConversationId = state?.convId || conversationIdFromPath() || legacyRoute?.convId;
   const view = state?.view
     || (urlConversationId ? 'chat' : null)
-    || _URL_VIEW[window.location.hash]
-    || (window.location.hash ? 'landing' : 'landing');
+    || legacyRoute?.view
+    || _PATH_VIEW[normaliseAppPath()]
+    || 'landing';
 
   // Close all overlays first — avoids every case having to enumerate which to close
   closeTrackRecord({ updateHistory: false });
@@ -7756,7 +7867,7 @@ function loadOrSettings() {
   loadBuiltinChatModels();
   renderModelList();
   if (_loadModels().length) {
-    const det = document.getElementById('configDetails');
+    const det = document.getElementById('workspacePreferences');
     if (det) det.open = true;
   }
   _updateModelLabel();
@@ -8415,21 +8526,49 @@ function _loadSkills() {
   catch { return []; }
 }
 function _saveSkills(s) { localStorage.setItem('agent_skills', JSON.stringify(s)); }
-function _agentEnabled() { return localStorage.getItem('agent_enabled') === '1'; }
-// Keep the sidebar checkbox and the inline input-bar toggle in sync.
-function _applyAgentEnabled(on) {
-  localStorage.setItem('agent_enabled', on ? '1' : '0');
-  const cb = document.getElementById('agentToggle');
-  if (cb) cb.checked = on;
+function _agentEnabled() { return true; }
+// Research is Foresea's always-on answering workflow.
+function _applyAgentEnabled() {
+  localStorage.setItem('agent_enabled', '1');
   const btn = document.getElementById('agentModeBtn');
-  if (btn) { btn.classList.toggle('active', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  if (btn) { btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true'); }
   const input = document.getElementById('questionInput');
-  if (input) input.placeholder = on
-    ? 'Agent mode — ask about any market or question'
-    : 'Ask about a market, quote, or resolution criteria';
+  if (input) input.placeholder = 'What would you like to forecast?';
+  if (typeof renderWorkspacePanel === 'function') renderWorkspacePanel();
 }
-function toggleAgent() { _applyAgentEnabled(document.getElementById('agentToggle').checked); }
-function toggleAgentMode() { _applyAgentEnabled(!_agentEnabled()); }
+
+let _workspaceKbDocs = [];
+
+function renderWorkspacePanel() {
+  const context = document.getElementById('workspaceContextSummary');
+  if (context) {
+    if (!currentUser) context.textContent = 'Sign in to save notes and links.';
+    else context.textContent = _workspaceKbDocs.length
+      ? `${_workspaceKbDocs.length} note${_workspaceKbDocs.length === 1 ? '' : 's'} saved`
+      : 'No notes added';
+  }
+
+  const record = document.getElementById('workspaceLedgerSummary');
+  if (record) {
+    if (!currentUser) record.textContent = 'Sign in to see your saved forecasts.';
+    else {
+      const entries = personalLedgerEntries || [];
+      const marked = entries.filter(entry => ['correct', 'wrong'].includes(entry.user_verdict)).length;
+      record.textContent = `${entries.length} forecast${entries.length === 1 ? '' : 's'} saved · ${marked} marked correct or wrong`;
+    }
+  }
+}
+
+function openWorkspaceContext() {
+  trackEvent('workspace_context_add_opened', { signed_in: Boolean(currentUser) });
+  if (!currentUser) { openAuthModal('login'); return; }
+  const panel = document.getElementById('configDetails');
+  const preferences = document.getElementById('workspacePreferences');
+  if (panel) panel.open = true;
+  if (preferences) preferences.open = true;
+  const input = document.getElementById('kbText');
+  setTimeout(() => input?.focus(), 0);
+}
 
 function renderSkillList() {
   const host = document.getElementById('skillList');
@@ -8493,10 +8632,10 @@ function deleteSkill(id) {
   renderSkillList();
 }
 function loadAgentSkills() {
-  _applyAgentEnabled(_agentEnabled());
+  _applyAgentEnabled();
   renderSkillList();
-  if (_loadSkills().length || _agentEnabled()) {
-    const d = document.getElementById('configDetails');
+  if (_loadSkills().length) {
+    const d = document.getElementById('workspacePreferences');
     if (d) d.open = true;
   }
 }
@@ -8511,24 +8650,29 @@ async function loadKb() {
   const hint = document.getElementById('kbHint');
   if (!list) return;
   if (!currentUser) {
+    _workspaceKbDocs = [];
     list.innerHTML = '';
     if (hint) hint.textContent = "Sign in to add docs. They're retrieved as evidence in your forecasts.";
+    renderWorkspacePanel();
     return;
   }
   try {
     const r = await fetch('/rag/documents', { headers: authHeaders() });
     const d = await _readJson(r);
     if (!r.ok) return;
-    renderKbList(d.documents || []);
-    if (hint) hint.textContent = (d.documents || []).length
+    _workspaceKbDocs = d.documents || [];
+    renderKbList(_workspaceKbDocs);
+    if (hint) hint.textContent = _workspaceKbDocs.length
       ? 'Retrieved as evidence in your forecasts.'
       : 'Add text or a URL; it becomes searchable evidence in your forecasts.';
+    renderWorkspacePanel();
   } catch (_) {}
 }
 function renderKbList(docs) {
   const host = document.getElementById('kbList');
   if (!host) return;
-  host.innerHTML = docs.map(doc => `
+  _workspaceKbDocs = docs || [];
+  host.innerHTML = _workspaceKbDocs.map(doc => `
     <div class="model-row" style="cursor:default">
       <div class="model-meta">
         <div class="model-name">${escHtml(doc.title || doc.source || 'Document')}</div>
@@ -8538,6 +8682,7 @@ function renderKbList(docs) {
         <button type="button" class="model-icon-btn" title="Remove" onclick="deleteKbDoc('${escAttr(doc.doc_id || '')}')">${uiIcon('x')}</button>
       </div>
     </div>`).join('');
+  renderWorkspacePanel();
 }
 async function ingestKb() {
   if (!currentUser) { _kbError('Sign in to add documents.'); return; }
@@ -8870,7 +9015,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>` : ''}
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. Smart ROI uses the filtered strategy; crowd-follow is the zero-edge baseline. <a href="#track-app" class="ui-icon-label" style="color:var(--accent)" onclick="showView('track-app')">Full track record ${uiIcon('arrow-right')}</a></p>`);
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. Smart ROI uses the filtered strategy; crowd-follow is the zero-edge baseline. <a href="/track" class="ui-icon-label" style="color:var(--accent)">Full track record ${uiIcon('arrow-right')}</a></p>`);
     } catch(e) { typing.remove(); _appendError('Could not load track record: ' + e.message); }
     return true;
   }
@@ -9118,6 +9263,8 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') _closeAcct
 function updateAuthUI(user) {
   currentUser = user;
   if (typeof loadKb === 'function') loadKb();  // refresh KB on sign-in/out
+  if (typeof refreshPersonalLedger === 'function') refreshPersonalLedger();
+  if (typeof renderWorkspacePanel === 'function') renderWorkspacePanel();
   if (typeof _syncFavoritesFromServer === 'function') {
     if (user) {
       _syncFavoritesFromServer();
@@ -9467,8 +9614,18 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-const _initConversationId = conversationIdFromHash();
-const _initView = _initConversationId ? 'chat' : (_URL_VIEW[window.location.hash || '/'] ?? 'app');
+const _legacyInitialRoute = legacyRouteFromHash();
+if (_legacyInitialRoute) {
+  history.replaceState(
+    { view: _legacyInitialRoute.view, convId: _legacyInitialRoute.convId },
+    '',
+    historyUrlFor(_legacyInitialRoute.view, _legacyInitialRoute.convId),
+  );
+}
+const _initConversationId = conversationIdFromPath();
+const _initView = _initConversationId
+  ? 'chat'
+  : (history.state?.view || _PATH_VIEW[normaliseAppPath()] || 'landing');
 setHistoryState(_initView, 'replace', { convId: _initConversationId });
 syncSidebarA11y();
 recordPageVisit();

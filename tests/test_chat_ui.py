@@ -18,6 +18,16 @@ class ChatUiTests(unittest.TestCase):
             self.index_html,
         )
 
+    def test_composer_keeps_prompt_and_controls_in_distinct_areas(self) -> None:
+        self.assertIn('class="input-box composer-shell"', self.index_html)
+        self.assertIn('class="composer-actions"', self.index_html)
+        self.assertIn('class="composer-model-picker"', self.index_html)
+        self.assertIn('class="composer-model-label">Model</span>', self.index_html)
+        self.assertIn('placeholder="What would you like to forecast?"', self.index_html)
+        self.assertIn('aria-label="Choose chat model"', self.index_html)
+        self.assertIn('@media (max-width: 640px) {', self.index_html)
+        self.assertIn('.composer-shell { gap: 7px; grid-template-columns: 1fr;', self.index_html)
+
     def test_hidden_live_status_does_not_leave_an_empty_pill(self) -> None:
         self.assertIn(
             ".chat-live-status {\n      display: none !important;",
@@ -112,6 +122,33 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("Add to personal ledger", self.index_html)
         self.assertIn("/personal-ledger/", self.index_html)
         self.assertIn("function openPersonalLedger", self.index_html)
+
+    def test_app_uses_refresh_safe_paths_and_migrates_legacy_hash_links(self) -> None:
+        self.assertIn("const CHAT_PATH_PREFIX = '/chat/';", self.index_html)
+        self.assertIn("'app':           '/ask'", self.index_html)
+        self.assertIn("'edge-landing':  '/edge'", self.index_html)
+        self.assertIn("'watch-landing': '/watchlist'", self.index_html)
+        self.assertIn("'ledger-landing': '/ledger'", self.index_html)
+        self.assertIn("function legacyRouteFromHash", self.index_html)
+        self.assertIn("history.replaceState(", self.index_html)
+        self.assertIn("const _initConversationId = conversationIdFromPath();", self.index_html)
+
+    def test_workspace_panel_uses_plain_language_controls(self) -> None:
+        self.assertIn(">Your workspace<", self.index_html)
+        self.assertIn("Your saved context", self.index_html)
+        self.assertIn("Add a note or link", self.index_html)
+        self.assertIn("Your record", self.index_html)
+        self.assertIn("function openWorkspaceContext", self.index_html)
+        self.assertIn("Research is Foresea's always-on answering workflow.", self.index_html)
+        self.assertNotIn("workspaceStandardMode", self.index_html)
+        self.assertNotIn("setWorkspaceAnswerMode", self.index_html)
+        self.assertNotIn("How Foresea answers", self.index_html)
+
+    def test_workspace_panel_summarizes_private_context_and_ledger(self) -> None:
+        self.assertIn("No notes added", self.index_html)
+        self.assertIn("note${_workspaceKbDocs.length === 1 ? '' : 's'} saved", self.index_html)
+        self.assertIn("marked correct or wrong", self.index_html)
+        self.assertIn("renderWorkspacePanel();", self.index_html)
 
     def test_browser_history_closes_personal_ledger_overlay(self) -> None:
         history_body = self.index_html.split("function applyHistoryState", 1)[1].split(

@@ -1752,6 +1752,11 @@ class ServerTests(unittest.TestCase):
     def test_page_routes_include_dynamic_context(self):
         cases = [
             ("/", "home", "no-cache"),
+            ("/ask", "ask", "no-cache"),
+            ("/edge", "edge", "no-cache"),
+            ("/track", "track", "no-cache"),
+            ("/ledger", "ledger", "no-cache"),
+            ("/chat/conv_123", "chat", "no-cache"),
             ("/watchlist", "watchlist", "no-cache"),
             ("/trade", "trade", "no-cache"),
             ("/agents", "agents", "public, max-age=300"),
@@ -1768,6 +1773,20 @@ class ServerTests(unittest.TestCase):
                 self.assertEqual(context["canonical"], f"https://foresea.ink{path}")
                 self.assertEqual(context["api"]["radar"], "/radar")
                 self.assertIn("</head>", r.text)
+
+    def test_chat_page_route_does_not_reflect_hostile_path_input(self):
+        r = self.client.get("/chat/conv_%22%3E%3Cimg%20src=x%20onerror=alert(1)%3E")
+
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn("<img src=x onerror=alert(1)>", r.text)
+        self.assertIn("\\u003cimg", r.text)
+
+    def test_chat_models_route_is_not_shadowed_by_chat_page_route(self):
+        r = self.client.get("/chat/models")
+
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("application/json", r.headers.get("content-type", ""))
+        self.assertNotIn("<html", r.text.lower())
 
     def test_agent_manifest(self):
         r = self.client.get("/.well-known/agent.json")

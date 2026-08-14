@@ -1807,8 +1807,10 @@ async def exception_alert_middleware(request: Request, call_next):
         )
 
 
-# Reject oversized request bodies up front (Content-Length based) so a handler
-# never has to buffer a hostile payload.
+# Reject oversized request bodies up front. Content-Length lets us reject before
+# reading a request. For chunked and HTTP/2 uploads that omit it, wrap the ASGI
+# receive channel so the request is rejected as soon as its running size exceeds
+# the cap, before an endpoint can buffer the complete body.
 @app.middleware("http")
 async def body_size_limit_middleware(request: Request, call_next):
     cl = request.headers.get("content-length")
@@ -1821,6 +1823,29 @@ async def body_size_limit_middleware(request: Request, call_next):
                 )
         except ValueError:
             pass
+    elif request.method not in {"GET", "HEAD", "OPTIONS"}:
+        receive = request._receive
+        received_bytes = 0
+        exceeded = False
+
+        async def limited_receive():
+            nonlocal exceeded, received_bytes
+            message = await receive()
+            if message["type"] == "http.request":
+                received_bytes += len(message.get("body", b""))
+                if received_bytes > _MAX_BODY_BYTES:
+                    exceeded = True
+                    return {"type": "http.disconnect"}
+            return message
+
+        request._receive = limited_receive
+        response = await call_next(request)
+        if exceeded:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": f"Request body exceeds the {_MAX_BODY_BYTES // (1024 * 1024)} MB limit."},
+            )
+        return response
     return await call_next(request)
 
 
@@ -2140,6 +2165,36 @@ async def index(request: Request) -> Response:
         page="home",
         cache_control="no-cache",
     )
+
+
+async def _spa_page(request: Request, page: str) -> Response:
+    """Serve the app shell for a client-side route that must survive refresh."""
+    return _render_static_html_page(
+        "index.html",
+        request,
+        page=page,
+        cache_control="no-cache",
+    )
+
+
+@app.get("/ask", include_in_schema=False)
+async def ask_page(request: Request) -> Response:
+    return await _spa_page(request, "ask")
+
+
+@app.get("/edge", include_in_schema=False)
+async def edge_page(request: Request) -> Response:
+    return await _spa_page(request, "edge")
+
+
+@app.get("/track", include_in_schema=False)
+async def track_page(request: Request) -> Response:
+    return await _spa_page(request, "track")
+
+
+@app.get("/ledger", include_in_schema=False)
+async def ledger_page(request: Request) -> Response:
+    return await _spa_page(request, "ledger")
 
 
 @app.get("/agents", include_in_schema=False)
@@ -6372,6 +6427,12 @@ async def chat_models(request: Request) -> Dict[str, Any]:
         for cfg in _SCADS_CHAT_MODEL_OPTIONS
     ]
     return {"default_model": default_key, "models": models}
+
+
+@app.get("/chat/{conversation_id}", include_in_schema=False)
+async def chat_page(conversation_id: str, request: Request) -> Response:
+    """Serve a refresh-safe, shareable app URL for one local conversation."""
+    return await _spa_page(request, "chat")
 
 
 @app.get("/favorites", tags=["Auth"], response_model=FavoriteList, summary="List favourited markets")
