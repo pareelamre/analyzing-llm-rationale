@@ -94,6 +94,34 @@ def build_system_prompt(tool_specs: List[Dict[str, str]], max_steps: int, extra_
     return "\n".join(lines)
 
 
+def _normalize_action(obj: Dict[str, Any]) -> Dict[str, Any]:
+    """Recognize a model's native function-calling JSON shape and normalize it
+    to this loop's own {"action": ..., "args": ...} schema.
+
+    Not every model reliably follows the schema given in the system prompt --
+    observed live: minimax-m3 defaulting to OpenAI-style
+    {"name": "web_search", "parameters": {...}} instead, which parsed as valid
+    JSON but was silently treated as a "final answer" (that JSON, verbatim)
+    because it had no "action" key -- the tool never actually ran even though
+    the model was clearly trying to call it. Left untouched if the model
+    already used the prompted schema (has "action" or "final").
+    """
+    if "action" in obj or "final" in obj:
+        return obj
+    name = obj.get("name")
+    if not isinstance(name, str) or not name:
+        return obj
+    params = obj.get("parameters", obj.get("arguments"))
+    if isinstance(params, str):
+        try:
+            params = json.loads(params)
+        except ValueError:
+            params = {}
+    if not isinstance(params, dict):
+        params = {}
+    return {"thought": obj.get("thought", ""), "action": name, "args": params}
+
+
 def parse_action(text: str) -> Optional[Dict[str, Any]]:
     """Extract the first JSON object from a model turn. Returns the dict, or None
     if no JSON is found (caller treats that as a plain final answer)."""
@@ -115,7 +143,7 @@ def parse_action(text: str) -> Optional[Dict[str, Any]]:
                 try:
                     obj = json.loads(blob)
                     if isinstance(obj, dict):
-                        return obj
+                        return _normalize_action(obj)
                 except ValueError:
                     start = -1  # keep scanning for a valid object
     return None
