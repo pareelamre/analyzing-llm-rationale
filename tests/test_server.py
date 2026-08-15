@@ -1147,6 +1147,7 @@ class ServerTests(unittest.TestCase):
             "leaderboard": [{"agent_id": "gpt-oss-120b", "account_value": 9981.46}],
             "equity_curves": {"gpt-oss-120b": {"value_curve": [{"account_value": 10000.0}]}},
             "recent_activity": [{"agent_id": "gpt-oss-120b", "type": "trade"}],
+            "eligibility": {"gpt-oss-120b": {"eligible": False, "checks": {"sufficient_sample": False}}},
         }
         with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
             response = self.client.get("/agent-trading/board")
@@ -1157,6 +1158,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["leaderboard"][0]["agent_id"], "gpt-oss-120b")
         self.assertEqual(payload["equity_curves"]["gpt-oss-120b"]["value_curve"][0]["account_value"], 10000.0)
         self.assertEqual(payload["recent_activity"][0]["type"], "trade")
+        self.assertFalse(payload["eligibility"]["gpt-oss-120b"]["eligible"])
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])
 
@@ -1178,6 +1180,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["leaderboard"], [])
         self.assertEqual(payload["equity_curves"], {})
         self.assertEqual(payload["recent_activity"], [])
+        self.assertEqual(payload["eligibility"], {})
         self.assertEqual(payload["mode"], "shadow")
 
     def test_edge_board_endpoint_compacts_large_chart_payloads(self):
@@ -2479,6 +2482,44 @@ class ServerTests(unittest.TestCase):
             notes = json.loads((Path(td) / "notes.json").read_text())
         self.assertIn("minimax-m3", notes)
         self.assertNotIn("agent", notes)
+
+    def test_select_agent_provider_uses_auto_selected_model_when_no_explicit_model_given(self):
+        # _run_agent_skills and _agent_tool_loop used to always fall back to
+        # the server's static default model whenever no explicit model/BYOK
+        # key was given, bypassing the same ROI-based evolution-loop
+        # auto-selection _select_predict_provider already applies to the main
+        # forecast. Both now share _select_agent_provider, which mirrors that
+        # branch order.
+        alt_provider = FakeProvider()
+        with (
+            mock.patch.object(server_module, "_auto_selected_model", return_value="gpt-oss-120b"),
+            mock.patch.object(server_module, "_scads_alt_provider", return_value=alt_provider) as alt_provider_mock,
+        ):
+            req = server_module.AgentAnalyzeRequest(question="Will X happen?")
+            provider, temperature, max_tokens = server_module._select_agent_provider(req)
+        alt_provider_mock.assert_called_once_with("gpt-oss-120b")
+        self.assertIs(provider, alt_provider)
+
+    def test_select_agent_provider_prefers_explicit_model_over_auto_selection(self):
+        alt_provider = FakeProvider()
+        with (
+            mock.patch.object(server_module, "_auto_selected_model", return_value="gpt-oss-120b"),
+            mock.patch.object(server_module, "_scads_alt_provider", return_value=alt_provider) as alt_provider_mock,
+        ):
+            req = server_module.AgentAnalyzeRequest(question="Will X happen?", model="minimax-m3")
+            server_module._select_agent_provider(req)
+        alt_provider_mock.assert_called_once_with("minimax-m3")
+
+    def test_select_agent_provider_prefers_byok_over_auto_selection(self):
+        with mock.patch.object(server_module, "_auto_selected_model") as auto_mock:
+            req = server_module.AgentAnalyzeRequest(
+                question="Will X happen?",
+                openrouter_api_key="user-key",
+                openrouter_model="user/custom-model",
+            )
+            provider, temperature, max_tokens = server_module._select_agent_provider(req)
+        auto_mock.assert_not_called()
+        self.assertEqual(provider.model_name, "user/custom-model")
 
     def test_agent_analyze_fetches_market_and_recommends(self):
         import analyzing_llm_rationale.market_data as md

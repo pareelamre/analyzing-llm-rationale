@@ -113,6 +113,9 @@ class BuildBoardTests(unittest.TestCase):
         self.assertAlmostEqual(model_a_row["account_value"], 9950.0 + 30.0)
         self.assertIn("model-a", board["equity_curves"])
         self.assertIn("model-b", board["equity_curves"])
+        self.assertIn("model-a", board["eligibility"])
+        self.assertIn("model-b", board["eligibility"])
+        self.assertIn("eligible", board["eligibility"]["model-a"])
         # Must be JSON-serializable end to end (no stray sqlite3.Row/etc leaking through).
         json.dumps(board)
 

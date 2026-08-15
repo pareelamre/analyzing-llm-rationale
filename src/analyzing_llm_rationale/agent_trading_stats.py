@@ -152,6 +152,59 @@ def agent_equity_curve(conn: sqlite3.Connection, agent_id: str) -> Dict[str, Any
     }
 
 
+# Reasoned, adjustable starting thresholds for shadow-trading "promotion
+# eligibility" -- there is no real-money consequence to calibrate against
+# yet, so these are deliberately conservative rather than tuned:
+#   - 30 settled trades is a common rough floor for a Sharpe/win-rate
+#     estimate to start meaning more than noise.
+#   - Sharpe >= 0.5 is comfortably above "indistinguishable from luck"
+#     (~0) while well short of "strong" (1.0+) -- a low bar on purpose.
+#   - 25% max drawdown is a common early-stage risk ceiling for vetting a
+#     new strategy, well above the 15% single-market concentration cap
+#     already enforced per-trade (a different thing: that's a position
+#     limit, this is an observed historical portfolio drawdown).
+PROMOTION_MIN_SETTLED_TRADES = 30
+PROMOTION_MIN_SHARPE = 0.5
+PROMOTION_MAX_DRAWDOWN = 0.25
+
+
+def compute_promotion_eligibility(
+    leaderboard_row: Mapping[str, Any], equity: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """Whether one agent's shadow-trading track record currently clears a
+    conservative, adjustable bar for "worth a human's attention as a
+    promotion candidate."
+
+    Purely observational -- this reports a verdict, it does not grant or
+    restrict anything. There is no "more autonomy" lever wired to this yet;
+    any future graduation to real trading must still go through Trade Runs,
+    guardrails, and explicit human confirmation regardless of this verdict.
+    """
+    settled_count = int(leaderboard_row.get("settled_count") or 0)
+    return_pct = leaderboard_row.get("return_pct")
+    sharpe = equity.get("sharpe")
+    max_drawdown = equity.get("max_drawdown")
+
+    checks = {
+        "sufficient_sample": settled_count >= PROMOTION_MIN_SETTLED_TRADES,
+        "positive_return": (return_pct or 0) > 0,
+        "sharpe_above_floor": sharpe is not None and sharpe >= PROMOTION_MIN_SHARPE,
+        "drawdown_within_cap": max_drawdown is not None and max_drawdown <= PROMOTION_MAX_DRAWDOWN,
+    }
+    return {
+        "agent_id": leaderboard_row.get("agent_id"),
+        "eligible": all(checks.values()),
+        "checks": checks,
+        "settled_count": settled_count,
+        "min_settled_trades_required": PROMOTION_MIN_SETTLED_TRADES,
+        "return_pct": return_pct,
+        "sharpe": sharpe,
+        "min_sharpe_required": PROMOTION_MIN_SHARPE,
+        "max_drawdown": max_drawdown,
+        "max_drawdown_allowed": PROMOTION_MAX_DRAWDOWN,
+    }
+
+
 def recent_activity(
     conn: sqlite3.Connection,
     notes_by_agent: Mapping[str, List[Mapping[str, Any]]],

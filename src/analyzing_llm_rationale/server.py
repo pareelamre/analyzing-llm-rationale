@@ -2859,6 +2859,10 @@ async def agent_trading_board():
       approximates and why) plus Sharpe/max-drawdown computed over it.
     - ``recent_activity``: a merged, newest-first transparency feed of
       trades, settlements, per-cycle theses, and notes across every model.
+    - ``eligibility``: per model, whether its shadow track record currently
+      clears a conservative, adjustable bar (settled trades, Sharpe,
+      drawdown -- see ``agent_trading_stats.compute_promotion_eligibility``).
+      Purely observational: nothing reads this to grant any capability.
     """
     live = await asyncio.get_running_loop().run_in_executor(None, _read_agent_trading_board)
     live = live or {}
@@ -2873,6 +2877,7 @@ async def agent_trading_board():
             "leaderboard": live.get("leaderboard", []),
             "equity_curves": live.get("equity_curves", {}),
             "recent_activity": live.get("recent_activity", []),
+            "eligibility": live.get("eligibility", {}),
         },
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
@@ -11176,6 +11181,32 @@ def _agent_prediction_request(
     )
 
 
+def _select_agent_provider(req: "AgentAnalyzeRequest"):
+    """Provider selection shared by skills and the tool loop. Mirrors
+    _select_predict_provider's branch order (explicit model -> BYOK/custom
+    endpoint -> ROI-based auto-selection -> server default), so an
+    /agent/analyze request without an explicit model benefits from the same
+    evolution-loop auto-routing the main forecast already gets, instead of
+    always falling straight to the server's static default."""
+    alt_provider = _scads_alt_provider(req.model) if req.model else None
+    if alt_provider is not None:
+        return alt_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
+    if (req.ollama_base_url and req.openrouter_model) or (req.openrouter_api_key and req.openrouter_model):
+        return _select_provider(
+            req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
+            getattr(req, "ollama_base_url", None),
+        )
+    auto = _auto_selected_model()
+    if auto:
+        auto_provider = _scads_alt_provider(auto)
+        if auto_provider is not None:
+            return auto_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
+    return _select_provider(
+        req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
+        getattr(req, "ollama_base_url", None),
+    )
+
+
 async def _run_agent_skills(
     req: AgentAnalyzeRequest,
     question: str,
@@ -11189,18 +11220,7 @@ async def _run_agent_skills(
     if not skills_to_run:
         return [], False
 
-    alt_provider = _scads_alt_provider(req.model) if req.model else None
-    if alt_provider is not None:
-        provider, temperature, max_tokens = (
-            alt_provider,
-            _state.get("temperature", 0.0),
-            _state.get("max_tokens", 1024),
-        )
-    else:
-        provider, temperature, max_tokens = _select_provider(
-            req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
-            getattr(req, "ollama_base_url", None),
-        )
+    provider, temperature, max_tokens = _select_agent_provider(req)
     sources_txt = "\n".join(
         f"- {s.source}: {s.title}" for s in result.evidence_sources[:8]
     ) or "(no evidence retrieved)"
@@ -11550,18 +11570,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             return
         await _persist_agent_run_step(user_id, run, step)
 
-    alt_provider = _scads_alt_provider(req.model) if req.model else None
-    if alt_provider is not None:
-        provider, temperature, max_tokens = (
-            alt_provider,
-            _state.get("temperature", 0.0),
-            _state.get("max_tokens", 1024),
-        )
-    else:
-        provider, temperature, max_tokens = _select_provider(
-            req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
-            getattr(req, "ollama_base_url", None),
-        )
+    provider, temperature, max_tokens = _select_agent_provider(req)
     loop = asyncio.get_running_loop()
     last: Dict[str, Any] = {}
     agent_id = str(req.model or req.openrouter_model or _state.get("model_key") or "agent")
