@@ -4055,6 +4055,7 @@ class AnalyticsEventSummary(BaseModel):
     events_24h: int = 0
     active_accounts_24h: int = 0
     active_accounts_7d: int = 0
+    by_model: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class RecentAnalyticsEvent(BaseModel):
@@ -5613,6 +5614,7 @@ def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
     records = list(query.fetch(limit=10000))
     by_event: Dict[str, Dict[str, int]] = defaultdict(lambda: {"count": 0, "authenticated": 0, "anonymous": 0})
     by_day: Dict[str, int] = defaultdict(int)
+    by_model: Dict[str, int] = defaultdict(int)
     events_24h = 0
     active_accounts_24h: set = set()
     active_accounts_7d: set = set()
@@ -5626,6 +5628,17 @@ def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
         else:
             by_event[name]["anonymous"] += 1
         by_day[entity.get("day") or entity["ts"].strftime("%Y-%m-%d")] += 1
+
+        # Model usage tracking from metadata
+        raw_meta = entity.get("metadata")
+        if raw_meta:
+            try:
+                meta = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+                if isinstance(meta, dict) and meta.get("model"):
+                    by_model[str(meta["model"])] += 1
+            except Exception:
+                pass
+
         if ts and ts >= cutoff_24h:
             events_24h += 1
             ref = entity.get("account_ref") or (_analytics_account_ref(str(entity["user_id"])) if entity.get("user_id") else None)
@@ -5649,6 +5662,10 @@ def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
         by_day=[
             {"day": day, "count": count}
             for day, count in sorted(by_day.items(), reverse=True)
+        ],
+        by_model=[
+            {"model": model, "count": count}
+            for model, count in sorted(by_model.items(), key=lambda kv: kv[1], reverse=True)
         ],
         attribution=_analytics_attribution_summary(records),
         events_24h=events_24h,
@@ -6243,6 +6260,14 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
               AND (account_ref IS NOT NULL OR user_id IS NOT NULL)
             """
         ).fetchall()
+        meta_rows = conn.execute(
+            """
+            SELECT metadata_json
+            FROM analytics_events
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
+              AND metadata_json IS NOT NULL
+            """
+        ).fetchall()
     finally:
         conn.close()
     active_accounts_24h = {
@@ -6255,6 +6280,15 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
         for row in active_7d_rows
         if row[0] or row[1]
     }
+    by_model: Dict[str, int] = defaultdict(int)
+    for (mjson,) in meta_rows:
+        if mjson:
+            try:
+                m = json.loads(mjson) if isinstance(mjson, str) else mjson
+                if isinstance(m, dict) and m.get("model"):
+                    by_model[str(m["model"])] += 1
+            except Exception:
+                pass
     return AnalyticsEventSummary(
         total_events=int(total or 0),
         by_event=[
@@ -6267,6 +6301,10 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
             for name, count, auth, anon in by_event
         ],
         by_day=[{"day": str(day), "count": int(count)} for day, count in by_day],
+        by_model=[
+            {"model": model, "count": count}
+            for model, count in sorted(by_model.items(), key=lambda kv: kv[1], reverse=True)
+        ],
         attribution=_analytics_attribution_summary(
             [
                 {"account_ref": account_ref, "user_id": user_id, "attribution": attribution}
@@ -6336,6 +6374,10 @@ async def export_analytics_csv(request: Request) -> Response:
     lines.append("Event Name,Total Count,Authenticated,Anonymous")
     for row in events.by_event:
         lines.append(f"{row.get('event_name')},{row.get('count', 0)},{row.get('authenticated', 0)},{row.get('anonymous', 0)}")
+    lines.append("")
+    lines.append("Model,Forecast Count")
+    for row in events.by_model:
+        lines.append(f"{row.get('model')},{row.get('count', 0)}")
 
     csv_content = "\n".join(lines)
     filename = f"foresea_analytics_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
@@ -6651,16 +6693,43 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
       </div>
     </div>
 
-    <!-- Live Recent Activity Stream -->
-    <div class="panel" style="margin-bottom: 24px;">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">Live Activity Stream</div>
-          <div class="panel-sub">Most recent privacy-preserving product events</div>
+    <!-- Row 2 Panels: Activity Stream & Model Preference -->
+    <div class="grid-panels">
+      <!-- Live Recent Activity Stream -->
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Live Activity Stream</div>
+            <div class="panel-sub">Most recent privacy-preserving product events</div>
+          </div>
+        </div>
+        <div id="recentActivityList" class="activity-list">
+          <div style="text-align:center; color:var(--text-dim); padding: 16px;">Loading recent events...</div>
         </div>
       </div>
-      <div id="recentActivityList" class="activity-list">
-        <div style="text-align:center; color:var(--text-dim); padding: 16px;">Loading recent events...</div>
+
+      <!-- Model Preference -->
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Model Preference & Utilization</div>
+            <div class="panel-sub">Forecast model selection share</div>
+          </div>
+        </div>
+        <div style="max-height: 290px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th style="text-align:right">Forecasts</th>
+                <th style="text-align:right">Share</th>
+              </tr>
+            </thead>
+            <tbody id="modelsTableBody">
+              <tr><td colspan="3" style="text-align:center; color:var(--text-dim)">Loading models...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -6770,6 +6839,28 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
           }).join('');
         } else {
           streamContainer.innerHTML = '<div style="text-align:center; color:var(--text-dim); padding: 16px;">No recent events recorded yet</div>';
+        }
+
+        // 5. Model Preference Table
+        const modelTbody = document.getElementById('modelsTableBody');
+        if (events.by_model && events.by_model.length) {
+          const totalModelForecasts = events.by_model.reduce((acc, m) => acc + (m.count || 0), 0) || 1;
+          modelTbody.innerHTML = events.by_model.map(m => {
+            const mCount = m.count || 0;
+            const pct = Math.round((mCount / totalModelForecasts) * 100);
+            return `<tr>
+              <td>
+                <div style="font-weight:600">${m.model}</div>
+                <div class="event-bar-wrap">
+                  <div style="background:#6366f1; width:${pct}%; height:100%;"></div>
+                </div>
+              </td>
+              <td style="text-align:right; font-weight:700">${mCount.toLocaleString()}</td>
+              <td style="text-align:right; font-size:12px; color:#a5b4fc; font-weight:600">${pct}%</td>
+            </tr>`;
+          }).join('');
+        } else {
+          modelTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim)">No model forecasts recorded yet</td></tr>';
         }
       } catch (err) {
         console.error(err);

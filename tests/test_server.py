@@ -1239,7 +1239,7 @@ class ServerTests(unittest.TestCase):
     def test_analytics_event_summary_counts_events(self):
         response = self.client.post(
             "/analytics/event",
-            json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test"}},
+            json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test", "model": "gpt-oss-120b"}},
         )
         self.assertEqual(response.status_code, 200)
         time.sleep(0.02)
@@ -1255,6 +1255,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["by_event"][0]["count"], 1)
         self.assertEqual(payload["by_event"][0]["anonymous"], 1)
         self.assertEqual(payload["by_event"][0]["authenticated"], 0)
+        self.assertEqual(len(payload["by_model"]), 1)
+        self.assertEqual(payload["by_model"][0]["model"], "gpt-oss-120b")
+        self.assertEqual(payload["by_model"][0]["count"], 1)
 
     def test_analytics_attribution_hashes_session_identity_and_summarizes(self):
         user_id = "analytics-user@example.com"
@@ -1352,7 +1355,7 @@ class ServerTests(unittest.TestCase):
         )
         self.client.post(
             "/analytics/event",
-            json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test"}},
+            json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test", "model": "gpt-oss-120b"}},
         )
         response = self.client.get("/analytics/export")
         self.assertEqual(response.status_code, 200)
@@ -1360,6 +1363,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("attachment;", response.headers.get("content-disposition", ""))
         self.assertIn("Total Visits (30d)", response.text)
         self.assertIn("forecast_completed", response.text)
+        self.assertIn("gpt-oss-120b", response.text)
 
     def test_share_forecast_creates_public_page(self):
         response = self.client.post(
