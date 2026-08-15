@@ -177,7 +177,7 @@ jobs:
               and row.get("done_ms") is not None
               and row.get("model_key") in requested_models
           ]
-          successful_models = sorted({row["model_key"] for row in successes})
+          successful_models = {row["model_key"] for row in successes}
           unavailable_models = sorted(
               requested_models - successful_models
           )
@@ -187,5 +187,5 @@ jobs:
                   "::warning::SCADS smoke models unavailable: "
                   + ", ".join(unavailable_models)
               )
-          print("stream latency smoke test passed via: " + ", ".join(successful_models))
+          print("stream latency smoke test passed via: " + ", ".join(sorted(successful_models)))
           PY
