@@ -1328,6 +1328,38 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Foresea Activity Desk", response.text)
         self.assertIn("Daily Active Accounts", response.text)
         self.assertIn("Product Funnel", response.text)
+        self.assertIn("Live Activity Stream", response.text)
+        self.assertIn("Export CSV", response.text)
+
+    def test_analytics_events_recent_returns_events(self):
+        self.client.post(
+            "/analytics/event",
+            json={"event_name": "forecast_completed", "path": "/", "metadata": {"model": "test-model"}},
+        )
+        response = self.client.get("/analytics/events/recent?limit=10")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("events", payload)
+        self.assertEqual(len(payload["events"]), 1)
+        self.assertEqual(payload["events"][0]["event_name"], "forecast_completed")
+        self.assertEqual(payload["events"][0]["attribution"], "anonymous")
+        self.assertEqual(payload["events"][0]["metadata"]["model"], "test-model")
+
+    def test_analytics_export_returns_csv(self):
+        self.client.post(
+            "/analytics/visit",
+            json={"path": "/", "referrer": "", "timezone": "UTC"},
+        )
+        self.client.post(
+            "/analytics/event",
+            json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test"}},
+        )
+        response = self.client.get("/analytics/export")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/csv", response.headers.get("content-type", ""))
+        self.assertIn("attachment;", response.headers.get("content-disposition", ""))
+        self.assertIn("Total Visits (30d)", response.text)
+        self.assertIn("forecast_completed", response.text)
 
     def test_share_forecast_creates_public_page(self):
         response = self.client.post(
