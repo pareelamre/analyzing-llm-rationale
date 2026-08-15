@@ -4058,9 +4058,21 @@ class AgentSkill(BaseModel):
     instruction: str = Field(..., min_length=1, max_length=2000, description="What this skill should analyse.")
 
 
+class RedTeamVerdict(BaseModel):
+    """Structured classification of a Red team skill's own argument, from a
+    separate follow-up call. Observational only -- nothing in the pipeline
+    reads this to gate or adjust the forecast."""
+    credible: bool = Field(..., description="Whether the argument is well-supported by a real mechanism or evidence, not just contrarian restating.")
+    severity: Literal["low", "medium", "high"] = Field(..., description="How much this argument should weigh against the forecast if credible.")
+
+
 class AgentSkillResult(BaseModel):
     name: str
     output: str
+    verdict: Optional[RedTeamVerdict] = Field(
+        None,
+        description="Structured classification of this skill's own argument, when available (Red team only, best-effort).",
+    )
 
 
 class AgentProfile(BaseModel):
@@ -10441,6 +10453,17 @@ _AGENT_SKILL_SYSTEM = (
     "the skill asks for."
 )
 
+# Kept as a separate, small follow-up call rather than folded into
+# _AGENT_SKILL_SYSTEM above so the other three built-in skills' plain-prose
+# contract (and their "do not output JSON" instruction) stays untouched.
+_RED_TEAM_VERDICT_SYSTEM = (
+    "Classify a red-team argument made against a forecast. Respond with ONLY a "
+    "JSON object: {\"credible\": true|false, \"severity\": \"low\"|\"medium\"|\"high\"}. "
+    "\"credible\" means the argument rests on a real mechanism or evidence, not "
+    "just a contrarian restatement. \"severity\" is how much this argument should "
+    "weigh against the forecast if it is credible. No other text."
+)
+
 
 # Alternate server-hosted SCADS models the public API may forecast with (using
 # the server's own key) — for the multi-model paper-trading comparison.
@@ -11011,17 +11034,44 @@ def _model_probability_from_prediction(resp: PredictResponse) -> Optional[float]
     return resp.confidence
 
 
+async def _classify_red_team_argument(
+    argument: str, provider, temperature: float, max_tokens: int
+) -> Optional[RedTeamVerdict]:
+    """Best-effort structured classification of the Red team skill's own
+    output, via a small separate follow-up call. Never raises -- a
+    classification failure just means no verdict, not a broken skill run."""
+    try:
+        raw = await _provider_chat(
+            provider,
+            [
+                {"role": "system", "content": _RED_TEAM_VERDICT_SYSTEM},
+                {"role": "user", "content": argument[:2000]},
+            ],
+            temperature,
+            min(max_tokens, 150),
+            call_site="red_team_verdict",
+        )
+        obj = json.loads((raw or "").strip())
+        return RedTeamVerdict(credible=bool(obj["credible"]), severity=str(obj["severity"]))
+    except Exception:
+        logger.warning("red team verdict classification failed", exc_info=True)
+        return None
+
+
 async def _run_agent_skill(skill: AgentSkill, context: str, provider, temperature, max_tokens) -> AgentSkillResult:
     messages = [
         {"role": "system", "content": _AGENT_SKILL_SYSTEM},
         {"role": "user", "content": f"{context}\n\nSkill: {skill.name}\nInstruction: {skill.instruction}"},
     ]
     try:
-        output = await _provider_chat(provider, messages, temperature, max_tokens)
-        return AgentSkillResult(name=skill.name, output=(output or "").strip())
+        output = (await _provider_chat(provider, messages, temperature, max_tokens) or "").strip()
     except Exception as exc:
         logger.warning("agent skill %r failed: %s", skill.name, type(exc).__name__)
         return AgentSkillResult(name=skill.name, output="(this analysis step is temporarily unavailable)")
+    verdict = None
+    if skill.name == "Red team" and output:
+        verdict = await _classify_red_team_argument(output, provider, temperature, max_tokens)
+    return AgentSkillResult(name=skill.name, output=output, verdict=verdict)
 
 
 async def _resolve_agent_question(

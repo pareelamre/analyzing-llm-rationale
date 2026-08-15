@@ -2296,6 +2296,68 @@ class ServerTests(unittest.TestCase):
         names = {s["name"] for s in response.json()["skills"]}
         self.assertEqual(names, {"Base rate", "Scenario decomposition", "Red team", "Key drivers"})
 
+    def test_agent_analyze_red_team_skill_gets_structured_verdict(self):
+        # Red team runs strictly after the forecast is already computed and is
+        # purely decorative prose today -- this adds a small, separate
+        # follow-up call that classifies its own argument into a structured,
+        # observational verdict (nothing gates on it yet).
+        self.provider.responses = [
+            json.dumps({"predicted_answer": "Yes", "confidence": 0.7,
+                       "rationale": "Rate-cut odds look elevated."}),  # main forecast
+            "The market may be underpricing a scheduling delay risk.",  # Red team's own output
+            json.dumps({"credible": True, "severity": "medium"}),  # verdict classification
+        ]
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "evidence_top_k": 2,
+                "skills": [{"name": "Red team", "instruction": "Argue the strongest case the forecast is wrong."}],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        skill = response.json()["skills"][0]
+        self.assertEqual(skill["name"], "Red team")
+        self.assertEqual(skill["output"], "The market may be underpricing a scheduling delay risk.")
+        self.assertEqual(skill["verdict"], {"credible": True, "severity": "medium"})
+
+    def test_agent_analyze_non_red_team_skill_has_no_verdict_and_no_extra_call(self):
+        self.provider.responses = [
+            json.dumps({"predicted_answer": "Yes", "confidence": 0.7, "rationale": "..."}),  # main forecast
+            "Historically similar setups resolved Yes about 40% of the time.",  # skill output
+        ]
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "evidence_top_k": 2,
+                "skills": [{"name": "Base rate check", "instruction": "Compare to historical base rates."}],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        skill = response.json()["skills"][0]
+        self.assertIsNone(skill["verdict"])
+        self.assertEqual(len(self.provider.calls), 2)  # forecast + skill only, no extra classification call
+
+    def test_agent_analyze_red_team_verdict_degrades_gracefully_on_malformed_classification(self):
+        self.provider.responses = [
+            json.dumps({"predicted_answer": "Yes", "confidence": 0.7, "rationale": "..."}),  # main forecast
+            "The market may be underpricing a scheduling delay risk.",  # Red team's own output
+            "not valid json",  # malformed classification response
+        ]
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "evidence_top_k": 2,
+                "skills": [{"name": "Red team", "instruction": "Argue the strongest case the forecast is wrong."}],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        skill = response.json()["skills"][0]
+        self.assertEqual(skill["output"], "The market may be underpricing a scheduling delay risk.")
+        self.assertIsNone(skill["verdict"])
+
     def test_agent_analyze_tool_loop_runs(self):
         # FakeProvider returns forecast JSON (no action/final), so the loop treats
         # it as a final answer without calling tools — the deterministic backstop
