@@ -88,10 +88,15 @@ def build_board() -> Dict[str, Any]:
 
         leaderboard: List[Dict[str, Any]] = []
         equity_curves: Dict[str, Any] = {}
+        eligibility: Dict[str, Any] = {}
         activity: List[Dict[str, Any]] = []
         for model, conn in conns.items():
-            leaderboard.extend(agent_trading_stats.compute_agent_leaderboard(conn, quotes))
-            equity_curves[model] = agent_trading_stats.agent_equity_curve(conn, model)
+            rows = agent_trading_stats.compute_agent_leaderboard(conn, quotes)
+            leaderboard.extend(rows)
+            equity = agent_trading_stats.agent_equity_curve(conn, model)
+            equity_curves[model] = equity
+            if rows:
+                eligibility[model] = agent_trading_stats.compute_promotion_eligibility(rows[0], equity)
             activity.extend(agent_trading_stats.recent_activity(
                 conn, _load_model_notes(model), limit=RECENT_ACTIVITY_LIMIT,
             ))
@@ -109,6 +114,7 @@ def build_board() -> Dict[str, Any]:
         "models": models,
         "leaderboard": leaderboard,
         "equity_curves": equity_curves,
+        "eligibility": eligibility,
         "recent_activity": activity[:RECENT_ACTIVITY_LIMIT],
     }
 

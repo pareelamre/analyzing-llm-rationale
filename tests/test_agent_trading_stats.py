@@ -210,6 +210,53 @@ class EquityCurveTests(unittest.TestCase):
         self.assertEqual(values, [10_000.0, 9_950.0, 9_950.0, 9_920.0])
 
 
+class PromotionEligibilityTests(unittest.TestCase):
+    def test_eligible_when_all_checks_pass(self):
+        row = {"agent_id": "model-a", "settled_count": 40, "return_pct": 5.0}
+        equity = {"sharpe": 0.8, "max_drawdown": 0.10}
+        result = agent_trading_stats.compute_promotion_eligibility(row, equity)
+        self.assertTrue(result["eligible"])
+        self.assertEqual(result["agent_id"], "model-a")
+        self.assertTrue(all(result["checks"].values()))
+
+    def test_insufficient_sample_blocks_eligibility_even_with_good_metrics(self):
+        row = {"agent_id": "model-a", "settled_count": 5, "return_pct": 5.0}
+        equity = {"sharpe": 2.0, "max_drawdown": 0.02}
+        result = agent_trading_stats.compute_promotion_eligibility(row, equity)
+        self.assertFalse(result["eligible"])
+        self.assertFalse(result["checks"]["sufficient_sample"])
+        self.assertTrue(result["checks"]["sharpe_above_floor"])
+
+    def test_negative_return_blocks_eligibility(self):
+        row = {"agent_id": "model-a", "settled_count": 40, "return_pct": -2.0}
+        equity = {"sharpe": 0.8, "max_drawdown": 0.10}
+        result = agent_trading_stats.compute_promotion_eligibility(row, equity)
+        self.assertFalse(result["eligible"])
+        self.assertFalse(result["checks"]["positive_return"])
+
+    def test_sharpe_below_floor_blocks_eligibility(self):
+        row = {"agent_id": "model-a", "settled_count": 40, "return_pct": 1.0}
+        equity = {"sharpe": 0.1, "max_drawdown": 0.10}
+        result = agent_trading_stats.compute_promotion_eligibility(row, equity)
+        self.assertFalse(result["eligible"])
+        self.assertFalse(result["checks"]["sharpe_above_floor"])
+
+    def test_drawdown_over_cap_blocks_eligibility(self):
+        row = {"agent_id": "model-a", "settled_count": 40, "return_pct": 5.0}
+        equity = {"sharpe": 0.8, "max_drawdown": 0.40}
+        result = agent_trading_stats.compute_promotion_eligibility(row, equity)
+        self.assertFalse(result["eligible"])
+        self.assertFalse(result["checks"]["drawdown_within_cap"])
+
+    def test_missing_sharpe_or_drawdown_blocks_eligibility_rather_than_crashing(self):
+        row = {"agent_id": "model-a", "settled_count": 40, "return_pct": 5.0}
+        equity = {"sharpe": None, "max_drawdown": None}
+        result = agent_trading_stats.compute_promotion_eligibility(row, equity)
+        self.assertFalse(result["eligible"])
+        self.assertFalse(result["checks"]["sharpe_above_floor"])
+        self.assertFalse(result["checks"]["drawdown_within_cap"])
+
+
 class RecentActivityTests(unittest.TestCase):
     def test_merges_trades_theses_and_notes_sorted_newest_first(self):
         with _fixture_conn() as conn:

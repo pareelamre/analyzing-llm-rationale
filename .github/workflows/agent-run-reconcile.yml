@@ -1,0 +1,38 @@
+name: Agent run reconciliation
+
+# Marks AgentRun records stuck at status="running" as interrupted once
+# they're stale (see AGENT_RUN_STALE_MINUTES). Never resumes a run, never
+# touches a connected exchange account -- it only rewrites the status field
+# on a signed-in user's own private research-run record. The Cloud Run
+# endpoint is disabled unless the same scoped token is configured in both
+# environments.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-run-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Reconcile stale agent runs
+        env:
+          FORESEA_BASE_URL: https://foresea.ink
+          AGENT_RUN_RECONCILIATION_TOKEN: ${{ secrets.AGENT_RUN_RECONCILIATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AGENT_RUN_RECONCILIATION_TOKEN" ]; then
+            echo "::warning::AGENT_RUN_RECONCILIATION_TOKEN is not configured; reconciliation is intentionally inactive."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 240 --retry 2 --retry-all-errors \
+            -X POST "$FORESEA_BASE_URL/internal/agent-runs/reconcile?limit=25" \
+            -H "X-Agent-Run-Reconciliation-Token: $AGENT_RUN_RECONCILIATION_TOKEN"

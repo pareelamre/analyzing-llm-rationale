@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -7,6 +8,7 @@ import tempfile
 import time
 import unittest
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -42,14 +44,16 @@ class FakeProvider:
             "confidence": 0.7,
             "rationale": "Evidence supports a yes forecast.",
         }
+        self.responses = None  # optional queue of per-call responses, popped in order
         self.stream_response = "Streaming answer."
 
     def chat_completion(self, messages, temperature, max_tokens):
         self.calls.append(messages)
         self.max_tokens.append(max_tokens)
-        if isinstance(self.response, str):
-            return self.response
-        return json.dumps(self.response)
+        response = self.responses.pop(0) if self.responses else self.response
+        if isinstance(response, str):
+            return response
+        return json.dumps(response)
 
     def stream_chat_completion(self, messages, temperature, max_tokens):
         self.calls.append(messages)
@@ -687,6 +691,13 @@ class ServerTests(unittest.TestCase):
         self.assertIn("event: done", body)
         self.assertIn('"report"', body)
         self.assertIn('"model_probability": 0.7', body)
+        self.assertIn('"agent_run"', body)
+        runs = self.client.get(
+            "/agent/runs",
+            headers={"Authorization": f"Bearer {_issue_session('test-user', 'test@example.com', 'Test User', '')}"},
+        )
+        self.assertEqual(runs.status_code, 200)
+        self.assertEqual(runs.json()["runs"][0]["status"], "completed")
 
     def test_market_forecast_stream_returns_model_probability(self):
         token = _issue_session("stream-user", "user@example.com", "Stream User", "")
@@ -914,6 +925,50 @@ class ServerTests(unittest.TestCase):
             [("Will X happen before December 31, 2026?", 2)],
         )
 
+    def test_predict_backfills_created_time_and_publish_time_from_live_quote(self):
+        # Regression test: build_user_prompt's resolution-window check (only
+        # activates when publish_time is set) was dead on the live path --
+        # the market's own created_time was fetched into `quote` but never
+        # copied onto the record that reaches build_user_prompt. A caller who
+        # supplies a market URL but omits resolution_criteria/probability
+        # triggers the live-enrichment fetch, so created_time/publish_time
+        # must be backfilled from that same fetched quote.
+        import analyzing_llm_rationale.market_data as md
+
+        quote = {
+            "platform": "Polymarket",
+            "ident": "will-x",
+            "question": "Will X happen before December 31, 2026?",
+            "market_url": "https://polymarket.com/market/will-x",
+            "description": "Polymarket's current event background.",
+            "resolution_criteria": "Resolves Yes only if the official source confirms X.",
+            "outcome": "Yes",
+            "probability": 0.61,
+            "outcomes": [],
+            "created_time": "2026-01-01T00:00:00Z",
+        }
+        with mock.patch.object(
+            md,
+            "fetch_polymarket",
+            lambda slug=None, market_id=None: quote,
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Please analyze this market.",
+                    "market_platform": "Polymarket",
+                    "market_url": quote["market_url"],
+                    "market_probability": 0.60,
+                    "evidence_top_k": 2,
+                    "chat_mode": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Created Time: 2026-01-01T00:00:00Z", prompt)
+        self.assertIn("Normalized Contract Window", prompt)
+
     def test_predict_skips_market_enrichment_when_context_is_complete(self):
         import analyzing_llm_rationale.market_data as md
 
@@ -1099,6 +1154,7 @@ class ServerTests(unittest.TestCase):
             "leaderboard": [{"agent_id": "gpt-oss-120b", "account_value": 9981.46}],
             "equity_curves": {"gpt-oss-120b": {"value_curve": [{"account_value": 10000.0}]}},
             "recent_activity": [{"agent_id": "gpt-oss-120b", "type": "trade"}],
+            "eligibility": {"gpt-oss-120b": {"eligible": False, "checks": {"sufficient_sample": False}}},
         }
         with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
             response = self.client.get("/agent-trading/board")
@@ -1109,6 +1165,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["leaderboard"][0]["agent_id"], "gpt-oss-120b")
         self.assertEqual(payload["equity_curves"]["gpt-oss-120b"]["value_curve"][0]["account_value"], 10000.0)
         self.assertEqual(payload["recent_activity"][0]["type"], "trade")
+        self.assertFalse(payload["eligibility"]["gpt-oss-120b"]["eligible"])
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])
 
@@ -1130,6 +1187,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["leaderboard"], [])
         self.assertEqual(payload["equity_curves"], {})
         self.assertEqual(payload["recent_activity"], [])
+        self.assertEqual(payload["eligibility"], {})
         self.assertEqual(payload["mode"], "shadow")
 
     def test_edge_board_endpoint_compacts_large_chart_payloads(self):
@@ -1642,6 +1700,8 @@ class ServerTests(unittest.TestCase):
         }
         with mock.patch.object(server_module, "_stored_trading_credentials", return_value=fake_connection), mock.patch(
             "analyzing_llm_rationale.trading.place_order", return_value=fake_result
+        ), mock.patch.object(
+            server_module, "_validate_live_trade_guardrails", new=mock.AsyncMock(return_value={})
         ):
             submitted = self.client.post(
                 "/trading/orders",
@@ -1685,6 +1745,658 @@ class ServerTests(unittest.TestCase):
                 )
             self.assertEqual(cancelled.status_code, 200)
             self.assertEqual(cancelled.json()["status"], "canceled")
+
+    def test_trade_run_requires_explicit_execution_and_tracks_reconciliation(self):
+        token = _issue_session("run-trader", "run@example.com", "Run", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        fake_connection = {
+            "kalshi_api_key_id": "safe-test-key",
+            "kalshi_private_key": "safe-test-pem",
+            "kalshi_base_url": "https://external-api.kalshi.com/trade-api/v2",
+        }
+        fake_result = {
+            "ok": True,
+            "platform": "kalshi",
+            "would_execute": True,
+            "requires_confirmation": True,
+            "confirmation_phrase": "PLACE REAL ORDER",
+            "trading_enabled": True,
+            "max_order_notional": 50.0,
+            "estimated_notional": 1.0,
+            "warnings": [],
+            "normalized_order": {
+                "platform": "kalshi", "action": "buy", "outcome": "yes",
+                "order_type": "limit", "ticker": "KXTEST", "quantity": 2.0,
+                "price": 0.5, "subaccount": 0, "exchange_index": 0,
+            },
+            "submitted": True,
+            "user_id": "run-trader",
+            "venue_response": {"body": {"order_id": "run-venue-123", "status": "resting"}},
+        }
+        with mock.patch.object(
+            server_module, "_stored_trading_credentials", return_value=fake_connection
+        ):
+            created = self.client.post(
+                "/trading/runs",
+                json={
+                    "platform": "kalshi", "ticker": "KXTEST", "price": 0.5,
+                    "quantity": 2, "title": "Fed easing thesis", "thesis": "Policy data favors YES.",
+                    "expected_edge": 0.08, "sources": ["https://example.test/source"],
+                },
+                headers=headers,
+            )
+            self.assertEqual(created.status_code, 200)
+            run = created.json()
+            run_id = run["id"]
+            self.assertEqual(run["status"], "awaiting_approval")
+            self.assertTrue(run["client_order_id"].startswith("foresea-run-"))
+            self.assertEqual(run["provenance"]["expected_edge"], 0.08)
+            self.assertNotIn("safe-test-pem", created.text)
+
+            listed = self.client.get("/trading/runs", headers=headers)
+            self.assertEqual(listed.status_code, 200)
+            self.assertEqual(listed.json()["runs"][0]["id"], run_id)
+
+            rejected = self.client.post(
+                f"/trading/runs/{run_id}/execute",
+                json={"confirmation": "not approved"},
+                headers=headers,
+            )
+            self.assertEqual(rejected.status_code, 422)
+            self.assertEqual(
+                self.client.get(f"/trading/runs/{run_id}", headers=headers).json()["status"],
+                "awaiting_approval",
+            )
+
+            with mock.patch(
+                "analyzing_llm_rationale.trading.place_order", return_value=fake_result
+            ), mock.patch.object(
+                server_module, "_validate_live_trade_guardrails", new=mock.AsyncMock(return_value={})
+            ):
+                submitted = self.client.post(
+                    f"/trading/runs/{run_id}/execute",
+                    json={"confirmation": "PLACE REAL ORDER"},
+                    headers=headers,
+                )
+            self.assertEqual(submitted.status_code, 200)
+            self.assertEqual(submitted.json()["status"], "submitted")
+            self.assertEqual(submitted.json()["venue_order_id"], "run-venue-123")
+            audit_id = submitted.json()["audit_order_id"]
+            self.assertEqual(
+                self.client.get("/trading/orders", headers=headers).json()["orders"][0]["trade_run_id"],
+                run_id,
+            )
+
+            with mock.patch(
+                "analyzing_llm_rationale.trading.reconcile_order",
+                return_value={
+                    "venue_order_id": "run-venue-123", "status": "filled", "venue_status": "filled",
+                    "filled_quantity": 2.0, "remaining_quantity": 0.0,
+                },
+            ):
+                reconciled = self.client.post(
+                    f"/trading/runs/{run_id}/reconcile", headers=headers
+                )
+            self.assertEqual(reconciled.status_code, 200)
+            self.assertEqual(reconciled.json()["status"], "filled")
+            self.assertEqual(reconciled.json()["audit_order_id"], audit_id)
+
+            duplicate = self.client.post(
+                f"/trading/runs/{run_id}/execute",
+                json={"confirmation": "PLACE REAL ORDER"},
+                headers=headers,
+            )
+            self.assertEqual(duplicate.status_code, 409)
+
+    def test_trade_run_execution_claim_has_one_in_memory_owner(self):
+        req = server_module.TradeRunCreateRequest(
+            platform="kalshi", ticker="KXTEST", price=0.5, quantity=2
+        )
+        preview = {
+            "estimated_notional": 1.0,
+            "normalized_order": {
+                "platform": "kalshi", "action": "buy", "outcome": "yes",
+                "order_type": "limit", "ticker": "KXTEST", "quantity": 2.0,
+                "price": 0.5,
+            },
+        }
+        run = server_module._put_trading_run(
+            "claim-user",
+            server_module._new_trading_run(
+                req,
+                {"platform": "kalshi", "ticker": "KXTEST", "price": 0.5, "quantity": 2},
+                preview,
+            ),
+        )
+
+        first, first_owner = server_module._claim_trading_run_for_execution(
+            "claim-user", run["id"], preview
+        )
+        second, second_owner = server_module._claim_trading_run_for_execution(
+            "claim-user", run["id"], preview
+        )
+
+        self.assertTrue(first_owner)
+        self.assertFalse(second_owner)
+        self.assertEqual(first["status"], "submitting")
+        self.assertEqual(second["status"], "submitting")
+
+    def test_trading_guardrails_are_user_scoped_and_can_only_be_narrowed(self):
+        token = _issue_session("risk-user", "risk@example.com", "Risk", "")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        initial = self.client.get("/trading/guardrails", headers=headers)
+        self.assertEqual(initial.status_code, 200)
+        self.assertFalse(initial.json()["paused"])
+        self.assertFalse(initial.json()["platform_kill_switch"])
+
+        updated = self.client.put(
+            "/trading/guardrails",
+            json={
+                "paused": True,
+                "max_order_notional": 0.75,
+                "max_daily_risk_notional": 2.0,
+                "max_market_exposure_notional": 1.5,
+                "max_price_deviation_bps": 100,
+            },
+            headers=headers,
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertTrue(updated.json()["paused"])
+        self.assertEqual(updated.json()["max_order_notional"], 0.75)
+        self.assertEqual(updated.json()["max_price_deviation_bps"], 100)
+
+        above_cap = self.client.put(
+            "/trading/guardrails",
+            json={"max_order_notional": 100_000},
+            headers=headers,
+        )
+        self.assertEqual(above_cap.status_code, 409)
+        self.assertIn("hard ceiling", above_cap.json()["detail"])
+
+        events = self.client.get("/trading/guardrails/events", headers=headers)
+        self.assertEqual(events.status_code, 200)
+        self.assertEqual(events.json()["events"][0]["event"], "guardrail_updated")
+
+    def test_live_guardrails_block_price_deviation_and_daily_risk(self):
+        user_id = "guardrail-user"
+        payload = {
+            "platform": "kalshi", "ticker": "KXTEST", "action": "buy", "outcome": "yes",
+            "price": 0.60, "quantity": 2,
+        }
+        preview = {
+            "estimated_notional": 1.2,
+            "normalized_order": {
+                "platform": "kalshi", "ticker": "KXTEST", "action": "buy", "outcome": "yes",
+                "price": 0.60, "quantity": 2.0,
+            },
+        }
+        self.assertEqual(
+            server_module._update_trading_guardrails(
+                user_id, server_module.TradingGuardrailsUpdateRequest(max_price_deviation_bps=100)
+            )["max_price_deviation_bps"],
+            100,
+        )
+        with mock.patch.object(
+            server_module,
+            "_fresh_trade_guard_quote",
+            new=mock.AsyncMock(return_value={
+                "outcome_probability": 0.50,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "market_ident": "KXTEST",
+            }),
+        ):
+            with self.assertRaises(server_module.TradingGuardrailError) as price_error:
+                asyncio.run(
+                    server_module._validate_live_trade_guardrails(
+                        user_id, payload=payload, preview=preview, credentials={"kalshi_api_key_id": "safe"}
+                    )
+                )
+        self.assertEqual(price_error.exception.code, "price_deviation")
+
+        server_module._update_trading_guardrails(
+            user_id,
+            server_module.TradingGuardrailsUpdateRequest(
+                max_price_deviation_bps=300,
+                max_daily_risk_notional=1.5,
+            ),
+        )
+        server_module._put_trading_order(
+            user_id,
+            {
+                "id": "daily-risk-order", "platform": "kalshi", "ticker": "KXOLD", "status": "filled",
+                "action": "buy", "outcome": "yes", "quantity": 2.0, "price": 0.5,
+                "estimated_notional": 1.0, "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        with mock.patch.object(
+            server_module,
+            "_fresh_trade_guard_quote",
+            new=mock.AsyncMock(return_value={
+                "outcome_probability": 0.60,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "market_ident": "KXTEST",
+            }),
+        ), mock.patch(
+            "analyzing_llm_rationale.trading.reconcile_portfolio",
+            return_value={"balance": {"available": 100.0, "unit": "USDC"}, "positions": []},
+        ):
+            with self.assertRaises(server_module.TradingGuardrailError) as daily_error:
+                asyncio.run(
+                    server_module._validate_live_trade_guardrails(
+                        user_id, payload=payload, preview=preview, credentials={"kalshi_api_key_id": "safe"}
+                    )
+                )
+        self.assertEqual(daily_error.exception.code, "daily_risk_limit")
+
+    def test_trade_run_kill_switch_blocks_before_exchange_submission(self):
+        token = _issue_session("kill-switch-user", "kill@example.com", "Kill", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        connection = {"kalshi_api_key_id": "safe-key", "kalshi_private_key": "safe-pem"}
+        with mock.patch.dict(
+            os.environ,
+            {"FORESEA_ENABLE_BYO_TRADING": "true", "FORESEA_TRADING_KILL_SWITCH": "true"},
+            clear=False,
+        ), mock.patch.object(server_module, "_stored_trading_credentials", return_value=connection), mock.patch(
+            "analyzing_llm_rationale.trading.place_order"
+        ) as place_order:
+            created = self.client.post(
+                "/trading/runs",
+                json={"platform": "kalshi", "ticker": "KXTEST", "price": 0.5, "quantity": 1},
+                headers=headers,
+            )
+            self.assertEqual(created.status_code, 200)
+            blocked = self.client.post(
+                f"/trading/runs/{created.json()['id']}/execute",
+                json={"confirmation": "PLACE REAL ORDER"},
+                headers=headers,
+            )
+        self.assertEqual(blocked.status_code, 409)
+        self.assertIn("kill switch", blocked.json()["detail"])
+        place_order.assert_not_called()
+        events = self.client.get("/trading/guardrails/events", headers=headers).json()["events"]
+        self.assertTrue(any(event["reason_code"] == "platform_kill_switch" for event in events))
+
+    def test_scheduled_reconciliation_is_token_gated_and_updates_open_orders(self):
+        order = server_module._put_trading_order(
+            "scheduled-user",
+            {
+                "id": "scheduled-order",
+                "trade_run_id": None,
+                "platform": "kalshi",
+                "venue_order_id": "venue-scheduled",
+                "status": "open",
+                "venue_status": "resting",
+                "action": "buy",
+                "outcome": "yes",
+                "ticker": "KXTEST",
+                "quantity": 2.0,
+                "price": 0.5,
+                "created_at": "2026-08-15T00:00:00+00:00",
+                "updated_at": "2026-08-15T00:00:00+00:00",
+            },
+        )
+        self.assertEqual(order["status"], "open")
+        with mock.patch.object(server_module, "_TRADING_RECONCILIATION_TOKEN", "scheduler-token"):
+            denied = self.client.post("/internal/trading/reconcile")
+            self.assertEqual(denied.status_code, 401)
+            with mock.patch.object(
+                server_module, "_stored_trading_credentials", return_value={"kalshi_api_key_id": "key"}
+            ), mock.patch(
+                "analyzing_llm_rationale.trading.reconcile_order",
+                return_value={
+                    "venue_order_id": "venue-scheduled", "status": "filled", "venue_status": "filled",
+                    "filled_quantity": 2.0, "remaining_quantity": 0.0,
+                },
+            ):
+                reconciled = self.client.post(
+                    "/internal/trading/reconcile?limit=10",
+                    headers={"X-Trading-Reconciliation-Token": "scheduler-token"},
+                )
+        self.assertEqual(reconciled.status_code, 200)
+        self.assertEqual(reconciled.json()["checked"], 1)
+        self.assertEqual(reconciled.json()["updated"], 1)
+        self.assertEqual(reconciled.json()["terminal"], 1)
+        stored = server_module._read_trading_order("scheduled-user", "scheduled-order")
+        self.assertEqual(stored["status"], "filled")
+        self.assertEqual(stored["filled_quantity"], 2.0)
+
+    def test_trading_launch_readiness_is_token_gated_and_does_not_expose_secrets(self):
+        kms_key = (
+            "projects/foresea/locations/us-central1/keyRings/foresea-trading/"
+            "cryptoKeys/exchange-connections"
+        )
+        with mock.patch.object(server_module, "_TRADING_RECONCILIATION_TOKEN", "readiness-token"):
+            denied = self.client.get("/internal/trading/readiness")
+            self.assertEqual(denied.status_code, 401)
+            with mock.patch.object(server_module, "_get_datastore", return_value=object()), mock.patch.dict(
+                os.environ,
+                {
+                    "FORESEA_TRADING_KMS_KEY_NAME": kms_key,
+                    "FORESEA_ENABLE_BYO_TRADING": "false",
+                    "FORESEA_ENABLE_TRADING": "false",
+                    "FORESEA_TRADING_KILL_SWITCH": "false",
+                    "FORESEA_ALLOW_MARKET_ORDERS": "false",
+                },
+                clear=False,
+            ):
+                ready = self.client.get(
+                    "/internal/trading/readiness",
+                    headers={"X-Trading-Reconciliation-Token": "readiness-token"},
+                )
+
+        self.assertEqual(ready.status_code, 200)
+        report = ready.json()
+        self.assertTrue(report["safe_default_active"])
+        self.assertTrue(report["ready_for_connection_beta"])
+        self.assertFalse(report["ready_for_live_byo_beta"])
+        self.assertTrue(report["scheduled_reconciliation_configured"])
+        self.assertNotIn("readiness-token", ready.text)
+        self.assertNotIn(kms_key, ready.text)
+        self.assertEqual(
+            {check["status"] for check in report["checks"] if check["code"] == "secure_connections"},
+            {"ready"},
+        )
+
+    def test_copied_agent_profile_is_private_versioned_and_research_only(self):
+        token = _issue_session("profile-user", "profile@example.com", "Profile", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": "test-model"}):
+            denied = self.client.post(
+                "/agent-profiles/copy", json={"source_agent_id": "not-public"}, headers=headers
+            )
+            self.assertEqual(denied.status_code, 422)
+
+            copied = self.client.post(
+                "/agent-profiles/copy",
+                json={"source_agent_id": "test-model", "name": "My copied model"},
+                headers=headers,
+            )
+            self.assertEqual(copied.status_code, 201)
+            payload = copied.json()
+            profile = payload["profile"]
+            self.assertTrue(payload["created"])
+            self.assertEqual(profile["version"], 1)
+            self.assertEqual(profile["execution_mode"], "research_only")
+            self.assertNotIn("connection", json.dumps(profile).lower())
+
+            copied_again = self.client.post(
+                "/agent-profiles/copy",
+                json={"source_agent_id": "test-model"},
+                headers=headers,
+            )
+            self.assertEqual(copied_again.status_code, 201)
+            self.assertFalse(copied_again.json()["created"])
+            self.assertEqual(copied_again.json()["profile"]["id"], profile["id"])
+
+            report = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Will it rain tomorrow?",
+                    "agent_profile_id": profile["id"],
+                    "model": "attacker-controlled-model",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                },
+                headers=headers,
+            )
+
+        self.assertEqual(report.status_code, 200)
+        report_payload = report.json()
+        self.assertIn("agent_profile", report_payload["pipeline"])
+        self.assertNotIn("tool_loop", report_payload["pipeline"])
+        self.assertEqual(report_payload["agent_profile"]["id"], profile["id"])
+        self.assertEqual(report_payload["agent_profile"]["execution_mode"], "research_only")
+        listed = self.client.get("/agent-profiles", headers=headers)
+        self.assertEqual([item["id"] for item in listed.json()["profiles"]], [profile["id"]])
+        deleted = self.client.delete(f"/agent-profiles/{profile['id']}", headers=headers)
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(self.client.get("/agent-profiles", headers=headers).json()["profiles"], [])
+
+    def test_agent_run_is_private_durable_and_excludes_provider_secrets(self):
+        owner_headers = {"Authorization": f"Bearer {_issue_session('run-owner', 'owner@example.com', 'Owner', '')}"}
+        other_headers = {"Authorization": f"Bearer {_issue_session('run-other', 'other@example.com', 'Other', '')}"}
+        report_response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will it rain tomorrow?",
+                "openrouter_api_key": "never-persist-this-provider-secret",
+                "history": [{"role": "user", "content": "private prior chat"}],
+                "builtin_skills": True,
+            },
+            headers=owner_headers,
+        )
+
+        self.assertEqual(report_response.status_code, 200)
+        report = report_response.json()
+        run_id = report["agent_run"]["id"]
+        self.assertEqual(report["agent_run"]["status"], "completed")
+
+        listed = self.client.get("/agent/runs", headers=owner_headers)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()["runs"][0]["id"], run_id)
+        self.assertEqual(listed.json()["runs"][0]["status"], "completed")
+        self.assertEqual(
+            [event["phase"] for event in listed.json()["runs"][0]["timeline"]],
+            ["created", "context_ready", "completed"],
+        )
+
+        detail = self.client.get(f"/agent/runs/{run_id}", headers=owner_headers)
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["report"]["agent_run"]["id"], run_id)
+        self.assertNotIn("never-persist-this-provider-secret", detail.text)
+        self.assertNotIn("private prior chat", detail.text)
+        self.assertNotIn("openrouter_api_key", detail.json()["request"])
+        self.assertNotIn("history", detail.json()["request"])
+
+        self.assertEqual(self.client.get(f"/agent/runs/{run_id}", headers=other_headers).status_code, 404)
+
+    def test_agent_analyze_tool_loop_persists_steps_incrementally(self):
+        # Regression test: _agent_tool_loop ran the entire ReAct loop as one
+        # opaque await with zero intermediate persistence -- a crash mid-loop
+        # left the AgentRun record with no trace of what happened. Steps must
+        # now be visible on the durable run record, including for a run still
+        # in flight (steps come from run_tool_loop's on_step hook, not from
+        # the final report).
+        owner_headers = {"Authorization": f"Bearer {_issue_session('step-owner', 'stepowner@example.com', 'Owner', '')}"}
+        self.provider.responses = [
+            json.dumps({"thought": "note one", "action": "manage_notes",
+                        "args": {"action": "add", "text": "Track Fed dates."}}),
+            json.dumps({"thought": "note two", "action": "manage_notes",
+                        "args": {"action": "add", "text": "Track CPI dates."}}),
+            json.dumps({"final": "Two notes saved."}),
+        ]
+        with tempfile.TemporaryDirectory() as td, mock.patch.dict(
+            os.environ,
+            {"FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json")},
+            clear=False,
+        ):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Will the Fed cut rates tomorrow?",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                    "max_tool_steps": 3,
+                },
+                headers=owner_headers,
+            )
+        self.assertEqual(response.status_code, 200)
+        run_id = response.json()["agent_run"]["id"]
+
+        detail = self.client.get(f"/agent/runs/{run_id}", headers=owner_headers)
+        self.assertEqual(detail.status_code, 200)
+        body = detail.json()
+        steps = body["steps"]
+        self.assertEqual(len(steps), 2)
+        self.assertEqual(steps[0]["index"], 0)
+        self.assertEqual(steps[0]["thought"], "note one")
+        self.assertEqual(steps[0]["action"], "manage_notes")
+        self.assertEqual(steps[0]["args"], {"action": "add", "text": "Track Fed dates."})
+        self.assertFalse(steps[0]["error"])
+        # Two-phase write: the start-phase and completion-phase hooks update
+        # the same record by index rather than appending two entries.
+        self.assertIn("started_at", steps[0])
+        self.assertIn("completed_at", steps[0])
+        self.assertEqual(steps[1]["index"], 1)
+        self.assertEqual(steps[1]["thought"], "note two")
+        # The widened request snapshot: benchmark_tools/max_tool_steps are
+        # plain non-secret fields, unlike openrouter_api_key/history (see
+        # test_agent_run_is_private_durable_and_excludes_provider_secrets).
+        self.assertTrue(body["request"]["benchmark_tools"])
+        self.assertEqual(body["request"]["max_tool_steps"], 3)
+
+    def test_agent_analyze_tool_loop_step_started_but_not_completed_is_visible_not_missing(self):
+        # A crash between the start-phase and completion-phase writes must
+        # still show up as a visibly stuck step, not silently vanish.
+        owner_headers = {"Authorization": f"Bearer {_issue_session('stuck-owner', 'stuck@example.com', 'Owner', '')}"}
+
+        real_persist = server_module._persist_agent_run_step
+
+        async def _flaky_persist(user_id, run, step):
+            if "observation" in step:
+                raise RuntimeError("simulated crash before the completion write")
+            await real_persist(user_id, run, step)
+
+        self.provider.responses = [
+            json.dumps({"thought": "note one", "action": "manage_notes",
+                        "args": {"action": "add", "text": "Track Fed dates."}}),
+            json.dumps({"final": "done"}),
+        ]
+        with (
+            tempfile.TemporaryDirectory() as td,
+            mock.patch.dict(os.environ, {"FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json")}, clear=False),
+            mock.patch.object(server_module, "_persist_agent_run_step", side_effect=_flaky_persist),
+        ):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Will the Fed cut rates tomorrow?",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                    "max_tool_steps": 2,
+                },
+                headers=owner_headers,
+            )
+        self.assertEqual(response.status_code, 200)
+        run_id = response.json()["agent_run"]["id"]
+
+        detail = self.client.get(f"/agent/runs/{run_id}", headers=owner_headers)
+        steps = detail.json()["steps"]
+        self.assertEqual(len(steps), 1)
+        self.assertIn("started_at", steps[0])
+        self.assertNotIn("completed_at", steps[0])
+
+    def test_agent_run_list_does_not_include_steps(self):
+        owner_headers = {"Authorization": f"Bearer {_issue_session('step-list-owner', 'steplist@example.com', 'Owner', '')}"}
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "Will it rain tomorrow?", "tool_loop": True, "max_tool_steps": 2},
+            headers=owner_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        listed = self.client.get("/agent/runs", headers=owner_headers)
+        self.assertEqual(listed.status_code, 200)
+        self.assertNotIn("steps", listed.json()["runs"][0])
+
+    def test_agent_run_steps_field_survives_put_agent_run_field_filter(self):
+        # _AGENT_RUN_FIELDS gates every read/write, Datastore-backed or
+        # in-memory-fallback alike, applied before persistence -- if "steps"
+        # were left out of that tuple, a step written during a request would
+        # look correct in-process (the same dict object gets mutated) but be
+        # silently stripped on the next _put_agent_run call, so a *separate*
+        # GET would come back with no steps at all.
+        user_id = "steps-roundtrip-user"
+        record = {
+            "id": "agent_run_steps_roundtrip",
+            "status": "running",
+            "title": "t", "question": "q", "platform": None, "recommendation": None,
+            "model_probability": None, "market_probability": None, "edge": None,
+            "agent_profile": None, "request": {}, "report": None, "timeline": [],
+            "steps": [{"index": 0, "thought": "", "action": "get_market", "args": {},
+                       "observation": "obs", "error": False, "at": "2026-01-01T00:00:00+00:00"}],
+            "created_at": "2026-01-01T00:00:00+00:00", "updated_at": "2026-01-01T00:00:00+00:00",
+            "completed_at": None, "error_code": None,
+        }
+        server_module._put_agent_run(user_id, record)
+        reread = server_module._read_agent_run(user_id, "agent_run_steps_roundtrip")
+        self.assertEqual(reread["steps"], record["steps"])
+
+    def _seed_agent_run(self, user_id, run_id, *, status="running", updated_at):
+        server_module._put_agent_run(user_id, {
+            "id": run_id, "status": status,
+            "title": "t", "question": "q", "platform": None, "recommendation": None,
+            "model_probability": None, "market_probability": None, "edge": None,
+            "agent_profile": None, "request": {}, "report": None, "timeline": [], "steps": [],
+            "created_at": updated_at, "updated_at": updated_at,
+            "completed_at": None, "error_code": None,
+        })
+
+    def test_agent_run_reconciliation_is_token_gated_and_marks_stale_runs_interrupted(self):
+        # A run stuck at status="running" almost always means the request
+        # that owned it crashed or the process recycled mid-flight -- left
+        # alone forever otherwise, since nothing else ever revisits it.
+        stale_ts = (datetime.now(timezone.utc) - timedelta(minutes=90)).isoformat()
+        fresh_ts = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        self._seed_agent_run("recon-user", "agent_run_stale", updated_at=stale_ts)
+        self._seed_agent_run("recon-user", "agent_run_fresh", updated_at=fresh_ts)
+
+        with mock.patch.object(server_module, "_AGENT_RUN_RECONCILIATION_TOKEN", "recon-token"):
+            denied = self.client.post("/internal/agent-runs/reconcile")
+            self.assertEqual(denied.status_code, 401)
+
+            reconciled = self.client.post(
+                "/internal/agent-runs/reconcile?limit=10",
+                headers={"X-Agent-Run-Reconciliation-Token": "recon-token"},
+            )
+        self.assertEqual(reconciled.status_code, 200)
+        self.assertEqual(reconciled.json()["checked"], 1)
+        self.assertEqual(reconciled.json()["interrupted"], 1)
+
+        stale = server_module._read_agent_run("recon-user", "agent_run_stale")
+        self.assertEqual(stale["status"], "interrupted")
+        self.assertEqual(stale["error_code"], "stale_reconciled")
+        fresh = server_module._read_agent_run("recon-user", "agent_run_fresh")
+        self.assertEqual(fresh["status"], "running")
+
+    def test_agent_run_reconciliation_leaves_non_running_runs_alone(self):
+        stale_ts = (datetime.now(timezone.utc) - timedelta(minutes=90)).isoformat()
+        self._seed_agent_run("recon-user-2", "agent_run_done", status="completed", updated_at=stale_ts)
+
+        with mock.patch.object(server_module, "_AGENT_RUN_RECONCILIATION_TOKEN", "recon-token"):
+            reconciled = self.client.post(
+                "/internal/agent-runs/reconcile",
+                headers={"X-Agent-Run-Reconciliation-Token": "recon-token"},
+            )
+        self.assertEqual(reconciled.status_code, 200)
+        self.assertEqual(reconciled.json()["checked"], 0)
+        done = server_module._read_agent_run("recon-user-2", "agent_run_done")
+        self.assertEqual(done["status"], "completed")
+
+    def test_agent_run_reconciliation_never_reenters_the_tool_loop(self):
+        # The reconciliation sweep only ever changes status="running" to
+        # "interrupted" -- it must never call back into run_tool_loop/
+        # _agent_tool_loop. Actual crash-resume (re-executing a stale run)
+        # is a deliberately separate, not-yet-built decision; this test
+        # exists specifically so extending the sweep to also resume can't
+        # happen by accident without a deliberate design/security review.
+        stale_ts = (datetime.now(timezone.utc) - timedelta(minutes=90)).isoformat()
+        self._seed_agent_run("recon-user-3", "agent_run_stale_3", updated_at=stale_ts)
+
+        with (
+            mock.patch.object(server_module, "_AGENT_RUN_RECONCILIATION_TOKEN", "recon-token"),
+            mock.patch.object(server_module, "_agent_tool_loop") as tool_loop_mock,
+            mock.patch.object(server_module.agent_capabilities, "run_tool_loop") as run_tool_loop_mock,
+        ):
+            reconciled = self.client.post(
+                "/internal/agent-runs/reconcile",
+                headers={"X-Agent-Run-Reconciliation-Token": "recon-token"},
+            )
+        self.assertEqual(reconciled.status_code, 200)
+        self.assertEqual(reconciled.json()["interrupted"], 1)
+        tool_loop_mock.assert_not_called()
+        run_tool_loop_mock.assert_not_called()
 
     def test_favorites_crud_roundtrip(self):
         token = _issue_session("fav-user", "fav@example.com", "Fav", "")
@@ -1765,6 +2477,68 @@ class ServerTests(unittest.TestCase):
         names = {s["name"] for s in response.json()["skills"]}
         self.assertEqual(names, {"Base rate", "Scenario decomposition", "Red team", "Key drivers"})
 
+    def test_agent_analyze_red_team_skill_gets_structured_verdict(self):
+        # Red team runs strictly after the forecast is already computed and is
+        # purely decorative prose today -- this adds a small, separate
+        # follow-up call that classifies its own argument into a structured,
+        # observational verdict (nothing gates on it yet).
+        self.provider.responses = [
+            json.dumps({"predicted_answer": "Yes", "confidence": 0.7,
+                       "rationale": "Rate-cut odds look elevated."}),  # main forecast
+            "The market may be underpricing a scheduling delay risk.",  # Red team's own output
+            json.dumps({"credible": True, "severity": "medium"}),  # verdict classification
+        ]
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "evidence_top_k": 2,
+                "skills": [{"name": "Red team", "instruction": "Argue the strongest case the forecast is wrong."}],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        skill = response.json()["skills"][0]
+        self.assertEqual(skill["name"], "Red team")
+        self.assertEqual(skill["output"], "The market may be underpricing a scheduling delay risk.")
+        self.assertEqual(skill["verdict"], {"credible": True, "severity": "medium"})
+
+    def test_agent_analyze_non_red_team_skill_has_no_verdict_and_no_extra_call(self):
+        self.provider.responses = [
+            json.dumps({"predicted_answer": "Yes", "confidence": 0.7, "rationale": "..."}),  # main forecast
+            "Historically similar setups resolved Yes about 40% of the time.",  # skill output
+        ]
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "evidence_top_k": 2,
+                "skills": [{"name": "Base rate check", "instruction": "Compare to historical base rates."}],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        skill = response.json()["skills"][0]
+        self.assertIsNone(skill["verdict"])
+        self.assertEqual(len(self.provider.calls), 2)  # forecast + skill only, no extra classification call
+
+    def test_agent_analyze_red_team_verdict_degrades_gracefully_on_malformed_classification(self):
+        self.provider.responses = [
+            json.dumps({"predicted_answer": "Yes", "confidence": 0.7, "rationale": "..."}),  # main forecast
+            "The market may be underpricing a scheduling delay risk.",  # Red team's own output
+            "not valid json",  # malformed classification response
+        ]
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will the Fed cut rates before September 30, 2026?",
+                "evidence_top_k": 2,
+                "skills": [{"name": "Red team", "instruction": "Argue the strongest case the forecast is wrong."}],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        skill = response.json()["skills"][0]
+        self.assertEqual(skill["output"], "The market may be underpricing a scheduling delay risk.")
+        self.assertIsNone(skill["verdict"])
+
     def test_agent_analyze_tool_loop_runs(self):
         # FakeProvider returns forecast JSON (no action/final), so the loop treats
         # it as a final answer without calling tools — the deterministic backstop
@@ -1778,6 +2552,17 @@ class ServerTests(unittest.TestCase):
         self.assertIn("tool_loop", report["pipeline"])
         self.assertIn("forecast", report["pipeline"])           # backstop forecast ran
         self.assertAlmostEqual(report["model_probability"], 0.7)  # populated, not null
+        # Regression test: run_tool_loop's steps/truncated were computed but
+        # never persisted, and the model's own raw final-turn text was
+        # silently dropped whenever the deterministic backstop ran -- both
+        # must now survive into the durable report.
+        self.assertEqual(report["tool_loop_steps"], 0)
+        self.assertFalse(report["tool_loop_truncated"])
+        backstop_entries = [
+            t for t in report["tool_transcript"] if t["action"] == "final_text_before_backstop"
+        ]
+        self.assertEqual(len(backstop_entries), 1)
+        self.assertIn("predicted_answer", backstop_entries[0]["observation"])
 
     def test_agent_analyze_benchmark_tool_loop_exposes_only_benchmark_tools(self):
         self.provider.response = {
@@ -1810,6 +2595,25 @@ class ServerTests(unittest.TestCase):
         self.assertIn("manage_notes(", system_prompt)
         self.assertNotIn("forecast(", system_prompt)
         self.assertNotIn("scan_markets(", system_prompt)
+
+    def test_agent_analyze_tool_loop_without_benchmark_tools_excludes_place_trade(self):
+        # Regression test: _agent_tool_loop used to merge benchmark_tool_map
+        # (place_trade, web_search, manage_notes) into the standard tool set
+        # unconditionally, regardless of req.benchmark_tools -- contradicting
+        # both the field's own docstring ("expose only benchmark tools") and
+        # the documented contract that /agent/analyze never places an order.
+        # place_trade must only ever be reachable when benchmark_tools=True.
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "Will it rain tomorrow?", "tool_loop": True, "max_tool_steps": 1},
+        )
+        self.assertEqual(response.status_code, 200)
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertNotIn("place_trade(", system_prompt)
+        self.assertNotIn("web_search(", system_prompt)
+        self.assertNotIn("manage_notes(", system_prompt)
+        self.assertIn("forecast(", system_prompt)
+        self.assertIn("scan_markets(", system_prompt)
 
     def test_agent_analyze_tool_loop_routes_via_scads_alt_provider_for_model(self):
         # `req.model` (the field every other /agent/analyze and /predict path
@@ -1857,6 +2661,44 @@ class ServerTests(unittest.TestCase):
         self.assertIn("minimax-m3", notes)
         self.assertNotIn("agent", notes)
 
+    def test_select_agent_provider_uses_auto_selected_model_when_no_explicit_model_given(self):
+        # _run_agent_skills and _agent_tool_loop used to always fall back to
+        # the server's static default model whenever no explicit model/BYOK
+        # key was given, bypassing the same ROI-based evolution-loop
+        # auto-selection _select_predict_provider already applies to the main
+        # forecast. Both now share _select_agent_provider, which mirrors that
+        # branch order.
+        alt_provider = FakeProvider()
+        with (
+            mock.patch.object(server_module, "_auto_selected_model", return_value="gpt-oss-120b"),
+            mock.patch.object(server_module, "_scads_alt_provider", return_value=alt_provider) as alt_provider_mock,
+        ):
+            req = server_module.AgentAnalyzeRequest(question="Will X happen?")
+            provider, temperature, max_tokens = server_module._select_agent_provider(req)
+        alt_provider_mock.assert_called_once_with("gpt-oss-120b")
+        self.assertIs(provider, alt_provider)
+
+    def test_select_agent_provider_prefers_explicit_model_over_auto_selection(self):
+        alt_provider = FakeProvider()
+        with (
+            mock.patch.object(server_module, "_auto_selected_model", return_value="gpt-oss-120b"),
+            mock.patch.object(server_module, "_scads_alt_provider", return_value=alt_provider) as alt_provider_mock,
+        ):
+            req = server_module.AgentAnalyzeRequest(question="Will X happen?", model="minimax-m3")
+            server_module._select_agent_provider(req)
+        alt_provider_mock.assert_called_once_with("minimax-m3")
+
+    def test_select_agent_provider_prefers_byok_over_auto_selection(self):
+        with mock.patch.object(server_module, "_auto_selected_model") as auto_mock:
+            req = server_module.AgentAnalyzeRequest(
+                question="Will X happen?",
+                openrouter_api_key="user-key",
+                openrouter_model="user/custom-model",
+            )
+            provider, temperature, max_tokens = server_module._select_agent_provider(req)
+        auto_mock.assert_not_called()
+        self.assertEqual(provider.model_name, "user/custom-model")
+
     def test_agent_analyze_fetches_market_and_recommends(self):
         import analyzing_llm_rationale.market_data as md
 
@@ -1892,6 +2734,35 @@ class ServerTests(unittest.TestCase):
         prompt = self.provider.calls[0][-1]["content"]
         self.assertIn("Latest venue context.", prompt)
         self.assertIn("Resolve from the official FOMC announcement.", prompt)
+
+    def test_agent_analyze_threads_market_created_time_into_evidence_window_check(self):
+        # _agent_prediction_request had a fetched quote (with created_time) in
+        # hand but never copied it onto the PredictRequest it builds, leaving
+        # build_user_prompt's resolution-window safeguard dark for every
+        # /agent/analyze market lookup.
+        import analyzing_llm_rationale.market_data as md
+
+        quote = {
+            "platform": "Polymarket",
+            "ident": "fed",
+            "question": "Will the Fed cut rates before September 30, 2026?",
+            "market_url": "https://polymarket.com/market/fed",
+            "description": "Latest venue context.",
+            "resolution_criteria": "Resolve from the official FOMC announcement.",
+            "outcome": "Yes",
+            "probability": 0.40,
+            "outcomes": [{"label": "Yes", "probability": 0.40}, {"label": "No", "probability": 0.60}],
+            "created_time": "2026-02-01T00:00:00Z",
+        }
+        with mock.patch.object(md, "fetch_polymarket", lambda slug=None, market_id=None: quote):
+            response = self.client.post(
+                "/agent/analyze",
+                json={"platform": "polymarket", "slug": "fed", "evidence_top_k": 2},
+            )
+        self.assertEqual(response.status_code, 200)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Created Time: 2026-02-01T00:00:00Z", prompt)
+        self.assertIn("Normalized Contract Window", prompt)
 
     def test_live_trade_intent_complements_a_no_recommendation(self):
         intent = server_module._live_trade_intent(
@@ -2022,6 +2893,26 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(opp["question"], "Will event A happen by 2027?")
         self.assertAlmostEqual(opp["edge"], 0.30)
         self.assertEqual(opp["recommendation"], "buy_yes")
+
+    def test_agent_scan_threads_market_created_time_into_evidence_window_check(self):
+        # agent_scan's _score() had the listing's created_time in hand but
+        # never copied it onto the PredictRequest it scores with, leaving
+        # build_user_prompt's resolution-window safeguard dark for every
+        # scanned market.
+        import analyzing_llm_rationale.market_data as md
+
+        markets = [
+            {"platform": "Polymarket", "question": "Will event A happen by 2027?", "market_url": "https://p/a",
+             "outcome": "Yes", "probability": 0.40, "outcomes": [], "created_time": "2026-03-01T00:00:00Z"},
+        ]
+        with mock.patch.object(md, "list_polymarket", lambda limit=5, query=None: markets):
+            response = self.client.get("/agent/scan?platform=polymarket&limit=1&min_edge=0.1&evidence_top_k=2")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["opportunities"]), 1)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Created Time: 2026-03-01T00:00:00Z", prompt)
+        self.assertIn("Normalized Contract Window", prompt)
 
     def test_agent_scan_both_venues_and_keyword(self):
         import analyzing_llm_rationale.market_data as md

@@ -442,6 +442,37 @@ The report includes `recommendation` (`buy_yes`/`buy_no`/`hold`/`no_market_price
 `edge`, `model_probability`, `market_probability`, `thesis`, `evidence_sources`,
 and `pipeline` (the ordered steps that ran).
 
+#### Durable private Agent Runs
+
+Every signed-in call to `POST /agent/analyze` (including the streamed endpoint)
+also creates a private `AgentRun`. It retains a bounded, secret-free input
+snapshot, lifecycle timeline, model report, and any review-only trade handoff.
+Use `GET /agent/runs` for the newest operator timeline and
+`GET /agent/runs/{run_id}` for one full report. The snapshot intentionally
+excludes provider keys, browser credentials, conversation history, and raw
+custom-skill instructions. An Agent Run is research only: even when it has a
+trade handoff, it cannot create, size, or submit an order; the user must still
+create and explicitly confirm a durable Trade Run in the terminal.
+
+#### Copied agents: private, versioned research recipes
+
+Signed-in users can copy a public Foresea model from the Agentic board. The copy
+is saved under the user's account as an immutable version-1 research recipe;
+it contains the public source model and analysis instruction only—never the
+source agent's private context, shadow-account history, exchange connection,
+order size, or trading permission. Use `POST /agent-profiles/copy` with an
+allowlisted `source_agent_id`, then pass the returned `agent_profile_id` to
+`POST /agent/analyze`.
+
+When a profile is selected, the server resolves the profile's model and
+instruction itself, ignores client BYOK/provider/model overrides, and forces
+the fixed research pipeline (no tool loop or trade tool). The resulting report
+returns its profile ID, source, version, and `research_only` mode for
+reproducibility. A profile may prepare the existing review-only trade handoff,
+but it cannot create or submit an exchange order; a signed-in user must still
+create a durable Trade Run and explicitly confirm `PLACE REAL ORDER` in the
+trading terminal.
+
 ### Edge scan — find mispriced markets
 
 `GET /agent/scan` lists live markets on a venue, forecasts each, and returns the
@@ -828,6 +859,90 @@ After submission, use the audit ID returned by `/trading/orders` to reconcile
 the current venue state instead of assuming a submission was filled. The trade
 terminal also exposes this flow, including an explicit `CANCEL OPEN ORDER`
 confirmation before it cancels a remaining resting order.
+
+#### Durable Trade Runs and scheduled reconciliation
+
+New terminal submissions use a durable `/trading/runs` record: Foresea saves a
+validated order plan, requires a second exact confirmation to execute that saved
+plan, and atomically claims it before contacting a venue. This prevents duplicate
+orders from concurrent tabs or Cloud Run instances. Run state follows the linked
+audit order when a fill, cancellation, or rejection is reconciled.
+
+#### Real-money guardrails
+
+Every live submission now passes a second server-side preflight immediately
+before the venue call. It fails closed when Foresea cannot obtain a fresh market
+quote and a current portfolio snapshot, or when any of these limits would be
+crossed:
+
+- Foresea hard caps: per-order notional, trailing-day worst-case risk budget,
+  per-market exposure, outstanding orders, quote deviation, quote age, and a
+  duplicate-order cooldown.
+- User controls at `GET`/`PUT /trading/guardrails`: users may set stricter
+  limits or pause all new live orders, but cannot increase the platform caps.
+- `FORESEA_TRADING_KILL_SWITCH=true`: blocks every new live submission without
+  touching reconciliation or cancellations.
+- A no-cache market quote is checked against the limit price. Buy limits cannot
+  be above the configured collar and sell limits cannot be below it. A live
+  balance/position snapshot must support the order and exposure cap.
+
+The trailing-day budget is deliberately **worst-case notional newly risked**,
+not a misleading synthetic P&L figure. Filled positions are measured from the
+venue portfolio snapshot before a new order; exact realized daily P&L remains a
+separate accounting/reporting concern. Guardrail passes, blocks, policy changes,
+and reconciled fill/rejection/cancellation transitions are appended to
+`GET /trading/guardrails/events` without credentials or order payloads. Configure
+the existing `SMTP_*` and `ALERT_*` settings to receive operator emails for
+submission-unknown, rejection, fill, and platform-kill-switch events.
+
+Production ceilings are environment variables; conservative defaults apply when
+they are omitted:
+
+```text
+FORESEA_TRADING_KILL_SWITCH=false
+FORESEA_MAX_DAILY_RISK_NOTIONAL=100
+FORESEA_MAX_MARKET_EXPOSURE_NOTIONAL=50
+FORESEA_MAX_OPEN_ORDERS=5
+FORESEA_MAX_PRICE_DEVIATION_BPS=300
+FORESEA_MAX_QUOTE_AGE_SECONDS=20
+FORESEA_ORDER_COOLDOWN_SECONDS=60
+```
+
+The terminal requires a Polymarket `slug` or `market_id` for real execution so
+Foresea can independently obtain a fresh market quote; a raw CLOB token ID alone
+is insufficient for this safety check.
+
+To enable the read-only scheduled reconciler, generate one high-entropy service
+token and store the same value as Cloud Run's `TRADING_RECONCILIATION_TOKEN` and
+the GitHub Actions secret of that name. This is an operator token, not a user
+credential and not an encryption key. The `Trading reconciliation` workflow then
+calls the hidden endpoint every 15 minutes, bounded by
+`TRADING_RECONCILIATION_MAX_ORDERS` (default `25`, hard maximum `100`). The job
+only fetches the current state of already-submitted venue order IDs; it cannot
+place, amend, or cancel an order.
+
+#### Operator launch-readiness check
+
+After deploying the trading revision, use the same narrowly scoped reconciliation
+token to read its non-sensitive configuration report:
+
+```bash
+curl https://foresea.ink/internal/trading/readiness \
+  -H "X-Trading-Reconciliation-Token: $TRADING_RECONCILIATION_TOKEN"
+```
+
+The report confirms the configured KMS resource, durable store client,
+reconciliation-token presence, valid hard caps, live-execution gates, and whether
+the retired shared encryption key is still present. It does not expose key names,
+tokens, credentials, or account data. It also cannot prove Cloud KMS IAM, that
+the GitHub Actions secret matches, or that an exchange account can trade; verify
+those separately during the invite-only smoke test.
+
+Deploy the `TradingOrder` index in `index.yaml` before enabling the scheduler:
+
+```bash
+gcloud datastore indexes create index.yaml --project <project>
+```
 
 ### Request fields
 

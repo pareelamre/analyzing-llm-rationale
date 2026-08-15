@@ -1,0 +1,34 @@
+name: Trading reconciliation
+
+# Read-only reconciliation for submitted live orders. The Cloud Run endpoint is
+# disabled unless the same scoped token is configured in both environments.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trading-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Reconcile submitted exchange orders
+        env:
+          FORESEA_BASE_URL: https://foresea.ink
+          TRADING_RECONCILIATION_TOKEN: ${{ secrets.TRADING_RECONCILIATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TRADING_RECONCILIATION_TOKEN" ]; then
+            echo "::warning::TRADING_RECONCILIATION_TOKEN is not configured; reconciliation is intentionally inactive."
+            exit 0
+          fi
+          curl --fail --silent --show-error --max-time 240 --retry 2 --retry-all-errors \
+            -X POST "$FORESEA_BASE_URL/internal/trading/reconcile?limit=25" \
+            -H "X-Trading-Reconciliation-Token: $TRADING_RECONCILIATION_TOKEN"

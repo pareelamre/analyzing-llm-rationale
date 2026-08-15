@@ -935,6 +935,27 @@
           </div>
         </div>
 
+        <div style="padding:11px 12px; background:var(--panel); border:1px solid var(--border); border-radius:12px; margin:0 0 12px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+            <strong style="font-size:12px; color:var(--ink);">Real-money risk controls</strong>
+            <button type="button" class="topbar-link" id="riskPauseBtn" style="font-size:11px;" onclick="toggleTradingPause()">Loading…</button>
+          </div>
+          <div id="riskControlsSummary" style="font-size:11px; color:var(--text-dim); line-height:1.45;">Sign in to load your execution limits.</div>
+          <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:7px; margin-top:9px;">
+            <label style="font-size:9px;">Per order
+              <input type="number" id="riskMaxOrder" min="0.01" step="0.01" placeholder="$" />
+            </label>
+            <label style="font-size:9px;">Daily risk
+              <input type="number" id="riskMaxDaily" min="0.01" step="0.01" placeholder="$" />
+            </label>
+            <label style="font-size:9px;">Market exposure
+              <input type="number" id="riskMaxMarket" min="0.01" step="0.01" placeholder="$" />
+            </label>
+          </div>
+          <button type="button" class="topbar-link" style="font-size:11px; margin-top:8px;" onclick="saveTradingRiskControls()">Save lower limits</button>
+          <div style="font-size:10px; color:var(--text-mute); margin-top:5px;">Foresea rechecks a fresh quote, available balance, current exposure, and duplicate cooldown immediately before any order reaches an exchange.</div>
+        </div>
+
         <!-- Preview Details -->
         <div id="orderPreviewBox" class="hidden" style="padding:12px; background:var(--panel); border:1px solid var(--border); border-radius:12px; font-size:12px; line-height:1.4; margin-bottom: 12px;">
           <div id="previewDetails" style="color:var(--ink); font-weight:500;"></div>
@@ -1102,9 +1123,11 @@
     let selectedPlatform = 'polymarket';
     let selectedAction = 'buy';
     let selectedOutcome = 'yes';
+    let activeTradeRunId = null;
     let maxOrderNotional = 50.00;
     let activeMarketQuote = null;
     let researchContext = null;
+    let tradingGuardrails = null;
 
     // Credentials schema configuration
     const VENUE_FIELDS = {
@@ -1130,6 +1153,7 @@
 
       loadSession();
       checkExchanges();
+      loadTradingGuardrails();
       updateNotional();
 
       const params = new URLSearchParams(window.location.search);
@@ -1146,25 +1170,57 @@
       return Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
     }
 
+    function boundedResearchText(value, maxLength) {
+      return String(value || '').replace(/\u0000/g, '').trim().slice(0, maxLength);
+    }
+
+    function consumeResearchHandoff(params) {
+      const handoffId = String(params.get('handoff') || '');
+      if (!/^trade_[A-Za-z0-9_-]{12,120}$/.test(handoffId)) return null;
+      try {
+        const key = `foresea_trade_handoff_${handoffId}`;
+        const raw = sessionStorage.getItem(key);
+        sessionStorage.removeItem(key);
+        if (!raw) return null;
+        const handoff = JSON.parse(raw);
+        return handoff && typeof handoff === 'object' ? handoff : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
     // The chat only hands the terminal research context. It intentionally
     // omits a price and size, so the user must set a current limit order after
     // the terminal retrieves a fresh venue quote.
     function configureResearchHandoff(params) {
-      const platform = String(params.get('platform') || '').toLowerCase();
+      const handoff = consumeResearchHandoff(params) || {};
+      const platform = String(handoff.platform || params.get('platform') || '').toLowerCase();
       if (['kalshi', 'polymarket'].includes(platform)) setPlatform(platform);
-      const action = String(params.get('action') || '').toLowerCase();
+      const action = String(handoff.action || params.get('action') || '').toLowerCase();
       if (['buy', 'sell'].includes(action)) setAction(action);
-      const outcome = String(params.get('outcome') || '').toLowerCase();
+      const outcome = String(handoff.outcome || params.get('outcome') || '').toLowerCase();
       if (['yes', 'no'].includes(outcome)) setOutcome(outcome);
 
-      const modelProbability = queryProbability(params, 'model_probability');
-      const marketProbability = queryProbability(params, 'market_probability');
+      const handoffModelProbability = Number(handoff.modelProbability);
+      const handoffMarketProbability = Number(handoff.marketProbability);
+      const modelProbability = Number.isFinite(handoffModelProbability)
+        && handoffModelProbability >= 0 && handoffModelProbability <= 1
+        ? handoffModelProbability : queryProbability(params, 'model_probability');
+      const marketProbability = Number.isFinite(handoffMarketProbability)
+        && handoffMarketProbability >= 0 && handoffMarketProbability <= 1
+        ? handoffMarketProbability : queryProbability(params, 'market_probability');
       if (modelProbability == null || marketProbability == null || !['yes', 'no'].includes(outcome)) return;
       researchContext = {
         outcome,
         modelProbability,
         marketProbability,
-        recommendation: String(params.get('recommendation') || ''),
+        recommendation: boundedResearchText(handoff.recommendation || params.get('recommendation'), 120),
+        title: boundedResearchText(handoff.title, 160),
+        thesis: boundedResearchText(handoff.thesis, 4000),
+        sourceConversationId: boundedResearchText(handoff.sourceConversationId, 100),
+        sources: Array.isArray(handoff.sources)
+          ? handoff.sources.map(source => boundedResearchText(source, 2000)).filter(Boolean).slice(0, 20)
+          : [],
       };
     }
 
@@ -1182,6 +1238,100 @@
     function authHeaders(extra = {}) {
       const token = localStorage.getItem('foresea_session');
       return Object.assign({}, extra, token ? { 'Authorization': 'Bearer ' + token } : {});
+    }
+
+    function _moneyGuardrail(value) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? `$${numeric.toFixed(2)}` : '—';
+    }
+
+    function renderTradingGuardrails(policy) {
+      tradingGuardrails = policy || null;
+      const summary = document.getElementById('riskControlsSummary');
+      const pauseButton = document.getElementById('riskPauseBtn');
+      if (!policy) {
+        summary.textContent = 'Sign in to load your execution limits.';
+        pauseButton.textContent = 'Risk controls';
+        pauseButton.disabled = true;
+        return;
+      }
+      const isPaused = Boolean(policy.paused || policy.platform_kill_switch);
+      summary.textContent = isPaused
+        ? (policy.platform_kill_switch
+          ? 'Foresea has paused new live orders platform-wide. Existing orders can still be reconciled or cancelled.'
+          : 'Your live trading is paused. Existing orders can still be reconciled or cancelled.')
+        : `${_moneyGuardrail(policy.max_order_notional)} per order · ${_moneyGuardrail(policy.max_daily_risk_notional)} daily worst-case risk · ${_moneyGuardrail(policy.max_market_exposure_notional)} per market · ${policy.max_price_deviation_bps} bps quote collar`;
+      pauseButton.disabled = Boolean(policy.platform_kill_switch);
+      pauseButton.textContent = policy.platform_kill_switch
+        ? 'Platform paused'
+        : (policy.paused ? 'Resume trading' : 'Pause trading');
+      document.getElementById('riskMaxOrder').value = Number(policy.max_order_notional || 0).toFixed(2);
+      document.getElementById('riskMaxDaily').value = Number(policy.max_daily_risk_notional || 0).toFixed(2);
+      document.getElementById('riskMaxMarket').value = Number(policy.max_market_exposure_notional || 0).toFixed(2);
+      maxOrderNotional = Number(policy.max_order_notional) || maxOrderNotional;
+      document.getElementById('lblMaxNotional').textContent = maxOrderNotional.toFixed(2);
+      updateNotional();
+    }
+
+    async function loadTradingGuardrails() {
+      if (!localStorage.getItem('foresea_session')) {
+        renderTradingGuardrails(null);
+        return;
+      }
+      try {
+        const response = await fetch('/trading/guardrails', { headers: authHeaders() });
+        const data = await response.json().catch(() => null);
+        renderTradingGuardrails(response.ok ? data : null);
+      } catch (_) {
+        renderTradingGuardrails(null);
+      }
+    }
+
+    async function updateTradingGuardrails(body) {
+      const response = await fetch('/trading/guardrails', {
+        method: 'PUT',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Could not update risk controls.');
+      renderTradingGuardrails(data);
+      return data;
+    }
+
+    async function toggleTradingPause() {
+      if (!tradingGuardrails || tradingGuardrails.platform_kill_switch) return;
+      try {
+        const next = !tradingGuardrails.paused;
+        await updateTradingGuardrails({ paused: next });
+        logLine('warn', next ? 'Live trading paused by your risk controls.' : 'Live trading resumed under your risk controls.');
+        if (next) resetPreview();
+      } catch (err) {
+        showError(err.message || 'Could not update risk controls.');
+      }
+    }
+
+    async function saveTradingRiskControls() {
+      const body = {};
+      const fields = [
+        ['riskMaxOrder', 'max_order_notional'],
+        ['riskMaxDaily', 'max_daily_risk_notional'],
+        ['riskMaxMarket', 'max_market_exposure_notional'],
+      ];
+      for (const [elementId, field] of fields) {
+        const value = Number(document.getElementById(elementId).value);
+        if (Number.isFinite(value) && value > 0) body[field] = value;
+      }
+      if (!Object.keys(body).length) {
+        showError('Enter a positive limit before saving risk controls.');
+        return;
+      }
+      try {
+        await updateTradingGuardrails(body);
+        logLine('success', 'Risk controls saved. Values can only be lowered below Foresea hard caps.');
+      } catch (err) {
+        showError(err.message || 'Could not update risk controls.');
+      }
     }
 
     // ── Credentials check ──
@@ -1322,6 +1472,7 @@
     }
 
     function resetPreview() {
+      activeTradeRunId = null;
       document.getElementById('orderPreviewBox').classList.add('hidden');
       document.getElementById('confirmationBlock').classList.add('hidden');
       document.getElementById('confirmInput').value = '';
@@ -1350,6 +1501,10 @@
         showError('Please specify a contract count greater than 0.');
         return;
       }
+      if (tradingGuardrails && (tradingGuardrails.paused || tradingGuardrails.platform_kill_switch)) {
+        showError('Live trading is paused in risk controls. Resume it before creating a new trade run.');
+        return;
+      }
       if (!isVenueConnected(selectedPlatform)) {
         showError(`Exchange credentials are not connected for ${selectedPlatform.toUpperCase()}`);
         return;
@@ -1367,6 +1522,14 @@
         time_in_force: document.getElementById('optTif').value
       };
 
+      if (researchContext) {
+        body.title = researchContext.title;
+        body.thesis = researchContext.thesis;
+        body.source_conversation_id = researchContext.sourceConversationId || undefined;
+        body.expected_edge = researchContext.modelProbability - researchContext.marketProbability;
+        body.sources = researchContext.sources;
+      }
+
       if (selectedPlatform === 'kalshi') {
         body.ticker = symbol;
       } else {
@@ -1381,26 +1544,33 @@
       logLine('info', `Validating order details: ${selectedAction.toUpperCase()} ${selectedOutcome.toUpperCase()}...`);
 
       try {
-        const response = await fetch('/trading/preview', {
+        const response = await fetch('/trading/runs', {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(body)
         });
 
-        const data = await response.json();
+        const run = await response.json();
         if (!response.ok) {
-          showError(data.detail || 'Preview request failed.');
-          logLine('error', `Failed validation: ${data.detail || 'API error'}`);
+          showError(run.detail || 'Trade run could not be created.');
+          logLine('error', `Failed validation: ${run.detail || 'API error'}`);
           return;
         }
+        const data = run.preview || {};
+        activeTradeRunId = run.id;
 
-        maxOrderNotional = parseFloat(data.max_order_notional) || 50.00;
+        if (data.guardrails && typeof data.guardrails === 'object') renderTradingGuardrails(data.guardrails);
+        maxOrderNotional = Math.min(
+          parseFloat(data.max_order_notional) || 50.00,
+          Number(data.guardrails?.max_order_notional) || Number.POSITIVE_INFINITY
+        );
         document.getElementById('lblMaxNotional').textContent = maxOrderNotional.toFixed(2);
         updateNotional();
 
         const norm = data.normalized_order || {};
         document.getElementById('previewDetails').innerHTML = `
-          <div style="font-weight: 600; color: var(--ink); margin-bottom: 4px;">Normalized Order Payload</div>
+          <div style="font-weight: 600; color: var(--ink); margin-bottom: 4px;">Trade Run Created</div>
+          <div style="font-family:var(--font-mono); color:var(--text-dim); margin-bottom:6px;">Run: ${run.id} · ${String(run.status || 'awaiting approval').replace(/_/g, ' ')}</div>
           <div>Exchange: ${norm.platform.toUpperCase()}</div>
           <div>Operation: ${norm.action.toUpperCase()} ${norm.outcome.toUpperCase()}</div>
           <div>Quantity: ${norm.quantity} contracts @ $${norm.price}</div>
@@ -1423,8 +1593,8 @@
         document.getElementById('confirmationBlock').classList.remove('hidden');
         document.getElementById('previewBtn').classList.add('hidden');
 
-        logLine('success', 'Order preview checks completed successfully.');
-        logJSON(data);
+        logLine('success', `Trade run ${run.id} is awaiting your final approval.`);
+        logJSON(run);
 
       } catch (err) {
         showError('Request failed: ' + err.message);
@@ -1440,43 +1610,18 @@
         showError("You must type 'PLACE REAL ORDER' exactly to authorize execution.");
         return;
       }
-
-      const price = parseFloat(document.getElementById('priceInput').value);
-      const qty = parseFloat(document.getElementById('qtyInput').value);
-      const symbol = document.getElementById('symbolInput').value.trim();
-
-      const body = {
-        platform: selectedPlatform,
-        action: selectedAction,
-        outcome: selectedOutcome,
-        order_type: 'limit',
-        price: price,
-        quantity: qty,
-        post_only: document.getElementById('optPostOnly').checked,
-        reduce_only: document.getElementById('optReduceOnly').checked,
-        time_in_force: document.getElementById('optTif').value,
-        execute: true,
-        confirmation: confirmVal
-      };
-
-      if (selectedPlatform === 'kalshi') {
-        body.ticker = symbol;
-      } else {
-        body.tick_size = document.getElementById('optTick').value;
-        if (/^\d+$/.test(symbol)) {
-          body.token_id = symbol;
-        } else {
-          body.slug = symbol;
-        }
+      if (!activeTradeRunId) {
+        showError('Create a trade run before executing an order.');
+        return;
       }
 
-      logLine('info', 'Broadcasting live transaction to exchange...');
+      logLine('info', `Submitting approved trade run ${activeTradeRunId} to the exchange...`);
 
       try {
-        const response = await fetch('/trading/orders', {
+        const response = await fetch(`/trading/runs/${encodeURIComponent(activeTradeRunId)}/execute`, {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify(body)
+          body: JSON.stringify({ confirmation: confirmVal })
         });
 
         const data = await response.json();
@@ -1489,12 +1634,13 @@
         document.getElementById('orderPreviewBox').innerHTML = `
           <div style="color: var(--yes); font-weight:700; font-size:13.5px; text-align:center;display:flex;align-items:center;justify-content:center;gap:6px;">
             <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>
-            ORDER SUBMITTED — AWAITING RECONCILIATION
+            TRADE RUN SUBMITTED — AWAITING RECONCILIATION
           </div>
           <div style="font-family: var(--font-mono); margin-top:8px; font-size:11px; text-align:center; color: var(--text-dim);">
-            Foresea audit: ${data.audit_order_id || 'recorded'} · venue status: ${data.reconciliation_status || 'submitted'}
+            Run: ${data.id || activeTradeRunId} · Foresea audit: ${data.audit_order_id || 'recorded'} · venue status: ${data.reconciliation_status || data.status || 'submitted'}
           </div>
         `;
+        activeTradeRunId = null;
         document.getElementById('confirmationBlock').classList.add('hidden');
         logLine('success', 'Order submitted. Refresh reconciliation before treating it as filled.');
         logJSON(data);

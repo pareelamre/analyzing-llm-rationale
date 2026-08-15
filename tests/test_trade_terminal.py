@@ -20,6 +20,9 @@ class TradeTerminalTests(unittest.TestCase):
         self.assertIn("function setSuggestedLimitPrice", self.trade_html)
         self.assertIn("The chat only hands the terminal research context.", self.trade_html)
         self.assertIn("must set a current limit order", self.trade_html)
+        self.assertIn("function consumeResearchHandoff", self.trade_html)
+        self.assertIn("sessionStorage.removeItem(key)", self.trade_html)
+        self.assertIn("body.expected_edge = researchContext.modelProbability - researchContext.marketProbability", self.trade_html)
 
     def test_terminal_does_not_render_fabricated_market_data(self) -> None:
         self.assertNotIn("loadMockOrderBook", self.trade_html)
@@ -31,10 +34,20 @@ class TradeTerminalTests(unittest.TestCase):
         self.assertIn("/trading/connections", self.trade_html)
         self.assertNotIn("getStoredCreds", self.trade_html)
         self.assertNotIn("allVenueCreds", self.trade_html)
+        self.assertIn("/trading/runs", self.trade_html)
+        self.assertIn("TRADE RUN SUBMITTED", self.trade_html)
         self.assertIn("Portfolio reconciliation", self.trade_html)
         self.assertIn("/trading/portfolio?platform=", self.trade_html)
         self.assertIn("CANCEL OPEN ORDER", self.trade_html)
         self.assertIn("AWAITING RECONCILIATION", self.trade_html)
+
+    def test_terminal_exposes_server_enforced_risk_controls(self) -> None:
+        self.assertIn("Real-money risk controls", self.trade_html)
+        self.assertIn("/trading/guardrails", self.trade_html)
+        self.assertIn("function toggleTradingPause", self.trade_html)
+        self.assertIn("Save lower limits", self.trade_html)
+        self.assertIn("fresh quote, available balance, current exposure", self.trade_html)
+        self.assertIn("platform_kill_switch", self.trade_html)
 
     def test_frontend_source_terminal_cannot_reintroduce_browser_credential_storage(self) -> None:
         self.assertIn("/trading/connections", self.frontend_trade_html)

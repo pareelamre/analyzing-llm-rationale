@@ -146,6 +146,44 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("trackEvent('watchlist_opened'", self.index_html)
         self.assertIn("trackEvent('personal_ledger_opened'", self.index_html)
 
+    def test_agent_research_can_open_a_review_only_trade_run(self) -> None:
+        self.assertIn("Review Trade Run", self.index_html)
+        self.assertIn("function openTradeRunFromBubble", self.index_html)
+        self.assertIn("function tradeRunHandoff", self.index_html)
+        self.assertIn("Choose a fresh limit price and size in the terminal.", self.index_html)
+        self.assertIn("no exchange credentials, price, or size", self.index_html)
+
+    def test_agent_runs_show_private_research_progress_and_keep_trade_review_explicit(self) -> None:
+        self.assertIn(">Agent runs<", self.index_html)
+        self.assertIn("function syncAgentRunsFromServer", self.index_html)
+        self.assertIn("function renderAgentRunTimeline", self.index_html)
+        self.assertIn("function openAgentRunTrade", self.index_html)
+        self.assertIn("/agent/runs", self.index_html)
+        self.assertIn("agent_run: d.agent_run || null", self.index_html)
+
+    def test_agent_run_steps_are_visible_via_an_expandable_panel(self) -> None:
+        self.assertIn("function toggleAgentRunSteps", self.index_html)
+        self.assertIn("function _agentRunStepRowHtml", self.index_html)
+        self.assertIn("run.steps || []", self.index_html)
+        self.assertIn("No tool-loop steps recorded for this run.", self.index_html)
+
+    def test_agentic_trading_board_surfaces_promotion_eligibility(self) -> None:
+        self.assertIn("d.eligibility || {}", self.index_html)
+        self.assertIn("function _eligibilityReasonText", self.index_html)
+        self.assertIn("Not yet eligible", self.index_html)
+        self.assertIn(">Eligible</th>", self.index_html)
+
+    def test_users_can_copy_a_public_agent_without_private_trading_state(self) -> None:
+        self.assertIn("Copy agent", self.index_html)
+        self.assertIn("function copyPublicAgent", self.index_html)
+        self.assertIn("/agent-profiles/copy", self.index_html)
+        self.assertIn("function syncCopiedAgentsFromServer", self.index_html)
+        self.assertIn("function _agentSkillsForRun", self.index_html)
+        self.assertIn("agentBody.agent_profile_id = copiedAgent.profileId", self.index_html)
+        self.assertIn("agentBody.model = copiedAgent.sourceAgentId", self.index_html)
+        self.assertIn("private research recipe", self.index_html)
+        self.assertIn("no private history, context, trading permissions, or exchange connection", self.index_html)
+
     def test_app_uses_refresh_safe_paths_and_migrates_legacy_hash_links(self) -> None:
         self.assertIn("const CHAT_PATH_PREFIX = '/chat/';", self.index_html)
         self.assertIn("'app':           '/ask'", self.index_html)

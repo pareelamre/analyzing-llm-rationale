@@ -161,83 +161,36 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertTrue(any("post_only" in w for w in result["warnings"]))
         self.assertTrue(any("order_type" in w for w in result["warnings"]))
 
-    def test_live_place_trade_accounts_for_partial_immediate_fill(self):
+    def test_place_trade_rejects_live_mode_and_never_calls_trading_place_order(self):
+        # place_trade is called from an autonomous LLM tool loop, which cannot
+        # supply real human confirmation and does not route through
+        # create_trading_run/execute_trading_run/the guardrail chain/the kill
+        # switch. FORESEA_AGENT_PLACE_TRADE_MODE=live used to let it call
+        # trading.place_order directly with a self-supplied confirmation
+        # phrase and shared server credentials -- it must now be rejected
+        # outright, before trading.place_order is ever reached.
         from analyzing_llm_rationale import trading
 
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
-        def fake_place_order(order, *, user_id):
-            preview = trading.preview_order(order)
-            return {
-                **preview,
-                "submitted": True,
-                "would_execute": True,
-                "user_id": user_id,
-                "venue_response": {
-                    "body": {
-                        "order": {
-                            "status": "canceled",
-                            "fill_count": "3",
-                            "remaining_count": "7",
-                            "fee": "0.12",
-                        }
-                    }
-                },
-            }
-
         with tempfile.TemporaryDirectory() as td:
-            db_path = Path(td) / "accounts.sqlite"
             env = {
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
-                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_AGENT_PLACE_TRADE_MODE": "live",
-                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
-                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
-                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
-                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
-                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
             with (
                 mock.patch.dict(os.environ, env, clear=False),
-                mock.patch.object(trading, "place_order", side_effect=fake_place_order),
+                mock.patch.object(trading, "place_order") as fake_place_order,
             ):
                 result = benchmark_tools.place_trade(
                     {"ticker": "KXPARTIAL", "side": "yes", "price": 0.40, "quantity": 10},
                     ctx,
                 )
-            conn = sqlite3.connect(db_path)
-            try:
-                pos = conn.execute(
-                    """
-                    SELECT quantity, cost_basis
-                    FROM agent_positions
-                    WHERE agent_id = 'model-a' AND ticker = 'KXPARTIAL' AND side = 'yes'
-                    """
-                ).fetchone()
-                action = conn.execute(
-                    """
-                    SELECT quantity, notional, fee, cash_required
-                    FROM agent_actions
-                    WHERE action_type = 'trade' AND ticker = 'KXPARTIAL'
-                    """
-                ).fetchone()
-            finally:
-                conn.close()
+                fake_place_order.assert_not_called()
 
-        self.assertTrue(result["ok"])
-        self.assertTrue(result["submitted"])
-        self.assertEqual(result["execution"]["fill_outcome"], "partial")
-        self.assertEqual(result["execution"]["requested_quantity"], 10.0)
-        self.assertEqual(result["execution"]["filled_quantity"], 3.0)
-        self.assertEqual(result["execution"]["unfilled_quantity_cancelled"], 7.0)
-        self.assertEqual(result["risk_guard"]["fee_source"], "venue")
-        self.assertIsNotNone(pos)
-        self.assertAlmostEqual(pos[0], 3.0)
-        self.assertAlmostEqual(pos[1], 1.2)
-        self.assertAlmostEqual(action[0], 3.0)
-        self.assertAlmostEqual(action[1], 1.2)
-        self.assertAlmostEqual(action[2], 0.12)
-        self.assertAlmostEqual(action[3], 1.32)
+        self.assertFalse(result["ok"])
+        self.assertIn("must be 'shadow'", result["error"])
 
     def test_place_trade_rejects_single_market_concentration_over_15_percent(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")

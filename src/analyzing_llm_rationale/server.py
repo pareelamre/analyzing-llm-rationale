@@ -8,6 +8,7 @@ import html
 import ipaddress
 import json
 import logging
+import math
 import os
 import queue
 import random
@@ -43,6 +44,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from opentelemetry import metrics as otel_metrics
 from opentelemetry import trace as otel_trace
+from opentelemetry.trace import Status, StatusCode
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from analyzing_llm_rationale import (
@@ -147,7 +149,29 @@ _AGENT_TRADING_BOARD_STALE_AFTER_S = int(
 # Shared secret gating the evolution-loop bridge endpoints (pending-markets /
 # mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
 _TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
+# Shared secret for the bounded scheduled reconciliation trigger. It intentionally
+# has a distinct capability from the forecast bridge because this path decrypts
+# users' connected exchange accounts to read, never trade.
+_TRADING_RECONCILIATION_TOKEN: Optional[str] = os.environ.get("TRADING_RECONCILIATION_TOKEN")
+_TRADING_RECONCILIATION_MAX_ORDERS = max(
+    1, min(int(os.environ.get("TRADING_RECONCILIATION_MAX_ORDERS", "25")), 100)
+)
+# Shared secret for the bounded scheduled AgentRun reconciliation trigger. A
+# distinct token from trading reconciliation on purpose -- this path never
+# touches a connected exchange account, only a signed-in user's own private
+# research-run records.
+_AGENT_RUN_RECONCILIATION_TOKEN: Optional[str] = os.environ.get("AGENT_RUN_RECONCILIATION_TOKEN")
+_AGENT_RUN_RECONCILIATION_MAX_RUNS = max(
+    1, min(int(os.environ.get("AGENT_RUN_RECONCILIATION_MAX_RUNS", "25")), 100)
+)
+# A run stuck at status="running" past this many minutes almost certainly means
+# the request that owned it crashed or the process recycled mid-flight, not
+# that it's still legitimately working -- the bounded tool loop (<=8 steps,
+# each one LLM call) normally finishes in well under this.
+_AGENT_RUN_STALE_MINUTES = int(os.environ.get("AGENT_RUN_STALE_MINUTES", "60"))
 _state: Dict[str, Any] = {}
+_trading_run_lock = threading.RLock()
+_trading_guardrail_lock = threading.RLock()
 _PUBLIC_MCP = None
 _PUBLIC_MCP_APP = None
 
@@ -999,6 +1023,157 @@ def _delete_personal_ledger_entry(user_id: str, entry_id: str) -> None:
     client.delete(_personal_ledger_key(client, user_id, entry_id))
 
 
+# Private copied-agent recipes (per-user on Datastore).
+_AGENT_PROFILE_KIND = "AgentProfile"
+_AGENT_PROFILE_FIELDS = (
+    "id", "name", "source_agent_id", "model", "instruction", "version",
+    "execution_mode", "created_at", "updated_at",
+)
+_MAX_AGENT_PROFILES_PER_USER = 5
+
+# Durable research runs are strictly private to the signed-in user. The
+# request snapshot deliberately excludes browser/provider secrets and prior
+# conversation content; the run stores only its public market inputs, progress
+# events, and the resulting research report.
+_AGENT_RUN_KIND = "AgentRun"
+_AGENT_RUN_FIELDS = (
+    "id", "status", "title", "question", "platform", "recommendation",
+    "model_probability", "market_probability", "edge", "agent_profile",
+    "request", "report", "timeline", "steps", "created_at", "updated_at",
+    "completed_at", "error_code",
+)
+_MAX_AGENT_RUNS_PER_USER = 100
+
+
+def _agent_run_key(client: Any, user_id: str, run_id: str) -> Any:
+    return client.key("User", user_id, _AGENT_RUN_KIND, run_id)
+
+
+def _agent_run_from_entity(entity: Any) -> Dict[str, Any]:
+    record = {field: entity.get(field) for field in _AGENT_RUN_FIELDS}
+    record["id"] = record.get("id") or entity.key.name
+    return record
+
+
+def _list_agent_runs(user_id: str) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        records = list(_state.setdefault("agent_runs", {}).get(user_id, {}).values())
+    else:
+        query = client.query(kind=_AGENT_RUN_KIND, ancestor=client.key("User", user_id))
+        records = [_agent_run_from_entity(entity) for entity in query.fetch(limit=_MAX_AGENT_RUNS_PER_USER)]
+    return sorted(records, key=lambda record: record.get("updated_at") or "", reverse=True)
+
+
+def _read_agent_run(user_id: str, run_id: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        record = _state.setdefault("agent_runs", {}).setdefault(user_id, {}).get(run_id)
+        return dict(record) if record else None
+    entity = client.get(_agent_run_key(client, user_id, run_id))
+    return _agent_run_from_entity(entity) if entity is not None else None
+
+
+def _put_agent_run(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
+    record = {field: record.get(field) for field in _AGENT_RUN_FIELDS}
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("agent_runs", {}).setdefault(user_id, {})[record["id"]] = record
+        return record
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(
+        key=_agent_run_key(client, user_id, record["id"]),
+        exclude_from_indexes=("title", "question", "request", "report", "timeline", "steps", "agent_profile"),
+    )
+    entity.update(record)
+    client.put(entity)
+    return record
+
+
+def _list_stale_running_agent_runs(cutoff_iso: str, limit: int) -> List[tuple[str, Dict[str, Any]]]:
+    """Cross-user, bounded set of AgentRun records stuck at status="running"
+    with no update since `cutoff_iso` -- almost certainly orphaned by a
+    crashed or recycled request, not still legitimately in flight."""
+    bounded_limit = max(1, min(int(limit), _AGENT_RUN_RECONCILIATION_MAX_RUNS))
+    client = _get_datastore()
+    if client is None:
+        candidates = [
+            (user_id, dict(record))
+            for user_id, records in _state.setdefault("agent_runs", {}).items()
+            for record in records.values()
+            if record.get("status") == "running" and (record.get("updated_at") or "") < cutoff_iso
+        ]
+        return sorted(candidates, key=lambda item: item[1].get("updated_at") or "")[:bounded_limit]
+
+    query = client.query(kind=_AGENT_RUN_KIND)
+    query.add_filter("status", "=", "running")
+    query.add_filter("updated_at", "<", cutoff_iso)
+    query.order = ["updated_at"]
+    candidates: List[tuple[str, Dict[str, Any]]] = []
+    for entity in query.fetch(limit=bounded_limit):
+        parent = entity.key.parent
+        user_id = parent.name if parent is not None else None
+        if not user_id:
+            continue
+        candidates.append((str(user_id), _agent_run_from_entity(entity)))
+    return candidates
+
+
+def _agent_profile_key(client: Any, user_id: str, profile_id: str) -> Any:
+    return client.key("User", user_id, _AGENT_PROFILE_KIND, profile_id)
+
+
+def _agent_profile_from_entity(entity: Any) -> Dict[str, Any]:
+    profile = {field: entity.get(field) for field in _AGENT_PROFILE_FIELDS}
+    profile["id"] = entity.key.name
+    return profile
+
+
+def _list_agent_profiles(user_id: str) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        profiles = list(_state.setdefault("agent_profiles", {}).get(user_id, {}).values())
+    else:
+        query = client.query(kind=_AGENT_PROFILE_KIND, ancestor=client.key("User", user_id))
+        profiles = [_agent_profile_from_entity(entity) for entity in query.fetch(limit=_MAX_AGENT_PROFILES_PER_USER)]
+    return sorted(profiles, key=lambda profile: profile.get("created_at") or "", reverse=True)
+
+
+def _read_agent_profile(user_id: str, profile_id: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        profile = _state.setdefault("agent_profiles", {}).setdefault(user_id, {}).get(profile_id)
+        return dict(profile) if profile else None
+    entity = client.get(_agent_profile_key(client, user_id, profile_id))
+    return _agent_profile_from_entity(entity) if entity is not None else None
+
+
+def _put_agent_profile(user_id: str, profile: Dict[str, Any]) -> Dict[str, Any]:
+    profile = {field: profile.get(field) for field in _AGENT_PROFILE_FIELDS}
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("agent_profiles", {}).setdefault(user_id, {})[profile["id"]] = profile
+        return profile
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(
+        key=_agent_profile_key(client, user_id, profile["id"]),
+        exclude_from_indexes=("instruction",),
+    )
+    entity.update(profile)
+    client.put(entity)
+    return profile
+
+
+def _delete_agent_profile(user_id: str, profile_id: str) -> None:
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("agent_profiles", {}).setdefault(user_id, {}).pop(profile_id, None)
+        return
+    client.delete(_agent_profile_key(client, user_id, profile_id))
+
+
 # ── RAG knowledge base (per-user vector store on Datastore) ──────────────────
 
 def _rag_fetch(user_id: str, namespace: str, limit: int = 2000) -> List[Dict[str, Any]]:
@@ -1765,10 +1940,35 @@ _trading_connection_actions = _meter.create_counter(
     unit="1",
     description="Secure exchange connection actions by venue, action, and outcome",
 )
+_trading_run_actions = _meter.create_counter(
+    "trading.run.actions",
+    unit="1",
+    description="Durable trade-run lifecycle actions by venue, action, and outcome",
+)
 _trading_reconciliation_actions = _meter.create_counter(
     "trading.reconciliation.actions",
     unit="1",
     description="Trading portfolio, order, and cancellation reconciliation actions",
+)
+_trading_guardrail_actions = _meter.create_counter(
+    "trading.guardrail.actions",
+    unit="1",
+    description="Trading risk-guardrail evaluations by venue, action, and outcome",
+)
+_trading_readiness_actions = _meter.create_counter(
+    "trading.readiness.actions",
+    unit="1",
+    description="Operator launch-readiness checks for guarded live trading",
+)
+_agent_profile_actions = _meter.create_counter(
+    "agent.profile.actions",
+    unit="1",
+    description="Private copied-agent profile actions by lifecycle outcome",
+)
+_agent_run_actions = _meter.create_counter(
+    "agent.run.actions",
+    unit="1",
+    description="Durable agent-run lifecycle actions by outcome",
 )
 _analytics_attribution_actions = _meter.create_counter(
     "analytics.attribution.records",
@@ -2702,6 +2902,10 @@ async def agent_trading_board():
       approximates and why) plus Sharpe/max-drawdown computed over it.
     - ``recent_activity``: a merged, newest-first transparency feed of
       trades, settlements, per-cycle theses, and notes across every model.
+    - ``eligibility``: per model, whether its shadow track record currently
+      clears a conservative, adjustable bar (settled trades, Sharpe,
+      drawdown -- see ``agent_trading_stats.compute_promotion_eligibility``).
+      Purely observational: nothing reads this to grant any capability.
     """
     live = await asyncio.get_running_loop().run_in_executor(None, _read_agent_trading_board)
     live = live or {}
@@ -2716,6 +2920,7 @@ async def agent_trading_board():
             "leaderboard": live.get("leaderboard", []),
             "equity_curves": live.get("equity_curves", {}),
             "recent_activity": live.get("recent_activity", []),
+            "eligibility": live.get("eligibility", {}),
         },
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
@@ -3011,6 +3216,30 @@ def _require_track_token(request: Optional[Request]) -> None:
     token = request.headers.get("x-track-token") if request is not None else None
     if not token or not hmac.compare_digest(token, _TRACK_RECORD_TOKEN):
         raise HTTPException(status_code=401, detail="Invalid or missing X-Track-Token.")
+
+
+def _require_trading_reconciliation_token(request: Optional[Request]) -> None:
+    """Gate the scheduled reconciliation trigger with its narrowly scoped secret."""
+    if not _TRADING_RECONCILIATION_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Scheduled trading reconciliation is not enabled (set TRADING_RECONCILIATION_TOKEN).",
+        )
+    token = request.headers.get("x-trading-reconciliation-token") if request is not None else None
+    if not token or not hmac.compare_digest(token, _TRADING_RECONCILIATION_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid or missing reconciliation token.")
+
+
+def _require_agent_run_reconciliation_token(request: Optional[Request]) -> None:
+    """Gate the scheduled AgentRun reconciliation trigger with its own narrowly scoped secret."""
+    if not _AGENT_RUN_RECONCILIATION_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Scheduled agent-run reconciliation is not enabled (set AGENT_RUN_RECONCILIATION_TOKEN).",
+        )
+    token = request.headers.get("x-agent-run-reconciliation-token") if request is not None else None
+    if not token or not hmac.compare_digest(token, _AGENT_RUN_RECONCILIATION_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid or missing reconciliation token.")
 
 
 @app.get(
@@ -3780,15 +4009,177 @@ class TradeOrderResponse(TradeOrderPreviewResponse):
     reconciliation_status: Optional[str] = None
 
 
+class TradeRunCreateRequest(TradeOrderRequest):
+    """Create a durable, human-reviewable live-trade run without executing it."""
+
+    title: str = Field("", max_length=160, description="Short operator-facing name for this run.")
+    thesis: str = Field("", max_length=4000, description="Optional research rationale retained with the trade run.")
+    source_conversation_id: Optional[str] = Field(
+        None, max_length=100, description="Optional chat thread that produced the trade idea."
+    )
+    expected_edge: Optional[float] = Field(
+        None, ge=-1.0, le=1.0, description="Optional model-minus-market probability edge."
+    )
+    sources: List[str] = Field(
+        default_factory=list, max_length=20, description="Optional source URLs or identifiers supporting the thesis."
+    )
+
+
+class TradeRunExecuteRequest(BaseModel):
+    """The explicit human acknowledgement required to send a saved run."""
+
+    confirmation: str = Field(..., max_length=80)
+
+
+class TradeRunResponse(BaseModel):
+    """A durable live-trading lifecycle record, with no credential material."""
+
+    id: str
+    status: str
+    title: str
+    platform: str
+    action: str
+    outcome: str
+    ticker: Optional[str] = None
+    token_id: Optional[str] = None
+    quantity: Optional[float] = None
+    price: Optional[float] = None
+    estimated_notional: Optional[float] = None
+    order_type: Optional[str] = None
+    client_order_id: Optional[str] = None
+    preview: Dict[str, Any]
+    provenance: Dict[str, Any]
+    audit_order_id: Optional[str] = None
+    venue_order_id: Optional[str] = None
+    reconciliation_status: Optional[str] = None
+    approved_at: Optional[str] = None
+    submitted_at: Optional[str] = None
+    last_reconciled_at: Optional[str] = None
+    created_at: str
+    updated_at: str
+    error_code: Optional[str] = None
+
+
+class TradingGuardrailsResponse(BaseModel):
+    """The signed-in user's execution limits, never exchange credentials."""
+
+    paused: bool
+    platform_kill_switch: bool
+    max_order_notional: float
+    max_daily_risk_notional: float
+    max_market_exposure_notional: float
+    max_open_orders: int
+    max_price_deviation_bps: int
+    max_quote_age_seconds: int
+    cooldown_seconds: int
+    updated_at: Optional[str] = None
+
+
+class TradingGuardrailsUpdateRequest(BaseModel):
+    """Users may only narrow their own limits below Foresea's hard ceilings."""
+
+    paused: Optional[bool] = None
+    max_order_notional: Optional[float] = Field(None, gt=0.0, le=100_000.0)
+    max_daily_risk_notional: Optional[float] = Field(None, gt=0.0, le=1_000_000.0)
+    max_market_exposure_notional: Optional[float] = Field(None, gt=0.0, le=1_000_000.0)
+    max_open_orders: Optional[int] = Field(None, ge=1, le=100)
+    max_price_deviation_bps: Optional[int] = Field(None, ge=1, le=10_000)
+    max_quote_age_seconds: Optional[int] = Field(None, ge=1, le=300)
+    cooldown_seconds: Optional[int] = Field(None, ge=0, le=3600)
+
+
+class TradingLaunchReadinessCheck(BaseModel):
+    """One non-sensitive operator check required before enabling live BYO trading."""
+
+    code: str
+    status: Literal["ready", "attention", "blocked"]
+    detail: str
+
+
+class TradingLaunchReadinessResponse(BaseModel):
+    """Configuration-only launch report; it never probes exchanges or reveals secrets."""
+
+    safe_default_active: bool
+    ready_for_connection_beta: bool
+    ready_for_live_byo_beta: bool
+    byo_trading_enabled: bool
+    shared_trading_enabled: bool
+    market_orders_enabled: bool
+    platform_kill_switch: bool
+    scheduled_reconciliation_configured: bool
+    durable_store_configured: bool
+    hard_caps: Dict[str, Any]
+    checks: List[TradingLaunchReadinessCheck]
+
+
 class AgentSkill(BaseModel):
     """A user-defined analysis step the agent runs over the question + evidence."""
     name: str = Field(..., min_length=1, max_length=60, description="Short skill name, e.g. 'Base rate check'.")
     instruction: str = Field(..., min_length=1, max_length=2000, description="What this skill should analyse.")
 
 
+class RedTeamVerdict(BaseModel):
+    """Structured classification of a Red team skill's own argument, from a
+    separate follow-up call. Observational only -- nothing in the pipeline
+    reads this to gate or adjust the forecast."""
+    credible: bool = Field(..., description="Whether the argument is well-supported by a real mechanism or evidence, not just contrarian restating.")
+    severity: Literal["low", "medium", "high"] = Field(..., description="How much this argument should weigh against the forecast if credible.")
+
+
 class AgentSkillResult(BaseModel):
     name: str
     output: str
+    verdict: Optional[RedTeamVerdict] = Field(
+        None,
+        description="Structured classification of this skill's own argument, when available (Red team only, best-effort).",
+    )
+
+
+class AgentProfile(BaseModel):
+    """A private, immutable copy of a public Foresea research setup."""
+
+    id: str
+    name: str
+    source_agent_id: str
+    model: str
+    instruction: str
+    version: int = Field(..., ge=1)
+    execution_mode: Literal["research_only"]
+    created_at: str
+    updated_at: str
+
+
+class AgentProfileReference(BaseModel):
+    """The profile snapshot that shaped one agent report, without private context."""
+
+    id: str
+    source_agent_id: str
+    model: str
+    version: int = Field(..., ge=1)
+    execution_mode: Literal["research_only"]
+
+
+class AgentRunReference(BaseModel):
+    """The durable, private research run that produced an agent report."""
+
+    id: str
+    status: Literal["running", "completed", "failed", "interrupted"]
+    created_at: str
+    updated_at: str
+
+
+class AgentProfileList(BaseModel):
+    profiles: List[AgentProfile] = Field(default_factory=list)
+
+
+class AgentProfileCopyRequest(BaseModel):
+    source_agent_id: str = Field(..., min_length=1, max_length=120, pattern=r"^[a-zA-Z0-9._-]+$")
+    name: Optional[str] = Field(None, min_length=1, max_length=80)
+
+
+class AgentProfileCopyResponse(BaseModel):
+    profile: AgentProfile
+    created: bool
 
 
 class AgentAnalyzeRequest(BaseModel):
@@ -3834,15 +4225,21 @@ class AgentAnalyzeRequest(BaseModel):
     model: Optional[str] = Field(None, max_length=64)
     provider_base_url: Optional[str] = Field(None, max_length=2000)
     ollama_base_url: Optional[str] = Field(None, max_length=500)
+    agent_profile_id: Optional[str] = Field(
+        None,
+        max_length=160,
+        pattern=r"^agent_[a-zA-Z0-9_-]{12,150}$",
+        description="Private copied-agent recipe. Its research model and instructions are server-resolved.",
+    )
 
 
 class LiveTradeIntent(BaseModel):
     """A chat-to-terminal handoff for a human-reviewed live order.
 
     This is deliberately not an executable order: it contains no size or limit
-    price, and the trading terminal must still fetch a fresh venue quote, run
-    `/trading/preview`, and receive an explicit user confirmation before the
-    existing order endpoint can submit funds-moving instructions.
+    price, and the trading terminal must still fetch a fresh venue quote, create
+    a durable `/trading/runs` record, and receive an explicit user confirmation
+    before an exchange order can be submitted.
     """
 
     platform: str
@@ -3877,10 +4274,63 @@ class AgentReport(BaseModel):
     skills: List[AgentSkillResult] = Field(default_factory=list)
     grounding: Optional[str] = Field(None, description="Track-record self-calibration note applied to the forecast.")
     tool_transcript: List[Dict[str, Any]] = Field(default_factory=list, description="Tool calls + observations when the tool loop ran.")
+    tool_loop_steps: Optional[int] = Field(None, description="Tool-call steps the loop actually ran, when tool_loop=true.")
+    tool_loop_truncated: Optional[bool] = Field(None, description="True if the loop hit max_tool_steps without the model giving a final answer.")
+    agent_profile: Optional[AgentProfileReference] = Field(
+        None,
+        description="Immutable private research recipe used for this report, when one was selected.",
+    )
     live_trade_intent: Optional[LiveTradeIntent] = Field(
         None,
         description="A non-executable research handoff for the authenticated user's live trade terminal.",
     )
+    agent_run: Optional[AgentRunReference] = Field(
+        None,
+        description="Private durable run record for this signed-in user's agent research.",
+    )
+
+
+class AgentRunTimelineEvent(BaseModel):
+    at: str
+    phase: str
+    status: Literal["running", "completed", "failed", "interrupted"]
+    detail: str
+
+
+class AgentRunSummary(BaseModel):
+    """Operator-safe overview of a private, durable agent research run."""
+
+    id: str
+    status: Literal["running", "completed", "failed", "interrupted"]
+    title: str
+    question: str
+    platform: Optional[str] = None
+    recommendation: Optional[str] = None
+    model_probability: Optional[float] = None
+    market_probability: Optional[float] = None
+    edge: Optional[float] = None
+    agent_profile: Optional[AgentProfileReference] = None
+    has_live_trade_intent: bool = False
+    timeline: List[AgentRunTimelineEvent] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+    completed_at: Optional[str] = None
+    error_code: Optional[str] = None
+
+
+class AgentRunResponse(AgentRunSummary):
+    """Full private run record, including the safe input snapshot and report."""
+
+    request: Dict[str, Any] = Field(default_factory=dict)
+    report: Optional[AgentReport] = None
+    steps: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Tool-loop steps persisted as they happened, visible even for a still-running or crashed run.",
+    )
+
+
+class AgentRunList(BaseModel):
+    runs: List[AgentRunSummary] = Field(default_factory=list)
 
 
 class ScanOpportunity(BaseModel):
@@ -5048,6 +5498,14 @@ async def _prepare_predict_messages(
                     record["resolution_criteria"] = quote.get("resolution_criteria")
                 if not record.get("resolve_time") and quote.get("close_time"):
                     record["resolve_time"] = quote["close_time"]
+                # Evidence-date discipline (build_user_prompt's resolution-window
+                # check) is inert unless created_time/publish_time are populated --
+                # backfill both from the market's own open/creation time so the
+                # model can't credit evidence dated before the contract existed.
+                if not record.get("created_time") and quote.get("created_time"):
+                    record["created_time"] = quote["created_time"]
+                if not record.get("publish_time") and quote.get("created_time"):
+                    record["publish_time"] = quote["created_time"]
                 # Market microstructure signals — populate only when not already supplied.
                 if record.get("market_volume") is None and quote.get("volume") is not None:
                     record["market_volume"] = float(quote["volume"])
@@ -6916,12 +7374,14 @@ async def submit_feedback(fb: FeedbackRequest, request: Request) -> Dict[str, st
 _MARKET_CACHE_TTL = int(os.environ.get("MARKET_CACHE_TTL", "30"))
 
 
-async def _fetch_market_quote(venue: str, **kwargs: Any) -> "MarketQuote":
-    """Shared cache + error handling for the market-fetch endpoints."""
+async def _fetch_market_quote(
+    venue: str, *, force_refresh: bool = False, **kwargs: Any
+) -> "MarketQuote":
+    """Shared market fetch; execution guardrails may explicitly bypass the cache."""
     from analyzing_llm_rationale import market_data
 
     cache_key = _cache_key("market", venue, kwargs)
-    cached = _cache_get(cache_key)
+    cached = None if force_refresh else _cache_get(cache_key)
     if cached is not None:
         return MarketQuote(**cached)
 
@@ -6988,8 +7448,12 @@ async def radar(limit: int = Query(12, ge=1, le=30)) -> JSONResponse:
 
 _TRADING_CONNECTION_KIND = "TradingConnection"
 _TRADING_ORDER_KIND = "TradingOrder"
+_TRADING_RUN_KIND = "TradingRun"
+_TRADING_GUARDRAILS_KIND = "TradingGuardrails"
+_TRADING_RISK_EVENT_KIND = "TradingRiskEvent"
 _TRADING_ORDER_FIELDS = (
     "id",
+    "trade_run_id",
     "platform",
     "venue_order_id",
     "status",
@@ -7011,10 +7475,66 @@ _TRADING_ORDER_FIELDS = (
     "last_reconciled_at",
     "canceled_at",
 )
+_TRADING_RUN_FIELDS = (
+    "id",
+    "status",
+    "title",
+    "platform",
+    "action",
+    "outcome",
+    "ticker",
+    "token_id",
+    "quantity",
+    "price",
+    "estimated_notional",
+    "order_type",
+    "client_order_id",
+    "order_request",
+    "preview",
+    "provenance",
+    "audit_order_id",
+    "venue_order_id",
+    "reconciliation_status",
+    "approved_at",
+    "submitted_at",
+    "last_reconciled_at",
+    "created_at",
+    "updated_at",
+    "error_code",
+)
+_TRADING_GUARDRAIL_FIELDS = (
+    "paused",
+    "max_order_notional",
+    "max_daily_risk_notional",
+    "max_market_exposure_notional",
+    "max_open_orders",
+    "max_price_deviation_bps",
+    "max_quote_age_seconds",
+    "cooldown_seconds",
+    "updated_at",
+)
+_TRADING_RISK_EVENT_FIELDS = (
+    "id",
+    "created_at",
+    "venue",
+    "event",
+    "outcome",
+    "reason_code",
+    "trade_run_id",
+    "audit_order_id",
+)
 
 
 class SecureTradingConnectionError(RuntimeError):
     """The server is unable to safely persist or read a connected account."""
+
+
+class TradingGuardrailError(RuntimeError):
+    """A real-order request crossed a deliberate Foresea risk boundary."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
 
 
 _TRADING_KMS_KEY_ENV = "FORESEA_TRADING_KMS_KEY_NAME"
@@ -7040,6 +7560,10 @@ def _trading_connection_key(client: Any, user_id: str, platform: str) -> Any:
 
 def _trading_order_key(client: Any, user_id: str, order_id: str) -> Any:
     return client.key("User", user_id, _TRADING_ORDER_KIND, order_id)
+
+
+def _trading_run_key(client: Any, user_id: str, run_id: str) -> Any:
+    return client.key("User", user_id, _TRADING_RUN_KIND, run_id)
 
 
 def _iso_timestamp(value: Any) -> Optional[str]:
@@ -7109,6 +7633,103 @@ def _secure_connection_configured() -> bool:
     except SecureTradingConnectionError:
         return False
     return True
+
+
+def _trading_launch_readiness() -> TradingLaunchReadinessResponse:
+    """Report deploy-local prerequisites without exercising KMS or an exchange.
+
+    A green report means this revision is configured for an invite-only account
+    connection beta. It deliberately does *not* claim that Cloud KMS IAM,
+    GitHub's mirrored scheduler secret, or a venue account have been proven;
+    those require their own least-privilege smoke checks.
+    """
+    from analyzing_llm_rationale import trading
+
+    checks: List[TradingLaunchReadinessCheck] = []
+
+    def add(code: str, status: Literal["ready", "attention", "blocked"], detail: str) -> None:
+        checks.append(TradingLaunchReadinessCheck(code=code, status=status, detail=detail))
+
+    secure_connections = _secure_connection_configured()
+    add(
+        "secure_connections",
+        "ready" if secure_connections else "blocked",
+        (
+            "A dedicated Cloud KMS key resource is configured for encrypted user connections."
+            if secure_connections
+            else "A valid Cloud KMS key resource is required before user exchange accounts can connect."
+        ),
+    )
+
+    durable_store = _get_datastore() is not None
+    add(
+        "durable_store",
+        "ready" if durable_store else "blocked",
+        (
+            "A durable store client is available for trade runs, audit orders, and guardrail events."
+            if durable_store
+            else "A durable Datastore client is required; in-memory trade state is not launch-safe."
+        ),
+    )
+
+    scheduler_configured = bool(_TRADING_RECONCILIATION_TOKEN)
+    add(
+        "scheduled_reconciliation",
+        "ready" if scheduler_configured else "blocked",
+        (
+            "The service has a reconciliation token; confirm the matching GitHub Actions secret separately."
+            if scheduler_configured
+            else "Set the reconciliation token in the service and its matching GitHub Actions secret."
+        ),
+    )
+
+    try:
+        hard_caps = _platform_trading_guardrail_caps()
+        caps_valid = True
+        add("hard_caps", "ready", "Server-side order, exposure, freshness, and cooldown caps are valid.")
+    except TradingGuardrailError:
+        hard_caps = {}
+        caps_valid = False
+        add("hard_caps", "blocked", "One or more server-side trading cap values are invalid.")
+
+    byo_trading_enabled = trading._env_bool("FORESEA_ENABLE_BYO_TRADING", False)
+    shared_trading_enabled = trading._env_bool("FORESEA_ENABLE_TRADING", False)
+    market_orders_enabled = trading._env_bool("FORESEA_ALLOW_MARKET_ORDERS", False)
+    kill_switch = _trading_guardrail_env_bool("FORESEA_TRADING_KILL_SWITCH", False)
+    safe_default_active = not byo_trading_enabled and not shared_trading_enabled
+    if safe_default_active:
+        add("execution_gate", "ready", "Live execution is disabled by default.")
+    elif kill_switch:
+        add("execution_gate", "attention", "Execution is enabled, but the platform kill switch currently blocks new orders.")
+    else:
+        add("execution_gate", "attention", "Live execution is enabled; keep the rollout invite-only and within hard caps.")
+
+    legacy_key_present = bool((os.environ.get(_TRADING_LEGACY_ENCRYPTION_KEY_ENV) or "").strip())
+    add(
+        "legacy_encryption_key",
+        "attention" if legacy_key_present else "ready",
+        (
+            "A retired connection-encryption key remains for lazy migration; remove it after all version-1 records migrate."
+            if legacy_key_present
+            else "No retired shared connection-encryption key is configured."
+        ),
+    )
+
+    connection_beta_ready = secure_connections and durable_store and scheduler_configured and caps_valid
+    live_byo_beta_ready = connection_beta_ready and byo_trading_enabled and not kill_switch
+    return TradingLaunchReadinessResponse(
+        safe_default_active=safe_default_active,
+        ready_for_connection_beta=connection_beta_ready,
+        ready_for_live_byo_beta=live_byo_beta_ready,
+        byo_trading_enabled=byo_trading_enabled,
+        shared_trading_enabled=shared_trading_enabled,
+        market_orders_enabled=market_orders_enabled,
+        platform_kill_switch=kill_switch,
+        scheduled_reconciliation_configured=scheduler_configured,
+        durable_store_configured=durable_store,
+        hard_caps=hard_caps,
+        checks=checks,
+    )
 
 
 def _read_trading_connection(user_id: str, platform: str) -> Optional[Dict[str, Any]]:
@@ -7267,6 +7888,43 @@ def _list_trading_orders(user_id: str, platform: Optional[str] = None) -> List[D
     return sorted(records, key=lambda record: record.get("created_at") or "", reverse=True)
 
 
+_RECONCILABLE_TRADING_ORDER_STATUSES = ("submitted", "open")
+
+
+def _list_reconcilable_trading_orders(limit: int) -> List[tuple[str, Dict[str, Any]]]:
+    """Return a bounded cross-account set of non-terminal audited orders.
+
+    Credentials are deliberately not joined here.  The reconciliation worker
+    decrypts each user's connection only for the venue being read, and never
+    returns account, order, or credential identifiers to its scheduler.
+    """
+    bounded_limit = max(1, min(int(limit), _TRADING_RECONCILIATION_MAX_ORDERS))
+    client = _get_datastore()
+    if client is None:
+        candidates = [
+            (user_id, dict(record))
+            for user_id, records in _state.setdefault("trading_orders", {}).items()
+            for record in records.values()
+            if record.get("status") in _RECONCILABLE_TRADING_ORDER_STATUSES
+            and record.get("venue_order_id")
+        ]
+        return sorted(candidates, key=lambda item: item[1].get("updated_at") or "")[:bounded_limit]
+
+    query = client.query(kind=_TRADING_ORDER_KIND)
+    query.add_filter("status", "IN", list(_RECONCILABLE_TRADING_ORDER_STATUSES))
+    # The composite index in index.yaml makes this a fair, oldest-first queue
+    # rather than repeatedly reading whichever live orders sort first by key.
+    query.order = ["last_reconciled_at"]
+    candidates: List[tuple[str, Dict[str, Any]]] = []
+    for entity in query.fetch(limit=bounded_limit):
+        parent = entity.key.parent
+        user_id = parent.name if parent is not None else None
+        if not user_id or not entity.get("venue_order_id"):
+            continue
+        candidates.append((str(user_id), _trading_order_from_entity(entity)))
+    return candidates
+
+
 def _read_trading_order(user_id: str, order_id: str) -> Optional[Dict[str, Any]]:
     client = _get_datastore()
     if client is None:
@@ -7293,6 +7951,657 @@ def _put_trading_order(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
     return record
 
 
+def _trading_run_from_entity(entity: Any) -> Dict[str, Any]:
+    record = {field: entity.get(field) for field in _TRADING_RUN_FIELDS}
+    record["id"] = record.get("id") or entity.key.name
+    return record
+
+
+def _list_trading_runs(user_id: str, platform: Optional[str] = None) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        records = list(_state.setdefault("trading_runs", {}).get(user_id, {}).values())
+    else:
+        query = client.query(kind=_TRADING_RUN_KIND, ancestor=client.key("User", user_id))
+        records = [_trading_run_from_entity(entity) for entity in query.fetch(limit=250)]
+    if platform:
+        records = [record for record in records if record.get("platform") == platform]
+    return sorted(records, key=lambda record: record.get("created_at") or "", reverse=True)
+
+
+def _read_trading_run(user_id: str, run_id: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        record = _state.setdefault("trading_runs", {}).get(user_id, {}).get(run_id)
+        return dict(record) if record else None
+    entity = client.get(_trading_run_key(client, user_id, run_id))
+    return _trading_run_from_entity(entity) if entity is not None else None
+
+
+def _put_trading_run(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
+    record = {field: record.get(field) for field in _TRADING_RUN_FIELDS}
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("trading_runs", {}).setdefault(user_id, {})[record["id"]] = record
+        return record
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(
+        key=_trading_run_key(client, user_id, record["id"]),
+        exclude_from_indexes=("order_request", "preview", "provenance"),
+    )
+    entity.update(record)
+    client.put(entity)
+    return record
+
+
+def _trading_guardrails_key(client: Any, user_id: str) -> Any:
+    return client.key("User", user_id, _TRADING_GUARDRAILS_KIND, "current")
+
+
+def _trading_risk_event_key(client: Any, user_id: str, event_id: str) -> Any:
+    return client.key("User", user_id, _TRADING_RISK_EVENT_KIND, event_id)
+
+
+def _trading_guardrail_env_float(name: str, default: float) -> float:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise TradingGuardrailError("invalid_platform_config", f"{name} must be numeric.") from exc
+    if not math.isfinite(value) or value <= 0:
+        raise TradingGuardrailError("invalid_platform_config", f"{name} must be greater than zero.")
+    return value
+
+
+def _trading_guardrail_env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _trading_guardrail_env_int(name: str, default: int, *, minimum: int = 1) -> int:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise TradingGuardrailError("invalid_platform_config", f"{name} must be an integer.") from exc
+    if value < minimum:
+        raise TradingGuardrailError("invalid_platform_config", f"{name} must be at least {minimum}.")
+    return value
+
+
+def _platform_trading_guardrail_caps() -> Dict[str, Any]:
+    """Hard ceilings. Users may choose lower limits but never raise these caps."""
+    from analyzing_llm_rationale import trading
+
+    max_order = float(trading._max_order_notional())
+    return {
+        "max_order_notional": max_order,
+        "max_daily_risk_notional": _trading_guardrail_env_float(
+            "FORESEA_MAX_DAILY_RISK_NOTIONAL", max(max_order, 100.0)
+        ),
+        "max_market_exposure_notional": _trading_guardrail_env_float(
+            "FORESEA_MAX_MARKET_EXPOSURE_NOTIONAL", max(max_order, 50.0)
+        ),
+        "max_open_orders": _trading_guardrail_env_int("FORESEA_MAX_OPEN_ORDERS", 5),
+        "max_price_deviation_bps": _trading_guardrail_env_int(
+            "FORESEA_MAX_PRICE_DEVIATION_BPS", 300
+        ),
+        "max_quote_age_seconds": _trading_guardrail_env_int("FORESEA_MAX_QUOTE_AGE_SECONDS", 20),
+        "cooldown_seconds": _trading_guardrail_env_int(
+            "FORESEA_ORDER_COOLDOWN_SECONDS", 60, minimum=0
+        ),
+    }
+
+
+def _default_trading_guardrails() -> Dict[str, Any]:
+    caps = _platform_trading_guardrail_caps()
+    return {"paused": False, **caps, "updated_at": None}
+
+
+def _read_trading_guardrails(user_id: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        record = _state.setdefault("trading_guardrails", {}).get(user_id)
+        return dict(record) if record else None
+    entity = client.get(_trading_guardrails_key(client, user_id))
+    if entity is None:
+        return None
+    return {field: entity.get(field) for field in _TRADING_GUARDRAIL_FIELDS}
+
+
+def _effective_trading_guardrails(user_id: str) -> Dict[str, Any]:
+    policy = _default_trading_guardrails()
+    stored = _read_trading_guardrails(user_id)
+    if stored:
+        policy.update({field: stored.get(field) for field in _TRADING_GUARDRAIL_FIELDS if stored.get(field) is not None})
+    caps = _platform_trading_guardrail_caps()
+    for field, hard_cap in caps.items():
+        policy[field] = min(policy[field], hard_cap)
+    return policy
+
+
+def _put_trading_guardrails(user_id: str, policy: Dict[str, Any]) -> Dict[str, Any]:
+    record = {field: policy.get(field) for field in _TRADING_GUARDRAIL_FIELDS}
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("trading_guardrails", {})[user_id] = record
+        return record
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(key=_trading_guardrails_key(client, user_id))
+    entity.update(record)
+    client.put(entity)
+    return record
+
+
+def _update_trading_guardrails(user_id: str, update: TradingGuardrailsUpdateRequest) -> Dict[str, Any]:
+    caps = _platform_trading_guardrail_caps()
+    changes = update.model_dump(exclude_none=True)
+    for field, value in changes.items():
+        if field == "paused":
+            continue
+        if value > caps[field]:
+            raise TradingGuardrailError(
+                "limit_above_platform_cap",
+                f"{field} may not exceed Foresea's hard ceiling of {caps[field]}.",
+            )
+    with _trading_guardrail_lock:
+        policy = _effective_trading_guardrails(user_id)
+        policy.update(changes)
+        policy["updated_at"] = datetime.now(timezone.utc).isoformat()
+        return _put_trading_guardrails(user_id, policy)
+
+
+def _trading_guardrails_response(user_id: str) -> TradingGuardrailsResponse:
+    policy = _effective_trading_guardrails(user_id)
+    return TradingGuardrailsResponse(
+        **policy,
+        platform_kill_switch=_trading_guardrail_env_bool("FORESEA_TRADING_KILL_SWITCH", False),
+    )
+
+
+def _record_trading_risk_event(
+    user_id: str,
+    *,
+    venue: str,
+    event: str,
+    outcome: str,
+    reason_code: Optional[str] = None,
+    trade_run_id: Optional[str] = None,
+    audit_order_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Append a safe, immutable audit record without order payloads or secrets."""
+    record = {
+        "id": str(uuid.uuid4()),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "venue": venue,
+        "event": event,
+        "outcome": outcome,
+        "reason_code": reason_code,
+        "trade_run_id": trade_run_id,
+        "audit_order_id": audit_order_id,
+    }
+    client = _get_datastore()
+    if client is None:
+        events = _state.setdefault("trading_risk_events", {}).setdefault(user_id, [])
+        events.append(record)
+        del events[:-250]
+        return record
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(key=_trading_risk_event_key(client, user_id, record["id"]))
+    entity.update(record)
+    client.put(entity)
+    return record
+
+
+def _list_trading_risk_events(user_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    bounded_limit = max(1, min(int(limit), 250))
+    client = _get_datastore()
+    if client is None:
+        records = list(_state.setdefault("trading_risk_events", {}).get(user_id, []))
+    else:
+        query = client.query(kind=_TRADING_RISK_EVENT_KIND, ancestor=client.key("User", user_id))
+        records = [
+            {field: entity.get(field) for field in _TRADING_RISK_EVENT_FIELDS}
+            for entity in query.fetch(limit=bounded_limit)
+        ]
+    return sorted(records, key=lambda record: record.get("created_at") or "", reverse=True)[:bounded_limit]
+
+
+def _notify_trading_safety_event(
+    *, venue: str, event: str, reason_code: str, trade_run_id: Optional[str] = None
+) -> None:
+    """Alert an operator only for states that require human follow-up."""
+    if event not in {"submission_unknown", "venue_rejected", "platform_kill_switch", "order_filled"}:
+        return
+    logger.error("trading safety event venue=%s event=%s reason=%s", venue, event, reason_code)
+    try:
+        threading.Thread(
+            target=_send_alert_email,
+            args=(
+                f"Foresea trading safety: {event}",
+                "\n".join(
+                    part
+                    for part in (
+                        f"Venue: {venue}",
+                        f"Event: {event}",
+                        f"Reason: {reason_code}",
+                        f"Trade run: {trade_run_id}" if trade_run_id else "",
+                    )
+                    if part
+                ),
+            ),
+            daemon=True,
+        ).start()
+    except Exception:
+        logger.exception("could not enqueue trading safety alert")
+
+
+def _record_terminal_trading_order_event(
+    user_id: str, *, venue: str, record: Dict[str, Any], previous_status: Any
+) -> None:
+    status = str(record.get("status") or "").lower()
+    if status not in {"filled", "canceled", "rejected"} or status == str(previous_status or "").lower():
+        return
+    event = {"filled": "order_filled", "canceled": "order_canceled", "rejected": "venue_rejected"}[status]
+    _record_trading_risk_event(
+        user_id,
+        venue=venue,
+        event=event,
+        outcome=status,
+        reason_code=status,
+        trade_run_id=record.get("trade_run_id"),
+        audit_order_id=record.get("id"),
+    )
+    _notify_trading_safety_event(
+        venue=venue, event=event, reason_code=status, trade_run_id=record.get("trade_run_id")
+    )
+
+
+def _parse_trading_timestamp(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _trading_market_key(payload: Dict[str, Any], normalized: Dict[str, Any]) -> str:
+    venue = _clean_trading_platform(normalized.get("platform") or payload.get("platform"))
+    identifier = normalized.get("ticker") or normalized.get("token_id")
+    if not identifier:
+        identifier = payload.get("ticker") or payload.get("token_id") or payload.get("slug") or payload.get("market_id")
+    cleaned = str(identifier or "").strip().lower()
+    if not cleaned:
+        raise TradingGuardrailError("market_identifier_missing", "A stable market identifier is required for risk checks.")
+    return f"{venue}:{cleaned}"
+
+
+def _trading_order_market_key(record: Dict[str, Any]) -> str:
+    try:
+        return _trading_market_key(record, record)
+    except TradingGuardrailError:
+        # Older audit rows may predate stable market identifiers. They cannot
+        # safely contribute to a market-specific match, but still count in the
+        # global daily/open-order limits.
+        return ""
+
+
+def _trading_risk_usage(user_id: str, market_key: str, now: datetime) -> Dict[str, float]:
+    risk_window_start = now - timedelta(hours=24)
+    daily_risk = 0.0
+    open_orders = 0.0
+    local_market_exposure = 0.0
+    for order in _list_trading_orders(user_id):
+        status = str(order.get("status") or "").lower()
+        notional = float(order.get("estimated_notional") or 0.0)
+        created_at = _parse_trading_timestamp(order.get("created_at"))
+        if status not in {"rejected", "canceled"} and created_at and created_at >= risk_window_start:
+            daily_risk += notional
+        if status in {"submitted", "open"}:
+            open_orders += 1
+            if _trading_order_market_key(order) == market_key:
+                local_market_exposure += notional
+    for run in _list_trading_runs(user_id):
+        status = str(run.get("status") or "").lower()
+        if status in {"submitting", "submission_unknown"}:
+            open_orders += 1
+            if _trading_order_market_key(run) == market_key:
+                local_market_exposure += float(run.get("estimated_notional") or 0.0)
+    return {
+        "daily_risk_notional": round(daily_risk, 6),
+        "open_orders": open_orders,
+        "local_market_exposure_notional": round(local_market_exposure, 6),
+    }
+
+
+def _has_recent_duplicate_trade(
+    user_id: str,
+    *,
+    market_key: str,
+    action: str,
+    outcome: str,
+    now: datetime,
+    cooldown_seconds: int,
+    exclude_run_id: Optional[str] = None,
+) -> bool:
+    if cooldown_seconds <= 0:
+        return False
+    threshold = now - timedelta(seconds=cooldown_seconds)
+    candidate_records = [
+        *(_list_trading_orders(user_id)),
+        *(_list_trading_runs(user_id)),
+    ]
+    for record in candidate_records:
+        if exclude_run_id and record.get("id") == exclude_run_id:
+            continue
+        if str(record.get("status") or "").lower() in {"blocked", "rejected", "canceled"}:
+            continue
+        if str(record.get("action") or "").lower() != action or str(record.get("outcome") or "").lower() != outcome:
+            continue
+        if _trading_order_market_key(record) != market_key:
+            continue
+        created_at = _parse_trading_timestamp(record.get("created_at"))
+        if created_at and created_at >= threshold:
+            return True
+    return False
+
+
+def _quote_probability_for_outcome(quote: MarketQuote, outcome: str) -> Optional[float]:
+    desired = outcome.strip().lower()
+    for option in quote.outcomes:
+        if option.label.strip().lower() == desired and option.probability is not None:
+            return float(option.probability)
+    if quote.outcome.strip().lower() == desired and quote.probability is not None:
+        return float(quote.probability)
+    if desired == "no" and quote.outcome.strip().lower() == "yes" and quote.probability is not None:
+        return 1.0 - float(quote.probability)
+    return None
+
+
+async def _fresh_trade_guard_quote(payload: Dict[str, Any], normalized: Dict[str, Any]) -> Dict[str, Any]:
+    """Fetch a no-cache quote immediately before live execution; failures block safely."""
+    venue = _clean_trading_platform(normalized.get("platform") or payload.get("platform"))
+    if venue == "kalshi":
+        ticker = str(normalized.get("ticker") or payload.get("ticker") or "").strip()
+        if not ticker:
+            raise TradingGuardrailError("market_identifier_missing", "Kalshi ticker is required for a live quote check.")
+        quote = await _fetch_market_quote("kalshi", ticker=ticker, force_refresh=True)
+    else:
+        slug = str(payload.get("slug") or "").strip() or None
+        market_id = str(payload.get("market_id") or "").strip() or None
+        if not (slug or market_id):
+            raise TradingGuardrailError(
+                "live_quote_identifier_required",
+                "Polymarket live execution requires the market slug or market_id, not only a token ID.",
+            )
+        quote = await _fetch_market_quote("polymarket", slug=slug, market_id=market_id, force_refresh=True)
+    probability = _quote_probability_for_outcome(quote, str(normalized.get("outcome") or payload.get("outcome") or "yes"))
+    if probability is None or not (0.0 < probability < 1.0):
+        raise TradingGuardrailError("quote_unpriced", "The selected outcome has no actionable live quote.")
+    return {
+        "outcome_probability": probability,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "market_ident": quote.ident,
+    }
+
+
+def _portfolio_available_usd(snapshot: Dict[str, Any]) -> Optional[float]:
+    balance = snapshot.get("balance") if isinstance(snapshot.get("balance"), dict) else {}
+    value = balance.get("available")
+    if not isinstance(value, (int, float)):
+        return None
+    return float(value) / 100.0 if str(balance.get("unit") or "").lower() == "cents" else float(value)
+
+
+def _portfolio_market_exposure(snapshot: Dict[str, Any], normalized: Dict[str, Any]) -> float:
+    venue = _clean_trading_platform(normalized.get("platform"))
+    identifier = str(normalized.get("ticker") if venue == "kalshi" else normalized.get("token_id") or "")
+    exposure = 0.0
+    for position in snapshot.get("positions") or []:
+        if not isinstance(position, dict):
+            continue
+        position_id = str(position.get("ticker") if venue == "kalshi" else position.get("token_id") or "")
+        if position_id != identifier:
+            continue
+        raw_value = position.get("exposure") if venue == "kalshi" else position.get("current_value")
+        if isinstance(raw_value, (int, float)):
+            exposure += abs(float(raw_value))
+    return exposure
+
+
+async def _validate_live_trade_guardrails(
+    user_id: str,
+    *,
+    payload: Dict[str, Any],
+    preview: Dict[str, Any],
+    credentials: Dict[str, Any],
+    trade_run_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Fail closed on policy, quote, portfolio, exposure, and duplicate checks."""
+    now = datetime.now(timezone.utc)
+    normalized = dict(preview.get("normalized_order") or {})
+    venue = _clean_trading_platform(normalized.get("platform") or payload.get("platform"))
+    policy = _effective_trading_guardrails(user_id)
+    if _trading_guardrail_env_bool("FORESEA_TRADING_KILL_SWITCH", False):
+        raise TradingGuardrailError("platform_kill_switch", "Trading is temporarily paused by Foresea's platform kill switch.")
+    if policy["paused"]:
+        raise TradingGuardrailError("user_paused", "Trading is paused in your risk controls. Resume it before submitting a new order.")
+    estimated_notional = float(preview.get("estimated_notional") or 0.0)
+    if estimated_notional <= 0:
+        raise TradingGuardrailError("invalid_notional", "The order did not produce a positive risk notional.")
+    if estimated_notional > float(policy["max_order_notional"]):
+        raise TradingGuardrailError(
+            "max_order_notional",
+            f"Order risk ${estimated_notional:.2f} exceeds your ${float(policy['max_order_notional']):.2f} per-order limit.",
+        )
+    market_key = _trading_market_key(payload, normalized)
+    if _has_recent_duplicate_trade(
+        user_id,
+        market_key=market_key,
+        action=str(normalized.get("action") or ""),
+        outcome=str(normalized.get("outcome") or ""),
+        now=now,
+        cooldown_seconds=int(policy["cooldown_seconds"]),
+        exclude_run_id=trade_run_id,
+    ):
+        raise TradingGuardrailError(
+            "duplicate_cooldown",
+            f"An equivalent order is already active or was created within the {int(policy['cooldown_seconds'])}-second cooldown.",
+        )
+
+    quote = await _fresh_trade_guard_quote(payload, normalized)
+    quote_at = _parse_trading_timestamp(quote.get("fetched_at"))
+    quote_age_seconds = (datetime.now(timezone.utc) - quote_at).total_seconds() if quote_at else float("inf")
+    if quote_age_seconds > int(policy["max_quote_age_seconds"]):
+        raise TradingGuardrailError("stale_quote", "The live market quote became stale before the order could be submitted.")
+    current_price = float(quote["outcome_probability"])
+    limit_price = float(normalized.get("price") or 0.0)
+    action = str(normalized.get("action") or "buy")
+    adverse_move = ((limit_price - current_price) / current_price) if action == "buy" else ((current_price - limit_price) / current_price)
+    adverse_bps = max(0.0, adverse_move * 10_000.0)
+    if adverse_bps > float(policy["max_price_deviation_bps"]):
+        raise TradingGuardrailError(
+            "price_deviation",
+            f"Limit price is {adverse_bps:.0f} bps worse than the fresh quote; your cap is {int(policy['max_price_deviation_bps'])} bps.",
+        )
+
+    from analyzing_llm_rationale import trading
+
+    snapshot = await asyncio.get_running_loop().run_in_executor(
+        None, lambda: trading.reconcile_portfolio(venue, credentials, limit=100)
+    )
+    available = _portfolio_available_usd(snapshot)
+    if available is None:
+        raise TradingGuardrailError("balance_unavailable", "Available exchange balance could not be confirmed; no order was sent.")
+    if available + 1e-9 < estimated_notional:
+        raise TradingGuardrailError(
+            "insufficient_available_balance",
+            f"Available balance ${available:.2f} is below this order's ${estimated_notional:.2f} worst-case notional.",
+        )
+    usage = _trading_risk_usage(user_id, market_key, now)
+    if usage["daily_risk_notional"] + estimated_notional > float(policy["max_daily_risk_notional"]):
+        raise TradingGuardrailError(
+            "daily_risk_limit",
+            "This order would exceed your trailing-day worst-case risk budget.",
+        )
+    if usage["open_orders"] + 1 > int(policy["max_open_orders"]):
+        raise TradingGuardrailError(
+            "max_open_orders",
+            f"This would exceed your limit of {int(policy['max_open_orders'])} outstanding orders.",
+        )
+    market_exposure = _portfolio_market_exposure(snapshot, normalized) + usage["local_market_exposure_notional"]
+    if market_exposure + estimated_notional > float(policy["max_market_exposure_notional"]):
+        raise TradingGuardrailError(
+            "market_exposure_limit",
+            "This order would exceed your per-market exposure cap after current positions and open orders.",
+        )
+    return {
+        "policy": {
+            key: policy[key]
+            for key in (
+                "max_order_notional",
+                "max_daily_risk_notional",
+                "max_market_exposure_notional",
+                "max_open_orders",
+                "max_price_deviation_bps",
+                "max_quote_age_seconds",
+                "cooldown_seconds",
+            )
+        },
+        "quote": {**quote, "age_seconds": round(quote_age_seconds, 3), "adverse_bps": round(adverse_bps, 2)},
+        "portfolio": {
+            "available": round(available, 6),
+            "market_exposure_notional": round(market_exposure, 6),
+        },
+        "usage": usage,
+    }
+
+
+def _new_trading_run(
+    req: TradeRunCreateRequest,
+    payload: Dict[str, Any],
+    preview: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Capture a validated order plan before a human can send it to a venue."""
+    normalized = dict(preview.get("normalized_order") or {})
+    run_id = str(uuid.uuid4())
+    client_order_id = str(payload.get("client_order_id") or f"foresea-run-{run_id}")
+    payload = {**payload, "client_order_id": client_order_id}
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "id": run_id,
+        "status": "awaiting_approval",
+        "title": req.title.strip() or f"{normalized.get('action', 'buy').title()} {normalized.get('outcome', 'yes').upper()}",
+        "platform": normalized.get("platform"),
+        "action": normalized.get("action"),
+        "outcome": normalized.get("outcome"),
+        "ticker": normalized.get("ticker"),
+        "token_id": normalized.get("token_id"),
+        "quantity": normalized.get("quantity"),
+        "price": normalized.get("price"),
+        "estimated_notional": preview.get("estimated_notional"),
+        "order_type": normalized.get("order_type"),
+        "client_order_id": client_order_id,
+        "order_request": payload,
+        "preview": preview,
+        "provenance": {
+            "thesis": req.thesis.strip(),
+            "source_conversation_id": req.source_conversation_id,
+            "expected_edge": req.expected_edge,
+            "sources": [source.strip() for source in req.sources if source.strip()],
+        },
+        "audit_order_id": None,
+        "venue_order_id": None,
+        "reconciliation_status": None,
+        "approved_at": None,
+        "submitted_at": None,
+        "last_reconciled_at": None,
+        "created_at": now,
+        "updated_at": now,
+        "error_code": None,
+    }
+
+
+def _claim_trading_run_for_execution(
+    user_id: str, run_id: str, preview: Dict[str, Any]
+) -> tuple[Optional[Dict[str, Any]], bool]:
+    """Atomically acquire a saved run for one exchange-submission attempt.
+
+    The Datastore transaction is the cross-instance idempotency boundary.  The
+    in-memory lock gives development and tests the same single-process guarantee.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+
+    def claim(record: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+        if record.get("status") != "awaiting_approval":
+            return record, False
+        record["preview"] = preview
+        record["estimated_notional"] = preview.get("estimated_notional")
+        record["status"] = "submitting"
+        record["approved_at"] = now
+        record["updated_at"] = now
+        record["error_code"] = None
+        return record, True
+
+    client = _get_datastore()
+    if client is None:
+        with _trading_run_lock:
+            record = _state.setdefault("trading_runs", {}).get(user_id, {}).get(run_id)
+            if record is None:
+                return None, False
+            claimed, acquired = claim(dict(record))
+            if acquired:
+                _state["trading_runs"][user_id][run_id] = claimed
+            return claimed, acquired
+
+    with client.transaction():
+        entity = client.get(_trading_run_key(client, user_id, run_id))
+        if entity is None:
+            return None, False
+        record, acquired = claim(_trading_run_from_entity(entity))
+        if acquired:
+            _put_trading_run(user_id, record)
+        return record, acquired
+
+
+def _trade_run_status_from_order(order_status: Any) -> str:
+    status = str(order_status or "").strip().lower()
+    if status in {"filled", "canceled", "rejected"}:
+        return status
+    return "submitted"
+
+
+def _sync_trade_run_from_order(user_id: str, order: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Project venue reconciliation back onto its parent run, when one exists."""
+    run_id = str(order.get("trade_run_id") or "").strip()
+    if not run_id:
+        return None
+    run = _read_trading_run(user_id, run_id)
+    if run is None:
+        return None
+    run["audit_order_id"] = order.get("id") or run.get("audit_order_id")
+    run["venue_order_id"] = order.get("venue_order_id") or run.get("venue_order_id")
+    run["reconciliation_status"] = order.get("status") or run.get("reconciliation_status")
+    run["last_reconciled_at"] = order.get("last_reconciled_at") or run.get("last_reconciled_at")
+    run["status"] = _trade_run_status_from_order(order.get("status"))
+    run["updated_at"] = datetime.now(timezone.utc).isoformat()
+    run["error_code"] = None
+    return _put_trading_run(user_id, run)
+
+
 def _status_from_venue(value: Any) -> str:
     raw = str(value or "").strip().lower()
     if raw in {"filled", "executed", "matched", "complete", "completed"}:
@@ -7306,7 +8615,9 @@ def _status_from_venue(value: Any) -> str:
     return "submitted"
 
 
-def _submitted_trading_order(result: Dict[str, Any]) -> Dict[str, Any]:
+def _submitted_trading_order(
+    result: Dict[str, Any], *, trade_run_id: Optional[str] = None
+) -> Dict[str, Any]:
     """Keep a local audit row without persisting exchange responses or secrets."""
     normalized = result.get("normalized_order") or {}
     venue_response = result.get("venue_response") or {}
@@ -7326,6 +8637,7 @@ def _submitted_trading_order(result: Dict[str, Any]) -> Dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     return {
         "id": str(uuid.uuid4()),
+        "trade_run_id": trade_run_id,
         "platform": normalized.get("platform"),
         "venue_order_id": venue_order_id,
         "status": _status_from_venue(source.get("status")),
@@ -7365,6 +8677,70 @@ def _merge_order_reconciliation(record: Dict[str, Any], reconciliation: Dict[str
     return record
 
 
+def _scheduled_reconcile_open_trading_orders(limit: int) -> Dict[str, Any]:
+    """Reconcile a bounded batch of submitted orders without placing trades.
+
+    This is intentionally serial and rate-limited by batch size: it is a
+    read-only venue operation that moves audit state from venue evidence only.
+    """
+    from analyzing_llm_rationale import trading
+
+    result: Dict[str, Any] = {
+        "checked": 0,
+        "updated": 0,
+        "terminal": 0,
+        "connection_missing": 0,
+        "errors": 0,
+        "by_venue": {"kalshi": 0, "polymarket": 0},
+    }
+    credentials_cache: Dict[tuple[str, str], Optional[Dict[str, Any]]] = {}
+    for user_id, record in _list_reconcilable_trading_orders(limit):
+        try:
+            venue = _clean_trading_platform(record.get("platform"))
+        except Exception:
+            result["errors"] += 1
+            continue
+        result["checked"] += 1
+        result["by_venue"][venue] += 1
+        cache_key = (user_id, venue)
+        if cache_key not in credentials_cache:
+            try:
+                credentials_cache[cache_key] = _stored_trading_credentials(user_id, venue)
+            except Exception:
+                # Do not expose the user, order, or decrypt error to logs or the
+                # scheduler response. The owner sees connection health in their UI.
+                credentials_cache[cache_key] = None
+        credentials = credentials_cache[cache_key]
+        if credentials is None:
+            result["connection_missing"] += 1
+            _trading_reconciliation_actions.add(
+                1, {"venue": venue, "action": "scheduled_order", "outcome": "connection_missing"}
+            )
+            continue
+        try:
+            venue_state = trading.reconcile_order(venue, str(record["venue_order_id"]), credentials)
+            previous_status = record.get("status")
+            record = _merge_order_reconciliation(record, venue_state)
+            _put_trading_order(user_id, record)
+            _sync_trade_run_from_order(user_id, record)
+            _record_terminal_trading_order_event(
+                user_id, venue=venue, record=record, previous_status=previous_status
+            )
+            result["updated"] += 1
+            if record.get("status") in {"filled", "canceled", "rejected"}:
+                result["terminal"] += 1
+            _trading_reconciliation_actions.add(
+                1, {"venue": venue, "action": "scheduled_order", "outcome": "success"}
+            )
+        except Exception:
+            result["errors"] += 1
+            _trading_reconciliation_actions.add(
+                1, {"venue": venue, "action": "scheduled_order", "outcome": "error"}
+            )
+            logger.warning("scheduled trading reconciliation could not update one %s order", venue)
+    return result
+
+
 def _trading_http_exception(exc: Exception) -> HTTPException:
     from analyzing_llm_rationale import trading
 
@@ -7372,6 +8748,8 @@ def _trading_http_exception(exc: Exception) -> HTTPException:
         return exc
     if isinstance(exc, SecureTradingConnectionError):
         return HTTPException(status_code=503, detail=str(exc))
+    if isinstance(exc, TradingGuardrailError):
+        return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, trading.TradingValidationError):
         return HTTPException(status_code=422, detail=str(exc))
     if isinstance(exc, (trading.TradingDisabledError, trading.TradingNotConfiguredError)):
@@ -7428,6 +8806,61 @@ async def trading_accounts_check(
         return TradingAccountStatus(**trading.account_status(creds))
     except Exception as exc:
         raise _trading_http_exception(exc) from exc
+
+
+@app.get(
+    "/trading/guardrails",
+    tags=["Trading"],
+    summary="Read the signed-in user's real-money trading guardrails",
+    response_model=TradingGuardrailsResponse,
+)
+async def get_trading_guardrails(request: Request) -> TradingGuardrailsResponse:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    return _trading_guardrails_response(claims["sub"])
+
+
+@app.put(
+    "/trading/guardrails",
+    tags=["Trading"],
+    summary="Narrow the signed-in user's real-money trading guardrails",
+    response_model=TradingGuardrailsResponse,
+)
+async def update_trading_guardrails(
+    req: TradingGuardrailsUpdateRequest, request: Request
+) -> TradingGuardrailsResponse:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("trading.guardrail.update") as span:
+        span.set_attribute("trading.user_id", claims["sub"])
+        try:
+            policy = _update_trading_guardrails(claims["sub"], req)
+            _record_trading_risk_event(
+                claims["sub"], venue="all", event="guardrail_updated", outcome="success"
+            )
+            _trading_guardrail_actions.add(1, {"venue": "all", "action": "update", "outcome": "success"})
+            return TradingGuardrailsResponse(
+                **policy,
+                platform_kill_switch=_trading_guardrail_env_bool("FORESEA_TRADING_KILL_SWITCH", False),
+            )
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _trading_guardrail_actions.add(1, {"venue": "all", "action": "update", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.get(
+    "/trading/guardrails/events",
+    tags=["Trading"],
+    summary="List safe audit events for real-money trading controls",
+)
+async def list_trading_guardrail_events(
+    request: Request, limit: int = Query(50, ge=1, le=250)
+) -> Dict[str, Any]:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    return {"events": _list_trading_risk_events(claims["sub"], limit)}
 
 
 @app.get(
@@ -7536,6 +8969,241 @@ async def trading_preview(req: TradeOrderRequest, request: Request) -> TradeOrde
 
 
 @app.post(
+    "/trading/runs",
+    tags=["Trading"],
+    summary="Create a durable, reviewable live-trade run",
+    response_model=TradeRunResponse,
+)
+async def create_trading_run(req: TradeRunCreateRequest, request: Request) -> TradeRunResponse:
+    """Save a validated order plan. This endpoint cannot submit an order."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    from analyzing_llm_rationale import trading
+
+    if req.execute or req.confirmation is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="Trade runs are created without execution or confirmation. Execute the saved run explicitly.",
+        )
+    venue = _clean_trading_platform(req.platform)
+    with _tracer.start_as_current_span("trading.run.create") as span:
+        span.set_attribute("trading.venue", venue)
+        try:
+            credentials = _resolve_order_credentials(claims["sub"], req)
+            payload = req.model_dump(
+                exclude_none=True,
+                exclude={
+                    "title", "thesis", "source_conversation_id", "expected_edge", "sources",
+                    "execute", "confirmation", "venue_credentials",
+                },
+            )
+            preview = trading.preview_order(payload, credentials)
+            policy = _effective_trading_guardrails(claims["sub"])
+            if float(preview.get("estimated_notional") or 0.0) > float(policy["max_order_notional"]):
+                raise TradingGuardrailError(
+                    "max_order_notional",
+                    f"Order risk ${float(preview['estimated_notional']):.2f} exceeds your ${float(policy['max_order_notional']):.2f} per-order limit.",
+                )
+            preview["guardrails"] = TradingGuardrailsResponse(
+                **policy,
+                platform_kill_switch=_trading_guardrail_env_bool("FORESEA_TRADING_KILL_SWITCH", False),
+            ).model_dump()
+            preview.setdefault("warnings", []).append(
+                "Foresea rechecks a fresh quote, available balance, exposure, duplicate cooldown, and risk limits immediately before submission."
+            )
+            run = _put_trading_run(claims["sub"], _new_trading_run(req, payload, preview))
+            span.set_attribute("trading.run_id", run["id"])
+            span.set_attribute("trading.run.status", run["status"])
+            _record_trading_risk_event(
+                claims["sub"], venue=venue, event="trade_run_created", outcome="success", trade_run_id=run["id"]
+            )
+            _trading_run_actions.add(1, {"venue": venue, "action": "create", "outcome": "success"})
+            logger.info("trading run created id=%s venue=%s", run["id"], venue)
+            return TradeRunResponse(**run)
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _trading_run_actions.add(1, {"venue": venue, "action": "create", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.get("/trading/runs", tags=["Trading"], summary="List the signed-in user's durable trade runs")
+async def list_trading_runs(
+    request: Request, platform: Optional[str] = Query(None, max_length=20)
+) -> Dict[str, Any]:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    venue = _clean_trading_platform(platform) if platform else None
+    return {"runs": [TradeRunResponse(**run).model_dump() for run in _list_trading_runs(claims["sub"], venue)]}
+
+
+@app.get("/trading/runs/{run_id}", tags=["Trading"], summary="Read one durable trade run", response_model=TradeRunResponse)
+async def read_trading_run(run_id: str, request: Request) -> TradeRunResponse:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    run = _read_trading_run(claims["sub"], run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Trade run was not found.")
+    return TradeRunResponse(**run)
+
+
+@app.post(
+    "/trading/runs/{run_id}/execute",
+    tags=["Trading"],
+    summary="Execute one saved run after explicit confirmation",
+    response_model=TradeRunResponse,
+)
+async def execute_trading_run(
+    run_id: str, req: TradeRunExecuteRequest, request: Request
+) -> TradeRunResponse:
+    """Submit exactly one approved run and attach the resulting order audit row."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    from analyzing_llm_rationale import trading
+
+    run: Optional[Dict[str, Any]] = None
+    claimed_for_execution = False
+    venue = "unknown"
+    with _tracer.start_as_current_span("trading.run.execute") as span:
+        span.set_attribute("trading.run_id", run_id)
+        try:
+            run = _read_trading_run(claims["sub"], run_id)
+            if run is None:
+                raise HTTPException(status_code=404, detail="Trade run was not found.")
+            venue = _clean_trading_platform(run.get("platform"))
+            span.set_attribute("trading.venue", venue)
+            if run.get("status") != "awaiting_approval":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Trade run is {run.get('status')}; it cannot be submitted again.",
+                )
+            if req.confirmation != trading.CONFIRMATION_PHRASE:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"confirmation must be exactly '{trading.CONFIRMATION_PHRASE}'.",
+                )
+            payload = run.get("order_request")
+            if not isinstance(payload, dict):
+                raise HTTPException(status_code=409, detail="Trade run does not contain a valid order plan.")
+            credentials = _stored_trading_credentials(claims["sub"], venue)
+            if credentials is None:
+                raise HTTPException(status_code=409, detail=f"Connect a {venue} account before executing this run.")
+
+            # Revalidate guardrails immediately before the user-approved request,
+            # then atomically claim the run before touching the exchange.  A
+            # second browser tab or Cloud Run instance will receive a conflict
+            # rather than submitting a duplicate venue order.
+            preview = trading.preview_order(payload, credentials)
+            if not preview.get("trading_enabled"):
+                trading.place_order(
+                    {**payload, "execute": True, "confirmation": req.confirmation},
+                    user_id=claims["sub"],
+                    creds=credentials,
+                )
+            guardrail_snapshot = await _validate_live_trade_guardrails(
+                claims["sub"],
+                payload=payload,
+                preview=preview,
+                credentials=credentials,
+                trade_run_id=run_id,
+            )
+            preview["guardrails"] = guardrail_snapshot
+            run, claimed_for_execution = _claim_trading_run_for_execution(
+                claims["sub"], run_id, preview
+            )
+            if run is None:
+                raise HTTPException(status_code=404, detail="Trade run was not found.")
+            if not claimed_for_execution:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Trade run is {run.get('status')}; it cannot be submitted again.",
+                )
+
+            result = trading.place_order(
+                {**payload, "execute": True, "confirmation": req.confirmation},
+                user_id=claims["sub"],
+                creds=credentials,
+            )
+            audit = _put_trading_order(
+                claims["sub"], _submitted_trading_order(result, trade_run_id=run_id)
+            )
+            _record_terminal_trading_order_event(
+                claims["sub"], venue=venue, record=audit, previous_status="submitted"
+            )
+            submitted_at = datetime.now(timezone.utc).isoformat()
+            run.update({
+                "status": _trade_run_status_from_order(audit.get("status")),
+                "audit_order_id": audit["id"],
+                "venue_order_id": audit.get("venue_order_id"),
+                "reconciliation_status": audit.get("status"),
+                "submitted_at": submitted_at,
+                "updated_at": submitted_at,
+                "error_code": None,
+            })
+            _put_trading_run(claims["sub"], run)
+            span.set_attribute("trading.audit_order_id", audit["id"])
+            span.set_attribute("trading.run.status", run["status"])
+            _record_trading_risk_event(
+                claims["sub"],
+                venue=venue,
+                event="order_submitted",
+                outcome="success",
+                trade_run_id=run_id,
+                audit_order_id=audit["id"],
+            )
+            _trading_guardrail_actions.add(1, {"venue": venue, "action": "execute", "outcome": "passed"})
+            _trading_run_actions.add(1, {"venue": venue, "action": "execute", "outcome": "success"})
+            logger.info("trading run submitted id=%s venue=%s audit_order_id=%s", run_id, venue, audit["id"])
+            return TradeRunResponse(**run)
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            if isinstance(exc, TradingGuardrailError):
+                _record_trading_risk_event(
+                    claims["sub"],
+                    venue=venue,
+                    event="guardrail_blocked",
+                    outcome="blocked",
+                    reason_code=exc.code,
+                    trade_run_id=run_id,
+                )
+                _trading_guardrail_actions.add(1, {"venue": venue, "action": "execute", "outcome": "blocked"})
+                _notify_trading_safety_event(
+                    venue=venue, event=exc.code, reason_code=exc.code, trade_run_id=run_id
+                )
+            if claimed_for_execution and run is not None and run.get("status") == "submitting":
+                if isinstance(exc, trading.TradingExecutionError):
+                    # A transport failure can occur after the venue accepts the
+                    # request. Preserve the idempotency key and force a later
+                    # reconciliation instead of issuing a duplicate order.
+                    run["status"] = "submission_unknown"
+                    run["error_code"] = "venue_submission_uncertain"
+                    logger.error("trading run submission uncertain id=%s venue=%s", run_id, venue)
+                    _record_trading_risk_event(
+                        claims["sub"],
+                        venue=venue,
+                        event="submission_unknown",
+                        outcome="error",
+                        reason_code="venue_submission_uncertain",
+                        trade_run_id=run_id,
+                    )
+                    _notify_trading_safety_event(
+                        venue=venue,
+                        event="submission_unknown",
+                        reason_code="venue_submission_uncertain",
+                        trade_run_id=run_id,
+                    )
+                else:
+                    run["status"] = "blocked"
+                    run["error_code"] = "execution_guard_failed"
+                    logger.warning("trading run blocked before submission id=%s venue=%s", run_id, venue)
+                run["updated_at"] = datetime.now(timezone.utc).isoformat()
+                _put_trading_run(claims["sub"], run)
+            _trading_run_actions.add(1, {"venue": venue, "action": "execute", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.post(
     "/trading/orders",
     tags=["Trading"],
     summary="Submit a confirmed prediction-market order",
@@ -7557,9 +9225,30 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
         try:
             creds = _resolve_order_credentials(claims["sub"], req)
             payload = req.model_dump(exclude_none=True, exclude={"venue_credentials"})
+            preview = trading.preview_order(payload, creds)
+            if not preview.get("trading_enabled"):
+                # Preserve the explicit server-side live-trading gate before
+                # reporting account-specific readiness details.
+                trading.place_order(payload, user_id=claims["sub"], creds=creds)
+            if creds is None:
+                raise HTTPException(status_code=409, detail=f"Connect a {venue} account before submitting an order.")
+            await _validate_live_trade_guardrails(
+                claims["sub"], payload=payload, preview=preview, credentials=creds
+            )
             result = trading.place_order(payload, user_id=claims["sub"], creds=creds)
             audit = _put_trading_order(claims["sub"], _submitted_trading_order(result))
+            _record_terminal_trading_order_event(
+                claims["sub"], venue=venue, record=audit, previous_status="submitted"
+            )
             span.set_attribute("trading.audit_order_id", audit["id"])
+            _record_trading_risk_event(
+                claims["sub"],
+                venue=venue,
+                event="order_submitted",
+                outcome="success",
+                audit_order_id=audit["id"],
+            )
+            _trading_guardrail_actions.add(1, {"venue": venue, "action": "direct_submit", "outcome": "passed"})
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "submit", "outcome": "success"})
             return TradeOrderResponse(
                 **result,
@@ -7569,6 +9258,16 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
             )
         except Exception as exc:
             span.record_exception(exc)
+            if isinstance(exc, TradingGuardrailError):
+                _record_trading_risk_event(
+                    claims["sub"],
+                    venue=venue,
+                    event="guardrail_blocked",
+                    outcome="blocked",
+                    reason_code=exc.code,
+                )
+                _trading_guardrail_actions.add(1, {"venue": venue, "action": "direct_submit", "outcome": "blocked"})
+                _notify_trading_safety_event(venue=venue, event=exc.code, reason_code=exc.code)
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "submit", "outcome": "error"})
             raise _trading_http_exception(exc) from exc
 
@@ -7618,15 +9317,25 @@ async def trading_portfolio(
                 venue_order_id = record.get("venue_order_id")
                 remote = remote_orders.get(venue_order_id)
                 if remote:
+                    previous_status = record.get("status")
                     record = _merge_order_reconciliation(record, remote)
                     _put_trading_order(claims["sub"], record)
+                    _sync_trade_run_from_order(claims["sub"], record)
+                    _record_terminal_trading_order_event(
+                        claims["sub"], venue=venue, record=record, previous_status=previous_status
+                    )
                 elif venue_order_id and venue_order_id in remote_fills:
+                    previous_status = record.get("status")
                     record["filled_quantity"] = remote_fills[venue_order_id]
                     if record.get("quantity") is not None and remote_fills[venue_order_id] >= float(record["quantity"]):
                         record["status"] = "filled"
                     record["last_reconciled_at"] = datetime.now(timezone.utc).isoformat()
                     record["updated_at"] = record["last_reconciled_at"]
                     _put_trading_order(claims["sub"], record)
+                    _sync_trade_run_from_order(claims["sub"], record)
+                    _record_terminal_trading_order_event(
+                        claims["sub"], venue=venue, record=record, previous_status=previous_status
+                    )
                 reconciled.append(record)
             snapshot["audit_orders"] = reconciled
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "portfolio", "outcome": "success"})
@@ -7660,8 +9369,13 @@ async def reconcile_trading_order(audit_order_id: str, request: Request) -> Dict
             if credentials is None:
                 raise HTTPException(status_code=409, detail=f"Reconnect {venue} before reconciling this order.")
             venue_state = trading.reconcile_order(venue, record["venue_order_id"], credentials)
+            previous_status = record.get("status")
             record = _merge_order_reconciliation(record, venue_state)
             _put_trading_order(claims["sub"], record)
+            _sync_trade_run_from_order(claims["sub"], record)
+            _record_terminal_trading_order_event(
+                claims["sub"], venue=venue, record=record, previous_status=previous_status
+            )
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "order", "outcome": "success"})
             return record
         except HTTPException:
@@ -7670,6 +9384,56 @@ async def reconcile_trading_order(audit_order_id: str, request: Request) -> Dict
         except Exception as exc:
             span.record_exception(exc)
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "order", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.post(
+    "/trading/runs/{run_id}/reconcile",
+    tags=["Trading"],
+    summary="Reconcile the exchange order linked to a durable trade run",
+    response_model=TradeRunResponse,
+)
+async def reconcile_trading_run(run_id: str, request: Request) -> TradeRunResponse:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    venue = "unknown"
+    with _tracer.start_as_current_span("trading.run.reconcile") as span:
+        span.set_attribute("trading.run_id", run_id)
+        try:
+            run = _read_trading_run(claims["sub"], run_id)
+            if run is None:
+                raise HTTPException(status_code=404, detail="Trade run was not found.")
+            audit_order_id = run.get("audit_order_id")
+            if not audit_order_id:
+                raise HTTPException(status_code=409, detail="Trade run has not submitted an exchange order yet.")
+            record = _read_trading_order(claims["sub"], str(audit_order_id))
+            if record is None or not record.get("venue_order_id"):
+                raise HTTPException(status_code=409, detail="Trade run has no reconcilable exchange order.")
+            venue = _clean_trading_platform(record.get("platform"))
+            span.set_attribute("trading.venue", venue)
+            span.set_attribute("trading.audit_order_id", str(audit_order_id))
+            from analyzing_llm_rationale import trading
+
+            credentials = _stored_trading_credentials(claims["sub"], venue)
+            if credentials is None:
+                raise HTTPException(status_code=409, detail=f"Reconnect {venue} before reconciling this run.")
+            venue_state = trading.reconcile_order(venue, record["venue_order_id"], credentials)
+            previous_status = record.get("status")
+            record = _merge_order_reconciliation(record, venue_state)
+            _put_trading_order(claims["sub"], record)
+            synced = _sync_trade_run_from_order(claims["sub"], record)
+            _record_terminal_trading_order_event(
+                claims["sub"], venue=venue, record=record, previous_status=previous_status
+            )
+            if synced is None:
+                raise HTTPException(status_code=409, detail="Trade run lost its order linkage; reconnect and investigate.")
+            span.set_attribute("trading.run.status", synced["status"])
+            _trading_run_actions.add(1, {"venue": venue, "action": "reconcile", "outcome": "success"})
+            return TradeRunResponse(**synced)
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _trading_run_actions.add(1, {"venue": venue, "action": "reconcile", "outcome": "error"})
             raise _trading_http_exception(exc) from exc
 
 
@@ -7705,9 +9469,14 @@ async def cancel_trading_order(
                 subaccount=record.get("subaccount"),
                 exchange_index=int(record.get("exchange_index") or 0),
             )
+            previous_status = record.get("status")
             record = _merge_order_reconciliation(record, venue_state)
             record["canceled_at"] = datetime.now(timezone.utc).isoformat()
             _put_trading_order(claims["sub"], record)
+            _sync_trade_run_from_order(claims["sub"], record)
+            _record_terminal_trading_order_event(
+                claims["sub"], venue=venue, record=record, previous_status=previous_status
+            )
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "cancel", "outcome": "success"})
             return record
         except HTTPException:
@@ -7717,6 +9486,120 @@ async def cancel_trading_order(
             span.record_exception(exc)
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "cancel", "outcome": "error"})
             raise _trading_http_exception(exc) from exc
+
+
+@app.post(
+    "/internal/trading/reconcile",
+    tags=["System"],
+    summary="Run a bounded, read-only reconciliation of open live-trading orders",
+    include_in_schema=False,
+)
+async def scheduled_trading_reconciliation(
+    request: Request,
+    limit: int = Query(25, ge=1, le=100),
+) -> Dict[str, Any]:
+    """Scheduler-only trigger; it cannot create, modify, or cancel a trade."""
+    _require_trading_reconciliation_token(request)
+    effective_limit = min(limit, _TRADING_RECONCILIATION_MAX_ORDERS)
+    with _tracer.start_as_current_span("trading.reconciliation.scheduled") as span:
+        span.set_attribute("trading.reconciliation.limit", effective_limit)
+        try:
+            result = await asyncio.get_running_loop().run_in_executor(
+                None, _scheduled_reconcile_open_trading_orders, effective_limit
+            )
+            span.set_attributes(
+                {
+                    "trading.reconciliation.checked": result["checked"],
+                    "trading.reconciliation.updated": result["updated"],
+                    "trading.reconciliation.errors": result["errors"],
+                }
+            )
+            logger.info(
+                "scheduled trading reconciliation completed checked=%s updated=%s errors=%s",
+                result["checked"], result["updated"], result["errors"],
+            )
+            return result
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            logger.error("scheduled trading reconciliation failed")
+            raise HTTPException(status_code=503, detail="Scheduled reconciliation could not complete.") from exc
+
+
+@app.post(
+    "/internal/agent-runs/reconcile",
+    tags=["System"],
+    summary="Mark stale, orphaned AgentRun records as interrupted",
+    include_in_schema=False,
+)
+async def scheduled_agent_run_reconciliation(
+    request: Request,
+    limit: int = Query(25, ge=1, le=100),
+) -> Dict[str, Any]:
+    """Scheduler-only trigger; it never resumes a run, only marks a run stuck
+    at status="running" past AGENT_RUN_STALE_MINUTES as interrupted."""
+    _require_agent_run_reconciliation_token(request)
+    effective_limit = min(limit, _AGENT_RUN_RECONCILIATION_MAX_RUNS)
+    with _tracer.start_as_current_span("agent.run.reconciliation.scheduled") as span:
+        span.set_attribute("agent.run.reconciliation.limit", effective_limit)
+        try:
+            result = await asyncio.get_running_loop().run_in_executor(
+                None, _scheduled_reconcile_stale_agent_runs, _AGENT_RUN_STALE_MINUTES, effective_limit
+            )
+            span.set_attributes(
+                {
+                    "agent.run.reconciliation.checked": result["checked"],
+                    "agent.run.reconciliation.interrupted": result["interrupted"],
+                    "agent.run.reconciliation.errors": result["errors"],
+                }
+            )
+            logger.info(
+                "scheduled agent run reconciliation completed checked=%s interrupted=%s errors=%s",
+                result["checked"], result["interrupted"], result["errors"],
+            )
+            return result
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            logger.error("scheduled agent run reconciliation failed")
+            raise HTTPException(status_code=503, detail="Scheduled reconciliation could not complete.") from exc
+
+
+@app.get(
+    "/internal/trading/readiness",
+    tags=["System"],
+    summary="Read non-sensitive launch prerequisites for guarded live trading",
+    response_model=TradingLaunchReadinessResponse,
+    include_in_schema=False,
+)
+async def trading_launch_readiness(request: Request) -> TradingLaunchReadinessResponse:
+    """Operator-only configuration check; this endpoint never contacts a venue."""
+    _require_trading_reconciliation_token(request)
+    with _tracer.start_as_current_span("trading.readiness.check") as span:
+        try:
+            readiness = _trading_launch_readiness()
+            outcome = "ready" if readiness.ready_for_connection_beta else "blocked"
+            span.set_attributes(
+                {
+                    "trading.readiness.outcome": outcome,
+                    "trading.readiness.check_count": len(readiness.checks),
+                    "trading.readiness.byo_enabled": readiness.byo_trading_enabled,
+                    "trading.readiness.kill_switch": readiness.platform_kill_switch,
+                }
+            )
+            _trading_readiness_actions.add(1, {"outcome": outcome})
+            logger.info(
+                "trading launch readiness checked outcome=%s checks=%s",
+                outcome,
+                len(readiness.checks),
+            )
+            return readiness
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _trading_readiness_actions.add(1, {"outcome": "error"})
+            logger.error("trading launch readiness check failed")
+            raise HTTPException(status_code=503, detail="Trading launch readiness could not be evaluated.") from exc
 
 
 @app.get("/providers/models", tags=["System"], summary="List models from a provider base URL")
@@ -8038,6 +9921,138 @@ async def delete_personal_ledger_entry(entry_id: str, request: Request) -> Dict[
             span.set_status(otel_trace.Status(otel_trace.StatusCode.ERROR, type(exc).__name__))
             logger.exception("personal ledger entry could not be removed")
             raise
+
+
+@app.get("/agent-profiles", tags=["Agents"], response_model=AgentProfileList)
+async def list_agent_profiles(request: Request) -> AgentProfileList:
+    """List the current user's private copied-agent recipes."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("agent.profile.list") as span:
+        span.set_attribute("user.id", claims["sub"])
+        profiles = _list_agent_profiles(claims["sub"])
+        span.set_attribute("agent.profile.count", len(profiles))
+        _agent_profile_actions.add(1, {"action": "list", "outcome": "success"})
+        return AgentProfileList(profiles=[AgentProfile(**profile) for profile in profiles])
+
+
+@app.post(
+    "/agent-profiles/copy",
+    tags=["Agents"],
+    response_model=AgentProfileCopyResponse,
+    status_code=201,
+)
+async def copy_agent_profile(req: AgentProfileCopyRequest, request: Request) -> AgentProfileCopyResponse:
+    """Copy a public model's research setup into a private, research-only recipe."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    source_agent_id = req.source_agent_id.strip()
+    with _tracer.start_as_current_span("agent.profile.copy") as span:
+        span.set_attribute("user.id", claims["sub"])
+        try:
+            if source_agent_id not in _SCADS_MODEL_ALLOWLIST:
+                raise HTTPException(status_code=422, detail="That public Foresea agent is not available to copy.")
+            span.set_attribute("agent.profile.source", source_agent_id)
+            profiles = _list_agent_profiles(claims["sub"])
+            existing = next(
+                (profile for profile in profiles if profile.get("source_agent_id") == source_agent_id),
+                None,
+            )
+            if existing is not None:
+                span.set_attribute("outcome", "existing")
+                _agent_profile_actions.add(1, {"action": "copy", "outcome": "existing"})
+                return AgentProfileCopyResponse(profile=AgentProfile(**existing), created=False)
+            if len(profiles) >= _MAX_AGENT_PROFILES_PER_USER:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"You can keep up to {_MAX_AGENT_PROFILES_PER_USER} copied agents. Remove one first.",
+                )
+            now = datetime.now(timezone.utc).isoformat()
+            name = (req.name or f"Copy of {source_agent_id}").strip()
+            profile = _put_agent_profile(
+                claims["sub"],
+                {
+                    "id": f"agent_{secrets.token_urlsafe(12).replace('-', '_')}",
+                    "name": name,
+                    "source_agent_id": source_agent_id,
+                    "model": source_agent_id,
+                    "instruction": (
+                        f"Use {source_agent_id}'s public Foresea research setup: resolve the exact contract "
+                        "and current venue quote, gather independent evidence, state the model-versus-market "
+                        "edge, then list the strongest disconfirming case and the condition that would invalidate "
+                        "the thesis. This is research only: do not create, size, or submit a trade."
+                    ),
+                    "version": 1,
+                    "execution_mode": "research_only",
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
+            span.set_attributes({"agent.profile.id": profile["id"], "outcome": "created"})
+            _agent_profile_actions.add(1, {"action": "copy", "outcome": "created"})
+            logger.info("agent profile copied id=%s source=%s", profile["id"], source_agent_id)
+            return AgentProfileCopyResponse(profile=AgentProfile(**profile), created=True)
+        except HTTPException:
+            _agent_profile_actions.add(1, {"action": "copy", "outcome": "rejected"})
+            raise
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _agent_profile_actions.add(1, {"action": "copy", "outcome": "error"})
+            logger.error("agent profile copy failed")
+            raise
+
+
+@app.delete("/agent-profiles/{profile_id}", tags=["Agents"])
+async def delete_agent_profile(profile_id: str, request: Request) -> Dict[str, bool]:
+    """Delete one of the current user's private copied-agent recipes."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("agent.profile.delete") as span:
+        span.set_attributes({"user.id": claims["sub"], "agent.profile.id": profile_id})
+        profile = _read_agent_profile(claims["sub"], profile_id)
+        if profile is None:
+            _agent_profile_actions.add(1, {"action": "delete", "outcome": "missing"})
+            raise HTTPException(status_code=404, detail="Copied agent was not found.")
+        try:
+            _delete_agent_profile(claims["sub"], profile_id)
+            _agent_profile_actions.add(1, {"action": "delete", "outcome": "success"})
+            logger.info("agent profile deleted id=%s", profile_id)
+            return {"ok": True}
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _agent_profile_actions.add(1, {"action": "delete", "outcome": "error"})
+            logger.error("agent profile deletion failed")
+            raise
+
+
+@app.get("/agent/runs", tags=["Agents"], response_model=AgentRunList)
+async def list_agent_runs(request: Request) -> AgentRunList:
+    """List the signed-in user's durable research runs, newest activity first."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("agent.run.list") as span:
+        span.set_attribute("user.id", claims["sub"])
+        runs = _list_agent_runs(claims["sub"])
+        span.set_attribute("agent.run.count", len(runs))
+        _agent_run_actions.add(1, {"action": "list", "outcome": "success"})
+        return AgentRunList(runs=[_agent_run_summary(run) for run in runs])
+
+
+@app.get("/agent/runs/{run_id}", tags=["Agents"], response_model=AgentRunResponse)
+async def read_agent_run(run_id: str, request: Request) -> AgentRunResponse:
+    """Read one private research run, including its completed report when available."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("agent.run.read") as span:
+        span.set_attributes({"user.id": claims["sub"], "agent.run.id": run_id})
+        run = _read_agent_run(claims["sub"], run_id)
+        if run is None:
+            _agent_run_actions.add(1, {"action": "read", "outcome": "missing"})
+            raise HTTPException(status_code=404, detail="Agent run was not found.")
+        _agent_run_actions.add(1, {"action": "read", "outcome": "success"})
+        return _agent_run_response(run)
 
 
 @app.get("/chat/models", tags=["System"], include_in_schema=False)
@@ -9214,6 +11229,17 @@ _AGENT_SKILL_SYSTEM = (
     "the skill asks for."
 )
 
+# Kept as a separate, small follow-up call rather than folded into
+# _AGENT_SKILL_SYSTEM above so the other three built-in skills' plain-prose
+# contract (and their "do not output JSON" instruction) stays untouched.
+_RED_TEAM_VERDICT_SYSTEM = (
+    "Classify a red-team argument made against a forecast. Respond with ONLY a "
+    "JSON object: {\"credible\": true|false, \"severity\": \"low\"|\"medium\"|\"high\"}. "
+    "\"credible\" means the argument rests on a real mechanism or evidence, not "
+    "just a contrarian restatement. \"severity\" is how much this argument should "
+    "weigh against the forecast if it is credible. No other text."
+)
+
 
 # Alternate server-hosted SCADS models the public API may forecast with (using
 # the server's own key) — for the multi-model paper-trading comparison.
@@ -9263,6 +11289,277 @@ def _scads_alt_provider(
             else 120.0
         ),
     )
+
+
+def _agent_run_event(phase: str, status: str, detail: str) -> Dict[str, str]:
+    return {
+        "at": datetime.now(timezone.utc).isoformat(),
+        "phase": phase,
+        "status": status,
+        "detail": detail[:240],
+    }
+
+
+def _agent_run_request_snapshot(req: AgentAnalyzeRequest) -> Dict[str, Any]:
+    """Persist only bounded, non-secret inputs needed to understand a run."""
+    return {
+        "question": (req.question or "").strip(),
+        "platform": (req.platform or req.market_platform or "").strip().lower() or None,
+        "market_ident": req.market_ident or req.ticker or req.slug or req.market_id,
+        "market_url": req.market_url or None,
+        "agent_profile_id": req.agent_profile_id or None,
+        "model": req.model or None,
+        "builtin_skills": bool(req.builtin_skills),
+        "ground_in_record": bool(req.ground_in_record),
+        "tool_loop": bool(req.tool_loop),
+        "evidence_top_k": int(req.evidence_top_k),
+        "benchmark_tools": bool(req.benchmark_tools),
+        "max_tool_steps": int(req.max_tool_steps),
+    }
+
+
+def _agent_run_title(question: str) -> str:
+    normalized = " ".join((question or "Agent research").split())
+    return normalized[:157] + "..." if len(normalized) > 160 else normalized
+
+
+def _new_agent_run(user_id: str, req: AgentAnalyzeRequest) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    snapshot = _agent_run_request_snapshot(req)
+    return _put_agent_run(
+        user_id,
+        {
+            "id": f"agent_run_{secrets.token_urlsafe(12).replace('-', '_')}",
+            "status": "running",
+            "title": _agent_run_title(snapshot["question"]),
+            "question": snapshot["question"],
+            "platform": snapshot["platform"],
+            "recommendation": None,
+            "model_probability": None,
+            "market_probability": None,
+            "edge": None,
+            "agent_profile": None,
+            "request": snapshot,
+            "report": None,
+            "timeline": [_agent_run_event("created", "running", "Research run created")],
+            "created_at": now,
+            "updated_at": now,
+            "completed_at": None,
+            "error_code": None,
+        },
+    )
+
+
+def _advance_agent_run(
+    user_id: str, run: Dict[str, Any], *, phase: str, detail: str, question: Optional[str] = None,
+    platform: Optional[str] = None,
+) -> Dict[str, Any]:
+    if question:
+        run["question"] = question
+        run["title"] = _agent_run_title(question)
+    if platform:
+        run["platform"] = platform
+    timeline = list(run.get("timeline") or [])
+    timeline.append(_agent_run_event(phase, "running", detail))
+    run["timeline"] = timeline[-12:]
+    run["updated_at"] = datetime.now(timezone.utc).isoformat()
+    return _put_agent_run(user_id, run)
+
+
+async def _persist_agent_run_step(user_id: str, run: Dict[str, Any], step: Dict[str, Any]) -> None:
+    """Best-effort incremental persistence of one tool-loop step, keyed by
+    step["index"]. A step already present at that index is merged into --
+    the start-phase write ({index, thought, action, args, started_at}) is
+    later filled in by the completion-phase write ({observation, error,
+    completed_at}) on the *same* record, rather than appending a second,
+    disconnected entry. This is what lets a still-"started_at"-only step
+    show up as visibly stuck (crashed mid-tool-call) instead of silently
+    missing. Mutates `run` in place (the same object the caller holds) so
+    partial progress survives even if this specific write fails -- the next
+    successful step's write carries it forward. Never raises: a persistence
+    hiccup must not interrupt the tool loop itself."""
+    try:
+        steps = list(run.get("steps") or [])
+        index = step.get("index")
+        existing = next((i for i, s in enumerate(steps) if s.get("index") == index), None)
+        if existing is not None:
+            steps[existing] = {**steps[existing], **step}
+        else:
+            steps.append(dict(step))
+        run["steps"] = steps
+        run["updated_at"] = datetime.now(timezone.utc).isoformat()
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _put_agent_run, user_id, run)
+        _agent_run_actions.add(1, {"action": "step", "outcome": "success"})
+    except Exception:
+        _agent_run_actions.add(1, {"action": "step", "outcome": "error"})
+        logger.warning("failed to persist agent run step id=%s", run.get("id"), exc_info=True)
+
+
+def _agent_run_reference(run: Dict[str, Any]) -> AgentRunReference:
+    return AgentRunReference(
+        id=str(run["id"]),
+        status=str(run["status"]),
+        created_at=str(run["created_at"]),
+        updated_at=str(run["updated_at"]),
+    )
+
+
+def _complete_agent_run(user_id: str, run: Dict[str, Any], report: AgentReport) -> AgentReport:
+    now = datetime.now(timezone.utc).isoformat()
+    report_snapshot = report.model_dump(mode="json", exclude={"agent_run"})
+    timeline = list(run.get("timeline") or [])
+    timeline.append(_agent_run_event("completed", "completed", f"Research complete: {report.recommendation}"))
+    run.update(
+        {
+            "status": "completed",
+            "title": _agent_run_title(report.question),
+            "question": report.question,
+            "platform": report.platform,
+            "recommendation": report.recommendation,
+            "model_probability": report.model_probability,
+            "market_probability": report.market_probability,
+            "edge": report.edge,
+            "agent_profile": report.agent_profile.model_dump(mode="json") if report.agent_profile else None,
+            "report": report_snapshot,
+            "timeline": timeline[-12:],
+            "updated_at": now,
+            "completed_at": now,
+            "error_code": None,
+        }
+    )
+    stored = _put_agent_run(user_id, run)
+    report.agent_run = _agent_run_reference(stored)
+    _agent_run_actions.add(1, {"action": "complete", "outcome": "success"})
+    logger.info("agent run completed id=%s recommendation=%s", stored["id"], report.recommendation)
+    return report
+
+
+def _fail_agent_run(
+    user_id: str, run: Dict[str, Any], *, status: str, error_code: str, detail: str
+) -> Dict[str, Any]:
+    if run.get("status") != "running":
+        return run
+    now = datetime.now(timezone.utc).isoformat()
+    timeline = list(run.get("timeline") or [])
+    timeline.append(_agent_run_event("failed", status, detail))
+    run.update(
+        {
+            "status": status,
+            "timeline": timeline[-12:],
+            "updated_at": now,
+            "completed_at": now,
+            "error_code": error_code,
+        }
+    )
+    stored = _put_agent_run(user_id, run)
+    _agent_run_actions.add(1, {"action": "complete", "outcome": status})
+    logger.warning("agent run ended id=%s status=%s code=%s", stored["id"], status, error_code)
+    return stored
+
+
+def _scheduled_reconcile_stale_agent_runs(stale_minutes: int, limit: int) -> Dict[str, Any]:
+    """Mark AgentRun records stuck at status="running" past `stale_minutes` as
+    interrupted. Idempotent: _fail_agent_run only acts on a record whose own
+    status is still "running", so a run that legitimately completes between
+    being listed here and being processed is left untouched, not clobbered."""
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(minutes=stale_minutes)).isoformat()
+    result: Dict[str, Any] = {"checked": 0, "interrupted": 0, "errors": 0}
+    for user_id, record in _list_stale_running_agent_runs(cutoff_iso, limit):
+        result["checked"] += 1
+        try:
+            _fail_agent_run(
+                user_id, record, status="interrupted", error_code="stale_reconciled",
+                detail=f"No progress for over {stale_minutes} minutes; marked interrupted by scheduled reconciliation.",
+            )
+            result["interrupted"] += 1
+        except Exception:
+            result["errors"] += 1
+            logger.warning("agent run reconciliation could not update run id=%s", record.get("id"))
+    return result
+
+
+def _agent_run_summary(record: Dict[str, Any]) -> AgentRunSummary:
+    report = record.get("report") if isinstance(record.get("report"), dict) else {}
+    return AgentRunSummary(
+        id=str(record["id"]),
+        status=str(record["status"]),
+        title=str(record.get("title") or "Agent research"),
+        question=str(record.get("question") or ""),
+        platform=record.get("platform"),
+        recommendation=record.get("recommendation"),
+        model_probability=record.get("model_probability"),
+        market_probability=record.get("market_probability"),
+        edge=record.get("edge"),
+        agent_profile=record.get("agent_profile"),
+        has_live_trade_intent=bool(report.get("live_trade_intent")),
+        timeline=list(record.get("timeline") or []),
+        created_at=str(record["created_at"]),
+        updated_at=str(record["updated_at"]),
+        completed_at=record.get("completed_at"),
+        error_code=record.get("error_code"),
+    )
+
+
+def _agent_run_response(record: Dict[str, Any]) -> AgentRunResponse:
+    report_payload = record.get("report") if isinstance(record.get("report"), dict) else None
+    if report_payload is not None:
+        report_payload = {**report_payload, "agent_run": _agent_run_reference(record).model_dump(mode="json")}
+    return AgentRunResponse(
+        **_agent_run_summary(record).model_dump(mode="json"),
+        request=dict(record.get("request") or {}),
+        report=AgentReport(**report_payload) if report_payload is not None else None,
+        steps=list(record.get("steps") or []),
+    )
+
+
+def _resolve_agent_profile_request(
+    req: AgentAnalyzeRequest, user_id: str
+) -> tuple[AgentAnalyzeRequest, Optional[AgentProfileReference]]:
+    """Resolve an owned copied-agent recipe and strip unsafe client overrides."""
+    profile_id = req.agent_profile_id
+    if not profile_id:
+        return req, None
+    with _tracer.start_as_current_span("agent.profile.resolve") as span:
+        span.set_attributes({"user.id": user_id, "agent.profile.id": profile_id})
+        profile = _read_agent_profile(user_id, profile_id)
+        if profile is None:
+            _agent_profile_actions.add(1, {"action": "resolve", "outcome": "missing"})
+            raise HTTPException(status_code=404, detail="Copied agent was not found.")
+        source_agent_id = str(profile.get("source_agent_id") or "")
+        model = str(profile.get("model") or "")
+        if (
+            profile.get("execution_mode") != "research_only"
+            or not source_agent_id
+            or model not in _SCADS_MODEL_ALLOWLIST
+        ):
+            _agent_profile_actions.add(1, {"action": "resolve", "outcome": "unavailable"})
+            raise HTTPException(status_code=409, detail="This copied agent is no longer available for research.")
+        profile_skill = AgentSkill(name=str(profile["name"]), instruction=str(profile["instruction"]))
+        effective = req.model_copy(
+            update={
+                "model": model,
+                "skills": [profile_skill, *req.skills[:4]],
+                "builtin_skills": True,
+                "ground_in_record": True,
+                "tool_loop": False,
+                "benchmark_tools": False,
+                "openrouter_api_key": None,
+                "openrouter_model": None,
+                "provider_base_url": None,
+                "ollama_base_url": None,
+            }
+        )
+        reference = AgentProfileReference(
+            id=str(profile["id"]),
+            source_agent_id=source_agent_id,
+            model=model,
+            version=int(profile["version"]),
+            execution_mode="research_only",
+        )
+        span.set_attribute("agent.profile.version", reference.version)
+        _agent_profile_actions.add(1, {"action": "resolve", "outcome": "success"})
+        return effective, reference
 
 
 def _scads_provider_for_model_name(
@@ -9547,17 +11844,44 @@ def _model_probability_from_prediction(resp: PredictResponse) -> Optional[float]
     return resp.confidence
 
 
+async def _classify_red_team_argument(
+    argument: str, provider, temperature: float, max_tokens: int
+) -> Optional[RedTeamVerdict]:
+    """Best-effort structured classification of the Red team skill's own
+    output, via a small separate follow-up call. Never raises -- a
+    classification failure just means no verdict, not a broken skill run."""
+    try:
+        raw = await _provider_chat(
+            provider,
+            [
+                {"role": "system", "content": _RED_TEAM_VERDICT_SYSTEM},
+                {"role": "user", "content": argument[:2000]},
+            ],
+            temperature,
+            min(max_tokens, 150),
+            call_site="red_team_verdict",
+        )
+        obj = json.loads((raw or "").strip())
+        return RedTeamVerdict(credible=bool(obj["credible"]), severity=str(obj["severity"]))
+    except Exception:
+        logger.warning("red team verdict classification failed", exc_info=True)
+        return None
+
+
 async def _run_agent_skill(skill: AgentSkill, context: str, provider, temperature, max_tokens) -> AgentSkillResult:
     messages = [
         {"role": "system", "content": _AGENT_SKILL_SYSTEM},
         {"role": "user", "content": f"{context}\n\nSkill: {skill.name}\nInstruction: {skill.instruction}"},
     ]
     try:
-        output = await _provider_chat(provider, messages, temperature, max_tokens)
-        return AgentSkillResult(name=skill.name, output=(output or "").strip())
+        output = (await _provider_chat(provider, messages, temperature, max_tokens) or "").strip()
     except Exception as exc:
         logger.warning("agent skill %r failed: %s", skill.name, type(exc).__name__)
         return AgentSkillResult(name=skill.name, output="(this analysis step is temporarily unavailable)")
+    verdict = None
+    if skill.name == "Red team" and output:
+        verdict = await _classify_red_team_argument(output, provider, temperature, max_tokens)
+    return AgentSkillResult(name=skill.name, output=output, verdict=verdict)
 
 
 async def _resolve_agent_question(
@@ -9652,11 +11976,39 @@ def _agent_prediction_request(
             quote.liquidity if quote and quote.liquidity is not None else req.market_liquidity
         ),
         resolve_time=(quote.close_time if quote and quote.close_time else req.resolve_time),
+        created_time=(quote.created_time if quote and quote.created_time else None),
+        publish_time=(quote.created_time if quote and quote.created_time else None),
         openrouter_api_key=req.openrouter_api_key,
         openrouter_model=req.openrouter_model,
         model=req.model,
         provider_base_url=req.provider_base_url,
         chat_mode=False,
+    )
+
+
+def _select_agent_provider(req: "AgentAnalyzeRequest"):
+    """Provider selection shared by skills and the tool loop. Mirrors
+    _select_predict_provider's branch order (explicit model -> BYOK/custom
+    endpoint -> ROI-based auto-selection -> server default), so an
+    /agent/analyze request without an explicit model benefits from the same
+    evolution-loop auto-routing the main forecast already gets, instead of
+    always falling straight to the server's static default."""
+    alt_provider = _scads_alt_provider(req.model) if req.model else None
+    if alt_provider is not None:
+        return alt_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
+    if (req.ollama_base_url and req.openrouter_model) or (req.openrouter_api_key and req.openrouter_model):
+        return _select_provider(
+            req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
+            getattr(req, "ollama_base_url", None),
+        )
+    auto = _auto_selected_model()
+    if auto:
+        auto_provider = _scads_alt_provider(auto)
+        if auto_provider is not None:
+            return auto_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
+    return _select_provider(
+        req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
+        getattr(req, "ollama_base_url", None),
     )
 
 
@@ -9673,18 +12025,7 @@ async def _run_agent_skills(
     if not skills_to_run:
         return [], False
 
-    alt_provider = _scads_alt_provider(req.model) if req.model else None
-    if alt_provider is not None:
-        provider, temperature, max_tokens = (
-            alt_provider,
-            _state.get("temperature", 0.0),
-            _state.get("max_tokens", 1024),
-        )
-    else:
-        provider, temperature, max_tokens = _select_provider(
-            req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
-            getattr(req, "ollama_base_url", None),
-        )
+    provider, temperature, max_tokens = _select_agent_provider(req)
     sources_txt = "\n".join(
         f"- {s.source}: {s.title}" for s in result.evidence_sources[:8]
     ) or "(no evidence retrieved)"
@@ -9710,6 +12051,7 @@ async def _agent_report_from_prediction(
     pipeline: List[str],
     pred_req: PredictRequest,
     result: PredictResponse,
+    agent_profile: Optional[AgentProfileReference] = None,
 ) -> AgentReport:
     pipeline = list(pipeline) + ["gather_evidence", "forecast"]
     analysis = result.market_analysis
@@ -9760,6 +12102,7 @@ async def _agent_report_from_prediction(
         evidence_error=result.evidence_error,
         skills=list(skill_results),
         grounding=grounding_note,
+        agent_profile=agent_profile,
         live_trade_intent=live_trade_intent,
     )
     if report.market_url and report.model_probability is not None:
@@ -9767,6 +12110,65 @@ async def _agent_report_from_prediction(
         _ident = _trl.ident_from_url(report.platform or "", report.market_url)
         await _enroll_market(report.platform, _ident, report.market_url, question, "agent_analyze")
     return report
+
+
+async def _agent_analyze_durable(
+    req: AgentAnalyzeRequest, request: Request, claims: Dict[str, Any]
+) -> AgentReport:
+    """Run one authenticated analysis while recording its private lifecycle."""
+    user_id = str(claims["sub"])
+    run = _new_agent_run(user_id, req)
+    with _tracer.start_as_current_span("agent.run.execute") as span:
+        span.set_attributes({"user.id": user_id, "agent.run.id": run["id"]})
+        _agent_run_actions.add(1, {"action": "create", "outcome": "success"})
+        try:
+            agent_profile = None
+            if req.agent_profile_id:
+                req, agent_profile = _resolve_agent_profile_request(req, user_id)
+
+            question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+            if agent_profile is not None:
+                pipeline.insert(0, "agent_profile")
+            run = _advance_agent_run(
+                user_id,
+                run,
+                phase="context_ready",
+                detail="Resolved a live market quote" if quote is not None else "Prepared research question",
+                question=question,
+                platform=(quote.platform if quote else (req.platform or req.market_platform)),
+            )
+
+            if req.tool_loop:
+                report = await _agent_tool_loop(
+                    req, request, question, quote, grounding_note, run=run, user_id=user_id
+                )
+            else:
+                pred_req = _agent_prediction_request(req, question, quote, grounding_note)
+                _agent_counter.add(1, {"agent.platform": req.platform or "unknown"})
+                result = await predict(pred_req, kb_user_id=user_id)
+                report = await _agent_report_from_prediction(
+                    req, question, quote, grounding_note, pipeline, pred_req, result, agent_profile
+                )
+            report = _complete_agent_run(user_id, run, report)
+            span.set_attributes({"agent.run.status": "completed", "outcome": "success"})
+            return report
+        except HTTPException as exc:
+            _fail_agent_run(
+                user_id, run, status="failed", error_code=f"http_{exc.status_code}", detail="Research run was rejected"
+            )
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "rejected")
+            raise
+        except Exception as exc:
+            _fail_agent_run(
+                user_id, run, status="failed", error_code="analysis_failed", detail="Research run could not complete"
+            )
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "error")
+            logger.exception("agent run failed")
+            raise
 
 
 @app.post("/agent/analyze", tags=["Agents"], summary="Run the analysis agent on a live question", response_model=AgentReport)
@@ -9784,8 +12186,18 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         claims = _require_auth(request)
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
+    if claims is not None:
+        return await _agent_analyze_durable(req, request, claims)
+
+    agent_profile = None
+    if req.agent_profile_id:
+        if claims is None:
+            raise HTTPException(status_code=401, detail="Sign in to use a copied agent.")
+        req, agent_profile = _resolve_agent_profile_request(req, claims["sub"])
 
     question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+    if agent_profile is not None:
+        pipeline.insert(0, "agent_profile")
 
     # Optional: ReAct tool-using loop instead of the fixed pipeline below.
     if req.tool_loop:
@@ -9796,7 +12208,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
     _agent_counter.add(1, {"agent.platform": req.platform or "unknown"})
     result = await predict(pred_req, kb_user_id=(claims.get("sub") if claims else None))
     return await _agent_report_from_prediction(
-        req, question, quote, grounding_note, pipeline, pred_req, result
+        req, question, quote, grounding_note, pipeline, pred_req, result, agent_profile
     )
 
 
@@ -9818,13 +12230,32 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
     claims = _require_auth(request)
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
+    agent_profile = None
+    if req.agent_profile_id:
+        req, agent_profile = _resolve_agent_profile_request(req, claims["sub"])
     if req.tool_loop:
         raise HTTPException(status_code=400, detail="Streaming is not supported for tool_loop agent mode.")
+    with _tracer.start_as_current_span("agent.run.stream") as span:
+        run = _new_agent_run(claims["sub"], req)
+        span.set_attributes({"user.id": claims["sub"], "agent.run.id": run["id"], "outcome": "started"})
+        _agent_run_actions.add(1, {"action": "create", "outcome": "success"})
+        logger.info("agent streaming run created id=%s", run["id"])
 
     async def events():
-        yield _sse_event("meta", {"status": "resolving"})
+        nonlocal run
+        yield _sse_event("meta", {"status": "resolving", "agent_run": _agent_run_reference(run).model_dump(mode="json")})
         try:
             question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+            if agent_profile is not None:
+                pipeline.insert(0, "agent_profile")
+            run = _advance_agent_run(
+                claims["sub"],
+                run,
+                phase="context_ready",
+                detail="Resolved a live market quote" if quote is not None else "Prepared research question",
+                question=question,
+                platform=(quote.platform if quote else (req.platform or req.market_platform)),
+            )
             yield _sse_event("meta", {
                 "status": "forecasting",
                 "question": question,
@@ -9837,10 +12268,16 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
             )
             provider, temperature, max_tokens = _select_predict_provider(pred_req)
         except HTTPException as exc:
+            _fail_agent_run(
+                claims["sub"], run, status="failed", error_code=f"http_{exc.status_code}", detail="Research run was rejected"
+            )
             yield _sse_event("error", {"status_code": exc.status_code, "detail": exc.detail})
             return
         except Exception:
             logger.exception("agent stream setup failed")
+            _fail_agent_run(
+                claims["sub"], run, status="failed", error_code="analysis_failed", detail="Research run could not be prepared"
+            )
             yield _sse_event("error", {
                 "status_code": 500,
                 "detail": "The streaming agent request could not be prepared.",
@@ -9859,11 +12296,17 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         try:
             async for chunk in _provider_stream_chat(provider, messages, temperature, max_tokens):
                 if await request.is_disconnected():
+                    _fail_agent_run(
+                        claims["sub"], run, status="interrupted", error_code="client_disconnected", detail="Client disconnected during research"
+                    )
                     return
                 chunks.append(chunk)
                 yield _sse_event("delta", {"text": chunk, "phase": "forecast"})
         except Exception as exc:
             http_exc = _provider_http_error(exc)
+            _fail_agent_run(
+                claims["sub"], run, status="failed", error_code=f"http_{http_exc.status_code}", detail="Forecasting could not complete"
+            )
             yield _sse_event("error", {
                 "status_code": http_exc.status_code,
                 "detail": http_exc.detail,
@@ -9874,20 +12317,35 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
                                              "rationale", "options", "p10", "p50", "p90", "unit"))
         result = _build_typed_response(pred_req, parsed, text, evidence_articles, evidence_error)
-        await _finalize_predict_response(pred_req, result, _optional_user_id(request))
+        try:
+            await _finalize_predict_response(pred_req, result, _optional_user_id(request))
+        except Exception:
+            logger.exception("agent stream forecast finalisation failed")
+            _fail_agent_run(
+                claims["sub"], run, status="failed", error_code="analysis_failed", detail="Forecast result could not be finalized"
+            )
+            yield _sse_event("error", {
+                "status_code": 500,
+                "detail": "The streaming agent forecast could not be finalized.",
+            })
+            return
 
         yield _sse_event("meta", {"status": "skills"})
         try:
             report = await _agent_report_from_prediction(
-                req, question, quote, grounding_note, pipeline, pred_req, result
+                req, question, quote, grounding_note, pipeline, pred_req, result, agent_profile
             )
         except Exception:
             logger.exception("agent stream finalisation failed")
+            _fail_agent_run(
+                claims["sub"], run, status="failed", error_code="analysis_failed", detail="Research report could not be finalized"
+            )
             yield _sse_event("error", {
                 "status_code": 500,
                 "detail": "The streaming agent report could not be finalized.",
             })
             return
+        report = _complete_agent_run(claims["sub"], run, report)
         yield _sse_event("done", {"report": report.model_dump(mode="json")})
 
     return StreamingResponse(
@@ -9901,24 +12359,32 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
 
 
 async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
-                           quote: "Optional[MarketQuote]", grounding_note: Optional[str]) -> "AgentReport":
+                           quote: "Optional[MarketQuote]", grounding_note: Optional[str],
+                           *, run: Optional[Dict[str, Any]] = None,
+                           user_id: Optional[str] = None) -> "AgentReport":
     """ReAct tool-using loop: the model plans and calls tools (forecast, market
     fetch, evidence search, venue scan, track record), then answers. Falls back
-    cleanly to a no-edge report if no forecast tool was used."""
+    cleanly to a no-edge report if no forecast tool was used.
+
+    When `run`/`user_id` are given (the durable /agent/analyze path), each
+    step is persisted to the AgentRun record as it happens via on_step."""
     from analyzing_llm_rationale import market_data
 
-    alt_provider = _scads_alt_provider(req.model) if req.model else None
-    if alt_provider is not None:
-        provider, temperature, max_tokens = (
-            alt_provider,
-            _state.get("temperature", 0.0),
-            _state.get("max_tokens", 1024),
+    async def _on_step_start(step: Dict[str, Any]) -> None:
+        if run is None or user_id is None:
+            return
+        await _persist_agent_run_step(
+            user_id, run, {**step, "started_at": datetime.now(timezone.utc).isoformat()}
         )
-    else:
-        provider, temperature, max_tokens = _select_provider(
-            req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
-            getattr(req, "ollama_base_url", None),
+
+    async def _on_step(step: Dict[str, Any]) -> None:
+        if run is None or user_id is None:
+            return
+        await _persist_agent_run_step(
+            user_id, run, {**step, "completed_at": datetime.now(timezone.utc).isoformat()}
         )
+
+    provider, temperature, max_tokens = _select_agent_provider(req)
     loop = asyncio.get_running_loop()
     last: Dict[str, Any] = {}
     agent_id = str(req.model or req.openrouter_model or _state.get("model_key") or "agent")
@@ -10024,16 +12490,19 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         tools = dict(benchmark_tool_map)
         specs = list(benchmark_specs)
     else:
+        # Benchmark tools (place_trade above all) must never reach the standard
+        # tool loop -- /agent/analyze's documented contract is that it never
+        # places an order, and req.benchmark_tools is the only opt-in for the
+        # trading tool surface. Do not merge benchmark_tool_map/specs here.
         tools = {"forecast": _tool_forecast, "get_market": _tool_get_market,
                  "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,
-                 "track_record": _tool_track_record, **benchmark_tool_map}
+                 "track_record": _tool_track_record}
         specs = [
             {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
             {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
             {"name": "search_evidence", "args": "query", "description": "Retrieve recent news headlines relevant to a query."},
             {"name": "scan_markets", "args": "platform, query?", "description": "List live markets on a venue (optionally filtered by keyword)."},
             {"name": "track_record", "args": "", "description": "Get the model's own live calibration / skill-vs-market."},
-            *benchmark_specs,
         ]
 
     # Optional: proxy the venues' own MCP tools (orderbook/depth/etc.) when
@@ -10075,7 +12544,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     backstopped = False
     try:
         res = await agent_capabilities.run_tool_loop(
-            q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule)
+            q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule,
+            on_step=_on_step, on_step_start=_on_step_start)
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
         if not last and not req.benchmark_tools:
@@ -10110,6 +12580,20 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         market_probability=last.get("market_probability"),
         edge=edge,
     )
+    raw_answer = res.get("answer", "")
+    use_backstop_thesis = backstopped and bool(last.get("thesis"))
+    tool_transcript = list(res.get("transcript", []))
+    if use_backstop_thesis and raw_answer:
+        # The backstop's forecast becomes the thesis below (so the number it
+        # cites stays consistent with edge/recommendation), which would
+        # otherwise silently drop the model's own final-turn text -- keep it
+        # in the transcript so a malformed or off-contract tool call still
+        # leaves a trace in the durable run record.
+        tool_transcript.append({
+            "action": "final_text_before_backstop",
+            "args": {},
+            "observation": raw_answer[:4000],
+        })
     report = AgentReport(
         question=question, pipeline=pipeline,
         platform=market_platform,
@@ -10121,10 +12605,11 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         # When we had to backstop the forecast, the model's prose can cite a
         # different number than the structured forecast that drives the
         # recommendation — so use the forecast's own rationale to stay consistent.
-        thesis=(last.get("thesis") if backstopped and last.get("thesis") else res.get("answer", "")),
+        thesis=(last.get("thesis") if use_backstop_thesis else raw_answer),
         evidence_sources=last.get("evidence_sources", []),
         evidence_error=last.get("evidence_error"),
-        grounding=grounding_note, tool_transcript=res.get("transcript", []),
+        grounding=grounding_note, tool_transcript=tool_transcript,
+        tool_loop_steps=res.get("steps"), tool_loop_truncated=res.get("truncated"),
         live_trade_intent=live_trade_intent,
     )
     # Evolution loop: enrol the analysed market into the live track record (pointer only).
@@ -10213,6 +12698,8 @@ async def agent_scan(
                 market_url=quote.get("market_url"),
                 market_outcome=quote.get("outcome"),
                 market_probability=quote.get("probability"),
+                created_time=quote.get("created_time"),
+                publish_time=quote.get("created_time"),
                 chat_mode=False,
             ), kb_user_id=(claims.get("sub") if claims else None))
         except Exception:

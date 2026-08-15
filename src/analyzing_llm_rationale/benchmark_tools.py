@@ -1046,9 +1046,12 @@ def _check_trade_guards(
 def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     """Place a Kalshi trade through the benchmark tool surface.
 
-    By default this records a shadow action and returns the normalized Kalshi
-    order. Set FORESEA_AGENT_PLACE_TRADE_MODE=live to call the real trading
-    path, which still requires the existing trading env gates and credentials.
+    This is shadow/paper trading only: it records a shadow action and returns
+    the normalized Kalshi order, and never calls trading.place_order. This
+    tool is reachable from an autonomous LLM tool loop, which cannot supply
+    real human confirmation and does not route through create_trading_run,
+    execute_trading_run, the guardrail chain, or the kill switch -- real
+    execution must go through POST /trading/preview then POST /trading/orders.
     """
     start = time.perf_counter()
     tool = "place_trade"
@@ -1081,8 +1084,19 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 if key in args:
                     order[key] = args[key]
             mode = str(os.environ.get("FORESEA_AGENT_PLACE_TRADE_MODE", "shadow")).strip().lower()
-            if mode not in {"shadow", "live"}:
-                raise ValueError("FORESEA_AGENT_PLACE_TRADE_MODE must be 'shadow' or 'live'")
+            if mode != "shadow":
+                # This tool is called from an autonomous LLM tool loop, which
+                # cannot supply real human confirmation and does not route
+                # through create_trading_run/execute_trading_run/the guardrail
+                # chain/the kill switch. It must never place a real order --
+                # real execution goes through /trading/preview -> /trading/orders,
+                # which requires a signed-in human to type the confirmation
+                # phrase and passes through _validate_live_trade_guardrails.
+                raise ValueError(
+                    "FORESEA_AGENT_PLACE_TRADE_MODE must be 'shadow'. The benchmark "
+                    "tool surface is shadow/paper trading only and cannot place real "
+                    "orders; use /trading/preview and /trading/orders for real execution."
+                )
 
             preview = trading.preview_order(order)
             normalized = preview.get("normalized_order") or {}
@@ -1154,15 +1168,9 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "warnings": execution_warnings + preview.get("warnings", []),
                 }
 
-            if mode == "live":
-                order.update({"execute": True, "confirmation": trading.CONFIRMATION_PHRASE})
-                result = trading.place_order(order, user_id=f"agent:{agent_id}")
-                submitted = True
-                normalized = result.get("normalized_order") or {}
-            else:
-                result = preview
-                submitted = False
-            live = mode == "live"
+            result = preview
+            submitted = False
+            live = False
             accounting_normalized, accounting_guard = _normalize_fill_for_accounting(
                 args=args,
                 result=result,

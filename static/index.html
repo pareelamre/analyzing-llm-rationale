@@ -532,51 +532,6 @@
     }
     .hero-action.primary { background: var(--ink); color: #fff; }
     .hero-action:hover { background: var(--ink); color: #fff; }
-    .landing-question {
-      margin-top: 30px;
-      max-width: 720px;
-      width: 100%;
-      border: 1px solid var(--border-2);
-      border-radius: 30px;
-      background: #fff;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: end;
-      gap: 10px;
-      padding: 10px 10px 10px 16px;
-      box-shadow: 0 18px 50px rgba(15,15,16,.08);
-    }
-    .landing-question textarea {
-      min-height: 44px;
-      max-height: 112px;
-      padding: 8px 6px;
-      font-size: 16px;
-      line-height: 1.45;
-      border: none;
-      outline: none;
-    }
-    .landing-question:focus-within {
-      border-color: #c8c8d0;
-      box-shadow: 0 20px 58px rgba(15,15,16,.12);
-    }
-    .landing-answer {
-      max-width: 720px;
-      width: 100%;
-      margin-top: 18px;
-      border: 1px solid var(--border-2);
-      border-radius: 18px;
-      background: #fff;
-      padding: 20px 24px;
-      box-shadow: 0 8px 28px rgba(15,15,16,.06);
-      display: none;
-    }
-    .landing-answer.visible { display: block; }
-    .landing-answer-content { font-size: 15px; line-height: 1.65; color: var(--text); }
-    .landing-answer-actions { display: flex; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--paper); }
-    .landing-answer-btn { font-size: 13px; padding: 7px 18px; border-radius: 20px; border: 1px solid var(--border-2); background: #fff; cursor: pointer; color: var(--text-dim); transition: background .15s; }
-    .landing-answer-btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
-    .landing-answer-btn:hover { background: var(--paper); }
-    .landing-answer-btn.primary:hover { background: #111; }
     .quiet-link {
       margin-top: 10px;
       font-size: 12px;
@@ -590,35 +545,6 @@
       cursor: pointer;
     }
     .quiet-link:hover { color: var(--ink); }
-    .market-prompt-row {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
-      margin-top: 14px;
-      max-width: 720px;
-    }
-    .market-prompt-lead {
-      align-self: center;
-      font-size: 12px;
-      color: var(--text-mute);
-      margin-right: 2px;
-    }
-    .market-prompt {
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: #fff;
-      color: var(--text);
-      font-size: 12px;
-      padding: 8px 11px;
-      cursor: pointer;
-      transition: background var(--dur-med), border-color var(--dur-med), color var(--dur-med), transform var(--dur-med);
-    }
-    .market-prompt:hover {
-      border-color: var(--ink);
-      color: var(--ink);
-      transform: translateY(-1px);
-    }
     .market-sources {
       margin-top: 14px;
       font-size: 12px;
@@ -929,8 +855,6 @@
       .landing-data-links { gap: 12px; }
       .landing-shell { padding-top: 28px; }
       .hero-title { font-size: 36px; }
-      .landing-question { grid-template-columns: 1fr; }
-      .landing-question .hero-action { width: 100%; }
       .market-table { grid-template-columns: 1fr 1fr; }
       .market-table > div:nth-child(4n) { border-right: 1px solid var(--border); }
       .market-table > div:nth-child(2n) { border-right: 0; }
@@ -1408,30 +1332,63 @@
       overflow-y: hidden;
     }
     #questionInput::placeholder { color: #8f8f8f; }
-    .prompt-model-select {
-      align-self: center;
+    .composer-shell {
+      align-items: end;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: 10px 12px !important;
+    }
+    .composer-shell #questionInput {
+      min-width: 0;
+      padding: 5px 3px !important;
+    }
+    .composer-actions { align-items: center; display: flex; flex-shrink: 0; gap: 5px; }
+    .composer-model-picker {
+      align-items: center;
       background: #f7f7f8;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
+      display: flex;
+      height: 40px;
+      padding: 0 8px 0 10px;
+    }
+    .composer-model-label {
+      color: var(--text-mute);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .prompt-model-select {
+      background: transparent;
+      border: 0;
+      border-radius: 0;
       color: var(--text-dim);
       cursor: pointer;
-      flex: 0 1 150px;
+      flex: 0 1 132px;
       font-size: 12px;
-      height: 34px;
-      max-width: 34vw;
-      min-width: 112px;
-      padding: 0 24px 0 9px;
+      height: 38px;
+      max-width: 30vw;
+      min-width: 104px;
+      padding: 0 20px 0 6px;
     }
     .prompt-model-select:focus-visible {
       border-color: var(--ink);
       box-shadow: 0 0 0 3px rgba(17, 17, 17, .08);
       outline: none;
     }
-    @media (max-width: 520px) {
+    @media (max-width: 640px) {
+      .composer-shell { gap: 7px; grid-template-columns: 1fr; padding: 10px 12px 9px !important; }
+      .composer-shell #questionInput { min-height: 48px; padding: 4px 3px !important; }
+      .composer-actions { border-top: 1px solid #eeeeef; justify-content: flex-end; padding-top: 7px; }
+      .composer-model-picker { height: 36px; }
       .prompt-model-select {
-        flex-basis: 104px;
+        flex-basis: 130px;
         font-size: 11px;
-        min-width: 92px;
+        height: 34px;
+        max-width: 42vw;
+        min-width: 118px;
       }
     }
     .send-btn {
@@ -1701,6 +1658,19 @@
     }
     .config-body { padding: 4px 10px 8px; display: flex; flex-direction: column; gap: 16px; }
     .config-group { display: flex; flex-direction: column; gap: 6px; }
+    .workspace-group { display: flex; flex-direction: column; gap: 7px; }
+    .workspace-title { margin: 0; font-size: 12px; font-weight: 650; color: var(--ink); }
+    .workspace-copy { margin: 0; font-size: 11px; line-height: 1.45; color: var(--text-mute); }
+    .workspace-action {
+      appearance: none; cursor: pointer; width: 100%; text-align: left; padding: 9px 10px;
+      border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--ink);
+      transition: background var(--dur-med), border-color var(--dur-med);
+    }
+    .workspace-action:hover { background: #f7f7f6; border-color: var(--text-mute); }
+    .workspace-action strong, .workspace-action span { display: block; }
+    .workspace-action strong { font-size: 12px; font-weight: 600; }
+    .workspace-action span { margin-top: 2px; color: var(--text-mute); font-size: 10px; line-height: 1.35; }
+    .workspace-preferences { margin-top: 2px; }
 
     /* ── Glass surfaces ──────────────────────────────────────────────────── */
     .glass {
@@ -1926,8 +1896,7 @@
       .nav-collapse { display: none; }
       .btn-signin { padding: 7px 13px; }
     }
-  </style>
-
+  </style>
   <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
@@ -1986,38 +1955,16 @@
 
   <div class="landing-shell">
     <div class="hero-grid">
-      <!-- Left Column: Copy & Input -->
+      <!-- Left Column: Product proposition -->
       <div class="hero-copy">
         <p class="label mb-4" style="align-self: flex-start;">AI forecasts, scored in public</p>
         <h1 class="display hero-title" style="text-align: left; align-self: flex-start; max-width: 100%;">The intelligence layer for prediction markets</h1>
         <p class="hero-text" style="text-align: left; align-self: flex-start; max-width: 100%; margin-top: 14px;">
-          Ask any yes-or-no question about the future. Foresea runs real-time searches to gather evidence, weighs facts via an LLM council, and calculates calibrated probabilities compared with live prediction markets.
+          Foresea turns fresh evidence and live market signals into calibrated forecasts you can examine, compare, and hold to account over time.
         </p>
-        
-        <form class="landing-question" onsubmit="submitLandingQuestion(event)" style="max-width: 100%; margin-top: 24px;">
-          <textarea
-            id="landingQuestionInput"
-            rows="2"
-            placeholder="Paste a market question or ask for a forecast"
-            oninput="autoResize(this)"
-            onkeydown="handleLandingKey(event)"
-          ></textarea>
-          <button class="hero-action primary" type="submit" id="landingSubmitBtn">Analyze</button>
-        </form>
-
-        <div id="landingAnswer" class="landing-answer" aria-live="polite" style="max-width: 100%;">
-          <div class="landing-answer-content chat-md" id="landingAnswerContent"></div>
-          <div class="landing-answer-actions" id="landingAnswerActions" style="display:none">
-            <button class="landing-answer-btn primary ui-icon-label" onclick="_landingOpenInApp()">Continue in app <svg class="ui-icon" aria-hidden="true"><use href="#ui-arrow-right"></use></svg></button>
-            <button class="landing-answer-btn" onclick="_landingReset()">Ask another</button>
-          </div>
-        </div>
-
-        <div class="market-prompt-row" aria-label="Example market prompts" style="max-width: 100%; justify-content: flex-start; margin-top: 20px;">
-          <span class="market-prompt-lead">Try one:</span>
-          <button type="button" class="market-prompt" onclick="startExample('Market at 42%: Will the Fed cut rates before September 30, 2026?')">Fed Rate Cut</button>
-          <button type="button" class="market-prompt" onclick="startExample('Compare the evidence for this market: Will US CPI inflation be at least 3.0% in December 2026?')">US Inflation</button>
-          <button type="button" class="market-prompt" onclick="startExample('What probability should this market trade at: Will SpaceX complete a major Starship milestone before December 31, 2026?')">SpaceX Milestone</button>
+        <div class="hero-actions" style="align-self: flex-start;">
+          <button class="hero-action primary" type="button" onclick="launchApp()">Open the forecast desk</button>
+          <button class="hero-action" type="button" onclick="openEdgeBoard()">Explore the edge board</button>
         </div>
 
         <p class="market-sources" style="align-self: flex-start; text-align: left; margin-top: 20px;">
@@ -2169,7 +2116,7 @@
         <!-- Live calibration stats, refreshed from GET /track-record. -->
         <div id="transparencyPerformancePanel" data-resolved-count="" style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02);">
           <h3 style="font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">Verified System Performance</h3>
-          
+
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
             <div style="text-align: center; border-right: 1px solid var(--border); padding-right: 8px;">
               <span id="trustAccuracy" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">?</span>
@@ -2186,7 +2133,7 @@
           </div>
 
           <h4 style="font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">Calibration Accuracy (Observed Rates vs Predicted)</h4>
-          
+
           <div id="trustCalibrationRows" aria-busy="true" style="display: flex; flex-direction: column; gap: 8px;">
             <p style="font-size: 12px; color: var(--text-dim); margin: 0;">Loading resolved calibration?</p>
           </div>
@@ -2238,13 +2185,12 @@
     <div id="convList"></div>
   </div>
 
-  <!-- Account: one control at the bottom; clicking it opens a menu with
-       Config / Connect exchange / Advanced + account actions (Prism-style). -->
+  <!-- Account: one control at the bottom; it opens workspace, preferences, and account actions. -->
   <div class="acct" id="acctWrap">
   <div id="acctMenu" class="acct-menu" hidden onclick="event.stopPropagation()">
 
   <details class="advanced-panel">
-    <summary role="button" aria-label="Show advanced forecast settings">Advanced</summary>
+    <summary role="button" aria-label="Show forecast preferences">Forecast preferences</summary>
     <div>
       <p class="label px-1 mb-2">Prompt variant</p>
       <select id="variantSelect" class="variant-select" onchange="updateVariantDesc()">
@@ -2275,16 +2221,39 @@
     </div>
   </details>
 
-  <!-- Config: model + agent skills, collapsed to keep the sidebar clean -->
+  <!-- Workspace: everyday choices first; technical controls stay available below. -->
   <details class="config-panel" id="configDetails">
     <summary class="config-summary">
       <svg class="config-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
         <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <span>Config</span>
-      <span id="activeModelLabel" class="config-active">gpt-oss-120b</span>
+      <span>Your workspace</span>
+      <span class="config-active">Personal</span>
     </summary>
     <div class="config-body" onclick="event.stopPropagation()">
+      <section class="workspace-group" aria-labelledby="workspace-context-title">
+        <p class="workspace-title" id="workspace-context-title">Your saved context</p>
+        <p id="workspaceContextSummary" class="workspace-copy">No notes added</p>
+        <button type="button" class="workspace-action" onclick="openWorkspaceContext()">
+          <strong>Add a note or link</strong>
+          <span>Use it as evidence in future forecasts.</span>
+        </button>
+      </section>
+
+      <section class="workspace-group" aria-labelledby="workspace-record-title">
+        <p class="workspace-title" id="workspace-record-title">Your record</p>
+        <p id="workspaceLedgerSummary" class="workspace-copy">Sign in to see your saved forecasts.</p>
+      </section>
+
+      <section class="workspace-group" aria-labelledby="workspace-agent-runs-title">
+        <p class="workspace-title" id="workspace-agent-runs-title">Agent runs</p>
+        <p id="workspaceAgentRunsSummary" class="workspace-copy">Sign in to see research progress and trade handoffs.</p>
+        <div id="workspaceAgentRunsTimeline" class="model-list" style="margin-top:10px"></div>
+      </section>
+
+      <details class="advanced-panel workspace-preferences" id="workspacePreferences">
+        <summary role="button" aria-label="Show preferences and advanced controls">Preferences</summary>
+        <div>
 
       <!-- Model -->
       <div class="config-group">
@@ -2343,15 +2312,9 @@
         </div>
       </div>
 
-      <!-- Agent skills -->
+      <!-- Research skills -->
       <div class="config-group">
-        <div class="flex items-center justify-between">
-          <p class="label" style="margin:0">Agent skills</p>
-          <label class="flex items-center gap-1.5 cursor-pointer select-none" title="Route questions through the analysis agent">
-            <input type="checkbox" id="agentToggle" onchange="toggleAgent()" />
-            <span class="text-xs" style="color:var(--text-dim)">Use</span>
-          </label>
-        </div>
+        <p class="label" style="margin:0">Research skills</p>
         <div id="skillList" class="model-list"></div>
         <button type="button" id="addSkillBtn" class="model-add-btn ui-icon-label" onclick="startAddSkill()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-plus"></use></svg>Add a skill</button>
         <div id="skillForm" class="model-form" hidden>
@@ -2369,7 +2332,14 @@
             <button type="button" class="model-cancel" onclick="cancelSkillForm()">Cancel</button>
           </div>
         </div>
-        <p class="text-gray-400" style="font-size:10px;margin-top:2px">When “Use” is on, the agent fetches evidence, forecasts, prices the edge, and runs your skills.</p>
+        <p class="text-gray-400" style="font-size:10px;margin-top:2px">Foresea uses these alongside evidence gathering, forecasting, and edge analysis.</p>
+      </div>
+
+      <!-- Copied public agents -->
+      <div class="config-group">
+        <p class="label" style="margin:0">Copied agents</p>
+        <div id="copiedAgentList" class="model-list"></div>
+        <p id="copiedAgentHint" class="text-gray-400" style="font-size:10px;margin-top:2px">Copy a public agent from the Agentic board. This copies its model and research setup only — never its private context, account history, or exchange connection.</p>
       </div>
 
       <!-- Knowledge base -->
@@ -2392,6 +2362,8 @@
         <a href="/agents" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs ui-icon-label">Agent integration <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></a><br />
         <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs ui-icon-label">API docs <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></a>
       </div>
+        </div>
+      </details>
     </div>
   </details>
 
@@ -2407,8 +2379,8 @@
     <div class="config-body" onclick="event.stopPropagation()">
       <p class="text-gray-400" style="font-size:10px;margin:0 0 8px;line-height:1.5">
         Connect your own Kalshi or Polymarket account to place real orders.
-        Keys are stored only in this browser, sent per order to sign, and
-        <strong>never saved on our servers</strong>. Only connect on a device you trust.
+        Credentials are encrypted before they are stored with your Foresea account and
+        are never returned to this browser. They are used server-side only for your signed-in trading actions.
       </p>
       <details class="model-form" style="margin-top:0">
         <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
@@ -2419,7 +2391,7 @@
           <textarea id="vcKalshiPriv" class="variant-select text-xs" rows="3" placeholder="RSA private key (PEM)" style="resize:vertical;min-height:54px;font-family:monospace;font-size:11px"></textarea>
           <input id="vcKalshiBase" class="variant-select text-xs" placeholder="Base URL (optional)" autocomplete="off" />
           <div class="model-form-actions">
-            <button type="button" class="model-save" onclick="saveVenueCreds('kalshi')">Save &amp; verify</button>
+            <button type="button" class="model-save" onclick="saveVenueCreds('kalshi')">Connect securely</button>
             <button type="button" class="model-cancel" onclick="disconnectVenue('kalshi')">Disconnect</button>
           </div>
         </div>
@@ -2436,7 +2408,7 @@
           <input id="vcPolyHost" class="variant-select text-xs" placeholder="CLOB host (optional)" autocomplete="off" />
           <input id="vcPolyFunder" class="variant-select text-xs" placeholder="Funder address (optional)" autocomplete="off" />
           <div class="model-form-actions">
-            <button type="button" class="model-save" onclick="saveVenueCreds('polymarket')">Save &amp; verify</button>
+            <button type="button" class="model-save" onclick="saveVenueCreds('polymarket')">Connect securely</button>
             <button type="button" class="model-cancel" onclick="disconnectVenue('polymarket')">Disconnect</button>
           </div>
         </div>
@@ -2510,27 +2482,32 @@
       <div style="position:relative">
         <div id="slashPalette" class="slash-palette" role="listbox" aria-label="Commands"></div>
       </div>
-      <div class="input-box flex gap-2 sm:gap-3 items-end p-2 sm:p-3">
+      <div class="input-box composer-shell">
         <textarea
           id="questionInput"
           rows="1"
-          placeholder="Ask anything, or type / for commands"
-          class="flex-1 bg-transparent border-none py-1 px-1"
+          placeholder="What would you like to forecast?"
+          class="bg-transparent border-none"
           style="font-size: 16px;"
           oninput="autoResize(this); _updateSlashPalette(this.value)"
           onkeydown="handleKey(event)"
         ></textarea>
-        <select id="promptModelSelect" class="prompt-model-select" onchange="setBuiltinChatModel(this.value)" title="Chat model" aria-label="Chat model">
-          <option value="gpt-oss-120b">GPT-OSS-120B</option>
-        </select>
-        <button id="attachBtn" class="attach-btn" onclick="toggleAttachPanel()" title="Attach PDF or URL" aria-label="Attach file or URL" aria-expanded="false">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
-          </svg>
-        </button>
-        <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="handleSendButton()" title="Send" aria-label="Send">
-          <svg class="ui-icon send-btn-icon" aria-hidden="true"><use href="#ui-arrow-up"></use></svg>
-        </button>
+        <div class="composer-actions">
+          <div class="composer-model-picker">
+            <span class="composer-model-label">Model</span>
+            <select id="promptModelSelect" class="prompt-model-select" onchange="setBuiltinChatModel(this.value)" title="Choose chat model" aria-label="Choose chat model">
+              <option value="gpt-oss-120b">GPT-OSS-120B</option>
+            </select>
+          </div>
+          <button id="attachBtn" class="attach-btn" onclick="toggleAttachPanel()" title="Attach PDF or URL" aria-label="Attach file or URL" aria-expanded="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+            </svg>
+          </button>
+          <button id="sendBtn" class="send-btn w-9 h-9 text-sm flex-shrink-0 flex items-center justify-center" onclick="handleSendButton()" title="Send" aria-label="Send">
+            <svg class="ui-icon send-btn-icon" aria-hidden="true"><use href="#ui-arrow-up"></use></svg>
+          </button>
+        </div>
       </div>
       <!-- Attach panel -->
       <div id="attachPanel" class="attach-panel" hidden>
@@ -2940,12 +2917,20 @@ function closeSidebar() {
 }
 
 // ── Conversation management ──────────────────────────────────────────────────
-const CHAT_HASH_PREFIX = '#chat/';
-function conversationHash(id) {
-  return CHAT_HASH_PREFIX + encodeURIComponent(id);
+const CHAT_PATH_PREFIX = '/chat/';
+function conversationPath(id) {
+  return CHAT_PATH_PREFIX + encodeURIComponent(id);
 }
-function conversationIdFromHash(hash = window.location.hash) {
-  return hash?.startsWith(CHAT_HASH_PREFIX) ? decodeURIComponent(hash.slice(CHAT_HASH_PREFIX.length)) : null;
+function conversationIdFromPath(pathname = window.location.pathname) {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  if (!path.startsWith(CHAT_PATH_PREFIX)) return null;
+  const id = path.slice(CHAT_PATH_PREFIX.length);
+  if (!id || id.includes('/')) return null;
+  try { return decodeURIComponent(id); } catch { return null; }
+}
+function conversationIdFromLegacyHash(hash = window.location.hash) {
+  if (!hash?.startsWith('#chat/')) return null;
+  try { return decodeURIComponent(hash.slice('#chat/'.length)); } catch { return null; }
 }
 
 function newConversation(options = {}) {
@@ -3416,6 +3401,14 @@ function forecastActionsHtml(data, { ledgerOnly = false } = {}) {
     `</div>`;
 }
 
+function tradeRunHandoffHtml(data) {
+  if (!tradeRunHandoff(data)) return '';
+  return `<div class="market-actions pt-2">
+    <button type="button" class="market-action ui-icon-label" onclick="openTradeRunFromBubble(this)">${uiIcon('external')} Review Trade Run</button>
+    <span class="text-xs text-gray-500">Choose a fresh limit price and size in the terminal.</span>
+  </div>`;
+}
+
 async function addForecastToPersonalLedger(btn) {
   if (!currentUser) {
     openAuthModal('login');
@@ -3454,6 +3447,7 @@ async function addForecastToPersonalLedger(btn) {
     personalLedgerEntries = [saved, ...personalLedgerEntries.filter(entry => entry.id !== saved.id)];
     btn.textContent = 'Saved to ledger';
     trackEvent('personal_ledger_add', { source: 'forecast_card', question_type: data.question_type || 'chat' });
+    renderWorkspacePanel();
   } catch (_) {
     btn.textContent = 'Retry save';
     btn.disabled = false;
@@ -3532,7 +3526,7 @@ function renderMarketHistoryChart(container, history) {
     container.innerHTML = '<p style="font-size:11px;color:var(--text-dim)">No snapshot history tracked yet.</p>';
     return;
   }
-  
+
   if (history.length < 2) {
     container.innerHTML = '<p style="font-size:11px;color:var(--text-dim)">Building history (need 2+ daily snapshots)...</p>';
     return;
@@ -3587,13 +3581,13 @@ function renderMarketHistoryChart(container, history) {
       <line x1="${padL}" y1="${toY(0.5)}" x2="${padL + cW}" y2="${toY(0.5)}" stroke="var(--border)" stroke-dasharray="2 2" />
       <line x1="${padL}" y1="${toY(1.0)}" x2="${padL + cW}" y2="${toY(1.0)}" stroke="var(--border)" stroke-dasharray="2 2" />
       <line x1="${padL}" y1="${toY(0.0)}" x2="${padL + cW}" y2="${toY(0.0)}" stroke="var(--border)" />
-      
+
       <path d="${marketPath}" fill="none" stroke="#60a5fa" stroke-width="2" />
       <path d="${modelPath}" fill="none" stroke="#10b981" stroke-width="2" />
-      
+
       <circle cx="${toX(history.length - 1)}" cy="${toY(modelProbs[history.length - 1] ?? 0)}" r="3" fill="#10b981" />
       <circle cx="${toX(history.length - 1)}" cy="${toY(marketProbs[history.length - 1] ?? 0)}" r="3" fill="#60a5fa" />
-      
+
       ${yAxisHtml}
       ${xLabels.join('')}
     </svg>
@@ -3685,6 +3679,8 @@ function makeAIBubble(data, variant, options = {}) {
     const isChatForecast = chatForecastProbability != null;
     const div = document.createElement('div');
     div.className = 'max-w-2xl mx-auto w-full';
+    const tradeHandoff = tradeRunHandoff(data);
+    if (tradeHandoff) div._tradeHandoff = tradeHandoff;
     if (isChatForecast) {
       div._forecastData = data;
       div._ledgerContext = {
@@ -3699,6 +3695,7 @@ function makeAIBubble(data, variant, options = {}) {
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         ${sourceFeedHtml(sources, data.evidence_error)}
         ${isChatForecast && options.includeActions !== false ? forecastActionsHtml(data, { ledgerOnly: true }) : ''}
+        ${options.includeActions !== false ? tradeRunHandoffHtml(data) : ''}
         <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
           <span class="logo-dot" style="width:5px;height:5px"></span>
           ${escHtml(modelKey)}
@@ -4132,6 +4129,8 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
           generation_stopped: true,
         };
     data.question = agentBody.question || data.question || '';
+    if (data.live_trade_intent) data.source_conversation_id = convId;
+    if (outcome === 'completed' && data.agent_run) syncAgentRunsFromServer();
     if (outcome === 'completed') {
       trackEvent('forecast_completed', {
         question_type: 'chat',
@@ -4388,12 +4387,13 @@ async function sendQuestion(options = {}) {
     _renderChips();
     let data;
     if (_agentEnabled() || options.forceAgent) {
+      const copiedAgent = _activeCopiedAgent();
       const agentBody = {
         question,
         evidence_top_k: 20,
         history,  // full thread context — only a new brief resets it
         conversation_steer: conversationSteer,
-        skills: _loadSkills().map(s => ({ name: s.name, instruction: s.instruction })),
+        skills: _agentSkillsForRun().map(s => ({ name: s.name, instruction: s.instruction })),
         builtin_skills: true,    // base-rate / scenario / red-team / key-drivers toolkit
         ground_in_record: true,  // condition on the model's own live calibration
       };
@@ -4420,6 +4420,10 @@ async function sendQuestion(options = {}) {
           agentBody.openrouter_api_key = activeModel.apiKey;
         }
         if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
+      } else if (copiedAgent?.profileId) {
+        agentBody.agent_profile_id = copiedAgent.profileId;
+      } else if (copiedAgent?.sourceAgentId) {
+        agentBody.model = copiedAgent.sourceAgentId;
       } else if (builtinChatModel) {
         agentBody.model = builtinChatModel;
       }
@@ -4440,6 +4444,8 @@ async function sendQuestion(options = {}) {
       typingEl.remove();
       if (!resp.ok) { addError(report.detail || 'Agent error', request.convId); return; }
       data = _agentReportData(report);
+      if (data.live_trade_intent) data.source_conversation_id = request.convId;
+      if (data.agent_run) syncAgentRunsFromServer();
     } else {
       const streamed = await streamPredict(body, variant, request.convId, typingEl, request.controller.signal);
       if (streamed.ok) return;
@@ -4917,22 +4923,52 @@ function updateVariantDesc() {
 }
 const _VIEW_URL = {
   'landing':       '/',
-  'app':           '#ask',
-  'track-landing': '#track',
-  'track-app':     '#track-app',
-  'edge-landing':  '#edge',
-  'edge-app':      '#edge-app',
-  'watch-landing': '#watchlist',
-  'watch-app':     '#watchlist-app',
-  'ledger-landing': '#ledger',
-  'ledger-app':     '#ledger-app',
+  'app':           '/ask',
+  'track-landing': '/track',
+  'track-app':     '/track',
+  'edge-landing':  '/edge',
+  'edge-app':      '/edge',
+  'watch-landing': '/watchlist',
+  'watch-app':     '/watchlist',
+  'ledger-landing': '/ledger',
+  'ledger-app':     '/ledger',
 };
-const _URL_VIEW = Object.fromEntries(Object.entries(_VIEW_URL).map(([k, v]) => [v, k]));
+const _PATH_VIEW = {
+  '/': 'landing',
+  '/ask': 'app',
+  '/track': 'track-landing',
+  '/edge': 'edge-landing',
+  '/watchlist': 'watch-landing',
+  '/ledger': 'ledger-landing',
+};
+const _LEGACY_HASH_VIEW = {
+  '#ask': 'app',
+  '#track': 'track-landing',
+  '#track-app': 'track-app',
+  '#edge': 'edge-landing',
+  '#edge-app': 'edge-app',
+  '#watchlist': 'watch-landing',
+  '#watchlist-app': 'watch-app',
+  '#ledger': 'ledger-landing',
+  '#ledger-app': 'ledger-app',
+};
+function normaliseAppPath(pathname = window.location.pathname) {
+  return pathname.replace(/\/+$/, '') || '/';
+}
+function historyUrlFor(view, convId = null) {
+  return view === 'chat' && convId ? conversationPath(convId) : (_VIEW_URL[view] ?? '/ask');
+}
+function legacyRouteFromHash(hash = window.location.hash) {
+  const convId = conversationIdFromLegacyHash(hash);
+  if (convId) return { view: 'chat', convId };
+  const view = _LEGACY_HASH_VIEW[hash];
+  return view ? { view, convId: null } : null;
+}
 
 function setHistoryState(view, mode = 'push', options = {}) {
   if (isApplyingHistory || !window.history) return;
   const state = { view, convId: options.convId || null };
-  const url = view === 'chat' && options.convId ? conversationHash(options.convId) : (_VIEW_URL[view] ?? '#ask');
+  const url = historyUrlFor(view, state.convId);
   if (mode === 'replace') history.replaceState(state, '', url);
   else if (history.state?.view !== view || history.state?.convId !== state.convId) history.pushState(state, '', url);
 }
@@ -5759,7 +5795,11 @@ function clearPersonalLedgerSignInIntent() {
 
 async function refreshPersonalLedger() {
   renderPersonalLedger();
-  if (!currentUser) return;
+  if (!currentUser) {
+    personalLedgerEntries = [];
+    renderWorkspacePanel();
+    return;
+  }
   try {
     const r = await fetch('/personal-ledger', { headers: authHeaders() });
     const d = await _readJson(r);
@@ -5769,6 +5809,7 @@ async function refreshPersonalLedger() {
     console.warn(err);
   }
   renderPersonalLedger();
+  renderWorkspacePanel();
 }
 
 async function openPersonalLedger({ updateHistory = true } = {}) {
@@ -5875,6 +5916,7 @@ async function markPersonalLedgerVerdict(entryId, verdict, btn) {
     personalLedgerEntries = personalLedgerEntries.map(entry => entry.id === saved.id ? saved : entry);
     trackEvent('personal_ledger_feedback', { verdict });
     renderPersonalLedger();
+    renderWorkspacePanel();
   } catch (_) {
     btn.disabled = false;
   }
@@ -5915,6 +5957,21 @@ function _agentTradingActivityLine(a) {
   return '';
 }
 
+function _eligibilityReasonText(elig) {
+  if (!elig || !elig.checks) return 'Not enough data yet.';
+  if (elig.eligible) return 'Meets the shadow-trading promotion bar (observational only — grants nothing).';
+  const c = elig.checks;
+  const reasons = [];
+  if (!c.sufficient_sample) reasons.push(`needs ${elig.min_settled_trades_required}+ settled trades (has ${elig.settled_count})`);
+  if (!c.positive_return) reasons.push('return is not positive');
+  if (!c.sharpe_above_floor) reasons.push(`Sharpe below ${elig.min_sharpe_required} (${elig.sharpe ?? 'n/a'})`);
+  if (!c.drawdown_within_cap) {
+    const dd = elig.max_drawdown != null ? `${Math.round(elig.max_drawdown * 100)}%` : 'n/a';
+    reasons.push(`drawdown above ${Math.round(elig.max_drawdown_allowed * 100)}% (${dd})`);
+  }
+  return reasons.length ? `Not yet eligible: ${reasons.join('; ')}.` : 'Not yet eligible.';
+}
+
 function renderAgentTradingBoard(d) {
   const host = document.getElementById('eb-agentic-section');
   if (!host) return;
@@ -5926,6 +5983,7 @@ function renderAgentTradingBoard(d) {
   }
   const leaderboard = d.leaderboard || [];
   const equityCurves = d.equity_curves || {};
+  const eligibility = d.eligibility || {};
   const activity = d.recent_activity || [];
 
   const _usd = v => Number.isFinite(Number(v))
@@ -5948,6 +6006,14 @@ function renderAgentTradingBoard(d) {
     const pnl = (Number(row.realized_pnl) || 0) + (Number(row.unrealized_pnl) || 0);
     const pnlColor = pnl >= 0 ? '#0a7' : '#c33';
     const winRate = row.win_rate == null ? '—' : `${Math.round(row.win_rate * 100)}%`;
+    const agentId = String(row.agent_id || '');
+    const elig = eligibility[agentId];
+    const eligCell = elig && elig.eligible
+      ? `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:#0a7">${uiIcon('check')}</span>`
+      : `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:var(--text-dim)">—</span>`;
+    const copyButton = /^[a-zA-Z0-9._-]{1,120}$/.test(agentId)
+      ? `<button type="button" class="wl-act" onclick="copyPublicAgent(${JSON.stringify(agentId).replace(/&/g, '&amp;').replace(/"/g, '&quot;')})">Copy agent</button>`
+      : '';
     return `<tr class="eb-row" data-model="${escAttr(row.agent_id || '')}">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(row.agent_id || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(row.agent_id || '')}</span></td>
@@ -5957,6 +6023,8 @@ function renderAgentTradingBoard(d) {
       <td>${winRate}</td>
       <td>${row.trade_count ?? 0}</td>
       <td>${(row.open_positions || []).length}</td>
+      <td>${eligCell}</td>
+      <td>${copyButton}</td>
     </tr>`;
   }).join('');
 
@@ -5972,7 +6040,7 @@ function renderAgentTradingBoard(d) {
 
   host.innerHTML = `${banner}
     <div id="agentTradingSvg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th></tr></thead><tbody>${tableRows}</tbody></table>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th><th>Workspace</th></tr></thead><tbody>${tableRows}</tbody></table>
     <h4 class="eb-h" style="margin-top:24px">Recent activity</h4>
     ${activityRows || '<p class="text-sm text-gray-500">No activity yet.</p>'}`;
   const svgEl = document.getElementById('agentTradingSvg');
@@ -5990,6 +6058,7 @@ async function removePersonalLedgerEntry(entryId, btn) {
     personalLedgerEntries = personalLedgerEntries.filter(entry => entry.id !== entryId);
     trackEvent('personal_ledger_remove', { source: 'ledger' });
     renderPersonalLedger();
+    renderWorkspacePanel();
   } catch (_) {
     btn.disabled = false;
   }
@@ -7119,7 +7188,7 @@ function _renderMtmPage(d) {
   const rows = mtmModels.map((m, i) => {
     const account = m.account || {};
     const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    
+
     const startPrincipal = EB_STARTING_BANKROLL;
     const currentBankroll = _getScaledMtmValue(rawVal, sizingMode);
     const pnlUsd = currentBankroll - startPrincipal;
@@ -7339,12 +7408,14 @@ function syncSidebarA11y() {
 }
 function applyHistoryState(state) {
   isApplyingHistory = true;
-  // Infer view from URL hash when state is missing (e.g. external link / fresh load)
-  const urlConversationId = state?.convId || conversationIdFromHash();
+  // Infer a route from the path when state is missing (e.g. a direct link or refresh).
+  const legacyRoute = legacyRouteFromHash();
+  const urlConversationId = state?.convId || conversationIdFromPath() || legacyRoute?.convId;
   const view = state?.view
     || (urlConversationId ? 'chat' : null)
-    || _URL_VIEW[window.location.hash]
-    || (window.location.hash ? 'landing' : 'landing');
+    || legacyRoute?.view
+    || _PATH_VIEW[normaliseAppPath()]
+    || 'landing';
 
   // Close all overlays first — avoids every case having to enumerate which to close
   closeTrackRecord({ updateHistory: false });
@@ -7770,7 +7841,7 @@ function loadOrSettings() {
   loadBuiltinChatModels();
   renderModelList();
   if (_loadModels().length) {
-    const det = document.getElementById('configDetails');
+    const det = document.getElementById('workspacePreferences');
     if (det) det.open = true;
   }
   _updateModelLabel();
@@ -7786,9 +7857,8 @@ function _updateModelLabel() {
 }
 
 // ── Exchange accounts (bring-your-own trading) ───────────────────────────────
-// Credentials live ONLY in this browser (localStorage `foresea_venue_creds`,
-// keyed exactly as the server's venue_credentials fields) and are sent per
-// order to sign. They are never persisted server-side.
+// Raw credentials are sent once to the secure connection endpoint, encrypted
+// server-side, and never attached to preview or order requests.
 const _VENUE_FIELDS = {
   kalshi: {
     vcKalshiKeyId: 'kalshi_api_key_id',
@@ -7808,36 +7878,55 @@ const _VENUE_REQUIRED = {
   kalshi: ['kalshi_api_key_id', 'kalshi_private_key'],
   polymarket: ['polymarket_private_key', 'polymarket_api_key', 'polymarket_api_secret', 'polymarket_api_passphrase'],
 };
+let _venueConnections = { kalshi: false, polymarket: false };
+let _secureConnectionsConfigured = false;
 
-function _loadVenueCreds() {
-  try { return JSON.parse(localStorage.getItem('foresea_venue_creds') || '{}') || {}; }
-  catch { return {}; }
-}
-function _saveVenueCredsStore(obj) {
-  localStorage.setItem('foresea_venue_creds', JSON.stringify(obj));
-}
-// Combined non-empty credentials to attach to a trading request.
-function _allVenueCreds() {
-  const store = _loadVenueCreds();
-  const out = {};
-  for (const [k, v] of Object.entries(store)) {
-    if (v != null && String(v).trim() !== '') out[k] = v;
-  }
-  return Object.keys(out).length ? out : null;
-}
 function _venueConnected(platform) {
-  const store = _loadVenueCreds();
-  return _VENUE_REQUIRED[platform].every(k => String(store[k] || '').trim() !== '');
+  return Boolean(_venueConnections[platform]);
 }
-
-function _fillVenueInputs() {
-  const store = _loadVenueCreds();
-  for (const map of Object.values(_VENUE_FIELDS)) {
-    for (const [id, key] of Object.entries(map)) {
+function _clearVenueInputs(platform) {
+  const fields = platform ? [_VENUE_FIELDS[platform]] : Object.values(_VENUE_FIELDS);
+  for (const map of fields) {
+    for (const id of Object.keys(map)) {
       const el = document.getElementById(id);
-      if (el) el.value = store[key] || '';
+      if (el) el.value = '';
     }
   }
+}
+function _purgeLegacyBrowserVenueCreds() {
+  if (localStorage.getItem('foresea_venue_creds') == null) return false;
+  localStorage.removeItem('foresea_venue_creds');
+  return true;
+}
+async function _loadVenueConnections() {
+  if (!currentUser) return;
+  try {
+    const r = await fetch('/trading/connections', { headers: authHeaders() });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return;
+    _secureConnectionsConfigured = Boolean(d.encryption_configured);
+    const connections = d.connections || {};
+    for (const platform of Object.keys(_VENUE_FIELDS)) {
+      _venueConnections[platform] = Boolean((connections[platform] || {}).connected);
+    }
+    renderVenueStatus();
+    if (!_secureConnectionsConfigured) _venueErr('Secure exchange connections are not configured on this server yet.');
+  } catch (_) { /* The connection panel remains safely disconnected. */ }
+}
+function _credentialsFromInputs(platform) {
+  const credentials = {};
+  for (const [id, key] of Object.entries(_VENUE_FIELDS[platform])) {
+    const value = (document.getElementById(id)?.value || '').trim();
+    if (value) credentials[key] = value;
+  }
+  return credentials;
+}
+function _inputsComplete(platform, credentials) {
+  return _VENUE_REQUIRED[platform].every(key => String(credentials[key] || '').trim() !== '');
+}
+function _fillVenueInputs() {
+  // Connected secrets deliberately never flow back into form fields.
+  _clearVenueInputs();
 }
 function renderVenueStatus() {
   let connected = 0;
@@ -7857,46 +7946,43 @@ function renderVenueStatus() {
 async function saveVenueCreds(platform) {
   _venueErr('');
   if (!currentUser) { _venueErr('Sign in to connect an exchange account.'); openAuthModal('login'); return; }
-  const store = _loadVenueCreds();
-  for (const [id, key] of Object.entries(_VENUE_FIELDS[platform])) {
-    const el = document.getElementById(id);
-    const val = el ? el.value.trim() : '';
-    if (val) store[key] = val; else delete store[key];
-  }
-  if (!_VENUE_REQUIRED[platform].every(k => store[k])) {
+  const credentials = _credentialsFromInputs(platform);
+  if (!_inputsComplete(platform, credentials)) {
     _venueErr(`Missing required ${platform} fields.`); return;
   }
-  _saveVenueCredsStore(store);
-  renderVenueStatus();
-  // Validate against the server without persisting (e.g. RSA key parses).
   try {
-    const r = await fetch('/trading/accounts/check', {
-      method: 'POST',
+    const r = await fetch('/trading/connections/' + encodeURIComponent(platform), {
+      method: 'PUT',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ venue_credentials: _allVenueCreds() }),
+      body: JSON.stringify({ venue_credentials: credentials }),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { _venueErr(d.detail || 'Could not verify credentials.'); return; }
-    const v = (d.venues || {})[platform] || {};
-    if (!v.configured) {
-      _venueErr(`${platform} credentials look incomplete or invalid.`);
-    } else if (!d.byo_trading_enabled) {
-      _venueErr('Connected. Note: live BYO trading is not enabled on the server yet.');
-    }
+    if (!r.ok) { _venueErr(d.detail || 'Could not connect this account securely.'); return; }
+    _venueConnections[platform] = Boolean(d.connected);
+    _clearVenueInputs(platform);
+    _purgeLegacyBrowserVenueCreds();
+    renderVenueStatus();
   } catch (e) {
-    _venueErr('Could not reach Foresea to verify: ' + e.message);
+    _venueErr('Could not reach Foresea to save the encrypted connection: ' + e.message);
   }
 }
 
-function disconnectVenue(platform) {
-  const store = _loadVenueCreds();
-  for (const key of Object.values(_VENUE_FIELDS[platform])) delete store[key];
-  _saveVenueCredsStore(store);
-  for (const id of Object.keys(_VENUE_FIELDS[platform])) {
-    const el = document.getElementById(id); if (el) el.value = '';
-  }
-  renderVenueStatus();
+async function disconnectVenue(platform) {
   _venueErr('');
+  if (!currentUser) { _clearVenueInputs(platform); return; }
+  try {
+    const r = await fetch('/trading/connections/' + encodeURIComponent(platform), {
+      method: 'DELETE', headers: authHeaders(),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { _venueErr(d.detail || 'Could not disconnect this account.'); return; }
+    _venueConnections[platform] = false;
+    _clearVenueInputs(platform);
+    _purgeLegacyBrowserVenueCreds();
+    renderVenueStatus();
+  } catch (e) {
+    _venueErr('Could not reach Foresea to disconnect: ' + e.message);
+  }
 }
 function _venueErr(msg) {
   const el = document.getElementById('venueErr');
@@ -7905,13 +7991,17 @@ function _venueErr(msg) {
   el.hidden = !msg;
 }
 function _initVenueAccounts() {
+  const removedLegacy = _purgeLegacyBrowserVenueCreds();
   _fillVenueInputs();
   renderVenueStatus();
+  if (removedLegacy) _venueErr('Security update: browser-stored exchange credentials were removed. Reconnect securely to trade.');
+  _loadVenueConnections();
 }
 
 // ── Trade modal ──────────────────────────────────────────────────────────────
-function openTradeModal(prefill) {
+async function openTradeModal(prefill) {
   if (!currentUser) { openAuthModal('login'); return; }
+  await _loadVenueConnections();
   // If no account is connected yet, point the user at the Connect-exchange panel.
   if (!_venueConnected('kalshi') && !_venueConnected('polymarket')) {
     openSidebar();
@@ -7920,12 +8010,70 @@ function openTradeModal(prefill) {
     _venueErr('Connect a Kalshi or Polymarket account here first, then Place an order.');
     return;
   }
-  let url = '/trade';
-  if (prefill && prefill.platform && prefill.ident) {
-    const p = String(prefill.platform).toLowerCase().includes('kalshi') ? 'kalshi' : 'polymarket';
-    url += `?platform=${p}&ident=${encodeURIComponent(prefill.ident)}`;
+  const handoff = tradeRunHandoff(prefill);
+  const platform = handoff?.platform || prefill?.platform;
+  const ident = handoff?.ident || prefill?.ident;
+  const params = new URLSearchParams();
+  if (platform && ident) {
+    const p = String(platform).toLowerCase().includes('kalshi') ? 'kalshi' : 'polymarket';
+    params.set('platform', p);
+    params.set('ident', String(ident));
   }
-  window.open(url, '_blank');
+
+  // The research record is a short-lived, same-origin session handoff. It has
+  // no exchange credentials, price, or size; the terminal consumes it once.
+  if (handoff) {
+    const handoffId = `trade_${crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
+    try {
+      sessionStorage.setItem(`foresea_trade_handoff_${handoffId}`, JSON.stringify(handoff));
+      params.set('handoff', handoffId);
+    } catch (_) {
+      // The terminal can still open on the identified market, without provenance.
+    }
+  }
+  const terminal = window.open(`/trade${params.size ? `?${params.toString()}` : ''}`, '_blank');
+  // A newly opened tab gets the session-storage snapshot before this removes
+  // the opener relationship, so research cannot control the chat window.
+  try { if (terminal) terminal.opener = null; } catch (_) {}
+}
+
+function boundedTradeHandoffText(value, maxLength) {
+  return String(value || '').replace(/\u0000/g, '').trim().slice(0, maxLength);
+}
+
+function tradeRunHandoff(data) {
+  const intent = data?.live_trade_intent || data;
+  const platform = String(intent?.platform || '').toLowerCase();
+  const ident = boundedTradeHandoffText(intent?.ident, 300);
+  const action = String(intent?.action || '').toLowerCase();
+  const outcome = String(intent?.outcome || '').toLowerCase();
+  const modelProbability = Number(intent?.model_probability);
+  const marketProbability = Number(intent?.market_probability);
+  if (!['kalshi', 'polymarket'].includes(platform) || !ident
+      || !['buy', 'sell'].includes(action) || !['yes', 'no'].includes(outcome)
+      || !Number.isFinite(modelProbability) || modelProbability < 0 || modelProbability > 1
+      || !Number.isFinite(marketProbability) || marketProbability < 0 || marketProbability > 1) {
+    return null;
+  }
+  const sources = (data?.evidence_sources || [])
+    .map(source => boundedTradeHandoffText(source?.url || source?.source, 2000))
+    .filter(Boolean)
+    .slice(0, 20);
+  return {
+    platform, ident, action, outcome,
+    modelProbability, marketProbability,
+    recommendation: boundedTradeHandoffText(intent?.recommendation, 120),
+    title: boundedTradeHandoffText(data?.question || `Research review: ${ident}`, 160),
+    thesis: boundedTradeHandoffText(data?.thesis || data?.rationale, 4000),
+    sourceConversationId: boundedTradeHandoffText(data?.source_conversation_id, 100),
+    sources,
+  };
+}
+
+function openTradeRunFromBubble(button) {
+  const bubble = button.closest('.max-w-2xl');
+  const handoff = bubble?._tradeHandoff;
+  if (handoff) openTradeModal(handoff);
 }
 function closeTradeModal() {
   const ov = document.getElementById('tradeOverlay');
@@ -7955,7 +8103,6 @@ function _tradeBody() {
     order_type: 'limit',
     price: parseFloat(document.getElementById('trPrice').value),
     quantity: parseFloat(document.getElementById('trQty').value),
-    venue_credentials: _allVenueCreds(),
   };
   if (platform === 'kalshi') {
     body.ticker = document.getElementById('trKalshiTicker').value.trim();
@@ -8424,26 +8571,354 @@ function _initFavorites() {
 }
 
 // ── Agent skills manager ──────────────────────────────────────────────────────
+const COPIED_AGENTS_STORAGE_KEY = 'foresea_copied_agents';
+const ACTIVE_COPIED_AGENT_STORAGE_KEY = 'foresea_active_copied_agent';
+
+function _loadCopiedAgents() {
+  try {
+    const agents = JSON.parse(localStorage.getItem(COPIED_AGENTS_STORAGE_KEY) || '[]');
+    if (!Array.isArray(agents)) return [];
+    return agents
+      .filter(agent => /^[a-zA-Z0-9_-]{12,160}$/.test(String(agent?.id || ''))
+        && /^[a-zA-Z0-9._-]{1,120}$/.test(String(agent?.sourceAgentId || '')))
+      .slice(0, 5)
+      .map(agent => ({
+        id: String(agent.id),
+        sourceAgentId: String(agent.sourceAgentId),
+        name: boundedTradeHandoffText(agent.name, 80),
+        instruction: boundedTradeHandoffText(agent.instruction, 2000),
+        profileId: /^[a-zA-Z0-9_-]{12,160}$/.test(String(agent.profileId || ''))
+          ? String(agent.profileId) : '',
+        version: Number.isInteger(Number(agent.version)) ? Number(agent.version) : null,
+        executionMode: String(agent.executionMode || 'research_only'),
+      }));
+  } catch (_) { return []; }
+}
+
+function _saveCopiedAgents(agents) {
+  localStorage.setItem(COPIED_AGENTS_STORAGE_KEY, JSON.stringify(agents));
+}
+
+function _copiedAgentFromProfile(profile) {
+  return {
+    id: String(profile.id),
+    profileId: String(profile.id),
+    sourceAgentId: String(profile.source_agent_id),
+    name: boundedTradeHandoffText(profile.name, 80),
+    instruction: boundedTradeHandoffText(profile.instruction, 2000),
+    version: Number(profile.version) || 1,
+    executionMode: String(profile.execution_mode || 'research_only'),
+  };
+}
+
+async function syncCopiedAgentsFromServer() {
+  if (!currentUser) return;
+  try {
+    const r = await fetch('/agent-profiles', { headers: authHeaders() });
+    const data = await _readJson(r);
+    if (!r.ok) throw new Error(data.detail || 'Could not load copied agents.');
+    const remote = (data.profiles || []).map(_copiedAgentFromProfile).slice(0, 5);
+    const remoteSources = new Set(remote.map(agent => agent.sourceAgentId));
+    const localOnly = _loadCopiedAgents().filter(agent => !agent.profileId && !remoteSources.has(agent.sourceAgentId));
+    const merged = [...remote, ...localOnly].slice(0, 5);
+    const activeId = localStorage.getItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
+    _saveCopiedAgents(merged);
+    if (activeId && !merged.some(agent => agent.id === activeId)) {
+      localStorage.removeItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
+    }
+    renderCopiedAgentList();
+  } catch (err) {
+    console.warn(err);
+  }
+}
+
+function _activeCopiedAgent() {
+  const activeId = localStorage.getItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
+  return _loadCopiedAgents().find(agent => agent.id === activeId) || null;
+}
+
+function _copiedAgentSkills() {
+  const agent = _activeCopiedAgent();
+  // Server-backed profiles inject their immutable recipe server-side. Legacy
+  // browser-only copies keep their one research skill during migration.
+  return agent && !agent.profileId ? [{ name: agent.name, instruction: agent.instruction }] : [];
+}
+
+function _agentSkillsForRun() {
+  const copied = _copiedAgentSkills();
+  return [...copied, ..._loadSkills().slice(0, 5 - copied.length)];
+}
+
+function _maxCustomSkills() {
+  return _activeCopiedAgent() ? 4 : 5;
+}
+
+function _setCopiedAgentHint(message) {
+  const hint = document.getElementById('copiedAgentHint');
+  if (hint) hint.textContent = message;
+}
+
+function renderCopiedAgentList() {
+  const host = document.getElementById('copiedAgentList');
+  if (!host) return;
+  const activeId = localStorage.getItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
+  const agents = _loadCopiedAgents();
+  if (!agents.length) {
+    host.innerHTML = '<p class="text-gray-400" style="font-size:11px;margin:0">No copied agents yet.</p>';
+    return;
+  }
+  host.innerHTML = agents.map(agent => `
+    <div class="model-row" style="cursor:default">
+      <div class="model-meta">
+        <div class="model-name">${escHtml(agent.name)}${agent.id === activeId ? ' <span style="color:var(--yes);font-size:10px">ACTIVE</span>' : ''}</div>
+        <div class="model-sub">${escHtml(agent.sourceAgentId)} · ${agent.profileId ? `private recipe v${agent.version || 1}` : 'local research setup'}</div>
+      </div>
+      <div class="model-actions">
+        <button type="button" class="model-icon-btn" title="Use for research" onclick="useCopiedAgent('${agent.id}')">${uiIcon('check')}</button>
+        <button type="button" class="model-icon-btn" title="Remove copied agent" onclick="removeCopiedAgent('${agent.id}')">${uiIcon('x')}</button>
+      </div>
+    </div>`).join('');
+}
+
+function useCopiedAgent(agentId) {
+  const agent = _loadCopiedAgents().find(item => item.id === agentId);
+  if (!agent) return;
+  localStorage.setItem(ACTIVE_COPIED_AGENT_STORAGE_KEY, agentId);
+  const skillNote = _loadSkills().length >= 5
+    ? ' Five custom skills are saved, so only the first four run while this copy is active.'
+    : ' You can still add up to four of your own skills.';
+  _setCopiedAgentHint(`${agent.name} is active for research.${skillNote}`);
+  renderCopiedAgentList();
+  trackEvent('agent_copy_activated', { source_agent: agent.sourceAgentId });
+}
+
+async function removeCopiedAgent(agentId) {
+  const agents = _loadCopiedAgents();
+  const removed = agents.find(item => item.id === agentId);
+  if (removed?.profileId && currentUser) {
+    try {
+      const r = await fetch('/agent-profiles/' + encodeURIComponent(removed.profileId), {
+        method: 'DELETE', headers: authHeaders(),
+      });
+      const data = await _readJson(r);
+      if (!r.ok) throw new Error(data.detail || 'Could not remove copied agent.');
+    } catch (err) {
+      _setCopiedAgentHint(err.message || 'Could not remove copied agent.');
+      return;
+    }
+  }
+  _saveCopiedAgents(agents.filter(item => item.id !== agentId));
+  if (localStorage.getItem(ACTIVE_COPIED_AGENT_STORAGE_KEY) === agentId) {
+    localStorage.removeItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
+  }
+  _setCopiedAgentHint(removed ? `${removed.name} was removed from your workspace.` : '');
+  renderCopiedAgentList();
+}
+
+async function copyPublicAgent(agentId) {
+  if (!currentUser) { openAuthModal('login'); return; }
+  const sourceAgentId = String(agentId || '').trim();
+  if (!/^[a-zA-Z0-9._-]{1,120}$/.test(sourceAgentId)) return;
+  const existing = _loadCopiedAgents().find(agent => agent.sourceAgentId === sourceAgentId);
+  if (existing?.profileId) {
+    useCopiedAgent(existing.id);
+    return;
+  }
+  if (_loadCopiedAgents().length >= 5 && !existing) {
+    _setCopiedAgentHint('You can keep up to five copied agents. Remove one before copying another.');
+    return;
+  }
+  try {
+    const r = await fetch('/agent-profiles/copy', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ source_agent_id: sourceAgentId, name: `Copy of ${_ebModelLabel(sourceAgentId)}` }),
+    });
+    const data = await _readJson(r);
+    if (!r.ok) throw new Error(data.detail || 'Could not copy this agent.');
+    const copy = _copiedAgentFromProfile(data.profile);
+    const next = _loadCopiedAgents().filter(agent => agent.sourceAgentId !== sourceAgentId);
+    _saveCopiedAgents([copy, ...next].slice(0, 5));
+    localStorage.setItem(ACTIVE_COPIED_AGENT_STORAGE_KEY, copy.id);
+    _setCopiedAgentHint(`${copy.name} is now active as a private research recipe. It copied no private history, context, trading permissions, or exchange connection.`);
+    renderCopiedAgentList();
+    const panel = document.getElementById('configDetails');
+    const preferences = document.getElementById('workspacePreferences');
+    if (panel) panel.open = true;
+    if (preferences) preferences.open = true;
+    trackEvent('agent_copied', { source_agent: sourceAgentId, server_backed: true });
+  } catch (err) {
+    _setCopiedAgentHint(err.message || 'Could not copy this agent.');
+  }
+}
+
 function _loadSkills() {
   try { return JSON.parse(localStorage.getItem('agent_skills') || '[]') || []; }
   catch { return []; }
 }
 function _saveSkills(s) { localStorage.setItem('agent_skills', JSON.stringify(s)); }
-function _agentEnabled() { return localStorage.getItem('agent_enabled') === '1'; }
-// Keep the sidebar checkbox and the inline input-bar toggle in sync.
-function _applyAgentEnabled(on) {
-  localStorage.setItem('agent_enabled', on ? '1' : '0');
-  const cb = document.getElementById('agentToggle');
-  if (cb) cb.checked = on;
+function _agentEnabled() { return true; }
+// Research is Foresea's always-on answering workflow.
+function _applyAgentEnabled() {
+  localStorage.setItem('agent_enabled', '1');
   const btn = document.getElementById('agentModeBtn');
-  if (btn) { btn.classList.toggle('active', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  if (btn) { btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true'); }
   const input = document.getElementById('questionInput');
-  if (input) input.placeholder = on
-    ? 'Agent mode — ask about any market or question'
-    : 'Ask about a market, quote, or resolution criteria';
+  if (input) input.placeholder = 'What would you like to forecast?';
+  if (typeof renderWorkspacePanel === 'function') renderWorkspacePanel();
 }
-function toggleAgent() { _applyAgentEnabled(document.getElementById('agentToggle').checked); }
-function toggleAgentMode() { _applyAgentEnabled(!_agentEnabled()); }
+
+let _workspaceKbDocs = [];
+let agentRuns = [];
+
+function _agentRunStatusLabel(status) {
+  const labels = { running: 'Working', completed: 'Complete', failed: 'Needs attention', interrupted: 'Interrupted' };
+  return labels[status] || 'Unknown';
+}
+
+function renderAgentRunTimeline() {
+  const host = document.getElementById('workspaceAgentRunsTimeline');
+  if (!host) return;
+  if (!currentUser) { host.innerHTML = ''; return; }
+  const runs = (agentRuns || []).slice(0, 5);
+  if (!runs.length) {
+    host.innerHTML = '<p class="workspace-copy">Your completed research will appear here.</p>';
+    return;
+  }
+  host.innerHTML = runs.map(run => {
+    const events = (run.timeline || []).slice(-3).map(event =>
+      `<span title="${escAttr(event.at || '')}">${escHtml(event.detail || event.phase || 'Updated')}</span>`
+    ).join(` ${uiIcon('arrow-right')} `);
+    const handoff = run.has_live_trade_intent
+      ? `<button type="button" class="model-icon-btn" title="Review Trade Run" onclick="openAgentRunTrade('${escAttr(run.id)}')">${uiIcon('external')}</button>`
+      : '';
+    const stepsBtn = `<button type="button" class="model-icon-btn" title="View tool-loop steps" onclick="toggleAgentRunSteps('${escAttr(run.id)}')">${uiIcon('chevron-down')}</button>`;
+    return `<div class="model-row" style="cursor:default">
+      <div class="model-meta">
+        <div class="model-name">${escHtml(run.title || 'Agent research')} <span style="color:var(--yes);font-size:10px">${escHtml(_agentRunStatusLabel(run.status))}</span></div>
+        <div class="model-sub">${events || escHtml(run.question || 'Research pending')}</div>
+      </div>
+      <div class="model-actions">${stepsBtn}${handoff}</div>
+    </div>
+    <div id="${_agentRunStepsPanelId(run.id)}" class="workspace-copy" style="display:none;padding:6px 0 6px 12px"></div>`;
+  }).join('');
+}
+
+function _agentRunStepsPanelId(runId) {
+  return 'agentRunSteps-' + encodeURIComponent(runId);
+}
+
+function _agentRunStepRowHtml(step) {
+  const marker = step.error ? uiIcon('alert') : uiIcon('check');
+  const action = escHtml(step.action || 'unknown');
+  const thought = step.thought
+    ? `<div style="font-style:italic;color:var(--text-dim)">${escHtml(step.thought)}</div>`
+    : '';
+  const obs = escHtml(String(step.observation || '').slice(0, 300));
+  return `<div style="margin-bottom:6px">
+    <div>${marker} <b>${action}</b></div>
+    ${thought}
+    <div style="color:var(--text-dim)">${obs}</div>
+  </div>`;
+}
+
+async function toggleAgentRunSteps(runId) {
+  const panel = document.getElementById(_agentRunStepsPanelId(runId));
+  if (!panel) return;
+  if (panel.dataset.loaded === '1') {
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    return;
+  }
+  panel.style.display = '';
+  panel.innerHTML = '<p class="workspace-copy">Loading…</p>';
+  try {
+    const r = await fetch('/agent/runs/' + encodeURIComponent(runId), { headers: authHeaders() });
+    const run = await _readJson(r);
+    if (!r.ok) throw new Error(run.detail || 'Could not load steps.');
+    const steps = run.steps || [];
+    panel.innerHTML = steps.length
+      ? steps.map(_agentRunStepRowHtml).join('')
+      : '<p class="workspace-copy">No tool-loop steps recorded for this run.</p>';
+    panel.dataset.loaded = '1';
+  } catch (err) {
+    panel.innerHTML = `<p class="workspace-copy">${escHtml(err.message || 'Could not load steps.')}</p>`;
+  }
+}
+
+async function syncAgentRunsFromServer() {
+  if (!currentUser) {
+    agentRuns = [];
+    renderAgentRunTimeline();
+    return;
+  }
+  try {
+    const r = await fetch('/agent/runs', { headers: authHeaders() });
+    const data = await _readJson(r);
+    if (!r.ok) throw new Error(data.detail || 'Could not load agent runs.');
+    agentRuns = data.runs || [];
+  } catch (err) {
+    console.warn(err);
+  }
+  renderAgentRunTimeline();
+  renderWorkspacePanel();
+}
+
+async function openAgentRunTrade(runId) {
+  if (!currentUser) { openAuthModal('login'); return; }
+  try {
+    const r = await fetch('/agent/runs/' + encodeURIComponent(runId), { headers: authHeaders() });
+    const run = await _readJson(r);
+    if (!r.ok) throw new Error(run.detail || 'Could not load this agent run.');
+    const handoff = tradeRunHandoff({ ...(run.report || {}), question: run.question || '' });
+    if (!handoff) throw new Error('This research run has no reviewable trade handoff.');
+    openTradeModal(handoff);
+  } catch (err) {
+    const host = document.getElementById('workspaceAgentRunsTimeline');
+    if (host) host.insertAdjacentHTML('afterbegin', `<p class="workspace-copy">${escHtml(err.message || 'Could not open this run.')}</p>`);
+  }
+}
+
+function renderWorkspacePanel() {
+  const context = document.getElementById('workspaceContextSummary');
+  if (context) {
+    if (!currentUser) context.textContent = 'Sign in to save notes and links.';
+    else context.textContent = _workspaceKbDocs.length
+      ? `${_workspaceKbDocs.length} note${_workspaceKbDocs.length === 1 ? '' : 's'} saved`
+      : 'No notes added';
+  }
+
+  const record = document.getElementById('workspaceLedgerSummary');
+  if (record) {
+    if (!currentUser) record.textContent = 'Sign in to see your saved forecasts.';
+    else {
+      const entries = personalLedgerEntries || [];
+      const marked = entries.filter(entry => ['correct', 'wrong'].includes(entry.user_verdict)).length;
+      record.textContent = `${entries.length} forecast${entries.length === 1 ? '' : 's'} saved · ${marked} marked correct or wrong`;
+    }
+  }
+
+  const runs = document.getElementById('workspaceAgentRunsSummary');
+  if (runs) {
+    if (!currentUser) runs.textContent = 'Sign in to see research progress and trade handoffs.';
+    else {
+      const completed = (agentRuns || []).filter(run => run.status === 'completed').length;
+      const pending = (agentRuns || []).filter(run => run.status === 'running').length;
+      runs.textContent = `${completed} completed research run${completed === 1 ? '' : 's'}${pending ? ` · ${pending} working` : ''}`;
+    }
+  }
+  renderAgentRunTimeline();
+}
+
+function openWorkspaceContext() {
+  trackEvent('workspace_context_add_opened', { signed_in: Boolean(currentUser) });
+  if (!currentUser) { openAuthModal('login'); return; }
+  const panel = document.getElementById('configDetails');
+  const preferences = document.getElementById('workspacePreferences');
+  if (panel) panel.open = true;
+  if (preferences) preferences.open = true;
+  const input = document.getElementById('kbText');
+  setTimeout(() => input?.focus(), 0);
+}
 
 function renderSkillList() {
   const host = document.getElementById('skillList');
@@ -8471,7 +8946,8 @@ function _sfError(msg) {
   el.textContent = msg || ''; el.hidden = !msg;
 }
 function startAddSkill() {
-  if (_loadSkills().length >= 5) { _showSkillForm(true); _sfError('Up to 5 skills.'); return; }
+  const maxSkills = _maxCustomSkills();
+  if (_loadSkills().length >= maxSkills) { _showSkillForm(true); _sfError(`Up to ${maxSkills} custom skills with the current agent setup.`); return; }
   _editingSkillId = null;
   document.getElementById('sfName').value = '';
   document.getElementById('sfInstruction').value = '';
@@ -8495,7 +8971,8 @@ function saveSkillForm() {
     const i = skills.findIndex(x => x.id === _editingSkillId);
     if (i >= 0) skills[i] = { ...skills[i], name, instruction };
   } else {
-    if (skills.length >= 5) { _sfError('Up to 5 skills.'); return; }
+    const maxSkills = _maxCustomSkills();
+    if (skills.length >= maxSkills) { _sfError(`Up to ${maxSkills} custom skills with the current agent setup.`); return; }
     skills.push({ id: 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name, instruction });
   }
   _saveSkills(skills);
@@ -8507,10 +8984,13 @@ function deleteSkill(id) {
   renderSkillList();
 }
 function loadAgentSkills() {
-  _applyAgentEnabled(_agentEnabled());
+  _applyAgentEnabled();
   renderSkillList();
-  if (_loadSkills().length || _agentEnabled()) {
-    const d = document.getElementById('configDetails');
+  renderCopiedAgentList();
+  if (currentUser) syncCopiedAgentsFromServer();
+  if (currentUser) syncAgentRunsFromServer();
+  if (_loadSkills().length || _activeCopiedAgent()) {
+    const d = document.getElementById('workspacePreferences');
     if (d) d.open = true;
   }
 }
@@ -8525,24 +9005,29 @@ async function loadKb() {
   const hint = document.getElementById('kbHint');
   if (!list) return;
   if (!currentUser) {
+    _workspaceKbDocs = [];
     list.innerHTML = '';
     if (hint) hint.textContent = "Sign in to add docs. They're retrieved as evidence in your forecasts.";
+    renderWorkspacePanel();
     return;
   }
   try {
     const r = await fetch('/rag/documents', { headers: authHeaders() });
     const d = await _readJson(r);
     if (!r.ok) return;
-    renderKbList(d.documents || []);
-    if (hint) hint.textContent = (d.documents || []).length
+    _workspaceKbDocs = d.documents || [];
+    renderKbList(_workspaceKbDocs);
+    if (hint) hint.textContent = _workspaceKbDocs.length
       ? 'Retrieved as evidence in your forecasts.'
       : 'Add text or a URL; it becomes searchable evidence in your forecasts.';
+    renderWorkspacePanel();
   } catch (_) {}
 }
 function renderKbList(docs) {
   const host = document.getElementById('kbList');
   if (!host) return;
-  host.innerHTML = docs.map(doc => `
+  _workspaceKbDocs = docs || [];
+  host.innerHTML = _workspaceKbDocs.map(doc => `
     <div class="model-row" style="cursor:default">
       <div class="model-meta">
         <div class="model-name">${escHtml(doc.title || doc.source || 'Document')}</div>
@@ -8552,6 +9037,7 @@ function renderKbList(docs) {
         <button type="button" class="model-icon-btn" title="Remove" onclick="deleteKbDoc('${escAttr(doc.doc_id || '')}')">${uiIcon('x')}</button>
       </div>
     </div>`).join('');
+  renderWorkspacePanel();
 }
 async function ingestKb() {
   if (!currentUser) { _kbError('Sign in to add documents.'); return; }
@@ -8588,6 +9074,8 @@ function _agentReportData(report) {
   const d = report || {};
   return {
     question_type: 'chat',
+    question: d.question || '',
+    thesis: d.thesis || '',
     rationale: _agentReportToMarkdown(d, { includeSources: false }),
     model_key: 'agent',
     model_probability: d.model_probability ?? null,
@@ -8596,6 +9084,8 @@ function _agentReportData(report) {
     edge: d.edge ?? null,
     evidence_sources: d.evidence_sources || [],
     evidence_error: d.evidence_error || '',
+    live_trade_intent: d.live_trade_intent || null,
+    agent_run: d.agent_run || null,
   };
 }
 
@@ -8884,7 +9374,7 @@ async function _runSlashCommand(cmd, args, rawQuestion) {
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>` : ''}
-        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. Smart ROI uses the filtered strategy; crowd-follow is the zero-edge baseline. <a href="#track-app" class="ui-icon-label" style="color:var(--accent)" onclick="showView('track-app')">Full track record ${uiIcon('arrow-right')}</a></p>`);
+        <p style="margin-top:8px;font-size:12px;color:var(--text-mute)">Paper/hypothetical. Smart ROI uses the filtered strategy; crowd-follow is the zero-edge baseline. <a href="/track" class="ui-icon-label" style="color:var(--accent)">Full track record ${uiIcon('arrow-right')}</a></p>`);
     } catch(e) { typing.remove(); _appendError('Could not load track record: ' + e.message); }
     return true;
   }
@@ -9078,7 +9568,7 @@ async function _afterSignIn(user, source = 'auth') {
   } else if (currentView === 'landing' || !currentView) {
     launchApp();
   }
-  
+
   if (_pendingFavoriteAfterSignIn) {
     const fav = _pendingFavoriteAfterSignIn;
     _pendingFavoriteAfterSignIn = null;
@@ -9132,6 +9622,10 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') _closeAcct
 function updateAuthUI(user) {
   currentUser = user;
   if (typeof loadKb === 'function') loadKb();  // refresh KB on sign-in/out
+  if (typeof refreshPersonalLedger === 'function') refreshPersonalLedger();
+  if (typeof renderWorkspacePanel === 'function') renderWorkspacePanel();
+  if (user && typeof syncCopiedAgentsFromServer === 'function') syncCopiedAgentsFromServer();
+  if (typeof syncAgentRunsFromServer === 'function') syncAgentRunsFromServer();
   if (typeof _syncFavoritesFromServer === 'function') {
     if (user) {
       _syncFavoritesFromServer();
@@ -9481,8 +9975,18 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-const _initConversationId = conversationIdFromHash();
-const _initView = _initConversationId ? 'chat' : (_URL_VIEW[window.location.hash || '/'] ?? 'app');
+const _legacyInitialRoute = legacyRouteFromHash();
+if (_legacyInitialRoute) {
+  history.replaceState(
+    { view: _legacyInitialRoute.view, convId: _legacyInitialRoute.convId },
+    '',
+    historyUrlFor(_legacyInitialRoute.view, _legacyInitialRoute.convId),
+  );
+}
+const _initConversationId = conversationIdFromPath();
+const _initView = _initConversationId
+  ? 'chat'
+  : (history.state?.view || _PATH_VIEW[normaliseAppPath()] || 'landing');
 setHistoryState(_initView, 'replace', { convId: _initConversationId });
 syncSidebarA11y();
 recordPageVisit();
