@@ -140,6 +140,11 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("// sendBeacon cannot attach the session header.", self.index_html)
         self.assertIn("_sendAnalytics('/analytics/visit', payload);", self.index_html)
         self.assertIn("_sendAnalytics('/analytics/event', payload);", self.index_html)
+        self.assertIn("trackEvent('forecast_started'", self.index_html)
+        self.assertIn("trackEvent('track_record_opened'", self.index_html)
+        self.assertIn("trackEvent('edge_board_opened'", self.index_html)
+        self.assertIn("trackEvent('watchlist_opened'", self.index_html)
+        self.assertIn("trackEvent('personal_ledger_opened'", self.index_html)
 
     def test_agent_research_can_open_a_review_only_trade_run(self) -> None:
         self.assertIn("Review Trade Run", self.index_html)
