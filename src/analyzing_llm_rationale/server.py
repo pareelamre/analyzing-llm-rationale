@@ -11312,16 +11312,19 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         tools = dict(benchmark_tool_map)
         specs = list(benchmark_specs)
     else:
+        # Benchmark tools (place_trade above all) must never reach the standard
+        # tool loop -- /agent/analyze's documented contract is that it never
+        # places an order, and req.benchmark_tools is the only opt-in for the
+        # trading tool surface. Do not merge benchmark_tool_map/specs here.
         tools = {"forecast": _tool_forecast, "get_market": _tool_get_market,
                  "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,
-                 "track_record": _tool_track_record, **benchmark_tool_map}
+                 "track_record": _tool_track_record}
         specs = [
             {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
             {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
             {"name": "search_evidence", "args": "query", "description": "Retrieve recent news headlines relevant to a query."},
             {"name": "scan_markets", "args": "platform, query?", "description": "List live markets on a venue (optionally filtered by keyword)."},
             {"name": "track_record", "args": "", "description": "Get the model's own live calibration / skill-vs-market."},
-            *benchmark_specs,
         ]
 
     # Optional: proxy the venues' own MCP tools (orderbook/depth/etc.) when

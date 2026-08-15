@@ -2145,6 +2145,25 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn("forecast(", system_prompt)
         self.assertNotIn("scan_markets(", system_prompt)
 
+    def test_agent_analyze_tool_loop_without_benchmark_tools_excludes_place_trade(self):
+        # Regression test: _agent_tool_loop used to merge benchmark_tool_map
+        # (place_trade, web_search, manage_notes) into the standard tool set
+        # unconditionally, regardless of req.benchmark_tools -- contradicting
+        # both the field's own docstring ("expose only benchmark tools") and
+        # the documented contract that /agent/analyze never places an order.
+        # place_trade must only ever be reachable when benchmark_tools=True.
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "Will it rain tomorrow?", "tool_loop": True, "max_tool_steps": 1},
+        )
+        self.assertEqual(response.status_code, 200)
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertNotIn("place_trade(", system_prompt)
+        self.assertNotIn("web_search(", system_prompt)
+        self.assertNotIn("manage_notes(", system_prompt)
+        self.assertIn("forecast(", system_prompt)
+        self.assertIn("scan_markets(", system_prompt)
+
     def test_agent_analyze_tool_loop_routes_via_scads_alt_provider_for_model(self):
         # `req.model` (the field every other /agent/analyze and /predict path
         # uses for SCADS model selection) used to be silently ignored by
