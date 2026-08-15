@@ -1,4 +1,176 @@
 {
+  "eligibility": {
+    "gemma-4-31b-it": {
+      "agent_id": "gemma-4-31b-it",
+      "checks": {
+        "drawdown_within_cap": true,
+        "positive_return": false,
+        "sharpe_above_floor": false,
+        "sufficient_sample": false
+      },
+      "eligible": false,
+      "max_drawdown": 0.0064,
+      "max_drawdown_allowed": 0.25,
+      "min_settled_trades_required": 30,
+      "min_sharpe_required": 0.5,
+      "return_pct": -0.5288,
+      "settled_count": 0,
+      "sharpe": -1.5035
+    },
+    "glm-5.2-fp8": {
+      "agent_id": "glm-5.2-fp8",
+      "checks": {
+        "drawdown_within_cap": true,
+        "positive_return": false,
+        "sharpe_above_floor": false,
+        "sufficient_sample": false
+      },
+      "eligible": false,
+      "max_drawdown": 0.1563,
+      "max_drawdown_allowed": 0.25,
+      "min_settled_trades_required": 30,
+      "min_sharpe_required": 0.5,
+      "return_pct": -5.4798,
+      "settled_count": 0,
+      "sharpe": -0.7028
+    },
+    "gpt-oss-120b": {
+      "agent_id": "gpt-oss-120b",
+      "checks": {
+        "drawdown_within_cap": true,
+        "positive_return": true,
+        "sharpe_above_floor": false,
+        "sufficient_sample": false
+      },
+      "eligible": false,
+      "max_drawdown": 0.2079,
+      "max_drawdown_allowed": 0.25,
+      "min_settled_trades_required": 30,
+      "min_sharpe_required": 0.5,
+      "return_pct": 35.0818,
+      "settled_count": 0,
+      "sharpe": 0.1174
+    },
+    "kimi-k2.7-code": {
+      "agent_id": "kimi-k2.7-code",
+      "checks": {
+        "drawdown_within_cap": false,
+        "positive_return": false,
+        "sharpe_above_floor": false,
+        "sufficient_sample": false
+      },
+      "eligible": false,
+      "max_drawdown": null,
+      "max_drawdown_allowed": 0.25,
+      "min_settled_trades_required": 30,
+      "min_sharpe_required": 0.5,
+      "return_pct": 0.0,
+      "settled_count": 0,
+      "sharpe": null
+    },
+    "llama-3.3-70b-instruct": {
+      "agent_id": "llama-3.3-70b-instruct",
+      "checks": {
+        "drawdown_within_cap": true,
+        "positive_return": true,
+        "sharpe_above_floor": false,
+        "sufficient_sample": false
+      },
+      "eligible": false,
+      "max_drawdown": 0.0666,
+      "max_drawdown_allowed": 0.25,
+      "min_settled_trades_required": 30,
+      "min_sharpe_required": 0.5,
+      "return_pct": 70.0052,
+      "settled_count": 0,
+      "sharpe": 0.3089
+    },
+    "minimax-m3": {
+      "agent_id": "minimax-m3",
+      "checks": {
+        "drawdown_within_cap": true,
+        "positive_return": false,
+        "sharpe_above_floor": false,
+        "sufficient_sample": false
+      },
+      "eligible": false,
+      "max_drawdown": 0.1514,
+      "max_drawdown_allowed": 0.25,
+      "min_settled_trades_required": 30,
+      "min_sharpe_required": 0.5,
+      "return_pct": -5.3087,
+      "settled_count": 0,
+      "sharpe": -0.63
+    },
+    "qwen3-coder-30b-a3b-instruct": {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "checks": {
+        "drawdown_within_cap": true,
+        "positive_return": true,
+        "sharpe_above_floor": false,
+        "sufficient_sample": false
+      },
+      "eligible": false,
+      "max_drawdown": 0.0015,
+      "max_drawdown_allowed": 0.25,
+      "min_settled_trades_required": 30,
+      "min_sharpe_required": 0.5,
+      "return_pct": 0.777,
+      "settled_count": 0,
+      "sharpe": 0.3176
+    },
+    "scads-alias-code": {
+      "agent_id": "scads-alias-code",
+      "checks": {
+        "drawdown_within_cap": true,
+        "positive_return": true,
+        "sharpe_above_floor": false,
+        "sufficient_sample": false
+      },
+      "eligible": false,
+      "max_drawdown": 0.0005,
+      "max_drawdown_allowed": 0.25,
+      "min_settled_trades_required": 30,
+      "min_sharpe_required": 0.5,
+      "return_pct": 0.5805,
+      "settled_count": 0,
+      "sharpe": 0.3037
+    },
+    "scads-alias-ha": {
+      "agent_id": "scads-alias-ha",
+      "checks": {
+        "drawdown_within_cap": true,
+        "positive_return": true,
+        "sharpe_above_floor": false,
+        "sufficient_sample": false
+      },
+      "eligible": false,
+      "max_drawdown": 0.0974,
+      "max_drawdown_allowed": 0.25,
+      "min_settled_trades_required": 30,
+      "min_sharpe_required": 0.5,
+      "return_pct": 20.1164,
+      "settled_count": 0,
+      "sharpe": 0.1317
+    },
+    "scads-alias-reasoning": {
+      "agent_id": "scads-alias-reasoning",
+      "checks": {
+        "drawdown_within_cap": true,
+        "positive_return": true,
+        "sharpe_above_floor": false,
+        "sufficient_sample": false
+      },
+      "eligible": false,
+      "max_drawdown": 0.0055,
+      "max_drawdown_allowed": 0.25,
+      "min_settled_trades_required": 30,
+      "min_sharpe_required": 0.5,
+      "return_pct": 2.3132,
+      "settled_count": 0,
+      "sharpe": 0.2465
+    }
+  },
   "equity_curves": {
     "gemma-4-31b-it": {
       "agent_id": "gemma-4-31b-it",
@@ -570,7 +742,7 @@
     "qwen3-coder-30b-a3b-instruct": {
       "agent_id": "qwen3-coder-30b-a3b-instruct",
       "max_drawdown": 0.0015,
-      "sharpe": 0.2906,
+      "sharpe": 0.3176,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -786,6 +958,11 @@
           "account_value": 10068.977592,
           "event_type": "trade",
           "ts": "2026-08-15T17:51:55.893029+00:00"
+        },
+        {
+          "account_value": 10077.703672,
+          "event_type": "trade",
+          "ts": "2026-08-15T20:01:29.158149+00:00"
         }
       ]
     },
@@ -1356,7 +1533,7 @@
       ]
     }
   },
-  "generated_at": "2026-08-15T19:46:31.770025+00:00",
+  "generated_at": "2026-08-15T20:18:18.307938+00:00",
   "leaderboard": [
     {
       "account_value": 17000.519835,
@@ -1487,28 +1664,19 @@
       "won_count": 0
     },
     {
-      "account_value": 10069.577592,
+      "account_value": 10077.703672,
       "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cash": 10068.977592,
-      "fees_paid": 3.922408,
+      "cash": 10077.703672,
+      "fees_paid": 3.996328,
       "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.12,
-          "cost_basis": 1.2,
-          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
-          "platform": "kalshi",
-          "quantity": 10.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 72.298557,
-      "return_pct": 0.6958,
+      "open_positions": [],
+      "realized_pnl": 79.824637,
+      "return_pct": 0.777,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "trade_count": 42,
-      "unrealized_pnl": -0.6,
-      "updated_at": "2026-08-15T17:51:55.892494+00:00",
+      "trade_count": 43,
+      "unrealized_pnl": 0.0,
+      "updated_at": "2026-08-15T20:01:29.157655+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -1665,6 +1833,89 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985360",
+      "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01.",
+      "ts": "2026-08-15T20:04:42.674453+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "tags": [],
+      "text": "Franklin Arias and Kade Anderson have positive news, increasing their chances of playing in the MLB before September 1, 2026. I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01.",
+      "ts": "2026-08-15T20:04:38.101915+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985360",
+      "thesis": "No trades will be placed this cycle.",
+      "ts": "2026-08-15T20:03:14.653836+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985360",
+      "thesis": "**Decision: HOLD \u2014 no action this cycle.**\n\n**Verification of thesis:**\n- Gabbard announced resignation **May 22, 2026** (the exact day the market window opened)\n- Effective date: **June 30, 2026** \u2014 squarely within the May 22 \u2013 Sep 2, 2026 window\n- Reason: family health crisis (husband's rare bone cancer diagnosis)\n- Trump has already named acting DNI Bill Pulte\n- Confirmed by ABC News, Zee News, Fox News, and others\n\n**Why hold:**\n1. **Thesis is ironclad.** A sitting Cabinet member has publicly resigned with a fixed effective date inside the resolution window. This is not speculation \u2014 it's documented fact.\n2. **Cannot add.** Cost basis ($1,429.76) is already 16.8% of cash, exceeding the 15% single-market cap.\n3. **Closing would be irrational.** Selling at 0.11 bid would lock in a ~$447 loss. Holding to resolution yields ~$8,936 (payout) \u2212 $1,429.76 (cost) = **~$7,500 profit** if YES resolves at 1.00.\n4. **No new information changes the calculus.** The resignation is announced, the date is set, the successor is in place. The only way this resolves NO is if Gabbard reverses her resignation \u2014 which would require her husband's health situation to dramatically improve AND her to publicly withdraw, both extremely unlikely given the formal letter to the President.\n\n**Expected value at resolution:** ~$7,500 profit on a $1,429.76 risk. This is one of the most asymmetric bets available \u2014 a near-certain event trading at deeply mispriced levels because the market window opened the same day as the announcement and hasn't fully repriced yet.\n\n**Action: None. Hold to settlement.**",
+      "ts": "2026-08-15T20:02:49.623165+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985360",
+      "thesis": "I will maintain my current position on KXMLBDEBUT-KANDERSON-26SEP01. The Futures Game event on July 12, 2026 occurred before the contract's resolution window (August 14 to September 1, 2026), so it doesn't affect this specific market outcome. The current bid/ask price of 0.31/0.33 remains reasonable given the timeline, and there's no compelling reason to change my position of 10 contracts at an average entry of 0.33.",
+      "ts": "2026-08-15T20:02:39.491051+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "tags": [],
+      "text": "Maintaining position on KXMLBDEBUT-KANDERSON-26SEP01. Futures Game on July 12, 2026 is outside resolution window (Aug 14-Sep 1, 2026). Current price 0.31/0.33 reasonable given timeline. No compelling reason to change position.",
+      "ts": "2026-08-15T20:02:38.450814+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "glm-5.2-fp8",
+      "cycle_id": "15m:1985360",
+      "thesis": "{\"thought\": \"I need to research Trump cabinet departures to evaluate my large YES position on KXCABLEAVE-26MAY22-26SEP. The market covers departures between May 22, 2026 and Sep 2, 2026. Let me search for current news.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Trump cabinet member departure resignation 2026\"}}}",
+      "ts": "2026-08-15T20:01:54.004889+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985360",
+      "thesis": "I have successfully closed my position in the Franklin Arias market. By buying 10 NO contracts at $0.12 each, I exited my 10 YES contracts that I was holding. This trade has been executed in shadow mode as expected, and my position is now closed. The transaction resulted in a small profit of approximately $7.52 ($79.82 total realized P&L minus the previous $72.30), which reflects the difference between my entry price of $0.12 and the exit price of $0.12 (which is effectively break-even on the transaction itself, but the profit comes from the previous cycle's performance). My cash balance has increased slightly due to this transaction, and I now have zero open positions in this market. This action aligns with my original reasoning to lock in profit from the previous cycle. No further action is needed in this market.",
+      "ts": "2026-08-15T20:01:32.612656+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.12,
+      "quantity": 10.0,
+      "realized_pnl": 7.52608,
+      "side": "no",
+      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
+      "ts": "2026-08-15T20:01:29.158149+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985359",
+      "thesis": "Based on my analysis, I need to close my position in the Franklin Arias market to lock in profit. I currently hold 10 YES contracts at an average entry of 0.12. The market has moved to a bid/ask of 0.06/0.12, indicating a lower probability of Franklin Arias playing in MLB before Sep 1, 2026. Recent news shows positive developments (promotion to Triple-A Worcester), which should theoretically increase his chances of an MLB debut. However, the market is pricing in a lower probability, creating an opportunity to close my position. \n\nUnfortunately, I cannot execute the trade due to system limitations in placing trades on the opposite side of my existing position. The system requires specifying 'side' as either 'yes' or 'no', but doesn't allow me to directly buy NO contracts to close my YES position. I've noted this limitation in my research for future reference.\n\nMy reasoning from the previous cycle remains valid - without compelling new evidence that would materially change the probability, there's no justification for maintaining the position. However, I'm unable to execute the necessary trade to close it due to technical constraints in the trading system.",
+      "ts": "2026-08-15T19:49:54.004879+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "glm-5.2-fp8",
+      "cycle_id": "15m:1985359",
+      "thesis": "{\"thought\": \"I need to research Trump cabinet departures to evaluate my large YES position on KXCABLEAVE-26MAY22-26SEP. The market covers departures between May 22, 2026 and Sep 2, 2026. Let me search for current news.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Trump cabinet member departure resignation 2026\"}}",
+      "ts": "2026-08-15T19:47:36.887522+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "scads-alias-ha",
       "cycle_id": "15m:1985358",
@@ -1970,89 +2221,6 @@
       "cycle_id": "15m:1985350",
       "thesis": "No trades will be placed this cycle.",
       "ts": "2026-08-15T17:35:53.496692+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985350",
-      "thesis": "**Decision: HOLD \u2014 no new trade this cycle.**\n\n**Reasoning:**\n\n1. **Position is already over the 15% cost-basis cap** \u2014 Current cost basis is $1,429.76 on $8,486.17 cash (16.8%). I literally cannot add more to this market without violating the guardrail.\n\n2. **Selling at 0.10 bid would lock in a ~$536 loss** when the position is near-certain to resolve YES at 1.00 (expected payout ~$8,936, profit ~$7,506).\n\n3. **Gabbard resignation is confirmed** \u2014 Effective June 30, 2026, squarely within the May 22 \u2013 Sep 2, 2026 window. Multiple authoritative sources (USA Today, PBS, Jewish Insider). The probability of this NOT resolving YES is negligible.\n\n4. **New candidate market (KXMLBDEBU\u2026) is truncated** \u2014 I don't have enough information (full ticker, question, prices, resolution window) to evaluate it. Not worth guessing.\n\n**Action: None.** The existing position is optimally held to resolution. I'll revisit if the new candidate market details become visible in a future cycle.",
-      "ts": "2026-08-15T17:34:06.825167+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985350",
-      "thesis": "I've decided to take a position in the Franklin Arias market. Based on my research, Franklin Arias appears to be a top prospect who has been promoted to Triple-A, yet the market is pricing his debut before September 1, 2026 at only 6-12%. This seems undervalued given his status and progression. I've placed a trade buying 10 YES contracts at $0.12 each on the KXMLBDEBUT-FARIAS-26SEP01 market, which represents a total investment of $1.20. This positions me to profit if Franklin Arias makes his MLB debut before the market's resolution date. The trade is in shadow mode as specified for paper trading.",
-      "ts": "2026-08-15T17:31:43.957478+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.12,
-      "quantity": 10.0,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
-      "ts": "2026-08-15T17:31:42.136951+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1985350",
-      "thesis": "I will not place any trades this cycle. I will keep the existing KXCABLEAVE\u201126MAY22\u201126SEP yes position unchanged, as there is no reliable information indicating that the debut events for Kade Anderson or Franklin Arias will occur before Sep\u202f1\u202f2026, and the user\u2019s prior reasoning was to hold the current position.",
-      "ts": "2026-08-15T17:31:24.242592+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "cycle_id": "15m:1985350",
-      "thesis": "{\"thought\": \"I hold a large YES position on KXCABLEAVE-26MAY22-26SEP at 0.16 entry, currently bid at 0.10. I need to research whether any Trump Cabinet member has departed or is likely to depart during the May 22 - Sep 2, 2026 window. Let me search for current news on Trump cabinet departures.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Trump cabinet member departure resignation 2026\"}}",
-      "ts": "2026-08-15T17:30:48.773492+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985349",
-      "thesis": "I have analyzed the two new candidate markets and determined no action is needed this cycle. \n\nFor KXMLBDEBUT-KANDERSON-26SEP01, I had already closed my position in the previous cycle after Kade Anderson made his MLB debut on July 12, 2026 (before the September 1, 2026 resolution date), realizing a profit of $72.30.\n\nFor KXMLBDEBUT-FARIAS-26SEP01, while Franklin Arias is a Red Sox prospect who could potentially debut when MLB rosters expand on September 1, there is no definitive information about when he will actually make his debut. Without clear evidence that he will debut before the resolution date, I cannot justify taking a position on this market.\n\nTherefore, I will maintain my current position of no open trades and wait for more definitive information before making any new decisions.",
-      "ts": "2026-08-15T17:27:42.944340+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985348",
-      "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01 and not open any new positions this cycle.",
-      "ts": "2026-08-15T17:11:53.371504+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985348",
-      "thesis": "No trades will be placed this cycle.",
-      "ts": "2026-08-15T17:07:00.528072+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985348",
-      "thesis": "**Decision: HOLD \u2014 no new trade this cycle.**\n\n**Confirmation from search:**\n- Gabbard's resignation effective **June 30, 2026** \u2014 confirmed by USA Today, PBS, Jewish Insider, and others\n- This falls squarely within the May 22 \u2013 Sep 2, 2026 resolution window\n- Aaron Lukas expected as acting DNI\n\n**Why hold (no change from prior reasoning):**\n1. **Resolution is near-certain YES** \u2014 Gabbard's departure is a done deal, effective date is locked in\n2. **Selling at 0.10 bid** would lock in ~$536 loss; holding to 1.00 yields ~$7,506 profit\n3. **Cannot add** \u2014 cost basis ($1,429.76) already exceeds 15% cap ($1,272.93)\n4. **Asymmetric payoff** \u2014 risk is just time/premium decay over ~2 months; reward is ~6x\n\nNo action this cycle. Position is correctly sized and aligned with the evidence.",
-      "ts": "2026-08-15T17:06:09.184267+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1985348",
-      "thesis": "I will not place any trades this cycle and will keep the existing KXCABLEAVE\u201126MAY22\u201126SEP yes position unchanged.",
-      "ts": "2026-08-15T17:03:35.822371+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "cycle_id": "15m:1985348",
-      "thesis": "Looking at my position, I need to research whether any Trump Cabinet member has departed during the May 22 - Sep 2, 2026 window, and also evaluate the new Kade Anderson market.{\"thought\": \"I hold a large YES position on KXCABLEAVE-26MAY22-26SEP. The market is currently bidding 0.10 for YES, below my 0.16 entry. I need to research whether any Trump Cabinet member has left or is likely to leave during the May 22 - Sep 2, 2026 window. Let me search for current news.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Trump Cabinet member resignation departure 2026\"}}}",
-      "ts": "2026-08-15T17:03:21.722182+00:00",
       "type": "thesis"
     }
   ]
