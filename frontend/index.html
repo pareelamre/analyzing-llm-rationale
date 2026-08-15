@@ -2116,7 +2116,7 @@
         <!-- Live calibration stats, refreshed from GET /track-record. -->
         <div id="transparencyPerformancePanel" data-resolved-count="" style="background: #fff; border: 1px solid var(--border-2); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02);">
           <h3 style="font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">Verified System Performance</h3>
-          
+
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
             <div style="text-align: center; border-right: 1px solid var(--border); padding-right: 8px;">
               <span id="trustAccuracy" style="font-size: 26px; font-weight: 700; color: var(--ink); display: block;">?</span>
@@ -2133,7 +2133,7 @@
           </div>
 
           <h4 style="font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;">Calibration Accuracy (Observed Rates vs Predicted)</h4>
-          
+
           <div id="trustCalibrationRows" aria-busy="true" style="display: flex; flex-direction: column; gap: 8px;">
             <p style="font-size: 12px; color: var(--text-dim); margin: 0;">Loading resolved calibration?</p>
           </div>
@@ -2366,8 +2366,8 @@
     <div class="config-body" onclick="event.stopPropagation()">
       <p class="text-gray-400" style="font-size:10px;margin:0 0 8px;line-height:1.5">
         Connect your own Kalshi or Polymarket account to place real orders.
-        Keys are stored only in this browser, sent per order to sign, and
-        <strong>never saved on our servers</strong>. Only connect on a device you trust.
+        Credentials are encrypted before they are stored with your Foresea account and
+        are never returned to this browser. They are used server-side only for your signed-in trading actions.
       </p>
       <details class="model-form" style="margin-top:0">
         <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
@@ -2378,7 +2378,7 @@
           <textarea id="vcKalshiPriv" class="variant-select text-xs" rows="3" placeholder="RSA private key (PEM)" style="resize:vertical;min-height:54px;font-family:monospace;font-size:11px"></textarea>
           <input id="vcKalshiBase" class="variant-select text-xs" placeholder="Base URL (optional)" autocomplete="off" />
           <div class="model-form-actions">
-            <button type="button" class="model-save" onclick="saveVenueCreds('kalshi')">Save &amp; verify</button>
+            <button type="button" class="model-save" onclick="saveVenueCreds('kalshi')">Connect securely</button>
             <button type="button" class="model-cancel" onclick="disconnectVenue('kalshi')">Disconnect</button>
           </div>
         </div>
@@ -2395,7 +2395,7 @@
           <input id="vcPolyHost" class="variant-select text-xs" placeholder="CLOB host (optional)" autocomplete="off" />
           <input id="vcPolyFunder" class="variant-select text-xs" placeholder="Funder address (optional)" autocomplete="off" />
           <div class="model-form-actions">
-            <button type="button" class="model-save" onclick="saveVenueCreds('polymarket')">Save &amp; verify</button>
+            <button type="button" class="model-save" onclick="saveVenueCreds('polymarket')">Connect securely</button>
             <button type="button" class="model-cancel" onclick="disconnectVenue('polymarket')">Disconnect</button>
           </div>
         </div>
@@ -3505,7 +3505,7 @@ function renderMarketHistoryChart(container, history) {
     container.innerHTML = '<p style="font-size:11px;color:var(--text-dim)">No snapshot history tracked yet.</p>';
     return;
   }
-  
+
   if (history.length < 2) {
     container.innerHTML = '<p style="font-size:11px;color:var(--text-dim)">Building history (need 2+ daily snapshots)...</p>';
     return;
@@ -3560,13 +3560,13 @@ function renderMarketHistoryChart(container, history) {
       <line x1="${padL}" y1="${toY(0.5)}" x2="${padL + cW}" y2="${toY(0.5)}" stroke="var(--border)" stroke-dasharray="2 2" />
       <line x1="${padL}" y1="${toY(1.0)}" x2="${padL + cW}" y2="${toY(1.0)}" stroke="var(--border)" stroke-dasharray="2 2" />
       <line x1="${padL}" y1="${toY(0.0)}" x2="${padL + cW}" y2="${toY(0.0)}" stroke="var(--border)" />
-      
+
       <path d="${marketPath}" fill="none" stroke="#60a5fa" stroke-width="2" />
       <path d="${modelPath}" fill="none" stroke="#10b981" stroke-width="2" />
-      
+
       <circle cx="${toX(history.length - 1)}" cy="${toY(modelProbs[history.length - 1] ?? 0)}" r="3" fill="#10b981" />
       <circle cx="${toX(history.length - 1)}" cy="${toY(marketProbs[history.length - 1] ?? 0)}" r="3" fill="#60a5fa" />
-      
+
       ${yAxisHtml}
       ${xLabels.join('')}
     </svg>
@@ -7116,7 +7116,7 @@ function _renderMtmPage(d) {
   const rows = mtmModels.map((m, i) => {
     const account = m.account || {};
     const rawVal = Number(account.account_value ?? m.account_value ?? 10000);
-    
+
     const startPrincipal = EB_STARTING_BANKROLL;
     const currentBankroll = _getScaledMtmValue(rawVal, sizingMode);
     const pnlUsd = currentBankroll - startPrincipal;
@@ -7785,9 +7785,8 @@ function _updateModelLabel() {
 }
 
 // ── Exchange accounts (bring-your-own trading) ───────────────────────────────
-// Credentials live ONLY in this browser (localStorage `foresea_venue_creds`,
-// keyed exactly as the server's venue_credentials fields) and are sent per
-// order to sign. They are never persisted server-side.
+// Raw credentials are sent once to the secure connection endpoint, encrypted
+// server-side, and never attached to preview or order requests.
 const _VENUE_FIELDS = {
   kalshi: {
     vcKalshiKeyId: 'kalshi_api_key_id',
@@ -7807,36 +7806,55 @@ const _VENUE_REQUIRED = {
   kalshi: ['kalshi_api_key_id', 'kalshi_private_key'],
   polymarket: ['polymarket_private_key', 'polymarket_api_key', 'polymarket_api_secret', 'polymarket_api_passphrase'],
 };
+let _venueConnections = { kalshi: false, polymarket: false };
+let _secureConnectionsConfigured = false;
 
-function _loadVenueCreds() {
-  try { return JSON.parse(localStorage.getItem('foresea_venue_creds') || '{}') || {}; }
-  catch { return {}; }
-}
-function _saveVenueCredsStore(obj) {
-  localStorage.setItem('foresea_venue_creds', JSON.stringify(obj));
-}
-// Combined non-empty credentials to attach to a trading request.
-function _allVenueCreds() {
-  const store = _loadVenueCreds();
-  const out = {};
-  for (const [k, v] of Object.entries(store)) {
-    if (v != null && String(v).trim() !== '') out[k] = v;
-  }
-  return Object.keys(out).length ? out : null;
-}
 function _venueConnected(platform) {
-  const store = _loadVenueCreds();
-  return _VENUE_REQUIRED[platform].every(k => String(store[k] || '').trim() !== '');
+  return Boolean(_venueConnections[platform]);
 }
-
-function _fillVenueInputs() {
-  const store = _loadVenueCreds();
-  for (const map of Object.values(_VENUE_FIELDS)) {
-    for (const [id, key] of Object.entries(map)) {
+function _clearVenueInputs(platform) {
+  const fields = platform ? [_VENUE_FIELDS[platform]] : Object.values(_VENUE_FIELDS);
+  for (const map of fields) {
+    for (const id of Object.keys(map)) {
       const el = document.getElementById(id);
-      if (el) el.value = store[key] || '';
+      if (el) el.value = '';
     }
   }
+}
+function _purgeLegacyBrowserVenueCreds() {
+  if (localStorage.getItem('foresea_venue_creds') == null) return false;
+  localStorage.removeItem('foresea_venue_creds');
+  return true;
+}
+async function _loadVenueConnections() {
+  if (!currentUser) return;
+  try {
+    const r = await fetch('/trading/connections', { headers: authHeaders() });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return;
+    _secureConnectionsConfigured = Boolean(d.encryption_configured);
+    const connections = d.connections || {};
+    for (const platform of Object.keys(_VENUE_FIELDS)) {
+      _venueConnections[platform] = Boolean((connections[platform] || {}).connected);
+    }
+    renderVenueStatus();
+    if (!_secureConnectionsConfigured) _venueErr('Secure exchange connections are not configured on this server yet.');
+  } catch (_) { /* The connection panel remains safely disconnected. */ }
+}
+function _credentialsFromInputs(platform) {
+  const credentials = {};
+  for (const [id, key] of Object.entries(_VENUE_FIELDS[platform])) {
+    const value = (document.getElementById(id)?.value || '').trim();
+    if (value) credentials[key] = value;
+  }
+  return credentials;
+}
+function _inputsComplete(platform, credentials) {
+  return _VENUE_REQUIRED[platform].every(key => String(credentials[key] || '').trim() !== '');
+}
+function _fillVenueInputs() {
+  // Connected secrets deliberately never flow back into form fields.
+  _clearVenueInputs();
 }
 function renderVenueStatus() {
   let connected = 0;
@@ -7856,46 +7874,43 @@ function renderVenueStatus() {
 async function saveVenueCreds(platform) {
   _venueErr('');
   if (!currentUser) { _venueErr('Sign in to connect an exchange account.'); openAuthModal('login'); return; }
-  const store = _loadVenueCreds();
-  for (const [id, key] of Object.entries(_VENUE_FIELDS[platform])) {
-    const el = document.getElementById(id);
-    const val = el ? el.value.trim() : '';
-    if (val) store[key] = val; else delete store[key];
-  }
-  if (!_VENUE_REQUIRED[platform].every(k => store[k])) {
+  const credentials = _credentialsFromInputs(platform);
+  if (!_inputsComplete(platform, credentials)) {
     _venueErr(`Missing required ${platform} fields.`); return;
   }
-  _saveVenueCredsStore(store);
-  renderVenueStatus();
-  // Validate against the server without persisting (e.g. RSA key parses).
   try {
-    const r = await fetch('/trading/accounts/check', {
-      method: 'POST',
+    const r = await fetch('/trading/connections/' + encodeURIComponent(platform), {
+      method: 'PUT',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ venue_credentials: _allVenueCreds() }),
+      body: JSON.stringify({ venue_credentials: credentials }),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { _venueErr(d.detail || 'Could not verify credentials.'); return; }
-    const v = (d.venues || {})[platform] || {};
-    if (!v.configured) {
-      _venueErr(`${platform} credentials look incomplete or invalid.`);
-    } else if (!d.byo_trading_enabled) {
-      _venueErr('Connected. Note: live BYO trading is not enabled on the server yet.');
-    }
+    if (!r.ok) { _venueErr(d.detail || 'Could not connect this account securely.'); return; }
+    _venueConnections[platform] = Boolean(d.connected);
+    _clearVenueInputs(platform);
+    _purgeLegacyBrowserVenueCreds();
+    renderVenueStatus();
   } catch (e) {
-    _venueErr('Could not reach Foresea to verify: ' + e.message);
+    _venueErr('Could not reach Foresea to save the encrypted connection: ' + e.message);
   }
 }
 
-function disconnectVenue(platform) {
-  const store = _loadVenueCreds();
-  for (const key of Object.values(_VENUE_FIELDS[platform])) delete store[key];
-  _saveVenueCredsStore(store);
-  for (const id of Object.keys(_VENUE_FIELDS[platform])) {
-    const el = document.getElementById(id); if (el) el.value = '';
-  }
-  renderVenueStatus();
+async function disconnectVenue(platform) {
   _venueErr('');
+  if (!currentUser) { _clearVenueInputs(platform); return; }
+  try {
+    const r = await fetch('/trading/connections/' + encodeURIComponent(platform), {
+      method: 'DELETE', headers: authHeaders(),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { _venueErr(d.detail || 'Could not disconnect this account.'); return; }
+    _venueConnections[platform] = false;
+    _clearVenueInputs(platform);
+    _purgeLegacyBrowserVenueCreds();
+    renderVenueStatus();
+  } catch (e) {
+    _venueErr('Could not reach Foresea to disconnect: ' + e.message);
+  }
 }
 function _venueErr(msg) {
   const el = document.getElementById('venueErr');
@@ -7904,13 +7919,17 @@ function _venueErr(msg) {
   el.hidden = !msg;
 }
 function _initVenueAccounts() {
+  const removedLegacy = _purgeLegacyBrowserVenueCreds();
   _fillVenueInputs();
   renderVenueStatus();
+  if (removedLegacy) _venueErr('Security update: browser-stored exchange credentials were removed. Reconnect securely to trade.');
+  _loadVenueConnections();
 }
 
 // ── Trade modal ──────────────────────────────────────────────────────────────
-function openTradeModal(prefill) {
+async function openTradeModal(prefill) {
   if (!currentUser) { openAuthModal('login'); return; }
+  await _loadVenueConnections();
   // If no account is connected yet, point the user at the Connect-exchange panel.
   if (!_venueConnected('kalshi') && !_venueConnected('polymarket')) {
     openSidebar();
@@ -7954,7 +7973,6 @@ function _tradeBody() {
     order_type: 'limit',
     price: parseFloat(document.getElementById('trPrice').value),
     quantity: parseFloat(document.getElementById('trQty').value),
-    venue_credentials: _allVenueCreds(),
   };
   if (platform === 'kalshi') {
     body.ticker = document.getElementById('trKalshiTicker').value.trim();
@@ -8629,6 +8647,7 @@ function _agentReportData(report) {
     edge: d.edge ?? null,
     evidence_sources: d.evidence_sources || [],
     evidence_error: d.evidence_error || '',
+    live_trade_intent: d.live_trade_intent || null,
   };
 }
 
@@ -9111,7 +9130,7 @@ async function _afterSignIn(user, source = 'auth') {
   } else if (currentView === 'landing' || !currentView) {
     launchApp();
   }
-  
+
   if (_pendingFavoriteAfterSignIn) {
     const fav = _pendingFavoriteAfterSignIn;
     _pendingFavoriteAfterSignIn = null;

@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from fastapi.testclient import TestClient  # noqa: E402
 
 from analyzing_llm_rationale import server as server_module  # noqa: E402
+from analyzing_llm_rationale import trading as trading_module  # noqa: E402
 from analyzing_llm_rationale.providers import RetryableProviderError  # noqa: E402
 from analyzing_llm_rationale.server import (  # noqa: E402
     _cache_get,
@@ -55,6 +56,35 @@ class FakeProvider:
         mid = max(1, len(self.stream_response) // 2)
         yield self.stream_response[:mid]
         yield self.stream_response[mid:]
+
+
+class FakeTradingKms:
+    """In-memory KMS double that verifies the encrypted DEK's binding context."""
+
+    def __init__(self):
+        self.encrypt_requests = []
+        self.decrypt_requests = []
+        self._wrapped = {}
+
+    def encrypt(self, *, request):
+        self.encrypt_requests.append(request)
+        ciphertext = os.urandom(16)
+        self._wrapped[ciphertext] = (
+            request["name"],
+            request["plaintext"],
+            request["additional_authenticated_data"],
+        )
+        return SimpleNamespace(
+            ciphertext=ciphertext,
+            name=f"{request['name']}/cryptoKeyVersions/7",
+        )
+
+    def decrypt(self, *, request):
+        self.decrypt_requests.append(request)
+        name, plaintext, aad = self._wrapped[request["ciphertext"]]
+        if request["name"] != name or request["additional_authenticated_data"] != aad:
+            raise ValueError("KMS authenticated data did not match")
+        return SimpleNamespace(plaintext=plaintext)
 
 
 class FakeEvidencePipeline:
@@ -1356,9 +1386,183 @@ class ServerTests(unittest.TestCase):
             },
             headers={"Authorization": f"Bearer {token}"},
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 422)
         self.assertNotIn("byo-secret-pem", response.text)
-        self.assertNotIn("venue_credentials", response.text)
+        self.assertIn("Connect the account securely first", response.json()["detail"])
+
+    def test_secure_trading_connection_encrypts_credentials_and_never_returns_them(self):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode("utf-8")
+        token = _issue_session("secure-trader", "secure@example.com", "Secure", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        kms = FakeTradingKms()
+        kms_key_name = "projects/test-project/locations/us-central1/keyRings/foresea/cryptoKeys/trading"
+        with mock.patch.dict(
+            os.environ,
+            {"FORESEA_TRADING_KMS_KEY_NAME": kms_key_name},
+            clear=False,
+        ), mock.patch.object(server_module, "_get_trading_kms_client", return_value=kms):
+            created = self.client.put(
+                "/trading/connections/kalshi",
+                json={"venue_credentials": {
+                    "kalshi_api_key_id": "secure-key-id",
+                    "kalshi_private_key": pem,
+                }},
+                headers=headers,
+            )
+            self.assertEqual(created.status_code, 200)
+            self.assertEqual(created.json()["platform"], "kalshi")
+            self.assertTrue(created.json()["connected"])
+            self.assertNotIn(pem, created.text)
+            self.assertNotIn("secure-key-id", created.text)
+            stored = _state["trading_connections"]["secure-trader"]["kalshi"]
+            self.assertEqual(stored["credential_version"], 2)
+            self.assertEqual(stored["kms_key_name"], kms_key_name)
+            self.assertNotIn(pem, stored["encrypted_credentials"])
+            self.assertNotIn("secure-key-id", stored["encrypted_credentials"])
+            self.assertNotIn(pem, stored["wrapped_data_key"])
+            self.assertNotIn("secure-key-id", stored["wrapped_data_key"])
+            self.assertEqual(len(kms.encrypt_requests), 1)
+            self.assertEqual(
+                kms.encrypt_requests[0]["additional_authenticated_data"],
+                b"foresea:trading-connection:v2:secure-trader:kalshi",
+            )
+
+            listed = self.client.get("/trading/connections", headers=headers)
+            self.assertEqual(listed.status_code, 200)
+            self.assertTrue(listed.json()["connections"]["kalshi"]["connected"])
+            self.assertNotIn(pem, listed.text)
+
+            with mock.patch(
+                "analyzing_llm_rationale.trading.preview_order",
+                wraps=trading_module.preview_order,
+            ) as preview_order:
+                preview = self.client.post(
+                    "/trading/preview",
+                    json={"platform": "kalshi", "ticker": "KXTEST", "price": 0.5, "quantity": 1},
+                    headers=headers,
+                )
+            self.assertEqual(preview.status_code, 200)
+            self.assertEqual(preview_order.call_args.args[1]["kalshi_api_key_id"], "secure-key-id")
+            self.assertEqual(len(kms.decrypt_requests), 1)
+
+            removed = self.client.delete("/trading/connections/kalshi", headers=headers)
+            self.assertEqual(removed.status_code, 200)
+            self.assertFalse(removed.json()["connected"])
+
+    def test_legacy_trading_connection_is_rewrapped_with_a_kms_data_key(self):
+        from cryptography.fernet import Fernet
+
+        legacy_key = Fernet.generate_key()
+        legacy_credentials = {"kalshi_api_key_id": "legacy-key", "kalshi_private_key": "legacy-pem"}
+        legacy_ciphertext = Fernet(legacy_key).encrypt(
+            json.dumps(legacy_credentials, sort_keys=True).encode("utf-8")
+        ).decode("utf-8")
+        _state.setdefault("trading_connections", {}).setdefault("legacy-trader", {})["kalshi"] = {
+            "platform": "kalshi",
+            "encrypted_credentials": legacy_ciphertext,
+            "credential_version": 1,
+        }
+        kms = FakeTradingKms()
+        with mock.patch.dict(
+            os.environ,
+            {
+                "FORESEA_CREDENTIALS_ENCRYPTION_KEY": legacy_key.decode("utf-8"),
+                "FORESEA_TRADING_KMS_KEY_NAME": (
+                    "projects/test-project/locations/us-central1/keyRings/foresea/cryptoKeys/trading"
+                ),
+            },
+            clear=False,
+        ), mock.patch.object(server_module, "_get_trading_kms_client", return_value=kms):
+            self.assertEqual(
+                server_module._stored_trading_credentials("legacy-trader", "kalshi"),
+                legacy_credentials,
+            )
+        migrated = _state["trading_connections"]["legacy-trader"]["kalshi"]
+        self.assertEqual(migrated["credential_version"], 2)
+        self.assertIn("wrapped_data_key", migrated)
+        self.assertNotEqual(migrated["encrypted_credentials"], legacy_ciphertext)
+        self.assertNotIn("legacy-pem", migrated["encrypted_credentials"])
+
+    def test_submitted_order_is_audited_and_can_be_reconciled_or_cancelled(self):
+        token = _issue_session("audit-trader", "audit@example.com", "Audit", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        fake_connection = {
+            "kalshi_api_key_id": "safe-test-key",
+            "kalshi_private_key": "safe-test-pem",
+            "kalshi_base_url": "https://external-api.kalshi.com/trade-api/v2",
+        }
+        fake_result = {
+            "ok": True,
+            "platform": "kalshi",
+            "would_execute": True,
+            "requires_confirmation": True,
+            "confirmation_phrase": "PLACE REAL ORDER",
+            "trading_enabled": True,
+            "max_order_notional": 50.0,
+            "estimated_notional": 1.0,
+            "warnings": [],
+            "normalized_order": {
+                "platform": "kalshi", "action": "buy", "outcome": "yes",
+                "order_type": "limit", "ticker": "KXTEST", "quantity": 2.0,
+                "price": 0.5, "subaccount": 0, "exchange_index": 0,
+            },
+            "submitted": True,
+            "user_id": "audit-trader",
+            "venue_response": {"body": {"order_id": "venue-123", "status": "resting"}},
+        }
+        with mock.patch.object(server_module, "_stored_trading_credentials", return_value=fake_connection), mock.patch(
+            "analyzing_llm_rationale.trading.place_order", return_value=fake_result
+        ):
+            submitted = self.client.post(
+                "/trading/orders",
+                json={
+                    "platform": "kalshi", "ticker": "KXTEST", "price": 0.5,
+                    "quantity": 2, "execute": True, "confirmation": "PLACE REAL ORDER",
+                },
+                headers=headers,
+            )
+            self.assertEqual(submitted.status_code, 200)
+            audit_id = submitted.json()["audit_order_id"]
+            self.assertEqual(submitted.json()["reconciliation_status"], "open")
+
+            listed = self.client.get("/trading/orders", headers=headers)
+            self.assertEqual(listed.status_code, 200)
+            self.assertEqual(listed.json()["orders"][0]["venue_order_id"], "venue-123")
+
+            with mock.patch(
+                "analyzing_llm_rationale.trading.reconcile_order",
+                return_value={
+                    "venue_order_id": "venue-123", "status": "open", "venue_status": "resting",
+                    "filled_quantity": 1.0, "remaining_quantity": 1.0,
+                },
+            ):
+                reconciled = self.client.post(f"/trading/orders/{audit_id}/reconcile", headers=headers)
+            self.assertEqual(reconciled.status_code, 200)
+            self.assertEqual(reconciled.json()["filled_quantity"], 1.0)
+
+            with mock.patch(
+                "analyzing_llm_rationale.trading.cancel_order",
+                return_value={
+                    "venue_order_id": "venue-123", "status": "canceled", "venue_status": "canceled",
+                    "remaining_quantity": 0.0,
+                },
+            ):
+                cancelled = self.client.request(
+                    "DELETE",
+                    f"/trading/orders/{audit_id}",
+                    json={"confirmation": "CANCEL OPEN ORDER"},
+                    headers=headers,
+                )
+            self.assertEqual(cancelled.status_code, 200)
+            self.assertEqual(cancelled.json()["status"], "canceled")
 
     def test_favorites_crud_roundtrip(self):
         token = _issue_session("fav-user", "fav@example.com", "Fav", "")
@@ -1558,9 +1762,34 @@ class ServerTests(unittest.TestCase):
         self.assertAlmostEqual(report["model_probability"], 0.70)
         self.assertAlmostEqual(report["edge"], 0.30)
         self.assertEqual(report["recommendation"], "buy_yes")
+        self.assertEqual(report["live_trade_intent"]["platform"], "polymarket")
+        self.assertEqual(report["live_trade_intent"]["ident"], "fed")
+        self.assertEqual(report["live_trade_intent"]["outcome"], "yes")
+        self.assertAlmostEqual(report["live_trade_intent"]["model_probability"], 0.70)
+        self.assertAlmostEqual(report["live_trade_intent"]["market_probability"], 0.40)
         prompt = self.provider.calls[0][-1]["content"]
         self.assertIn("Latest venue context.", prompt)
         self.assertIn("Resolve from the official FOMC announcement.", prompt)
+
+    def test_live_trade_intent_complements_a_no_recommendation(self):
+        intent = server_module._live_trade_intent(
+            platform="Kalshi",
+            ident="KXFED-26SEP-C",
+            market_url="https://kalshi.com/markets/KXFED-26SEP-C",
+            question_type="binary",
+            recommendation="buy_no",
+            model_probability=0.30,
+            market_probability=0.50,
+            edge=-0.20,
+        )
+
+        self.assertIsNotNone(intent)
+        assert intent is not None
+        self.assertEqual(intent.platform, "kalshi")
+        self.assertEqual(intent.outcome, "no")
+        self.assertAlmostEqual(intent.model_probability, 0.70)
+        self.assertAlmostEqual(intent.market_probability, 0.50)
+        self.assertAlmostEqual(intent.edge, 0.20)
 
     def test_agent_analyze_preserves_ui_rules_and_supplied_articles(self):
         response = self.client.post(

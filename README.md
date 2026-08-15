@@ -389,9 +389,12 @@ evidence articles. It is built for resolvable forecasts, not general Q&A.
 - `GET /analytics/events/summary`: summarize product analytics separately from page visits.
 - `POST /forecasts/share`: create an explicit public forecast share page.
 - `GET /forecast/{share_id}`: render a shared forecast without exposing private chat history.
-- `GET /trading/accounts`: authenticated trading-readiness status, no secrets returned.
+- `GET|PUT|DELETE /trading/connections/{platform}`: encrypted per-user exchange connection metadata and lifecycle.
 - `POST /trading/preview`: authenticated dry-run order normalization.
 - `POST /trading/orders`: authenticated live order submission with explicit confirmation.
+- `GET /trading/portfolio`: authenticated balance, positions, order, and fill reconciliation.
+- `POST /trading/orders/{audit_order_id}/reconcile`: refresh a submitted order's venue status/fills.
+- `DELETE /trading/orders/{audit_order_id}`: explicitly cancel the remaining quantity of an open submitted order.
 
 ### Web app runtime state
 
@@ -685,19 +688,44 @@ Both return a normalised quote:
 Foresea can submit guarded prediction-market orders, but live execution is
 disabled by default. Keep this separate from `/agent/analyze`: the agent can
 recommend `buy_yes`/`buy_no`, but order submission requires a signed-in user,
-server-side exchange credentials, `FORESEA_ENABLE_TRADING=true`, `execute=true`,
-and the exact confirmation phrase `PLACE REAL ORDER`.
+an encrypted exchange connection, `FORESEA_ENABLE_BYO_TRADING=true`,
+`execute=true`, and the exact confirmation phrase `PLACE REAL ORDER`.
 
-Credentials are read only from the server environment, so use Cloud Run Secret
-Manager mounts or environment secrets. Do not collect private keys in the
-browser or store exchange secrets in Datastore.
+The browser sends connection credentials only to `PUT /trading/connections/{platform}`.
+Foresea validates them, generates a unique data-encryption key for that one
+user/venue connection, and encrypts the credential payload locally. Cloud KMS
+wraps the data key using authenticated user/venue context; Datastore receives only
+the ciphertext, wrapped data key, and KMS key metadata. The KMS root key never
+enters the service process. Foresea never returns credentials to the browser and
+rejects inline `venue_credentials` on preview and order requests.
+
+Create a dedicated KMS symmetric `ENCRYPT_DECRYPT` CryptoKey and give only the
+Cloud Run service account `roles/cloudkms.cryptoKeyEncrypterDecrypter` on that
+key. Configure its fully qualified resource name, not a secret value:
+
+```bash
+gcloud kms keyrings create foresea-trading --location=us-central1
+gcloud kms keys create exchange-connections --location=us-central1 \
+  --keyring=foresea-trading --purpose=encryption
+gcloud kms keys add-iam-policy-binding exchange-connections --location=us-central1 \
+  --keyring=foresea-trading \
+  --member="serviceAccount:${CLOUD_RUN_SERVICE_ACCOUNT}" \
+  --role="roles/cloudkms.cryptoKeyEncrypterDecrypter"
+```
+
+Cloud KMS key rotation is transparent to existing wrapped data keys. The service
+uses the primary key version for a new connection and KMS selects the needed older
+version when decrypting an existing one.
 
 ```bash
 # Global guardrails
-export FORESEA_ENABLE_TRADING=false          # must be true for live orders
+export FORESEA_ENABLE_TRADING=false          # must be true for shared-account live orders
+export FORESEA_ENABLE_BYO_TRADING=false      # must be true for encrypted user-account live orders
 export FORESEA_MAX_ORDER_NOTIONAL=50         # local cap per order, USD
 export FORESEA_ALLOW_MARKET_ORDERS=false     # separate gate for IOC/FOK-style orders
+export FORESEA_TRADING_KMS_KEY_NAME=projects/<project>/locations/<location>/keyRings/foresea-trading/cryptoKeys/exchange-connections
 
+# Optional shared server account (not used by the public connection flow)
 # Kalshi authenticated REST (RSA-PSS signing)
 export KALSHI_API_KEY_ID=<kalshi-key-id>
 export KALSHI_PRIVATE_KEY_FILE=/secrets/kalshi-private-key.pem
@@ -720,11 +748,37 @@ pip install -e ".[serve,trading]"
 
 The Docker image installs `trading`, so Cloud Run only needs secrets/env vars.
 
-Check configured venues:
+#### Migrating the retired shared Fernet key
+
+If version-1 connection records already exist, deploy the KMS configuration and
+keep the old `FORESEA_CREDENTIALS_ENCRYPTION_KEY` Secret Manager value available
+only during migration. Existing records migrate lazily on their first authenticated
+use, or migrate the full set from an environment with Application Default
+Credentials and Datastore access:
 
 ```bash
-curl https://foresea.ink/trading/accounts \
+py scripts/migrate_trading_connection_encryption.py        # dry run
+py scripts/migrate_trading_connection_encryption.py --apply
+```
+
+The command reports counts only and never outputs credentials. Once no version-1
+records remain, remove `FORESEA_CREDENTIALS_ENCRYPTION_KEY` from Cloud Run and
+Secret Manager.
+
+Check encrypted account connection metadata (no secrets are returned):
+
+```bash
+curl https://foresea.ink/trading/connections \
   -H "Authorization: Bearer $FORESEA_SESSION"
+```
+
+Connect one account over TLS (the payload is encrypted before persistence):
+
+```bash
+curl -X PUT https://foresea.ink/trading/connections/kalshi \
+  -H "Authorization: Bearer $FORESEA_SESSION" \
+  -H "Content-Type: application/json" \
+  -d '{"venue_credentials":{"kalshi_api_key_id":"<key-id>","kalshi_private_key":"<pem>"}}'
 ```
 
 Preview a Kalshi order without execution:
@@ -766,6 +820,11 @@ For Polymarket, pass the CLOB `token_id` for the exact outcome, or pass
 public market record. Limit orders use `quantity` as shares. Market-buy orders
 use `max_cost` as USD spend when supplied and remain blocked unless
 `FORESEA_ALLOW_MARKET_ORDERS=true`.
+
+After submission, use the audit ID returned by `/trading/orders` to reconcile
+the current venue state instead of assuming a submission was filled. The trade
+terminal also exposes this flow, including an explicit `CANCEL OPEN ORDER`
+confirmation before it cancels a remaining resting order.
 
 ### Request fields
 

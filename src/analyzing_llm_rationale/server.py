@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import hmac
 import html
@@ -361,12 +362,13 @@ requires a signed-in user session, `execute=true`, and the exact confirmation
 phrase `PLACE REAL ORDER`. Market/IOC/FOK-style orders are separately blocked
 unless `FORESEA_ALLOW_MARKET_ORDERS=true`.
 
-Exchange credentials come from one of two sources: the shared server account
-(environment variables / Secret Manager mounts), or **per-request own-account
-credentials** a signed-in user supplies in `venue_credentials` so they trade
-their own Kalshi/Polymarket account. Own-account credentials are used transiently
-to sign a single order, never persisted, logged, or echoed back; that path is
-gated by `FORESEA_ENABLE_BYO_TRADING=true` (independent of `FORESEA_ENABLE_TRADING`).
+Exchange credentials come from a shared server account (environment variables /
+Secret Manager mounts) or an authenticated user's **encrypted account
+connection**. The connection endpoint accepts a user's credentials once, validates
+them with a unique data-encryption key wrapped by Cloud KMS, and never returns
+them to the browser. Inline `venue_credentials` are rejected on public preview
+and order calls; encrypted own-account trading remains gated by
+`FORESEA_ENABLE_BYO_TRADING=true` (independent of `FORESEA_ENABLE_TRADING`).
 
 `/agent/analyze` may return a directional recommendation, but it never places an
 order. Use `/trading/preview` first, review the normalized order, then call
@@ -554,6 +556,7 @@ def _optional_user_id(request: Optional[Request]) -> Optional[str]:
 
 
 _ds_client: Any = None
+_trading_kms_client: Any = None
 
 
 def _get_datastore():
@@ -1750,6 +1753,21 @@ _personal_ledger_actions = _meter.create_counter(
     "personal_ledger.actions",
     unit="1",
     description="Personal-ledger actions by type and outcome",
+)
+_live_trade_intents = _meter.create_counter(
+    "trading.live_trade_intents",
+    unit="1",
+    description="Chat research reports that produced a reviewable live-trade intent",
+)
+_trading_connection_actions = _meter.create_counter(
+    "trading.connection.actions",
+    unit="1",
+    description="Secure exchange connection actions by venue, action, and outcome",
+)
+_trading_reconciliation_actions = _meter.create_counter(
+    "trading.reconciliation.actions",
+    unit="1",
+    description="Trading portfolio, order, and cancellation reconciliation actions",
 )
 
 
@@ -3634,11 +3652,12 @@ class MarketQuote(BaseModel):
 
 
 class VenueCredentials(BaseModel):
-    """Bring-your-own venue credentials supplied per request.
+    """Credentials received only by the authenticated connection endpoint.
 
-    These let a signed-in user trade their OWN Kalshi/Polymarket account. They are
-    used transiently to sign a single order and are NEVER persisted, logged, or
-    echoed back. When omitted, the server falls back to its shared-account env vars.
+    These values are accepted once over TLS, encrypted server-side, and never
+    returned to the browser. They are intentionally rejected on order-preview
+    and order-submission requests so the public UI cannot fall back to a
+    browser-held secret flow.
     """
     kalshi_api_key_id: Optional[str] = Field(None, max_length=200)
     kalshi_private_key: Optional[str] = Field(None, max_length=8000, description="RSA private key PEM.")
@@ -3665,8 +3684,32 @@ class TradingAccountStatus(BaseModel):
 
 
 class TradingAccountCheckRequest(BaseModel):
-    """Validate own-account credentials without persisting them."""
+    """Legacy transient credential validation request.
+
+    Kept for non-browser compatibility while the public product uses the secure
+    account-connection endpoint below.
+    """
     venue_credentials: Optional[VenueCredentials] = None
+
+
+class TradingConnectionRequest(BaseModel):
+    """One-time encrypted account-connection request."""
+    venue_credentials: VenueCredentials
+
+
+class TradingConnectionStatus(BaseModel):
+    platform: str
+    connected: bool
+    updated_at: Optional[str] = None
+
+
+class TradingConnectionsResponse(BaseModel):
+    encryption_configured: bool
+    connections: Dict[str, TradingConnectionStatus]
+
+
+class CancelTradingOrderRequest(BaseModel):
+    confirmation: str = Field(..., max_length=80)
 
 
 class TradeOrderRequest(BaseModel):
@@ -3705,7 +3748,7 @@ class TradeOrderRequest(BaseModel):
     confirmation: Optional[str] = Field(None, max_length=80, description="Must equal the server confirmation phrase.")
     venue_credentials: Optional[VenueCredentials] = Field(
         None,
-        description="Own-account credentials to sign with; transient, never stored. Falls back to the server account when omitted.",
+        description="Deprecated and rejected for public trading requests. Connect the account through /trading/connections first.",
     )
 
 
@@ -3726,6 +3769,9 @@ class TradeOrderResponse(TradeOrderPreviewResponse):
     submitted: bool
     user_id: str
     venue_response: Dict[str, Any]
+    audit_order_id: Optional[str] = None
+    venue_order_id: Optional[str] = None
+    reconciliation_status: Optional[str] = None
 
 
 class AgentSkill(BaseModel):
@@ -3784,6 +3830,26 @@ class AgentAnalyzeRequest(BaseModel):
     ollama_base_url: Optional[str] = Field(None, max_length=500)
 
 
+class LiveTradeIntent(BaseModel):
+    """A chat-to-terminal handoff for a human-reviewed live order.
+
+    This is deliberately not an executable order: it contains no size or limit
+    price, and the trading terminal must still fetch a fresh venue quote, run
+    `/trading/preview`, and receive an explicit user confirmation before the
+    existing order endpoint can submit funds-moving instructions.
+    """
+
+    platform: str
+    ident: str
+    action: str = "buy"
+    outcome: str
+    market_url: Optional[str] = None
+    model_probability: float
+    market_probability: float
+    edge: float
+    recommendation: str
+
+
 class AgentReport(BaseModel):
     """End-to-end analysis of a live question produced by the agent."""
     question: str
@@ -3805,6 +3871,10 @@ class AgentReport(BaseModel):
     skills: List[AgentSkillResult] = Field(default_factory=list)
     grounding: Optional[str] = Field(None, description="Track-record self-calibration note applied to the forecast.")
     tool_transcript: List[Dict[str, Any]] = Field(default_factory=list, description="Tool calls + observations when the tool loop ran.")
+    live_trade_intent: Optional[LiveTradeIntent] = Field(
+        None,
+        description="A non-executable research handoff for the authenticated user's live trade terminal.",
+    )
 
 
 class ScanOpportunity(BaseModel):
@@ -5981,9 +6051,392 @@ async def radar(limit: int = Query(12, ge=1, le=30)) -> JSONResponse:
     )
 
 
+_TRADING_CONNECTION_KIND = "TradingConnection"
+_TRADING_ORDER_KIND = "TradingOrder"
+_TRADING_ORDER_FIELDS = (
+    "id",
+    "platform",
+    "venue_order_id",
+    "status",
+    "venue_status",
+    "action",
+    "outcome",
+    "ticker",
+    "token_id",
+    "quantity",
+    "price",
+    "estimated_notional",
+    "order_type",
+    "subaccount",
+    "exchange_index",
+    "filled_quantity",
+    "remaining_quantity",
+    "created_at",
+    "updated_at",
+    "last_reconciled_at",
+    "canceled_at",
+)
+
+
+class SecureTradingConnectionError(RuntimeError):
+    """The server is unable to safely persist or read a connected account."""
+
+
+_TRADING_KMS_KEY_ENV = "FORESEA_TRADING_KMS_KEY_NAME"
+_TRADING_KMS_KEY_PATTERN = re.compile(
+    r"^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/cryptoKeys/[^/]+$"
+)
+_TRADING_CONNECTION_ENVELOPE_VERSION = 2
+_TRADING_LEGACY_ENCRYPTION_KEY_ENV = "FORESEA_CREDENTIALS_ENCRYPTION_KEY"
+
+
+def _clean_trading_platform(value: Any) -> str:
+    platform = str(value or "").strip().lower()
+    if platform in {"kalshi"}:
+        return "kalshi"
+    if platform in {"poly", "polymarket"}:
+        return "polymarket"
+    raise HTTPException(status_code=422, detail="platform must be 'kalshi' or 'polymarket'.")
+
+
+def _trading_connection_key(client: Any, user_id: str, platform: str) -> Any:
+    return client.key("User", user_id, _TRADING_CONNECTION_KIND, platform)
+
+
+def _trading_order_key(client: Any, user_id: str, order_id: str) -> Any:
+    return client.key("User", user_id, _TRADING_ORDER_KIND, order_id)
+
+
+def _iso_timestamp(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def _trading_kms_key_name() -> str:
+    """Return the dedicated Cloud KMS key name without accepting a fallback."""
+    raw_name = (os.environ.get(_TRADING_KMS_KEY_ENV) or "").strip()
+    if not raw_name:
+        raise SecureTradingConnectionError(
+            f"Secure exchange connections are unavailable until {_TRADING_KMS_KEY_ENV} is configured."
+        )
+    if not _TRADING_KMS_KEY_PATTERN.fullmatch(raw_name):
+        raise SecureTradingConnectionError(
+            f"{_TRADING_KMS_KEY_ENV} must be a Cloud KMS CryptoKey resource name."
+        )
+    return raw_name
+
+
+def _get_trading_kms_client() -> Any:
+    """Create one ADC-authenticated KMS client for envelope-key operations."""
+    global _trading_kms_client
+    if _trading_kms_client is not None:
+        return _trading_kms_client
+    try:
+        from google.cloud import kms_v1
+
+        _trading_kms_client = kms_v1.KeyManagementServiceClient()
+    except Exception as exc:
+        raise SecureTradingConnectionError(
+            "Cloud KMS is unavailable. Check the deployment dependency and service-account permissions."
+        ) from exc
+    return _trading_kms_client
+
+
+def _trading_kms_aad(user_id: str, platform: str) -> bytes:
+    """Bind a wrapped data key to exactly one user and venue without storing secrets."""
+    return f"foresea:trading-connection:v2:{user_id}:{platform}".encode("utf-8")
+
+
+def _legacy_trading_fernet():
+    """Load only the retired root key needed while migrating version-1 records."""
+    raw_key = (os.environ.get(_TRADING_LEGACY_ENCRYPTION_KEY_ENV) or "").strip()
+    if not raw_key:
+        raise SecureTradingConnectionError(
+            "This legacy exchange connection requires its retired encryption key to migrate. "
+            "Restore it temporarily or have the user reconnect."
+        )
+    try:
+        from cryptography.fernet import Fernet
+
+        return Fernet(raw_key.encode("utf-8"))
+    except Exception as exc:
+        raise SecureTradingConnectionError(
+            f"{_TRADING_LEGACY_ENCRYPTION_KEY_ENV} is invalid; this connection must be reconnected."
+        ) from exc
+
+
+def _secure_connection_configured() -> bool:
+    try:
+        _trading_kms_key_name()
+    except SecureTradingConnectionError:
+        return False
+    return True
+
+
+def _read_trading_connection(user_id: str, platform: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        record = _state.setdefault("trading_connections", {}).get(user_id, {}).get(platform)
+        return dict(record) if record else None
+    entity = client.get(_trading_connection_key(client, user_id, platform))
+    return dict(entity) if entity is not None else None
+
+
+def _connection_status(user_id: str, platform: str) -> TradingConnectionStatus:
+    record = _read_trading_connection(user_id, platform)
+    return TradingConnectionStatus(
+        platform=platform,
+        connected=bool(record and record.get("encrypted_credentials")),
+        updated_at=_iso_timestamp(record.get("updated_at")) if record else None,
+    )
+
+
+def _put_trading_connection(
+    user_id: str, platform: str, credentials: Dict[str, Any]
+) -> TradingConnectionStatus:
+    """Encrypt credentials with a unique DEK and wrap that DEK in Cloud KMS."""
+    try:
+        from cryptography.fernet import Fernet
+
+        data_key = Fernet.generate_key()
+        plaintext = json.dumps(
+            {
+                "version": _TRADING_CONNECTION_ENVELOPE_VERSION,
+                "user_id": user_id,
+                "platform": platform,
+                "credentials": credentials,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        ciphertext = Fernet(data_key).encrypt(plaintext).decode("utf-8")
+        kms_key_name = _trading_kms_key_name()
+        wrapped_key = _get_trading_kms_client().encrypt(
+            request={
+                "name": kms_key_name,
+                "plaintext": data_key,
+                "additional_authenticated_data": _trading_kms_aad(user_id, platform),
+            }
+        )
+    except Exception as exc:
+        raise SecureTradingConnectionError(
+            "Could not encrypt exchange credentials with Cloud KMS. Check the KMS key and service-account permissions."
+        ) from exc
+    now = datetime.now(timezone.utc)
+    record = {
+        "platform": platform,
+        "encrypted_credentials": ciphertext,
+        "wrapped_data_key": base64.urlsafe_b64encode(wrapped_key.ciphertext).decode("ascii"),
+        "kms_key_name": kms_key_name,
+        "kms_key_version": str(getattr(wrapped_key, "name", "") or ""),
+        "updated_at": now,
+        "credential_version": _TRADING_CONNECTION_ENVELOPE_VERSION,
+    }
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("trading_connections", {}).setdefault(user_id, {})[platform] = record
+    else:
+        from google.cloud import datastore as _ds
+
+        entity = _ds.Entity(
+            key=_trading_connection_key(client, user_id, platform),
+            exclude_from_indexes=("encrypted_credentials", "wrapped_data_key"),
+        )
+        entity.update(record)
+        client.put(entity)
+    return TradingConnectionStatus(platform=platform, connected=True, updated_at=now.isoformat())
+
+
+def _delete_trading_connection(user_id: str, platform: str) -> None:
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("trading_connections", {}).setdefault(user_id, {}).pop(platform, None)
+        return
+    client.delete(_trading_connection_key(client, user_id, platform))
+
+
+def _stored_trading_credentials(user_id: str, platform: str) -> Optional[Dict[str, Any]]:
+    record = _read_trading_connection(user_id, platform)
+    if not record or not record.get("encrypted_credentials"):
+        return None
+    try:
+        from cryptography.fernet import Fernet
+
+        credential_version = int(record.get("credential_version") or 1)
+        if credential_version == 1:
+            # Migration keeps the previous root only long enough to rewrap this
+            # connection under a new, per-record KMS-backed data key.
+            legacy_plaintext = _legacy_trading_fernet().decrypt(
+                str(record["encrypted_credentials"]).encode("utf-8")
+            )
+            legacy_credentials = json.loads(legacy_plaintext.decode("utf-8"))
+            if not isinstance(legacy_credentials, dict):
+                raise SecureTradingConnectionError(
+                    f"The {platform} connection is malformed. Disconnect and reconnect it."
+                )
+            _put_trading_connection(user_id, platform, legacy_credentials)
+            return legacy_credentials
+        if credential_version != _TRADING_CONNECTION_ENVELOPE_VERSION:
+            raise SecureTradingConnectionError(
+                f"The {platform} connection uses an unsupported encryption version. Disconnect and reconnect it."
+            )
+        wrapped_data_key = base64.urlsafe_b64decode(
+            str(record["wrapped_data_key"]).encode("ascii")
+        )
+        data_key = _get_trading_kms_client().decrypt(
+            request={
+                "name": str(record.get("kms_key_name") or _trading_kms_key_name()),
+                "ciphertext": wrapped_data_key,
+                "additional_authenticated_data": _trading_kms_aad(user_id, platform),
+            }
+        ).plaintext
+        plaintext = Fernet(data_key).decrypt(str(record["encrypted_credentials"]).encode("utf-8"))
+        envelope = json.loads(plaintext.decode("utf-8"))
+    except SecureTradingConnectionError:
+        raise
+    except Exception as exc:
+        raise SecureTradingConnectionError(
+            f"The {platform} connection can no longer be decrypted. Disconnect and reconnect it."
+        ) from exc
+    if (
+        not isinstance(envelope, dict)
+        or envelope.get("version") != _TRADING_CONNECTION_ENVELOPE_VERSION
+        or envelope.get("user_id") != user_id
+        or envelope.get("platform") != platform
+        or not isinstance(envelope.get("credentials"), dict)
+    ):
+        raise SecureTradingConnectionError(
+            f"The {platform} connection is malformed. Disconnect and reconnect it."
+        )
+    return envelope["credentials"]
+
+
+def _trading_order_from_entity(entity: Any) -> Dict[str, Any]:
+    record = {field: entity.get(field) for field in _TRADING_ORDER_FIELDS}
+    record["id"] = record.get("id") or entity.key.name
+    return record
+
+
+def _list_trading_orders(user_id: str, platform: Optional[str] = None) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        records = list(_state.setdefault("trading_orders", {}).get(user_id, {}).values())
+    else:
+        query = client.query(kind=_TRADING_ORDER_KIND, ancestor=client.key("User", user_id))
+        records = [_trading_order_from_entity(entity) for entity in query.fetch(limit=250)]
+    if platform:
+        records = [record for record in records if record.get("platform") == platform]
+    return sorted(records, key=lambda record: record.get("created_at") or "", reverse=True)
+
+
+def _read_trading_order(user_id: str, order_id: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        record = _state.setdefault("trading_orders", {}).get(user_id, {}).get(order_id)
+        return dict(record) if record else None
+    entity = client.get(_trading_order_key(client, user_id, order_id))
+    return _trading_order_from_entity(entity) if entity is not None else None
+
+
+def _put_trading_order(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
+    record = {field: record.get(field) for field in _TRADING_ORDER_FIELDS}
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("trading_orders", {}).setdefault(user_id, {})[record["id"]] = record
+        return record
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(
+        key=_trading_order_key(client, user_id, record["id"]),
+        exclude_from_indexes=("ticker", "token_id"),
+    )
+    entity.update(record)
+    client.put(entity)
+    return record
+
+
+def _status_from_venue(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"filled", "executed", "matched", "complete", "completed"}:
+        return "filled"
+    if raw in {"canceled", "cancelled", "cancel"}:
+        return "canceled"
+    if raw in {"rejected", "failed", "error", "unmatched"}:
+        return "rejected"
+    if raw in {"resting", "live", "open", "active", "pending", "delayed"}:
+        return "open"
+    return "submitted"
+
+
+def _submitted_trading_order(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Keep a local audit row without persisting exchange responses or secrets."""
+    normalized = result.get("normalized_order") or {}
+    venue_response = result.get("venue_response") or {}
+    source = venue_response.get("body") if isinstance(venue_response, dict) else {}
+    if isinstance(source, list):
+        source = source[0] if source and isinstance(source[0], dict) else {}
+    if not isinstance(source, dict):
+        source = {}
+    venue_order_id = next(
+        (
+            str(source[key])
+            for key in ("order_id", "orderID", "id", "orderId")
+            if source.get(key) not in (None, "")
+        ),
+        None,
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "id": str(uuid.uuid4()),
+        "platform": normalized.get("platform"),
+        "venue_order_id": venue_order_id,
+        "status": _status_from_venue(source.get("status")),
+        "venue_status": str(source.get("status") or "submitted"),
+        "action": normalized.get("action"),
+        "outcome": normalized.get("outcome"),
+        "ticker": normalized.get("ticker"),
+        "token_id": normalized.get("token_id"),
+        "quantity": normalized.get("quantity"),
+        "price": normalized.get("price"),
+        "estimated_notional": result.get("estimated_notional"),
+        "order_type": normalized.get("order_type"),
+        "subaccount": normalized.get("subaccount"),
+        "exchange_index": normalized.get("exchange_index"),
+        "filled_quantity": None,
+        "remaining_quantity": None,
+        "created_at": now,
+        "updated_at": now,
+        "last_reconciled_at": None,
+        "canceled_at": None,
+    }
+
+
+def _merge_order_reconciliation(record: Dict[str, Any], reconciliation: Dict[str, Any]) -> Dict[str, Any]:
+    for field in (
+        "venue_order_id",
+        "status",
+        "venue_status",
+        "filled_quantity",
+        "remaining_quantity",
+    ):
+        if reconciliation.get(field) is not None:
+            record[field] = reconciliation[field]
+    now = datetime.now(timezone.utc).isoformat()
+    record["last_reconciled_at"] = now
+    record["updated_at"] = now
+    return record
+
+
 def _trading_http_exception(exc: Exception) -> HTTPException:
     from analyzing_llm_rationale import trading
 
+    if isinstance(exc, HTTPException):
+        return exc
+    if isinstance(exc, SecureTradingConnectionError):
+        return HTTPException(status_code=503, detail=str(exc))
     if isinstance(exc, trading.TradingValidationError):
         return HTTPException(status_code=422, detail=str(exc))
     if isinstance(exc, (trading.TradingDisabledError, trading.TradingNotConfiguredError)):
@@ -6042,6 +6495,91 @@ async def trading_accounts_check(
         raise _trading_http_exception(exc) from exc
 
 
+@app.get(
+    "/trading/connections",
+    tags=["Trading"],
+    summary="List encrypted exchange connections",
+    response_model=TradingConnectionsResponse,
+)
+async def trading_connections(request: Request) -> TradingConnectionsResponse:
+    """Return only connection metadata for the signed-in user, never secrets."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    return TradingConnectionsResponse(
+        encryption_configured=_secure_connection_configured(),
+        connections={
+            platform: _connection_status(claims["sub"], platform)
+            for platform in ("kalshi", "polymarket")
+        },
+    )
+
+
+@app.put(
+    "/trading/connections/{platform}",
+    tags=["Trading"],
+    summary="Encrypt and save one exchange connection",
+    response_model=TradingConnectionStatus,
+)
+async def save_trading_connection(
+    platform: str, req: TradingConnectionRequest, request: Request
+) -> TradingConnectionStatus:
+    """Validate and store one account connection with server-side encryption."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    venue = _clean_trading_platform(platform)
+    with _tracer.start_as_current_span("trading.connection.save") as span:
+        span.set_attribute("trading.venue", venue)
+        try:
+            from analyzing_llm_rationale import trading
+
+            # Keep this mapping in local scope only. Do not log it or attach it
+            # to telemetry; it contains funds-moving secrets.
+            credentials = trading.connection_credentials(
+                venue, req.venue_credentials.model_dump(exclude_none=True)
+            )
+            status = _put_trading_connection(claims["sub"], venue, credentials)
+            _trading_connection_actions.add(1, {"venue": venue, "action": "save", "outcome": "success"})
+            return status
+        except Exception as exc:
+            span.record_exception(exc)
+            _trading_connection_actions.add(1, {"venue": venue, "action": "save", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.delete(
+    "/trading/connections/{platform}",
+    tags=["Trading"],
+    summary="Delete one encrypted exchange connection",
+    response_model=TradingConnectionStatus,
+)
+async def delete_trading_connection(platform: str, request: Request) -> TradingConnectionStatus:
+    """Delete only the encrypted credential blob; trading audit history remains."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    venue = _clean_trading_platform(platform)
+    with _tracer.start_as_current_span("trading.connection.delete") as span:
+        span.set_attribute("trading.venue", venue)
+        try:
+            _delete_trading_connection(claims["sub"], venue)
+            _trading_connection_actions.add(1, {"venue": venue, "action": "delete", "outcome": "success"})
+            return TradingConnectionStatus(platform=venue, connected=False)
+        except Exception as exc:
+            span.record_exception(exc)
+            _trading_connection_actions.add(1, {"venue": venue, "action": "delete", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+def _resolve_order_credentials(user_id: str, req: TradeOrderRequest) -> Optional[Dict[str, Any]]:
+    """Prefer a secure per-user connection and block deprecated inline secrets."""
+    if req.venue_credentials is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="Inline exchange credentials are no longer accepted. Connect the account securely first.",
+        )
+    platform = _clean_trading_platform(req.platform)
+    return _stored_trading_credentials(user_id, platform)
+
+
 @app.post(
     "/trading/preview",
     tags=["Trading"],
@@ -6051,13 +6589,11 @@ async def trading_accounts_check(
 async def trading_preview(req: TradeOrderRequest, request: Request) -> TradeOrderPreviewResponse:
     """Validate and normalize a Kalshi/Polymarket order without placing it."""
     _check_rate_limit(request)
-    _require_session(request)
+    claims = _require_session(request)
     from analyzing_llm_rationale import trading
 
     try:
-        # Pull credentials out of the order payload so they never reach the
-        # normalized order / response echo, and never get logged.
-        creds = req.venue_credentials.model_dump(exclude_none=True) if req.venue_credentials else None
+        creds = _resolve_order_credentials(claims["sub"], req)
         payload = req.model_dump(exclude_none=True, exclude={"venue_credentials"})
         return TradeOrderPreviewResponse(**trading.preview_order(payload, creds))
     except Exception as exc:
@@ -6073,21 +6609,179 @@ async def trading_preview(req: TradeOrderRequest, request: Request) -> TradeOrde
 async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderResponse:
     """Submit a live order after preview guardrails and exact confirmation.
 
-    Live execution is disabled unless `FORESEA_ENABLE_TRADING=true`. Market/IOC
+    Live execution is disabled unless `FORESEA_ENABLE_BYO_TRADING=true`. Market/IOC
     style orders are separately disabled unless `FORESEA_ALLOW_MARKET_ORDERS=true`.
     """
     _check_rate_limit(request)
     claims = _require_session(request)
     from analyzing_llm_rationale import trading
 
-    try:
-        creds = req.venue_credentials.model_dump(exclude_none=True) if req.venue_credentials else None
-        payload = req.model_dump(exclude_none=True, exclude={"venue_credentials"})
-        return TradeOrderResponse(
-            **trading.place_order(payload, user_id=claims["sub"], creds=creds)
-        )
-    except Exception as exc:
-        raise _trading_http_exception(exc) from exc
+    venue = _clean_trading_platform(req.platform)
+    with _tracer.start_as_current_span("trading.order.submit") as span:
+        span.set_attribute("trading.venue", venue)
+        try:
+            creds = _resolve_order_credentials(claims["sub"], req)
+            payload = req.model_dump(exclude_none=True, exclude={"venue_credentials"})
+            result = trading.place_order(payload, user_id=claims["sub"], creds=creds)
+            audit = _put_trading_order(claims["sub"], _submitted_trading_order(result))
+            span.set_attribute("trading.audit_order_id", audit["id"])
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "submit", "outcome": "success"})
+            return TradeOrderResponse(
+                **result,
+                audit_order_id=audit["id"],
+                venue_order_id=audit.get("venue_order_id"),
+                reconciliation_status=audit.get("status"),
+            )
+        except Exception as exc:
+            span.record_exception(exc)
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "submit", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.get("/trading/orders", tags=["Trading"], summary="List the signed-in user's submitted order audit trail")
+async def list_trading_orders(
+    request: Request, platform: Optional[str] = Query(None, max_length=20)
+) -> Dict[str, Any]:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    venue = _clean_trading_platform(platform) if platform else None
+    return {"orders": _list_trading_orders(claims["sub"], venue)}
+
+
+@app.get("/trading/portfolio", tags=["Trading"], summary="Reconcile an exchange portfolio, orders, and fills")
+async def trading_portfolio(
+    request: Request,
+    platform: str = Query(..., max_length=20),
+    limit: int = Query(50, ge=1, le=100),
+) -> Dict[str, Any]:
+    """Fetch live venue state and safely merge known order status/fill progress."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    venue = _clean_trading_platform(platform)
+    with _tracer.start_as_current_span("trading.portfolio.reconcile") as span:
+        span.set_attribute("trading.venue", venue)
+        try:
+            from analyzing_llm_rationale import trading
+
+            credentials = _stored_trading_credentials(claims["sub"], venue)
+            if credentials is None:
+                raise HTTPException(status_code=409, detail=f"Connect a {venue} account before reconciling it.")
+            snapshot = trading.reconcile_portfolio(venue, credentials, limit=limit)
+            remote_orders = {
+                record.get("venue_order_id"): record
+                for record in snapshot.get("orders") or []
+                if record.get("venue_order_id")
+            }
+            remote_fills: Dict[str, float] = defaultdict(float)
+            for fill in snapshot.get("fills") or []:
+                order_id = fill.get("order_id")
+                quantity = fill.get("quantity")
+                if order_id and isinstance(quantity, (int, float)):
+                    remote_fills[str(order_id)] += float(quantity)
+            reconciled = []
+            for record in _list_trading_orders(claims["sub"], venue):
+                venue_order_id = record.get("venue_order_id")
+                remote = remote_orders.get(venue_order_id)
+                if remote:
+                    record = _merge_order_reconciliation(record, remote)
+                    _put_trading_order(claims["sub"], record)
+                elif venue_order_id and venue_order_id in remote_fills:
+                    record["filled_quantity"] = remote_fills[venue_order_id]
+                    if record.get("quantity") is not None and remote_fills[venue_order_id] >= float(record["quantity"]):
+                        record["status"] = "filled"
+                    record["last_reconciled_at"] = datetime.now(timezone.utc).isoformat()
+                    record["updated_at"] = record["last_reconciled_at"]
+                    _put_trading_order(claims["sub"], record)
+                reconciled.append(record)
+            snapshot["audit_orders"] = reconciled
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "portfolio", "outcome": "success"})
+            return snapshot
+        except HTTPException:
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "portfolio", "outcome": "error"})
+            raise
+        except Exception as exc:
+            span.record_exception(exc)
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "portfolio", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.post("/trading/orders/{audit_order_id}/reconcile", tags=["Trading"], summary="Refresh a submitted order's fill/status")
+async def reconcile_trading_order(audit_order_id: str, request: Request) -> Dict[str, Any]:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    record = _read_trading_order(claims["sub"], audit_order_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Submitted order was not found.")
+    if not record.get("venue_order_id"):
+        raise HTTPException(status_code=409, detail="The exchange did not return an order ID to reconcile.")
+    venue = _clean_trading_platform(record.get("platform"))
+    with _tracer.start_as_current_span("trading.order.reconcile") as span:
+        span.set_attribute("trading.venue", venue)
+        span.set_attribute("trading.audit_order_id", audit_order_id)
+        try:
+            from analyzing_llm_rationale import trading
+
+            credentials = _stored_trading_credentials(claims["sub"], venue)
+            if credentials is None:
+                raise HTTPException(status_code=409, detail=f"Reconnect {venue} before reconciling this order.")
+            venue_state = trading.reconcile_order(venue, record["venue_order_id"], credentials)
+            record = _merge_order_reconciliation(record, venue_state)
+            _put_trading_order(claims["sub"], record)
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "order", "outcome": "success"})
+            return record
+        except HTTPException:
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "order", "outcome": "error"})
+            raise
+        except Exception as exc:
+            span.record_exception(exc)
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "order", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.delete("/trading/orders/{audit_order_id}", tags=["Trading"], summary="Cancel the remaining quantity of a submitted order")
+async def cancel_trading_order(
+    audit_order_id: str, req: CancelTradingOrderRequest, request: Request
+) -> Dict[str, Any]:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    if req.confirmation != "CANCEL OPEN ORDER":
+        raise HTTPException(status_code=422, detail="confirmation must be exactly 'CANCEL OPEN ORDER'.")
+    record = _read_trading_order(claims["sub"], audit_order_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Submitted order was not found.")
+    if not record.get("venue_order_id"):
+        raise HTTPException(status_code=409, detail="The exchange did not return an order ID to cancel.")
+    if record.get("status") in {"filled", "canceled", "rejected"}:
+        raise HTTPException(status_code=409, detail="This order is already in a terminal state.")
+    venue = _clean_trading_platform(record.get("platform"))
+    with _tracer.start_as_current_span("trading.order.cancel") as span:
+        span.set_attribute("trading.venue", venue)
+        span.set_attribute("trading.audit_order_id", audit_order_id)
+        try:
+            from analyzing_llm_rationale import trading
+
+            credentials = _stored_trading_credentials(claims["sub"], venue)
+            if credentials is None:
+                raise HTTPException(status_code=409, detail=f"Reconnect {venue} before cancelling this order.")
+            venue_state = trading.cancel_order(
+                venue,
+                record["venue_order_id"],
+                credentials,
+                subaccount=record.get("subaccount"),
+                exchange_index=int(record.get("exchange_index") or 0),
+            )
+            record = _merge_order_reconciliation(record, venue_state)
+            record["canceled_at"] = datetime.now(timezone.utc).isoformat()
+            _put_trading_order(claims["sub"], record)
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "cancel", "outcome": "success"})
+            return record
+        except HTTPException:
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "cancel", "outcome": "error"})
+            raise
+        except Exception as exc:
+            span.record_exception(exc)
+            _trading_reconciliation_actions.add(1, {"venue": venue, "action": "cancel", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
 
 
 @app.get("/providers/models", tags=["System"], summary="List models from a provider base URL")
@@ -7831,6 +8525,80 @@ def _agent_recommendation(edge: Optional[float], outcome: str) -> tuple[str, str
     return "buy_no", f"Model is {pts} pts below the market on {out}; {out} looks overpriced."
 
 
+def _live_trade_intent(
+    *,
+    platform: Optional[str],
+    ident: Optional[str],
+    market_url: Optional[str],
+    question_type: str,
+    recommendation: str,
+    model_probability: Optional[float],
+    market_probability: Optional[float],
+    edge: Optional[float],
+) -> Optional[LiveTradeIntent]:
+    """Create a *review-only* live-order handoff from a binary agent report.
+
+    The returned probabilities are always for the suggested contract. A
+    ``buy_no`` recommendation therefore complements the report's YES-side
+    probabilities, which keeps the terminal's research context unambiguous.
+    """
+    venue = str(platform or "").strip().lower()
+    market_ident = str(ident or "").strip()
+    with _tracer.start_as_current_span("trading.live_trade_intent.prepare") as span:
+        span.set_attributes({
+            "market.venue": venue or "unknown",
+            "market.id": market_ident[:200] if market_ident else "unknown",
+            "trading.recommendation": recommendation or "unknown",
+        })
+        if (
+            question_type != "binary"
+            or venue not in {"kalshi", "polymarket"}
+            or not market_ident
+            or recommendation not in {"buy_yes", "buy_no"}
+            or model_probability is None
+            or market_probability is None
+            or edge is None
+        ):
+            span.set_attribute("outcome", "skipped")
+            _live_trade_intents.add(1, {"outcome": "skipped", "platform": venue or "unknown"})
+            return None
+
+        try:
+            model_p = float(model_probability)
+            market_p = float(market_probability)
+            raw_edge = float(edge)
+        except (TypeError, ValueError):
+            span.set_attribute("outcome", "skipped")
+            _live_trade_intents.add(1, {"outcome": "skipped", "platform": venue})
+            return None
+        if not (0.0 <= model_p <= 1.0 and 0.0 <= market_p <= 1.0):
+            span.set_attribute("outcome", "skipped")
+            _live_trade_intents.add(1, {"outcome": "skipped", "platform": venue})
+            return None
+
+        outcome = "yes" if recommendation == "buy_yes" else "no"
+        if outcome == "no":
+            model_p, market_p, raw_edge = 1.0 - model_p, 1.0 - market_p, -raw_edge
+        intent = LiveTradeIntent(
+            platform=venue,
+            ident=market_ident,
+            action="buy",
+            outcome=outcome,
+            market_url=market_url or None,
+            model_probability=model_p,
+            market_probability=market_p,
+            edge=raw_edge,
+            recommendation=recommendation,
+        )
+        span.set_attributes({
+            "trading.outcome_contract": outcome,
+            "outcome": "ready",
+        })
+        _live_trade_intents.add(1, {"outcome": "ready", "platform": venue})
+        logger.info("live trade intent prepared: platform=%s outcome=%s", venue, outcome)
+        return intent
+
+
 def _model_probability_from_prediction(resp: PredictResponse) -> Optional[float]:
     analysis = getattr(resp, "market_analysis", None)
     if analysis is not None and analysis.model_probability is not None:
@@ -8023,11 +8791,26 @@ async def _agent_report_from_prediction(
         pipeline.append("skills")
     pipeline.append("recommend")
 
+    market_platform = quote.platform if quote else (req.platform or req.market_platform)
+    market_ident = quote.ident if quote else (
+        req.market_ident or req.ticker or req.slug or req.market_id
+    )
+    market_url = quote.market_url if quote else req.market_url
+    live_trade_intent = _live_trade_intent(
+        platform=market_platform,
+        ident=market_ident,
+        market_url=market_url,
+        question_type=result.question_type,
+        recommendation=recommendation,
+        model_probability=model_probability,
+        market_probability=(analysis.market_probability if analysis else pred_req.market_probability),
+        edge=edge,
+    )
     report = AgentReport(
         question=question,
         pipeline=pipeline,
-        platform=(quote.platform if quote else req.platform),
-        market_url=(quote.market_url if quote else None),
+        platform=market_platform,
+        market_url=market_url,
         outcome=outcome,
         market_probability=(analysis.market_probability if analysis else pred_req.market_probability),
         model_probability=model_probability,
@@ -8042,6 +8825,7 @@ async def _agent_report_from_prediction(
         evidence_error=result.evidence_error,
         skills=list(skill_results),
         grounding=grounding_note,
+        live_trade_intent=live_trade_intent,
     )
     if report.market_url and report.model_probability is not None:
         from analyzing_llm_rationale import track_record_live as _trl
@@ -8376,10 +9160,25 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         pipeline.append("forecast")
     if grounding_note:
         pipeline.insert(0, "ground_in_record")
+    market_platform = quote.platform if quote else (req.platform or req.market_platform)
+    market_ident = quote.ident if quote else (
+        req.market_ident or req.ticker or req.slug or req.market_id
+    )
+    market_url = quote.market_url if quote else req.market_url
+    live_trade_intent = _live_trade_intent(
+        platform=market_platform,
+        ident=market_ident,
+        market_url=market_url,
+        question_type=last.get("question_type", "binary"),
+        recommendation=recommendation,
+        model_probability=last.get("model_probability"),
+        market_probability=last.get("market_probability"),
+        edge=edge,
+    )
     report = AgentReport(
         question=question, pipeline=pipeline,
-        platform=(quote.platform if quote else req.platform),
-        market_url=(quote.market_url if quote else None),
+        platform=market_platform,
+        market_url=market_url,
         outcome=outcome, market_probability=last.get("market_probability"),
         model_probability=last.get("model_probability"), edge=edge, stance=last.get("stance"),
         recommendation=recommendation, recommendation_detail=detail, confidence=last.get("confidence"),
@@ -8391,6 +9190,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         evidence_sources=last.get("evidence_sources", []),
         evidence_error=last.get("evidence_error"),
         grounding=grounding_note, tool_transcript=res.get("transcript", []),
+        live_trade_intent=live_trade_intent,
     )
     # Evolution loop: enrol the analysed market into the live track record (pointer only).
     if report.market_url and report.model_probability is not None:
