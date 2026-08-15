@@ -3401,12 +3401,26 @@ function forecastActionsHtml(data, { ledgerOnly = false } = {}) {
     `</div>`;
 }
 
+// Mirrors _TRADING_INTENT_RE in server.py — kept in sync by hand, both are
+// simple keyword gates, not the source of truth for anything safety-related.
+const _TRADING_INTENT_RE = /\b(bet|order|trade|place|buy|sell|position|recommend|suggest|should i|what to|portfolio|stake|wager)\b/i;
+
 function tradeRunHandoffHtml(data) {
-  if (!tradeRunHandoff(data)) return '';
-  return `<div class="market-actions pt-2">
+  // These captions are fixed, hardcoded strings gated on booleans below —
+  // never model output — so wording can never drift into implying Foresea
+  // itself confirms or executes a trade from the conversation.
+  if (tradeRunHandoff(data)) {
+    return `<div class="market-actions pt-2">
     <button type="button" class="market-action ui-icon-label" onclick="openTradeRunFromBubble(this)">${uiIcon('external')} Review Trade Run</button>
-    <span class="text-xs text-gray-500">Choose a fresh limit price and size in the terminal.</span>
+    <span class="text-xs text-gray-500">I've prepared this as a reviewable order — nothing is placed. Choose your own price and size in the terminal.</span>
   </div>`;
+  }
+  if (_TRADING_INTENT_RE.test(data?.question || '')) {
+    return `<div class="market-actions pt-2">
+    <span class="text-xs text-gray-500">I can't place trades directly, and I didn't pin down a specific market here. Paste a Kalshi/Polymarket link or click a market card and I'll prepare one to review.</span>
+  </div>`;
+  }
+  return '';
 }
 
 async function addForecastToPersonalLedger(btn) {
@@ -4338,8 +4352,18 @@ async function sendQuestion(options = {}) {
     const body = { question, variant, history, chat_mode };
     if (chat_mode) body.max_tokens = 384;
     if (conversationSteer) body.conversation_steer = conversationSteer;
-    const mCtx = _pendingMarketCtx;
+    let mCtx = _pendingMarketCtx;
     _pendingMarketCtx = null;
+    if (mCtx) {
+      // Remember this market for later turns in the same conversation — a
+      // follow-up like "can you place a trade on that?" has no market card
+      // of its own, so without this the market context is lost after one turn.
+      const marketOnly = { ...mCtx };
+      delete marketOnly.model;
+      upsertConv(request.convId, { activeMarketCtx: marketOnly });
+    } else {
+      mCtx = getConv(request.convId)?.activeMarketCtx || null;
+    }
     if (mCtx) {
       if (mCtx.market_probability != null) body.market_probability = mCtx.market_probability;
       if (mCtx.market_url)                 body.market_url = mCtx.market_url;
