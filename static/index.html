@@ -5957,6 +5957,21 @@ function _agentTradingActivityLine(a) {
   return '';
 }
 
+function _eligibilityReasonText(elig) {
+  if (!elig || !elig.checks) return 'Not enough data yet.';
+  if (elig.eligible) return 'Meets the shadow-trading promotion bar (observational only — grants nothing).';
+  const c = elig.checks;
+  const reasons = [];
+  if (!c.sufficient_sample) reasons.push(`needs ${elig.min_settled_trades_required}+ settled trades (has ${elig.settled_count})`);
+  if (!c.positive_return) reasons.push('return is not positive');
+  if (!c.sharpe_above_floor) reasons.push(`Sharpe below ${elig.min_sharpe_required} (${elig.sharpe ?? 'n/a'})`);
+  if (!c.drawdown_within_cap) {
+    const dd = elig.max_drawdown != null ? `${Math.round(elig.max_drawdown * 100)}%` : 'n/a';
+    reasons.push(`drawdown above ${Math.round(elig.max_drawdown_allowed * 100)}% (${dd})`);
+  }
+  return reasons.length ? `Not yet eligible: ${reasons.join('; ')}.` : 'Not yet eligible.';
+}
+
 function renderAgentTradingBoard(d) {
   const host = document.getElementById('eb-agentic-section');
   if (!host) return;
@@ -5968,6 +5983,7 @@ function renderAgentTradingBoard(d) {
   }
   const leaderboard = d.leaderboard || [];
   const equityCurves = d.equity_curves || {};
+  const eligibility = d.eligibility || {};
   const activity = d.recent_activity || [];
 
   const _usd = v => Number.isFinite(Number(v))
@@ -5991,6 +6007,10 @@ function renderAgentTradingBoard(d) {
     const pnlColor = pnl >= 0 ? '#0a7' : '#c33';
     const winRate = row.win_rate == null ? '—' : `${Math.round(row.win_rate * 100)}%`;
     const agentId = String(row.agent_id || '');
+    const elig = eligibility[agentId];
+    const eligCell = elig && elig.eligible
+      ? `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:#0a7">${uiIcon('check')}</span>`
+      : `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:var(--text-dim)">—</span>`;
     const copyButton = /^[a-zA-Z0-9._-]{1,120}$/.test(agentId)
       ? `<button type="button" class="wl-act" onclick="copyPublicAgent(${JSON.stringify(agentId).replace(/&/g, '&amp;').replace(/"/g, '&quot;')})">Copy agent</button>`
       : '';
@@ -6003,6 +6023,7 @@ function renderAgentTradingBoard(d) {
       <td>${winRate}</td>
       <td>${row.trade_count ?? 0}</td>
       <td>${(row.open_positions || []).length}</td>
+      <td>${eligCell}</td>
       <td>${copyButton}</td>
     </tr>`;
   }).join('');
@@ -6019,7 +6040,7 @@ function renderAgentTradingBoard(d) {
 
   host.innerHTML = `${banner}
     <div id="agentTradingSvg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th>Workspace</th></tr></thead><tbody>${tableRows}</tbody></table>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th><th>Workspace</th></tr></thead><tbody>${tableRows}</tbody></table>
     <h4 class="eb-h" style="margin-top:24px">Recent activity</h4>
     ${activityRows || '<p class="text-sm text-gray-500">No activity yet.</p>'}`;
   const svgEl = document.getElementById('agentTradingSvg');
@@ -8771,14 +8792,57 @@ function renderAgentRunTimeline() {
     const handoff = run.has_live_trade_intent
       ? `<button type="button" class="model-icon-btn" title="Review Trade Run" onclick="openAgentRunTrade('${escAttr(run.id)}')">${uiIcon('external')}</button>`
       : '';
+    const stepsBtn = `<button type="button" class="model-icon-btn" title="View tool-loop steps" onclick="toggleAgentRunSteps('${escAttr(run.id)}')">${uiIcon('chevron-down')}</button>`;
     return `<div class="model-row" style="cursor:default">
       <div class="model-meta">
         <div class="model-name">${escHtml(run.title || 'Agent research')} <span style="color:var(--yes);font-size:10px">${escHtml(_agentRunStatusLabel(run.status))}</span></div>
         <div class="model-sub">${events || escHtml(run.question || 'Research pending')}</div>
       </div>
-      <div class="model-actions">${handoff}</div>
-    </div>`;
+      <div class="model-actions">${stepsBtn}${handoff}</div>
+    </div>
+    <div id="${_agentRunStepsPanelId(run.id)}" class="workspace-copy" style="display:none;padding:6px 0 6px 12px"></div>`;
   }).join('');
+}
+
+function _agentRunStepsPanelId(runId) {
+  return 'agentRunSteps-' + encodeURIComponent(runId);
+}
+
+function _agentRunStepRowHtml(step) {
+  const marker = step.error ? uiIcon('alert') : uiIcon('check');
+  const action = escHtml(step.action || 'unknown');
+  const thought = step.thought
+    ? `<div style="font-style:italic;color:var(--text-dim)">${escHtml(step.thought)}</div>`
+    : '';
+  const obs = escHtml(String(step.observation || '').slice(0, 300));
+  return `<div style="margin-bottom:6px">
+    <div>${marker} <b>${action}</b></div>
+    ${thought}
+    <div style="color:var(--text-dim)">${obs}</div>
+  </div>`;
+}
+
+async function toggleAgentRunSteps(runId) {
+  const panel = document.getElementById(_agentRunStepsPanelId(runId));
+  if (!panel) return;
+  if (panel.dataset.loaded === '1') {
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    return;
+  }
+  panel.style.display = '';
+  panel.innerHTML = '<p class="workspace-copy">Loading…</p>';
+  try {
+    const r = await fetch('/agent/runs/' + encodeURIComponent(runId), { headers: authHeaders() });
+    const run = await _readJson(r);
+    if (!r.ok) throw new Error(run.detail || 'Could not load steps.');
+    const steps = run.steps || [];
+    panel.innerHTML = steps.length
+      ? steps.map(_agentRunStepRowHtml).join('')
+      : '<p class="workspace-copy">No tool-loop steps recorded for this run.</p>';
+    panel.dataset.loaded = '1';
+  } catch (err) {
+    panel.innerHTML = `<p class="workspace-copy">${escHtml(err.message || 'Could not load steps.')}</p>`;
+  }
 }
 
 async function syncAgentRunsFromServer() {

@@ -161,6 +161,18 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("/agent/runs", self.index_html)
         self.assertIn("agent_run: d.agent_run || null", self.index_html)
 
+    def test_agent_run_steps_are_visible_via_an_expandable_panel(self) -> None:
+        self.assertIn("function toggleAgentRunSteps", self.index_html)
+        self.assertIn("function _agentRunStepRowHtml", self.index_html)
+        self.assertIn("run.steps || []", self.index_html)
+        self.assertIn("No tool-loop steps recorded for this run.", self.index_html)
+
+    def test_agentic_trading_board_surfaces_promotion_eligibility(self) -> None:
+        self.assertIn("d.eligibility || {}", self.index_html)
+        self.assertIn("function _eligibilityReasonText", self.index_html)
+        self.assertIn("Not yet eligible", self.index_html)
+        self.assertIn(">Eligible</th>", self.index_html)
+
     def test_users_can_copy_a_public_agent_without_private_trading_state(self) -> None:
         self.assertIn("Copy agent", self.index_html)
         self.assertIn("function copyPublicAgent", self.index_html)
