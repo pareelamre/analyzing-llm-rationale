@@ -22,6 +22,28 @@ DEFAULT_MAX_ORDER_NOTIONAL = Decimal("50")
 DEFAULT_TIMEOUT_S = 15
 _USER_AGENT = "foresea-trading/0.1"
 _TRUTHY = {"1", "true", "yes", "y", "on"}
+_KALSHI_HOSTS = {
+    "external-api.kalshi.com",
+    "api.elections.kalshi.com",
+    "external-api.demo.kalshi.co",
+    "demo-api.kalshi.co",
+}
+_POLYMARKET_HOSTS = {"clob.polymarket.com"}
+_KALSHI_CONNECTION_KEYS = {
+    "kalshi_api_key_id",
+    "kalshi_private_key",
+    "kalshi_base_url",
+}
+_POLYMARKET_CONNECTION_KEYS = {
+    "polymarket_private_key",
+    "polymarket_api_key",
+    "polymarket_api_secret",
+    "polymarket_api_passphrase",
+    "polymarket_clob_host",
+    "polymarket_chain_id",
+    "polymarket_signature_type",
+    "polymarket_funder_address",
+}
 
 
 class TradingError(RuntimeError):
@@ -149,6 +171,101 @@ def _clean_platform(value: Any) -> str:
     if platform == "kalshi":
         return "kalshi"
     raise TradingValidationError("platform must be 'polymarket' or 'kalshi'.")
+
+
+def _connection_url(value: Any, *, platform: str) -> str:
+    """Validate a stored user-supplied venue base URL.
+
+    Account connections must never turn the trading service into a generic HTTP
+    client. Only the official production/demo Kalshi endpoints and production
+    Polymarket CLOB endpoint are accepted.
+    """
+    url = str(value or "").strip().rstrip("/")
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    allowed = _KALSHI_HOSTS if platform == "kalshi" else _POLYMARKET_HOSTS
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.hostname.lower() not in allowed
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise TradingValidationError(
+            f"{platform} connection URL must use an official HTTPS API host."
+        )
+    if platform == "kalshi" and not parsed.path.rstrip("/").endswith("/trade-api/v2"):
+        raise TradingValidationError(
+            "Kalshi base URL must end with /trade-api/v2."
+        )
+    if platform == "polymarket" and parsed.path not in ("", "/"):
+        raise TradingValidationError("Polymarket CLOB host cannot include a path.")
+    return url
+
+
+def connection_credentials(platform: Any, creds: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return a validated, platform-scoped set of credentials for encrypted storage.
+
+    This deliberately reads the mapping directly rather than through ``_cv``:
+    an account connection must be complete on its own and must never silently
+    borrow a shared deployment credential.
+    """
+    venue = _clean_platform(platform)
+    allowed = _KALSHI_CONNECTION_KEYS if venue == "kalshi" else _POLYMARKET_CONNECTION_KEYS
+    cleaned = {
+        key: value
+        for key, value in dict(creds or {}).items()
+        if key in allowed and value not in (None, "")
+    }
+    if venue == "kalshi":
+        missing = [key for key in ("kalshi_api_key_id", "kalshi_private_key") if not str(cleaned.get(key) or "").strip()]
+        if missing:
+            raise TradingValidationError("Kalshi API key ID and RSA private key are required.")
+        cleaned["kalshi_base_url"] = _connection_url(
+            cleaned.get("kalshi_base_url") or "https://external-api.kalshi.com/trade-api/v2",
+            platform=venue,
+        )
+        try:
+            from cryptography.hazmat.primitives import serialization
+
+            serialization.load_pem_private_key(
+                str(cleaned["kalshi_private_key"]).replace("\\n", "\n").encode("utf-8"),
+                password=None,
+            )
+        except TradingError:
+            raise
+        except Exception as exc:
+            raise TradingValidationError("Kalshi private key must be a valid unencrypted PEM key.") from exc
+    else:
+        required = (
+            "polymarket_private_key",
+            "polymarket_api_key",
+            "polymarket_api_secret",
+            "polymarket_api_passphrase",
+        )
+        missing = [key for key in required if not str(cleaned.get(key) or "").strip()]
+        if missing:
+            raise TradingValidationError(
+                "Polymarket wallet key, API key, API secret, and API passphrase are required."
+            )
+        cleaned["polymarket_clob_host"] = _connection_url(
+            cleaned.get("polymarket_clob_host") or "https://clob.polymarket.com",
+            platform=venue,
+        )
+        if "polymarket_chain_id" in cleaned:
+            try:
+                cleaned["polymarket_chain_id"] = int(cleaned["polymarket_chain_id"])
+            except (TypeError, ValueError) as exc:
+                raise TradingValidationError("Polymarket chain ID must be an integer.") from exc
+        if "polymarket_signature_type" in cleaned:
+            try:
+                cleaned["polymarket_signature_type"] = int(cleaned["polymarket_signature_type"])
+            except (TypeError, ValueError) as exc:
+                raise TradingValidationError("Polymarket signature type must be an integer.") from exc
+    return cleaned
 
 
 def _clean_action(value: Any) -> str:
@@ -675,4 +792,346 @@ def place_order(req: Mapping[str, Any], *, user_id: str, creds: Creds = None) ->
         "submitted": True,
         "user_id": user_id,
         "venue_response": venue_response,
+    }
+
+
+def _response_json(response: Any, *, operation: str) -> Dict[str, Any]:
+    try:
+        body = response.json()
+    except ValueError:
+        body = {"text": str(getattr(response, "text", ""))[:1000]}
+    if not isinstance(body, dict):
+        body = {"data": body}
+    if not 200 <= int(response.status_code) < 300:
+        raise TradingExecutionError(
+            f"{operation} returned status {response.status_code}: {body}"
+        )
+    return body
+
+
+def _kalshi_request(
+    method: str,
+    endpoint_path: str,
+    *,
+    creds: Creds,
+    params: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Make a signed Kalshi account request without exposing its auth material."""
+    import requests
+
+    base_url = _cv(
+        creds, "kalshi_base_url", "https://external-api.kalshi.com/trade-api/v2"
+    ).rstrip("/")
+    parsed = urlparse(base_url)
+    signing_path = f"{parsed.path.rstrip('/')}{endpoint_path}"
+    headers = {
+        **_kalshi_auth_headers(method, signing_path, creds=creds),
+        "User-Agent": _USER_AGENT,
+    }
+    try:
+        response = requests.request(
+            method.upper(),
+            f"{base_url}{endpoint_path}",
+            headers=headers,
+            params=dict(params or {}),
+            timeout=DEFAULT_TIMEOUT_S,
+        )
+    except Exception as exc:
+        raise TradingExecutionError(f"Kalshi {method.upper()} request failed: {exc}") from exc
+    return _response_json(response, operation=f"Kalshi {method.upper()} {endpoint_path}")
+
+
+def _number(value: Any) -> Optional[float]:
+    if value in (None, ""):
+        return None
+    try:
+        return float(Decimal(str(value)))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _venue_order_id(source: Mapping[str, Any]) -> Optional[str]:
+    for key in ("order_id", "orderID", "id", "orderId"):
+        value = source.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return None
+
+
+def _reconciliation_status(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"filled", "executed", "matched", "complete", "completed"}:
+        return "filled"
+    if raw in {"canceled", "cancelled", "cancel"}:
+        return "canceled"
+    if raw in {"rejected", "failed", "error", "unmatched"}:
+        return "rejected"
+    if raw in {"resting", "live", "open", "active", "pending", "delayed"}:
+        return "open"
+    return "submitted"
+
+
+def _normalise_reconciled_order(platform: str, source: Mapping[str, Any]) -> Dict[str, Any]:
+    """Translate a venue order response into safe, display-ready audit fields."""
+    raw_status = source.get("status") or source.get("order_status")
+    if platform == "kalshi":
+        filled = _number(source.get("fill_count_fp", source.get("fill_count")))
+        remaining = _number(source.get("remaining_count_fp", source.get("remaining_count")))
+        quantity = _number(source.get("initial_count_fp", source.get("initial_count")))
+        price = _number(source.get("yes_price_dollars", source.get("yes_price")))
+        ticker = source.get("ticker")
+        token_id = None
+    else:
+        filled = _number(source.get("size_matched", source.get("matched_size")))
+        remaining = _number(source.get("size_remaining", source.get("remaining_size")))
+        quantity = _number(source.get("original_size", source.get("size")))
+        if quantity is not None and remaining is None and filled is not None:
+            remaining = max(0.0, quantity - filled)
+        price = _number(source.get("price", source.get("average_price")))
+        ticker = None
+        token_id = source.get("asset_id", source.get("token_id"))
+    return {
+        "venue_order_id": _venue_order_id(source),
+        "status": _reconciliation_status(raw_status),
+        "venue_status": str(raw_status or "submitted"),
+        "filled_quantity": filled,
+        "remaining_quantity": remaining,
+        "quantity": quantity,
+        "price": price,
+        "ticker": str(ticker) if ticker not in (None, "") else None,
+        "token_id": str(token_id) if token_id not in (None, "") else None,
+        "updated_at": source.get("last_update_time") or source.get("updated_at") or source.get("created_time"),
+    }
+
+
+def _kalshi_portfolio(creds: Creds, *, limit: int) -> Dict[str, Any]:
+    balance = _kalshi_request("GET", "/portfolio/balance", creds=creds)
+    positions_payload = _kalshi_request(
+        "GET", "/portfolio/positions", creds=creds, params={"limit": limit}
+    )
+    orders_payload = _kalshi_request(
+        "GET", "/portfolio/orders", creds=creds, params={"limit": limit}
+    )
+    fills_payload = _kalshi_request(
+        "GET", "/portfolio/fills", creds=creds, params={"limit": limit}
+    )
+    positions = []
+    for item in positions_payload.get("market_positions") or []:
+        if not isinstance(item, Mapping):
+            continue
+        positions.append(
+            {
+                "ticker": item.get("ticker"),
+                "quantity": _number(item.get("position_fp", item.get("position"))),
+                "exposure": _number(item.get("market_exposure_dollars")),
+                "realized_pnl": _number(item.get("realized_pnl_dollars")),
+                "fees": _number(item.get("fees_paid_dollars")),
+                "resting_orders": item.get("resting_orders_count"),
+                "updated_at": item.get("last_updated_ts"),
+            }
+        )
+    orders = [
+        _normalise_reconciled_order("kalshi", item)
+        for item in orders_payload.get("orders") or []
+        if isinstance(item, Mapping)
+    ]
+    fills = []
+    for item in fills_payload.get("fills") or []:
+        if not isinstance(item, Mapping):
+            continue
+        fills.append(
+            {
+                "trade_id": item.get("trade_id"),
+                "order_id": item.get("order_id"),
+                "ticker": item.get("ticker"),
+                "quantity": _number(item.get("count_fp", item.get("count"))),
+                "price": _number(item.get("yes_price_dollars", item.get("yes_price"))),
+                "fee": _number(item.get("fee_cost_dollars", item.get("fee_cost"))),
+                "created_at": item.get("created_time") or item.get("created_ts"),
+            }
+        )
+    return {
+        "platform": "kalshi",
+        "balance": {
+            "available": _number(balance.get("balance")),
+            "portfolio_value": _number(balance.get("portfolio_value")),
+            "unit": "cents",
+            "updated_at": balance.get("updated_ts"),
+        },
+        "positions": positions,
+        "orders": orders,
+        "fills": fills,
+    }
+
+
+def _polymarket_account_address(client: Any, creds: Creds) -> str:
+    funder = _cv(creds, "polymarket_funder_address")
+    if funder:
+        return funder
+    try:
+        return str(client.get_address())
+    except Exception as exc:
+        raise TradingExecutionError("Could not resolve the Polymarket account address.") from exc
+
+
+def _polymarket_portfolio(creds: Creds, *, limit: int) -> Dict[str, Any]:
+    client = _polymarket_client(creds)
+    try:
+        allowance = client.get_balance_allowance()
+        orders = client.get_open_orders(only_first_page=True)
+        trades = client.get_trades(only_first_page=True)
+        address = _polymarket_account_address(client, creds)
+    except Exception as exc:
+        raise TradingExecutionError(f"Polymarket account reconciliation failed: {exc}") from exc
+
+    import requests
+
+    try:
+        positions_response = requests.get(
+            "https://data-api.polymarket.com/positions",
+            params={"user": address, "limit": limit, "sizeThreshold": 0},
+            timeout=DEFAULT_TIMEOUT_S,
+            headers={"User-Agent": _USER_AGENT},
+        )
+        positions_payload = _response_json(
+            positions_response, operation="Polymarket position lookup"
+        )
+    except TradingExecutionError:
+        raise
+    except Exception as exc:
+        raise TradingExecutionError(f"Polymarket position lookup failed: {exc}") from exc
+
+    # The Data API returns a list; keep only display-safe position fields.
+    positions_source = positions_payload.get("data")
+    if not isinstance(positions_source, list):
+        positions_source = []
+    positions = [
+        {
+            "token_id": item.get("asset"),
+            "outcome": item.get("outcome"),
+            "quantity": _number(item.get("size")),
+            "average_price": _number(item.get("avgPrice")),
+            "current_price": _number(item.get("curPrice")),
+            "current_value": _number(item.get("currentValue")),
+            "cash_pnl": _number(item.get("cashPnl")),
+            "realized_pnl": _number(item.get("realizedPnl")),
+            "title": item.get("title"),
+            "slug": item.get("slug"),
+        }
+        for item in positions_source
+        if isinstance(item, Mapping)
+    ]
+    normalised_orders = [
+        _normalise_reconciled_order("polymarket", item)
+        for item in (orders or [])
+        if isinstance(item, Mapping)
+    ]
+    fills = [
+        {
+            "trade_id": item.get("id"),
+            "order_id": item.get("order_id", item.get("taker_order_id")),
+            "token_id": item.get("asset_id"),
+            "quantity": _number(item.get("size")),
+            "price": _number(item.get("price")),
+            "created_at": item.get("match_time") or item.get("created_at"),
+        }
+        for item in (trades or [])[:limit]
+        if isinstance(item, Mapping)
+    ]
+    return {
+        "platform": "polymarket",
+        "balance": {
+            "available": _number((allowance or {}).get("balance")),
+            "allowance": _number((allowance or {}).get("allowance")),
+            "unit": "USDC",
+        },
+        "positions": positions,
+        "orders": normalised_orders,
+        "fills": fills,
+    }
+
+
+def reconcile_portfolio(platform: Any, creds: Mapping[str, Any], *, limit: int = 100) -> Dict[str, Any]:
+    """Fetch a current portfolio, open-order, and fill snapshot from one venue."""
+    venue = _clean_platform(platform)
+    secure_creds = connection_credentials(venue, creds)
+    bounded_limit = max(1, min(int(limit), 100))
+    return (
+        _kalshi_portfolio(secure_creds, limit=bounded_limit)
+        if venue == "kalshi"
+        else _polymarket_portfolio(secure_creds, limit=bounded_limit)
+    )
+
+
+def reconcile_order(platform: Any, venue_order_id: str, creds: Mapping[str, Any]) -> Dict[str, Any]:
+    """Fetch the live venue state of a specific submitted order."""
+    venue = _clean_platform(platform)
+    order_id = str(venue_order_id or "").strip()
+    if not order_id:
+        raise TradingValidationError("venue_order_id is required for reconciliation.")
+    secure_creds = connection_credentials(venue, creds)
+    if venue == "kalshi":
+        source = _kalshi_request(
+            "GET", f"/portfolio/orders/{order_id}", creds=secure_creds
+        )
+        source = source.get("order") if isinstance(source.get("order"), Mapping) else source
+    else:
+        try:
+            source = _polymarket_client(secure_creds).get_order(order_id)
+        except Exception as exc:
+            raise TradingExecutionError(f"Polymarket order reconciliation failed: {exc}") from exc
+    if not isinstance(source, Mapping):
+        raise TradingExecutionError("Venue returned an invalid order-reconciliation response.")
+    result = _normalise_reconciled_order(venue, source)
+    result["venue_order_id"] = result.get("venue_order_id") or order_id
+    return result
+
+
+def cancel_order(
+    platform: Any,
+    venue_order_id: str,
+    creds: Mapping[str, Any],
+    *,
+    subaccount: Optional[int] = None,
+    exchange_index: int = 0,
+) -> Dict[str, Any]:
+    """Cancel the remaining quantity of a submitted venue order."""
+    venue = _clean_platform(platform)
+    order_id = str(venue_order_id or "").strip()
+    if not order_id:
+        raise TradingValidationError("venue_order_id is required to cancel an order.")
+    secure_creds = connection_credentials(venue, creds)
+    if venue == "kalshi":
+        params: Dict[str, Any] = {"exchange_index": int(exchange_index or 0)}
+        if subaccount is not None:
+            params["subaccount"] = int(subaccount)
+        source = _kalshi_request(
+            "DELETE",
+            f"/portfolio/events/orders/{order_id}",
+            creds=secure_creds,
+            params=params,
+        )
+        return {
+            "venue_order_id": str(source.get("order_id") or order_id),
+            "status": "canceled",
+            "venue_status": "canceled",
+            "remaining_quantity": 0.0,
+            "canceled_quantity": _number(source.get("reduced_by")),
+            "updated_at": source.get("ts_ms"),
+        }
+    try:
+        from py_clob_client_v2.clob_types import OrderPayload
+
+        source = _polymarket_client(secure_creds).cancel_order(OrderPayload(orderID=order_id))
+    except Exception as exc:
+        raise TradingExecutionError(f"Polymarket cancellation failed: {exc}") from exc
+    canceled = source.get("canceled") if isinstance(source, Mapping) else []
+    if order_id not in (canceled or []):
+        detail = source.get("not_canceled") if isinstance(source, Mapping) else source
+        raise TradingExecutionError(f"Polymarket did not cancel order {order_id}: {detail}")
+    return {
+        "venue_order_id": order_id,
+        "status": "canceled",
+        "venue_status": "canceled",
+        "remaining_quantity": 0.0,
     }

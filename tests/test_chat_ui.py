@@ -123,6 +123,15 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("/personal-ledger/", self.index_html)
         self.assertIn("function openPersonalLedger", self.index_html)
 
+    def test_exchange_connection_never_persists_credentials_in_browser_storage(self) -> None:
+        self.assertIn("/trading/connections/", self.index_html)
+        self.assertIn("FORESEA_TRADING_KMS_KEY_NAME", (
+            Path(__file__).resolve().parents[1] / "src" / "analyzing_llm_rationale" / "server.py"
+        ).read_text(encoding="utf-8"))
+        self.assertNotIn("_saveVenueCredsStore", self.index_html)
+        self.assertNotIn("_allVenueCreds", self.index_html)
+        self.assertIn("localStorage.removeItem('foresea_venue_creds')", self.index_html)
+
     def test_app_uses_refresh_safe_paths_and_migrates_legacy_hash_links(self) -> None:
         self.assertIn("const CHAT_PATH_PREFIX = '/chat/';", self.index_html)
         self.assertIn("'app':           '/ask'", self.index_html)
