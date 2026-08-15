@@ -211,7 +211,9 @@ Required runtime environment:
   OAuth app's callback URL must be the site origin (e.g. `https://foresea.ink/`).
   When unset, the "Continue with GitHub" button is hidden and `/auth/github`
   returns 503. Sign-in also works with Google and email/password.
-- `SESSION_SECRET`: long random string used to sign browser session JWTs.
+- `SESSION_SECRET`: long random string used to sign browser session JWTs and
+  derive domain-separated, non-reversible references for authenticated analytics.
+  Rotating it starts a new attribution cohort; it never exposes account emails.
 
 The OAuth client must allow these JavaScript origins:
 
@@ -385,8 +387,9 @@ evidence articles. It is built for resolvable forecasts, not general Q&A.
 - `POST /agent/analyze`: orchestrated end-to-end analysis of a live question (see below).
 - `GET /agent/scan`: scan a venue for mispriced markets, ranked by edge (see below).
 - `GET /radar`: homepage market desk built from the live track-record edge board.
-- `POST /analytics/event`: record product funnel events such as `forecast_completed`, `watchlist_add`, `share_created`, and `digest_sent`.
-- `GET /analytics/events/summary`: summarize product analytics separately from page visits.
+- `POST /analytics/visit`: record a page visit; signed-in requests are linked only to a non-reversible account reference.
+- `POST /analytics/event`: record product funnel events such as `forecast_completed`, `watchlist_add`, `share_created`, and `digest_sent`; signed-in events use the same private reference.
+- `GET /analytics/events/summary`: summarize product analytics separately from page visits, including aggregate authenticated-versus-anonymous attribution for the last 30 days.
 - `POST /forecasts/share`: create an explicit public forecast share page.
 - `GET /forecast/{share_id}`: render a shared forecast without exposing private chat history.
 - `GET|PUT|DELETE /trading/connections/{platform}`: encrypted per-user exchange connection metadata and lifecycle.
