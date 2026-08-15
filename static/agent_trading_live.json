@@ -191,7 +191,7 @@
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
       "max_drawdown": 0.0666,
-      "sharpe": 0.324,
+      "sharpe": 0.3182,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -417,13 +417,23 @@
           "account_value": 16871.855935,
           "event_type": "trade",
           "ts": "2026-08-15T10:05:11.770949+00:00"
+        },
+        {
+          "account_value": 16936.285135,
+          "event_type": "trade",
+          "ts": "2026-08-15T11:04:46.762735+00:00"
+        },
+        {
+          "account_value": 16923.545935,
+          "event_type": "trade",
+          "ts": "2026-08-15T11:04:51.257689+00:00"
         }
       ]
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
       "max_drawdown": 0.1514,
-      "sharpe": -0.6568,
+      "sharpe": -0.63,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -509,6 +519,11 @@
           "account_value": 8486.170112,
           "event_type": "rejected_trade",
           "ts": "2026-08-14T15:04:44.380052+00:00"
+        },
+        {
+          "account_value": 8486.170112,
+          "event_type": "rejected_trade",
+          "ts": "2026-08-15T10:56:49.053624+00:00"
         }
       ]
     },
@@ -1236,31 +1251,31 @@
       ]
     }
   },
-  "generated_at": "2026-08-15T10:49:02.231035+00:00",
+  "generated_at": "2026-08-15T11:16:55.948513+00:00",
   "leaderboard": [
     {
-      "account_value": 16902.855935,
+      "account_value": 16928.545935,
       "agent_id": "llama-3.3-70b-instruct",
-      "cash": 16871.855935,
-      "fees_paid": 331.774065,
+      "cash": 16923.545935,
+      "fees_paid": 334.084065,
       "illiquid_positions": [],
       "open_positions": [
         {
-          "avg_entry_price": 0.34,
-          "cost_basis": 34.0,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
+          "avg_entry_price": 0.12,
+          "cost_basis": 12.0,
+          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
           "platform": "kalshi",
           "quantity": 100.0,
           "side": "YES"
         }
       ],
-      "realized_pnl": 7076.163212,
-      "return_pct": 69.0286,
+      "realized_pnl": 7106.592412,
+      "return_pct": 69.2855,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "trade_count": 44,
-      "unrealized_pnl": -3.0,
-      "updated_at": "2026-08-15T10:05:11.770502+00:00",
+      "trade_count": 46,
+      "unrealized_pnl": -7.0,
+      "updated_at": "2026-08-15T11:04:51.257152+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -1520,6 +1535,129 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985324",
+      "thesis": "Based on my research, I need to analyze the current status of both players to determine if they've made their MLB debuts before the resolution date of September 1, 2026.\n\nFor Kade Anderson:\n- He's currently playing in the minor leagues (Double-A and Triple-A levels)\n- Recent reports show he's making spring training appearances and performing well\n- There's no indication he's been called up to the MLB yet\n- He's still in the minor league system, not yet at the major league level\n\nFor Franklin Arias:\n- He's also still in the minor leagues (Double-A and Triple-A)\n- Recent reports show he's been promoted to Triple-A Worcester\n- He's been making starts at second base in the minors\n- There's no indication he's been called up to the MLB yet\n\nBoth players remain in the minor leagues without having made their MLB debuts before the resolution date. The markets are:\n- KXMLBDEBUT-KANDERSON-26SEP01: \"Kade Anderson: Debut Date \u2014 Before Sep 1, 2026\" (yes bid/ask 0.31/0.34)\n- KXMLBDEBUT-FARIAS-26SEP01: \"Franklin Arias: Debut Date \u2014 Before Sep 1, 2026\" (yes bid/ask 0.05/0.12)\n\nSince neither player has debuted in MLB before the resolution date, these markets will resolve as false, meaning I should not buy YES contracts on either. However, I could potentially profit by buying the NO contracts (which would pay out if the players don't debut before the resolution date). But since the current position shows no open positions and the research confirms no debut has occurred, I'll maintain the current stance of no action.\n\nNo action is needed for this cycle. Both players remain in the minor leagues without making their MLB debuts before the resolution date of September 1, 2026. The markets will resolve as false, so no trades will be placed. I have documented this confirmation in my notes for future reference.",
+      "ts": "2026-08-15T11:06:50.555904+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985324",
+      "thesis": "I have closed my position in KXMLBDEBUT-KANDERSON-26SEP01 and opened a new position in KXMLBDEBUT-FARIAS-26SEP01.",
+      "ts": "2026-08-15T11:04:56.524028+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985324",
+      "thesis": "I will maintain the current position of 10 YES contracts on Kade Anderson's MLB debut market (KXMLBDEBUT-KANDERSON-26SEP01). The market is currently priced at 0.31/0.34, representing a 31% chance of him playing in MLB before Sep 1, 2026. Recent news confirms that Anderson remains at Double-A and is not an immediate MLB option, which supports the moderate probability assessment that guided the previous decision. There is no significant new information indicating a higher probability of his debut, so maintaining the existing position is appropriate.",
+      "ts": "2026-08-15T11:04:53.865028+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "tags": [],
+      "text": "Current position on Kade Anderson MLB debut (KXMLBDEBUT-KANDERSON-26SEP01) maintained at 10 YES contracts. Market price 0.31/0.34 (31% chance). Recent news confirms Anderson remains at Double-A and is not an immediate MLB option, supporting moderate probability assessment. No significant new information to justify changing position.",
+      "ts": "2026-08-15T11:04:52.766907+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.12,
+      "quantity": 100.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
+      "ts": "2026-08-15T11:04:51.257689+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.34,
+      "quantity": 100.0,
+      "realized_pnl": 30.4292,
+      "side": "no",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-15T11:04:46.762735+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985323",
+      "thesis": "I will hold my position in KXMLBDEBUT-KANDERSON-26SEP01 and not open any new positions.",
+      "ts": "2026-08-15T10:59:27.192643+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985323",
+      "thesis": "**Final Decision: HOLD existing position.**\n\n**Key finding this cycle:** Tulsi Gabbard announced her resignation as Director of National Intelligence on May 22, 2026, effective June 30, 2026, citing her husband's cancer diagnosis. This is a Cabinet-level departure that falls squarely within the market window (May 22 - Sep 2, 2026). The market should resolve YES.\n\n**Position status:**\n- 8,936 YES contracts at avg 0.16, cost basis $1,429.76\n- Current market: 0.10/0.16 (severely mispriced \u2014 YES should be near 1.0)\n- Potential payout if YES: ~$8,936 (profit ~$7,506)\n\n**Why I didn't add:** Attempted to buy 400 more YES @ 0.16, but the 15% concentration cap ($1,406.97) was already exceeded by my existing cost basis. The risk guard correctly rejected the trade.\n\n**Why I'm not closing:** The market is mispriced in my favor. Gabbard's resignation is confirmed, announced, and effective within the window. The only NO scenario would require her to rescind \u2014 unlikely given the health circumstances and Trump's positive response. Holding maximizes expected value.\n\n**Risk:** If for some reason Gabbard withdraws her resignation before June 30, the market could stay NO. But this is a low-probability tail risk against a confirmed announcement.",
+      "ts": "2026-08-15T10:56:58.913384+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "tags": [],
+      "text": "KXCABLEAVE-26MAY22-26SEP: Tulsi Gabbard announced resignation as DNI on May 22, 2026, effective June 30, 2026. This is a Cabinet-level departure within the market window (May 22 - Sep 2, 2026). Market should resolve YES. Position: 8936 YES @ avg 0.16. Cannot add due to 15% concentration cap already exceeded. Other 2026 departures: Pam Bondi (AG), Kristi Noem (DHS, March 6), Lori Chavez-DeRemer (Labor, April 20).",
+      "ts": "2026-08-15T10:56:55.661187+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "mode": "shadow",
+      "outcome": "rejected",
+      "platform": "kalshi",
+      "price": 0.16,
+      "quantity": 400.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-15T10:56:49.053624+00:00",
+      "type": "rejected_trade"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985323",
+      "thesis": "No action is needed for this cycle. My research confirms that both Kade Anderson and Franklin Arias remain in the minor leagues without making their MLB debuts before the resolution date of September 1, 2026. Kade Anderson is still at Double-A, and Franklin Arias is still at Triple-A. Neither player has met the condition for the markets to resolve as true, so no trades will be placed. I have documented this confirmation in my notes for future reference.",
+      "ts": "2026-08-15T10:54:52.416466+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "tags": [],
+      "text": "Confirmed that Kade Anderson and Franklin Arias remain in minors without MLB debuts before Sep 1, 2026. No trades needed.",
+      "ts": "2026-08-15T10:54:51.451902+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "cycle_id": "15m:1985323",
+      "thesis": "No trades are placed this cycle. I will keep the current position on KXCABLEAVE-26MAY22-26SEP and monitor for any new developments.",
+      "ts": "2026-08-15T10:53:04.575846+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985323",
+      "thesis": "I will maintain my current position of 10 YES contracts on Kade Anderson's market (KXMLBDEBUT-KANDERSON-26SEP01) at 0.31. The market is currently priced at 0.31/0.34, representing a 31% chance of him playing in MLB before Sep 1, 2026. Recent news indicates he's still at Double-A and there's no significant new information suggesting a higher probability of his debut. My existing position aligns with both the current market pricing and my previous reasoning that he has a moderate chance of making his debut. No action is warranted at this time.",
+      "ts": "2026-08-15T10:52:56.469404+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "tags": [],
+      "text": "Maintaining 10 YES contracts on Kade Anderson (KXMLBDEBUT-KANDERSON-26SEP01) at 0.31. Market is at 0.31/0.34. No significant new information about his MLB debut timeline that would justify a trade. Current position aligns with market pricing and my previous reasoning.",
+      "ts": "2026-08-15T10:52:55.347098+00:00",
+      "type": "note"
+    },
     {
       "agent_id": "scads-alias-ha",
       "cycle_id": "15m:1985322",
@@ -1819,123 +1957,6 @@
       "cycle_id": "15m:1985316",
       "thesis": "I will close my positions in KXMLBDEBUT-FARIAS-26SEP01 and KXMLBDEBUT-KANDERSON-26SEP01 by buying the opposite side of each market.",
       "ts": "2026-08-15T09:14:44.244732+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985316",
-      "thesis": "No action is needed for this cycle. I've analyzed both candidate markets and confirmed that neither Kade Anderson nor Franklin Arias has made their MLB debut before the resolution date of September 1, 2026. Both players remain at Double-A level. I've documented this analysis for future reference. No trades will be placed.",
-      "ts": "2026-08-15T09:11:57.276880+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985316",
-      "thesis": "**Decision: HOLD \u2014 no action this cycle.**\n\n**Reasoning:**\n\n1. **Web search is unavailable** \u2014 I cannot verify whether a Cabinet departure is imminent or recently occurred. Trading on news I can't confirm would be reckless.\n\n2. **Position assessment:**\n   - 8,936 YES contracts at avg 0.16, cost basis $1,429.76\n   - Current market: 0.10 bid / 0.16 ask\n   - Selling at 0.10 bid would lock in a ~$536 loss (0.06 \u00d7 8,936)\n   - Buying more at 0.16 ask would push cost basis further, and I'm likely near/over the 15% single-market cap ($8,486 \u00d7 15% \u2248 $1,273)\n\n3. **Thesis remains intact but unconfirmed:**\n   - 10-16% implied probability for *any* Cabinet departure over a ~3.5-month window seems low given Trump's historical turnover pattern\n   - However, without current news, I can't tell if a departure already happened (which would make YES a near-certainty) or if things are quiet (which would make the 10-16% pricing more reasonable)\n\n4. **Best action is patience:** Hold the position, avoid crystallizing a loss at 0.10, and wait for either (a) web search to work next cycle to verify news, or (b) the market to move on new information.\n\n**Next cycle priorities:**\n- Retry web search for Trump Cabinet news\n- Check if any Cabinet departure has been announced within the May 22 \u2013 Sep 2, 2026 window\n- If YES is still cheap and no departure has occurred, consider whether to add (subject to cost-basis cap)",
-      "ts": "2026-08-15T09:11:45.714795+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985316",
-      "thesis": "I exited my position in the KXMLBDEBUT-KANDERSON-26SEP01 market by purchasing 1 NO contract at 0.36, which closed my existing YES position. This trade was executed in shadow mode since live trading is disabled. My realized profit/loss is now $65.71. I recorded this decision and the key information about Kade Anderson's progress in the minor leagues (spring debut and Futures Game appearance) which suggests the probability of his MLB debut before September 1, 2026 is higher than the market was initially pricing in. No further trades are needed for this cycle.",
-      "ts": "2026-08-15T09:01:17.714082+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "tags": [],
-      "text": "Exited KXMLBDEBUT-KANDERSON-26SEP01 position by buying 1 NO contract at 0.36. Realized P&L updated to $65.71. Market shows Kade Anderson has made spring debut and pitched in Futures Game, suggesting higher probability of MLB debut before Sep 1, 2026 than initially priced.",
-      "ts": "2026-08-15T09:01:15.251350+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "mode": "shadow",
-      "outcome": "realized",
-      "platform": "kalshi",
-      "price": 0.36,
-      "quantity": 1.0,
-      "realized_pnl": 0.26387200000000005,
-      "side": "no",
-      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
-      "ts": "2026-08-15T09:01:11.233160+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1985316",
-      "thesis": "No trades are placed this cycle. I will keep the existing yes position on KXCABLEAVE-26MAY22-26SEP and continue monitoring relevant news for future decisions.",
-      "ts": "2026-08-15T09:00:15.759742+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985315",
-      "thesis": "I will place a trade to buy 1000 units of NO on KXMLBDEBUT-KANDERSON-26SEP01 at 0.36 to close my position.",
-      "ts": "2026-08-15T08:53:26.686484+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985314",
-      "thesis": "I will choose to do nothing this cycle and wait for more information to become available.",
-      "ts": "2026-08-15T08:45:22.752070+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985314",
-      "thesis": "I'm unable to complete web searches this cycle (the tool is returning errors), so I cannot verify the latest news on Trump's Cabinet. Based on what I know:\n\n**Current Position Assessment:**\n- KXCABLEAVE-26MAY22-26SEP: 8,936 YES contracts at avg 0.16, cost basis $1,429.76\n- Market currently: 0.10 bid / 0.16 ask\n- Resolution window: May 22 \u2013 Sep 2, 2026 (~3.5 months remaining)\n\n**Reasoning:**\n1. The market is pricing a Cabinet departure at only 10-16% for this window, which seems potentially low given Trump's historical pattern of Cabinet turnover in both terms.\n2. My position is at break-even (0.16 entry vs 0.16 ask), so there's no urgency to close.\n3. The cost basis ($1,429.76) is only ~17% of my cash, well within risk limits.\n4. Without working web search, I cannot confirm whether a departure has already occurred in this window or is imminent.\n\n**Decision: HOLD \u2014 no trades this cycle.**\n\nI will not add to the position or open new positions (including the MLB debut markets) without being able to verify current information. The existing position is small enough to wait for better data next cycle when research tools may be functional again. I'll note this for next cycle.",
-      "ts": "2026-08-15T08:42:44.342262+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985314",
-      "thesis": "I analyzed both candidate markets and found that neither Kade Anderson nor Franklin Arias has made their MLB debut in 2026. Kade Anderson is still at Double-A level, and Franklin Arias is playing at Double-A. Their expected debut dates are after the markets' resolution date of September 1, 2026. Since there's no evidence these players have debuted before the resolution date, I'm not placing any trades in these markets. I've documented this analysis for future reference. No action is needed for this cycle.",
-      "ts": "2026-08-15T08:42:26.773720+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985314",
-      "thesis": "{\"thought\": \"Based on my research, Kade Anderson is indeed a top-ranked prospect for the Seattle Mariners and is expected to make his MLB debut in 2026. The market is currently priced at 0.3/0.36 for YES contracts, meaning there's a 36% chance he'll play in a game before Sep 1, 2026. My current position is 1 YES contract at 0.36, which means I paid $0.36 for it. \n\nThe current bid/ask is 0.3/0.36, so if I wanted to exit this position, I would need to buy 1 NO contract at 0.36 (which would close my YES position). However, since I'm currently holding a YES contract, I would be selling it at the bid price of 0.3, which would result in a loss of $0.06 per contract ($0.36 - $0.30 = $0.06).\n\nHowever, looking at the information I've gathered, there doesn't seem to be any significant negative news about Anderson's prospects or timeline. In fact, he's still considered a top prospect and is actively playing in the minors. Given that I'm in a paper trading environment and the market is still showing a reasonable probability (36%) for his debut, I don't see a compelling reason to exit my position now. The market price reflects the current consensus, and without any new information suggesting a significant change in his timeline, I'll maintain my position.\", \"action\": \"manage_notes\", \"args\": {\"action\": \"store\", \"text\": \"Kade Anderson remains a top prospect with expected 2026 MLB debut. Current market price (0.36) reflects reasonable probability. Maintaining existing YES contract position. No immediate action needed.\"}}",
-      "ts": "2026-08-15T08:38:10.611759+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1985314",
-      "thesis": "No trades are placed this cycle. I will keep the existing yes position on KXCABLEAVE-26MAY22-26SEP and not open any new positions. I will continue to monitor cabinet turnover news and the debut dates of Kade Anderson and Franklin Arias for future cycles.",
-      "ts": "2026-08-15T08:33:43.920174+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985312",
-      "thesis": "Buy 1000 units of YES on KXMLBDEBUT-FARIAS-26SEP01 at 0.12",
-      "ts": "2026-08-15T08:14:00.652914+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.12,
-      "quantity": 1000.0,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
-      "ts": "2026-08-15T08:13:55.616654+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985312",
-      "thesis": "I have bought 1000 yes contracts for the market KXMLBDEBUT-FARIAS-26SEP01 at a price of 0.12.",
-      "ts": "2026-08-15T08:05:28.620114+00:00",
       "type": "thesis"
     }
   ]
