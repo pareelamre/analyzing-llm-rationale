@@ -4057,6 +4057,18 @@ class AnalyticsEventSummary(BaseModel):
     active_accounts_7d: int = 0
 
 
+class RecentAnalyticsEvent(BaseModel):
+    event_name: str
+    path: str = ""
+    attribution: str = "anonymous"
+    ts: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RecentAnalyticsEventsResponse(BaseModel):
+    events: List[RecentAnalyticsEvent] = Field(default_factory=list)
+
+
 class GoogleAuthRequest(BaseModel):
     """Google One-Tap credential submitted by the browser."""
     credential: str = Field(..., max_length=8192)
@@ -5645,6 +5657,62 @@ def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
     )
 
 
+def _recent_analytics_events_datastore(limit: int = 20) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    query = client.query(kind="AnalyticsEvent")
+    query.order = ["-ts"]
+    entities = list(query.fetch(limit=limit))
+    events = []
+    for entity in entities:
+        meta = {}
+        if entity.get("metadata"):
+            try:
+                meta = json.loads(entity["metadata"]) if isinstance(entity["metadata"], str) else entity["metadata"]
+            except Exception:
+                meta = {}
+        ts_val = entity.get("ts")
+        events.append({
+            "event_name": str(entity.get("event_name", "")),
+            "path": str(entity.get("path", "/")),
+            "attribution": str(entity.get("attribution", "anonymous")),
+            "ts": ts_val.isoformat() if hasattr(ts_val, "isoformat") else str(ts_val or ""),
+            "metadata": meta,
+        })
+    return events
+
+
+def _recent_analytics_events_duckdb(limit: int = 20) -> List[Dict[str, Any]]:
+    conn = _analytics_conn()
+    try:
+        rows = conn.execute(
+            """
+            SELECT event_name, path, attribution, ts, metadata_json
+            FROM analytics_events
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            [limit],
+        ).fetchall()
+    finally:
+        conn.close()
+    events = []
+    for event_name, path, attribution, ts_val, metadata_json in rows:
+        meta = {}
+        if metadata_json:
+            try:
+                meta = json.loads(metadata_json) if isinstance(metadata_json, str) else metadata_json
+            except Exception:
+                meta = {}
+        events.append({
+            "event_name": str(event_name or ""),
+            "path": str(path or "/"),
+            "attribution": str(attribution or "anonymous"),
+            "ts": ts_val.isoformat() if hasattr(ts_val, "isoformat") else str(ts_val or ""),
+            "metadata": meta,
+        })
+    return events
+
+
 def _radar_id(platform: str, market_url: Optional[str], question: str) -> str:
     source = f"{platform}:{market_url or question}"
     return hashlib.sha256(source.encode("utf-8", errors="ignore")).hexdigest()[:16]
@@ -6211,6 +6279,73 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
     )
 
 
+@app.get(
+    "/analytics/events/recent",
+    tags=["System"],
+    response_model=RecentAnalyticsEventsResponse,
+    summary="Recent privacy-preserving product activity feed",
+)
+async def recent_analytics_events(
+    request: Request,
+    limit: int = Query(20, ge=1, le=100, description="Max events to return"),
+) -> RecentAnalyticsEventsResponse:
+    """Return the most recent product events without exposing PII."""
+    _check_api_key(request)
+    if _get_datastore() is not None:
+        try:
+            events = await asyncio.get_running_loop().run_in_executor(
+                None, _recent_analytics_events_datastore, limit
+            )
+            return RecentAnalyticsEventsResponse(events=events)
+        except Exception:
+            logger.warning("datastore recent events failed; falling back to duckdb", exc_info=True)
+    events = await asyncio.get_running_loop().run_in_executor(
+        None, _recent_analytics_events_duckdb, limit
+    )
+    return RecentAnalyticsEventsResponse(events=events)
+
+
+@app.get(
+    "/analytics/export",
+    tags=["System"],
+    summary="Export aggregate privacy-preserving analytics summary in CSV format",
+)
+async def export_analytics_csv(request: Request) -> Response:
+    """Export 30-day aggregate traffic and event counts in CSV format."""
+    _check_api_key(request)
+    visits_task = analytics_summary(request)
+    events_task = analytics_events_summary(request)
+    visits, events = await asyncio.gather(visits_task, events_task)
+
+    lines = ["# Foresea Analytics Summary Export", ""]
+    lines.append("Metric,Value")
+    lines.append(f"Total Visits (30d),{visits.total_visits}")
+    lines.append(f"Unique Visitors (30d),{visits.unique_visitors}")
+    lines.append(f"Visits (24h),{visits.visits_24h}")
+    lines.append(f"Total Events (30d),{events.total_events}")
+    lines.append(f"Events (24h),{events.events_24h}")
+    lines.append(f"Active Accounts (24h),{events.active_accounts_24h}")
+    lines.append(f"Active Accounts (7d),{events.active_accounts_7d}")
+    lines.append(f"Authenticated Records (30d),{events.attribution.authenticated_records}")
+    lines.append(f"Anonymous Records (30d),{events.attribution.anonymous_records}")
+    lines.append("")
+    lines.append("Day,Visits,Unique Visitors")
+    for row in visits.by_day:
+        lines.append(f"{row.get('day')},{row.get('visits', 0)},{row.get('unique_visitors', 0)}")
+    lines.append("")
+    lines.append("Event Name,Total Count,Authenticated,Anonymous")
+    for row in events.by_event:
+        lines.append(f"{row.get('event_name')},{row.get('count', 0)},{row.get('authenticated', 0)},{row.get('anonymous', 0)}")
+
+    csv_content = "\n".join(lines)
+    filename = f"foresea_analytics_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.get("/analytics/dashboard", response_class=HTMLResponse, tags=["System"], summary="Live Operator Activity & Attribution Dashboard")
 async def analytics_dashboard(request: Request) -> HTMLResponse:
     """Operator dashboard for real-time Foresea activity and attribution monitoring."""
@@ -6303,6 +6438,10 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
       border-radius: 7px;
       font-size: 13px;
       cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       transition: all 0.15s ease;
     }
     .btn-refresh:hover { background: var(--card-hover); border-color: var(--border-subtle); }
@@ -6375,6 +6514,27 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
     .bar-auth { background: var(--emerald); height: 100%; }
     .bar-anon { background: var(--slate); height: 100%; }
 
+    /* Activity Stream */
+    .activity-list { list-style: none; display: flex; flex-direction: column; gap: 8px; max-height: 290px; overflow-y: auto; }
+    .activity-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .activity-tag {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .tag-auth { background: var(--emerald-dim); color: #34d399; }
+    .tag-anon { background: rgba(100, 116, 139, 0.2); color: var(--slate); }
+
     /* Privacy Banner */
     .privacy-banner {
       background: rgba(16, 185, 129, 0.05);
@@ -6403,6 +6563,7 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
       </div>
       <div class="controls">
         <div class="live-indicator"><span class="pulse-dot"></span> Live Telemetry</div>
+        <a href="/analytics/export" class="btn-refresh">📥 Export CSV</a>
         <button class="btn-refresh" id="refreshBtn" onclick="loadTelemetry()">Refresh</button>
       </div>
     </div>
@@ -6490,6 +6651,19 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
       </div>
     </div>
 
+    <!-- Live Recent Activity Stream -->
+    <div class="panel" style="margin-bottom: 24px;">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Live Activity Stream</div>
+          <div class="panel-sub">Most recent privacy-preserving product events</div>
+        </div>
+      </div>
+      <div id="recentActivityList" class="activity-list">
+        <div style="text-align:center; color:var(--text-dim); padding: 16px;">Loading recent events...</div>
+      </div>
+    </div>
+
     <!-- Privacy Banner -->
     <div class="privacy-banner">
       <span class="privacy-icon">🛡️</span>
@@ -6504,13 +6678,15 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
       const btn = document.getElementById('refreshBtn');
       if (btn) btn.innerText = 'Refreshing...';
       try {
-        const [vRes, eRes] = await Promise.all([
+        const [vRes, eRes, rRes] = await Promise.all([
           fetch('/analytics/summary'),
-          fetch('/analytics/events/summary')
+          fetch('/analytics/events/summary'),
+          fetch('/analytics/events/recent?limit=15')
         ]);
         if (!vRes.ok || !eRes.ok) throw new Error('Analytics endpoints unreachable');
         const visits = await vRes.json();
         const events = await eRes.json();
+        const recents = rRes.ok ? await rRes.json() : { events: [] };
 
         // 1. Stats
         document.getElementById('activeAccounts24h').innerText = (events.active_accounts_24h || 0).toLocaleString();
@@ -6574,6 +6750,26 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
           }).join('');
         } else {
           tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim)">No events recorded yet</td></tr>';
+        }
+
+        // 4. Live Recent Activity Stream
+        const streamContainer = document.getElementById('recentActivityList');
+        if (recents.events && recents.events.length) {
+          streamContainer.innerHTML = recents.events.map(ev => {
+            const isAuth = ev.attribution === 'authenticated';
+            const tagClass = isAuth ? 'tag-auth' : 'tag-anon';
+            const tagLabel = isAuth ? 'Signed In' : 'Anonymous';
+            const tsStr = ev.ts ? new Date(ev.ts).toLocaleTimeString() : '';
+            return `<div class="activity-item">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-weight:600">${ev.event_name}</span>
+                <span class="activity-tag ${tagClass}">${tagLabel}</span>
+              </div>
+              <span style="color:var(--text-dim); font-size:12px;">${tsStr}</span>
+            </div>`;
+          }).join('');
+        } else {
+          streamContainer.innerHTML = '<div style="text-align:center; color:var(--text-dim); padding: 16px;">No recent events recorded yet</div>';
         }
       } catch (err) {
         console.error(err);
