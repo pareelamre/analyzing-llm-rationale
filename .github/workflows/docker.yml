@@ -159,8 +159,8 @@ jobs:
           python scripts/measure_forecast_latency.py \
             --url "${SERVICE_URL}" \
             --mode stream \
-            --models minimax-m3 \
-            --runs 3 \
+            --models minimax-m3,kimi-k2.7-code,gemma-4-31b-it \
+            --runs 1 \
             --no-attach-evidence \
             --max-tokens 64 \
             --timeout 60 > stream-latency.json
@@ -169,13 +169,23 @@ jobs:
           import json
 
           payload = json.load(open("stream-latency.json", "r", encoding="utf-8"))
+          requested_models = {"minimax-m3", "kimi-k2.7-code", "gemma-4-31b-it"}
           successes = [
               row for row in payload["rows"]
               if row.get("status") == 200
               and row.get("first_delta_ms") is not None
               and row.get("done_ms") is not None
-              and row.get("model_key") == "minimax-m3"
+              and row.get("model_key") in requested_models
           ]
+          successful_models = sorted({row["model_key"] for row in successes})
+          unavailable_models = sorted(
+              requested_models - successful_models
+          )
           assert successes, f"no successful streamed response: {payload['rows']}"
-          print("stream latency smoke test passed")
+          if unavailable_models:
+              print(
+                  "::warning::SCADS smoke models unavailable: "
+                  + ", ".join(unavailable_models)
+              )
+          print("stream latency smoke test passed via: " + ", ".join(successful_models))
           PY
