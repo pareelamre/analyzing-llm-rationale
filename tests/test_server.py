@@ -2174,16 +2174,66 @@ class ServerTests(unittest.TestCase):
 
         detail = self.client.get(f"/agent/runs/{run_id}", headers=owner_headers)
         self.assertEqual(detail.status_code, 200)
-        steps = detail.json()["steps"]
+        body = detail.json()
+        steps = body["steps"]
         self.assertEqual(len(steps), 2)
         self.assertEqual(steps[0]["index"], 0)
         self.assertEqual(steps[0]["thought"], "note one")
         self.assertEqual(steps[0]["action"], "manage_notes")
         self.assertEqual(steps[0]["args"], {"action": "add", "text": "Track Fed dates."})
         self.assertFalse(steps[0]["error"])
-        self.assertIn("at", steps[0])
+        # Two-phase write: the start-phase and completion-phase hooks update
+        # the same record by index rather than appending two entries.
+        self.assertIn("started_at", steps[0])
+        self.assertIn("completed_at", steps[0])
         self.assertEqual(steps[1]["index"], 1)
         self.assertEqual(steps[1]["thought"], "note two")
+        # The widened request snapshot: benchmark_tools/max_tool_steps are
+        # plain non-secret fields, unlike openrouter_api_key/history (see
+        # test_agent_run_is_private_durable_and_excludes_provider_secrets).
+        self.assertTrue(body["request"]["benchmark_tools"])
+        self.assertEqual(body["request"]["max_tool_steps"], 3)
+
+    def test_agent_analyze_tool_loop_step_started_but_not_completed_is_visible_not_missing(self):
+        # A crash between the start-phase and completion-phase writes must
+        # still show up as a visibly stuck step, not silently vanish.
+        owner_headers = {"Authorization": f"Bearer {_issue_session('stuck-owner', 'stuck@example.com', 'Owner', '')}"}
+
+        real_persist = server_module._persist_agent_run_step
+
+        async def _flaky_persist(user_id, run, step):
+            if "observation" in step:
+                raise RuntimeError("simulated crash before the completion write")
+            await real_persist(user_id, run, step)
+
+        self.provider.responses = [
+            json.dumps({"thought": "note one", "action": "manage_notes",
+                        "args": {"action": "add", "text": "Track Fed dates."}}),
+            json.dumps({"final": "done"}),
+        ]
+        with (
+            tempfile.TemporaryDirectory() as td,
+            mock.patch.dict(os.environ, {"FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json")}, clear=False),
+            mock.patch.object(server_module, "_persist_agent_run_step", side_effect=_flaky_persist),
+        ):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Will the Fed cut rates tomorrow?",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                    "max_tool_steps": 2,
+                },
+                headers=owner_headers,
+            )
+        self.assertEqual(response.status_code, 200)
+        run_id = response.json()["agent_run"]["id"]
+
+        detail = self.client.get(f"/agent/runs/{run_id}", headers=owner_headers)
+        steps = detail.json()["steps"]
+        self.assertEqual(len(steps), 1)
+        self.assertIn("started_at", steps[0])
+        self.assertNotIn("completed_at", steps[0])
 
     def test_agent_run_list_does_not_include_steps(self):
         owner_headers = {"Authorization": f"Bearer {_issue_session('step-list-owner', 'steplist@example.com', 'Owner', '')}"}
@@ -2271,6 +2321,30 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(reconciled.json()["checked"], 0)
         done = server_module._read_agent_run("recon-user-2", "agent_run_done")
         self.assertEqual(done["status"], "completed")
+
+    def test_agent_run_reconciliation_never_reenters_the_tool_loop(self):
+        # The reconciliation sweep only ever changes status="running" to
+        # "interrupted" -- it must never call back into run_tool_loop/
+        # _agent_tool_loop. Actual crash-resume (re-executing a stale run)
+        # is a deliberately separate, not-yet-built decision; this test
+        # exists specifically so extending the sweep to also resume can't
+        # happen by accident without a deliberate design/security review.
+        stale_ts = (datetime.now(timezone.utc) - timedelta(minutes=90)).isoformat()
+        self._seed_agent_run("recon-user-3", "agent_run_stale_3", updated_at=stale_ts)
+
+        with (
+            mock.patch.object(server_module, "_AGENT_RUN_RECONCILIATION_TOKEN", "recon-token"),
+            mock.patch.object(server_module, "_agent_tool_loop") as tool_loop_mock,
+            mock.patch.object(server_module.agent_capabilities, "run_tool_loop") as run_tool_loop_mock,
+        ):
+            reconciled = self.client.post(
+                "/internal/agent-runs/reconcile",
+                headers={"X-Agent-Run-Reconciliation-Token": "recon-token"},
+            )
+        self.assertEqual(reconciled.status_code, 200)
+        self.assertEqual(reconciled.json()["interrupted"], 1)
+        tool_loop_mock.assert_not_called()
+        run_tool_loop_mock.assert_not_called()
 
     def test_favorites_crud_roundtrip(self):
         token = _issue_session("fav-user", "fav@example.com", "Fav", "")

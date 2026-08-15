@@ -10635,6 +10635,8 @@ def _agent_run_request_snapshot(req: AgentAnalyzeRequest) -> Dict[str, Any]:
         "ground_in_record": bool(req.ground_in_record),
         "tool_loop": bool(req.tool_loop),
         "evidence_top_k": int(req.evidence_top_k),
+        "benchmark_tools": bool(req.benchmark_tools),
+        "max_tool_steps": int(req.max_tool_steps),
     }
 
 
@@ -10687,14 +10689,25 @@ def _advance_agent_run(
 
 
 async def _persist_agent_run_step(user_id: str, run: Dict[str, Any], step: Dict[str, Any]) -> None:
-    """Best-effort incremental persistence of one tool-loop step. Mutates `run`
-    in place (the same object the caller holds) so partial progress survives
-    even if this specific write fails -- the next successful step's write
-    carries it forward. Never raises: a persistence hiccup must not interrupt
-    the tool loop itself."""
+    """Best-effort incremental persistence of one tool-loop step, keyed by
+    step["index"]. A step already present at that index is merged into --
+    the start-phase write ({index, thought, action, args, started_at}) is
+    later filled in by the completion-phase write ({observation, error,
+    completed_at}) on the *same* record, rather than appending a second,
+    disconnected entry. This is what lets a still-"started_at"-only step
+    show up as visibly stuck (crashed mid-tool-call) instead of silently
+    missing. Mutates `run` in place (the same object the caller holds) so
+    partial progress survives even if this specific write fails -- the next
+    successful step's write carries it forward. Never raises: a persistence
+    hiccup must not interrupt the tool loop itself."""
     try:
         steps = list(run.get("steps") or [])
-        steps.append({**step, "at": datetime.now(timezone.utc).isoformat()})
+        index = step.get("index")
+        existing = next((i for i, s in enumerate(steps) if s.get("index") == index), None)
+        if existing is not None:
+            steps[existing] = {**steps[existing], **step}
+        else:
+            steps.append(dict(step))
         run["steps"] = steps
         run["updated_at"] = datetime.now(timezone.utc).isoformat()
         loop = asyncio.get_running_loop()
@@ -11679,10 +11692,19 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     step is persisted to the AgentRun record as it happens via on_step."""
     from analyzing_llm_rationale import market_data
 
+    async def _on_step_start(step: Dict[str, Any]) -> None:
+        if run is None or user_id is None:
+            return
+        await _persist_agent_run_step(
+            user_id, run, {**step, "started_at": datetime.now(timezone.utc).isoformat()}
+        )
+
     async def _on_step(step: Dict[str, Any]) -> None:
         if run is None or user_id is None:
             return
-        await _persist_agent_run_step(user_id, run, step)
+        await _persist_agent_run_step(
+            user_id, run, {**step, "completed_at": datetime.now(timezone.utc).isoformat()}
+        )
 
     provider, temperature, max_tokens = _select_agent_provider(req)
     loop = asyncio.get_running_loop()
@@ -11845,7 +11867,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     try:
         res = await agent_capabilities.run_tool_loop(
             q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule,
-            on_step=_on_step)
+            on_step=_on_step, on_step_start=_on_step_start)
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
         if not last and not req.benchmark_tools:

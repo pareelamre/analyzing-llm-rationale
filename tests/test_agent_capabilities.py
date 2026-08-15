@@ -272,6 +272,94 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["answer"], "no tools needed")
         self.assertEqual(seen, [])
 
+    def test_on_step_start_fires_before_the_tool_runs_with_no_observation_yet(self):
+        order = []
+
+        async def get_market(args):
+            order.append("tool_ran")
+            return "price 42%"
+
+        async def on_step_start(step):
+            order.append(("start", step))
+
+        turns = iter([
+            '{"thought":"check price","action":"get_market","args":{"platform":"polymarket"}}',
+            '{"final":"It trades around 42%."}',
+        ])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        asyncio.run(ac.run_tool_loop(
+            "where does it trade?", {"get_market": get_market},
+            [{"name": "get_market", "description": "fetch price"}], chat_fn, max_steps=5,
+            on_step_start=on_step_start))
+
+        self.assertEqual(len(order), 2)
+        self.assertEqual(order[0], ("start", {
+            "index": 0, "thought": "check price", "action": "get_market",
+            "args": {"platform": "polymarket"},
+        }))
+        self.assertEqual(order[1], "tool_ran")
+
+    def test_on_step_start_still_fires_when_the_tool_subsequently_raises(self):
+        seen = []
+
+        async def boom(args):
+            raise RuntimeError("tool exploded")
+
+        async def on_step_start(step):
+            seen.append(step)
+
+        turns = iter([
+            '{"action":"boom","args":{}}',
+            '{"final":"done anyway"}',
+        ])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"boom": boom}, [{"name": "boom", "description": "d"}], chat_fn, max_steps=3,
+            on_step_start=on_step_start))
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0]["action"], "boom")
+        self.assertEqual(res["answer"], "done anyway")
+
+    def test_on_step_start_exception_does_not_break_the_loop(self):
+        async def get_market(args):
+            return "price 42%"
+
+        async def on_step_start(step):
+            raise RuntimeError("persistence hiccup")
+
+        turns = iter([
+            '{"action":"get_market","args":{}}',
+            '{"final":"It trades around 42%."}',
+        ])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"get_market": get_market}, [{"name": "get_market", "description": "d"}],
+            chat_fn, max_steps=5, on_step_start=on_step_start))
+        self.assertEqual(res["answer"], "It trades around 42%.")
+        self.assertEqual(len(res["transcript"]), 1)
+
+    def test_on_step_start_not_called_on_final_answer_turn(self):
+        seen = []
+
+        async def on_step_start(step):
+            seen.append(step)
+
+        async def chat_fn(messages):
+            return '{"final": "no tools needed"}'
+
+        res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=3, on_step_start=on_step_start))
+        self.assertEqual(res["answer"], "no tools needed")
+        self.assertEqual(seen, [])
+
 
 if __name__ == "__main__":
     unittest.main()
