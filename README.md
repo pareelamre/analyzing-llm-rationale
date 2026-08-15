@@ -439,6 +439,18 @@ The report includes `recommendation` (`buy_yes`/`buy_no`/`hold`/`no_market_price
 `edge`, `model_probability`, `market_probability`, `thesis`, `evidence_sources`,
 and `pipeline` (the ordered steps that ran).
 
+#### Durable private Agent Runs
+
+Every signed-in call to `POST /agent/analyze` (including the streamed endpoint)
+also creates a private `AgentRun`. It retains a bounded, secret-free input
+snapshot, lifecycle timeline, model report, and any review-only trade handoff.
+Use `GET /agent/runs` for the newest operator timeline and
+`GET /agent/runs/{run_id}` for one full report. The snapshot intentionally
+excludes provider keys, browser credentials, conversation history, and raw
+custom-skill instructions. An Agent Run is research only: even when it has a
+trade handoff, it cannot create, size, or submit an order; the user must still
+create and explicitly confirm a durable Trade Run in the terminal.
+
 #### Copied agents: private, versioned research recipes
 
 Signed-in users can copy a public Foresea model from the Agentic board. The copy

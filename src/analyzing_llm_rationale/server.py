@@ -1017,6 +1017,65 @@ _AGENT_PROFILE_FIELDS = (
 )
 _MAX_AGENT_PROFILES_PER_USER = 5
 
+# Durable research runs are strictly private to the signed-in user. The
+# request snapshot deliberately excludes browser/provider secrets and prior
+# conversation content; the run stores only its public market inputs, progress
+# events, and the resulting research report.
+_AGENT_RUN_KIND = "AgentRun"
+_AGENT_RUN_FIELDS = (
+    "id", "status", "title", "question", "platform", "recommendation",
+    "model_probability", "market_probability", "edge", "agent_profile",
+    "request", "report", "timeline", "created_at", "updated_at",
+    "completed_at", "error_code",
+)
+_MAX_AGENT_RUNS_PER_USER = 100
+
+
+def _agent_run_key(client: Any, user_id: str, run_id: str) -> Any:
+    return client.key("User", user_id, _AGENT_RUN_KIND, run_id)
+
+
+def _agent_run_from_entity(entity: Any) -> Dict[str, Any]:
+    record = {field: entity.get(field) for field in _AGENT_RUN_FIELDS}
+    record["id"] = record.get("id") or entity.key.name
+    return record
+
+
+def _list_agent_runs(user_id: str) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        records = list(_state.setdefault("agent_runs", {}).get(user_id, {}).values())
+    else:
+        query = client.query(kind=_AGENT_RUN_KIND, ancestor=client.key("User", user_id))
+        records = [_agent_run_from_entity(entity) for entity in query.fetch(limit=_MAX_AGENT_RUNS_PER_USER)]
+    return sorted(records, key=lambda record: record.get("updated_at") or "", reverse=True)
+
+
+def _read_agent_run(user_id: str, run_id: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        record = _state.setdefault("agent_runs", {}).setdefault(user_id, {}).get(run_id)
+        return dict(record) if record else None
+    entity = client.get(_agent_run_key(client, user_id, run_id))
+    return _agent_run_from_entity(entity) if entity is not None else None
+
+
+def _put_agent_run(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
+    record = {field: record.get(field) for field in _AGENT_RUN_FIELDS}
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("agent_runs", {}).setdefault(user_id, {})[record["id"]] = record
+        return record
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(
+        key=_agent_run_key(client, user_id, record["id"]),
+        exclude_from_indexes=("title", "question", "request", "report", "timeline", "agent_profile"),
+    )
+    entity.update(record)
+    client.put(entity)
+    return record
+
 
 def _agent_profile_key(client: Any, user_id: str, profile_id: str) -> Any:
     return client.key("User", user_id, _AGENT_PROFILE_KIND, profile_id)
@@ -1862,6 +1921,11 @@ _agent_profile_actions = _meter.create_counter(
     "agent.profile.actions",
     unit="1",
     description="Private copied-agent profile actions by lifecycle outcome",
+)
+_agent_run_actions = _meter.create_counter(
+    "agent.run.actions",
+    unit="1",
+    description="Durable agent-run lifecycle actions by outcome",
 )
 
 
@@ -4018,6 +4082,15 @@ class AgentProfileReference(BaseModel):
     execution_mode: Literal["research_only"]
 
 
+class AgentRunReference(BaseModel):
+    """The durable, private research run that produced an agent report."""
+
+    id: str
+    status: Literal["running", "completed", "failed", "interrupted"]
+    created_at: str
+    updated_at: str
+
+
 class AgentProfileList(BaseModel):
     profiles: List[AgentProfile] = Field(default_factory=list)
 
@@ -4132,6 +4205,49 @@ class AgentReport(BaseModel):
         None,
         description="A non-executable research handoff for the authenticated user's live trade terminal.",
     )
+    agent_run: Optional[AgentRunReference] = Field(
+        None,
+        description="Private durable run record for this signed-in user's agent research.",
+    )
+
+
+class AgentRunTimelineEvent(BaseModel):
+    at: str
+    phase: str
+    status: Literal["running", "completed", "failed", "interrupted"]
+    detail: str
+
+
+class AgentRunSummary(BaseModel):
+    """Operator-safe overview of a private, durable agent research run."""
+
+    id: str
+    status: Literal["running", "completed", "failed", "interrupted"]
+    title: str
+    question: str
+    platform: Optional[str] = None
+    recommendation: Optional[str] = None
+    model_probability: Optional[float] = None
+    market_probability: Optional[float] = None
+    edge: Optional[float] = None
+    agent_profile: Optional[AgentProfileReference] = None
+    has_live_trade_intent: bool = False
+    timeline: List[AgentRunTimelineEvent] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+    completed_at: Optional[str] = None
+    error_code: Optional[str] = None
+
+
+class AgentRunResponse(AgentRunSummary):
+    """Full private run record, including the safe input snapshot and report."""
+
+    request: Dict[str, Any] = Field(default_factory=dict)
+    report: Optional[AgentReport] = None
+
+
+class AgentRunList(BaseModel):
+    runs: List[AgentRunSummary] = Field(default_factory=list)
 
 
 class ScanOpportunity(BaseModel):
@@ -8852,6 +8968,34 @@ async def delete_agent_profile(profile_id: str, request: Request) -> Dict[str, b
             raise
 
 
+@app.get("/agent/runs", tags=["Agents"], response_model=AgentRunList)
+async def list_agent_runs(request: Request) -> AgentRunList:
+    """List the signed-in user's durable research runs, newest activity first."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("agent.run.list") as span:
+        span.set_attribute("user.id", claims["sub"])
+        runs = _list_agent_runs(claims["sub"])
+        span.set_attribute("agent.run.count", len(runs))
+        _agent_run_actions.add(1, {"action": "list", "outcome": "success"})
+        return AgentRunList(runs=[_agent_run_summary(run) for run in runs])
+
+
+@app.get("/agent/runs/{run_id}", tags=["Agents"], response_model=AgentRunResponse)
+async def read_agent_run(run_id: str, request: Request) -> AgentRunResponse:
+    """Read one private research run, including its completed report when available."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("agent.run.read") as span:
+        span.set_attributes({"user.id": claims["sub"], "agent.run.id": run_id})
+        run = _read_agent_run(claims["sub"], run_id)
+        if run is None:
+            _agent_run_actions.add(1, {"action": "read", "outcome": "missing"})
+            raise HTTPException(status_code=404, detail="Agent run was not found.")
+        _agent_run_actions.add(1, {"action": "read", "outcome": "success"})
+        return _agent_run_response(run)
+
+
 @app.get("/chat/models", tags=["System"], include_in_schema=False)
 async def chat_models(request: Request) -> Dict[str, Any]:
     """Chat-capable server-hosted models exposed in the prompt selector."""
@@ -10077,6 +10221,174 @@ def _scads_alt_provider(
     )
 
 
+def _agent_run_event(phase: str, status: str, detail: str) -> Dict[str, str]:
+    return {
+        "at": datetime.now(timezone.utc).isoformat(),
+        "phase": phase,
+        "status": status,
+        "detail": detail[:240],
+    }
+
+
+def _agent_run_request_snapshot(req: AgentAnalyzeRequest) -> Dict[str, Any]:
+    """Persist only bounded, non-secret inputs needed to understand a run."""
+    return {
+        "question": (req.question or "").strip(),
+        "platform": (req.platform or req.market_platform or "").strip().lower() or None,
+        "market_ident": req.market_ident or req.ticker or req.slug or req.market_id,
+        "market_url": req.market_url or None,
+        "agent_profile_id": req.agent_profile_id or None,
+        "model": req.model or None,
+        "builtin_skills": bool(req.builtin_skills),
+        "ground_in_record": bool(req.ground_in_record),
+        "tool_loop": bool(req.tool_loop),
+        "evidence_top_k": int(req.evidence_top_k),
+    }
+
+
+def _agent_run_title(question: str) -> str:
+    normalized = " ".join((question or "Agent research").split())
+    return normalized[:157] + "..." if len(normalized) > 160 else normalized
+
+
+def _new_agent_run(user_id: str, req: AgentAnalyzeRequest) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    snapshot = _agent_run_request_snapshot(req)
+    return _put_agent_run(
+        user_id,
+        {
+            "id": f"agent_run_{secrets.token_urlsafe(12).replace('-', '_')}",
+            "status": "running",
+            "title": _agent_run_title(snapshot["question"]),
+            "question": snapshot["question"],
+            "platform": snapshot["platform"],
+            "recommendation": None,
+            "model_probability": None,
+            "market_probability": None,
+            "edge": None,
+            "agent_profile": None,
+            "request": snapshot,
+            "report": None,
+            "timeline": [_agent_run_event("created", "running", "Research run created")],
+            "created_at": now,
+            "updated_at": now,
+            "completed_at": None,
+            "error_code": None,
+        },
+    )
+
+
+def _advance_agent_run(
+    user_id: str, run: Dict[str, Any], *, phase: str, detail: str, question: Optional[str] = None,
+    platform: Optional[str] = None,
+) -> Dict[str, Any]:
+    if question:
+        run["question"] = question
+        run["title"] = _agent_run_title(question)
+    if platform:
+        run["platform"] = platform
+    timeline = list(run.get("timeline") or [])
+    timeline.append(_agent_run_event(phase, "running", detail))
+    run["timeline"] = timeline[-12:]
+    run["updated_at"] = datetime.now(timezone.utc).isoformat()
+    return _put_agent_run(user_id, run)
+
+
+def _agent_run_reference(run: Dict[str, Any]) -> AgentRunReference:
+    return AgentRunReference(
+        id=str(run["id"]),
+        status=str(run["status"]),
+        created_at=str(run["created_at"]),
+        updated_at=str(run["updated_at"]),
+    )
+
+
+def _complete_agent_run(user_id: str, run: Dict[str, Any], report: AgentReport) -> AgentReport:
+    now = datetime.now(timezone.utc).isoformat()
+    report_snapshot = report.model_dump(mode="json", exclude={"agent_run"})
+    timeline = list(run.get("timeline") or [])
+    timeline.append(_agent_run_event("completed", "completed", f"Research complete: {report.recommendation}"))
+    run.update(
+        {
+            "status": "completed",
+            "title": _agent_run_title(report.question),
+            "question": report.question,
+            "platform": report.platform,
+            "recommendation": report.recommendation,
+            "model_probability": report.model_probability,
+            "market_probability": report.market_probability,
+            "edge": report.edge,
+            "agent_profile": report.agent_profile.model_dump(mode="json") if report.agent_profile else None,
+            "report": report_snapshot,
+            "timeline": timeline[-12:],
+            "updated_at": now,
+            "completed_at": now,
+            "error_code": None,
+        }
+    )
+    stored = _put_agent_run(user_id, run)
+    report.agent_run = _agent_run_reference(stored)
+    _agent_run_actions.add(1, {"action": "complete", "outcome": "success"})
+    logger.info("agent run completed id=%s recommendation=%s", stored["id"], report.recommendation)
+    return report
+
+
+def _fail_agent_run(
+    user_id: str, run: Dict[str, Any], *, status: str, error_code: str, detail: str
+) -> Dict[str, Any]:
+    if run.get("status") != "running":
+        return run
+    now = datetime.now(timezone.utc).isoformat()
+    timeline = list(run.get("timeline") or [])
+    timeline.append(_agent_run_event("failed", status, detail))
+    run.update(
+        {
+            "status": status,
+            "timeline": timeline[-12:],
+            "updated_at": now,
+            "completed_at": now,
+            "error_code": error_code,
+        }
+    )
+    stored = _put_agent_run(user_id, run)
+    _agent_run_actions.add(1, {"action": "complete", "outcome": status})
+    logger.warning("agent run ended id=%s status=%s code=%s", stored["id"], status, error_code)
+    return stored
+
+
+def _agent_run_summary(record: Dict[str, Any]) -> AgentRunSummary:
+    report = record.get("report") if isinstance(record.get("report"), dict) else {}
+    return AgentRunSummary(
+        id=str(record["id"]),
+        status=str(record["status"]),
+        title=str(record.get("title") or "Agent research"),
+        question=str(record.get("question") or ""),
+        platform=record.get("platform"),
+        recommendation=record.get("recommendation"),
+        model_probability=record.get("model_probability"),
+        market_probability=record.get("market_probability"),
+        edge=record.get("edge"),
+        agent_profile=record.get("agent_profile"),
+        has_live_trade_intent=bool(report.get("live_trade_intent")),
+        timeline=list(record.get("timeline") or []),
+        created_at=str(record["created_at"]),
+        updated_at=str(record["updated_at"]),
+        completed_at=record.get("completed_at"),
+        error_code=record.get("error_code"),
+    )
+
+
+def _agent_run_response(record: Dict[str, Any]) -> AgentRunResponse:
+    report_payload = record.get("report") if isinstance(record.get("report"), dict) else None
+    if report_payload is not None:
+        report_payload = {**report_payload, "agent_run": _agent_run_reference(record).model_dump(mode="json")}
+    return AgentRunResponse(
+        **_agent_run_summary(record).model_dump(mode="json"),
+        request=dict(record.get("request") or {}),
+        report=AgentReport(**report_payload) if report_payload is not None else None,
+    )
+
+
 def _resolve_agent_profile_request(
     req: AgentAnalyzeRequest, user_id: str
 ) -> tuple[AgentAnalyzeRequest, Optional[AgentProfileReference]]:
@@ -10632,6 +10944,63 @@ async def _agent_report_from_prediction(
     return report
 
 
+async def _agent_analyze_durable(
+    req: AgentAnalyzeRequest, request: Request, claims: Dict[str, Any]
+) -> AgentReport:
+    """Run one authenticated analysis while recording its private lifecycle."""
+    user_id = str(claims["sub"])
+    run = _new_agent_run(user_id, req)
+    with _tracer.start_as_current_span("agent.run.execute") as span:
+        span.set_attributes({"user.id": user_id, "agent.run.id": run["id"]})
+        _agent_run_actions.add(1, {"action": "create", "outcome": "success"})
+        try:
+            agent_profile = None
+            if req.agent_profile_id:
+                req, agent_profile = _resolve_agent_profile_request(req, user_id)
+
+            question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+            if agent_profile is not None:
+                pipeline.insert(0, "agent_profile")
+            run = _advance_agent_run(
+                user_id,
+                run,
+                phase="context_ready",
+                detail="Resolved a live market quote" if quote is not None else "Prepared research question",
+                question=question,
+                platform=(quote.platform if quote else (req.platform or req.market_platform)),
+            )
+
+            if req.tool_loop:
+                report = await _agent_tool_loop(req, request, question, quote, grounding_note)
+            else:
+                pred_req = _agent_prediction_request(req, question, quote, grounding_note)
+                _agent_counter.add(1, {"agent.platform": req.platform or "unknown"})
+                result = await predict(pred_req, kb_user_id=user_id)
+                report = await _agent_report_from_prediction(
+                    req, question, quote, grounding_note, pipeline, pred_req, result, agent_profile
+                )
+            report = _complete_agent_run(user_id, run, report)
+            span.set_attributes({"agent.run.status": "completed", "outcome": "success"})
+            return report
+        except HTTPException as exc:
+            _fail_agent_run(
+                user_id, run, status="failed", error_code=f"http_{exc.status_code}", detail="Research run was rejected"
+            )
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "rejected")
+            raise
+        except Exception as exc:
+            _fail_agent_run(
+                user_id, run, status="failed", error_code="analysis_failed", detail="Research run could not complete"
+            )
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "error")
+            logger.exception("agent run failed")
+            raise
+
+
 @app.post("/agent/analyze", tags=["Agents"], summary="Run the analysis agent on a live question", response_model=AgentReport)
 async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> AgentReport:
     """Orchestrate an end-to-end analysis of a live market question.
@@ -10647,6 +11016,8 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         claims = _require_auth(request)
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
+    if claims is not None:
+        return await _agent_analyze_durable(req, request, claims)
 
     agent_profile = None
     if req.agent_profile_id:
@@ -10694,13 +11065,27 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         req, agent_profile = _resolve_agent_profile_request(req, claims["sub"])
     if req.tool_loop:
         raise HTTPException(status_code=400, detail="Streaming is not supported for tool_loop agent mode.")
+    with _tracer.start_as_current_span("agent.run.stream") as span:
+        run = _new_agent_run(claims["sub"], req)
+        span.set_attributes({"user.id": claims["sub"], "agent.run.id": run["id"], "outcome": "started"})
+        _agent_run_actions.add(1, {"action": "create", "outcome": "success"})
+        logger.info("agent streaming run created id=%s", run["id"])
 
     async def events():
-        yield _sse_event("meta", {"status": "resolving"})
+        nonlocal run
+        yield _sse_event("meta", {"status": "resolving", "agent_run": _agent_run_reference(run).model_dump(mode="json")})
         try:
             question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
             if agent_profile is not None:
                 pipeline.insert(0, "agent_profile")
+            run = _advance_agent_run(
+                claims["sub"],
+                run,
+                phase="context_ready",
+                detail="Resolved a live market quote" if quote is not None else "Prepared research question",
+                question=question,
+                platform=(quote.platform if quote else (req.platform or req.market_platform)),
+            )
             yield _sse_event("meta", {
                 "status": "forecasting",
                 "question": question,
@@ -10713,10 +11098,16 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
             )
             provider, temperature, max_tokens = _select_predict_provider(pred_req)
         except HTTPException as exc:
+            _fail_agent_run(
+                claims["sub"], run, status="failed", error_code=f"http_{exc.status_code}", detail="Research run was rejected"
+            )
             yield _sse_event("error", {"status_code": exc.status_code, "detail": exc.detail})
             return
         except Exception:
             logger.exception("agent stream setup failed")
+            _fail_agent_run(
+                claims["sub"], run, status="failed", error_code="analysis_failed", detail="Research run could not be prepared"
+            )
             yield _sse_event("error", {
                 "status_code": 500,
                 "detail": "The streaming agent request could not be prepared.",
@@ -10735,11 +11126,17 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         try:
             async for chunk in _provider_stream_chat(provider, messages, temperature, max_tokens):
                 if await request.is_disconnected():
+                    _fail_agent_run(
+                        claims["sub"], run, status="interrupted", error_code="client_disconnected", detail="Client disconnected during research"
+                    )
                     return
                 chunks.append(chunk)
                 yield _sse_event("delta", {"text": chunk, "phase": "forecast"})
         except Exception as exc:
             http_exc = _provider_http_error(exc)
+            _fail_agent_run(
+                claims["sub"], run, status="failed", error_code=f"http_{http_exc.status_code}", detail="Forecasting could not complete"
+            )
             yield _sse_event("error", {
                 "status_code": http_exc.status_code,
                 "detail": http_exc.detail,
@@ -10750,7 +11147,18 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
                                              "rationale", "options", "p10", "p50", "p90", "unit"))
         result = _build_typed_response(pred_req, parsed, text, evidence_articles, evidence_error)
-        await _finalize_predict_response(pred_req, result, _optional_user_id(request))
+        try:
+            await _finalize_predict_response(pred_req, result, _optional_user_id(request))
+        except Exception:
+            logger.exception("agent stream forecast finalisation failed")
+            _fail_agent_run(
+                claims["sub"], run, status="failed", error_code="analysis_failed", detail="Forecast result could not be finalized"
+            )
+            yield _sse_event("error", {
+                "status_code": 500,
+                "detail": "The streaming agent forecast could not be finalized.",
+            })
+            return
 
         yield _sse_event("meta", {"status": "skills"})
         try:
@@ -10759,11 +11167,15 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
             )
         except Exception:
             logger.exception("agent stream finalisation failed")
+            _fail_agent_run(
+                claims["sub"], run, status="failed", error_code="analysis_failed", detail="Research report could not be finalized"
+            )
             yield _sse_event("error", {
                 "status_code": 500,
                 "detail": "The streaming agent report could not be finalized.",
             })
             return
+        report = _complete_agent_run(claims["sub"], run, report)
         yield _sse_event("done", {"report": report.model_dump(mode="json")})
 
     return StreamingResponse(

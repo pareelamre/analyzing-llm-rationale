@@ -2245,6 +2245,12 @@
         <p id="workspaceLedgerSummary" class="workspace-copy">Sign in to see your saved forecasts.</p>
       </section>
 
+      <section class="workspace-group" aria-labelledby="workspace-agent-runs-title">
+        <p class="workspace-title" id="workspace-agent-runs-title">Agent runs</p>
+        <p id="workspaceAgentRunsSummary" class="workspace-copy">Sign in to see research progress and trade handoffs.</p>
+        <div id="workspaceAgentRunsTimeline" class="model-list" style="margin-top:10px"></div>
+      </section>
+
       <details class="advanced-panel workspace-preferences" id="workspacePreferences">
         <summary role="button" aria-label="Show preferences and advanced controls">Preferences</summary>
         <div>
@@ -4124,6 +4130,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
         };
     data.question = agentBody.question || data.question || '';
     if (data.live_trade_intent) data.source_conversation_id = convId;
+    if (outcome === 'completed' && data.agent_run) syncAgentRunsFromServer();
     if (outcome === 'completed') {
       trackEvent('forecast_completed', {
         question_type: 'chat',
@@ -4438,6 +4445,7 @@ async function sendQuestion(options = {}) {
       if (!resp.ok) { addError(report.detail || 'Agent error', request.convId); return; }
       data = _agentReportData(report);
       if (data.live_trade_intent) data.source_conversation_id = request.convId;
+      if (data.agent_run) syncAgentRunsFromServer();
     } else {
       const streamed = await streamPredict(body, variant, request.convId, typingEl, request.controller.signal);
       if (streamed.ok) return;
@@ -8727,6 +8735,71 @@ function _applyAgentEnabled() {
 }
 
 let _workspaceKbDocs = [];
+let agentRuns = [];
+
+function _agentRunStatusLabel(status) {
+  const labels = { running: 'Working', completed: 'Complete', failed: 'Needs attention', interrupted: 'Interrupted' };
+  return labels[status] || 'Unknown';
+}
+
+function renderAgentRunTimeline() {
+  const host = document.getElementById('workspaceAgentRunsTimeline');
+  if (!host) return;
+  if (!currentUser) { host.innerHTML = ''; return; }
+  const runs = (agentRuns || []).slice(0, 5);
+  if (!runs.length) {
+    host.innerHTML = '<p class="workspace-copy">Your completed research will appear here.</p>';
+    return;
+  }
+  host.innerHTML = runs.map(run => {
+    const events = (run.timeline || []).slice(-3).map(event =>
+      `<span title="${escAttr(event.at || '')}">${escHtml(event.detail || event.phase || 'Updated')}</span>`
+    ).join(' <span aria-hidden="true">→</span> ');
+    const handoff = run.has_live_trade_intent
+      ? `<button type="button" class="model-icon-btn" title="Review Trade Run" onclick="openAgentRunTrade('${escAttr(run.id)}')">${uiIcon('external')}</button>`
+      : '';
+    return `<div class="model-row" style="cursor:default">
+      <div class="model-meta">
+        <div class="model-name">${escHtml(run.title || 'Agent research')} <span style="color:var(--yes);font-size:10px">${escHtml(_agentRunStatusLabel(run.status))}</span></div>
+        <div class="model-sub">${events || escHtml(run.question || 'Research pending')}</div>
+      </div>
+      <div class="model-actions">${handoff}</div>
+    </div>`;
+  }).join('');
+}
+
+async function syncAgentRunsFromServer() {
+  if (!currentUser) {
+    agentRuns = [];
+    renderAgentRunTimeline();
+    return;
+  }
+  try {
+    const r = await fetch('/agent/runs', { headers: authHeaders() });
+    const data = await _readJson(r);
+    if (!r.ok) throw new Error(data.detail || 'Could not load agent runs.');
+    agentRuns = data.runs || [];
+  } catch (err) {
+    console.warn(err);
+  }
+  renderAgentRunTimeline();
+  renderWorkspacePanel();
+}
+
+async function openAgentRunTrade(runId) {
+  if (!currentUser) { openAuthModal('login'); return; }
+  try {
+    const r = await fetch('/agent/runs/' + encodeURIComponent(runId), { headers: authHeaders() });
+    const run = await _readJson(r);
+    if (!r.ok) throw new Error(run.detail || 'Could not load this agent run.');
+    const handoff = tradeRunHandoff({ ...(run.report || {}), question: run.question || '' });
+    if (!handoff) throw new Error('This research run has no reviewable trade handoff.');
+    openTradeModal(handoff);
+  } catch (err) {
+    const host = document.getElementById('workspaceAgentRunsTimeline');
+    if (host) host.insertAdjacentHTML('afterbegin', `<p class="workspace-copy">${escHtml(err.message || 'Could not open this run.')}</p>`);
+  }
+}
 
 function renderWorkspacePanel() {
   const context = document.getElementById('workspaceContextSummary');
@@ -8746,6 +8819,17 @@ function renderWorkspacePanel() {
       record.textContent = `${entries.length} forecast${entries.length === 1 ? '' : 's'} saved · ${marked} marked correct or wrong`;
     }
   }
+
+  const runs = document.getElementById('workspaceAgentRunsSummary');
+  if (runs) {
+    if (!currentUser) runs.textContent = 'Sign in to see research progress and trade handoffs.';
+    else {
+      const completed = (agentRuns || []).filter(run => run.status === 'completed').length;
+      const pending = (agentRuns || []).filter(run => run.status === 'running').length;
+      runs.textContent = `${completed} completed research run${completed === 1 ? '' : 's'}${pending ? ` · ${pending} working` : ''}`;
+    }
+  }
+  renderAgentRunTimeline();
 }
 
 function openWorkspaceContext() {
@@ -8827,6 +8911,7 @@ function loadAgentSkills() {
   renderSkillList();
   renderCopiedAgentList();
   if (currentUser) syncCopiedAgentsFromServer();
+  if (currentUser) syncAgentRunsFromServer();
   if (_loadSkills().length || _activeCopiedAgent()) {
     const d = document.getElementById('workspacePreferences');
     if (d) d.open = true;
@@ -8923,6 +9008,7 @@ function _agentReportData(report) {
     evidence_sources: d.evidence_sources || [],
     evidence_error: d.evidence_error || '',
     live_trade_intent: d.live_trade_intent || null,
+    agent_run: d.agent_run || null,
   };
 }
 
@@ -9462,6 +9548,7 @@ function updateAuthUI(user) {
   if (typeof refreshPersonalLedger === 'function') refreshPersonalLedger();
   if (typeof renderWorkspacePanel === 'function') renderWorkspacePanel();
   if (user && typeof syncCopiedAgentsFromServer === 'function') syncCopiedAgentsFromServer();
+  if (typeof syncAgentRunsFromServer === 'function') syncAgentRunsFromServer();
   if (typeof _syncFavoritesFromServer === 'function') {
     if (user) {
       _syncFavoritesFromServer();

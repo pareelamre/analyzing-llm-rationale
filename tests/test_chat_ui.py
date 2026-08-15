@@ -139,6 +139,14 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("Choose a fresh limit price and size in the terminal.", self.index_html)
         self.assertIn("no exchange credentials, price, or size", self.index_html)
 
+    def test_agent_runs_show_private_research_progress_and_keep_trade_review_explicit(self) -> None:
+        self.assertIn(">Agent runs<", self.index_html)
+        self.assertIn("function syncAgentRunsFromServer", self.index_html)
+        self.assertIn("function renderAgentRunTimeline", self.index_html)
+        self.assertIn("function openAgentRunTrade", self.index_html)
+        self.assertIn("/agent/runs", self.index_html)
+        self.assertIn("agent_run: d.agent_run || null", self.index_html)
+
     def test_users_can_copy_a_public_agent_without_private_trading_state(self) -> None:
         self.assertIn("Copy agent", self.index_html)
         self.assertIn("function copyPublicAgent", self.index_html)

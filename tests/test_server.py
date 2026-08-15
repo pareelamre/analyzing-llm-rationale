@@ -682,6 +682,13 @@ class ServerTests(unittest.TestCase):
         self.assertIn("event: done", body)
         self.assertIn('"report"', body)
         self.assertIn('"model_probability": 0.7', body)
+        self.assertIn('"agent_run"', body)
+        runs = self.client.get(
+            "/agent/runs",
+            headers={"Authorization": f"Bearer {_issue_session('test-user', 'test@example.com', 'Test User', '')}"},
+        )
+        self.assertEqual(runs.status_code, 200)
+        self.assertEqual(runs.json()["runs"][0]["status"], "completed")
 
     def test_market_forecast_stream_returns_model_probability(self):
         token = _issue_session("stream-user", "user@example.com", "Stream User", "")
@@ -1974,6 +1981,44 @@ class ServerTests(unittest.TestCase):
         deleted = self.client.delete(f"/agent-profiles/{profile['id']}", headers=headers)
         self.assertEqual(deleted.status_code, 200)
         self.assertEqual(self.client.get("/agent-profiles", headers=headers).json()["profiles"], [])
+
+    def test_agent_run_is_private_durable_and_excludes_provider_secrets(self):
+        owner_headers = {"Authorization": f"Bearer {_issue_session('run-owner', 'owner@example.com', 'Owner', '')}"}
+        other_headers = {"Authorization": f"Bearer {_issue_session('run-other', 'other@example.com', 'Other', '')}"}
+        report_response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will it rain tomorrow?",
+                "openrouter_api_key": "never-persist-this-provider-secret",
+                "history": [{"role": "user", "content": "private prior chat"}],
+                "builtin_skills": True,
+            },
+            headers=owner_headers,
+        )
+
+        self.assertEqual(report_response.status_code, 200)
+        report = report_response.json()
+        run_id = report["agent_run"]["id"]
+        self.assertEqual(report["agent_run"]["status"], "completed")
+
+        listed = self.client.get("/agent/runs", headers=owner_headers)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()["runs"][0]["id"], run_id)
+        self.assertEqual(listed.json()["runs"][0]["status"], "completed")
+        self.assertEqual(
+            [event["phase"] for event in listed.json()["runs"][0]["timeline"]],
+            ["created", "context_ready", "completed"],
+        )
+
+        detail = self.client.get(f"/agent/runs/{run_id}", headers=owner_headers)
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["report"]["agent_run"]["id"], run_id)
+        self.assertNotIn("never-persist-this-provider-secret", detail.text)
+        self.assertNotIn("private prior chat", detail.text)
+        self.assertNotIn("openrouter_api_key", detail.json()["request"])
+        self.assertNotIn("history", detail.json()["request"])
+
+        self.assertEqual(self.client.get(f"/agent/runs/{run_id}", headers=other_headers).status_code, 404)
 
     def test_favorites_crud_roundtrip(self):
         token = _issue_session("fav-user", "fav@example.com", "Fav", "")
