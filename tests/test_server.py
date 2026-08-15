@@ -1370,6 +1370,7 @@ class ServerTests(unittest.TestCase):
         })
         self.assertEqual(visit_summary, event_summary)
 
+
     def test_share_forecast_creates_public_page(self):
         response = self.client.post(
             "/forecasts/share",
