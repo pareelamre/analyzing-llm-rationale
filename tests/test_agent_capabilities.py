@@ -50,6 +50,38 @@ class ParseActionTests(unittest.TestCase):
     def test_no_json_returns_none(self):
         self.assertIsNone(ac.parse_action("just prose, no json here"))
 
+    def test_normalizes_openai_style_native_function_call(self):
+        # Regression: minimax-m3 (live, observed) defaults to its own native
+        # function-calling shape instead of the prompted {"action", "args"}
+        # schema. That JSON parses fine but has no "action" key, so it used
+        # to be silently treated as a final answer -- the tool never ran even
+        # though the model clearly meant to call it.
+        a = ac.parse_action('{"name": "web_search", "parameters": {"query": "cabinet news"}}')
+        self.assertEqual(a["action"], "web_search")
+        self.assertEqual(a["args"], {"query": "cabinet news"})
+        self.assertNotIn("final", a)
+
+    def test_normalizes_arguments_key_as_well_as_parameters(self):
+        a = ac.parse_action('{"name": "web_search", "arguments": {"query": "x"}}')
+        self.assertEqual(a["action"], "web_search")
+        self.assertEqual(a["args"], {"query": "x"})
+
+    def test_normalizes_stringified_arguments(self):
+        # Some providers hand back arguments as a JSON-encoded string rather
+        # than a nested object (the raw OpenAI tool_calls convention).
+        a = ac.parse_action('{"name": "web_search", "arguments": "{\\"query\\": \\"x\\"}"}')
+        self.assertEqual(a["args"], {"query": "x"})
+
+    def test_malformed_stringified_arguments_falls_back_to_empty_dict(self):
+        a = ac.parse_action('{"name": "web_search", "arguments": "not json"}')
+        self.assertEqual(a["action"], "web_search")
+        self.assertEqual(a["args"], {})
+
+    def test_does_not_touch_an_already_well_formed_final_answer(self):
+        a = ac.parse_action('{"name": "irrelevant", "final": "the answer"}')
+        self.assertEqual(a["final"], "the answer")
+        self.assertNotIn("action", a)
+
 
 class SystemPromptTests(unittest.TestCase):
     def test_extra_rules_included(self):
@@ -83,6 +115,32 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["transcript"][0]["action"], "get_market")
         self.assertFalse(res["truncated"])
         self.assertEqual(seen, [{"platform": "polymarket"}])
+
+    def test_calls_tool_when_model_uses_its_native_function_call_shape(self):
+        # End-to-end regression for the minimax-m3 bug: the model ignores the
+        # prompted {"action", "args"} schema and emits OpenAI-style native
+        # function-calling JSON instead. The tool must still actually run.
+        seen = []
+
+        async def web_search(args):
+            seen.append(args)
+            return "5 sources found"
+
+        turns = iter([
+            '{"name": "web_search", "parameters": {"query": "cabinet news"}}',
+            '{"final": "No new departures found."}',
+        ])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "any cabinet news?", {"web_search": web_search},
+            [{"name": "web_search", "description": "search the web"}], chat_fn, max_steps=5))
+        self.assertEqual(len(res["transcript"]), 1)
+        self.assertEqual(res["transcript"][0]["action"], "web_search")
+        self.assertEqual(seen, [{"query": "cabinet news"}])
+        self.assertEqual(res["answer"], "No new departures found.")
 
     def test_unknown_tool_is_handled(self):
         turns = iter([
