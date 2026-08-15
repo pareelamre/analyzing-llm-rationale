@@ -34,6 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
+    HTMLResponse,
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
@@ -4503,6 +4504,20 @@ class AnalyticsEventSummary(BaseModel):
     attribution: AnalyticsAttributionSummary
     events_24h: int = 0
     active_accounts_24h: int = 0
+    active_accounts_7d: int = 0
+    by_model: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class RecentAnalyticsEvent(BaseModel):
+    event_name: str
+    path: str = ""
+    attribution: str = "anonymous"
+    ts: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RecentAnalyticsEventsResponse(BaseModel):
+    events: List[RecentAnalyticsEvent] = Field(default_factory=list)
 
 
 class GoogleAuthRequest(BaseModel):
@@ -6048,55 +6063,129 @@ def _record_analytics_event(
 
 def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
     client = _get_datastore()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-    cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=30)
+    cutoff_24h = now - timedelta(hours=24)
+    cutoff_7d = now - timedelta(days=7)
     query = client.query(kind="AnalyticsEvent")
     query.add_filter("ts", ">=", cutoff)
     records = list(query.fetch(limit=10000))
     by_event: Dict[str, Dict[str, int]] = defaultdict(lambda: {"count": 0, "authenticated": 0, "anonymous": 0})
     by_day: Dict[str, int] = defaultdict(int)
+    by_model: Dict[str, int] = defaultdict(int)
     events_24h = 0
-    active_accounts_24h: set[str] = set()
+    active_accounts_24h: set = set()
+    active_accounts_7d: set = set()
     for entity in records:
+        ts = entity.get("ts")
         name = entity.get("event_name") or "unknown"
-        account_ref = entity.get("account_ref")
-        if not account_ref and entity.get("user_id"):
-            account_ref = _analytics_account_ref(str(entity["user_id"]))
-        is_auth = bool(account_ref)
+        is_auth = bool(entity.get("account_ref") or entity.get("user_id"))
         by_event[name]["count"] += 1
         if is_auth:
             by_event[name]["authenticated"] += 1
         else:
             by_event[name]["anonymous"] += 1
-        day = entity.get("day") or entity["ts"].strftime("%Y-%m-%d")
-        by_day[day] += 1
-        ts = entity.get("ts")
-        if ts:
-            if getattr(ts, "tzinfo", None) is None:
-                ts = ts.replace(tzinfo=timezone.utc)
-            if ts >= cutoff_24h:
-                events_24h += 1
-                if account_ref:
-                    active_accounts_24h.add(str(account_ref))
+        by_day[entity.get("day") or entity["ts"].strftime("%Y-%m-%d")] += 1
+
+        # Model usage tracking from metadata
+        raw_meta = entity.get("metadata")
+        if raw_meta:
+            try:
+                meta = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+                if isinstance(meta, dict) and meta.get("model"):
+                    by_model[str(meta["model"])] += 1
+            except Exception:
+                pass
+
+        if ts and ts >= cutoff_24h:
+            events_24h += 1
+            ref = entity.get("account_ref") or (_analytics_account_ref(str(entity["user_id"])) if entity.get("user_id") else None)
+            if ref:
+                active_accounts_24h.add(ref)
+        if ts and ts >= cutoff_7d:
+            ref = entity.get("account_ref") or (_analytics_account_ref(str(entity["user_id"])) if entity.get("user_id") else None)
+            if ref:
+                active_accounts_7d.add(ref)
     return AnalyticsEventSummary(
         total_events=len(records),
         by_event=[
             {
                 "event_name": name,
-                "count": data["count"],
-                "authenticated": data["authenticated"],
-                "anonymous": data["anonymous"],
+                "count": agg["count"],
+                "authenticated": agg["authenticated"],
+                "anonymous": agg["anonymous"],
             }
-            for name, data in sorted(by_event.items(), key=lambda kv: kv[1]["count"], reverse=True)
+            for name, agg in sorted(by_event.items(), key=lambda kv: kv[1]["count"], reverse=True)
         ],
         by_day=[
             {"day": day, "count": count}
             for day, count in sorted(by_day.items(), reverse=True)
         ],
+        by_model=[
+            {"model": model, "count": count}
+            for model, count in sorted(by_model.items(), key=lambda kv: kv[1], reverse=True)
+        ],
         attribution=_analytics_attribution_summary(records),
         events_24h=events_24h,
         active_accounts_24h=len(active_accounts_24h),
+        active_accounts_7d=len(active_accounts_7d),
     )
+
+
+def _recent_analytics_events_datastore(limit: int = 20) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    query = client.query(kind="AnalyticsEvent")
+    query.order = ["-ts"]
+    entities = list(query.fetch(limit=limit))
+    events = []
+    for entity in entities:
+        meta = {}
+        if entity.get("metadata"):
+            try:
+                meta = json.loads(entity["metadata"]) if isinstance(entity["metadata"], str) else entity["metadata"]
+            except Exception:
+                meta = {}
+        ts_val = entity.get("ts")
+        events.append({
+            "event_name": str(entity.get("event_name", "")),
+            "path": str(entity.get("path", "/")),
+            "attribution": str(entity.get("attribution", "anonymous")),
+            "ts": ts_val.isoformat() if hasattr(ts_val, "isoformat") else str(ts_val or ""),
+            "metadata": meta,
+        })
+    return events
+
+
+def _recent_analytics_events_duckdb(limit: int = 20) -> List[Dict[str, Any]]:
+    conn = _analytics_conn()
+    try:
+        rows = conn.execute(
+            """
+            SELECT event_name, path, attribution, ts, metadata_json
+            FROM analytics_events
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            [limit],
+        ).fetchall()
+    finally:
+        conn.close()
+    events = []
+    for event_name, path, attribution, ts_val, metadata_json in rows:
+        meta = {}
+        if metadata_json:
+            try:
+                meta = json.loads(metadata_json) if isinstance(metadata_json, str) else metadata_json
+            except Exception:
+                meta = {}
+        events.append({
+            "event_name": str(event_name or ""),
+            "path": str(path or "/"),
+            "attribution": str(attribution or "anonymous"),
+            "ts": ts_val.isoformat() if hasattr(ts_val, "isoformat") else str(ts_val or ""),
+            "metadata": meta,
+        })
+    return events
 
 
 def _radar_id(platform: str, market_url: Optional[str], question: str) -> str:
@@ -6364,8 +6453,9 @@ def _analytics_summary_datastore() -> "AnalyticsSummary":
 
     # Daily breakdown (last 30 days) from PageVisit rows; distinct counted in
     # Python over a bounded window.
-    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-    cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=30)
+    cutoff_24h = now - timedelta(hours=24)
     query = client.query(kind="PageVisit")
     query.add_filter("ts", ">=", cutoff)
     by_day: Dict[str, Dict[str, Any]] = {}
@@ -6378,11 +6468,8 @@ def _analytics_summary_datastore() -> "AnalyticsSummary":
         if e.get("visitor_id"):
             agg["visitors"].add(e["visitor_id"])
         ts = e.get("ts")
-        if ts:
-            if getattr(ts, "tzinfo", None) is None:
-                ts = ts.replace(tzinfo=timezone.utc)
-            if ts >= cutoff_24h:
-                visits_24h += 1
+        if ts and ts >= cutoff_24h:
+            visits_24h += 1
     rows = sorted(by_day.items(), reverse=True)[:30]
     return AnalyticsSummary(
         total_visits=total,
@@ -6519,11 +6606,7 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
             "SELECT COUNT(*), COUNT(DISTINCT visitor_hash) FROM page_visits"
         ).fetchone()
         visits_24h = conn.execute(
-            """
-            SELECT COUNT(*)
-            FROM page_visits
-            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR
-            """
+            "SELECT COUNT(*) FROM page_visits WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR"
         ).fetchone()[0]
         rows = conn.execute(
             """
@@ -6627,6 +6710,22 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
               AND (account_ref IS NOT NULL OR user_id IS NOT NULL)
             """
         ).fetchall()
+        active_7d_rows = conn.execute(
+            """
+            SELECT account_ref, user_id
+            FROM analytics_events
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 7 DAY
+              AND (account_ref IS NOT NULL OR user_id IS NOT NULL)
+            """
+        ).fetchall()
+        meta_rows = conn.execute(
+            """
+            SELECT metadata_json
+            FROM analytics_events
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
+              AND metadata_json IS NOT NULL
+            """
+        ).fetchall()
     finally:
         conn.close()
     active_accounts_24h = {
@@ -6634,6 +6733,20 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
         for row in active_24h_rows
         if row[0] or row[1]
     }
+    active_accounts_7d = {
+        (row[0] or _analytics_account_ref(str(row[1])))
+        for row in active_7d_rows
+        if row[0] or row[1]
+    }
+    by_model: Dict[str, int] = defaultdict(int)
+    for (mjson,) in meta_rows:
+        if mjson:
+            try:
+                m = json.loads(mjson) if isinstance(mjson, str) else mjson
+                if isinstance(m, dict) and m.get("model"):
+                    by_model[str(m["model"])] += 1
+            except Exception:
+                pass
     return AnalyticsEventSummary(
         total_events=int(total or 0),
         by_event=[
@@ -6646,6 +6759,10 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
             for name, count, auth, anon in by_event
         ],
         by_day=[{"day": str(day), "count": int(count)} for day, count in by_day],
+        by_model=[
+            {"model": model, "count": count}
+            for model, count in sorted(by_model.items(), key=lambda kv: kv[1], reverse=True)
+        ],
         attribution=_analytics_attribution_summary(
             [
                 {"account_ref": account_ref, "user_id": user_id, "attribution": attribution}
@@ -6654,7 +6771,568 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
         ),
         events_24h=int(events_24h or 0),
         active_accounts_24h=len(active_accounts_24h),
+        active_accounts_7d=len(active_accounts_7d),
     )
+
+
+@app.get(
+    "/analytics/events/recent",
+    tags=["System"],
+    response_model=RecentAnalyticsEventsResponse,
+    summary="Recent privacy-preserving product activity feed",
+)
+async def recent_analytics_events(
+    request: Request,
+    limit: int = Query(20, ge=1, le=100, description="Max events to return"),
+) -> RecentAnalyticsEventsResponse:
+    """Return the most recent product events without exposing PII."""
+    _check_api_key(request)
+    if _get_datastore() is not None:
+        try:
+            events = await asyncio.get_running_loop().run_in_executor(
+                None, _recent_analytics_events_datastore, limit
+            )
+            return RecentAnalyticsEventsResponse(events=events)
+        except Exception:
+            logger.warning("datastore recent events failed; falling back to duckdb", exc_info=True)
+    events = await asyncio.get_running_loop().run_in_executor(
+        None, _recent_analytics_events_duckdb, limit
+    )
+    return RecentAnalyticsEventsResponse(events=events)
+
+
+@app.get(
+    "/analytics/export",
+    tags=["System"],
+    summary="Export aggregate privacy-preserving analytics summary in CSV format",
+)
+async def export_analytics_csv(request: Request) -> Response:
+    """Export 30-day aggregate traffic and event counts in CSV format."""
+    _check_api_key(request)
+    visits_task = analytics_summary(request)
+    events_task = analytics_events_summary(request)
+    visits, events = await asyncio.gather(visits_task, events_task)
+
+    lines = ["# Foresea Analytics Summary Export", ""]
+    lines.append("Metric,Value")
+    lines.append(f"Total Visits (30d),{visits.total_visits}")
+    lines.append(f"Unique Visitors (30d),{visits.unique_visitors}")
+    lines.append(f"Visits (24h),{visits.visits_24h}")
+    lines.append(f"Total Events (30d),{events.total_events}")
+    lines.append(f"Events (24h),{events.events_24h}")
+    lines.append(f"Active Accounts (24h),{events.active_accounts_24h}")
+    lines.append(f"Active Accounts (7d),{events.active_accounts_7d}")
+    lines.append(f"Authenticated Records (30d),{events.attribution.authenticated_records}")
+    lines.append(f"Anonymous Records (30d),{events.attribution.anonymous_records}")
+    lines.append("")
+    lines.append("Day,Visits,Unique Visitors")
+    for row in visits.by_day:
+        lines.append(f"{row.get('day')},{row.get('visits', 0)},{row.get('unique_visitors', 0)}")
+    lines.append("")
+    lines.append("Event Name,Total Count,Authenticated,Anonymous")
+    for row in events.by_event:
+        lines.append(f"{row.get('event_name')},{row.get('count', 0)},{row.get('authenticated', 0)},{row.get('anonymous', 0)}")
+    lines.append("")
+    lines.append("Model,Forecast Count")
+    for row in events.by_model:
+        lines.append(f"{row.get('model')},{row.get('count', 0)}")
+
+    csv_content = "\n".join(lines)
+    filename = f"foresea_analytics_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/analytics/dashboard", response_class=HTMLResponse, tags=["System"], summary="Live Operator Activity & Attribution Dashboard")
+async def analytics_dashboard(request: Request) -> HTMLResponse:
+    """Operator dashboard for real-time Foresea activity and attribution monitoring."""
+    _check_api_key(request)
+    html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Foresea • Activity & Attribution Desk</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔮</text></svg>">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: #111827;
+      --card-hover: #172033;
+      --border: #1f2937;
+      --border-subtle: #2d3748;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --accent: #6366f1;
+      --emerald: #10b981;
+      --emerald-dim: rgba(16, 185, 129, 0.15);
+      --amber: #f59e0b;
+      --indigo: #6366f1;
+      --indigo-dim: rgba(99, 102, 241, 0.15);
+      --slate: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      padding: 28px 20px 60px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .title-group { display: flex; align-items: center; gap: 12px; }
+    .logo-badge {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #4f46e5, #06b6d4);
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 18px;
+      color: white;
+    }
+    h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    .subtitle { font-size: 13px; color: var(--text-muted); }
+    .controls { display: flex; align-items: center; gap: 12px; }
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--emerald-dim);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .btn-refresh {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 7px;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn-refresh:hover { background: var(--card-hover); border-color: var(--border-subtle); }
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .stat-card:hover { border-color: var(--border-subtle); }
+    .stat-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 600; margin-bottom: 6px; }
+    .stat-val { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; color: var(--text); margin-bottom: 6px; line-height: 1.1; }
+    .stat-sub { font-size: 13px; color: var(--text-muted); }
+    .badge-auth { color: var(--emerald); font-weight: 600; }
+    .badge-anon { color: var(--slate); font-weight: 600; }
+    
+    .grid-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 900px) { .grid-panels { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title { font-size: 15px; font-weight: 600; color: var(--text); }
+    .panel-sub { font-size: 12px; color: var(--text-dim); }
+
+    /* Funnel Flow */
+    .funnel-step {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .funnel-name { font-size: 13px; font-weight: 500; }
+    .funnel-counts { display: flex; align-items: center; gap: 12px; }
+    .funnel-count { font-size: 14px; font-weight: 700; }
+    .funnel-conv { font-size: 12px; color: #a5b4fc; background: var(--indigo-dim); padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+
+    /* Event Table */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 8px 10px; color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    td { padding: 10px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+    tr:last-child td { border-bottom: none; }
+    .event-bar-wrap { width: 100%; height: 6px; background: #334155; border-radius: 3px; overflow: hidden; display: flex; margin-top: 4px; }
+    .bar-auth { background: var(--emerald); height: 100%; }
+    .bar-anon { background: var(--slate); height: 100%; }
+
+    /* Activity Stream */
+    .activity-list { list-style: none; display: flex; flex-direction: column; gap: 8px; max-height: 290px; overflow-y: auto; }
+    .activity-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .activity-tag {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .tag-auth { background: var(--emerald-dim); color: #34d399; }
+    .tag-anon { background: rgba(100, 116, 139, 0.2); color: var(--slate); }
+
+    /* Privacy Banner */
+    .privacy-banner {
+      background: rgba(16, 185, 129, 0.05);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 10px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 24px;
+      font-size: 13px;
+      color: #a7f3d0;
+    }
+    .privacy-icon { font-size: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title-group">
+        <div class="logo-badge">🔮</div>
+        <div>
+          <h1>Foresea Activity Desk</h1>
+          <div class="subtitle">Real-time user engagement & privacy-preserving attribution telemetry</div>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="live-indicator"><span class="pulse-dot"></span> Live Telemetry</div>
+        <a href="/analytics/export" class="btn-refresh">📥 Export CSV</a>
+        <button class="btn-refresh" id="refreshBtn" onclick="loadTelemetry()">Refresh</button>
+      </div>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="grid-stats">
+      <div class="stat-card">
+        <div class="stat-label">Daily Active Accounts (24h)</div>
+        <div class="stat-val" id="activeAccounts24h">--</div>
+        <div class="stat-sub"><span id="activeAccounts7d">--</span> active in trailing 7 days</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Events Velocity (24h)</div>
+        <div class="stat-val" id="events24h">--</div>
+        <div class="stat-sub"><span id="totalEvents">--</span> total product events (30d)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Visits Velocity (24h)</div>
+        <div class="stat-val" id="visits24h">--</div>
+        <div class="stat-sub"><span id="totalVisits">--</span> visits (<span id="uniqueVisitors">--</span> unique)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Authenticated Cohort</div>
+        <div class="stat-val" id="authRatio">--%</div>
+        <div class="stat-sub"><span class="badge-auth" id="authRecords">--</span> signed-in / <span class="badge-anon" id="anonRecords">--</span> anon</div>
+      </div>
+    </div>
+
+    <!-- Main Content Panels -->
+    <div class="grid-panels">
+      <!-- Funnel Flow -->
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Forecasting & Product Funnel</div>
+            <div class="panel-sub">Trailing 30-day conversion flow</div>
+          </div>
+        </div>
+        <div id="funnelFlow">
+          <div class="funnel-step">
+            <span class="funnel-name">1. Page Visits</span>
+            <div class="funnel-counts"><span class="funnel-count" id="fnVisits">--</span><span class="funnel-conv">100%</span></div>
+          </div>
+          <div class="funnel-step">
+            <span class="funnel-name">2. Forecast Started</span>
+            <div class="funnel-counts"><span class="funnel-count" id="fnStarted">--</span><span class="funnel-conv" id="fnConvStarted">--%</span></div>
+          </div>
+          <div class="funnel-step">
+            <span class="funnel-name">3. Forecast Completed</span>
+            <div class="funnel-counts"><span class="funnel-count" id="fnCompleted">--</span><span class="funnel-conv" id="fnConvCompleted">--%</span></div>
+          </div>
+          <div class="funnel-step">
+            <span class="funnel-name">4. Desk / Radar Opened</span>
+            <div class="funnel-counts"><span class="funnel-count" id="fnDesk">--</span><span class="funnel-conv" id="fnConvDesk">--%</span></div>
+          </div>
+          <div class="funnel-step">
+            <span class="funnel-name">5. Watchlist / Ledger Actions</span>
+            <div class="funnel-counts"><span class="funnel-count" id="fnActions">--</span><span class="funnel-conv" id="fnConvActions">--%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Events Breakdown -->
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Product Event Attribution</div>
+            <div class="panel-sub">Signed-in (<span style="color:var(--emerald)">■</span>) vs Anonymous (<span style="color:var(--slate)">■</span>)</div>
+          </div>
+        </div>
+        <div style="max-height: 290px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th style="text-align:right">Volume</th>
+                <th style="text-align:right">Split</th>
+              </tr>
+            </thead>
+            <tbody id="eventsTableBody">
+              <tr><td colspan="3" style="text-align:center; color:var(--text-dim)">Loading events...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2 Panels: Activity Stream & Model Preference -->
+    <div class="grid-panels">
+      <!-- Live Recent Activity Stream -->
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Live Activity Stream</div>
+            <div class="panel-sub">Most recent privacy-preserving product events</div>
+          </div>
+        </div>
+        <div id="recentActivityList" class="activity-list">
+          <div style="text-align:center; color:var(--text-dim); padding: 16px;">Loading recent events...</div>
+        </div>
+      </div>
+
+      <!-- Model Preference -->
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Model Preference & Utilization</div>
+            <div class="panel-sub">Forecast model selection share</div>
+          </div>
+        </div>
+        <div style="max-height: 290px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th style="text-align:right">Forecasts</th>
+                <th style="text-align:right">Share</th>
+              </tr>
+            </thead>
+            <tbody id="modelsTableBody">
+              <tr><td colspan="3" style="text-align:center; color:var(--text-dim)">Loading models...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Privacy Banner -->
+    <div class="privacy-banner">
+      <span class="privacy-icon">🛡️</span>
+      <div>
+        <strong>Privacy-Preserving Telemetry Guarantee:</strong> Foresea does not store raw user identities, email addresses, or IP addresses in analytics tables. Authenticated activity uses domain-separated HMAC-SHA256 account references with server-side secret salting.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function loadTelemetry() {
+      const btn = document.getElementById('refreshBtn');
+      if (btn) btn.innerText = 'Refreshing...';
+      try {
+        const [vRes, eRes, rRes] = await Promise.all([
+          fetch('/analytics/summary'),
+          fetch('/analytics/events/summary'),
+          fetch('/analytics/events/recent?limit=15')
+        ]);
+        if (!vRes.ok || !eRes.ok) throw new Error('Analytics endpoints unreachable');
+        const visits = await vRes.json();
+        const events = await eRes.json();
+        const recents = rRes.ok ? await rRes.json() : { events: [] };
+
+        // 1. Stats
+        document.getElementById('activeAccounts24h').innerText = (events.active_accounts_24h || 0).toLocaleString();
+        document.getElementById('activeAccounts7d').innerText = (events.active_accounts_7d || events.active_accounts_24h || 0).toLocaleString();
+        document.getElementById('events24h').innerText = (events.events_24h || 0).toLocaleString();
+        document.getElementById('totalEvents').innerText = (events.total_events || 0).toLocaleString();
+        document.getElementById('visits24h').innerText = (visits.visits_24h || 0).toLocaleString();
+        document.getElementById('totalVisits').innerText = (visits.total_visits || 0).toLocaleString();
+        document.getElementById('uniqueVisitors').innerText = (visits.unique_visitors || 0).toLocaleString();
+
+        const attr = events.attribution || {};
+        const authCount = attr.authenticated_records || 0;
+        const anonCount = attr.anonymous_records || 0;
+        const totalAttr = authCount + anonCount;
+        const ratio = totalAttr > 0 ? Math.round((authCount / totalAttr) * 100) : 0;
+        document.getElementById('authRatio').innerText = ratio + '%';
+        document.getElementById('authRecords').innerText = authCount.toLocaleString() + ' auth';
+        document.getElementById('anonRecords').innerText = anonCount.toLocaleString() + ' anon';
+
+        // 2. Funnel
+        const evMap = {};
+        (events.by_event || []).forEach(e => { evMap[e.event_name] = e.count; });
+        const vCount = visits.total_visits || 1;
+        const fnStarted = (evMap['forecast_started'] || 0) + (evMap['first_forecast'] || 0);
+        const fnCompleted = evMap['forecast_completed'] || 0;
+        const fnDesk = (evMap['track_record_opened'] || 0) + (evMap['edge_board_opened'] || 0);
+        const fnActions = (evMap['watchlist_add'] || 0) + (evMap['personal_ledger_add'] || 0) + (evMap['share_created'] || 0);
+
+        document.getElementById('fnVisits').innerText = vCount.toLocaleString();
+        document.getElementById('fnStarted').innerText = fnStarted.toLocaleString();
+        document.getElementById('fnConvStarted').innerText = Math.round((fnStarted / vCount) * 100) + '%';
+        document.getElementById('fnCompleted').innerText = fnCompleted.toLocaleString();
+        document.getElementById('fnConvCompleted').innerText = (fnStarted > 0 ? Math.round((fnCompleted / fnStarted) * 100) : 0) + '%';
+        document.getElementById('fnDesk').innerText = fnDesk.toLocaleString();
+        document.getElementById('fnConvDesk').innerText = (vCount > 0 ? Math.round((fnDesk / vCount) * 100) : 0) + '%';
+        document.getElementById('fnActions').innerText = fnActions.toLocaleString();
+        document.getElementById('fnConvActions').innerText = (fnCompleted > 0 ? Math.round((fnActions / fnCompleted) * 100) : 0) + '%';
+
+        // 3. Events Table
+        const tbody = document.getElementById('eventsTableBody');
+        if (events.by_event && events.by_event.length) {
+          tbody.innerHTML = events.by_event.map(e => {
+            const auth = e.authenticated || 0;
+            const anon = e.anonymous != null ? e.anonymous : (e.count - auth);
+            const total = e.count || 1;
+            const authPct = Math.round((auth / total) * 100);
+            const anonPct = 100 - authPct;
+            return `<tr>
+              <td>
+                <div style="font-weight:600">${e.event_name}</div>
+                <div class="event-bar-wrap">
+                  <div class="bar-auth" style="width:${authPct}%"></div>
+                  <div class="bar-anon" style="width:${anonPct}%"></div>
+                </div>
+              </td>
+              <td style="text-align:right; font-weight:700">${e.count.toLocaleString()}</td>
+              <td style="text-align:right; font-size:12px; color:var(--text-muted)">
+                <span class="badge-auth">${auth}</span> / <span class="badge-anon">${anon}</span>
+              </td>
+            </tr>`;
+          }).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim)">No events recorded yet</td></tr>';
+        }
+
+        // 4. Live Recent Activity Stream
+        const streamContainer = document.getElementById('recentActivityList');
+        if (recents.events && recents.events.length) {
+          streamContainer.innerHTML = recents.events.map(ev => {
+            const isAuth = ev.attribution === 'authenticated';
+            const tagClass = isAuth ? 'tag-auth' : 'tag-anon';
+            const tagLabel = isAuth ? 'Signed In' : 'Anonymous';
+            const tsStr = ev.ts ? new Date(ev.ts).toLocaleTimeString() : '';
+            return `<div class="activity-item">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-weight:600">${ev.event_name}</span>
+                <span class="activity-tag ${tagClass}">${tagLabel}</span>
+              </div>
+              <span style="color:var(--text-dim); font-size:12px;">${tsStr}</span>
+            </div>`;
+          }).join('');
+        } else {
+          streamContainer.innerHTML = '<div style="text-align:center; color:var(--text-dim); padding: 16px;">No recent events recorded yet</div>';
+        }
+
+        // 5. Model Preference Table
+        const modelTbody = document.getElementById('modelsTableBody');
+        if (events.by_model && events.by_model.length) {
+          const totalModelForecasts = events.by_model.reduce((acc, m) => acc + (m.count || 0), 0) || 1;
+          modelTbody.innerHTML = events.by_model.map(m => {
+            const mCount = m.count || 0;
+            const pct = Math.round((mCount / totalModelForecasts) * 100);
+            return `<tr>
+              <td>
+                <div style="font-weight:600">${m.model}</div>
+                <div class="event-bar-wrap">
+                  <div style="background:#6366f1; width:${pct}%; height:100%;"></div>
+                </div>
+              </td>
+              <td style="text-align:right; font-weight:700">${mCount.toLocaleString()}</td>
+              <td style="text-align:right; font-size:12px; color:#a5b4fc; font-weight:600">${pct}%</td>
+            </tr>`;
+          }).join('');
+        } else {
+          modelTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim)">No model forecasts recorded yet</td></tr>';
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (btn) btn.innerText = 'Refresh';
+      }
+    }
+
+    loadTelemetry();
+    setInterval(loadTelemetry, 10000);
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html_content, media_type="text/html")
 
 
 @app.post("/forecasts/share", tags=["System"], response_model=SharedForecastResponse)

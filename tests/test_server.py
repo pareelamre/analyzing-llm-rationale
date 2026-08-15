@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -144,10 +145,13 @@ class ServerTests(unittest.TestCase):
     def setUp(self):
         self.provider = FakeProvider()
         self.evidence_pipeline = FakeEvidencePipeline()
-        self.analytics_db = Path(tempfile.gettempdir()) / "foresea_test_analytics.duckdb"
+        self.analytics_db = Path(tempfile.gettempdir()) / f"foresea_test_analytics_{uuid.uuid4().hex[:8]}.duckdb"
         server_module._ANALYTICS_DB = self.analytics_db
-        if self.analytics_db.exists():
-            self.analytics_db.unlink()
+        try:
+            if self.analytics_db.exists():
+                self.analytics_db.unlink()
+        except Exception:
+            pass
         self._datastore_patch = mock.patch.object(server_module, "_get_datastore", return_value=None)
         self._datastore_patch.start()
         def fake_require_auth(request):
@@ -192,8 +196,11 @@ class ServerTests(unittest.TestCase):
         self._datastore_patch.stop()
         _state.clear()
         _local_cache.clear()
-        if self.analytics_db.exists():
-            self.analytics_db.unlink()
+        try:
+            if self.analytics_db.exists():
+                self.analytics_db.unlink()
+        except Exception:
+            pass
 
     def _page_context(self, response):
         marker = '<script type="application/json" id="foresea-page-context">'
@@ -1290,7 +1297,7 @@ class ServerTests(unittest.TestCase):
     def test_analytics_event_summary_counts_events(self):
         response = self.client.post(
             "/analytics/event",
-            json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test"}},
+            json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test", "model": "gpt-oss-120b"}},
         )
         self.assertEqual(response.status_code, 200)
         time.sleep(0.02)
@@ -1301,10 +1308,14 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["total_events"], 1)
         self.assertEqual(payload["events_24h"], 1)
         self.assertEqual(payload["active_accounts_24h"], 0)
+        self.assertEqual(payload["active_accounts_7d"], 0)
         self.assertEqual(payload["by_event"][0]["event_name"], "forecast_completed")
         self.assertEqual(payload["by_event"][0]["count"], 1)
         self.assertEqual(payload["by_event"][0]["anonymous"], 1)
         self.assertEqual(payload["by_event"][0]["authenticated"], 0)
+        self.assertEqual(len(payload["by_model"]), 1)
+        self.assertEqual(payload["by_model"][0]["model"], "gpt-oss-120b")
+        self.assertEqual(payload["by_model"][0]["count"], 1)
 
     def test_analytics_attribution_hashes_session_identity_and_summarizes(self):
         user_id = "analytics-user@example.com"
@@ -1357,6 +1368,7 @@ class ServerTests(unittest.TestCase):
         visit_payload = visit_summary_response.json()
         self.assertEqual(event_payload["events_24h"], 1)
         self.assertEqual(event_payload["active_accounts_24h"], 1)
+        self.assertEqual(event_payload["active_accounts_7d"], 1)
         self.assertEqual(event_payload["by_event"][0]["authenticated"], 1)
         self.assertEqual(event_payload["by_event"][0]["anonymous"], 0)
         self.assertEqual(visit_payload["visits_24h"], 1)
@@ -1370,6 +1382,46 @@ class ServerTests(unittest.TestCase):
         })
         self.assertEqual(visit_summary, event_summary)
 
+    def test_analytics_dashboard_renders_html(self):
+        response = self.client.get("/analytics/dashboard")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/html", response.headers.get("content-type", ""))
+        self.assertIn("Foresea Activity Desk", response.text)
+        self.assertIn("Daily Active Accounts", response.text)
+        self.assertIn("Product Funnel", response.text)
+        self.assertIn("Live Activity Stream", response.text)
+        self.assertIn("Export CSV", response.text)
+
+    def test_analytics_events_recent_returns_events(self):
+        self.client.post(
+            "/analytics/event",
+            json={"event_name": "forecast_completed", "path": "/", "metadata": {"model": "test-model"}},
+        )
+        response = self.client.get("/analytics/events/recent?limit=10")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("events", payload)
+        self.assertEqual(len(payload["events"]), 1)
+        self.assertEqual(payload["events"][0]["event_name"], "forecast_completed")
+        self.assertEqual(payload["events"][0]["attribution"], "anonymous")
+        self.assertEqual(payload["events"][0]["metadata"]["model"], "test-model")
+
+    def test_analytics_export_returns_csv(self):
+        self.client.post(
+            "/analytics/visit",
+            json={"path": "/", "referrer": "", "timezone": "UTC"},
+        )
+        self.client.post(
+            "/analytics/event",
+            json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test", "model": "gpt-oss-120b"}},
+        )
+        response = self.client.get("/analytics/export")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/csv", response.headers.get("content-type", ""))
+        self.assertIn("attachment;", response.headers.get("content-disposition", ""))
+        self.assertIn("Total Visits (30d)", response.text)
+        self.assertIn("forecast_completed", response.text)
+        self.assertIn("gpt-oss-120b", response.text)
 
     def test_share_forecast_creates_public_page(self):
         response = self.client.post(
