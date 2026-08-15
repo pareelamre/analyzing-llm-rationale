@@ -1790,6 +1790,11 @@ _trading_guardrail_actions = _meter.create_counter(
     unit="1",
     description="Trading risk-guardrail evaluations by venue, action, and outcome",
 )
+_trading_readiness_actions = _meter.create_counter(
+    "trading.readiness.actions",
+    unit="1",
+    description="Operator launch-readiness checks for guarded live trading",
+)
 
 
 # Redirect middleware: send requests from run.app hosts to the custom domain
@@ -3884,6 +3889,30 @@ class TradingGuardrailsUpdateRequest(BaseModel):
     max_price_deviation_bps: Optional[int] = Field(None, ge=1, le=10_000)
     max_quote_age_seconds: Optional[int] = Field(None, ge=1, le=300)
     cooldown_seconds: Optional[int] = Field(None, ge=0, le=3600)
+
+
+class TradingLaunchReadinessCheck(BaseModel):
+    """One non-sensitive operator check required before enabling live BYO trading."""
+
+    code: str
+    status: Literal["ready", "attention", "blocked"]
+    detail: str
+
+
+class TradingLaunchReadinessResponse(BaseModel):
+    """Configuration-only launch report; it never probes exchanges or reveals secrets."""
+
+    safe_default_active: bool
+    ready_for_connection_beta: bool
+    ready_for_live_byo_beta: bool
+    byo_trading_enabled: bool
+    shared_trading_enabled: bool
+    market_orders_enabled: bool
+    platform_kill_switch: bool
+    scheduled_reconciliation_configured: bool
+    durable_store_configured: bool
+    hard_caps: Dict[str, Any]
+    checks: List[TradingLaunchReadinessCheck]
 
 
 class AgentSkill(BaseModel):
@@ -6354,6 +6383,103 @@ def _secure_connection_configured() -> bool:
     return True
 
 
+def _trading_launch_readiness() -> TradingLaunchReadinessResponse:
+    """Report deploy-local prerequisites without exercising KMS or an exchange.
+
+    A green report means this revision is configured for an invite-only account
+    connection beta. It deliberately does *not* claim that Cloud KMS IAM,
+    GitHub's mirrored scheduler secret, or a venue account have been proven;
+    those require their own least-privilege smoke checks.
+    """
+    from analyzing_llm_rationale import trading
+
+    checks: List[TradingLaunchReadinessCheck] = []
+
+    def add(code: str, status: Literal["ready", "attention", "blocked"], detail: str) -> None:
+        checks.append(TradingLaunchReadinessCheck(code=code, status=status, detail=detail))
+
+    secure_connections = _secure_connection_configured()
+    add(
+        "secure_connections",
+        "ready" if secure_connections else "blocked",
+        (
+            "A dedicated Cloud KMS key resource is configured for encrypted user connections."
+            if secure_connections
+            else "A valid Cloud KMS key resource is required before user exchange accounts can connect."
+        ),
+    )
+
+    durable_store = _get_datastore() is not None
+    add(
+        "durable_store",
+        "ready" if durable_store else "blocked",
+        (
+            "A durable store client is available for trade runs, audit orders, and guardrail events."
+            if durable_store
+            else "A durable Datastore client is required; in-memory trade state is not launch-safe."
+        ),
+    )
+
+    scheduler_configured = bool(_TRADING_RECONCILIATION_TOKEN)
+    add(
+        "scheduled_reconciliation",
+        "ready" if scheduler_configured else "blocked",
+        (
+            "The service has a reconciliation token; confirm the matching GitHub Actions secret separately."
+            if scheduler_configured
+            else "Set the reconciliation token in the service and its matching GitHub Actions secret."
+        ),
+    )
+
+    try:
+        hard_caps = _platform_trading_guardrail_caps()
+        caps_valid = True
+        add("hard_caps", "ready", "Server-side order, exposure, freshness, and cooldown caps are valid.")
+    except TradingGuardrailError:
+        hard_caps = {}
+        caps_valid = False
+        add("hard_caps", "blocked", "One or more server-side trading cap values are invalid.")
+
+    byo_trading_enabled = trading._env_bool("FORESEA_ENABLE_BYO_TRADING", False)
+    shared_trading_enabled = trading._env_bool("FORESEA_ENABLE_TRADING", False)
+    market_orders_enabled = trading._env_bool("FORESEA_ALLOW_MARKET_ORDERS", False)
+    kill_switch = _trading_guardrail_env_bool("FORESEA_TRADING_KILL_SWITCH", False)
+    safe_default_active = not byo_trading_enabled and not shared_trading_enabled
+    if safe_default_active:
+        add("execution_gate", "ready", "Live execution is disabled by default.")
+    elif kill_switch:
+        add("execution_gate", "attention", "Execution is enabled, but the platform kill switch currently blocks new orders.")
+    else:
+        add("execution_gate", "attention", "Live execution is enabled; keep the rollout invite-only and within hard caps.")
+
+    legacy_key_present = bool((os.environ.get(_TRADING_LEGACY_ENCRYPTION_KEY_ENV) or "").strip())
+    add(
+        "legacy_encryption_key",
+        "attention" if legacy_key_present else "ready",
+        (
+            "A retired connection-encryption key remains for lazy migration; remove it after all version-1 records migrate."
+            if legacy_key_present
+            else "No retired shared connection-encryption key is configured."
+        ),
+    )
+
+    connection_beta_ready = secure_connections and durable_store and scheduler_configured and caps_valid
+    live_byo_beta_ready = connection_beta_ready and byo_trading_enabled and not kill_switch
+    return TradingLaunchReadinessResponse(
+        safe_default_active=safe_default_active,
+        ready_for_connection_beta=connection_beta_ready,
+        ready_for_live_byo_beta=live_byo_beta_ready,
+        byo_trading_enabled=byo_trading_enabled,
+        shared_trading_enabled=shared_trading_enabled,
+        market_orders_enabled=market_orders_enabled,
+        platform_kill_switch=kill_switch,
+        scheduled_reconciliation_configured=scheduler_configured,
+        durable_store_configured=durable_store,
+        hard_caps=hard_caps,
+        checks=checks,
+    )
+
+
 def _read_trading_connection(user_id: str, platform: str) -> Optional[Dict[str, Any]]:
     client = _get_datastore()
     if client is None:
@@ -8146,6 +8272,43 @@ async def scheduled_trading_reconciliation(
             span.set_status(Status(StatusCode.ERROR))
             logger.error("scheduled trading reconciliation failed")
             raise HTTPException(status_code=503, detail="Scheduled reconciliation could not complete.") from exc
+
+
+@app.get(
+    "/internal/trading/readiness",
+    tags=["System"],
+    summary="Read non-sensitive launch prerequisites for guarded live trading",
+    response_model=TradingLaunchReadinessResponse,
+    include_in_schema=False,
+)
+async def trading_launch_readiness(request: Request) -> TradingLaunchReadinessResponse:
+    """Operator-only configuration check; this endpoint never contacts a venue."""
+    _require_trading_reconciliation_token(request)
+    with _tracer.start_as_current_span("trading.readiness.check") as span:
+        try:
+            readiness = _trading_launch_readiness()
+            outcome = "ready" if readiness.ready_for_connection_beta else "blocked"
+            span.set_attributes(
+                {
+                    "trading.readiness.outcome": outcome,
+                    "trading.readiness.check_count": len(readiness.checks),
+                    "trading.readiness.byo_enabled": readiness.byo_trading_enabled,
+                    "trading.readiness.kill_switch": readiness.platform_kill_switch,
+                }
+            )
+            _trading_readiness_actions.add(1, {"outcome": outcome})
+            logger.info(
+                "trading launch readiness checked outcome=%s checks=%s",
+                outcome,
+                len(readiness.checks),
+            )
+            return readiness
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _trading_readiness_actions.add(1, {"outcome": "error"})
+            logger.error("trading launch readiness check failed")
+            raise HTTPException(status_code=503, detail="Trading launch readiness could not be evaluated.") from exc
 
 
 @app.get("/providers/models", tags=["System"], summary="List models from a provider base URL")

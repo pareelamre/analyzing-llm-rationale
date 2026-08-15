@@ -887,6 +887,23 @@ calls the hidden endpoint every 15 minutes, bounded by
 only fetches the current state of already-submitted venue order IDs; it cannot
 place, amend, or cancel an order.
 
+#### Operator launch-readiness check
+
+After deploying the trading revision, use the same narrowly scoped reconciliation
+token to read its non-sensitive configuration report:
+
+```bash
+curl https://foresea.ink/internal/trading/readiness \
+  -H "X-Trading-Reconciliation-Token: $TRADING_RECONCILIATION_TOKEN"
+```
+
+The report confirms the configured KMS resource, durable store client,
+reconciliation-token presence, valid hard caps, live-execution gates, and whether
+the retired shared encryption key is still present. It does not expose key names,
+tokens, credentials, or account data. It also cannot prove Cloud KMS IAM, that
+the GitHub Actions secret matches, or that an exchange account can trade; verify
+those separately during the invite-only smoke test.
+
 Deploy the `TradingOrder` index in `index.yaml` before enabling the scheduler:
 
 ```bash

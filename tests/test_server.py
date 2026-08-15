@@ -1883,6 +1883,43 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(stored["status"], "filled")
         self.assertEqual(stored["filled_quantity"], 2.0)
 
+    def test_trading_launch_readiness_is_token_gated_and_does_not_expose_secrets(self):
+        kms_key = (
+            "projects/foresea/locations/us-central1/keyRings/foresea-trading/"
+            "cryptoKeys/exchange-connections"
+        )
+        with mock.patch.object(server_module, "_TRADING_RECONCILIATION_TOKEN", "readiness-token"):
+            denied = self.client.get("/internal/trading/readiness")
+            self.assertEqual(denied.status_code, 401)
+            with mock.patch.object(server_module, "_get_datastore", return_value=object()), mock.patch.dict(
+                os.environ,
+                {
+                    "FORESEA_TRADING_KMS_KEY_NAME": kms_key,
+                    "FORESEA_ENABLE_BYO_TRADING": "false",
+                    "FORESEA_ENABLE_TRADING": "false",
+                    "FORESEA_TRADING_KILL_SWITCH": "false",
+                    "FORESEA_ALLOW_MARKET_ORDERS": "false",
+                },
+                clear=False,
+            ):
+                ready = self.client.get(
+                    "/internal/trading/readiness",
+                    headers={"X-Trading-Reconciliation-Token": "readiness-token"},
+                )
+
+        self.assertEqual(ready.status_code, 200)
+        report = ready.json()
+        self.assertTrue(report["safe_default_active"])
+        self.assertTrue(report["ready_for_connection_beta"])
+        self.assertFalse(report["ready_for_live_byo_beta"])
+        self.assertTrue(report["scheduled_reconciliation_configured"])
+        self.assertNotIn("readiness-token", ready.text)
+        self.assertNotIn(kms_key, ready.text)
+        self.assertEqual(
+            {check["status"] for check in report["checks"] if check["code"] == "secure_connections"},
+            {"ready"},
+        )
+
     def test_favorites_crud_roundtrip(self):
         token = _issue_session("fav-user", "fav@example.com", "Fav", "")
         headers = {"Authorization": f"Bearer {token}"}
