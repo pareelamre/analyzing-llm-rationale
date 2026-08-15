@@ -140,6 +140,11 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("// sendBeacon cannot attach the session header.", self.index_html)
         self.assertIn("_sendAnalytics('/analytics/visit', payload);", self.index_html)
         self.assertIn("_sendAnalytics('/analytics/event', payload);", self.index_html)
+        self.assertIn("trackEvent('forecast_started'", self.index_html)
+        self.assertIn("trackEvent('track_record_opened'", self.index_html)
+        self.assertIn("trackEvent('edge_board_opened'", self.index_html)
+        self.assertIn("trackEvent('watchlist_opened'", self.index_html)
+        self.assertIn("trackEvent('personal_ledger_opened'", self.index_html)
 
     def test_app_uses_refresh_safe_paths_and_migrates_legacy_hash_links(self) -> None:
         self.assertIn("const CHAT_PATH_PREFIX = '/chat/';", self.index_html)

@@ -5103,6 +5103,10 @@ function startForecast(question, ctx = null) {
   const normalizedQuestion = String(question ?? '').trim();
   if (!normalizedQuestion) return;
   _pendingMarketCtx = ctx || null;
+  trackEvent('forecast_started', {
+    source: _pendingMarketCtx ? 'market_context' : 'manual',
+    platform: _pendingMarketCtx?.market_platform || '',
+  });
   launchApp();
   if (!activeId || (getConv(activeId)?.messages || []).length > 0) {
     newConversation();
@@ -5163,6 +5167,7 @@ async function openTrackRecord({ updateHistory = true } = {}) {
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+  trackEvent('track_record_opened', { source: currentView === 'app' ? 'app' : 'landing' });
   if (updateHistory) setHistoryState(currentView === 'app' ? 'track-app' : 'track-landing');
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
@@ -5609,6 +5614,7 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+  trackEvent('edge_board_opened', { source: currentView === 'app' ? 'app' : 'landing' });
   if (updateHistory) setHistoryState(currentView === 'app' ? 'edge-app' : 'edge-landing');
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
@@ -5694,6 +5700,7 @@ async function openWatchlistPage({ updateHistory = true } = {}) {
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+  trackEvent('watchlist_opened', { source: currentView === 'app' ? 'app' : 'landing' });
   if (updateHistory) setHistoryState(currentView === 'app' ? 'watch-app' : 'watch-landing');
   if (window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   renderWatchlistPage();
@@ -5782,6 +5789,7 @@ async function openPersonalLedger({ updateHistory = true } = {}) {
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+  trackEvent('personal_ledger_opened', { source: currentView === 'app' ? 'app' : 'landing' });
   if (updateHistory) setHistoryState(currentView === 'app' ? 'ledger-app' : 'ledger-landing');
   if (window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   await refreshPersonalLedger();
