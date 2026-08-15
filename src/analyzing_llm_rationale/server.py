@@ -155,6 +155,19 @@ _TRADING_RECONCILIATION_TOKEN: Optional[str] = os.environ.get("TRADING_RECONCILI
 _TRADING_RECONCILIATION_MAX_ORDERS = max(
     1, min(int(os.environ.get("TRADING_RECONCILIATION_MAX_ORDERS", "25")), 100)
 )
+# Shared secret for the bounded scheduled AgentRun reconciliation trigger. A
+# distinct token from trading reconciliation on purpose -- this path never
+# touches a connected exchange account, only a signed-in user's own private
+# research-run records.
+_AGENT_RUN_RECONCILIATION_TOKEN: Optional[str] = os.environ.get("AGENT_RUN_RECONCILIATION_TOKEN")
+_AGENT_RUN_RECONCILIATION_MAX_RUNS = max(
+    1, min(int(os.environ.get("AGENT_RUN_RECONCILIATION_MAX_RUNS", "25")), 100)
+)
+# A run stuck at status="running" past this many minutes almost certainly means
+# the request that owned it crashed or the process recycled mid-flight, not
+# that it's still legitimately working -- the bounded tool loop (<=8 steps,
+# each one LLM call) normally finishes in well under this.
+_AGENT_RUN_STALE_MINUTES = int(os.environ.get("AGENT_RUN_STALE_MINUTES", "60"))
 _state: Dict[str, Any] = {}
 _trading_run_lock = threading.RLock()
 _trading_guardrail_lock = threading.RLock()
@@ -1075,6 +1088,35 @@ def _put_agent_run(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
     entity.update(record)
     client.put(entity)
     return record
+
+
+def _list_stale_running_agent_runs(cutoff_iso: str, limit: int) -> List[tuple[str, Dict[str, Any]]]:
+    """Cross-user, bounded set of AgentRun records stuck at status="running"
+    with no update since `cutoff_iso` -- almost certainly orphaned by a
+    crashed or recycled request, not still legitimately in flight."""
+    bounded_limit = max(1, min(int(limit), _AGENT_RUN_RECONCILIATION_MAX_RUNS))
+    client = _get_datastore()
+    if client is None:
+        candidates = [
+            (user_id, dict(record))
+            for user_id, records in _state.setdefault("agent_runs", {}).items()
+            for record in records.values()
+            if record.get("status") == "running" and (record.get("updated_at") or "") < cutoff_iso
+        ]
+        return sorted(candidates, key=lambda item: item[1].get("updated_at") or "")[:bounded_limit]
+
+    query = client.query(kind=_AGENT_RUN_KIND)
+    query.add_filter("status", "=", "running")
+    query.add_filter("updated_at", "<", cutoff_iso)
+    query.order = ["updated_at"]
+    candidates: List[tuple[str, Dict[str, Any]]] = []
+    for entity in query.fetch(limit=bounded_limit):
+        parent = entity.key.parent
+        user_id = parent.name if parent is not None else None
+        if not user_id:
+            continue
+        candidates.append((str(user_id), _agent_run_from_entity(entity)))
+    return candidates
 
 
 def _agent_profile_key(client: Any, user_id: str, profile_id: str) -> Any:
@@ -3184,6 +3226,18 @@ def _require_trading_reconciliation_token(request: Optional[Request]) -> None:
         )
     token = request.headers.get("x-trading-reconciliation-token") if request is not None else None
     if not token or not hmac.compare_digest(token, _TRADING_RECONCILIATION_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid or missing reconciliation token.")
+
+
+def _require_agent_run_reconciliation_token(request: Optional[Request]) -> None:
+    """Gate the scheduled AgentRun reconciliation trigger with its own narrowly scoped secret."""
+    if not _AGENT_RUN_RECONCILIATION_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Scheduled agent-run reconciliation is not enabled (set AGENT_RUN_RECONCILIATION_TOKEN).",
+        )
+    token = request.headers.get("x-agent-run-reconciliation-token") if request is not None else None
+    if not token or not hmac.compare_digest(token, _AGENT_RUN_RECONCILIATION_TOKEN):
         raise HTTPException(status_code=401, detail="Invalid or missing reconciliation token.")
 
 
@@ -8794,6 +8848,45 @@ async def scheduled_trading_reconciliation(
             raise HTTPException(status_code=503, detail="Scheduled reconciliation could not complete.") from exc
 
 
+@app.post(
+    "/internal/agent-runs/reconcile",
+    tags=["System"],
+    summary="Mark stale, orphaned AgentRun records as interrupted",
+    include_in_schema=False,
+)
+async def scheduled_agent_run_reconciliation(
+    request: Request,
+    limit: int = Query(25, ge=1, le=100),
+) -> Dict[str, Any]:
+    """Scheduler-only trigger; it never resumes a run, only marks a run stuck
+    at status="running" past AGENT_RUN_STALE_MINUTES as interrupted."""
+    _require_agent_run_reconciliation_token(request)
+    effective_limit = min(limit, _AGENT_RUN_RECONCILIATION_MAX_RUNS)
+    with _tracer.start_as_current_span("agent.run.reconciliation.scheduled") as span:
+        span.set_attribute("agent.run.reconciliation.limit", effective_limit)
+        try:
+            result = await asyncio.get_running_loop().run_in_executor(
+                None, _scheduled_reconcile_stale_agent_runs, _AGENT_RUN_STALE_MINUTES, effective_limit
+            )
+            span.set_attributes(
+                {
+                    "agent.run.reconciliation.checked": result["checked"],
+                    "agent.run.reconciliation.interrupted": result["interrupted"],
+                    "agent.run.reconciliation.errors": result["errors"],
+                }
+            )
+            logger.info(
+                "scheduled agent run reconciliation completed checked=%s interrupted=%s errors=%s",
+                result["checked"], result["interrupted"], result["errors"],
+            )
+            return result
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            logger.error("scheduled agent run reconciliation failed")
+            raise HTTPException(status_code=503, detail="Scheduled reconciliation could not complete.") from exc
+
+
 @app.get(
     "/internal/trading/readiness",
     tags=["System"],
@@ -10672,6 +10765,27 @@ def _fail_agent_run(
     _agent_run_actions.add(1, {"action": "complete", "outcome": status})
     logger.warning("agent run ended id=%s status=%s code=%s", stored["id"], status, error_code)
     return stored
+
+
+def _scheduled_reconcile_stale_agent_runs(stale_minutes: int, limit: int) -> Dict[str, Any]:
+    """Mark AgentRun records stuck at status="running" past `stale_minutes` as
+    interrupted. Idempotent: _fail_agent_run only acts on a record whose own
+    status is still "running", so a run that legitimately completes between
+    being listed here and being processed is left untouched, not clobbered."""
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(minutes=stale_minutes)).isoformat()
+    result: Dict[str, Any] = {"checked": 0, "interrupted": 0, "errors": 0}
+    for user_id, record in _list_stale_running_agent_runs(cutoff_iso, limit):
+        result["checked"] += 1
+        try:
+            _fail_agent_run(
+                user_id, record, status="interrupted", error_code="stale_reconciled",
+                detail=f"No progress for over {stale_minutes} minutes; marked interrupted by scheduled reconciliation.",
+            )
+            result["interrupted"] += 1
+        except Exception:
+            result["errors"] += 1
+            logger.warning("agent run reconciliation could not update run id=%s", record.get("id"))
+    return result
 
 
 def _agent_run_summary(record: Dict[str, Any]) -> AgentRunSummary:

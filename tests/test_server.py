@@ -7,7 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -2220,6 +2220,57 @@ class ServerTests(unittest.TestCase):
         server_module._put_agent_run(user_id, record)
         reread = server_module._read_agent_run(user_id, "agent_run_steps_roundtrip")
         self.assertEqual(reread["steps"], record["steps"])
+
+    def _seed_agent_run(self, user_id, run_id, *, status="running", updated_at):
+        server_module._put_agent_run(user_id, {
+            "id": run_id, "status": status,
+            "title": "t", "question": "q", "platform": None, "recommendation": None,
+            "model_probability": None, "market_probability": None, "edge": None,
+            "agent_profile": None, "request": {}, "report": None, "timeline": [], "steps": [],
+            "created_at": updated_at, "updated_at": updated_at,
+            "completed_at": None, "error_code": None,
+        })
+
+    def test_agent_run_reconciliation_is_token_gated_and_marks_stale_runs_interrupted(self):
+        # A run stuck at status="running" almost always means the request
+        # that owned it crashed or the process recycled mid-flight -- left
+        # alone forever otherwise, since nothing else ever revisits it.
+        stale_ts = (datetime.now(timezone.utc) - timedelta(minutes=90)).isoformat()
+        fresh_ts = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        self._seed_agent_run("recon-user", "agent_run_stale", updated_at=stale_ts)
+        self._seed_agent_run("recon-user", "agent_run_fresh", updated_at=fresh_ts)
+
+        with mock.patch.object(server_module, "_AGENT_RUN_RECONCILIATION_TOKEN", "recon-token"):
+            denied = self.client.post("/internal/agent-runs/reconcile")
+            self.assertEqual(denied.status_code, 401)
+
+            reconciled = self.client.post(
+                "/internal/agent-runs/reconcile?limit=10",
+                headers={"X-Agent-Run-Reconciliation-Token": "recon-token"},
+            )
+        self.assertEqual(reconciled.status_code, 200)
+        self.assertEqual(reconciled.json()["checked"], 1)
+        self.assertEqual(reconciled.json()["interrupted"], 1)
+
+        stale = server_module._read_agent_run("recon-user", "agent_run_stale")
+        self.assertEqual(stale["status"], "interrupted")
+        self.assertEqual(stale["error_code"], "stale_reconciled")
+        fresh = server_module._read_agent_run("recon-user", "agent_run_fresh")
+        self.assertEqual(fresh["status"], "running")
+
+    def test_agent_run_reconciliation_leaves_non_running_runs_alone(self):
+        stale_ts = (datetime.now(timezone.utc) - timedelta(minutes=90)).isoformat()
+        self._seed_agent_run("recon-user-2", "agent_run_done", status="completed", updated_at=stale_ts)
+
+        with mock.patch.object(server_module, "_AGENT_RUN_RECONCILIATION_TOKEN", "recon-token"):
+            reconciled = self.client.post(
+                "/internal/agent-runs/reconcile",
+                headers={"X-Agent-Run-Reconciliation-Token": "recon-token"},
+            )
+        self.assertEqual(reconciled.status_code, 200)
+        self.assertEqual(reconciled.json()["checked"], 0)
+        done = server_module._read_agent_run("recon-user-2", "agent_run_done")
+        self.assertEqual(done["status"], "completed")
 
     def test_favorites_crud_roundtrip(self):
         token = _issue_session("fav-user", "fav@example.com", "Fav", "")
