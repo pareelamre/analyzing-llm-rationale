@@ -8767,7 +8767,7 @@ function renderAgentRunTimeline() {
   host.innerHTML = runs.map(run => {
     const events = (run.timeline || []).slice(-3).map(event =>
       `<span title="${escAttr(event.at || '')}">${escHtml(event.detail || event.phase || 'Updated')}</span>`
-    ).join(' <span aria-hidden="true">→</span> ');
+    ).join(` ${uiIcon('arrow-right')} `);
     const handoff = run.has_live_trade_intent
       ? `<button type="button" class="model-icon-btn" title="Review Trade Run" onclick="openAgentRunTrade('${escAttr(run.id)}')">${uiIcon('external')}</button>`
       : '';
