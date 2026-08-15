@@ -779,7 +779,7 @@
     "scads-alias-ha": {
       "agent_id": "scads-alias-ha",
       "max_drawdown": 0.0974,
-      "sharpe": 0.1158,
+      "sharpe": 0.1211,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -995,6 +995,11 @@
           "account_value": 10901.882308,
           "event_type": "trade",
           "ts": "2026-08-14T23:11:33.970291+00:00"
+        },
+        {
+          "account_value": 10961.217008,
+          "event_type": "trade",
+          "ts": "2026-08-15T02:05:40.872487+00:00"
         }
       ]
     },
@@ -1051,7 +1056,7 @@
       ]
     }
   },
-  "generated_at": "2026-08-15T00:56:52.815840+00:00",
+  "generated_at": "2026-08-15T02:15:56.222622+00:00",
   "leaderboard": [
     {
       "account_value": 15334.727735,
@@ -1097,28 +1102,19 @@
       "won_count": 0
     },
     {
-      "account_value": 10944.882308,
+      "account_value": 10961.217008,
       "agent_id": "scads-alias-ha",
-      "cash": 10901.882308,
-      "fees_paid": 52.317692,
+      "cash": 10961.217008,
+      "fees_paid": 53.982992,
       "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.45,
-          "cost_basis": 45.0,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 100.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 973.629,
-      "return_pct": 9.4488,
+      "open_positions": [],
+      "realized_pnl": 987.9637,
+      "return_pct": 9.6122,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "trade_count": 42,
-      "unrealized_pnl": -2.0,
-      "updated_at": "2026-08-14T23:11:33.969805+00:00",
+      "trade_count": 43,
+      "unrealized_pnl": 0.0,
+      "updated_at": "2026-08-15T02:05:40.871952+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -1317,6 +1313,61 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985288",
+      "thesis": "No further action will be taken this cycle.",
+      "ts": "2026-08-15T02:05:45.456089+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.39,
+      "quantity": 100.0,
+      "realized_pnl": 14.3347,
+      "side": "no",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-15T02:05:40.872487+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985287",
+      "thesis": "I will buy $1000 of YES contracts for the KXCABLEAVE-26MAY22-26SEP market at the current ask price of 0.16.",
+      "ts": "2026-08-15T01:47:53.169318+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985287",
+      "thesis": "I've analyzed both markets and determined no action is needed this cycle. \n\nFor Franklin Arias (KXMLBDEBUT-FARIAS-26SEP01), I already closed my position in the previous cycle since he made his MLB debut before September 1, 2026, which would resolve the market as YES. \n\nFor Kade Anderson (KXMLBDEBUT-KANDERSON-26SEP01), while he's been making starts in the minors, I don't have confirmation that he's made his MLB debut before the September 1, 2026 resolution date. Without clear evidence of his debut, and given the current pricing of 0.3/0.39, I'm not taking a position in this new market.\n\nMy previous position in the Franklin Arias market was correctly exited, and I've documented this analysis for future reference. No trades are necessary this cycle.",
+      "ts": "2026-08-15T01:47:39.279714+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985287",
+      "thesis": "I will not place any trades this cycle. \n\nAfter reviewing both markets, I don't have sufficient conviction to enter new positions despite the price movements. For Kade Anderson, while his market has moved to a higher price (0.39), I don't want to re-enter a market where I already have experience. For Franklin Arias, the market still shows an extremely low probability (0.12) of debut before the deadline, and I lack enough conviction to take that position either. \n\nThe resolution windows for both markets are identical (ending September 1, 2026) and I've already analyzed these prospects previously. My previous reasoning remains valid - I prefer to avoid re-entering markets where I already have experience and don't have strong conviction about new positions. The current prices don't provide enough compelling evidence to override my previous analysis and risk capital in either market.",
+      "ts": "2026-08-15T01:46:11.319035+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "tags": [],
+      "text": "Kade Anderson market (KXMLBDEBUT-KANDERSON-26SEP01): Resolution window 2026-08-14T15:25:04.200369Z -> 2026-09-01T03:59:00Z, current price 0.3/0.39. Franklin Arias market (KXMLBDEBUT-FARIAS-26SEP01): Resolution window 2026-08-14T02:51:10.423274Z -> 2026-09-01T03:59:00Z, current price 0.06/0.12. Both markets have the same resolution window, but Kade Anderson has a higher current price (0.39 vs 0.12). The previous analysis mentioned Kade Anderson was ranked #1 prospect in MLB with moderate probability (0.43/0.45) of making debut before Sep 1, 2026, while Franklin Arias had extremely low probability (0.06/0.12). Based on my previous reasoning, I don't want to re-enter a market where I already have experience, and I don't have sufficient conviction to enter new positions. However, I should consider if there's any new information that might change my perspective.",
+      "ts": "2026-08-15T01:46:09.993034+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "cycle_id": "15m:1985285",
+      "thesis": "I will not place any trades this cycle. I will keep the existing KXCABLEAVE-26MAY22-26SEP yes position and not open any new markets.",
+      "ts": "2026-08-15T01:23:02.817623+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "scads-alias-ha",
       "cycle_id": "15m:1985281",
@@ -1686,61 +1737,6 @@
       "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
       "ts": "2026-08-14T22:11:45.492935+00:00",
       "type": "trade"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985272",
-      "thesis": "I will not make any trades this cycle.",
-      "ts": "2026-08-14T22:04:43.306393+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985272",
-      "thesis": "I'll research the current state of Trump's Cabinet to inform my decision on this position.]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name<function_calls>\n<invoke name=\"web_search\">\n<parameter name=\"query\">Trump Cabinet member leaving 2026 departure resignation]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web_search\">]<]minimax[>[<tool_call>\n<invoke name=\"web",
-      "ts": "2026-08-14T22:03:39.100971+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "15m:1985272",
-      "thesis": "I will not place any trades this cycle. I will keep the existing KXCABLEAVE\u201126MAY22\u201126SEP yes position and not open any new markets, as there is no compelling evidence to improve the odds and the current position is at break\u2011even.",
-      "ts": "2026-08-14T22:02:30.579555+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985271",
-      "thesis": "{\"thought\": \"I've analyzed the two MLB debut markets and determined not to place any trades this cycle. I don't have any existing positions to close, and the current pricing doesn't present a clear opportunity to enter either market. Kade Anderson's market is trading at 0.42/0.51 while Franklin Arias' is at 0.06/0.12, both with the same resolution window (before Sep 1, 2026). I've recorded my analysis in notes for future reference.\", \"final\": \"I will not place any trades this cycle. Both markets (Kade Anderson and Franklin Arias) have the same resolution window (before Sep 1, 2026), but Anderson is priced significantly higher (0.42/0.51) than Arias (0.06/0.12). Since I have no existing positions to close and the current pricing doesn't indicate a clear trading opportunity, I'm maintaining a neutral stance. I've documented my analysis in notes for future reference.\"}",
-      "ts": "2026-08-14T21:58:32.347841+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985271",
-      "thesis": "I have bought 10 YES contracts at $0.51 on the Kade Anderson MLB debut market (KXMLBDEBUT-KANDERSON-26SEP01). This was a strategic move because Kade Anderson has already made his spring debut in February 2026, making it highly probable that his MLB debut will occur before September 1, 2026, causing this market to resolve as 'yes'. The trade was executed in shadow mode as live trading is disabled. My position is now open with an average entry price of $0.51. I've documented this decision in my notes for future reference.",
-      "ts": "2026-08-14T21:55:40.790364+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.51,
-      "quantity": 10.0,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
-      "ts": "2026-08-14T21:55:39.045461+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985271",
-      "thesis": "I have bought 100 YES contracts for the KXMLBDEBUT-FARIAS-26SEP01 market at a price of 0.12 and will continue to monitor the markets.",
-      "ts": "2026-08-14T21:48:59.940145+00:00",
-      "type": "thesis"
     }
   ]
 }
