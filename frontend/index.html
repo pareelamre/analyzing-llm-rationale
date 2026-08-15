@@ -8809,12 +8809,19 @@ function _agentRunStepsPanelId(runId) {
 }
 
 function _agentRunStepRowHtml(step) {
-  const marker = step.error ? uiIcon('alert') : uiIcon('check');
+  // A step with started_at but no completed_at means the process crashed or
+  // was recycled between the two writes -- its outcome is unknown, not a
+  // success. Must not fall through to the check icon, which would show a
+  // false "succeeded" for a step that never actually finished.
+  const stuck = !!step.started_at && !step.completed_at;
+  const marker = stuck ? uiIcon('minus') : (step.error ? uiIcon('alert') : uiIcon('check'));
   const action = escHtml(step.action || 'unknown');
   const thought = step.thought
     ? `<div style="font-style:italic;color:var(--text-dim)">${escHtml(step.thought)}</div>`
     : '';
-  const obs = escHtml(String(step.observation || '').slice(0, 300));
+  const obs = stuck
+    ? '<span style="font-style:italic">Started but never completed — outcome unknown (likely interrupted mid-step).</span>'
+    : escHtml(String(step.observation || '').slice(0, 300));
   return `<div style="margin-bottom:6px">
     <div>${marker} <b>${action}</b></div>
     ${thought}
