@@ -149,6 +149,9 @@ def parse_action(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+OnStep = Callable[[Dict[str, Any]], Awaitable[None]]
+
+
 async def run_tool_loop(
     question: str,
     tools: Dict[str, Tool],
@@ -158,8 +161,15 @@ async def run_tool_loop(
     max_steps: int = 5,
     obs_limit: int = 4000,
     extra_rules: str = "",
+    on_step: Optional[OnStep] = None,
 ) -> Dict[str, Any]:
-    """Drive the ReAct loop. Returns {answer, transcript, steps, truncated}."""
+    """Drive the ReAct loop. Returns {answer, transcript, steps, truncated}.
+
+    `on_step`, if given, is awaited once per completed tool call (not on the
+    final-answer turn) with {index, thought, action, args, observation, error}
+    -- e.g. to persist progress durably as the loop runs. Any exception it
+    raises is swallowed here: a caller-supplied hook must never break the loop.
+    """
     system = build_system_prompt(tool_specs, max_steps, extra_rules)
     messages: List[Dict[str, str]] = [
         {"role": "system", "content": system},
@@ -178,12 +188,26 @@ async def run_tool_loop(
         if not isinstance(args, dict):
             args = {}
         tool = tools.get(name)
+        errored = tool is None
         try:
             obs = await tool(args) if tool else f"(unknown tool '{name}')"
         except Exception:
             obs = f"(tool '{name}' failed)"
+            errored = True
         obs = (obs or "")[:obs_limit]
         transcript.append({"action": name, "args": args, "observation": obs})
+        if on_step is not None:
+            try:
+                await on_step({
+                    "index": step,
+                    "thought": action.get("thought") if isinstance(action.get("thought"), str) else "",
+                    "action": name,
+                    "args": args,
+                    "observation": obs,
+                    "error": errored,
+                })
+            except Exception:
+                pass
         messages.append({"role": "assistant", "content": out})
         messages.append({"role": "user", "content": f"Observation: {obs}"})
     # Out of steps — force a final answer.

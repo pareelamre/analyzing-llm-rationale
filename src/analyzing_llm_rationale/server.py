@@ -1025,7 +1025,7 @@ _AGENT_RUN_KIND = "AgentRun"
 _AGENT_RUN_FIELDS = (
     "id", "status", "title", "question", "platform", "recommendation",
     "model_probability", "market_probability", "edge", "agent_profile",
-    "request", "report", "timeline", "created_at", "updated_at",
+    "request", "report", "timeline", "steps", "created_at", "updated_at",
     "completed_at", "error_code",
 )
 _MAX_AGENT_RUNS_PER_USER = 100
@@ -1070,7 +1070,7 @@ def _put_agent_run(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
 
     entity = _ds.Entity(
         key=_agent_run_key(client, user_id, record["id"]),
-        exclude_from_indexes=("title", "question", "request", "report", "timeline", "agent_profile"),
+        exclude_from_indexes=("title", "question", "request", "report", "timeline", "steps", "agent_profile"),
     )
     entity.update(record)
     client.put(entity)
@@ -4251,6 +4251,10 @@ class AgentRunResponse(AgentRunSummary):
 
     request: Dict[str, Any] = Field(default_factory=dict)
     report: Optional[AgentReport] = None
+    steps: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Tool-loop steps persisted as they happened, visible even for a still-running or crashed run.",
+    )
 
 
 class AgentRunList(BaseModel):
@@ -4402,6 +4406,7 @@ class AnalyticsSummary(BaseModel):
     unique_visitors: int
     by_day: List[Dict[str, Any]]
     attribution: AnalyticsAttributionSummary
+    visits_24h: int = 0
 
 
 class AnalyticsEventRequest(BaseModel):
@@ -4425,6 +4430,8 @@ class AnalyticsEventSummary(BaseModel):
     by_event: List[Dict[str, Any]]
     by_day: List[Dict[str, Any]]
     attribution: AnalyticsAttributionSummary
+    events_24h: int = 0
+    active_accounts_24h: int = 0
 
 
 class GoogleAuthRequest(BaseModel):
@@ -5971,25 +5978,53 @@ def _record_analytics_event(
 def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
     client = _get_datastore()
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
     query = client.query(kind="AnalyticsEvent")
     query.add_filter("ts", ">=", cutoff)
     records = list(query.fetch(limit=10000))
-    by_event: Dict[str, int] = defaultdict(int)
+    by_event: Dict[str, Dict[str, int]] = defaultdict(lambda: {"count": 0, "authenticated": 0, "anonymous": 0})
     by_day: Dict[str, int] = defaultdict(int)
+    events_24h = 0
+    active_accounts_24h: set[str] = set()
     for entity in records:
-        by_event[entity.get("event_name") or "unknown"] += 1
-        by_day[entity.get("day") or entity["ts"].strftime("%Y-%m-%d")] += 1
+        name = entity.get("event_name") or "unknown"
+        account_ref = entity.get("account_ref")
+        if not account_ref and entity.get("user_id"):
+            account_ref = _analytics_account_ref(str(entity["user_id"]))
+        is_auth = bool(account_ref)
+        by_event[name]["count"] += 1
+        if is_auth:
+            by_event[name]["authenticated"] += 1
+        else:
+            by_event[name]["anonymous"] += 1
+        day = entity.get("day") or entity["ts"].strftime("%Y-%m-%d")
+        by_day[day] += 1
+        ts = entity.get("ts")
+        if ts:
+            if getattr(ts, "tzinfo", None) is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            if ts >= cutoff_24h:
+                events_24h += 1
+                if account_ref:
+                    active_accounts_24h.add(str(account_ref))
     return AnalyticsEventSummary(
         total_events=len(records),
         by_event=[
-            {"event_name": name, "count": count}
-            for name, count in sorted(by_event.items(), key=lambda kv: kv[1], reverse=True)
+            {
+                "event_name": name,
+                "count": data["count"],
+                "authenticated": data["authenticated"],
+                "anonymous": data["anonymous"],
+            }
+            for name, data in sorted(by_event.items(), key=lambda kv: kv[1]["count"], reverse=True)
         ],
         by_day=[
             {"day": day, "count": count}
             for day, count in sorted(by_day.items(), reverse=True)
         ],
         attribution=_analytics_attribution_summary(records),
+        events_24h=events_24h,
+        active_accounts_24h=len(active_accounts_24h),
     )
 
 
@@ -6259,16 +6294,24 @@ def _analytics_summary_datastore() -> "AnalyticsSummary":
     # Daily breakdown (last 30 days) from PageVisit rows; distinct counted in
     # Python over a bounded window.
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
     query = client.query(kind="PageVisit")
     query.add_filter("ts", ">=", cutoff)
     by_day: Dict[str, Dict[str, Any]] = {}
     records = list(query.fetch())
+    visits_24h = 0
     for e in records:
         d = e.get("day") or e["ts"].strftime("%Y-%m-%d")
         agg = by_day.setdefault(d, {"visits": 0, "visitors": set()})
         agg["visits"] += 1
         if e.get("visitor_id"):
             agg["visitors"].add(e["visitor_id"])
+        ts = e.get("ts")
+        if ts:
+            if getattr(ts, "tzinfo", None) is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            if ts >= cutoff_24h:
+                visits_24h += 1
     rows = sorted(by_day.items(), reverse=True)[:30]
     return AnalyticsSummary(
         total_visits=total,
@@ -6278,6 +6321,7 @@ def _analytics_summary_datastore() -> "AnalyticsSummary":
             for d, agg in rows
         ],
         attribution=_analytics_attribution_summary(records),
+        visits_24h=visits_24h,
     )
 
 
@@ -6345,7 +6389,7 @@ async def record_visit(event: VisitRequest, request: Request) -> Dict[str, str]:
             )
         except Exception as exc:
             span.record_exception(exc)
-            span.set_status(Status(StatusCode.ERROR))
+            span.set_status(otel_trace.Status(otel_trace.StatusCode.ERROR, type(exc).__name__))
             span.set_attribute("outcome", "error")
             _analytics_attribution_actions.add(
                 1, {"kind": "visit", "attribution": attribution, "outcome": "error"}
@@ -6371,7 +6415,7 @@ async def record_analytics_event(event: AnalyticsEventRequest, request: Request)
             )
         except Exception as exc:
             span.record_exception(exc)
-            span.set_status(Status(StatusCode.ERROR))
+            span.set_status(otel_trace.Status(otel_trace.StatusCode.ERROR, type(exc).__name__))
             span.set_attribute("outcome", "error")
             _analytics_attribution_actions.add(
                 1, {"kind": "event", "attribution": attribution, "outcome": "error"}
@@ -6403,6 +6447,13 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
         total, unique_visitors = conn.execute(
             "SELECT COUNT(*), COUNT(DISTINCT visitor_hash) FROM page_visits"
         ).fetchone()
+        visits_24h = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM page_visits
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR
+            """
+        ).fetchone()[0]
         rows = conn.execute(
             """
             SELECT
@@ -6440,6 +6491,7 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
             [{"account_ref": account_ref, "attribution": attribution}
              for account_ref, attribution in attribution_rows]
         ),
+        visits_24h=int(visits_24h or 0),
     )
 
 
@@ -6463,9 +6515,15 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
             "SELECT COUNT(*) FROM analytics_events "
             "WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY"
         ).fetchone()[0]
+        events_24h = conn.execute(
+            "SELECT COUNT(*) FROM analytics_events "
+            "WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR"
+        ).fetchone()[0]
         by_event = conn.execute(
             """
-            SELECT event_name, COUNT(*) AS count
+            SELECT event_name, COUNT(*) AS count,
+                   COUNT(CASE WHEN account_ref IS NOT NULL OR user_id IS NOT NULL THEN 1 END) AS authenticated,
+                   COUNT(CASE WHEN account_ref IS NULL AND user_id IS NULL THEN 1 END) AS anonymous
             FROM analytics_events
             WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
             GROUP BY 1
@@ -6490,11 +6548,32 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
             WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
             """
         ).fetchall()
+        active_24h_rows = conn.execute(
+            """
+            SELECT account_ref, user_id
+            FROM analytics_events
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR
+              AND (account_ref IS NOT NULL OR user_id IS NOT NULL)
+            """
+        ).fetchall()
     finally:
         conn.close()
+    active_accounts_24h = {
+        (row[0] or _analytics_account_ref(str(row[1])))
+        for row in active_24h_rows
+        if row[0] or row[1]
+    }
     return AnalyticsEventSummary(
         total_events=int(total or 0),
-        by_event=[{"event_name": name, "count": int(count)} for name, count in by_event],
+        by_event=[
+            {
+                "event_name": name,
+                "count": int(count),
+                "authenticated": int(auth),
+                "anonymous": int(anon),
+            }
+            for name, count, auth, anon in by_event
+        ],
         by_day=[{"day": str(day), "count": int(count)} for day, count in by_day],
         attribution=_analytics_attribution_summary(
             [
@@ -6502,6 +6581,8 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
                 for account_ref, user_id, attribution in attribution_rows
             ]
         ),
+        events_24h=int(events_24h or 0),
+        active_accounts_24h=len(active_accounts_24h),
     )
 
 
@@ -10484,6 +10565,25 @@ def _advance_agent_run(
     return _put_agent_run(user_id, run)
 
 
+async def _persist_agent_run_step(user_id: str, run: Dict[str, Any], step: Dict[str, Any]) -> None:
+    """Best-effort incremental persistence of one tool-loop step. Mutates `run`
+    in place (the same object the caller holds) so partial progress survives
+    even if this specific write fails -- the next successful step's write
+    carries it forward. Never raises: a persistence hiccup must not interrupt
+    the tool loop itself."""
+    try:
+        steps = list(run.get("steps") or [])
+        steps.append({**step, "at": datetime.now(timezone.utc).isoformat()})
+        run["steps"] = steps
+        run["updated_at"] = datetime.now(timezone.utc).isoformat()
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _put_agent_run, user_id, run)
+        _agent_run_actions.add(1, {"action": "step", "outcome": "success"})
+    except Exception:
+        _agent_run_actions.add(1, {"action": "step", "outcome": "error"})
+        logger.warning("failed to persist agent run step id=%s", run.get("id"), exc_info=True)
+
+
 def _agent_run_reference(run: Dict[str, Any]) -> AgentRunReference:
     return AgentRunReference(
         id=str(run["id"]),
@@ -10576,6 +10676,7 @@ def _agent_run_response(record: Dict[str, Any]) -> AgentRunResponse:
         **_agent_run_summary(record).model_dump(mode="json"),
         request=dict(record.get("request") or {}),
         report=AgentReport(**report_payload) if report_payload is not None else None,
+        steps=list(record.get("steps") or []),
     )
 
 
@@ -11163,7 +11264,9 @@ async def _agent_analyze_durable(
             )
 
             if req.tool_loop:
-                report = await _agent_tool_loop(req, request, question, quote, grounding_note)
+                report = await _agent_tool_loop(
+                    req, request, question, quote, grounding_note, run=run, user_id=user_id
+                )
             else:
                 pred_req = _agent_prediction_request(req, question, quote, grounding_note)
                 _agent_counter.add(1, {"agent.platform": req.platform or "unknown"})
@@ -11381,11 +11484,21 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
 
 
 async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
-                           quote: "Optional[MarketQuote]", grounding_note: Optional[str]) -> "AgentReport":
+                           quote: "Optional[MarketQuote]", grounding_note: Optional[str],
+                           *, run: Optional[Dict[str, Any]] = None,
+                           user_id: Optional[str] = None) -> "AgentReport":
     """ReAct tool-using loop: the model plans and calls tools (forecast, market
     fetch, evidence search, venue scan, track record), then answers. Falls back
-    cleanly to a no-edge report if no forecast tool was used."""
+    cleanly to a no-edge report if no forecast tool was used.
+
+    When `run`/`user_id` are given (the durable /agent/analyze path), each
+    step is persisted to the AgentRun record as it happens via on_step."""
     from analyzing_llm_rationale import market_data
+
+    async def _on_step(step: Dict[str, Any]) -> None:
+        if run is None or user_id is None:
+            return
+        await _persist_agent_run_step(user_id, run, step)
 
     alt_provider = _scads_alt_provider(req.model) if req.model else None
     if alt_provider is not None:
@@ -11558,7 +11671,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     backstopped = False
     try:
         res = await agent_capabilities.run_tool_loop(
-            q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule)
+            q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule,
+            on_step=_on_step)
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
         if not last and not req.benchmark_tools:

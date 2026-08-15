@@ -43,14 +43,16 @@ class FakeProvider:
             "confidence": 0.7,
             "rationale": "Evidence supports a yes forecast.",
         }
+        self.responses = None  # optional queue of per-call responses, popped in order
         self.stream_response = "Streaming answer."
 
     def chat_completion(self, messages, temperature, max_tokens):
         self.calls.append(messages)
         self.max_tokens.append(max_tokens)
-        if isinstance(self.response, str):
-            return self.response
-        return json.dumps(self.response)
+        response = self.responses.pop(0) if self.responses else self.response
+        if isinstance(response, str):
+            return response
+        return json.dumps(response)
 
     def stream_chat_completion(self, messages, temperature, max_tokens):
         self.calls.append(messages)
@@ -1294,7 +1296,12 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(summary.status_code, 200)
         payload = summary.json()
         self.assertEqual(payload["total_events"], 1)
+        self.assertEqual(payload["events_24h"], 1)
+        self.assertEqual(payload["active_accounts_24h"], 0)
         self.assertEqual(payload["by_event"][0]["event_name"], "forecast_completed")
+        self.assertEqual(payload["by_event"][0]["count"], 1)
+        self.assertEqual(payload["by_event"][0]["anonymous"], 1)
+        self.assertEqual(payload["by_event"][0]["authenticated"], 0)
 
     def test_analytics_attribution_hashes_session_identity_and_summarizes(self):
         user_id = "analytics-user@example.com"
@@ -1343,8 +1350,15 @@ class ServerTests(unittest.TestCase):
         visit_summary_response = self.client.get("/analytics/summary")
         self.assertNotIn(user_id, event_summary_response.text)
         self.assertNotIn(user_id, visit_summary_response.text)
-        event_summary = event_summary_response.json()["attribution"]
-        visit_summary = visit_summary_response.json()["attribution"]
+        event_payload = event_summary_response.json()
+        visit_payload = visit_summary_response.json()
+        self.assertEqual(event_payload["events_24h"], 1)
+        self.assertEqual(event_payload["active_accounts_24h"], 1)
+        self.assertEqual(event_payload["by_event"][0]["authenticated"], 1)
+        self.assertEqual(event_payload["by_event"][0]["anonymous"], 0)
+        self.assertEqual(visit_payload["visits_24h"], 1)
+        event_summary = event_payload["attribution"]
+        visit_summary = visit_payload["attribution"]
         self.assertEqual(event_summary, {
             "window_days": 30,
             "authenticated_records": 1,
@@ -2120,6 +2134,88 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn("history", detail.json()["request"])
 
         self.assertEqual(self.client.get(f"/agent/runs/{run_id}", headers=other_headers).status_code, 404)
+
+    def test_agent_analyze_tool_loop_persists_steps_incrementally(self):
+        # Regression test: _agent_tool_loop ran the entire ReAct loop as one
+        # opaque await with zero intermediate persistence -- a crash mid-loop
+        # left the AgentRun record with no trace of what happened. Steps must
+        # now be visible on the durable run record, including for a run still
+        # in flight (steps come from run_tool_loop's on_step hook, not from
+        # the final report).
+        owner_headers = {"Authorization": f"Bearer {_issue_session('step-owner', 'stepowner@example.com', 'Owner', '')}"}
+        self.provider.responses = [
+            json.dumps({"thought": "note one", "action": "manage_notes",
+                        "args": {"action": "add", "text": "Track Fed dates."}}),
+            json.dumps({"thought": "note two", "action": "manage_notes",
+                        "args": {"action": "add", "text": "Track CPI dates."}}),
+            json.dumps({"final": "Two notes saved."}),
+        ]
+        with tempfile.TemporaryDirectory() as td, mock.patch.dict(
+            os.environ,
+            {"FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json")},
+            clear=False,
+        ):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Will the Fed cut rates tomorrow?",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                    "max_tool_steps": 3,
+                },
+                headers=owner_headers,
+            )
+        self.assertEqual(response.status_code, 200)
+        run_id = response.json()["agent_run"]["id"]
+
+        detail = self.client.get(f"/agent/runs/{run_id}", headers=owner_headers)
+        self.assertEqual(detail.status_code, 200)
+        steps = detail.json()["steps"]
+        self.assertEqual(len(steps), 2)
+        self.assertEqual(steps[0]["index"], 0)
+        self.assertEqual(steps[0]["thought"], "note one")
+        self.assertEqual(steps[0]["action"], "manage_notes")
+        self.assertEqual(steps[0]["args"], {"action": "add", "text": "Track Fed dates."})
+        self.assertFalse(steps[0]["error"])
+        self.assertIn("at", steps[0])
+        self.assertEqual(steps[1]["index"], 1)
+        self.assertEqual(steps[1]["thought"], "note two")
+
+    def test_agent_run_list_does_not_include_steps(self):
+        owner_headers = {"Authorization": f"Bearer {_issue_session('step-list-owner', 'steplist@example.com', 'Owner', '')}"}
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "Will it rain tomorrow?", "tool_loop": True, "max_tool_steps": 2},
+            headers=owner_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        listed = self.client.get("/agent/runs", headers=owner_headers)
+        self.assertEqual(listed.status_code, 200)
+        self.assertNotIn("steps", listed.json()["runs"][0])
+
+    def test_agent_run_steps_field_survives_put_agent_run_field_filter(self):
+        # _AGENT_RUN_FIELDS gates every read/write, Datastore-backed or
+        # in-memory-fallback alike, applied before persistence -- if "steps"
+        # were left out of that tuple, a step written during a request would
+        # look correct in-process (the same dict object gets mutated) but be
+        # silently stripped on the next _put_agent_run call, so a *separate*
+        # GET would come back with no steps at all.
+        user_id = "steps-roundtrip-user"
+        record = {
+            "id": "agent_run_steps_roundtrip",
+            "status": "running",
+            "title": "t", "question": "q", "platform": None, "recommendation": None,
+            "model_probability": None, "market_probability": None, "edge": None,
+            "agent_profile": None, "request": {}, "report": None, "timeline": [],
+            "steps": [{"index": 0, "thought": "", "action": "get_market", "args": {},
+                       "observation": "obs", "error": False, "at": "2026-01-01T00:00:00+00:00"}],
+            "created_at": "2026-01-01T00:00:00+00:00", "updated_at": "2026-01-01T00:00:00+00:00",
+            "completed_at": None, "error_code": None,
+        }
+        server_module._put_agent_run(user_id, record)
+        reread = server_module._read_agent_run(user_id, "agent_run_steps_roundtrip")
+        self.assertEqual(reread["steps"], record["steps"])
 
     def test_favorites_crud_roundtrip(self):
         token = _issue_session("fav-user", "fav@example.com", "Fav", "")
