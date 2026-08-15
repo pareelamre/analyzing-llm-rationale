@@ -132,6 +132,15 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertNotIn("_allVenueCreds", self.index_html)
         self.assertIn("localStorage.removeItem('foresea_venue_creds')", self.index_html)
 
+    def test_signed_in_analytics_uses_the_session_header_not_send_beacon(self) -> None:
+        self.assertIn("function _sendAnalytics(url, payload)", self.index_html)
+        self.assertIn("const { token } = _loadStoredSession();", self.index_html)
+        self.assertIn("if (token) {", self.index_html)
+        self.assertIn("headers: authHeaders({ 'Content-Type': 'application/json' })", self.index_html)
+        self.assertIn("// sendBeacon cannot attach the session header.", self.index_html)
+        self.assertIn("_sendAnalytics('/analytics/visit', payload);", self.index_html)
+        self.assertIn("_sendAnalytics('/analytics/event', payload);", self.index_html)
+
     def test_agent_research_can_open_a_review_only_trade_run(self) -> None:
         self.assertIn("Review Trade Run", self.index_html)
         self.assertIn("function openTradeRunFromBubble", self.index_html)

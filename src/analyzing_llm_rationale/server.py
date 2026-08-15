@@ -24,7 +24,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Iterable, List, Literal, Optional
 from urllib.parse import quote as url_quote
 from urllib.parse import urlparse
 
@@ -1926,6 +1926,11 @@ _agent_run_actions = _meter.create_counter(
     "agent.run.actions",
     unit="1",
     description="Durable agent-run lifecycle actions by outcome",
+)
+_analytics_attribution_actions = _meter.create_counter(
+    "analytics.attribution.records",
+    unit="1",
+    description="Analytics records by authenticated or anonymous attribution",
 )
 
 
@@ -4376,17 +4381,27 @@ class FeedbackRequest(BaseModel):
 
 
 class VisitRequest(BaseModel):
-    """Anonymous browser visit event."""
+    """Browser visit event; attribution is resolved from the session header."""
 
     path: str = Field("/", max_length=500)
     referrer: str = Field("", max_length=2000)
     timezone: Optional[str] = Field(None, max_length=100)
 
 
+class AnalyticsAttributionSummary(BaseModel):
+    """Aggregate, privacy-preserving attribution for the last 30 days."""
+
+    window_days: int = 30
+    authenticated_records: int = 0
+    anonymous_records: int = 0
+    authenticated_accounts: int = 0
+
+
 class AnalyticsSummary(BaseModel):
     total_visits: int
     unique_visitors: int
     by_day: List[Dict[str, Any]]
+    attribution: AnalyticsAttributionSummary
 
 
 class AnalyticsEventRequest(BaseModel):
@@ -4409,6 +4424,7 @@ class AnalyticsEventSummary(BaseModel):
     total_events: int
     by_event: List[Dict[str, Any]]
     by_day: List[Dict[str, Any]]
+    attribution: AnalyticsAttributionSummary
 
 
 class GoogleAuthRequest(BaseModel):
@@ -5678,7 +5694,9 @@ def _analytics_conn():
             referrer TEXT,
             user_agent TEXT,
             timezone TEXT,
-            visitor_hash TEXT
+            visitor_hash TEXT,
+            account_ref TEXT,
+            attribution TEXT
         )
         """
     )
@@ -5691,10 +5709,18 @@ def _analytics_conn():
             path TEXT,
             user_id TEXT,
             visitor_id TEXT,
+            account_ref TEXT,
+            attribution TEXT,
             metadata_json TEXT
         )
         """
     )
+    # Existing local analytics stores predate authenticated attribution.
+    # These additive migrations keep the fallback usable across upgrades.
+    conn.execute("ALTER TABLE page_visits ADD COLUMN IF NOT EXISTS account_ref TEXT")
+    conn.execute("ALTER TABLE page_visits ADD COLUMN IF NOT EXISTS attribution TEXT")
+    conn.execute("ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS account_ref TEXT")
+    conn.execute("ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS attribution TEXT")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS shared_forecasts (
@@ -5734,13 +5760,60 @@ def _visitor_id(request: Request) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _record_visit_duckdb(event: VisitRequest, request: Request) -> None:
+def _analytics_account_ref(user_id: str) -> str:
+    """Return a domain-separated HMAC reference without persisting a raw account ID."""
+    digest = hmac.new(
+        _SESSION_SECRET.encode("utf-8"),
+        f"foresea.analytics.account.v1:{user_id}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"acct_{digest[:32]}"
+
+
+def _analytics_attribution(request: Optional[Request]) -> tuple[str, Optional[str]]:
+    """Resolve an analytics attribution class and non-reversible account reference."""
+    user_id = _optional_user_id(request)
+    if not user_id:
+        return "anonymous", None
+    return "authenticated", _analytics_account_ref(user_id)
+
+
+def _analytics_attribution_summary(records: Iterable[Dict[str, Any]]) -> AnalyticsAttributionSummary:
+    """Summarize records without exposing account references or legacy raw IDs."""
+    authenticated_records = 0
+    anonymous_records = 0
+    accounts: set[str] = set()
+    for record in records:
+        account_ref = record.get("account_ref")
+        if not account_ref and record.get("user_id"):
+            # Legacy rows may have a raw ID; transform it only in memory so the
+            # aggregate remains comparable without returning or re-persisting it.
+            account_ref = _analytics_account_ref(str(record["user_id"]))
+        if account_ref:
+            authenticated_records += 1
+            accounts.add(str(account_ref))
+        else:
+            anonymous_records += 1
+    return AnalyticsAttributionSummary(
+        authenticated_records=authenticated_records,
+        anonymous_records=anonymous_records,
+        authenticated_accounts=len(accounts),
+    )
+
+
+def _record_visit_duckdb(
+    event: VisitRequest,
+    request: Request,
+    attribution: str,
+    account_ref: Optional[str],
+) -> None:
     conn = _analytics_conn()
     try:
         conn.execute(
             """
-            INSERT INTO page_visits (path, referrer, user_agent, timezone, visitor_hash)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO page_visits
+                (path, referrer, user_agent, timezone, visitor_hash, account_ref, attribution)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 event.path,
@@ -5748,6 +5821,8 @@ def _record_visit_duckdb(event: VisitRequest, request: Request) -> None:
                 request.headers.get("user-agent", "")[:1000],
                 event.timezone,
                 _visitor_hash(request),
+                account_ref,
+                attribution,
             ],
         )
         conn.commit()
@@ -5755,7 +5830,12 @@ def _record_visit_duckdb(event: VisitRequest, request: Request) -> None:
         conn.close()
 
 
-def _record_visit_datastore(event: VisitRequest, request: Request) -> None:
+def _record_visit_datastore(
+    event: VisitRequest,
+    request: Request,
+    attribution: str,
+    account_ref: Optional[str],
+) -> None:
     """Persist a visit in Cloud Datastore so counts survive instance recycles.
 
     Cumulative totals live in an ``AnalyticsStats`` singleton updated in a
@@ -5773,11 +5853,12 @@ def _record_visit_datastore(event: VisitRequest, request: Request) -> None:
     with client.transaction():
         visit = _ds.Entity(
             client.key("PageVisit"),
-            exclude_from_indexes=("referrer", "user_agent", "timezone", "path"),
+            exclude_from_indexes=("account_ref", "referrer", "user_agent", "timezone", "path"),
         )
         visit.update(
             ts=now, day=day, path=event.path, referrer=event.referrer,
-            timezone=event.timezone, visitor_id=vid,
+            timezone=event.timezone, visitor_id=vid, attribution=attribution,
+            account_ref=account_ref,
             user_agent=request.headers.get("user-agent", "")[:1000],
         )
         client.put(visit)
@@ -5793,31 +5874,47 @@ def _record_visit_datastore(event: VisitRequest, request: Request) -> None:
         client.put(stats)
 
 
-def _record_visit(event: VisitRequest, request: Request) -> None:
+def _record_visit(
+    event: VisitRequest,
+    request: Request,
+    attribution: Optional[str] = None,
+    account_ref: Optional[str] = None,
+) -> str:
     """Record a visit in Datastore when available, else the local DuckDB."""
+    if attribution is None:
+        attribution, account_ref = _analytics_attribution(request)
     if _get_datastore() is not None:
         try:
-            _record_visit_datastore(event, request)
-            return
+            _record_visit_datastore(event, request, attribution, account_ref)
+            return "datastore"
         except Exception:
             logger.warning("datastore visit record failed; falling back to duckdb", exc_info=True)
-    _record_visit_duckdb(event, request)
+    _record_visit_duckdb(event, request, attribution, account_ref)
+    return "duckdb"
 
 
-def _record_analytics_event_duckdb(event: AnalyticsEventRequest, request: Request) -> None:
+def _record_analytics_event_duckdb(
+    event: AnalyticsEventRequest,
+    request: Request,
+    attribution: str,
+    account_ref: Optional[str],
+) -> None:
     conn = _analytics_conn()
     try:
         conn.execute(
             """
-            INSERT INTO analytics_events (day, event_name, path, user_id, visitor_id, metadata_json)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO analytics_events
+                (day, event_name, path, user_id, visitor_id, account_ref, attribution, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 time.strftime("%Y-%m-%d", time.gmtime()),
                 event.event_name,
                 event.path,
-                _optional_user_id(request),
+                None,
                 _visitor_id(request),
+                account_ref,
+                attribution,
                 json.dumps(event.metadata or {}, default=str, sort_keys=True),
             ],
         )
@@ -5826,35 +5923,49 @@ def _record_analytics_event_duckdb(event: AnalyticsEventRequest, request: Reques
         conn.close()
 
 
-def _record_analytics_event_datastore(event: AnalyticsEventRequest, request: Request) -> None:
+def _record_analytics_event_datastore(
+    event: AnalyticsEventRequest,
+    request: Request,
+    attribution: str,
+    account_ref: Optional[str],
+) -> None:
     client = _get_datastore()
     from google.cloud import datastore as _ds
 
     now = datetime.now(timezone.utc)
     entity = _ds.Entity(
         client.key("AnalyticsEvent"),
-        exclude_from_indexes=("metadata", "path"),
+        exclude_from_indexes=("account_ref", "metadata", "path"),
     )
     entity.update(
         ts=now,
         day=time.strftime("%Y-%m-%d", time.gmtime()),
         event_name=event.event_name,
         path=event.path,
-        user_id=_optional_user_id(request),
+        account_ref=account_ref,
+        attribution=attribution,
         visitor_id=_visitor_id(request),
         metadata=json.dumps(event.metadata or {}, default=str, sort_keys=True)[:4000],
     )
     client.put(entity)
 
 
-def _record_analytics_event(event: AnalyticsEventRequest, request: Request) -> None:
+def _record_analytics_event(
+    event: AnalyticsEventRequest,
+    request: Request,
+    attribution: Optional[str] = None,
+    account_ref: Optional[str] = None,
+) -> str:
+    if attribution is None:
+        attribution, account_ref = _analytics_attribution(request)
     if _get_datastore() is not None:
         try:
-            _record_analytics_event_datastore(event, request)
-            return
+            _record_analytics_event_datastore(event, request, attribution, account_ref)
+            return "datastore"
         except Exception:
             logger.warning("datastore analytics event failed; falling back to duckdb", exc_info=True)
-    _record_analytics_event_duckdb(event, request)
+    _record_analytics_event_duckdb(event, request, attribution, account_ref)
+    return "duckdb"
 
 
 def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
@@ -5862,15 +5973,14 @@ def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
     query = client.query(kind="AnalyticsEvent")
     query.add_filter("ts", ">=", cutoff)
+    records = list(query.fetch(limit=10000))
     by_event: Dict[str, int] = defaultdict(int)
     by_day: Dict[str, int] = defaultdict(int)
-    total = 0
-    for entity in query.fetch(limit=10000):
-        total += 1
+    for entity in records:
         by_event[entity.get("event_name") or "unknown"] += 1
         by_day[entity.get("day") or entity["ts"].strftime("%Y-%m-%d")] += 1
     return AnalyticsEventSummary(
-        total_events=total,
+        total_events=len(records),
         by_event=[
             {"event_name": name, "count": count}
             for name, count in sorted(by_event.items(), key=lambda kv: kv[1], reverse=True)
@@ -5879,6 +5989,7 @@ def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
             {"day": day, "count": count}
             for day, count in sorted(by_day.items(), reverse=True)
         ],
+        attribution=_analytics_attribution_summary(records),
     )
 
 
@@ -6151,7 +6262,8 @@ def _analytics_summary_datastore() -> "AnalyticsSummary":
     query = client.query(kind="PageVisit")
     query.add_filter("ts", ">=", cutoff)
     by_day: Dict[str, Dict[str, Any]] = {}
-    for e in query.fetch():
+    records = list(query.fetch())
+    for e in records:
         d = e.get("day") or e["ts"].strftime("%Y-%m-%d")
         agg = by_day.setdefault(d, {"visits": 0, "visitors": set()})
         agg["visits"] += 1
@@ -6165,6 +6277,7 @@ def _analytics_summary_datastore() -> "AnalyticsSummary":
             {"day": d, "visits": agg["visits"], "unique_visitors": len(agg["visitors"])}
             for d, agg in rows
         ],
+        attribution=_analytics_attribution_summary(records),
     )
 
 
@@ -6211,22 +6324,60 @@ async def ready() -> JSONResponse:
     )
 
 
-@app.post("/analytics/visit", tags=["System"], summary="Record anonymous page visit")
+@app.post("/analytics/visit", tags=["System"], summary="Record a privacy-preserving page visit")
 async def record_visit(event: VisitRequest, request: Request) -> Dict[str, str]:
-    """Record one anonymous page visit.
+    """Record one page visit with optional, non-reversible account attribution.
 
     Stores no raw IP address. Unique visitors are estimated with a salted hash
     of IP address and user agent.
     """
-    # Datastore/DuckDB I/O is blocking — keep it off the event loop.
-    await asyncio.get_running_loop().run_in_executor(None, _record_visit, event, request)
+    attribution, account_ref = _analytics_attribution(request)
+    with _tracer.start_as_current_span("analytics.visit.record") as span:
+        span.set_attribute("analytics.attribution", attribution)
+        try:
+            # Datastore/DuckDB I/O is blocking — keep it off the event loop.
+            store = await asyncio.get_running_loop().run_in_executor(
+                None, _record_visit, event, request, attribution, account_ref
+            )
+            span.set_attributes({"analytics.store": store, "outcome": "success"})
+            _analytics_attribution_actions.add(
+                1, {"kind": "visit", "attribution": attribution, "outcome": "success"}
+            )
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "error")
+            _analytics_attribution_actions.add(
+                1, {"kind": "visit", "attribution": attribution, "outcome": "error"}
+            )
+            logger.exception("analytics visit record failed")
+            raise
     return {"status": "ok"}
 
 
 @app.post("/analytics/event", tags=["System"], summary="Record product engagement event")
 async def record_analytics_event(event: AnalyticsEventRequest, request: Request) -> Dict[str, str]:
-    """Record a lightweight product event for engagement funnel analysis."""
-    await asyncio.get_running_loop().run_in_executor(None, _record_analytics_event, event, request)
+    """Record a lightweight product event with optional private attribution."""
+    attribution, account_ref = _analytics_attribution(request)
+    with _tracer.start_as_current_span("analytics.event.record") as span:
+        span.set_attribute("analytics.attribution", attribution)
+        try:
+            store = await asyncio.get_running_loop().run_in_executor(
+                None, _record_analytics_event, event, request, attribution, account_ref
+            )
+            span.set_attributes({"analytics.store": store, "outcome": "success"})
+            _analytics_attribution_actions.add(
+                1, {"kind": "event", "attribution": attribution, "outcome": "success"}
+            )
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "error")
+            _analytics_attribution_actions.add(
+                1, {"kind": "event", "attribution": attribution, "outcome": "error"}
+            )
+            logger.exception("analytics event record failed")
+            raise
     return {"status": "ok"}
 
 
@@ -6264,6 +6415,13 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
             LIMIT 30
             """
         ).fetchall()
+        attribution_rows = conn.execute(
+            """
+            SELECT account_ref, attribution
+            FROM page_visits
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
+            """
+        ).fetchall()
     finally:
         conn.close()
 
@@ -6278,6 +6436,10 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
             }
             for day, visits, unique_count in rows
         ],
+        attribution=_analytics_attribution_summary(
+            [{"account_ref": account_ref, "attribution": attribution}
+             for account_ref, attribution in attribution_rows]
+        ),
     )
 
 
@@ -6297,11 +6459,15 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
             logger.warning("datastore event summary failed; falling back to duckdb", exc_info=True)
     conn = _analytics_conn()
     try:
-        total = conn.execute("SELECT COUNT(*) FROM analytics_events").fetchone()[0]
+        total = conn.execute(
+            "SELECT COUNT(*) FROM analytics_events "
+            "WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY"
+        ).fetchone()[0]
         by_event = conn.execute(
             """
             SELECT event_name, COUNT(*) AS count
             FROM analytics_events
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
             GROUP BY 1
             ORDER BY 2 DESC
             LIMIT 50
@@ -6311,9 +6477,17 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
             """
             SELECT day, COUNT(*) AS count
             FROM analytics_events
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
             GROUP BY 1
             ORDER BY 1 DESC
             LIMIT 30
+            """
+        ).fetchall()
+        attribution_rows = conn.execute(
+            """
+            SELECT account_ref, user_id, attribution
+            FROM analytics_events
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
             """
         ).fetchall()
     finally:
@@ -6322,6 +6496,12 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
         total_events=int(total or 0),
         by_event=[{"event_name": name, "count": int(count)} for name, count in by_event],
         by_day=[{"day": str(day), "count": int(count)} for day, count in by_day],
+        attribution=_analytics_attribution_summary(
+            [
+                {"account_ref": account_ref, "user_id": user_id, "attribution": attribution}
+                for account_ref, user_id, attribution in attribution_rows
+            ]
+        ),
     )
 
 

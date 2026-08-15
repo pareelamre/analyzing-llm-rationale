@@ -5143,23 +5143,39 @@ function startForecast(question, ctx = null) {
   fillExample(normalizedQuestion);
   sendQuestion();
 }
+function _sendAnalytics(url, payload) {
+  const { token } = _loadStoredSession();
+  if (token) {
+    // sendBeacon cannot attach the session header. Keep signed-in activity
+    // attributable while preserving beacon delivery for anonymous visitors.
+    fetch(url, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: payload,
+      keepalive: true,
+    }).catch(() => {});
+    return;
+  }
+  if (navigator.sendBeacon) {
+    const blob = new Blob([payload], { type: 'application/json' });
+    navigator.sendBeacon(url, blob);
+    return;
+  }
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload,
+    keepalive: true,
+  }).catch(() => {});
+}
+
 function recordPageVisit() {
   const payload = JSON.stringify({
     path: window.location.pathname,
     referrer: document.referrer || '',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
   });
-  if (navigator.sendBeacon) {
-    const blob = new Blob([payload], { type: 'application/json' });
-    navigator.sendBeacon('/analytics/visit', blob);
-    return;
-  }
-  fetch('/analytics/visit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: payload,
-    keepalive: true,
-  }).catch(() => {});
+  _sendAnalytics('/analytics/visit', payload);
 }
 
 function trackEvent(eventName, metadata = {}) {
@@ -5168,18 +5184,7 @@ function trackEvent(eventName, metadata = {}) {
     path: window.location.pathname + window.location.hash,
     metadata,
   });
-  const url = '/analytics/event';
-  if (navigator.sendBeacon) {
-    const blob = new Blob([payload], { type: 'application/json' });
-    navigator.sendBeacon(url, blob);
-    return;
-  }
-  fetch(url, {
-    method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: payload,
-    keepalive: true,
-  }).catch(() => {});
+  _sendAnalytics('/analytics/event', payload);
 }
 
 // ── Track record ─────────────────────────────────────────────────────────────
