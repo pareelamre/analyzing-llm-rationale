@@ -8,6 +8,7 @@ import html
 import ipaddress
 import json
 import logging
+import math
 import os
 import queue
 import random
@@ -42,6 +43,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from opentelemetry import metrics as otel_metrics
 from opentelemetry import trace as otel_trace
+from opentelemetry.trace import Status, StatusCode
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from analyzing_llm_rationale import (
@@ -146,7 +148,16 @@ _AGENT_TRADING_BOARD_STALE_AFTER_S = int(
 # Shared secret gating the evolution-loop bridge endpoints (pending-markets /
 # mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
 _TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
+# Shared secret for the bounded scheduled reconciliation trigger. It intentionally
+# has a distinct capability from the forecast bridge because this path decrypts
+# users' connected exchange accounts to read, never trade.
+_TRADING_RECONCILIATION_TOKEN: Optional[str] = os.environ.get("TRADING_RECONCILIATION_TOKEN")
+_TRADING_RECONCILIATION_MAX_ORDERS = max(
+    1, min(int(os.environ.get("TRADING_RECONCILIATION_MAX_ORDERS", "25")), 100)
+)
 _state: Dict[str, Any] = {}
+_trading_run_lock = threading.RLock()
+_trading_guardrail_lock = threading.RLock()
 _PUBLIC_MCP = None
 _PUBLIC_MCP_APP = None
 
@@ -1764,10 +1775,20 @@ _trading_connection_actions = _meter.create_counter(
     unit="1",
     description="Secure exchange connection actions by venue, action, and outcome",
 )
+_trading_run_actions = _meter.create_counter(
+    "trading.run.actions",
+    unit="1",
+    description="Durable trade-run lifecycle actions by venue, action, and outcome",
+)
 _trading_reconciliation_actions = _meter.create_counter(
     "trading.reconciliation.actions",
     unit="1",
     description="Trading portfolio, order, and cancellation reconciliation actions",
+)
+_trading_guardrail_actions = _meter.create_counter(
+    "trading.guardrail.actions",
+    unit="1",
+    description="Trading risk-guardrail evaluations by venue, action, and outcome",
 )
 
 
@@ -3007,6 +3028,18 @@ def _require_track_token(request: Optional[Request]) -> None:
         raise HTTPException(status_code=401, detail="Invalid or missing X-Track-Token.")
 
 
+def _require_trading_reconciliation_token(request: Optional[Request]) -> None:
+    """Gate the scheduled reconciliation trigger with its narrowly scoped secret."""
+    if not _TRADING_RECONCILIATION_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Scheduled trading reconciliation is not enabled (set TRADING_RECONCILIATION_TOKEN).",
+        )
+    token = request.headers.get("x-trading-reconciliation-token") if request is not None else None
+    if not token or not hmac.compare_digest(token, _TRADING_RECONCILIATION_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid or missing reconciliation token.")
+
+
 @app.get(
     "/internal/forecast-evaluation",
     tags=["System"],
@@ -3774,6 +3807,85 @@ class TradeOrderResponse(TradeOrderPreviewResponse):
     reconciliation_status: Optional[str] = None
 
 
+class TradeRunCreateRequest(TradeOrderRequest):
+    """Create a durable, human-reviewable live-trade run without executing it."""
+
+    title: str = Field("", max_length=160, description="Short operator-facing name for this run.")
+    thesis: str = Field("", max_length=4000, description="Optional research rationale retained with the trade run.")
+    source_conversation_id: Optional[str] = Field(
+        None, max_length=100, description="Optional chat thread that produced the trade idea."
+    )
+    expected_edge: Optional[float] = Field(
+        None, ge=-1.0, le=1.0, description="Optional model-minus-market probability edge."
+    )
+    sources: List[str] = Field(
+        default_factory=list, max_length=20, description="Optional source URLs or identifiers supporting the thesis."
+    )
+
+
+class TradeRunExecuteRequest(BaseModel):
+    """The explicit human acknowledgement required to send a saved run."""
+
+    confirmation: str = Field(..., max_length=80)
+
+
+class TradeRunResponse(BaseModel):
+    """A durable live-trading lifecycle record, with no credential material."""
+
+    id: str
+    status: str
+    title: str
+    platform: str
+    action: str
+    outcome: str
+    ticker: Optional[str] = None
+    token_id: Optional[str] = None
+    quantity: Optional[float] = None
+    price: Optional[float] = None
+    estimated_notional: Optional[float] = None
+    order_type: Optional[str] = None
+    client_order_id: Optional[str] = None
+    preview: Dict[str, Any]
+    provenance: Dict[str, Any]
+    audit_order_id: Optional[str] = None
+    venue_order_id: Optional[str] = None
+    reconciliation_status: Optional[str] = None
+    approved_at: Optional[str] = None
+    submitted_at: Optional[str] = None
+    last_reconciled_at: Optional[str] = None
+    created_at: str
+    updated_at: str
+    error_code: Optional[str] = None
+
+
+class TradingGuardrailsResponse(BaseModel):
+    """The signed-in user's execution limits, never exchange credentials."""
+
+    paused: bool
+    platform_kill_switch: bool
+    max_order_notional: float
+    max_daily_risk_notional: float
+    max_market_exposure_notional: float
+    max_open_orders: int
+    max_price_deviation_bps: int
+    max_quote_age_seconds: int
+    cooldown_seconds: int
+    updated_at: Optional[str] = None
+
+
+class TradingGuardrailsUpdateRequest(BaseModel):
+    """Users may only narrow their own limits below Foresea's hard ceilings."""
+
+    paused: Optional[bool] = None
+    max_order_notional: Optional[float] = Field(None, gt=0.0, le=100_000.0)
+    max_daily_risk_notional: Optional[float] = Field(None, gt=0.0, le=1_000_000.0)
+    max_market_exposure_notional: Optional[float] = Field(None, gt=0.0, le=1_000_000.0)
+    max_open_orders: Optional[int] = Field(None, ge=1, le=100)
+    max_price_deviation_bps: Optional[int] = Field(None, ge=1, le=10_000)
+    max_quote_age_seconds: Optional[int] = Field(None, ge=1, le=300)
+    cooldown_seconds: Optional[int] = Field(None, ge=0, le=3600)
+
+
 class AgentSkill(BaseModel):
     """A user-defined analysis step the agent runs over the question + evidence."""
     name: str = Field(..., min_length=1, max_length=60, description="Short skill name, e.g. 'Base rate check'.")
@@ -3834,9 +3946,9 @@ class LiveTradeIntent(BaseModel):
     """A chat-to-terminal handoff for a human-reviewed live order.
 
     This is deliberately not an executable order: it contains no size or limit
-    price, and the trading terminal must still fetch a fresh venue quote, run
-    `/trading/preview`, and receive an explicit user confirmation before the
-    existing order endpoint can submit funds-moving instructions.
+    price, and the trading terminal must still fetch a fresh venue quote, create
+    a durable `/trading/runs` record, and receive an explicit user confirmation
+    before an exchange order can be submitted.
     """
 
     platform: str
@@ -5981,12 +6093,14 @@ async def submit_feedback(fb: FeedbackRequest, request: Request) -> Dict[str, st
 _MARKET_CACHE_TTL = int(os.environ.get("MARKET_CACHE_TTL", "30"))
 
 
-async def _fetch_market_quote(venue: str, **kwargs: Any) -> "MarketQuote":
-    """Shared cache + error handling for the market-fetch endpoints."""
+async def _fetch_market_quote(
+    venue: str, *, force_refresh: bool = False, **kwargs: Any
+) -> "MarketQuote":
+    """Shared market fetch; execution guardrails may explicitly bypass the cache."""
     from analyzing_llm_rationale import market_data
 
     cache_key = _cache_key("market", venue, kwargs)
-    cached = _cache_get(cache_key)
+    cached = None if force_refresh else _cache_get(cache_key)
     if cached is not None:
         return MarketQuote(**cached)
 
@@ -6053,8 +6167,12 @@ async def radar(limit: int = Query(12, ge=1, le=30)) -> JSONResponse:
 
 _TRADING_CONNECTION_KIND = "TradingConnection"
 _TRADING_ORDER_KIND = "TradingOrder"
+_TRADING_RUN_KIND = "TradingRun"
+_TRADING_GUARDRAILS_KIND = "TradingGuardrails"
+_TRADING_RISK_EVENT_KIND = "TradingRiskEvent"
 _TRADING_ORDER_FIELDS = (
     "id",
+    "trade_run_id",
     "platform",
     "venue_order_id",
     "status",
@@ -6076,10 +6194,66 @@ _TRADING_ORDER_FIELDS = (
     "last_reconciled_at",
     "canceled_at",
 )
+_TRADING_RUN_FIELDS = (
+    "id",
+    "status",
+    "title",
+    "platform",
+    "action",
+    "outcome",
+    "ticker",
+    "token_id",
+    "quantity",
+    "price",
+    "estimated_notional",
+    "order_type",
+    "client_order_id",
+    "order_request",
+    "preview",
+    "provenance",
+    "audit_order_id",
+    "venue_order_id",
+    "reconciliation_status",
+    "approved_at",
+    "submitted_at",
+    "last_reconciled_at",
+    "created_at",
+    "updated_at",
+    "error_code",
+)
+_TRADING_GUARDRAIL_FIELDS = (
+    "paused",
+    "max_order_notional",
+    "max_daily_risk_notional",
+    "max_market_exposure_notional",
+    "max_open_orders",
+    "max_price_deviation_bps",
+    "max_quote_age_seconds",
+    "cooldown_seconds",
+    "updated_at",
+)
+_TRADING_RISK_EVENT_FIELDS = (
+    "id",
+    "created_at",
+    "venue",
+    "event",
+    "outcome",
+    "reason_code",
+    "trade_run_id",
+    "audit_order_id",
+)
 
 
 class SecureTradingConnectionError(RuntimeError):
     """The server is unable to safely persist or read a connected account."""
+
+
+class TradingGuardrailError(RuntimeError):
+    """A real-order request crossed a deliberate Foresea risk boundary."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
 
 
 _TRADING_KMS_KEY_ENV = "FORESEA_TRADING_KMS_KEY_NAME"
@@ -6105,6 +6279,10 @@ def _trading_connection_key(client: Any, user_id: str, platform: str) -> Any:
 
 def _trading_order_key(client: Any, user_id: str, order_id: str) -> Any:
     return client.key("User", user_id, _TRADING_ORDER_KIND, order_id)
+
+
+def _trading_run_key(client: Any, user_id: str, run_id: str) -> Any:
+    return client.key("User", user_id, _TRADING_RUN_KIND, run_id)
 
 
 def _iso_timestamp(value: Any) -> Optional[str]:
@@ -6332,6 +6510,43 @@ def _list_trading_orders(user_id: str, platform: Optional[str] = None) -> List[D
     return sorted(records, key=lambda record: record.get("created_at") or "", reverse=True)
 
 
+_RECONCILABLE_TRADING_ORDER_STATUSES = ("submitted", "open")
+
+
+def _list_reconcilable_trading_orders(limit: int) -> List[tuple[str, Dict[str, Any]]]:
+    """Return a bounded cross-account set of non-terminal audited orders.
+
+    Credentials are deliberately not joined here.  The reconciliation worker
+    decrypts each user's connection only for the venue being read, and never
+    returns account, order, or credential identifiers to its scheduler.
+    """
+    bounded_limit = max(1, min(int(limit), _TRADING_RECONCILIATION_MAX_ORDERS))
+    client = _get_datastore()
+    if client is None:
+        candidates = [
+            (user_id, dict(record))
+            for user_id, records in _state.setdefault("trading_orders", {}).items()
+            for record in records.values()
+            if record.get("status") in _RECONCILABLE_TRADING_ORDER_STATUSES
+            and record.get("venue_order_id")
+        ]
+        return sorted(candidates, key=lambda item: item[1].get("updated_at") or "")[:bounded_limit]
+
+    query = client.query(kind=_TRADING_ORDER_KIND)
+    query.add_filter("status", "IN", list(_RECONCILABLE_TRADING_ORDER_STATUSES))
+    # The composite index in index.yaml makes this a fair, oldest-first queue
+    # rather than repeatedly reading whichever live orders sort first by key.
+    query.order = ["last_reconciled_at"]
+    candidates: List[tuple[str, Dict[str, Any]]] = []
+    for entity in query.fetch(limit=bounded_limit):
+        parent = entity.key.parent
+        user_id = parent.name if parent is not None else None
+        if not user_id or not entity.get("venue_order_id"):
+            continue
+        candidates.append((str(user_id), _trading_order_from_entity(entity)))
+    return candidates
+
+
 def _read_trading_order(user_id: str, order_id: str) -> Optional[Dict[str, Any]]:
     client = _get_datastore()
     if client is None:
@@ -6358,6 +6573,657 @@ def _put_trading_order(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
     return record
 
 
+def _trading_run_from_entity(entity: Any) -> Dict[str, Any]:
+    record = {field: entity.get(field) for field in _TRADING_RUN_FIELDS}
+    record["id"] = record.get("id") or entity.key.name
+    return record
+
+
+def _list_trading_runs(user_id: str, platform: Optional[str] = None) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        records = list(_state.setdefault("trading_runs", {}).get(user_id, {}).values())
+    else:
+        query = client.query(kind=_TRADING_RUN_KIND, ancestor=client.key("User", user_id))
+        records = [_trading_run_from_entity(entity) for entity in query.fetch(limit=250)]
+    if platform:
+        records = [record for record in records if record.get("platform") == platform]
+    return sorted(records, key=lambda record: record.get("created_at") or "", reverse=True)
+
+
+def _read_trading_run(user_id: str, run_id: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        record = _state.setdefault("trading_runs", {}).get(user_id, {}).get(run_id)
+        return dict(record) if record else None
+    entity = client.get(_trading_run_key(client, user_id, run_id))
+    return _trading_run_from_entity(entity) if entity is not None else None
+
+
+def _put_trading_run(user_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
+    record = {field: record.get(field) for field in _TRADING_RUN_FIELDS}
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("trading_runs", {}).setdefault(user_id, {})[record["id"]] = record
+        return record
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(
+        key=_trading_run_key(client, user_id, record["id"]),
+        exclude_from_indexes=("order_request", "preview", "provenance"),
+    )
+    entity.update(record)
+    client.put(entity)
+    return record
+
+
+def _trading_guardrails_key(client: Any, user_id: str) -> Any:
+    return client.key("User", user_id, _TRADING_GUARDRAILS_KIND, "current")
+
+
+def _trading_risk_event_key(client: Any, user_id: str, event_id: str) -> Any:
+    return client.key("User", user_id, _TRADING_RISK_EVENT_KIND, event_id)
+
+
+def _trading_guardrail_env_float(name: str, default: float) -> float:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise TradingGuardrailError("invalid_platform_config", f"{name} must be numeric.") from exc
+    if not math.isfinite(value) or value <= 0:
+        raise TradingGuardrailError("invalid_platform_config", f"{name} must be greater than zero.")
+    return value
+
+
+def _trading_guardrail_env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _trading_guardrail_env_int(name: str, default: int, *, minimum: int = 1) -> int:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise TradingGuardrailError("invalid_platform_config", f"{name} must be an integer.") from exc
+    if value < minimum:
+        raise TradingGuardrailError("invalid_platform_config", f"{name} must be at least {minimum}.")
+    return value
+
+
+def _platform_trading_guardrail_caps() -> Dict[str, Any]:
+    """Hard ceilings. Users may choose lower limits but never raise these caps."""
+    from analyzing_llm_rationale import trading
+
+    max_order = float(trading._max_order_notional())
+    return {
+        "max_order_notional": max_order,
+        "max_daily_risk_notional": _trading_guardrail_env_float(
+            "FORESEA_MAX_DAILY_RISK_NOTIONAL", max(max_order, 100.0)
+        ),
+        "max_market_exposure_notional": _trading_guardrail_env_float(
+            "FORESEA_MAX_MARKET_EXPOSURE_NOTIONAL", max(max_order, 50.0)
+        ),
+        "max_open_orders": _trading_guardrail_env_int("FORESEA_MAX_OPEN_ORDERS", 5),
+        "max_price_deviation_bps": _trading_guardrail_env_int(
+            "FORESEA_MAX_PRICE_DEVIATION_BPS", 300
+        ),
+        "max_quote_age_seconds": _trading_guardrail_env_int("FORESEA_MAX_QUOTE_AGE_SECONDS", 20),
+        "cooldown_seconds": _trading_guardrail_env_int(
+            "FORESEA_ORDER_COOLDOWN_SECONDS", 60, minimum=0
+        ),
+    }
+
+
+def _default_trading_guardrails() -> Dict[str, Any]:
+    caps = _platform_trading_guardrail_caps()
+    return {"paused": False, **caps, "updated_at": None}
+
+
+def _read_trading_guardrails(user_id: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        record = _state.setdefault("trading_guardrails", {}).get(user_id)
+        return dict(record) if record else None
+    entity = client.get(_trading_guardrails_key(client, user_id))
+    if entity is None:
+        return None
+    return {field: entity.get(field) for field in _TRADING_GUARDRAIL_FIELDS}
+
+
+def _effective_trading_guardrails(user_id: str) -> Dict[str, Any]:
+    policy = _default_trading_guardrails()
+    stored = _read_trading_guardrails(user_id)
+    if stored:
+        policy.update({field: stored.get(field) for field in _TRADING_GUARDRAIL_FIELDS if stored.get(field) is not None})
+    caps = _platform_trading_guardrail_caps()
+    for field, hard_cap in caps.items():
+        policy[field] = min(policy[field], hard_cap)
+    return policy
+
+
+def _put_trading_guardrails(user_id: str, policy: Dict[str, Any]) -> Dict[str, Any]:
+    record = {field: policy.get(field) for field in _TRADING_GUARDRAIL_FIELDS}
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("trading_guardrails", {})[user_id] = record
+        return record
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(key=_trading_guardrails_key(client, user_id))
+    entity.update(record)
+    client.put(entity)
+    return record
+
+
+def _update_trading_guardrails(user_id: str, update: TradingGuardrailsUpdateRequest) -> Dict[str, Any]:
+    caps = _platform_trading_guardrail_caps()
+    changes = update.model_dump(exclude_none=True)
+    for field, value in changes.items():
+        if field == "paused":
+            continue
+        if value > caps[field]:
+            raise TradingGuardrailError(
+                "limit_above_platform_cap",
+                f"{field} may not exceed Foresea's hard ceiling of {caps[field]}.",
+            )
+    with _trading_guardrail_lock:
+        policy = _effective_trading_guardrails(user_id)
+        policy.update(changes)
+        policy["updated_at"] = datetime.now(timezone.utc).isoformat()
+        return _put_trading_guardrails(user_id, policy)
+
+
+def _trading_guardrails_response(user_id: str) -> TradingGuardrailsResponse:
+    policy = _effective_trading_guardrails(user_id)
+    return TradingGuardrailsResponse(
+        **policy,
+        platform_kill_switch=_trading_guardrail_env_bool("FORESEA_TRADING_KILL_SWITCH", False),
+    )
+
+
+def _record_trading_risk_event(
+    user_id: str,
+    *,
+    venue: str,
+    event: str,
+    outcome: str,
+    reason_code: Optional[str] = None,
+    trade_run_id: Optional[str] = None,
+    audit_order_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Append a safe, immutable audit record without order payloads or secrets."""
+    record = {
+        "id": str(uuid.uuid4()),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "venue": venue,
+        "event": event,
+        "outcome": outcome,
+        "reason_code": reason_code,
+        "trade_run_id": trade_run_id,
+        "audit_order_id": audit_order_id,
+    }
+    client = _get_datastore()
+    if client is None:
+        events = _state.setdefault("trading_risk_events", {}).setdefault(user_id, [])
+        events.append(record)
+        del events[:-250]
+        return record
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(key=_trading_risk_event_key(client, user_id, record["id"]))
+    entity.update(record)
+    client.put(entity)
+    return record
+
+
+def _list_trading_risk_events(user_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    bounded_limit = max(1, min(int(limit), 250))
+    client = _get_datastore()
+    if client is None:
+        records = list(_state.setdefault("trading_risk_events", {}).get(user_id, []))
+    else:
+        query = client.query(kind=_TRADING_RISK_EVENT_KIND, ancestor=client.key("User", user_id))
+        records = [
+            {field: entity.get(field) for field in _TRADING_RISK_EVENT_FIELDS}
+            for entity in query.fetch(limit=bounded_limit)
+        ]
+    return sorted(records, key=lambda record: record.get("created_at") or "", reverse=True)[:bounded_limit]
+
+
+def _notify_trading_safety_event(
+    *, venue: str, event: str, reason_code: str, trade_run_id: Optional[str] = None
+) -> None:
+    """Alert an operator only for states that require human follow-up."""
+    if event not in {"submission_unknown", "venue_rejected", "platform_kill_switch", "order_filled"}:
+        return
+    logger.error("trading safety event venue=%s event=%s reason=%s", venue, event, reason_code)
+    try:
+        threading.Thread(
+            target=_send_alert_email,
+            args=(
+                f"Foresea trading safety: {event}",
+                "\n".join(
+                    part
+                    for part in (
+                        f"Venue: {venue}",
+                        f"Event: {event}",
+                        f"Reason: {reason_code}",
+                        f"Trade run: {trade_run_id}" if trade_run_id else "",
+                    )
+                    if part
+                ),
+            ),
+            daemon=True,
+        ).start()
+    except Exception:
+        logger.exception("could not enqueue trading safety alert")
+
+
+def _record_terminal_trading_order_event(
+    user_id: str, *, venue: str, record: Dict[str, Any], previous_status: Any
+) -> None:
+    status = str(record.get("status") or "").lower()
+    if status not in {"filled", "canceled", "rejected"} or status == str(previous_status or "").lower():
+        return
+    event = {"filled": "order_filled", "canceled": "order_canceled", "rejected": "venue_rejected"}[status]
+    _record_trading_risk_event(
+        user_id,
+        venue=venue,
+        event=event,
+        outcome=status,
+        reason_code=status,
+        trade_run_id=record.get("trade_run_id"),
+        audit_order_id=record.get("id"),
+    )
+    _notify_trading_safety_event(
+        venue=venue, event=event, reason_code=status, trade_run_id=record.get("trade_run_id")
+    )
+
+
+def _parse_trading_timestamp(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _trading_market_key(payload: Dict[str, Any], normalized: Dict[str, Any]) -> str:
+    venue = _clean_trading_platform(normalized.get("platform") or payload.get("platform"))
+    identifier = normalized.get("ticker") or normalized.get("token_id")
+    if not identifier:
+        identifier = payload.get("ticker") or payload.get("token_id") or payload.get("slug") or payload.get("market_id")
+    cleaned = str(identifier or "").strip().lower()
+    if not cleaned:
+        raise TradingGuardrailError("market_identifier_missing", "A stable market identifier is required for risk checks.")
+    return f"{venue}:{cleaned}"
+
+
+def _trading_order_market_key(record: Dict[str, Any]) -> str:
+    try:
+        return _trading_market_key(record, record)
+    except TradingGuardrailError:
+        # Older audit rows may predate stable market identifiers. They cannot
+        # safely contribute to a market-specific match, but still count in the
+        # global daily/open-order limits.
+        return ""
+
+
+def _trading_risk_usage(user_id: str, market_key: str, now: datetime) -> Dict[str, float]:
+    risk_window_start = now - timedelta(hours=24)
+    daily_risk = 0.0
+    open_orders = 0.0
+    local_market_exposure = 0.0
+    for order in _list_trading_orders(user_id):
+        status = str(order.get("status") or "").lower()
+        notional = float(order.get("estimated_notional") or 0.0)
+        created_at = _parse_trading_timestamp(order.get("created_at"))
+        if status not in {"rejected", "canceled"} and created_at and created_at >= risk_window_start:
+            daily_risk += notional
+        if status in {"submitted", "open"}:
+            open_orders += 1
+            if _trading_order_market_key(order) == market_key:
+                local_market_exposure += notional
+    for run in _list_trading_runs(user_id):
+        status = str(run.get("status") or "").lower()
+        if status in {"submitting", "submission_unknown"}:
+            open_orders += 1
+            if _trading_order_market_key(run) == market_key:
+                local_market_exposure += float(run.get("estimated_notional") or 0.0)
+    return {
+        "daily_risk_notional": round(daily_risk, 6),
+        "open_orders": open_orders,
+        "local_market_exposure_notional": round(local_market_exposure, 6),
+    }
+
+
+def _has_recent_duplicate_trade(
+    user_id: str,
+    *,
+    market_key: str,
+    action: str,
+    outcome: str,
+    now: datetime,
+    cooldown_seconds: int,
+    exclude_run_id: Optional[str] = None,
+) -> bool:
+    if cooldown_seconds <= 0:
+        return False
+    threshold = now - timedelta(seconds=cooldown_seconds)
+    candidate_records = [
+        *(_list_trading_orders(user_id)),
+        *(_list_trading_runs(user_id)),
+    ]
+    for record in candidate_records:
+        if exclude_run_id and record.get("id") == exclude_run_id:
+            continue
+        if str(record.get("status") or "").lower() in {"blocked", "rejected", "canceled"}:
+            continue
+        if str(record.get("action") or "").lower() != action or str(record.get("outcome") or "").lower() != outcome:
+            continue
+        if _trading_order_market_key(record) != market_key:
+            continue
+        created_at = _parse_trading_timestamp(record.get("created_at"))
+        if created_at and created_at >= threshold:
+            return True
+    return False
+
+
+def _quote_probability_for_outcome(quote: MarketQuote, outcome: str) -> Optional[float]:
+    desired = outcome.strip().lower()
+    for option in quote.outcomes:
+        if option.label.strip().lower() == desired and option.probability is not None:
+            return float(option.probability)
+    if quote.outcome.strip().lower() == desired and quote.probability is not None:
+        return float(quote.probability)
+    if desired == "no" and quote.outcome.strip().lower() == "yes" and quote.probability is not None:
+        return 1.0 - float(quote.probability)
+    return None
+
+
+async def _fresh_trade_guard_quote(payload: Dict[str, Any], normalized: Dict[str, Any]) -> Dict[str, Any]:
+    """Fetch a no-cache quote immediately before live execution; failures block safely."""
+    venue = _clean_trading_platform(normalized.get("platform") or payload.get("platform"))
+    if venue == "kalshi":
+        ticker = str(normalized.get("ticker") or payload.get("ticker") or "").strip()
+        if not ticker:
+            raise TradingGuardrailError("market_identifier_missing", "Kalshi ticker is required for a live quote check.")
+        quote = await _fetch_market_quote("kalshi", ticker=ticker, force_refresh=True)
+    else:
+        slug = str(payload.get("slug") or "").strip() or None
+        market_id = str(payload.get("market_id") or "").strip() or None
+        if not (slug or market_id):
+            raise TradingGuardrailError(
+                "live_quote_identifier_required",
+                "Polymarket live execution requires the market slug or market_id, not only a token ID.",
+            )
+        quote = await _fetch_market_quote("polymarket", slug=slug, market_id=market_id, force_refresh=True)
+    probability = _quote_probability_for_outcome(quote, str(normalized.get("outcome") or payload.get("outcome") or "yes"))
+    if probability is None or not (0.0 < probability < 1.0):
+        raise TradingGuardrailError("quote_unpriced", "The selected outcome has no actionable live quote.")
+    return {
+        "outcome_probability": probability,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "market_ident": quote.ident,
+    }
+
+
+def _portfolio_available_usd(snapshot: Dict[str, Any]) -> Optional[float]:
+    balance = snapshot.get("balance") if isinstance(snapshot.get("balance"), dict) else {}
+    value = balance.get("available")
+    if not isinstance(value, (int, float)):
+        return None
+    return float(value) / 100.0 if str(balance.get("unit") or "").lower() == "cents" else float(value)
+
+
+def _portfolio_market_exposure(snapshot: Dict[str, Any], normalized: Dict[str, Any]) -> float:
+    venue = _clean_trading_platform(normalized.get("platform"))
+    identifier = str(normalized.get("ticker") if venue == "kalshi" else normalized.get("token_id") or "")
+    exposure = 0.0
+    for position in snapshot.get("positions") or []:
+        if not isinstance(position, dict):
+            continue
+        position_id = str(position.get("ticker") if venue == "kalshi" else position.get("token_id") or "")
+        if position_id != identifier:
+            continue
+        raw_value = position.get("exposure") if venue == "kalshi" else position.get("current_value")
+        if isinstance(raw_value, (int, float)):
+            exposure += abs(float(raw_value))
+    return exposure
+
+
+async def _validate_live_trade_guardrails(
+    user_id: str,
+    *,
+    payload: Dict[str, Any],
+    preview: Dict[str, Any],
+    credentials: Dict[str, Any],
+    trade_run_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Fail closed on policy, quote, portfolio, exposure, and duplicate checks."""
+    now = datetime.now(timezone.utc)
+    normalized = dict(preview.get("normalized_order") or {})
+    venue = _clean_trading_platform(normalized.get("platform") or payload.get("platform"))
+    policy = _effective_trading_guardrails(user_id)
+    if _trading_guardrail_env_bool("FORESEA_TRADING_KILL_SWITCH", False):
+        raise TradingGuardrailError("platform_kill_switch", "Trading is temporarily paused by Foresea's platform kill switch.")
+    if policy["paused"]:
+        raise TradingGuardrailError("user_paused", "Trading is paused in your risk controls. Resume it before submitting a new order.")
+    estimated_notional = float(preview.get("estimated_notional") or 0.0)
+    if estimated_notional <= 0:
+        raise TradingGuardrailError("invalid_notional", "The order did not produce a positive risk notional.")
+    if estimated_notional > float(policy["max_order_notional"]):
+        raise TradingGuardrailError(
+            "max_order_notional",
+            f"Order risk ${estimated_notional:.2f} exceeds your ${float(policy['max_order_notional']):.2f} per-order limit.",
+        )
+    market_key = _trading_market_key(payload, normalized)
+    if _has_recent_duplicate_trade(
+        user_id,
+        market_key=market_key,
+        action=str(normalized.get("action") or ""),
+        outcome=str(normalized.get("outcome") or ""),
+        now=now,
+        cooldown_seconds=int(policy["cooldown_seconds"]),
+        exclude_run_id=trade_run_id,
+    ):
+        raise TradingGuardrailError(
+            "duplicate_cooldown",
+            f"An equivalent order is already active or was created within the {int(policy['cooldown_seconds'])}-second cooldown.",
+        )
+
+    quote = await _fresh_trade_guard_quote(payload, normalized)
+    quote_at = _parse_trading_timestamp(quote.get("fetched_at"))
+    quote_age_seconds = (datetime.now(timezone.utc) - quote_at).total_seconds() if quote_at else float("inf")
+    if quote_age_seconds > int(policy["max_quote_age_seconds"]):
+        raise TradingGuardrailError("stale_quote", "The live market quote became stale before the order could be submitted.")
+    current_price = float(quote["outcome_probability"])
+    limit_price = float(normalized.get("price") or 0.0)
+    action = str(normalized.get("action") or "buy")
+    adverse_move = ((limit_price - current_price) / current_price) if action == "buy" else ((current_price - limit_price) / current_price)
+    adverse_bps = max(0.0, adverse_move * 10_000.0)
+    if adverse_bps > float(policy["max_price_deviation_bps"]):
+        raise TradingGuardrailError(
+            "price_deviation",
+            f"Limit price is {adverse_bps:.0f} bps worse than the fresh quote; your cap is {int(policy['max_price_deviation_bps'])} bps.",
+        )
+
+    from analyzing_llm_rationale import trading
+
+    snapshot = await asyncio.get_running_loop().run_in_executor(
+        None, lambda: trading.reconcile_portfolio(venue, credentials, limit=100)
+    )
+    available = _portfolio_available_usd(snapshot)
+    if available is None:
+        raise TradingGuardrailError("balance_unavailable", "Available exchange balance could not be confirmed; no order was sent.")
+    if available + 1e-9 < estimated_notional:
+        raise TradingGuardrailError(
+            "insufficient_available_balance",
+            f"Available balance ${available:.2f} is below this order's ${estimated_notional:.2f} worst-case notional.",
+        )
+    usage = _trading_risk_usage(user_id, market_key, now)
+    if usage["daily_risk_notional"] + estimated_notional > float(policy["max_daily_risk_notional"]):
+        raise TradingGuardrailError(
+            "daily_risk_limit",
+            "This order would exceed your trailing-day worst-case risk budget.",
+        )
+    if usage["open_orders"] + 1 > int(policy["max_open_orders"]):
+        raise TradingGuardrailError(
+            "max_open_orders",
+            f"This would exceed your limit of {int(policy['max_open_orders'])} outstanding orders.",
+        )
+    market_exposure = _portfolio_market_exposure(snapshot, normalized) + usage["local_market_exposure_notional"]
+    if market_exposure + estimated_notional > float(policy["max_market_exposure_notional"]):
+        raise TradingGuardrailError(
+            "market_exposure_limit",
+            "This order would exceed your per-market exposure cap after current positions and open orders.",
+        )
+    return {
+        "policy": {
+            key: policy[key]
+            for key in (
+                "max_order_notional",
+                "max_daily_risk_notional",
+                "max_market_exposure_notional",
+                "max_open_orders",
+                "max_price_deviation_bps",
+                "max_quote_age_seconds",
+                "cooldown_seconds",
+            )
+        },
+        "quote": {**quote, "age_seconds": round(quote_age_seconds, 3), "adverse_bps": round(adverse_bps, 2)},
+        "portfolio": {
+            "available": round(available, 6),
+            "market_exposure_notional": round(market_exposure, 6),
+        },
+        "usage": usage,
+    }
+
+
+def _new_trading_run(
+    req: TradeRunCreateRequest,
+    payload: Dict[str, Any],
+    preview: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Capture a validated order plan before a human can send it to a venue."""
+    normalized = dict(preview.get("normalized_order") or {})
+    run_id = str(uuid.uuid4())
+    client_order_id = str(payload.get("client_order_id") or f"foresea-run-{run_id}")
+    payload = {**payload, "client_order_id": client_order_id}
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "id": run_id,
+        "status": "awaiting_approval",
+        "title": req.title.strip() or f"{normalized.get('action', 'buy').title()} {normalized.get('outcome', 'yes').upper()}",
+        "platform": normalized.get("platform"),
+        "action": normalized.get("action"),
+        "outcome": normalized.get("outcome"),
+        "ticker": normalized.get("ticker"),
+        "token_id": normalized.get("token_id"),
+        "quantity": normalized.get("quantity"),
+        "price": normalized.get("price"),
+        "estimated_notional": preview.get("estimated_notional"),
+        "order_type": normalized.get("order_type"),
+        "client_order_id": client_order_id,
+        "order_request": payload,
+        "preview": preview,
+        "provenance": {
+            "thesis": req.thesis.strip(),
+            "source_conversation_id": req.source_conversation_id,
+            "expected_edge": req.expected_edge,
+            "sources": [source.strip() for source in req.sources if source.strip()],
+        },
+        "audit_order_id": None,
+        "venue_order_id": None,
+        "reconciliation_status": None,
+        "approved_at": None,
+        "submitted_at": None,
+        "last_reconciled_at": None,
+        "created_at": now,
+        "updated_at": now,
+        "error_code": None,
+    }
+
+
+def _claim_trading_run_for_execution(
+    user_id: str, run_id: str, preview: Dict[str, Any]
+) -> tuple[Optional[Dict[str, Any]], bool]:
+    """Atomically acquire a saved run for one exchange-submission attempt.
+
+    The Datastore transaction is the cross-instance idempotency boundary.  The
+    in-memory lock gives development and tests the same single-process guarantee.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+
+    def claim(record: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+        if record.get("status") != "awaiting_approval":
+            return record, False
+        record["preview"] = preview
+        record["estimated_notional"] = preview.get("estimated_notional")
+        record["status"] = "submitting"
+        record["approved_at"] = now
+        record["updated_at"] = now
+        record["error_code"] = None
+        return record, True
+
+    client = _get_datastore()
+    if client is None:
+        with _trading_run_lock:
+            record = _state.setdefault("trading_runs", {}).get(user_id, {}).get(run_id)
+            if record is None:
+                return None, False
+            claimed, acquired = claim(dict(record))
+            if acquired:
+                _state["trading_runs"][user_id][run_id] = claimed
+            return claimed, acquired
+
+    with client.transaction():
+        entity = client.get(_trading_run_key(client, user_id, run_id))
+        if entity is None:
+            return None, False
+        record, acquired = claim(_trading_run_from_entity(entity))
+        if acquired:
+            _put_trading_run(user_id, record)
+        return record, acquired
+
+
+def _trade_run_status_from_order(order_status: Any) -> str:
+    status = str(order_status or "").strip().lower()
+    if status in {"filled", "canceled", "rejected"}:
+        return status
+    return "submitted"
+
+
+def _sync_trade_run_from_order(user_id: str, order: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Project venue reconciliation back onto its parent run, when one exists."""
+    run_id = str(order.get("trade_run_id") or "").strip()
+    if not run_id:
+        return None
+    run = _read_trading_run(user_id, run_id)
+    if run is None:
+        return None
+    run["audit_order_id"] = order.get("id") or run.get("audit_order_id")
+    run["venue_order_id"] = order.get("venue_order_id") or run.get("venue_order_id")
+    run["reconciliation_status"] = order.get("status") or run.get("reconciliation_status")
+    run["last_reconciled_at"] = order.get("last_reconciled_at") or run.get("last_reconciled_at")
+    run["status"] = _trade_run_status_from_order(order.get("status"))
+    run["updated_at"] = datetime.now(timezone.utc).isoformat()
+    run["error_code"] = None
+    return _put_trading_run(user_id, run)
+
+
 def _status_from_venue(value: Any) -> str:
     raw = str(value or "").strip().lower()
     if raw in {"filled", "executed", "matched", "complete", "completed"}:
@@ -6371,7 +7237,9 @@ def _status_from_venue(value: Any) -> str:
     return "submitted"
 
 
-def _submitted_trading_order(result: Dict[str, Any]) -> Dict[str, Any]:
+def _submitted_trading_order(
+    result: Dict[str, Any], *, trade_run_id: Optional[str] = None
+) -> Dict[str, Any]:
     """Keep a local audit row without persisting exchange responses or secrets."""
     normalized = result.get("normalized_order") or {}
     venue_response = result.get("venue_response") or {}
@@ -6391,6 +7259,7 @@ def _submitted_trading_order(result: Dict[str, Any]) -> Dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     return {
         "id": str(uuid.uuid4()),
+        "trade_run_id": trade_run_id,
         "platform": normalized.get("platform"),
         "venue_order_id": venue_order_id,
         "status": _status_from_venue(source.get("status")),
@@ -6430,6 +7299,70 @@ def _merge_order_reconciliation(record: Dict[str, Any], reconciliation: Dict[str
     return record
 
 
+def _scheduled_reconcile_open_trading_orders(limit: int) -> Dict[str, Any]:
+    """Reconcile a bounded batch of submitted orders without placing trades.
+
+    This is intentionally serial and rate-limited by batch size: it is a
+    read-only venue operation that moves audit state from venue evidence only.
+    """
+    from analyzing_llm_rationale import trading
+
+    result: Dict[str, Any] = {
+        "checked": 0,
+        "updated": 0,
+        "terminal": 0,
+        "connection_missing": 0,
+        "errors": 0,
+        "by_venue": {"kalshi": 0, "polymarket": 0},
+    }
+    credentials_cache: Dict[tuple[str, str], Optional[Dict[str, Any]]] = {}
+    for user_id, record in _list_reconcilable_trading_orders(limit):
+        try:
+            venue = _clean_trading_platform(record.get("platform"))
+        except Exception:
+            result["errors"] += 1
+            continue
+        result["checked"] += 1
+        result["by_venue"][venue] += 1
+        cache_key = (user_id, venue)
+        if cache_key not in credentials_cache:
+            try:
+                credentials_cache[cache_key] = _stored_trading_credentials(user_id, venue)
+            except Exception:
+                # Do not expose the user, order, or decrypt error to logs or the
+                # scheduler response. The owner sees connection health in their UI.
+                credentials_cache[cache_key] = None
+        credentials = credentials_cache[cache_key]
+        if credentials is None:
+            result["connection_missing"] += 1
+            _trading_reconciliation_actions.add(
+                1, {"venue": venue, "action": "scheduled_order", "outcome": "connection_missing"}
+            )
+            continue
+        try:
+            venue_state = trading.reconcile_order(venue, str(record["venue_order_id"]), credentials)
+            previous_status = record.get("status")
+            record = _merge_order_reconciliation(record, venue_state)
+            _put_trading_order(user_id, record)
+            _sync_trade_run_from_order(user_id, record)
+            _record_terminal_trading_order_event(
+                user_id, venue=venue, record=record, previous_status=previous_status
+            )
+            result["updated"] += 1
+            if record.get("status") in {"filled", "canceled", "rejected"}:
+                result["terminal"] += 1
+            _trading_reconciliation_actions.add(
+                1, {"venue": venue, "action": "scheduled_order", "outcome": "success"}
+            )
+        except Exception:
+            result["errors"] += 1
+            _trading_reconciliation_actions.add(
+                1, {"venue": venue, "action": "scheduled_order", "outcome": "error"}
+            )
+            logger.warning("scheduled trading reconciliation could not update one %s order", venue)
+    return result
+
+
 def _trading_http_exception(exc: Exception) -> HTTPException:
     from analyzing_llm_rationale import trading
 
@@ -6437,6 +7370,8 @@ def _trading_http_exception(exc: Exception) -> HTTPException:
         return exc
     if isinstance(exc, SecureTradingConnectionError):
         return HTTPException(status_code=503, detail=str(exc))
+    if isinstance(exc, TradingGuardrailError):
+        return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, trading.TradingValidationError):
         return HTTPException(status_code=422, detail=str(exc))
     if isinstance(exc, (trading.TradingDisabledError, trading.TradingNotConfiguredError)):
@@ -6493,6 +7428,61 @@ async def trading_accounts_check(
         return TradingAccountStatus(**trading.account_status(creds))
     except Exception as exc:
         raise _trading_http_exception(exc) from exc
+
+
+@app.get(
+    "/trading/guardrails",
+    tags=["Trading"],
+    summary="Read the signed-in user's real-money trading guardrails",
+    response_model=TradingGuardrailsResponse,
+)
+async def get_trading_guardrails(request: Request) -> TradingGuardrailsResponse:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    return _trading_guardrails_response(claims["sub"])
+
+
+@app.put(
+    "/trading/guardrails",
+    tags=["Trading"],
+    summary="Narrow the signed-in user's real-money trading guardrails",
+    response_model=TradingGuardrailsResponse,
+)
+async def update_trading_guardrails(
+    req: TradingGuardrailsUpdateRequest, request: Request
+) -> TradingGuardrailsResponse:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("trading.guardrail.update") as span:
+        span.set_attribute("trading.user_id", claims["sub"])
+        try:
+            policy = _update_trading_guardrails(claims["sub"], req)
+            _record_trading_risk_event(
+                claims["sub"], venue="all", event="guardrail_updated", outcome="success"
+            )
+            _trading_guardrail_actions.add(1, {"venue": "all", "action": "update", "outcome": "success"})
+            return TradingGuardrailsResponse(
+                **policy,
+                platform_kill_switch=_trading_guardrail_env_bool("FORESEA_TRADING_KILL_SWITCH", False),
+            )
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _trading_guardrail_actions.add(1, {"venue": "all", "action": "update", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.get(
+    "/trading/guardrails/events",
+    tags=["Trading"],
+    summary="List safe audit events for real-money trading controls",
+)
+async def list_trading_guardrail_events(
+    request: Request, limit: int = Query(50, ge=1, le=250)
+) -> Dict[str, Any]:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    return {"events": _list_trading_risk_events(claims["sub"], limit)}
 
 
 @app.get(
@@ -6601,6 +7591,241 @@ async def trading_preview(req: TradeOrderRequest, request: Request) -> TradeOrde
 
 
 @app.post(
+    "/trading/runs",
+    tags=["Trading"],
+    summary="Create a durable, reviewable live-trade run",
+    response_model=TradeRunResponse,
+)
+async def create_trading_run(req: TradeRunCreateRequest, request: Request) -> TradeRunResponse:
+    """Save a validated order plan. This endpoint cannot submit an order."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    from analyzing_llm_rationale import trading
+
+    if req.execute or req.confirmation is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="Trade runs are created without execution or confirmation. Execute the saved run explicitly.",
+        )
+    venue = _clean_trading_platform(req.platform)
+    with _tracer.start_as_current_span("trading.run.create") as span:
+        span.set_attribute("trading.venue", venue)
+        try:
+            credentials = _resolve_order_credentials(claims["sub"], req)
+            payload = req.model_dump(
+                exclude_none=True,
+                exclude={
+                    "title", "thesis", "source_conversation_id", "expected_edge", "sources",
+                    "execute", "confirmation", "venue_credentials",
+                },
+            )
+            preview = trading.preview_order(payload, credentials)
+            policy = _effective_trading_guardrails(claims["sub"])
+            if float(preview.get("estimated_notional") or 0.0) > float(policy["max_order_notional"]):
+                raise TradingGuardrailError(
+                    "max_order_notional",
+                    f"Order risk ${float(preview['estimated_notional']):.2f} exceeds your ${float(policy['max_order_notional']):.2f} per-order limit.",
+                )
+            preview["guardrails"] = TradingGuardrailsResponse(
+                **policy,
+                platform_kill_switch=_trading_guardrail_env_bool("FORESEA_TRADING_KILL_SWITCH", False),
+            ).model_dump()
+            preview.setdefault("warnings", []).append(
+                "Foresea rechecks a fresh quote, available balance, exposure, duplicate cooldown, and risk limits immediately before submission."
+            )
+            run = _put_trading_run(claims["sub"], _new_trading_run(req, payload, preview))
+            span.set_attribute("trading.run_id", run["id"])
+            span.set_attribute("trading.run.status", run["status"])
+            _record_trading_risk_event(
+                claims["sub"], venue=venue, event="trade_run_created", outcome="success", trade_run_id=run["id"]
+            )
+            _trading_run_actions.add(1, {"venue": venue, "action": "create", "outcome": "success"})
+            logger.info("trading run created id=%s venue=%s", run["id"], venue)
+            return TradeRunResponse(**run)
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _trading_run_actions.add(1, {"venue": venue, "action": "create", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.get("/trading/runs", tags=["Trading"], summary="List the signed-in user's durable trade runs")
+async def list_trading_runs(
+    request: Request, platform: Optional[str] = Query(None, max_length=20)
+) -> Dict[str, Any]:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    venue = _clean_trading_platform(platform) if platform else None
+    return {"runs": [TradeRunResponse(**run).model_dump() for run in _list_trading_runs(claims["sub"], venue)]}
+
+
+@app.get("/trading/runs/{run_id}", tags=["Trading"], summary="Read one durable trade run", response_model=TradeRunResponse)
+async def read_trading_run(run_id: str, request: Request) -> TradeRunResponse:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    run = _read_trading_run(claims["sub"], run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Trade run was not found.")
+    return TradeRunResponse(**run)
+
+
+@app.post(
+    "/trading/runs/{run_id}/execute",
+    tags=["Trading"],
+    summary="Execute one saved run after explicit confirmation",
+    response_model=TradeRunResponse,
+)
+async def execute_trading_run(
+    run_id: str, req: TradeRunExecuteRequest, request: Request
+) -> TradeRunResponse:
+    """Submit exactly one approved run and attach the resulting order audit row."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    from analyzing_llm_rationale import trading
+
+    run: Optional[Dict[str, Any]] = None
+    claimed_for_execution = False
+    venue = "unknown"
+    with _tracer.start_as_current_span("trading.run.execute") as span:
+        span.set_attribute("trading.run_id", run_id)
+        try:
+            run = _read_trading_run(claims["sub"], run_id)
+            if run is None:
+                raise HTTPException(status_code=404, detail="Trade run was not found.")
+            venue = _clean_trading_platform(run.get("platform"))
+            span.set_attribute("trading.venue", venue)
+            if run.get("status") != "awaiting_approval":
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Trade run is {run.get('status')}; it cannot be submitted again.",
+                )
+            if req.confirmation != trading.CONFIRMATION_PHRASE:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"confirmation must be exactly '{trading.CONFIRMATION_PHRASE}'.",
+                )
+            payload = run.get("order_request")
+            if not isinstance(payload, dict):
+                raise HTTPException(status_code=409, detail="Trade run does not contain a valid order plan.")
+            credentials = _stored_trading_credentials(claims["sub"], venue)
+            if credentials is None:
+                raise HTTPException(status_code=409, detail=f"Connect a {venue} account before executing this run.")
+
+            # Revalidate guardrails immediately before the user-approved request,
+            # then atomically claim the run before touching the exchange.  A
+            # second browser tab or Cloud Run instance will receive a conflict
+            # rather than submitting a duplicate venue order.
+            preview = trading.preview_order(payload, credentials)
+            if not preview.get("trading_enabled"):
+                trading.place_order(
+                    {**payload, "execute": True, "confirmation": req.confirmation},
+                    user_id=claims["sub"],
+                    creds=credentials,
+                )
+            guardrail_snapshot = await _validate_live_trade_guardrails(
+                claims["sub"],
+                payload=payload,
+                preview=preview,
+                credentials=credentials,
+                trade_run_id=run_id,
+            )
+            preview["guardrails"] = guardrail_snapshot
+            run, claimed_for_execution = _claim_trading_run_for_execution(
+                claims["sub"], run_id, preview
+            )
+            if run is None:
+                raise HTTPException(status_code=404, detail="Trade run was not found.")
+            if not claimed_for_execution:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Trade run is {run.get('status')}; it cannot be submitted again.",
+                )
+
+            result = trading.place_order(
+                {**payload, "execute": True, "confirmation": req.confirmation},
+                user_id=claims["sub"],
+                creds=credentials,
+            )
+            audit = _put_trading_order(
+                claims["sub"], _submitted_trading_order(result, trade_run_id=run_id)
+            )
+            _record_terminal_trading_order_event(
+                claims["sub"], venue=venue, record=audit, previous_status="submitted"
+            )
+            submitted_at = datetime.now(timezone.utc).isoformat()
+            run.update({
+                "status": _trade_run_status_from_order(audit.get("status")),
+                "audit_order_id": audit["id"],
+                "venue_order_id": audit.get("venue_order_id"),
+                "reconciliation_status": audit.get("status"),
+                "submitted_at": submitted_at,
+                "updated_at": submitted_at,
+                "error_code": None,
+            })
+            _put_trading_run(claims["sub"], run)
+            span.set_attribute("trading.audit_order_id", audit["id"])
+            span.set_attribute("trading.run.status", run["status"])
+            _record_trading_risk_event(
+                claims["sub"],
+                venue=venue,
+                event="order_submitted",
+                outcome="success",
+                trade_run_id=run_id,
+                audit_order_id=audit["id"],
+            )
+            _trading_guardrail_actions.add(1, {"venue": venue, "action": "execute", "outcome": "passed"})
+            _trading_run_actions.add(1, {"venue": venue, "action": "execute", "outcome": "success"})
+            logger.info("trading run submitted id=%s venue=%s audit_order_id=%s", run_id, venue, audit["id"])
+            return TradeRunResponse(**run)
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            if isinstance(exc, TradingGuardrailError):
+                _record_trading_risk_event(
+                    claims["sub"],
+                    venue=venue,
+                    event="guardrail_blocked",
+                    outcome="blocked",
+                    reason_code=exc.code,
+                    trade_run_id=run_id,
+                )
+                _trading_guardrail_actions.add(1, {"venue": venue, "action": "execute", "outcome": "blocked"})
+                _notify_trading_safety_event(
+                    venue=venue, event=exc.code, reason_code=exc.code, trade_run_id=run_id
+                )
+            if claimed_for_execution and run is not None and run.get("status") == "submitting":
+                if isinstance(exc, trading.TradingExecutionError):
+                    # A transport failure can occur after the venue accepts the
+                    # request. Preserve the idempotency key and force a later
+                    # reconciliation instead of issuing a duplicate order.
+                    run["status"] = "submission_unknown"
+                    run["error_code"] = "venue_submission_uncertain"
+                    logger.error("trading run submission uncertain id=%s venue=%s", run_id, venue)
+                    _record_trading_risk_event(
+                        claims["sub"],
+                        venue=venue,
+                        event="submission_unknown",
+                        outcome="error",
+                        reason_code="venue_submission_uncertain",
+                        trade_run_id=run_id,
+                    )
+                    _notify_trading_safety_event(
+                        venue=venue,
+                        event="submission_unknown",
+                        reason_code="venue_submission_uncertain",
+                        trade_run_id=run_id,
+                    )
+                else:
+                    run["status"] = "blocked"
+                    run["error_code"] = "execution_guard_failed"
+                    logger.warning("trading run blocked before submission id=%s venue=%s", run_id, venue)
+                run["updated_at"] = datetime.now(timezone.utc).isoformat()
+                _put_trading_run(claims["sub"], run)
+            _trading_run_actions.add(1, {"venue": venue, "action": "execute", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.post(
     "/trading/orders",
     tags=["Trading"],
     summary="Submit a confirmed prediction-market order",
@@ -6622,9 +7847,30 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
         try:
             creds = _resolve_order_credentials(claims["sub"], req)
             payload = req.model_dump(exclude_none=True, exclude={"venue_credentials"})
+            preview = trading.preview_order(payload, creds)
+            if not preview.get("trading_enabled"):
+                # Preserve the explicit server-side live-trading gate before
+                # reporting account-specific readiness details.
+                trading.place_order(payload, user_id=claims["sub"], creds=creds)
+            if creds is None:
+                raise HTTPException(status_code=409, detail=f"Connect a {venue} account before submitting an order.")
+            await _validate_live_trade_guardrails(
+                claims["sub"], payload=payload, preview=preview, credentials=creds
+            )
             result = trading.place_order(payload, user_id=claims["sub"], creds=creds)
             audit = _put_trading_order(claims["sub"], _submitted_trading_order(result))
+            _record_terminal_trading_order_event(
+                claims["sub"], venue=venue, record=audit, previous_status="submitted"
+            )
             span.set_attribute("trading.audit_order_id", audit["id"])
+            _record_trading_risk_event(
+                claims["sub"],
+                venue=venue,
+                event="order_submitted",
+                outcome="success",
+                audit_order_id=audit["id"],
+            )
+            _trading_guardrail_actions.add(1, {"venue": venue, "action": "direct_submit", "outcome": "passed"})
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "submit", "outcome": "success"})
             return TradeOrderResponse(
                 **result,
@@ -6634,6 +7880,16 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
             )
         except Exception as exc:
             span.record_exception(exc)
+            if isinstance(exc, TradingGuardrailError):
+                _record_trading_risk_event(
+                    claims["sub"],
+                    venue=venue,
+                    event="guardrail_blocked",
+                    outcome="blocked",
+                    reason_code=exc.code,
+                )
+                _trading_guardrail_actions.add(1, {"venue": venue, "action": "direct_submit", "outcome": "blocked"})
+                _notify_trading_safety_event(venue=venue, event=exc.code, reason_code=exc.code)
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "submit", "outcome": "error"})
             raise _trading_http_exception(exc) from exc
 
@@ -6683,15 +7939,25 @@ async def trading_portfolio(
                 venue_order_id = record.get("venue_order_id")
                 remote = remote_orders.get(venue_order_id)
                 if remote:
+                    previous_status = record.get("status")
                     record = _merge_order_reconciliation(record, remote)
                     _put_trading_order(claims["sub"], record)
+                    _sync_trade_run_from_order(claims["sub"], record)
+                    _record_terminal_trading_order_event(
+                        claims["sub"], venue=venue, record=record, previous_status=previous_status
+                    )
                 elif venue_order_id and venue_order_id in remote_fills:
+                    previous_status = record.get("status")
                     record["filled_quantity"] = remote_fills[venue_order_id]
                     if record.get("quantity") is not None and remote_fills[venue_order_id] >= float(record["quantity"]):
                         record["status"] = "filled"
                     record["last_reconciled_at"] = datetime.now(timezone.utc).isoformat()
                     record["updated_at"] = record["last_reconciled_at"]
                     _put_trading_order(claims["sub"], record)
+                    _sync_trade_run_from_order(claims["sub"], record)
+                    _record_terminal_trading_order_event(
+                        claims["sub"], venue=venue, record=record, previous_status=previous_status
+                    )
                 reconciled.append(record)
             snapshot["audit_orders"] = reconciled
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "portfolio", "outcome": "success"})
@@ -6725,8 +7991,13 @@ async def reconcile_trading_order(audit_order_id: str, request: Request) -> Dict
             if credentials is None:
                 raise HTTPException(status_code=409, detail=f"Reconnect {venue} before reconciling this order.")
             venue_state = trading.reconcile_order(venue, record["venue_order_id"], credentials)
+            previous_status = record.get("status")
             record = _merge_order_reconciliation(record, venue_state)
             _put_trading_order(claims["sub"], record)
+            _sync_trade_run_from_order(claims["sub"], record)
+            _record_terminal_trading_order_event(
+                claims["sub"], venue=venue, record=record, previous_status=previous_status
+            )
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "order", "outcome": "success"})
             return record
         except HTTPException:
@@ -6735,6 +8006,56 @@ async def reconcile_trading_order(audit_order_id: str, request: Request) -> Dict
         except Exception as exc:
             span.record_exception(exc)
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "order", "outcome": "error"})
+            raise _trading_http_exception(exc) from exc
+
+
+@app.post(
+    "/trading/runs/{run_id}/reconcile",
+    tags=["Trading"],
+    summary="Reconcile the exchange order linked to a durable trade run",
+    response_model=TradeRunResponse,
+)
+async def reconcile_trading_run(run_id: str, request: Request) -> TradeRunResponse:
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    venue = "unknown"
+    with _tracer.start_as_current_span("trading.run.reconcile") as span:
+        span.set_attribute("trading.run_id", run_id)
+        try:
+            run = _read_trading_run(claims["sub"], run_id)
+            if run is None:
+                raise HTTPException(status_code=404, detail="Trade run was not found.")
+            audit_order_id = run.get("audit_order_id")
+            if not audit_order_id:
+                raise HTTPException(status_code=409, detail="Trade run has not submitted an exchange order yet.")
+            record = _read_trading_order(claims["sub"], str(audit_order_id))
+            if record is None or not record.get("venue_order_id"):
+                raise HTTPException(status_code=409, detail="Trade run has no reconcilable exchange order.")
+            venue = _clean_trading_platform(record.get("platform"))
+            span.set_attribute("trading.venue", venue)
+            span.set_attribute("trading.audit_order_id", str(audit_order_id))
+            from analyzing_llm_rationale import trading
+
+            credentials = _stored_trading_credentials(claims["sub"], venue)
+            if credentials is None:
+                raise HTTPException(status_code=409, detail=f"Reconnect {venue} before reconciling this run.")
+            venue_state = trading.reconcile_order(venue, record["venue_order_id"], credentials)
+            previous_status = record.get("status")
+            record = _merge_order_reconciliation(record, venue_state)
+            _put_trading_order(claims["sub"], record)
+            synced = _sync_trade_run_from_order(claims["sub"], record)
+            _record_terminal_trading_order_event(
+                claims["sub"], venue=venue, record=record, previous_status=previous_status
+            )
+            if synced is None:
+                raise HTTPException(status_code=409, detail="Trade run lost its order linkage; reconnect and investigate.")
+            span.set_attribute("trading.run.status", synced["status"])
+            _trading_run_actions.add(1, {"venue": venue, "action": "reconcile", "outcome": "success"})
+            return TradeRunResponse(**synced)
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _trading_run_actions.add(1, {"venue": venue, "action": "reconcile", "outcome": "error"})
             raise _trading_http_exception(exc) from exc
 
 
@@ -6770,9 +8091,14 @@ async def cancel_trading_order(
                 subaccount=record.get("subaccount"),
                 exchange_index=int(record.get("exchange_index") or 0),
             )
+            previous_status = record.get("status")
             record = _merge_order_reconciliation(record, venue_state)
             record["canceled_at"] = datetime.now(timezone.utc).isoformat()
             _put_trading_order(claims["sub"], record)
+            _sync_trade_run_from_order(claims["sub"], record)
+            _record_terminal_trading_order_event(
+                claims["sub"], venue=venue, record=record, previous_status=previous_status
+            )
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "cancel", "outcome": "success"})
             return record
         except HTTPException:
@@ -6782,6 +8108,44 @@ async def cancel_trading_order(
             span.record_exception(exc)
             _trading_reconciliation_actions.add(1, {"venue": venue, "action": "cancel", "outcome": "error"})
             raise _trading_http_exception(exc) from exc
+
+
+@app.post(
+    "/internal/trading/reconcile",
+    tags=["System"],
+    summary="Run a bounded, read-only reconciliation of open live-trading orders",
+    include_in_schema=False,
+)
+async def scheduled_trading_reconciliation(
+    request: Request,
+    limit: int = Query(25, ge=1, le=100),
+) -> Dict[str, Any]:
+    """Scheduler-only trigger; it cannot create, modify, or cancel a trade."""
+    _require_trading_reconciliation_token(request)
+    effective_limit = min(limit, _TRADING_RECONCILIATION_MAX_ORDERS)
+    with _tracer.start_as_current_span("trading.reconciliation.scheduled") as span:
+        span.set_attribute("trading.reconciliation.limit", effective_limit)
+        try:
+            result = await asyncio.get_running_loop().run_in_executor(
+                None, _scheduled_reconcile_open_trading_orders, effective_limit
+            )
+            span.set_attributes(
+                {
+                    "trading.reconciliation.checked": result["checked"],
+                    "trading.reconciliation.updated": result["updated"],
+                    "trading.reconciliation.errors": result["errors"],
+                }
+            )
+            logger.info(
+                "scheduled trading reconciliation completed checked=%s updated=%s errors=%s",
+                result["checked"], result["updated"], result["errors"],
+            )
+            return result
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            logger.error("scheduled trading reconciliation failed")
+            raise HTTPException(status_code=503, detail="Scheduled reconciliation could not complete.") from exc
 
 
 @app.get("/providers/models", tags=["System"], summary="List models from a provider base URL")

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
 import tempfile
 import time
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -1520,6 +1522,8 @@ class ServerTests(unittest.TestCase):
         }
         with mock.patch.object(server_module, "_stored_trading_credentials", return_value=fake_connection), mock.patch(
             "analyzing_llm_rationale.trading.place_order", return_value=fake_result
+        ), mock.patch.object(
+            server_module, "_validate_live_trade_guardrails", new=mock.AsyncMock(return_value={})
         ):
             submitted = self.client.post(
                 "/trading/orders",
@@ -1563,6 +1567,321 @@ class ServerTests(unittest.TestCase):
                 )
             self.assertEqual(cancelled.status_code, 200)
             self.assertEqual(cancelled.json()["status"], "canceled")
+
+    def test_trade_run_requires_explicit_execution_and_tracks_reconciliation(self):
+        token = _issue_session("run-trader", "run@example.com", "Run", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        fake_connection = {
+            "kalshi_api_key_id": "safe-test-key",
+            "kalshi_private_key": "safe-test-pem",
+            "kalshi_base_url": "https://external-api.kalshi.com/trade-api/v2",
+        }
+        fake_result = {
+            "ok": True,
+            "platform": "kalshi",
+            "would_execute": True,
+            "requires_confirmation": True,
+            "confirmation_phrase": "PLACE REAL ORDER",
+            "trading_enabled": True,
+            "max_order_notional": 50.0,
+            "estimated_notional": 1.0,
+            "warnings": [],
+            "normalized_order": {
+                "platform": "kalshi", "action": "buy", "outcome": "yes",
+                "order_type": "limit", "ticker": "KXTEST", "quantity": 2.0,
+                "price": 0.5, "subaccount": 0, "exchange_index": 0,
+            },
+            "submitted": True,
+            "user_id": "run-trader",
+            "venue_response": {"body": {"order_id": "run-venue-123", "status": "resting"}},
+        }
+        with mock.patch.object(
+            server_module, "_stored_trading_credentials", return_value=fake_connection
+        ):
+            created = self.client.post(
+                "/trading/runs",
+                json={
+                    "platform": "kalshi", "ticker": "KXTEST", "price": 0.5,
+                    "quantity": 2, "title": "Fed easing thesis", "thesis": "Policy data favors YES.",
+                    "expected_edge": 0.08, "sources": ["https://example.test/source"],
+                },
+                headers=headers,
+            )
+            self.assertEqual(created.status_code, 200)
+            run = created.json()
+            run_id = run["id"]
+            self.assertEqual(run["status"], "awaiting_approval")
+            self.assertTrue(run["client_order_id"].startswith("foresea-run-"))
+            self.assertEqual(run["provenance"]["expected_edge"], 0.08)
+            self.assertNotIn("safe-test-pem", created.text)
+
+            listed = self.client.get("/trading/runs", headers=headers)
+            self.assertEqual(listed.status_code, 200)
+            self.assertEqual(listed.json()["runs"][0]["id"], run_id)
+
+            rejected = self.client.post(
+                f"/trading/runs/{run_id}/execute",
+                json={"confirmation": "not approved"},
+                headers=headers,
+            )
+            self.assertEqual(rejected.status_code, 422)
+            self.assertEqual(
+                self.client.get(f"/trading/runs/{run_id}", headers=headers).json()["status"],
+                "awaiting_approval",
+            )
+
+            with mock.patch(
+                "analyzing_llm_rationale.trading.place_order", return_value=fake_result
+            ), mock.patch.object(
+                server_module, "_validate_live_trade_guardrails", new=mock.AsyncMock(return_value={})
+            ):
+                submitted = self.client.post(
+                    f"/trading/runs/{run_id}/execute",
+                    json={"confirmation": "PLACE REAL ORDER"},
+                    headers=headers,
+                )
+            self.assertEqual(submitted.status_code, 200)
+            self.assertEqual(submitted.json()["status"], "submitted")
+            self.assertEqual(submitted.json()["venue_order_id"], "run-venue-123")
+            audit_id = submitted.json()["audit_order_id"]
+            self.assertEqual(
+                self.client.get("/trading/orders", headers=headers).json()["orders"][0]["trade_run_id"],
+                run_id,
+            )
+
+            with mock.patch(
+                "analyzing_llm_rationale.trading.reconcile_order",
+                return_value={
+                    "venue_order_id": "run-venue-123", "status": "filled", "venue_status": "filled",
+                    "filled_quantity": 2.0, "remaining_quantity": 0.0,
+                },
+            ):
+                reconciled = self.client.post(
+                    f"/trading/runs/{run_id}/reconcile", headers=headers
+                )
+            self.assertEqual(reconciled.status_code, 200)
+            self.assertEqual(reconciled.json()["status"], "filled")
+            self.assertEqual(reconciled.json()["audit_order_id"], audit_id)
+
+            duplicate = self.client.post(
+                f"/trading/runs/{run_id}/execute",
+                json={"confirmation": "PLACE REAL ORDER"},
+                headers=headers,
+            )
+            self.assertEqual(duplicate.status_code, 409)
+
+    def test_trade_run_execution_claim_has_one_in_memory_owner(self):
+        req = server_module.TradeRunCreateRequest(
+            platform="kalshi", ticker="KXTEST", price=0.5, quantity=2
+        )
+        preview = {
+            "estimated_notional": 1.0,
+            "normalized_order": {
+                "platform": "kalshi", "action": "buy", "outcome": "yes",
+                "order_type": "limit", "ticker": "KXTEST", "quantity": 2.0,
+                "price": 0.5,
+            },
+        }
+        run = server_module._put_trading_run(
+            "claim-user",
+            server_module._new_trading_run(
+                req,
+                {"platform": "kalshi", "ticker": "KXTEST", "price": 0.5, "quantity": 2},
+                preview,
+            ),
+        )
+
+        first, first_owner = server_module._claim_trading_run_for_execution(
+            "claim-user", run["id"], preview
+        )
+        second, second_owner = server_module._claim_trading_run_for_execution(
+            "claim-user", run["id"], preview
+        )
+
+        self.assertTrue(first_owner)
+        self.assertFalse(second_owner)
+        self.assertEqual(first["status"], "submitting")
+        self.assertEqual(second["status"], "submitting")
+
+    def test_trading_guardrails_are_user_scoped_and_can_only_be_narrowed(self):
+        token = _issue_session("risk-user", "risk@example.com", "Risk", "")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        initial = self.client.get("/trading/guardrails", headers=headers)
+        self.assertEqual(initial.status_code, 200)
+        self.assertFalse(initial.json()["paused"])
+        self.assertFalse(initial.json()["platform_kill_switch"])
+
+        updated = self.client.put(
+            "/trading/guardrails",
+            json={
+                "paused": True,
+                "max_order_notional": 0.75,
+                "max_daily_risk_notional": 2.0,
+                "max_market_exposure_notional": 1.5,
+                "max_price_deviation_bps": 100,
+            },
+            headers=headers,
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertTrue(updated.json()["paused"])
+        self.assertEqual(updated.json()["max_order_notional"], 0.75)
+        self.assertEqual(updated.json()["max_price_deviation_bps"], 100)
+
+        above_cap = self.client.put(
+            "/trading/guardrails",
+            json={"max_order_notional": 100_000},
+            headers=headers,
+        )
+        self.assertEqual(above_cap.status_code, 409)
+        self.assertIn("hard ceiling", above_cap.json()["detail"])
+
+        events = self.client.get("/trading/guardrails/events", headers=headers)
+        self.assertEqual(events.status_code, 200)
+        self.assertEqual(events.json()["events"][0]["event"], "guardrail_updated")
+
+    def test_live_guardrails_block_price_deviation_and_daily_risk(self):
+        user_id = "guardrail-user"
+        payload = {
+            "platform": "kalshi", "ticker": "KXTEST", "action": "buy", "outcome": "yes",
+            "price": 0.60, "quantity": 2,
+        }
+        preview = {
+            "estimated_notional": 1.2,
+            "normalized_order": {
+                "platform": "kalshi", "ticker": "KXTEST", "action": "buy", "outcome": "yes",
+                "price": 0.60, "quantity": 2.0,
+            },
+        }
+        self.assertEqual(
+            server_module._update_trading_guardrails(
+                user_id, server_module.TradingGuardrailsUpdateRequest(max_price_deviation_bps=100)
+            )["max_price_deviation_bps"],
+            100,
+        )
+        with mock.patch.object(
+            server_module,
+            "_fresh_trade_guard_quote",
+            new=mock.AsyncMock(return_value={
+                "outcome_probability": 0.50,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "market_ident": "KXTEST",
+            }),
+        ):
+            with self.assertRaises(server_module.TradingGuardrailError) as price_error:
+                asyncio.run(
+                    server_module._validate_live_trade_guardrails(
+                        user_id, payload=payload, preview=preview, credentials={"kalshi_api_key_id": "safe"}
+                    )
+                )
+        self.assertEqual(price_error.exception.code, "price_deviation")
+
+        server_module._update_trading_guardrails(
+            user_id,
+            server_module.TradingGuardrailsUpdateRequest(
+                max_price_deviation_bps=300,
+                max_daily_risk_notional=1.5,
+            ),
+        )
+        server_module._put_trading_order(
+            user_id,
+            {
+                "id": "daily-risk-order", "platform": "kalshi", "ticker": "KXOLD", "status": "filled",
+                "action": "buy", "outcome": "yes", "quantity": 2.0, "price": 0.5,
+                "estimated_notional": 1.0, "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        with mock.patch.object(
+            server_module,
+            "_fresh_trade_guard_quote",
+            new=mock.AsyncMock(return_value={
+                "outcome_probability": 0.60,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "market_ident": "KXTEST",
+            }),
+        ), mock.patch(
+            "analyzing_llm_rationale.trading.reconcile_portfolio",
+            return_value={"balance": {"available": 100.0, "unit": "USDC"}, "positions": []},
+        ):
+            with self.assertRaises(server_module.TradingGuardrailError) as daily_error:
+                asyncio.run(
+                    server_module._validate_live_trade_guardrails(
+                        user_id, payload=payload, preview=preview, credentials={"kalshi_api_key_id": "safe"}
+                    )
+                )
+        self.assertEqual(daily_error.exception.code, "daily_risk_limit")
+
+    def test_trade_run_kill_switch_blocks_before_exchange_submission(self):
+        token = _issue_session("kill-switch-user", "kill@example.com", "Kill", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        connection = {"kalshi_api_key_id": "safe-key", "kalshi_private_key": "safe-pem"}
+        with mock.patch.dict(
+            os.environ,
+            {"FORESEA_ENABLE_BYO_TRADING": "true", "FORESEA_TRADING_KILL_SWITCH": "true"},
+            clear=False,
+        ), mock.patch.object(server_module, "_stored_trading_credentials", return_value=connection), mock.patch(
+            "analyzing_llm_rationale.trading.place_order"
+        ) as place_order:
+            created = self.client.post(
+                "/trading/runs",
+                json={"platform": "kalshi", "ticker": "KXTEST", "price": 0.5, "quantity": 1},
+                headers=headers,
+            )
+            self.assertEqual(created.status_code, 200)
+            blocked = self.client.post(
+                f"/trading/runs/{created.json()['id']}/execute",
+                json={"confirmation": "PLACE REAL ORDER"},
+                headers=headers,
+            )
+        self.assertEqual(blocked.status_code, 409)
+        self.assertIn("kill switch", blocked.json()["detail"])
+        place_order.assert_not_called()
+        events = self.client.get("/trading/guardrails/events", headers=headers).json()["events"]
+        self.assertTrue(any(event["reason_code"] == "platform_kill_switch" for event in events))
+
+    def test_scheduled_reconciliation_is_token_gated_and_updates_open_orders(self):
+        order = server_module._put_trading_order(
+            "scheduled-user",
+            {
+                "id": "scheduled-order",
+                "trade_run_id": None,
+                "platform": "kalshi",
+                "venue_order_id": "venue-scheduled",
+                "status": "open",
+                "venue_status": "resting",
+                "action": "buy",
+                "outcome": "yes",
+                "ticker": "KXTEST",
+                "quantity": 2.0,
+                "price": 0.5,
+                "created_at": "2026-08-15T00:00:00+00:00",
+                "updated_at": "2026-08-15T00:00:00+00:00",
+            },
+        )
+        self.assertEqual(order["status"], "open")
+        with mock.patch.object(server_module, "_TRADING_RECONCILIATION_TOKEN", "scheduler-token"):
+            denied = self.client.post("/internal/trading/reconcile")
+            self.assertEqual(denied.status_code, 401)
+            with mock.patch.object(
+                server_module, "_stored_trading_credentials", return_value={"kalshi_api_key_id": "key"}
+            ), mock.patch(
+                "analyzing_llm_rationale.trading.reconcile_order",
+                return_value={
+                    "venue_order_id": "venue-scheduled", "status": "filled", "venue_status": "filled",
+                    "filled_quantity": 2.0, "remaining_quantity": 0.0,
+                },
+            ):
+                reconciled = self.client.post(
+                    "/internal/trading/reconcile?limit=10",
+                    headers={"X-Trading-Reconciliation-Token": "scheduler-token"},
+                )
+        self.assertEqual(reconciled.status_code, 200)
+        self.assertEqual(reconciled.json()["checked"], 1)
+        self.assertEqual(reconciled.json()["updated"], 1)
+        self.assertEqual(reconciled.json()["terminal"], 1)
+        stored = server_module._read_trading_order("scheduled-user", "scheduled-order")
+        self.assertEqual(stored["status"], "filled")
+        self.assertEqual(stored["filled_quantity"], 2.0)
 
     def test_favorites_crud_roundtrip(self):
         token = _issue_session("fav-user", "fav@example.com", "Fav", "")

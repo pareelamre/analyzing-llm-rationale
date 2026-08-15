@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Foresea — Trade Terminal</title>
-  
+
   <!-- Matching Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  
+
   <style>
     /* ── Prevalent Design System Tokens ── */
     :root {
@@ -26,18 +26,18 @@
       --accent: #111827; /* Dark slate matching main app */
       --accent-bg: #eef2ff;
       --accent-glow: rgba(17, 24, 39, 0.08);
-      
+
       --yes: #0f766e; /* Signal Teal from index.html */
       --yes-bg: #ecfdf5;
       --yes-border: #ccfbf1;
-      
+
       --no: #b91c1c; /* Signal Red */
       --no-bg: #fef2f2;
       --no-border: #fee2e2;
-      
+
       --font-db: "Inter", "Helvetica Neue", Arial, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
-      
+
       --ease-soft: cubic-bezier(.22, 1, .36, 1);
       --dur-med: 280ms;
       --dur-fast: 180ms;
@@ -53,7 +53,7 @@
       scrollbar-color: var(--border-2) transparent;
       transition-timing-function: var(--ease-soft);
     }
-    
+
     *::-webkit-scrollbar {
       width: 5px;
       height: 5px;
@@ -141,7 +141,7 @@
     .status-dot.active {
       background: var(--yes);
     }
-    
+
     .topbar-nav {
       display: flex;
       align-items: center;
@@ -166,7 +166,7 @@
       color: var(--ink);
       font-weight: 600;
     }
-    
+
     .live-pulse-container {
       display: flex;
       align-items: center;
@@ -303,7 +303,7 @@
       color: var(--ink);
       box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
-    
+
     .action-tabs .tab-item.active.buy {
       background: var(--yes-bg);
       color: var(--yes);
@@ -314,7 +314,7 @@
       color: var(--no);
       border: 1px solid var(--no-border);
     }
-    
+
     .outcome-btn-group {
       display: flex;
       gap: 8px;
@@ -758,7 +758,7 @@
       font-size: 10.5px;
       line-height: 1.5;
     }
-    
+
     /* JSON Syntax Colors */
     .json-key { color: #f43f5e; font-weight: 500; }
     .json-string { color: #10b981; }
@@ -798,7 +798,7 @@
     <div class="flex-grow-1" style="margin-left: 10px;">
       <span class="logo-sub">Trade extension</span>
     </div>
-    
+
     <div class="system-status">
       <div>
         <span class="status-dot" id="kalshiStatusDot"></span>
@@ -809,11 +809,11 @@
         <span style="color:var(--text-dim); margin-left: 4px;">Polymarket</span>
       </div>
     </div>
-    
+
     <div class="topbar-nav" style="margin-left: 20px;">
       <a href="/" class="topbar-link">Watchlist</a>
       <a href="/trade" class="topbar-link active">Trade</a>
-      
+
       <div class="live-pulse-container">
         <div class="live-pulse"></div>
         <span style="font-size:11px; font-weight:600; color:var(--ink)">Live</span>
@@ -824,13 +824,13 @@
   <!-- ── Main Workspace ── -->
   <div class="container">
     <div class="workspace-grid">
-      
+
       <!-- LEFT COLUMN: Order Ticket -->
       <section class="panel">
         <div class="panel-header">
           <h2 class="panel-title">Order ticket</h2>
         </div>
-        
+
         <!-- Platform Selector -->
         <div>
           <label>Exchange Venue</label>
@@ -892,7 +892,7 @@
             </svg>
             Advanced Options
           </button>
-          
+
           <div class="advanced-body" id="advancedPanel">
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
               <label class="flex items-center gap-1.5" style="text-transform:none; font-weight:500; font-size:11.5px; cursor:pointer;">
@@ -902,7 +902,7 @@
                 <input type="checkbox" id="optReduceOnly" onchange="resetPreview()" /> Reduce Only
               </label>
             </div>
-            
+
             <div style="margin-bottom:8px;">
               <label style="font-size:9px;">Time-in-Force (TIF)</label>
               <select id="optTif" onchange="resetPreview()">
@@ -935,6 +935,27 @@
           </div>
         </div>
 
+        <div style="padding:11px 12px; background:var(--panel); border:1px solid var(--border); border-radius:12px; margin:0 0 12px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+            <strong style="font-size:12px; color:var(--ink);">Real-money risk controls</strong>
+            <button type="button" class="topbar-link" id="riskPauseBtn" style="font-size:11px;" onclick="toggleTradingPause()">Loading…</button>
+          </div>
+          <div id="riskControlsSummary" style="font-size:11px; color:var(--text-dim); line-height:1.45;">Sign in to load your execution limits.</div>
+          <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:7px; margin-top:9px;">
+            <label style="font-size:9px;">Per order
+              <input type="number" id="riskMaxOrder" min="0.01" step="0.01" placeholder="$" />
+            </label>
+            <label style="font-size:9px;">Daily risk
+              <input type="number" id="riskMaxDaily" min="0.01" step="0.01" placeholder="$" />
+            </label>
+            <label style="font-size:9px;">Market exposure
+              <input type="number" id="riskMaxMarket" min="0.01" step="0.01" placeholder="$" />
+            </label>
+          </div>
+          <button type="button" class="topbar-link" style="font-size:11px; margin-top:8px;" onclick="saveTradingRiskControls()">Save lower limits</button>
+          <div style="font-size:10px; color:var(--text-mute); margin-top:5px;">Foresea rechecks a fresh quote, available balance, current exposure, and duplicate cooldown immediately before any order reaches an exchange.</div>
+        </div>
+
         <!-- Preview Details -->
         <div id="orderPreviewBox" class="hidden" style="padding:12px; background:var(--panel); border:1px solid var(--border); border-radius:12px; font-size:12px; line-height:1.4; margin-bottom: 12px;">
           <div id="previewDetails" style="color:var(--ink); font-weight:500;"></div>
@@ -954,25 +975,25 @@
         <button class="action-btn preview" id="previewBtn" onclick="requestPreview()">
           🔍 Preview Order Details
         </button>
-        
+
         <div class="glass-alert error hidden" id="orderErrorMsg" style="margin-top:10px;"></div>
       </section>
 
       <!-- RIGHT COLUMN: Details / Console -->
       <div class="main-col">
-        
+
         <!-- Live Quote Info -->
         <div class="panel">
           <div class="panel-header">
             <h2 class="panel-title">Active Market Quote</h2>
             <button class="topbar-link" style="font-size:11px;" onclick="loadCurrentMarket()">Refresh</button>
           </div>
-          
+
           <div class="market-search">
             <input type="text" id="marketLookupInput" placeholder="Search by market slug or ticker contract symbol" onkeydown="if(event.key==='Enter')lookupMarket()" />
             <button class="search-btn" onclick="lookupMarket()">Lookup</button>
           </div>
-          
+
           <div class="market-view-card" id="marketDetailsCard">
             <h3 class="market-view-title" id="mdTitle">-</h3>
             <div class="market-view-grid">
@@ -993,7 +1014,7 @@
                 <div class="market-stat-val" id="mdClose">-</div>
               </div>
             </div>
-            
+
             <!-- Model lean / odds meter -->
             <div class="edge-meter-container" id="modelEdgeMeterBox" style="display:none;">
               <div class="edge-meter-meta">
@@ -1011,7 +1032,7 @@
         </div>
 
         <div class="bottom-row">
-          
+
           <!-- Simulated book depth -->
           <div class="panel">
             <div class="panel-header">
@@ -1034,17 +1055,17 @@
             </div>
           </div>
 
-          <!-- Credentials / Wallets connected -->
+          <!-- Secure exchange connections -->
           <div class="panel" style="gap:10px;">
             <div class="panel-header" style="margin-bottom:0px;">
-              <h2 class="panel-title">Connected Credentials</h2>
-              <span style="font-size:8px; color:var(--text-mute); font-weight:600;">Sandbox Session</span>
+              <h2 class="panel-title">Connected accounts</h2>
+              <span style="font-size:8px; color:var(--text-mute); font-weight:600;">Live account</span>
             </div>
-            
+
             <p style="font-size:11.5px; color:var(--text-dim); line-height:1.4;">
-              Exchange connection credentials are held client-side in your browser's local sandbox storage and sent transiently to verify trades.
+              Credentials are encrypted server-side and are never displayed here or sent with individual order requests. Manage connections from the Forecast desk sidebar.
             </p>
-            
+
             <div class="venue-card-grid">
               <div class="venue-card" id="cardKalshi" onclick="highlightCredentialDetails('kalshi')">
                 <div class="venue-card-header">
@@ -1061,11 +1082,22 @@
                 <div class="venue-address" id="lblPolyAddress">-</div>
               </div>
             </div>
-            
+
             <div id="credentialDetailsBox" class="hidden" style="padding:10px; border:1px solid var(--border); border-radius:10px; background:var(--panel);">
               <h4 id="credTitle" style="font-size:10px; margin-bottom:4px; color:var(--ink); font-weight:700;">-</h4>
               <div style="font-size:10.5px; display:flex; flex-direction:column; gap:4px; color:var(--text-dim);" id="credItems"></div>
             </div>
+          </div>
+
+          <div class="panel" style="gap:8px;">
+            <div class="panel-header" style="margin-bottom:0px;">
+              <h2 class="panel-title">Portfolio reconciliation</h2>
+              <button class="btn-outline" type="button" onclick="refreshTradingReconciliation()" style="font-size:10px;padding:5px 8px;">Refresh</button>
+            </div>
+            <p style="font-size:11px; color:var(--text-dim); line-height:1.4; margin:0;">
+              Refreshes the selected venue's current balance, positions, open orders, and recent fills. A submission is never treated as a fill until the venue confirms it.
+            </p>
+            <div id="reconciliationBox" class="hidden" style="font-size:10.5px; display:flex; flex-direction:column; gap:7px;"></div>
           </div>
 
         </div>
@@ -1091,18 +1123,21 @@
     let selectedPlatform = 'polymarket';
     let selectedAction = 'buy';
     let selectedOutcome = 'yes';
+    let activeTradeRunId = null;
     let maxOrderNotional = 50.00;
     let activeMarketQuote = null;
+    let researchContext = null;
+    let tradingGuardrails = null;
 
     // Credentials schema configuration
     const VENUE_FIELDS = {
       kalshi: ['kalshi_api_key_id', 'kalshi_private_key', 'kalshi_base_url'],
       polymarket: [
-        'polymarket_private_key', 
-        'polymarket_api_key', 
-        'polymarket_api_secret', 
-        'polymarket_api_passphrase', 
-        'polymarket_clob_host', 
+        'polymarket_private_key',
+        'polymarket_api_key',
+        'polymarket_api_secret',
+        'polymarket_api_passphrase',
+        'polymarket_clob_host',
         'polymarket_funder_address'
       ]
     };
@@ -1115,21 +1150,79 @@
     window.addEventListener('DOMContentLoaded', () => {
       // Boot log
       logLine('info', 'Terminal listener initialized. Ready to execute transactions.');
-      
+
       loadSession();
       checkExchanges();
+      loadTradingGuardrails();
       updateNotional();
-      
+
       const params = new URLSearchParams(window.location.search);
-      if (params.get('platform')) {
-        setPlatform(params.get('platform').toLowerCase());
-      }
+      configureResearchHandoff(params);
       if (params.get('ident')) {
         document.getElementById('symbolInput').value = params.get('ident');
         document.getElementById('marketLookupInput').value = params.get('ident');
         lookupMarket();
       }
     });
+
+    function queryProbability(params, name) {
+      const value = Number(params.get(name));
+      return Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+    }
+
+    function boundedResearchText(value, maxLength) {
+      return String(value || '').replace(/\u0000/g, '').trim().slice(0, maxLength);
+    }
+
+    function consumeResearchHandoff(params) {
+      const handoffId = String(params.get('handoff') || '');
+      if (!/^trade_[A-Za-z0-9_-]{12,120}$/.test(handoffId)) return null;
+      try {
+        const key = `foresea_trade_handoff_${handoffId}`;
+        const raw = sessionStorage.getItem(key);
+        sessionStorage.removeItem(key);
+        if (!raw) return null;
+        const handoff = JSON.parse(raw);
+        return handoff && typeof handoff === 'object' ? handoff : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // The chat only hands the terminal research context. It intentionally
+    // omits a price and size, so the user must set a current limit order after
+    // the terminal retrieves a fresh venue quote.
+    function configureResearchHandoff(params) {
+      const handoff = consumeResearchHandoff(params) || {};
+      const platform = String(handoff.platform || params.get('platform') || '').toLowerCase();
+      if (['kalshi', 'polymarket'].includes(platform)) setPlatform(platform);
+      const action = String(handoff.action || params.get('action') || '').toLowerCase();
+      if (['buy', 'sell'].includes(action)) setAction(action);
+      const outcome = String(handoff.outcome || params.get('outcome') || '').toLowerCase();
+      if (['yes', 'no'].includes(outcome)) setOutcome(outcome);
+
+      const handoffModelProbability = Number(handoff.modelProbability);
+      const handoffMarketProbability = Number(handoff.marketProbability);
+      const modelProbability = Number.isFinite(handoffModelProbability)
+        && handoffModelProbability >= 0 && handoffModelProbability <= 1
+        ? handoffModelProbability : queryProbability(params, 'model_probability');
+      const marketProbability = Number.isFinite(handoffMarketProbability)
+        && handoffMarketProbability >= 0 && handoffMarketProbability <= 1
+        ? handoffMarketProbability : queryProbability(params, 'market_probability');
+      if (modelProbability == null || marketProbability == null || !['yes', 'no'].includes(outcome)) return;
+      researchContext = {
+        outcome,
+        modelProbability,
+        marketProbability,
+        recommendation: boundedResearchText(handoff.recommendation || params.get('recommendation'), 120),
+        title: boundedResearchText(handoff.title, 160),
+        thesis: boundedResearchText(handoff.thesis, 4000),
+        sourceConversationId: boundedResearchText(handoff.sourceConversationId, 100),
+        sources: Array.isArray(handoff.sources)
+          ? handoff.sources.map(source => boundedResearchText(source, 2000)).filter(Boolean).slice(0, 20)
+          : [],
+      };
+    }
 
     // Load session token
     function loadSession() {
@@ -1147,44 +1240,139 @@
       return Object.assign({}, extra, token ? { 'Authorization': 'Bearer ' + token } : {});
     }
 
-    // ── Credentials check ──
-    function getStoredCreds() {
-      try { return JSON.parse(localStorage.getItem('foresea_venue_creds') || '{}') || {}; }
-      catch { return {}; }
+    function _moneyGuardrail(value) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? `$${numeric.toFixed(2)}` : '—';
     }
+
+    function renderTradingGuardrails(policy) {
+      tradingGuardrails = policy || null;
+      const summary = document.getElementById('riskControlsSummary');
+      const pauseButton = document.getElementById('riskPauseBtn');
+      if (!policy) {
+        summary.textContent = 'Sign in to load your execution limits.';
+        pauseButton.textContent = 'Risk controls';
+        pauseButton.disabled = true;
+        return;
+      }
+      const isPaused = Boolean(policy.paused || policy.platform_kill_switch);
+      summary.textContent = isPaused
+        ? (policy.platform_kill_switch
+          ? 'Foresea has paused new live orders platform-wide. Existing orders can still be reconciled or cancelled.'
+          : 'Your live trading is paused. Existing orders can still be reconciled or cancelled.')
+        : `${_moneyGuardrail(policy.max_order_notional)} per order · ${_moneyGuardrail(policy.max_daily_risk_notional)} daily worst-case risk · ${_moneyGuardrail(policy.max_market_exposure_notional)} per market · ${policy.max_price_deviation_bps} bps quote collar`;
+      pauseButton.disabled = Boolean(policy.platform_kill_switch);
+      pauseButton.textContent = policy.platform_kill_switch
+        ? 'Platform paused'
+        : (policy.paused ? 'Resume trading' : 'Pause trading');
+      document.getElementById('riskMaxOrder').value = Number(policy.max_order_notional || 0).toFixed(2);
+      document.getElementById('riskMaxDaily').value = Number(policy.max_daily_risk_notional || 0).toFixed(2);
+      document.getElementById('riskMaxMarket').value = Number(policy.max_market_exposure_notional || 0).toFixed(2);
+      maxOrderNotional = Number(policy.max_order_notional) || maxOrderNotional;
+      document.getElementById('lblMaxNotional').textContent = maxOrderNotional.toFixed(2);
+      updateNotional();
+    }
+
+    async function loadTradingGuardrails() {
+      if (!localStorage.getItem('foresea_session')) {
+        renderTradingGuardrails(null);
+        return;
+      }
+      try {
+        const response = await fetch('/trading/guardrails', { headers: authHeaders() });
+        const data = await response.json().catch(() => null);
+        renderTradingGuardrails(response.ok ? data : null);
+      } catch (_) {
+        renderTradingGuardrails(null);
+      }
+    }
+
+    async function updateTradingGuardrails(body) {
+      const response = await fetch('/trading/guardrails', {
+        method: 'PUT',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Could not update risk controls.');
+      renderTradingGuardrails(data);
+      return data;
+    }
+
+    async function toggleTradingPause() {
+      if (!tradingGuardrails || tradingGuardrails.platform_kill_switch) return;
+      try {
+        const next = !tradingGuardrails.paused;
+        await updateTradingGuardrails({ paused: next });
+        logLine('warn', next ? 'Live trading paused by your risk controls.' : 'Live trading resumed under your risk controls.');
+        if (next) resetPreview();
+      } catch (err) {
+        showError(err.message || 'Could not update risk controls.');
+      }
+    }
+
+    async function saveTradingRiskControls() {
+      const body = {};
+      const fields = [
+        ['riskMaxOrder', 'max_order_notional'],
+        ['riskMaxDaily', 'max_daily_risk_notional'],
+        ['riskMaxMarket', 'max_market_exposure_notional'],
+      ];
+      for (const [elementId, field] of fields) {
+        const value = Number(document.getElementById(elementId).value);
+        if (Number.isFinite(value) && value > 0) body[field] = value;
+      }
+      if (!Object.keys(body).length) {
+        showError('Enter a positive limit before saving risk controls.');
+        return;
+      }
+      try {
+        await updateTradingGuardrails(body);
+        logLine('success', 'Risk controls saved. Values can only be lowered below Foresea hard caps.');
+      } catch (err) {
+        showError(err.message || 'Could not update risk controls.');
+      }
+    }
+
+    // ── Credentials check ──
+    const connectedVenues = { kalshi: false, polymarket: false };
 
     function isVenueConnected(platform) {
-      const creds = getStoredCreds();
-      return REQUIRED_FIELDS[platform].every(k => String(creds[k] || '').trim() !== '');
+      return Boolean(connectedVenues[platform]);
     }
 
-    function checkExchanges() {
-      const creds = getStoredCreds();
-      
+    async function checkExchanges() {
+
       const kalshiDot = document.getElementById('kalshiStatusDot');
       const polyDot = document.getElementById('polyStatusDot');
       const cardKalshiDot = document.getElementById('cardKalshiDot');
       const cardPolyDot = document.getElementById('cardPolyDot');
-      
+      try {
+        const response = await fetch('/trading/connections', { headers: authHeaders() });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok) {
+          connectedVenues.kalshi = Boolean((data.connections || {}).kalshi?.connected);
+          connectedVenues.polymarket = Boolean((data.connections || {}).polymarket?.connected);
+        }
+      } catch (_) { /* Keep the terminal safely disconnected on network errors. */ }
+
       const kalshiOk = isVenueConnected('kalshi');
       const polyOk = isVenueConnected('polymarket');
-      
+
       if (kalshiOk) {
         kalshiDot.classList.add('active');
         cardKalshiDot.classList.add('active');
-        document.getElementById('lblKalshiKey').textContent = (creds.kalshi_api_key_id || '').substring(0, 10) + '...';
+        document.getElementById('lblKalshiKey').textContent = 'Encrypted connection';
       } else {
         kalshiDot.classList.remove('active');
         cardKalshiDot.classList.remove('active');
         document.getElementById('lblKalshiKey').textContent = 'Not configured';
       }
-      
+
       if (polyOk) {
         polyDot.classList.add('active');
         cardPolyDot.classList.add('active');
-        if (creds.polymarket_private_key) {
-          document.getElementById('lblPolyAddress').textContent = (creds.polymarket_api_key || '').substring(0, 10) + '...';
-        }
+        document.getElementById('lblPolyAddress').textContent = 'Encrypted connection';
       } else {
         polyDot.classList.remove('active');
         cardPolyDot.classList.remove('active');
@@ -1193,27 +1381,21 @@
     }
 
     function highlightCredentialDetails(platform) {
-      const creds = getStoredCreds();
       const box = document.getElementById('credentialDetailsBox');
       const title = document.getElementById('credTitle');
       const list = document.getElementById('credItems');
-      
+
       const isConnected = isVenueConnected(platform);
       title.textContent = platform.toUpperCase() + (isConnected ? ' (ACTIVE)' : ' (INACTIVE)');
       list.innerHTML = '';
-      
-      const fieldsToShow = platform === 'kalshi' 
-        ? { 'API Key ID': 'kalshi_api_key_id', 'Base URL': 'kalshi_base_url' } 
-        : { 'API Key': 'polymarket_api_key', 'CLOB Host': 'polymarket_clob_host' };
-      
-      for (const [label, key] of Object.entries(fieldsToShow)) {
-        const val = creds[key] || '(None)';
-        const li = document.createElement('div');
-        li.innerHTML = `<strong>${label}:</strong> ${escHtml(val)}`;
-        list.appendChild(li);
-      }
+
+      const li = document.createElement('div');
+      li.textContent = isConnected
+        ? 'Credentials are encrypted server-side and are not displayed in this terminal.'
+        : 'Connect this account securely from the Forecast desk sidebar.';
+      list.appendChild(li);
       box.classList.remove('hidden');
-      
+
       document.getElementById('cardKalshi').classList.toggle('active', platform === 'kalshi');
       document.getElementById('cardPolymarket').classList.toggle('active', platform === 'polymarket');
     }
@@ -1221,15 +1403,15 @@
     // ── Form handlers ──
     function setPlatform(platform) {
       selectedPlatform = platform;
-      
+
       document.querySelectorAll('#platformTabs .tab-item').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.val === platform);
       });
-      
+
       const label = document.getElementById('symbolLabel');
       const input = document.getElementById('symbolInput');
       const tickRow = document.getElementById('tickSizeRow');
-      
+
       if (platform === 'polymarket') {
         label.textContent = "Polymarket Token / Slug";
         input.placeholder = "e.g. will-spacex-starship-launch-by-date";
@@ -1267,20 +1449,20 @@
     function updateNotional() {
       const price = parseFloat(document.getElementById('priceInput').value) || 0;
       const qty = parseFloat(document.getElementById('qtyInput').value) || 0;
-      
+
       let est = 0;
       if (selectedAction === 'buy') {
         est = price * qty;
       } else {
         est = Math.max(price, 1 - price) * qty;
       }
-      
+
       document.getElementById('lblEstNotional').textContent = est.toFixed(2);
-      
+
       const gauge = document.getElementById('notionalGauge');
       const pct = Math.min((est / maxOrderNotional) * 100, 100);
       gauge.style.width = pct + '%';
-      
+
       gauge.classList.remove('warning', 'error');
       if (est > maxOrderNotional) {
         gauge.classList.add('error');
@@ -1290,6 +1472,7 @@
     }
 
     function resetPreview() {
+      activeTradeRunId = null;
       document.getElementById('orderPreviewBox').classList.add('hidden');
       document.getElementById('confirmationBlock').classList.add('hidden');
       document.getElementById('confirmInput').value = '';
@@ -1297,24 +1480,15 @@
       hideError();
     }
 
-    function allVenueCreds() {
-      const creds = getStoredCreds();
-      const out = {};
-      for (const [k, v] of Object.entries(creds)) {
-        if (v != null && String(v).trim() !== '') out[k] = v;
-      }
-      return Object.keys(out).length ? out : null;
-    }
-
     // ── Preview Order ──
     async function requestPreview() {
       hideError();
       resetPreview();
-      
+
       const price = parseFloat(document.getElementById('priceInput').value);
       const qty = parseFloat(document.getElementById('qtyInput').value);
       const symbol = document.getElementById('symbolInput').value.trim();
-      
+
       if (!symbol) {
         showError(`Please specify a ${selectedPlatform === 'kalshi' ? 'Kalshi ticker' : 'Polymarket token or slug'}`);
         return;
@@ -1325,6 +1499,10 @@
       }
       if (!qty || qty <= 0) {
         showError('Please specify a contract count greater than 0.');
+        return;
+      }
+      if (tradingGuardrails && (tradingGuardrails.paused || tradingGuardrails.platform_kill_switch)) {
+        showError('Live trading is paused in risk controls. Resume it before creating a new trade run.');
         return;
       }
       if (!isVenueConnected(selectedPlatform)) {
@@ -1341,9 +1519,16 @@
         quantity: qty,
         post_only: document.getElementById('optPostOnly').checked,
         reduce_only: document.getElementById('optReduceOnly').checked,
-        time_in_force: document.getElementById('optTif').value,
-        venue_credentials: allVenueCreds()
+        time_in_force: document.getElementById('optTif').value
       };
+
+      if (researchContext) {
+        body.title = researchContext.title;
+        body.thesis = researchContext.thesis;
+        body.source_conversation_id = researchContext.sourceConversationId || undefined;
+        body.expected_edge = researchContext.modelProbability - researchContext.marketProbability;
+        body.sources = researchContext.sources;
+      }
 
       if (selectedPlatform === 'kalshi') {
         body.ticker = symbol;
@@ -1357,28 +1542,35 @@
       }
 
       logLine('info', `Validating order details: ${selectedAction.toUpperCase()} ${selectedOutcome.toUpperCase()}...`);
-      
+
       try {
-        const response = await fetch('/trading/preview', {
+        const response = await fetch('/trading/runs', {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(body)
         });
-        
-        const data = await response.json();
+
+        const run = await response.json();
         if (!response.ok) {
-          showError(data.detail || 'Preview request failed.');
-          logLine('error', `Failed validation: ${data.detail || 'API error'}`);
+          showError(run.detail || 'Trade run could not be created.');
+          logLine('error', `Failed validation: ${run.detail || 'API error'}`);
           return;
         }
+        const data = run.preview || {};
+        activeTradeRunId = run.id;
 
-        maxOrderNotional = parseFloat(data.max_order_notional) || 50.00;
+        if (data.guardrails && typeof data.guardrails === 'object') renderTradingGuardrails(data.guardrails);
+        maxOrderNotional = Math.min(
+          parseFloat(data.max_order_notional) || 50.00,
+          Number(data.guardrails?.max_order_notional) || Number.POSITIVE_INFINITY
+        );
         document.getElementById('lblMaxNotional').textContent = maxOrderNotional.toFixed(2);
         updateNotional();
 
         const norm = data.normalized_order || {};
         document.getElementById('previewDetails').innerHTML = `
-          <div style="font-weight: 600; color: var(--ink); margin-bottom: 4px;">Normalized Order Payload</div>
+          <div style="font-weight: 600; color: var(--ink); margin-bottom: 4px;">Trade Run Created</div>
+          <div style="font-family:var(--font-mono); color:var(--text-dim); margin-bottom:6px;">Run: ${run.id} · ${String(run.status || 'awaiting approval').replace(/_/g, ' ')}</div>
           <div>Exchange: ${norm.platform.toUpperCase()}</div>
           <div>Operation: ${norm.action.toUpperCase()} ${norm.outcome.toUpperCase()}</div>
           <div>Quantity: ${norm.quantity} contracts @ $${norm.price}</div>
@@ -1400,10 +1592,10 @@
         document.getElementById('orderPreviewBox').classList.remove('hidden');
         document.getElementById('confirmationBlock').classList.remove('hidden');
         document.getElementById('previewBtn').classList.add('hidden');
-        
-        logLine('success', 'Order preview checks completed successfully.');
-        logJSON(data);
-        
+
+        logLine('success', `Trade run ${run.id} is awaiting your final approval.`);
+        logJSON(run);
+
       } catch (err) {
         showError('Request failed: ' + err.message);
         logLine('error', 'Request failed: ' + err.message);
@@ -1418,46 +1610,20 @@
         showError("You must type 'PLACE REAL ORDER' exactly to authorize execution.");
         return;
       }
-
-      const price = parseFloat(document.getElementById('priceInput').value);
-      const qty = parseFloat(document.getElementById('qtyInput').value);
-      const symbol = document.getElementById('symbolInput').value.trim();
-
-      const body = {
-        platform: selectedPlatform,
-        action: selectedAction,
-        outcome: selectedOutcome,
-        order_type: 'limit',
-        price: price,
-        quantity: qty,
-        post_only: document.getElementById('optPostOnly').checked,
-        reduce_only: document.getElementById('optReduceOnly').checked,
-        time_in_force: document.getElementById('optTif').value,
-        execute: true,
-        confirmation: confirmVal,
-        venue_credentials: allVenueCreds()
-      };
-
-      if (selectedPlatform === 'kalshi') {
-        body.ticker = symbol;
-      } else {
-        body.tick_size = document.getElementById('optTick').value;
-        if (/^\d+$/.test(symbol)) {
-          body.token_id = symbol;
-        } else {
-          body.slug = symbol;
-        }
+      if (!activeTradeRunId) {
+        showError('Create a trade run before executing an order.');
+        return;
       }
 
-      logLine('info', 'Broadcasting live transaction to exchange...');
-      
+      logLine('info', `Submitting approved trade run ${activeTradeRunId} to the exchange...`);
+
       try {
-        const response = await fetch('/trading/orders', {
+        const response = await fetch(`/trading/runs/${encodeURIComponent(activeTradeRunId)}/execute`, {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify(body)
+          body: JSON.stringify({ confirmation: confirmVal })
         });
-        
+
         const data = await response.json();
         if (!response.ok) {
           showError(data.detail || 'Execution broadcast failed.');
@@ -1468,19 +1634,123 @@
         document.getElementById('orderPreviewBox').innerHTML = `
           <div style="color: var(--yes); font-weight:700; font-size:13.5px; text-align:center;display:flex;align-items:center;justify-content:center;gap:6px;">
             <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>
-            TRANSACTION POSTED SUCCESSFULLY
+            TRADE RUN SUBMITTED — AWAITING RECONCILIATION
           </div>
           <div style="font-family: var(--font-mono); margin-top:8px; font-size:11px; text-align:center; color: var(--text-dim);">
-            Order Reference: ${data.venue_response?.body?.order_id || 'Posted'}
+            Run: ${data.id || activeTradeRunId} · Foresea audit: ${data.audit_order_id || 'recorded'} · venue status: ${data.reconciliation_status || data.status || 'submitted'}
           </div>
         `;
+        activeTradeRunId = null;
         document.getElementById('confirmationBlock').classList.add('hidden');
-        logLine('success', 'Order filled successfully.');
+        logLine('success', 'Order submitted. Refresh reconciliation before treating it as filled.');
         logJSON(data);
-        
+        refreshTradingReconciliation();
+
       } catch (err) {
         showError('Execution failed: ' + err.message);
         logLine('error', 'Execution failed: ' + err.message);
+      }
+    }
+
+    // ── Portfolio reconciliation ──
+    function _reconciliationLine(label, value) {
+      const line = document.createElement('div');
+      const strong = document.createElement('strong');
+      strong.textContent = label + ': ';
+      line.appendChild(strong);
+      line.appendChild(document.createTextNode(value));
+      return line;
+    }
+
+    function _renderReconciliation(snapshot) {
+      const box = document.getElementById('reconciliationBox');
+      box.innerHTML = '';
+      box.classList.remove('hidden');
+      const balance = snapshot.balance || {};
+      const available = balance.available == null ? 'unavailable' : String(balance.available);
+      const value = balance.portfolio_value == null ? '' : ` · portfolio ${balance.portfolio_value}`;
+      box.appendChild(_reconciliationLine('Balance', `${available} ${balance.unit || ''}${value}`.trim()));
+      const positions = snapshot.positions || [];
+      box.appendChild(_reconciliationLine('Positions', positions.length ? `${positions.length} current position(s)` : 'No current positions returned'));
+      const fills = snapshot.fills || [];
+      box.appendChild(_reconciliationLine('Recent fills', fills.length ? `${fills.length} returned by the venue` : 'No fills returned'));
+
+      const orders = snapshot.audit_orders || [];
+      const title = document.createElement('strong');
+      title.textContent = orders.length ? 'Submitted through Foresea' : 'No Foresea-submitted orders recorded yet';
+      box.appendChild(title);
+      for (const order of orders.slice(0, 12)) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px;border:1px solid var(--border);border-radius:7px;';
+        const label = document.createElement('span');
+        label.textContent = `${String(order.action || '').toUpperCase()} ${String(order.outcome || '').toUpperCase()} · ${order.status || 'submitted'}${order.filled_quantity != null ? ` · filled ${order.filled_quantity}` : ''}`;
+        row.appendChild(label);
+        const refresh = document.createElement('button');
+        refresh.type = 'button'; refresh.className = 'btn-outline'; refresh.style.cssText = 'font-size:9px;padding:3px 6px;';
+        refresh.textContent = 'Refresh';
+        refresh.addEventListener('click', () => reconcileAuditOrder(order.id));
+        row.appendChild(refresh);
+        if (!['filled', 'canceled', 'rejected'].includes(order.status) && order.venue_order_id) {
+          const cancel = document.createElement('button');
+          cancel.type = 'button'; cancel.className = 'btn-outline'; cancel.style.cssText = 'font-size:9px;padding:3px 6px;color:var(--no);';
+          cancel.textContent = 'Cancel remaining';
+          cancel.addEventListener('click', () => cancelAuditOrder(order.id));
+          row.appendChild(cancel);
+        }
+        box.appendChild(row);
+      }
+    }
+
+    async function refreshTradingReconciliation() {
+      hideError();
+      if (!isVenueConnected(selectedPlatform)) {
+        showError(`Connect your ${selectedPlatform.toUpperCase()} account before reconciling it.`);
+        return;
+      }
+      const box = document.getElementById('reconciliationBox');
+      box.classList.remove('hidden');
+      box.textContent = 'Refreshing venue portfolio, orders, and fills…';
+      try {
+        const response = await fetch(`/trading/portfolio?platform=${encodeURIComponent(selectedPlatform)}`, { headers: authHeaders() });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || 'Reconciliation failed.');
+        _renderReconciliation(data);
+        logLine('success', 'Venue portfolio and order reconciliation refreshed.');
+      } catch (err) {
+        box.textContent = '';
+        showError(err.message || 'Could not reconcile the venue account.');
+        logLine('error', 'Reconciliation failed: ' + err.message);
+      }
+    }
+
+    async function reconcileAuditOrder(auditOrderId) {
+      try {
+        const response = await fetch(`/trading/orders/${encodeURIComponent(auditOrderId)}/reconcile`, {
+          method: 'POST', headers: authHeaders(),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || 'Order refresh failed.');
+        await refreshTradingReconciliation();
+      } catch (err) {
+        showError(err.message || 'Could not refresh this order.');
+      }
+    }
+
+    async function cancelAuditOrder(auditOrderId) {
+      const confirmation = window.prompt('Type CANCEL OPEN ORDER to cancel the remaining quantity.');
+      if (confirmation !== 'CANCEL OPEN ORDER') return;
+      try {
+        const response = await fetch(`/trading/orders/${encodeURIComponent(auditOrderId)}`, {
+          method: 'DELETE',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ confirmation }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || 'Cancellation failed.');
+        await refreshTradingReconciliation();
+        logLine('success', 'Cancellation request confirmed by Foresea; venue status refreshed.');
+      } catch (err) {
+        showError(err.message || 'Could not cancel this order.');
       }
     }
 
@@ -1490,19 +1760,19 @@
       const val = queryInput.value.trim();
       const statusBox = document.getElementById('marketQuoteError');
       const card = document.getElementById('marketDetailsCard');
-      
+
       statusBox.classList.add('hidden');
       card.style.display = 'none';
-      
+
       if (!val) return;
-      
+
       logLine('info', `Requesting quote for contract: ${val}...`);
-      
+
       try {
         const url = `/market/quote?platform=${selectedPlatform}&ident=${encodeURIComponent(val)}`;
         const r = await fetch(url, { headers: authHeaders() });
         const data = await r.json();
-        
+
         if (!r.ok) {
           statusBox.textContent = data.detail || 'Market contract not found.';
           statusBox.classList.remove('hidden');
@@ -1511,22 +1781,25 @@
         }
 
         activeMarketQuote = data;
-        
+
         document.getElementById('symbolInput').value = data.ident;
-        
+
         document.getElementById('mdTitle').textContent = data.question || 'Market Contract';
         document.getElementById('mdPrice').textContent = data.probability ? Math.round(data.probability * 100) + '%' : 'N/A';
         document.getElementById('mdPlatform').textContent = data.platform;
-        document.getElementById('mdChange').textContent = data.change_24h ? (data.change_24h > 0 ? '+' : '') + Math.round(data.change_24h * 100) + '%' : '0%';
+        document.getElementById('mdChange').textContent = data.price_change_24h != null
+          ? (data.price_change_24h > 0 ? '+' : '') + Math.round(data.price_change_24h * 100) + '%'
+          : 'N/A';
         document.getElementById('mdClose').textContent = data.close_time ? new Date(data.close_time).toLocaleDateString() : 'N/A';
         card.style.display = 'block';
 
-        loadMockOrderBook(data.probability || 0.5);
+        renderVenueQuote(data);
+        setSuggestedLimitPrice(data);
         checkModelEdge(data);
 
         logLine('success', `Resolved contract quote: ${data.question}`);
         logJSON(data);
-        
+
       } catch (e) {
         statusBox.textContent = 'Could not fetch quote: ' + e.message;
         statusBox.classList.remove('hidden');
@@ -1540,80 +1813,86 @@
       const lblModel = document.getElementById('lblModelOdds');
       const fill = document.getElementById('modelEdgeMeterFill');
       const text = document.getElementById('lblEdgeText');
-      
+
       box.style.display = 'none';
-      
-      const marketOdds = market.probability || 0.5;
-      
-      let modelOdds = marketOdds + 0.12; 
-      if (modelOdds > 0.95) modelOdds = 0.95;
-      
+      if (!researchContext) return;
+      const marketOdds = researchContext.marketProbability;
+      const modelOdds = researchContext.modelProbability;
+      if (!Number.isFinite(marketOdds) || !Number.isFinite(modelOdds)) return;
+
       lblMarket.textContent = Math.round(marketOdds * 100) + '%';
       lblModel.textContent = Math.round(modelOdds * 100) + '%';
-      
+
       const edge = modelOdds - marketOdds;
       const pct = Math.abs(edge) * 100;
-      
+
       fill.className = 'edge-meter-fill';
       if (edge >= 0) {
         fill.classList.add('yes');
         fill.style.left = '50%';
         fill.style.width = Math.min(pct / 2, 50) + '%';
-        text.textContent = `Edge detected: +${Math.round(pct)} pp Lean YES`;
+        text.textContent = `Foresea research: ${researchContext.outcome.toUpperCase()} +${Math.round(pct)} pp versus the quote`;
         text.style.color = 'var(--yes)';
       } else {
         fill.classList.add('no');
         fill.style.left = (50 - Math.min(pct / 2, 50)) + '%';
         fill.style.width = Math.min(pct / 2, 50) + '%';
-        text.textContent = `Edge detected: -${Math.round(pct)} pp Lean NO`;
+        text.textContent = `Foresea research: ${researchContext.outcome.toUpperCase()} ${Math.round(edge * 100)} pp versus the quote`;
         text.style.color = 'var(--no)';
       }
       box.style.display = 'flex';
     }
 
-    function loadMockOrderBook(midpoint) {
+    function renderVenueQuote(quote) {
       document.getElementById('lblActiveContract').textContent = selectedPlatform === 'kalshi' ? 'Ticker Book' : 'CLOB Book';
       const bidsBody = document.getElementById('orderBookBids');
       bidsBody.innerHTML = '';
-
-      const levels = 5;
-      const book = [];
-      
-      for (let i = levels; i >= 1; i--) {
-        const price = midpoint + (i * 0.015);
-        if (price < 1.0) {
-          const qty = Math.floor(Math.random() * 850) + 150;
-          book.push({ price, qty, type: 'ask' });
-        }
+      const rows = [];
+      const yesBid = quoteNumber(quote.yes_bid);
+      const yesAsk = quoteNumber(quote.yes_ask);
+      const lastTrade = quoteNumber(quote.last_trade_price);
+      const probability = quoteNumber(quote.probability);
+      if (yesBid != null) rows.push({ label: 'YES bid', price: yesBid, type: 'bid' });
+      if (yesAsk != null) rows.push({ label: 'YES ask', price: yesAsk, type: 'ask' });
+      if (!rows.length && lastTrade != null) rows.push({ label: 'Last trade', price: lastTrade, type: 'bid' });
+      if (!rows.length && probability != null) rows.push({ label: 'Market probability', price: probability, type: 'bid' });
+      if (!rows.length) {
+        bidsBody.innerHTML = '<tr class="ob-row"><td colspan="3" style="text-align:center; color:var(--text-mute); padding: 12px 0;">No executable venue quote is available for this market.</td></tr>';
+        return;
       }
-      
-      for (let i = 1; i <= levels; i++) {
-        const price = midpoint - (i * 0.015);
-        if (price > 0.0) {
-          const qty = Math.floor(Math.random() * 850) + 150;
-          book.push({ price, qty, type: 'bid' });
-        }
-      }
-
-      book.forEach(level => {
+      rows.forEach(row => {
         const tr = document.createElement('tr');
         tr.className = 'ob-row';
-        
-        const priceFormatted = level.price.toFixed(2);
-        const qtyFormatted = level.qty.toLocaleString();
-        
-        const pct = Math.min((level.qty / 1000) * 100, 100);
-        
         tr.innerHTML = `
-          <td class="ob-price ${level.type}">${priceFormatted}</td>
-          <td>${qtyFormatted}</td>
-          <td style="position:relative; width: 80px;">
-            <div class="ob-depth-bar ${level.type}" style="width: ${pct}%"></div>
-            <span style="font-size:10px; color:var(--text-mute); font-weight:600;">${Math.round(pct)}%</span>
-          </td>
+          <td class="ob-price ${row.type}">${row.label}</td>
+          <td>${row.price.toFixed(4)}</td>
+          <td style="font-size:10px; color:var(--text-mute); font-weight:600;">Venue data</td>
         `;
         bidsBody.appendChild(tr);
       });
+    }
+
+    function quoteNumber(value) {
+      if (value == null || value === '') return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function setSuggestedLimitPrice(quote) {
+      const input = document.getElementById('priceInput');
+      if (input.value) return;
+      const yesBid = quoteNumber(quote.yes_bid);
+      const yesAsk = quoteNumber(quote.yes_ask);
+      const probability = quoteNumber(quote.probability);
+      let suggested = null;
+      if (selectedAction === 'buy' && selectedOutcome === 'yes') suggested = yesAsk ?? probability;
+      if (selectedAction === 'buy' && selectedOutcome === 'no') suggested = yesBid != null ? 1 - yesBid : (probability != null ? 1 - probability : null);
+      if (selectedAction === 'sell' && selectedOutcome === 'yes') suggested = yesBid ?? probability;
+      if (selectedAction === 'sell' && selectedOutcome === 'no') suggested = yesAsk != null ? 1 - yesAsk : (probability != null ? 1 - probability : null);
+      if (Number.isFinite(suggested) && suggested > 0 && suggested < 1) {
+        input.value = suggested.toFixed(4);
+        updateNotional();
+      }
     }
 
     function loadCurrentMarket() {
@@ -1625,15 +1904,15 @@
       const screen = document.getElementById('terminalScreen');
       const el = document.createElement('div');
       el.className = 'term-line-row';
-      
+
       const time = new Date().toLocaleTimeString();
-      
+
       el.innerHTML = `
         <span class="term-time">${time}</span>
         <span class="term-badge badge-${type}">${type.toUpperCase()}</span>
         <span class="term-msg">${escHtml(text)}</span>
       `;
-      
+
       screen.appendChild(el);
       screen.scrollTop = screen.scrollHeight;
     }
@@ -1642,7 +1921,7 @@
       const screen = document.getElementById('terminalScreen');
       const el = document.createElement('div');
       el.className = 'term-line json';
-      
+
       let html = '';
       try {
         const str = JSON.stringify(obj, null, 2);
@@ -1664,7 +1943,7 @@
       } catch {
         html = escHtml(JSON.stringify(obj));
       }
-      
+
       el.innerHTML = '<pre>' + html + '</pre>';
       screen.appendChild(el);
       screen.scrollTop = screen.scrollHeight;
@@ -1678,13 +1957,13 @@
     function escHtml(str) {
       return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
-    
+
     function showError(msg) {
       const el = document.getElementById('orderErrorMsg');
       el.textContent = msg || '';
       el.classList.toggle('hidden', !msg);
     }
-    
+
     // Hide error
     function hideError() {
       showError('');

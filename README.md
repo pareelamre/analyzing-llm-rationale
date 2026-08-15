@@ -826,6 +826,73 @@ the current venue state instead of assuming a submission was filled. The trade
 terminal also exposes this flow, including an explicit `CANCEL OPEN ORDER`
 confirmation before it cancels a remaining resting order.
 
+#### Durable Trade Runs and scheduled reconciliation
+
+New terminal submissions use a durable `/trading/runs` record: Foresea saves a
+validated order plan, requires a second exact confirmation to execute that saved
+plan, and atomically claims it before contacting a venue. This prevents duplicate
+orders from concurrent tabs or Cloud Run instances. Run state follows the linked
+audit order when a fill, cancellation, or rejection is reconciled.
+
+#### Real-money guardrails
+
+Every live submission now passes a second server-side preflight immediately
+before the venue call. It fails closed when Foresea cannot obtain a fresh market
+quote and a current portfolio snapshot, or when any of these limits would be
+crossed:
+
+- Foresea hard caps: per-order notional, trailing-day worst-case risk budget,
+  per-market exposure, outstanding orders, quote deviation, quote age, and a
+  duplicate-order cooldown.
+- User controls at `GET`/`PUT /trading/guardrails`: users may set stricter
+  limits or pause all new live orders, but cannot increase the platform caps.
+- `FORESEA_TRADING_KILL_SWITCH=true`: blocks every new live submission without
+  touching reconciliation or cancellations.
+- A no-cache market quote is checked against the limit price. Buy limits cannot
+  be above the configured collar and sell limits cannot be below it. A live
+  balance/position snapshot must support the order and exposure cap.
+
+The trailing-day budget is deliberately **worst-case notional newly risked**,
+not a misleading synthetic P&L figure. Filled positions are measured from the
+venue portfolio snapshot before a new order; exact realized daily P&L remains a
+separate accounting/reporting concern. Guardrail passes, blocks, policy changes,
+and reconciled fill/rejection/cancellation transitions are appended to
+`GET /trading/guardrails/events` without credentials or order payloads. Configure
+the existing `SMTP_*` and `ALERT_*` settings to receive operator emails for
+submission-unknown, rejection, fill, and platform-kill-switch events.
+
+Production ceilings are environment variables; conservative defaults apply when
+they are omitted:
+
+```text
+FORESEA_TRADING_KILL_SWITCH=false
+FORESEA_MAX_DAILY_RISK_NOTIONAL=100
+FORESEA_MAX_MARKET_EXPOSURE_NOTIONAL=50
+FORESEA_MAX_OPEN_ORDERS=5
+FORESEA_MAX_PRICE_DEVIATION_BPS=300
+FORESEA_MAX_QUOTE_AGE_SECONDS=20
+FORESEA_ORDER_COOLDOWN_SECONDS=60
+```
+
+The terminal requires a Polymarket `slug` or `market_id` for real execution so
+Foresea can independently obtain a fresh market quote; a raw CLOB token ID alone
+is insufficient for this safety check.
+
+To enable the read-only scheduled reconciler, generate one high-entropy service
+token and store the same value as Cloud Run's `TRADING_RECONCILIATION_TOKEN` and
+the GitHub Actions secret of that name. This is an operator token, not a user
+credential and not an encryption key. The `Trading reconciliation` workflow then
+calls the hidden endpoint every 15 minutes, bounded by
+`TRADING_RECONCILIATION_MAX_ORDERS` (default `25`, hard maximum `100`). The job
+only fetches the current state of already-submitted venue order IDs; it cannot
+place, amend, or cancel an order.
+
+Deploy the `TradingOrder` index in `index.yaml` before enabling the scheduler:
+
+```bash
+gcloud datastore indexes create index.yaml --project <project>
+```
+
 ### Request fields
 
 Required:

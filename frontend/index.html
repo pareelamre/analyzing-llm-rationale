@@ -2329,6 +2329,13 @@
         <p class="text-gray-400" style="font-size:10px;margin-top:2px">Foresea uses these alongside evidence gathering, forecasting, and edge analysis.</p>
       </div>
 
+      <!-- Copied public agents -->
+      <div class="config-group">
+        <p class="label" style="margin:0">Copied agents</p>
+        <div id="copiedAgentList" class="model-list"></div>
+        <p id="copiedAgentHint" class="text-gray-400" style="font-size:10px;margin-top:2px">Copy a public agent from the Agentic board. This copies its model and research setup only — never its private context, account history, or exchange connection.</p>
+      </div>
+
       <!-- Knowledge base -->
       <div class="config-group">
         <p class="label" style="margin:0">Knowledge base</p>
@@ -3388,6 +3395,14 @@ function forecastActionsHtml(data, { ledgerOnly = false } = {}) {
     `</div>`;
 }
 
+function tradeRunHandoffHtml(data) {
+  if (!tradeRunHandoff(data)) return '';
+  return `<div class="market-actions pt-2">
+    <button type="button" class="market-action ui-icon-label" onclick="openTradeRunFromBubble(this)">${uiIcon('external')} Review Trade Run</button>
+    <span class="text-xs text-gray-500">Choose a fresh limit price and size in the terminal.</span>
+  </div>`;
+}
+
 async function addForecastToPersonalLedger(btn) {
   if (!currentUser) {
     openAuthModal('login');
@@ -3658,6 +3673,8 @@ function makeAIBubble(data, variant, options = {}) {
     const isChatForecast = chatForecastProbability != null;
     const div = document.createElement('div');
     div.className = 'max-w-2xl mx-auto w-full';
+    const tradeHandoff = tradeRunHandoff(data);
+    if (tradeHandoff) div._tradeHandoff = tradeHandoff;
     if (isChatForecast) {
       div._forecastData = data;
       div._ledgerContext = {
@@ -3672,6 +3689,7 @@ function makeAIBubble(data, variant, options = {}) {
         <div class="chat-md text-[15px] text-gray-700 leading-relaxed">${renderMarkdown(_chatText(rationale))}</div>
         ${sourceFeedHtml(sources, data.evidence_error)}
         ${isChatForecast && options.includeActions !== false ? forecastActionsHtml(data, { ledgerOnly: true }) : ''}
+        ${options.includeActions !== false ? tradeRunHandoffHtml(data) : ''}
         <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
           <span class="logo-dot" style="width:5px;height:5px"></span>
           ${escHtml(modelKey)}
@@ -4105,6 +4123,7 @@ async function streamAgentAnalyze(agentBody, variant, convId, typingEl, signal) 
           generation_stopped: true,
         };
     data.question = agentBody.question || data.question || '';
+    if (data.live_trade_intent) data.source_conversation_id = convId;
     if (outcome === 'completed') {
       trackEvent('forecast_completed', {
         question_type: 'chat',
@@ -4361,12 +4380,13 @@ async function sendQuestion(options = {}) {
     _renderChips();
     let data;
     if (_agentEnabled() || options.forceAgent) {
+      const copiedAgent = _activeCopiedAgent();
       const agentBody = {
         question,
         evidence_top_k: 20,
         history,  // full thread context — only a new brief resets it
         conversation_steer: conversationSteer,
-        skills: _loadSkills().map(s => ({ name: s.name, instruction: s.instruction })),
+        skills: _agentSkillsForRun().map(s => ({ name: s.name, instruction: s.instruction })),
         builtin_skills: true,    // base-rate / scenario / red-team / key-drivers toolkit
         ground_in_record: true,  // condition on the model's own live calibration
       };
@@ -4393,6 +4413,8 @@ async function sendQuestion(options = {}) {
           agentBody.openrouter_api_key = activeModel.apiKey;
         }
         if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
+      } else if (copiedAgent?.sourceAgentId) {
+        agentBody.model = copiedAgent.sourceAgentId;
       } else if (builtinChatModel) {
         agentBody.model = builtinChatModel;
       }
@@ -4413,6 +4435,7 @@ async function sendQuestion(options = {}) {
       typingEl.remove();
       if (!resp.ok) { addError(report.detail || 'Agent error', request.convId); return; }
       data = _agentReportData(report);
+      if (data.live_trade_intent) data.source_conversation_id = request.convId;
     } else {
       const streamed = await streamPredict(body, variant, request.convId, typingEl, request.controller.signal);
       if (streamed.ok) return;
@@ -5944,6 +5967,10 @@ function renderAgentTradingBoard(d) {
     const pnl = (Number(row.realized_pnl) || 0) + (Number(row.unrealized_pnl) || 0);
     const pnlColor = pnl >= 0 ? '#0a7' : '#c33';
     const winRate = row.win_rate == null ? '—' : `${Math.round(row.win_rate * 100)}%`;
+    const agentId = String(row.agent_id || '');
+    const copyButton = /^[a-zA-Z0-9._-]{1,120}$/.test(agentId)
+      ? `<button type="button" class="wl-act" onclick="copyPublicAgent(${JSON.stringify(agentId).replace(/&/g, '&amp;').replace(/"/g, '&quot;')})">Copy agent</button>`
+      : '';
     return `<tr class="eb-row" data-model="${escAttr(row.agent_id || '')}">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(row.agent_id || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(row.agent_id || '')}</span></td>
@@ -5953,6 +5980,7 @@ function renderAgentTradingBoard(d) {
       <td>${winRate}</td>
       <td>${row.trade_count ?? 0}</td>
       <td>${(row.open_positions || []).length}</td>
+      <td>${copyButton}</td>
     </tr>`;
   }).join('');
 
@@ -5968,7 +5996,7 @@ function renderAgentTradingBoard(d) {
 
   host.innerHTML = `${banner}
     <div id="agentTradingSvg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th></tr></thead><tbody>${tableRows}</tbody></table>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th>Workspace</th></tr></thead><tbody>${tableRows}</tbody></table>
     <h4 class="eb-h" style="margin-top:24px">Recent activity</h4>
     ${activityRows || '<p class="text-sm text-gray-500">No activity yet.</p>'}`;
   const svgEl = document.getElementById('agentTradingSvg');
@@ -7938,12 +7966,70 @@ async function openTradeModal(prefill) {
     _venueErr('Connect a Kalshi or Polymarket account here first, then Place an order.');
     return;
   }
-  let url = '/trade';
-  if (prefill && prefill.platform && prefill.ident) {
-    const p = String(prefill.platform).toLowerCase().includes('kalshi') ? 'kalshi' : 'polymarket';
-    url += `?platform=${p}&ident=${encodeURIComponent(prefill.ident)}`;
+  const handoff = tradeRunHandoff(prefill);
+  const platform = handoff?.platform || prefill?.platform;
+  const ident = handoff?.ident || prefill?.ident;
+  const params = new URLSearchParams();
+  if (platform && ident) {
+    const p = String(platform).toLowerCase().includes('kalshi') ? 'kalshi' : 'polymarket';
+    params.set('platform', p);
+    params.set('ident', String(ident));
   }
-  window.open(url, '_blank');
+
+  // The research record is a short-lived, same-origin session handoff. It has
+  // no exchange credentials, price, or size; the terminal consumes it once.
+  if (handoff) {
+    const handoffId = `trade_${crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
+    try {
+      sessionStorage.setItem(`foresea_trade_handoff_${handoffId}`, JSON.stringify(handoff));
+      params.set('handoff', handoffId);
+    } catch (_) {
+      // The terminal can still open on the identified market, without provenance.
+    }
+  }
+  const terminal = window.open(`/trade${params.size ? `?${params.toString()}` : ''}`, '_blank');
+  // A newly opened tab gets the session-storage snapshot before this removes
+  // the opener relationship, so research cannot control the chat window.
+  try { if (terminal) terminal.opener = null; } catch (_) {}
+}
+
+function boundedTradeHandoffText(value, maxLength) {
+  return String(value || '').replace(/\u0000/g, '').trim().slice(0, maxLength);
+}
+
+function tradeRunHandoff(data) {
+  const intent = data?.live_trade_intent || data;
+  const platform = String(intent?.platform || '').toLowerCase();
+  const ident = boundedTradeHandoffText(intent?.ident, 300);
+  const action = String(intent?.action || '').toLowerCase();
+  const outcome = String(intent?.outcome || '').toLowerCase();
+  const modelProbability = Number(intent?.model_probability);
+  const marketProbability = Number(intent?.market_probability);
+  if (!['kalshi', 'polymarket'].includes(platform) || !ident
+      || !['buy', 'sell'].includes(action) || !['yes', 'no'].includes(outcome)
+      || !Number.isFinite(modelProbability) || modelProbability < 0 || modelProbability > 1
+      || !Number.isFinite(marketProbability) || marketProbability < 0 || marketProbability > 1) {
+    return null;
+  }
+  const sources = (data?.evidence_sources || [])
+    .map(source => boundedTradeHandoffText(source?.url || source?.source, 2000))
+    .filter(Boolean)
+    .slice(0, 20);
+  return {
+    platform, ident, action, outcome,
+    modelProbability, marketProbability,
+    recommendation: boundedTradeHandoffText(intent?.recommendation, 120),
+    title: boundedTradeHandoffText(data?.question || `Research review: ${ident}`, 160),
+    thesis: boundedTradeHandoffText(data?.thesis || data?.rationale, 4000),
+    sourceConversationId: boundedTradeHandoffText(data?.source_conversation_id, 100),
+    sources,
+  };
+}
+
+function openTradeRunFromBubble(button) {
+  const bubble = button.closest('.max-w-2xl');
+  const handoff = bubble?._tradeHandoff;
+  if (handoff) openTradeModal(handoff);
 }
 function closeTradeModal() {
   const ov = document.getElementById('tradeOverlay');
@@ -8441,6 +8527,131 @@ function _initFavorites() {
 }
 
 // ── Agent skills manager ──────────────────────────────────────────────────────
+const COPIED_AGENTS_STORAGE_KEY = 'foresea_copied_agents';
+const ACTIVE_COPIED_AGENT_STORAGE_KEY = 'foresea_active_copied_agent';
+
+function _loadCopiedAgents() {
+  try {
+    const agents = JSON.parse(localStorage.getItem(COPIED_AGENTS_STORAGE_KEY) || '[]');
+    if (!Array.isArray(agents)) return [];
+    return agents
+      .filter(agent => /^[a-zA-Z0-9_-]{12,160}$/.test(String(agent?.id || ''))
+        && /^[a-zA-Z0-9._-]{1,120}$/.test(String(agent?.sourceAgentId || '')))
+      .slice(0, 5)
+      .map(agent => ({
+        id: String(agent.id),
+        sourceAgentId: String(agent.sourceAgentId),
+        name: boundedTradeHandoffText(agent.name, 80),
+        instruction: boundedTradeHandoffText(agent.instruction, 2000),
+      }));
+  } catch (_) { return []; }
+}
+
+function _saveCopiedAgents(agents) {
+  localStorage.setItem(COPIED_AGENTS_STORAGE_KEY, JSON.stringify(agents));
+}
+
+function _activeCopiedAgent() {
+  const activeId = localStorage.getItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
+  return _loadCopiedAgents().find(agent => agent.id === activeId) || null;
+}
+
+function _copiedAgentSkills() {
+  const agent = _activeCopiedAgent();
+  return agent ? [{ name: agent.name, instruction: agent.instruction }] : [];
+}
+
+function _agentSkillsForRun() {
+  const copied = _copiedAgentSkills();
+  return [...copied, ..._loadSkills().slice(0, 5 - copied.length)];
+}
+
+function _maxCustomSkills() {
+  return _activeCopiedAgent() ? 4 : 5;
+}
+
+function _setCopiedAgentHint(message) {
+  const hint = document.getElementById('copiedAgentHint');
+  if (hint) hint.textContent = message;
+}
+
+function renderCopiedAgentList() {
+  const host = document.getElementById('copiedAgentList');
+  if (!host) return;
+  const activeId = localStorage.getItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
+  const agents = _loadCopiedAgents();
+  if (!agents.length) {
+    host.innerHTML = '<p class="text-gray-400" style="font-size:11px;margin:0">No copied agents yet.</p>';
+    return;
+  }
+  host.innerHTML = agents.map(agent => `
+    <div class="model-row" style="cursor:default">
+      <div class="model-meta">
+        <div class="model-name">${escHtml(agent.name)}${agent.id === activeId ? ' <span style="color:var(--yes);font-size:10px">ACTIVE</span>' : ''}</div>
+        <div class="model-sub">${escHtml(agent.sourceAgentId)} · public research setup</div>
+      </div>
+      <div class="model-actions">
+        <button type="button" class="model-icon-btn" title="Use for research" onclick="useCopiedAgent('${agent.id}')">${uiIcon('check')}</button>
+        <button type="button" class="model-icon-btn" title="Remove copied agent" onclick="removeCopiedAgent('${agent.id}')">${uiIcon('x')}</button>
+      </div>
+    </div>`).join('');
+}
+
+function useCopiedAgent(agentId) {
+  const agent = _loadCopiedAgents().find(item => item.id === agentId);
+  if (!agent) return;
+  localStorage.setItem(ACTIVE_COPIED_AGENT_STORAGE_KEY, agentId);
+  const skillNote = _loadSkills().length >= 5
+    ? ' Five custom skills are saved, so only the first four run while this copy is active.'
+    : ' You can still add up to four of your own skills.';
+  _setCopiedAgentHint(`${agent.name} is active for research.${skillNote}`);
+  renderCopiedAgentList();
+  trackEvent('agent_copy_activated', { source_agent: agent.sourceAgentId });
+}
+
+function removeCopiedAgent(agentId) {
+  const agents = _loadCopiedAgents();
+  const removed = agents.find(item => item.id === agentId);
+  _saveCopiedAgents(agents.filter(item => item.id !== agentId));
+  if (localStorage.getItem(ACTIVE_COPIED_AGENT_STORAGE_KEY) === agentId) {
+    localStorage.removeItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
+  }
+  _setCopiedAgentHint(removed ? `${removed.name} was removed from your workspace.` : '');
+  renderCopiedAgentList();
+}
+
+function copyPublicAgent(agentId) {
+  if (!currentUser) { openAuthModal('login'); return; }
+  const sourceAgentId = String(agentId || '').trim();
+  if (!/^[a-zA-Z0-9._-]{1,120}$/.test(sourceAgentId)) return;
+  const existing = _loadCopiedAgents().find(agent => agent.sourceAgentId === sourceAgentId);
+  if (existing) {
+    useCopiedAgent(existing.id);
+    return;
+  }
+  if (_loadCopiedAgents().length >= 5) {
+    _setCopiedAgentHint('You can keep up to five copied agents. Remove one before copying another.');
+    return;
+  }
+  const label = _ebModelLabel(sourceAgentId);
+  const copy = {
+    id: `copied_${crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`}`,
+    sourceAgentId,
+    name: `Copy of ${label}`,
+    instruction: `Use ${label}'s public Foresea research setup: resolve the exact contract and current venue quote, gather independent evidence, state the model-versus-market edge, then list the strongest disconfirming case and the condition that would invalidate the thesis. This is research only: do not create, size, or submit a trade.`,
+    copiedAt: new Date().toISOString(),
+  };
+  _saveCopiedAgents([..._loadCopiedAgents(), copy]);
+  localStorage.setItem(ACTIVE_COPIED_AGENT_STORAGE_KEY, copy.id);
+  _setCopiedAgentHint(`${copy.name} is now active. It copied no private history, context, or trading permissions.`);
+  renderCopiedAgentList();
+  const panel = document.getElementById('configDetails');
+  const preferences = document.getElementById('workspacePreferences');
+  if (panel) panel.open = true;
+  if (preferences) preferences.open = true;
+  trackEvent('agent_copied', { source_agent: sourceAgentId });
+}
+
 function _loadSkills() {
   try { return JSON.parse(localStorage.getItem('agent_skills') || '[]') || []; }
   catch { return []; }
@@ -8516,7 +8727,8 @@ function _sfError(msg) {
   el.textContent = msg || ''; el.hidden = !msg;
 }
 function startAddSkill() {
-  if (_loadSkills().length >= 5) { _showSkillForm(true); _sfError('Up to 5 skills.'); return; }
+  const maxSkills = _maxCustomSkills();
+  if (_loadSkills().length >= maxSkills) { _showSkillForm(true); _sfError(`Up to ${maxSkills} custom skills with the current agent setup.`); return; }
   _editingSkillId = null;
   document.getElementById('sfName').value = '';
   document.getElementById('sfInstruction').value = '';
@@ -8540,7 +8752,8 @@ function saveSkillForm() {
     const i = skills.findIndex(x => x.id === _editingSkillId);
     if (i >= 0) skills[i] = { ...skills[i], name, instruction };
   } else {
-    if (skills.length >= 5) { _sfError('Up to 5 skills.'); return; }
+    const maxSkills = _maxCustomSkills();
+    if (skills.length >= maxSkills) { _sfError(`Up to ${maxSkills} custom skills with the current agent setup.`); return; }
     skills.push({ id: 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name, instruction });
   }
   _saveSkills(skills);
@@ -8554,7 +8767,8 @@ function deleteSkill(id) {
 function loadAgentSkills() {
   _applyAgentEnabled();
   renderSkillList();
-  if (_loadSkills().length) {
+  renderCopiedAgentList();
+  if (_loadSkills().length || _activeCopiedAgent()) {
     const d = document.getElementById('workspacePreferences');
     if (d) d.open = true;
   }
@@ -8639,6 +8853,8 @@ function _agentReportData(report) {
   const d = report || {};
   return {
     question_type: 'chat',
+    question: d.question || '',
+    thesis: d.thesis || '',
     rationale: _agentReportToMarkdown(d, { includeSources: false }),
     model_key: 'agent',
     model_probability: d.model_probability ?? null,
