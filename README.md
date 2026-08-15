@@ -439,6 +439,25 @@ The report includes `recommendation` (`buy_yes`/`buy_no`/`hold`/`no_market_price
 `edge`, `model_probability`, `market_probability`, `thesis`, `evidence_sources`,
 and `pipeline` (the ordered steps that ran).
 
+#### Copied agents: private, versioned research recipes
+
+Signed-in users can copy a public Foresea model from the Agentic board. The copy
+is saved under the user's account as an immutable version-1 research recipe;
+it contains the public source model and analysis instruction only—never the
+source agent's private context, shadow-account history, exchange connection,
+order size, or trading permission. Use `POST /agent-profiles/copy` with an
+allowlisted `source_agent_id`, then pass the returned `agent_profile_id` to
+`POST /agent/analyze`.
+
+When a profile is selected, the server resolves the profile's model and
+instruction itself, ignores client BYOK/provider/model overrides, and forces
+the fixed research pipeline (no tool loop or trade tool). The resulting report
+returns its profile ID, source, version, and `research_only` mode for
+reproducibility. A profile may prepare the existing review-only trade handoff,
+but it cannot create or submit an exchange order; a signed-in user must still
+create a durable Trade Run and explicitly confirm `PLACE REAL ORDER` in the
+trading terminal.
+
 ### Edge scan — find mispriced markets
 
 `GET /agent/scan` lists live markets on a venue, forecasts each, and returns the

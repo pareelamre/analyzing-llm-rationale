@@ -4413,6 +4413,8 @@ async function sendQuestion(options = {}) {
           agentBody.openrouter_api_key = activeModel.apiKey;
         }
         if (activeModel.provider === 'custom' && activeModel.baseUrl) agentBody.provider_base_url = activeModel.baseUrl;
+      } else if (copiedAgent?.profileId) {
+        agentBody.agent_profile_id = copiedAgent.profileId;
       } else if (copiedAgent?.sourceAgentId) {
         agentBody.model = copiedAgent.sourceAgentId;
       } else if (builtinChatModel) {
@@ -8543,12 +8545,49 @@ function _loadCopiedAgents() {
         sourceAgentId: String(agent.sourceAgentId),
         name: boundedTradeHandoffText(agent.name, 80),
         instruction: boundedTradeHandoffText(agent.instruction, 2000),
+        profileId: /^[a-zA-Z0-9_-]{12,160}$/.test(String(agent.profileId || ''))
+          ? String(agent.profileId) : '',
+        version: Number.isInteger(Number(agent.version)) ? Number(agent.version) : null,
+        executionMode: String(agent.executionMode || 'research_only'),
       }));
   } catch (_) { return []; }
 }
 
 function _saveCopiedAgents(agents) {
   localStorage.setItem(COPIED_AGENTS_STORAGE_KEY, JSON.stringify(agents));
+}
+
+function _copiedAgentFromProfile(profile) {
+  return {
+    id: String(profile.id),
+    profileId: String(profile.id),
+    sourceAgentId: String(profile.source_agent_id),
+    name: boundedTradeHandoffText(profile.name, 80),
+    instruction: boundedTradeHandoffText(profile.instruction, 2000),
+    version: Number(profile.version) || 1,
+    executionMode: String(profile.execution_mode || 'research_only'),
+  };
+}
+
+async function syncCopiedAgentsFromServer() {
+  if (!currentUser) return;
+  try {
+    const r = await fetch('/agent-profiles', { headers: authHeaders() });
+    const data = await _readJson(r);
+    if (!r.ok) throw new Error(data.detail || 'Could not load copied agents.');
+    const remote = (data.profiles || []).map(_copiedAgentFromProfile).slice(0, 5);
+    const remoteSources = new Set(remote.map(agent => agent.sourceAgentId));
+    const localOnly = _loadCopiedAgents().filter(agent => !agent.profileId && !remoteSources.has(agent.sourceAgentId));
+    const merged = [...remote, ...localOnly].slice(0, 5);
+    const activeId = localStorage.getItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
+    _saveCopiedAgents(merged);
+    if (activeId && !merged.some(agent => agent.id === activeId)) {
+      localStorage.removeItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
+    }
+    renderCopiedAgentList();
+  } catch (err) {
+    console.warn(err);
+  }
 }
 
 function _activeCopiedAgent() {
@@ -8558,7 +8597,9 @@ function _activeCopiedAgent() {
 
 function _copiedAgentSkills() {
   const agent = _activeCopiedAgent();
-  return agent ? [{ name: agent.name, instruction: agent.instruction }] : [];
+  // Server-backed profiles inject their immutable recipe server-side. Legacy
+  // browser-only copies keep their one research skill during migration.
+  return agent && !agent.profileId ? [{ name: agent.name, instruction: agent.instruction }] : [];
 }
 
 function _agentSkillsForRun() {
@@ -8588,7 +8629,7 @@ function renderCopiedAgentList() {
     <div class="model-row" style="cursor:default">
       <div class="model-meta">
         <div class="model-name">${escHtml(agent.name)}${agent.id === activeId ? ' <span style="color:var(--yes);font-size:10px">ACTIVE</span>' : ''}</div>
-        <div class="model-sub">${escHtml(agent.sourceAgentId)} · public research setup</div>
+        <div class="model-sub">${escHtml(agent.sourceAgentId)} · ${agent.profileId ? `private recipe v${agent.version || 1}` : 'local research setup'}</div>
       </div>
       <div class="model-actions">
         <button type="button" class="model-icon-btn" title="Use for research" onclick="useCopiedAgent('${agent.id}')">${uiIcon('check')}</button>
@@ -8609,9 +8650,21 @@ function useCopiedAgent(agentId) {
   trackEvent('agent_copy_activated', { source_agent: agent.sourceAgentId });
 }
 
-function removeCopiedAgent(agentId) {
+async function removeCopiedAgent(agentId) {
   const agents = _loadCopiedAgents();
   const removed = agents.find(item => item.id === agentId);
+  if (removed?.profileId && currentUser) {
+    try {
+      const r = await fetch('/agent-profiles/' + encodeURIComponent(removed.profileId), {
+        method: 'DELETE', headers: authHeaders(),
+      });
+      const data = await _readJson(r);
+      if (!r.ok) throw new Error(data.detail || 'Could not remove copied agent.');
+    } catch (err) {
+      _setCopiedAgentHint(err.message || 'Could not remove copied agent.');
+      return;
+    }
+  }
   _saveCopiedAgents(agents.filter(item => item.id !== agentId));
   if (localStorage.getItem(ACTIVE_COPIED_AGENT_STORAGE_KEY) === agentId) {
     localStorage.removeItem(ACTIVE_COPIED_AGENT_STORAGE_KEY);
@@ -8620,36 +8673,41 @@ function removeCopiedAgent(agentId) {
   renderCopiedAgentList();
 }
 
-function copyPublicAgent(agentId) {
+async function copyPublicAgent(agentId) {
   if (!currentUser) { openAuthModal('login'); return; }
   const sourceAgentId = String(agentId || '').trim();
   if (!/^[a-zA-Z0-9._-]{1,120}$/.test(sourceAgentId)) return;
   const existing = _loadCopiedAgents().find(agent => agent.sourceAgentId === sourceAgentId);
-  if (existing) {
+  if (existing?.profileId) {
     useCopiedAgent(existing.id);
     return;
   }
-  if (_loadCopiedAgents().length >= 5) {
+  if (_loadCopiedAgents().length >= 5 && !existing) {
     _setCopiedAgentHint('You can keep up to five copied agents. Remove one before copying another.');
     return;
   }
-  const label = _ebModelLabel(sourceAgentId);
-  const copy = {
-    id: `copied_${crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`}`,
-    sourceAgentId,
-    name: `Copy of ${label}`,
-    instruction: `Use ${label}'s public Foresea research setup: resolve the exact contract and current venue quote, gather independent evidence, state the model-versus-market edge, then list the strongest disconfirming case and the condition that would invalidate the thesis. This is research only: do not create, size, or submit a trade.`,
-    copiedAt: new Date().toISOString(),
-  };
-  _saveCopiedAgents([..._loadCopiedAgents(), copy]);
-  localStorage.setItem(ACTIVE_COPIED_AGENT_STORAGE_KEY, copy.id);
-  _setCopiedAgentHint(`${copy.name} is now active. It copied no private history, context, or trading permissions.`);
-  renderCopiedAgentList();
-  const panel = document.getElementById('configDetails');
-  const preferences = document.getElementById('workspacePreferences');
-  if (panel) panel.open = true;
-  if (preferences) preferences.open = true;
-  trackEvent('agent_copied', { source_agent: sourceAgentId });
+  try {
+    const r = await fetch('/agent-profiles/copy', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ source_agent_id: sourceAgentId, name: `Copy of ${_ebModelLabel(sourceAgentId)}` }),
+    });
+    const data = await _readJson(r);
+    if (!r.ok) throw new Error(data.detail || 'Could not copy this agent.');
+    const copy = _copiedAgentFromProfile(data.profile);
+    const next = _loadCopiedAgents().filter(agent => agent.sourceAgentId !== sourceAgentId);
+    _saveCopiedAgents([copy, ...next].slice(0, 5));
+    localStorage.setItem(ACTIVE_COPIED_AGENT_STORAGE_KEY, copy.id);
+    _setCopiedAgentHint(`${copy.name} is now active as a private research recipe. It copied no private history, context, trading permissions, or exchange connection.`);
+    renderCopiedAgentList();
+    const panel = document.getElementById('configDetails');
+    const preferences = document.getElementById('workspacePreferences');
+    if (panel) panel.open = true;
+    if (preferences) preferences.open = true;
+    trackEvent('agent_copied', { source_agent: sourceAgentId, server_backed: true });
+  } catch (err) {
+    _setCopiedAgentHint(err.message || 'Could not copy this agent.');
+  }
 }
 
 function _loadSkills() {
@@ -8768,6 +8826,7 @@ function loadAgentSkills() {
   _applyAgentEnabled();
   renderSkillList();
   renderCopiedAgentList();
+  if (currentUser) syncCopiedAgentsFromServer();
   if (_loadSkills().length || _activeCopiedAgent()) {
     const d = document.getElementById('workspacePreferences');
     if (d) d.open = true;
@@ -9402,6 +9461,7 @@ function updateAuthUI(user) {
   if (typeof loadKb === 'function') loadKb();  // refresh KB on sign-in/out
   if (typeof refreshPersonalLedger === 'function') refreshPersonalLedger();
   if (typeof renderWorkspacePanel === 'function') renderWorkspacePanel();
+  if (user && typeof syncCopiedAgentsFromServer === 'function') syncCopiedAgentsFromServer();
   if (typeof _syncFavoritesFromServer === 'function') {
     if (user) {
       _syncFavoritesFromServer();

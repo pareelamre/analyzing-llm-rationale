@@ -1009,6 +1009,69 @@ def _delete_personal_ledger_entry(user_id: str, entry_id: str) -> None:
     client.delete(_personal_ledger_key(client, user_id, entry_id))
 
 
+# Private copied-agent recipes (per-user on Datastore).
+_AGENT_PROFILE_KIND = "AgentProfile"
+_AGENT_PROFILE_FIELDS = (
+    "id", "name", "source_agent_id", "model", "instruction", "version",
+    "execution_mode", "created_at", "updated_at",
+)
+_MAX_AGENT_PROFILES_PER_USER = 5
+
+
+def _agent_profile_key(client: Any, user_id: str, profile_id: str) -> Any:
+    return client.key("User", user_id, _AGENT_PROFILE_KIND, profile_id)
+
+
+def _agent_profile_from_entity(entity: Any) -> Dict[str, Any]:
+    profile = {field: entity.get(field) for field in _AGENT_PROFILE_FIELDS}
+    profile["id"] = entity.key.name
+    return profile
+
+
+def _list_agent_profiles(user_id: str) -> List[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        profiles = list(_state.setdefault("agent_profiles", {}).get(user_id, {}).values())
+    else:
+        query = client.query(kind=_AGENT_PROFILE_KIND, ancestor=client.key("User", user_id))
+        profiles = [_agent_profile_from_entity(entity) for entity in query.fetch(limit=_MAX_AGENT_PROFILES_PER_USER)]
+    return sorted(profiles, key=lambda profile: profile.get("created_at") or "", reverse=True)
+
+
+def _read_agent_profile(user_id: str, profile_id: str) -> Optional[Dict[str, Any]]:
+    client = _get_datastore()
+    if client is None:
+        profile = _state.setdefault("agent_profiles", {}).setdefault(user_id, {}).get(profile_id)
+        return dict(profile) if profile else None
+    entity = client.get(_agent_profile_key(client, user_id, profile_id))
+    return _agent_profile_from_entity(entity) if entity is not None else None
+
+
+def _put_agent_profile(user_id: str, profile: Dict[str, Any]) -> Dict[str, Any]:
+    profile = {field: profile.get(field) for field in _AGENT_PROFILE_FIELDS}
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("agent_profiles", {}).setdefault(user_id, {})[profile["id"]] = profile
+        return profile
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(
+        key=_agent_profile_key(client, user_id, profile["id"]),
+        exclude_from_indexes=("instruction",),
+    )
+    entity.update(profile)
+    client.put(entity)
+    return profile
+
+
+def _delete_agent_profile(user_id: str, profile_id: str) -> None:
+    client = _get_datastore()
+    if client is None:
+        _state.setdefault("agent_profiles", {}).setdefault(user_id, {}).pop(profile_id, None)
+        return
+    client.delete(_agent_profile_key(client, user_id, profile_id))
+
+
 # ── RAG knowledge base (per-user vector store on Datastore) ──────────────────
 
 def _rag_fetch(user_id: str, namespace: str, limit: int = 2000) -> List[Dict[str, Any]]:
@@ -1794,6 +1857,11 @@ _trading_readiness_actions = _meter.create_counter(
     "trading.readiness.actions",
     unit="1",
     description="Operator launch-readiness checks for guarded live trading",
+)
+_agent_profile_actions = _meter.create_counter(
+    "agent.profile.actions",
+    unit="1",
+    description="Private copied-agent profile actions by lifecycle outcome",
 )
 
 
@@ -3926,6 +3994,44 @@ class AgentSkillResult(BaseModel):
     output: str
 
 
+class AgentProfile(BaseModel):
+    """A private, immutable copy of a public Foresea research setup."""
+
+    id: str
+    name: str
+    source_agent_id: str
+    model: str
+    instruction: str
+    version: int = Field(..., ge=1)
+    execution_mode: Literal["research_only"]
+    created_at: str
+    updated_at: str
+
+
+class AgentProfileReference(BaseModel):
+    """The profile snapshot that shaped one agent report, without private context."""
+
+    id: str
+    source_agent_id: str
+    model: str
+    version: int = Field(..., ge=1)
+    execution_mode: Literal["research_only"]
+
+
+class AgentProfileList(BaseModel):
+    profiles: List[AgentProfile] = Field(default_factory=list)
+
+
+class AgentProfileCopyRequest(BaseModel):
+    source_agent_id: str = Field(..., min_length=1, max_length=120, pattern=r"^[a-zA-Z0-9._-]+$")
+    name: Optional[str] = Field(None, min_length=1, max_length=80)
+
+
+class AgentProfileCopyResponse(BaseModel):
+    profile: AgentProfile
+    created: bool
+
+
 class AgentAnalyzeRequest(BaseModel):
     """Ask the analysis agent to work a live question end-to-end."""
     question: Optional[str] = Field(None, max_length=2000, description="Market question. Optional if a market identifier is given.")
@@ -3969,6 +4075,12 @@ class AgentAnalyzeRequest(BaseModel):
     model: Optional[str] = Field(None, max_length=64)
     provider_base_url: Optional[str] = Field(None, max_length=2000)
     ollama_base_url: Optional[str] = Field(None, max_length=500)
+    agent_profile_id: Optional[str] = Field(
+        None,
+        max_length=160,
+        pattern=r"^agent_[a-zA-Z0-9_-]{12,150}$",
+        description="Private copied-agent recipe. Its research model and instructions are server-resolved.",
+    )
 
 
 class LiveTradeIntent(BaseModel):
@@ -4012,6 +4124,10 @@ class AgentReport(BaseModel):
     skills: List[AgentSkillResult] = Field(default_factory=list)
     grounding: Optional[str] = Field(None, description="Track-record self-calibration note applied to the forecast.")
     tool_transcript: List[Dict[str, Any]] = Field(default_factory=list, description="Tool calls + observations when the tool loop ran.")
+    agent_profile: Optional[AgentProfileReference] = Field(
+        None,
+        description="Immutable private research recipe used for this report, when one was selected.",
+    )
     live_trade_intent: Optional[LiveTradeIntent] = Field(
         None,
         description="A non-executable research handoff for the authenticated user's live trade terminal.",
@@ -8632,6 +8748,110 @@ async def delete_personal_ledger_entry(entry_id: str, request: Request) -> Dict[
             raise
 
 
+@app.get("/agent-profiles", tags=["Agents"], response_model=AgentProfileList)
+async def list_agent_profiles(request: Request) -> AgentProfileList:
+    """List the current user's private copied-agent recipes."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("agent.profile.list") as span:
+        span.set_attribute("user.id", claims["sub"])
+        profiles = _list_agent_profiles(claims["sub"])
+        span.set_attribute("agent.profile.count", len(profiles))
+        _agent_profile_actions.add(1, {"action": "list", "outcome": "success"})
+        return AgentProfileList(profiles=[AgentProfile(**profile) for profile in profiles])
+
+
+@app.post(
+    "/agent-profiles/copy",
+    tags=["Agents"],
+    response_model=AgentProfileCopyResponse,
+    status_code=201,
+)
+async def copy_agent_profile(req: AgentProfileCopyRequest, request: Request) -> AgentProfileCopyResponse:
+    """Copy a public model's research setup into a private, research-only recipe."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    source_agent_id = req.source_agent_id.strip()
+    with _tracer.start_as_current_span("agent.profile.copy") as span:
+        span.set_attribute("user.id", claims["sub"])
+        try:
+            if source_agent_id not in _SCADS_MODEL_ALLOWLIST:
+                raise HTTPException(status_code=422, detail="That public Foresea agent is not available to copy.")
+            span.set_attribute("agent.profile.source", source_agent_id)
+            profiles = _list_agent_profiles(claims["sub"])
+            existing = next(
+                (profile for profile in profiles if profile.get("source_agent_id") == source_agent_id),
+                None,
+            )
+            if existing is not None:
+                span.set_attribute("outcome", "existing")
+                _agent_profile_actions.add(1, {"action": "copy", "outcome": "existing"})
+                return AgentProfileCopyResponse(profile=AgentProfile(**existing), created=False)
+            if len(profiles) >= _MAX_AGENT_PROFILES_PER_USER:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"You can keep up to {_MAX_AGENT_PROFILES_PER_USER} copied agents. Remove one first.",
+                )
+            now = datetime.now(timezone.utc).isoformat()
+            name = (req.name or f"Copy of {source_agent_id}").strip()
+            profile = _put_agent_profile(
+                claims["sub"],
+                {
+                    "id": f"agent_{secrets.token_urlsafe(12).replace('-', '_')}",
+                    "name": name,
+                    "source_agent_id": source_agent_id,
+                    "model": source_agent_id,
+                    "instruction": (
+                        f"Use {source_agent_id}'s public Foresea research setup: resolve the exact contract "
+                        "and current venue quote, gather independent evidence, state the model-versus-market "
+                        "edge, then list the strongest disconfirming case and the condition that would invalidate "
+                        "the thesis. This is research only: do not create, size, or submit a trade."
+                    ),
+                    "version": 1,
+                    "execution_mode": "research_only",
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
+            span.set_attributes({"agent.profile.id": profile["id"], "outcome": "created"})
+            _agent_profile_actions.add(1, {"action": "copy", "outcome": "created"})
+            logger.info("agent profile copied id=%s source=%s", profile["id"], source_agent_id)
+            return AgentProfileCopyResponse(profile=AgentProfile(**profile), created=True)
+        except HTTPException:
+            _agent_profile_actions.add(1, {"action": "copy", "outcome": "rejected"})
+            raise
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _agent_profile_actions.add(1, {"action": "copy", "outcome": "error"})
+            logger.error("agent profile copy failed")
+            raise
+
+
+@app.delete("/agent-profiles/{profile_id}", tags=["Agents"])
+async def delete_agent_profile(profile_id: str, request: Request) -> Dict[str, bool]:
+    """Delete one of the current user's private copied-agent recipes."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    with _tracer.start_as_current_span("agent.profile.delete") as span:
+        span.set_attributes({"user.id": claims["sub"], "agent.profile.id": profile_id})
+        profile = _read_agent_profile(claims["sub"], profile_id)
+        if profile is None:
+            _agent_profile_actions.add(1, {"action": "delete", "outcome": "missing"})
+            raise HTTPException(status_code=404, detail="Copied agent was not found.")
+        try:
+            _delete_agent_profile(claims["sub"], profile_id)
+            _agent_profile_actions.add(1, {"action": "delete", "outcome": "success"})
+            logger.info("agent profile deleted id=%s", profile_id)
+            return {"ok": True}
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            _agent_profile_actions.add(1, {"action": "delete", "outcome": "error"})
+            logger.error("agent profile deletion failed")
+            raise
+
+
 @app.get("/chat/models", tags=["System"], include_in_schema=False)
 async def chat_models(request: Request) -> Dict[str, Any]:
     """Chat-capable server-hosted models exposed in the prompt selector."""
@@ -9857,6 +10077,55 @@ def _scads_alt_provider(
     )
 
 
+def _resolve_agent_profile_request(
+    req: AgentAnalyzeRequest, user_id: str
+) -> tuple[AgentAnalyzeRequest, Optional[AgentProfileReference]]:
+    """Resolve an owned copied-agent recipe and strip unsafe client overrides."""
+    profile_id = req.agent_profile_id
+    if not profile_id:
+        return req, None
+    with _tracer.start_as_current_span("agent.profile.resolve") as span:
+        span.set_attributes({"user.id": user_id, "agent.profile.id": profile_id})
+        profile = _read_agent_profile(user_id, profile_id)
+        if profile is None:
+            _agent_profile_actions.add(1, {"action": "resolve", "outcome": "missing"})
+            raise HTTPException(status_code=404, detail="Copied agent was not found.")
+        source_agent_id = str(profile.get("source_agent_id") or "")
+        model = str(profile.get("model") or "")
+        if (
+            profile.get("execution_mode") != "research_only"
+            or not source_agent_id
+            or model not in _SCADS_MODEL_ALLOWLIST
+        ):
+            _agent_profile_actions.add(1, {"action": "resolve", "outcome": "unavailable"})
+            raise HTTPException(status_code=409, detail="This copied agent is no longer available for research.")
+        profile_skill = AgentSkill(name=str(profile["name"]), instruction=str(profile["instruction"]))
+        effective = req.model_copy(
+            update={
+                "model": model,
+                "skills": [profile_skill, *req.skills[:4]],
+                "builtin_skills": True,
+                "ground_in_record": True,
+                "tool_loop": False,
+                "benchmark_tools": False,
+                "openrouter_api_key": None,
+                "openrouter_model": None,
+                "provider_base_url": None,
+                "ollama_base_url": None,
+            }
+        )
+        reference = AgentProfileReference(
+            id=str(profile["id"]),
+            source_agent_id=source_agent_id,
+            model=model,
+            version=int(profile["version"]),
+            execution_mode="research_only",
+        )
+        span.set_attribute("agent.profile.version", reference.version)
+        _agent_profile_actions.add(1, {"action": "resolve", "outcome": "success"})
+        return effective, reference
+
+
 def _scads_provider_for_model_name(
     model_name: str,
     *,
@@ -10302,6 +10571,7 @@ async def _agent_report_from_prediction(
     pipeline: List[str],
     pred_req: PredictRequest,
     result: PredictResponse,
+    agent_profile: Optional[AgentProfileReference] = None,
 ) -> AgentReport:
     pipeline = list(pipeline) + ["gather_evidence", "forecast"]
     analysis = result.market_analysis
@@ -10352,6 +10622,7 @@ async def _agent_report_from_prediction(
         evidence_error=result.evidence_error,
         skills=list(skill_results),
         grounding=grounding_note,
+        agent_profile=agent_profile,
         live_trade_intent=live_trade_intent,
     )
     if report.market_url and report.model_probability is not None:
@@ -10377,7 +10648,15 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
 
+    agent_profile = None
+    if req.agent_profile_id:
+        if claims is None:
+            raise HTTPException(status_code=401, detail="Sign in to use a copied agent.")
+        req, agent_profile = _resolve_agent_profile_request(req, claims["sub"])
+
     question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+    if agent_profile is not None:
+        pipeline.insert(0, "agent_profile")
 
     # Optional: ReAct tool-using loop instead of the fixed pipeline below.
     if req.tool_loop:
@@ -10388,7 +10667,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
     _agent_counter.add(1, {"agent.platform": req.platform or "unknown"})
     result = await predict(pred_req, kb_user_id=(claims.get("sub") if claims else None))
     return await _agent_report_from_prediction(
-        req, question, quote, grounding_note, pipeline, pred_req, result
+        req, question, quote, grounding_note, pipeline, pred_req, result, agent_profile
     )
 
 
@@ -10410,6 +10689,9 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
     claims = _require_auth(request)
     if not _state:
         raise HTTPException(status_code=503, detail="Server not initialised")
+    agent_profile = None
+    if req.agent_profile_id:
+        req, agent_profile = _resolve_agent_profile_request(req, claims["sub"])
     if req.tool_loop:
         raise HTTPException(status_code=400, detail="Streaming is not supported for tool_loop agent mode.")
 
@@ -10417,6 +10699,8 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         yield _sse_event("meta", {"status": "resolving"})
         try:
             question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+            if agent_profile is not None:
+                pipeline.insert(0, "agent_profile")
             yield _sse_event("meta", {
                 "status": "forecasting",
                 "question": question,
@@ -10471,7 +10755,7 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         yield _sse_event("meta", {"status": "skills"})
         try:
             report = await _agent_report_from_prediction(
-                req, question, quote, grounding_note, pipeline, pred_req, result
+                req, question, quote, grounding_note, pipeline, pred_req, result, agent_profile
             )
         except Exception:
             logger.exception("agent stream finalisation failed")

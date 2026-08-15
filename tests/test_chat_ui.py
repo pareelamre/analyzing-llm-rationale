@@ -142,10 +142,13 @@ for (const [rationale, explicit, expected] of cases) {
     def test_users_can_copy_a_public_agent_without_private_trading_state(self) -> None:
         self.assertIn("Copy agent", self.index_html)
         self.assertIn("function copyPublicAgent", self.index_html)
+        self.assertIn("/agent-profiles/copy", self.index_html)
+        self.assertIn("function syncCopiedAgentsFromServer", self.index_html)
         self.assertIn("function _agentSkillsForRun", self.index_html)
+        self.assertIn("agentBody.agent_profile_id = copiedAgent.profileId", self.index_html)
         self.assertIn("agentBody.model = copiedAgent.sourceAgentId", self.index_html)
-        self.assertIn("never its private context, account history, or exchange connection", self.index_html)
-        self.assertIn("This is research only: do not create, size, or submit a trade.", self.index_html)
+        self.assertIn("private research recipe", self.index_html)
+        self.assertIn("no private history, context, trading permissions, or exchange connection", self.index_html)
 
     def test_app_uses_refresh_safe_paths_and_migrates_legacy_hash_links(self) -> None:
         self.assertIn("const CHAT_PATH_PREFIX = '/chat/';", self.index_html)

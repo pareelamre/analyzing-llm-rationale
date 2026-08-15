@@ -1920,6 +1920,61 @@ class ServerTests(unittest.TestCase):
             {"ready"},
         )
 
+    def test_copied_agent_profile_is_private_versioned_and_research_only(self):
+        token = _issue_session("profile-user", "profile@example.com", "Profile", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": "test-model"}):
+            denied = self.client.post(
+                "/agent-profiles/copy", json={"source_agent_id": "not-public"}, headers=headers
+            )
+            self.assertEqual(denied.status_code, 422)
+
+            copied = self.client.post(
+                "/agent-profiles/copy",
+                json={"source_agent_id": "test-model", "name": "My copied model"},
+                headers=headers,
+            )
+            self.assertEqual(copied.status_code, 201)
+            payload = copied.json()
+            profile = payload["profile"]
+            self.assertTrue(payload["created"])
+            self.assertEqual(profile["version"], 1)
+            self.assertEqual(profile["execution_mode"], "research_only")
+            self.assertNotIn("connection", json.dumps(profile).lower())
+
+            copied_again = self.client.post(
+                "/agent-profiles/copy",
+                json={"source_agent_id": "test-model"},
+                headers=headers,
+            )
+            self.assertEqual(copied_again.status_code, 201)
+            self.assertFalse(copied_again.json()["created"])
+            self.assertEqual(copied_again.json()["profile"]["id"], profile["id"])
+
+            report = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Will it rain tomorrow?",
+                    "agent_profile_id": profile["id"],
+                    "model": "attacker-controlled-model",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                },
+                headers=headers,
+            )
+
+        self.assertEqual(report.status_code, 200)
+        report_payload = report.json()
+        self.assertIn("agent_profile", report_payload["pipeline"])
+        self.assertNotIn("tool_loop", report_payload["pipeline"])
+        self.assertEqual(report_payload["agent_profile"]["id"], profile["id"])
+        self.assertEqual(report_payload["agent_profile"]["execution_mode"], "research_only")
+        listed = self.client.get("/agent-profiles", headers=headers)
+        self.assertEqual([item["id"] for item in listed.json()["profiles"]], [profile["id"]])
+        deleted = self.client.delete(f"/agent-profiles/{profile['id']}", headers=headers)
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(self.client.get("/agent-profiles", headers=headers).json()["profiles"], [])
+
     def test_favorites_crud_roundtrip(self):
         token = _issue_session("fav-user", "fav@example.com", "Fav", "")
         headers = {"Authorization": f"Bearer {token}"}
