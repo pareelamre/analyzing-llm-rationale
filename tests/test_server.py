@@ -1243,6 +1243,63 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["total_events"], 1)
         self.assertEqual(payload["by_event"][0]["event_name"], "forecast_completed")
 
+    def test_analytics_attribution_hashes_session_identity_and_summarizes(self):
+        user_id = "analytics-user@example.com"
+        token = _issue_session(user_id, user_id, "Analytics User", "")
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "user-agent": "analytics-test-browser",
+            "x-forwarded-for": "203.0.113.9",
+        }
+
+        self.assertEqual(
+            self.client.post(
+                "/analytics/event",
+                json={"event_name": "forecast_completed", "path": "/", "metadata": {"source": "test"}},
+                headers=headers,
+            ).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/analytics/visit",
+                json={"path": "/", "referrer": "", "timezone": "UTC"},
+                headers=headers,
+            ).status_code,
+            200,
+        )
+
+        conn = server_module._analytics_conn()
+        try:
+            event_row = conn.execute(
+                "SELECT user_id, account_ref, attribution FROM analytics_events"
+            ).fetchone()
+            visit_row = conn.execute(
+                "SELECT account_ref, attribution FROM page_visits"
+            ).fetchone()
+        finally:
+            conn.close()
+
+        expected_ref = server_module._analytics_account_ref(user_id)
+        self.assertEqual(event_row, (None, expected_ref, "authenticated"))
+        self.assertEqual(visit_row, (expected_ref, "authenticated"))
+        self.assertNotIn(user_id, repr(event_row))
+        self.assertNotIn(user_id, repr(visit_row))
+
+        event_summary_response = self.client.get("/analytics/events/summary")
+        visit_summary_response = self.client.get("/analytics/summary")
+        self.assertNotIn(user_id, event_summary_response.text)
+        self.assertNotIn(user_id, visit_summary_response.text)
+        event_summary = event_summary_response.json()["attribution"]
+        visit_summary = visit_summary_response.json()["attribution"]
+        self.assertEqual(event_summary, {
+            "window_days": 30,
+            "authenticated_records": 1,
+            "anonymous_records": 0,
+            "authenticated_accounts": 1,
+        })
+        self.assertEqual(visit_summary, event_summary)
+
     def test_share_forecast_creates_public_page(self):
         response = self.client.post(
             "/forecasts/share",
