@@ -5387,6 +5387,14 @@ async def _prepare_predict_messages(
                     record["resolution_criteria"] = quote.get("resolution_criteria")
                 if not record.get("resolve_time") and quote.get("close_time"):
                     record["resolve_time"] = quote["close_time"]
+                # Evidence-date discipline (build_user_prompt's resolution-window
+                # check) is inert unless created_time/publish_time are populated --
+                # backfill both from the market's own open/creation time so the
+                # model can't credit evidence dated before the contract existed.
+                if not record.get("created_time") and quote.get("created_time"):
+                    record["created_time"] = quote["created_time"]
+                if not record.get("publish_time") and quote.get("created_time"):
+                    record["publish_time"] = quote["created_time"]
                 # Market microstructure signals — populate only when not already supplied.
                 if record.get("market_volume") is None and quote.get("volume") is not None:
                     record["market_volume"] = float(quote["volume"])
@@ -10825,6 +10833,8 @@ def _agent_prediction_request(
             quote.liquidity if quote and quote.liquidity is not None else req.market_liquidity
         ),
         resolve_time=(quote.close_time if quote and quote.close_time else req.resolve_time),
+        created_time=(quote.created_time if quote and quote.created_time else None),
+        publish_time=(quote.created_time if quote and quote.created_time else None),
         openrouter_api_key=req.openrouter_api_key,
         openrouter_model=req.openrouter_model,
         model=req.model,
@@ -11504,6 +11514,8 @@ async def agent_scan(
                 market_url=quote.get("market_url"),
                 market_outcome=quote.get("outcome"),
                 market_probability=quote.get("probability"),
+                created_time=quote.get("created_time"),
+                publish_time=quote.get("created_time"),
                 chat_mode=False,
             ), kb_user_id=(claims.get("sub") if claims else None))
         except Exception:

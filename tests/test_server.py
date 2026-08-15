@@ -916,6 +916,50 @@ class ServerTests(unittest.TestCase):
             [("Will X happen before December 31, 2026?", 2)],
         )
 
+    def test_predict_backfills_created_time_and_publish_time_from_live_quote(self):
+        # Regression test: build_user_prompt's resolution-window check (only
+        # activates when publish_time is set) was dead on the live path --
+        # the market's own created_time was fetched into `quote` but never
+        # copied onto the record that reaches build_user_prompt. A caller who
+        # supplies a market URL but omits resolution_criteria/probability
+        # triggers the live-enrichment fetch, so created_time/publish_time
+        # must be backfilled from that same fetched quote.
+        import analyzing_llm_rationale.market_data as md
+
+        quote = {
+            "platform": "Polymarket",
+            "ident": "will-x",
+            "question": "Will X happen before December 31, 2026?",
+            "market_url": "https://polymarket.com/market/will-x",
+            "description": "Polymarket's current event background.",
+            "resolution_criteria": "Resolves Yes only if the official source confirms X.",
+            "outcome": "Yes",
+            "probability": 0.61,
+            "outcomes": [],
+            "created_time": "2026-01-01T00:00:00Z",
+        }
+        with mock.patch.object(
+            md,
+            "fetch_polymarket",
+            lambda slug=None, market_id=None: quote,
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Please analyze this market.",
+                    "market_platform": "Polymarket",
+                    "market_url": quote["market_url"],
+                    "market_probability": 0.60,
+                    "evidence_top_k": 2,
+                    "chat_mode": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Created Time: 2026-01-01T00:00:00Z", prompt)
+        self.assertIn("Normalized Contract Window", prompt)
+
     def test_predict_skips_market_enrichment_when_context_is_complete(self):
         import analyzing_llm_rationale.market_data as md
 
@@ -2246,6 +2290,35 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Latest venue context.", prompt)
         self.assertIn("Resolve from the official FOMC announcement.", prompt)
 
+    def test_agent_analyze_threads_market_created_time_into_evidence_window_check(self):
+        # _agent_prediction_request had a fetched quote (with created_time) in
+        # hand but never copied it onto the PredictRequest it builds, leaving
+        # build_user_prompt's resolution-window safeguard dark for every
+        # /agent/analyze market lookup.
+        import analyzing_llm_rationale.market_data as md
+
+        quote = {
+            "platform": "Polymarket",
+            "ident": "fed",
+            "question": "Will the Fed cut rates before September 30, 2026?",
+            "market_url": "https://polymarket.com/market/fed",
+            "description": "Latest venue context.",
+            "resolution_criteria": "Resolve from the official FOMC announcement.",
+            "outcome": "Yes",
+            "probability": 0.40,
+            "outcomes": [{"label": "Yes", "probability": 0.40}, {"label": "No", "probability": 0.60}],
+            "created_time": "2026-02-01T00:00:00Z",
+        }
+        with mock.patch.object(md, "fetch_polymarket", lambda slug=None, market_id=None: quote):
+            response = self.client.post(
+                "/agent/analyze",
+                json={"platform": "polymarket", "slug": "fed", "evidence_top_k": 2},
+            )
+        self.assertEqual(response.status_code, 200)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Created Time: 2026-02-01T00:00:00Z", prompt)
+        self.assertIn("Normalized Contract Window", prompt)
+
     def test_live_trade_intent_complements_a_no_recommendation(self):
         intent = server_module._live_trade_intent(
             platform="Kalshi",
@@ -2375,6 +2448,26 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(opp["question"], "Will event A happen by 2027?")
         self.assertAlmostEqual(opp["edge"], 0.30)
         self.assertEqual(opp["recommendation"], "buy_yes")
+
+    def test_agent_scan_threads_market_created_time_into_evidence_window_check(self):
+        # agent_scan's _score() had the listing's created_time in hand but
+        # never copied it onto the PredictRequest it scores with, leaving
+        # build_user_prompt's resolution-window safeguard dark for every
+        # scanned market.
+        import analyzing_llm_rationale.market_data as md
+
+        markets = [
+            {"platform": "Polymarket", "question": "Will event A happen by 2027?", "market_url": "https://p/a",
+             "outcome": "Yes", "probability": 0.40, "outcomes": [], "created_time": "2026-03-01T00:00:00Z"},
+        ]
+        with mock.patch.object(md, "list_polymarket", lambda limit=5, query=None: markets):
+            response = self.client.get("/agent/scan?platform=polymarket&limit=1&min_edge=0.1&evidence_top_k=2")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["opportunities"]), 1)
+        prompt = self.provider.calls[0][-1]["content"]
+        self.assertIn("Created Time: 2026-03-01T00:00:00Z", prompt)
+        self.assertIn("Normalized Contract Window", prompt)
 
     def test_agent_scan_both_venues_and_keyword(self):
         import analyzing_llm_rationale.market_data as md
