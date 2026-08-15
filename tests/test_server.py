@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import unittest
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -140,10 +141,13 @@ class ServerTests(unittest.TestCase):
     def setUp(self):
         self.provider = FakeProvider()
         self.evidence_pipeline = FakeEvidencePipeline()
-        self.analytics_db = Path(tempfile.gettempdir()) / "foresea_test_analytics.duckdb"
+        self.analytics_db = Path(tempfile.gettempdir()) / f"foresea_test_analytics_{uuid.uuid4().hex[:8]}.duckdb"
         server_module._ANALYTICS_DB = self.analytics_db
-        if self.analytics_db.exists():
-            self.analytics_db.unlink()
+        try:
+            if self.analytics_db.exists():
+                self.analytics_db.unlink()
+        except Exception:
+            pass
         self._datastore_patch = mock.patch.object(server_module, "_get_datastore", return_value=None)
         self._datastore_patch.start()
         def fake_require_auth(request):
@@ -188,8 +192,11 @@ class ServerTests(unittest.TestCase):
         self._datastore_patch.stop()
         _state.clear()
         _local_cache.clear()
-        if self.analytics_db.exists():
-            self.analytics_db.unlink()
+        try:
+            if self.analytics_db.exists():
+                self.analytics_db.unlink()
+        except Exception:
+            pass
 
     def _page_context(self, response):
         marker = '<script type="application/json" id="foresea-page-context">'
@@ -1241,7 +1248,13 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(summary.status_code, 200)
         payload = summary.json()
         self.assertEqual(payload["total_events"], 1)
+        self.assertEqual(payload["events_24h"], 1)
+        self.assertEqual(payload["active_accounts_24h"], 0)
+        self.assertEqual(payload["active_accounts_7d"], 0)
         self.assertEqual(payload["by_event"][0]["event_name"], "forecast_completed")
+        self.assertEqual(payload["by_event"][0]["count"], 1)
+        self.assertEqual(payload["by_event"][0]["anonymous"], 1)
+        self.assertEqual(payload["by_event"][0]["authenticated"], 0)
 
     def test_analytics_attribution_hashes_session_identity_and_summarizes(self):
         user_id = "analytics-user@example.com"
@@ -1290,8 +1303,16 @@ class ServerTests(unittest.TestCase):
         visit_summary_response = self.client.get("/analytics/summary")
         self.assertNotIn(user_id, event_summary_response.text)
         self.assertNotIn(user_id, visit_summary_response.text)
-        event_summary = event_summary_response.json()["attribution"]
-        visit_summary = visit_summary_response.json()["attribution"]
+        event_payload = event_summary_response.json()
+        visit_payload = visit_summary_response.json()
+        self.assertEqual(event_payload["events_24h"], 1)
+        self.assertEqual(event_payload["active_accounts_24h"], 1)
+        self.assertEqual(event_payload["active_accounts_7d"], 1)
+        self.assertEqual(event_payload["by_event"][0]["authenticated"], 1)
+        self.assertEqual(event_payload["by_event"][0]["anonymous"], 0)
+        self.assertEqual(visit_payload["visits_24h"], 1)
+        event_summary = event_payload["attribution"]
+        visit_summary = visit_payload["attribution"]
         self.assertEqual(event_summary, {
             "window_days": 30,
             "authenticated_records": 1,
@@ -1299,6 +1320,14 @@ class ServerTests(unittest.TestCase):
             "authenticated_accounts": 1,
         })
         self.assertEqual(visit_summary, event_summary)
+
+    def test_analytics_dashboard_renders_html(self):
+        response = self.client.get("/analytics/dashboard")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/html", response.headers.get("content-type", ""))
+        self.assertIn("Foresea Activity Desk", response.text)
+        self.assertIn("Daily Active Accounts", response.text)
+        self.assertIn("Product Funnel", response.text)
 
     def test_share_forecast_creates_public_page(self):
         response = self.client.post(

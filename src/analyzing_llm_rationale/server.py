@@ -33,6 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
+    HTMLResponse,
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
@@ -4027,6 +4028,7 @@ class AnalyticsSummary(BaseModel):
     unique_visitors: int
     by_day: List[Dict[str, Any]]
     attribution: AnalyticsAttributionSummary
+    visits_24h: int = 0
 
 
 class AnalyticsEventRequest(BaseModel):
@@ -4050,6 +4052,9 @@ class AnalyticsEventSummary(BaseModel):
     by_event: List[Dict[str, Any]]
     by_day: List[Dict[str, Any]]
     attribution: AnalyticsAttributionSummary
+    events_24h: int = 0
+    active_accounts_24h: int = 0
+    active_accounts_7d: int = 0
 
 
 class GoogleAuthRequest(BaseModel):
@@ -5587,26 +5592,56 @@ def _record_analytics_event(
 
 def _analytics_events_summary_datastore() -> "AnalyticsEventSummary":
     client = _get_datastore()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=30)
+    cutoff_24h = now - timedelta(hours=24)
+    cutoff_7d = now - timedelta(days=7)
     query = client.query(kind="AnalyticsEvent")
     query.add_filter("ts", ">=", cutoff)
     records = list(query.fetch(limit=10000))
-    by_event: Dict[str, int] = defaultdict(int)
+    by_event: Dict[str, Dict[str, int]] = defaultdict(lambda: {"count": 0, "authenticated": 0, "anonymous": 0})
     by_day: Dict[str, int] = defaultdict(int)
+    events_24h = 0
+    active_accounts_24h: set = set()
+    active_accounts_7d: set = set()
     for entity in records:
-        by_event[entity.get("event_name") or "unknown"] += 1
+        ts = entity.get("ts")
+        name = entity.get("event_name") or "unknown"
+        is_auth = bool(entity.get("account_ref") or entity.get("user_id"))
+        by_event[name]["count"] += 1
+        if is_auth:
+            by_event[name]["authenticated"] += 1
+        else:
+            by_event[name]["anonymous"] += 1
         by_day[entity.get("day") or entity["ts"].strftime("%Y-%m-%d")] += 1
+        if ts and ts >= cutoff_24h:
+            events_24h += 1
+            ref = entity.get("account_ref") or (_analytics_account_ref(str(entity["user_id"])) if entity.get("user_id") else None)
+            if ref:
+                active_accounts_24h.add(ref)
+        if ts and ts >= cutoff_7d:
+            ref = entity.get("account_ref") or (_analytics_account_ref(str(entity["user_id"])) if entity.get("user_id") else None)
+            if ref:
+                active_accounts_7d.add(ref)
     return AnalyticsEventSummary(
         total_events=len(records),
         by_event=[
-            {"event_name": name, "count": count}
-            for name, count in sorted(by_event.items(), key=lambda kv: kv[1], reverse=True)
+            {
+                "event_name": name,
+                "count": agg["count"],
+                "authenticated": agg["authenticated"],
+                "anonymous": agg["anonymous"],
+            }
+            for name, agg in sorted(by_event.items(), key=lambda kv: kv[1]["count"], reverse=True)
         ],
         by_day=[
             {"day": day, "count": count}
             for day, count in sorted(by_day.items(), reverse=True)
         ],
         attribution=_analytics_attribution_summary(records),
+        events_24h=events_24h,
+        active_accounts_24h=len(active_accounts_24h),
+        active_accounts_7d=len(active_accounts_7d),
     )
 
 
@@ -5875,17 +5910,23 @@ def _analytics_summary_datastore() -> "AnalyticsSummary":
 
     # Daily breakdown (last 30 days) from PageVisit rows; distinct counted in
     # Python over a bounded window.
-    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=30)
+    cutoff_24h = now - timedelta(hours=24)
     query = client.query(kind="PageVisit")
     query.add_filter("ts", ">=", cutoff)
     by_day: Dict[str, Dict[str, Any]] = {}
     records = list(query.fetch())
+    visits_24h = 0
     for e in records:
         d = e.get("day") or e["ts"].strftime("%Y-%m-%d")
         agg = by_day.setdefault(d, {"visits": 0, "visitors": set()})
         agg["visits"] += 1
         if e.get("visitor_id"):
             agg["visitors"].add(e["visitor_id"])
+        ts = e.get("ts")
+        if ts and ts >= cutoff_24h:
+            visits_24h += 1
     rows = sorted(by_day.items(), reverse=True)[:30]
     return AnalyticsSummary(
         total_visits=total,
@@ -5895,6 +5936,7 @@ def _analytics_summary_datastore() -> "AnalyticsSummary":
             for d, agg in rows
         ],
         attribution=_analytics_attribution_summary(records),
+        visits_24h=visits_24h,
     )
 
 
@@ -6020,6 +6062,9 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
         total, unique_visitors = conn.execute(
             "SELECT COUNT(*), COUNT(DISTINCT visitor_hash) FROM page_visits"
         ).fetchone()
+        visits_24h = conn.execute(
+            "SELECT COUNT(*) FROM page_visits WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR"
+        ).fetchone()[0]
         rows = conn.execute(
             """
             SELECT
@@ -6057,6 +6102,7 @@ async def analytics_summary(request: Request) -> AnalyticsSummary:
             [{"account_ref": account_ref, "attribution": attribution}
              for account_ref, attribution in attribution_rows]
         ),
+        visits_24h=int(visits_24h or 0),
     )
 
 
@@ -6080,9 +6126,15 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
             "SELECT COUNT(*) FROM analytics_events "
             "WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY"
         ).fetchone()[0]
+        events_24h = conn.execute(
+            "SELECT COUNT(*) FROM analytics_events "
+            "WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR"
+        ).fetchone()[0]
         by_event = conn.execute(
             """
-            SELECT event_name, COUNT(*) AS count
+            SELECT event_name, COUNT(*) AS count,
+                   COUNT(CASE WHEN account_ref IS NOT NULL OR user_id IS NOT NULL THEN 1 END) AS authenticated,
+                   COUNT(CASE WHEN account_ref IS NULL AND user_id IS NULL THEN 1 END) AS anonymous
             FROM analytics_events
             WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
             GROUP BY 1
@@ -6107,11 +6159,45 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
             WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
             """
         ).fetchall()
+        active_24h_rows = conn.execute(
+            """
+            SELECT account_ref, user_id
+            FROM analytics_events
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 24 HOUR
+              AND (account_ref IS NOT NULL OR user_id IS NOT NULL)
+            """
+        ).fetchall()
+        active_7d_rows = conn.execute(
+            """
+            SELECT account_ref, user_id
+            FROM analytics_events
+            WHERE ts >= CURRENT_TIMESTAMP - INTERVAL 7 DAY
+              AND (account_ref IS NOT NULL OR user_id IS NOT NULL)
+            """
+        ).fetchall()
     finally:
         conn.close()
+    active_accounts_24h = {
+        (row[0] or _analytics_account_ref(str(row[1])))
+        for row in active_24h_rows
+        if row[0] or row[1]
+    }
+    active_accounts_7d = {
+        (row[0] or _analytics_account_ref(str(row[1])))
+        for row in active_7d_rows
+        if row[0] or row[1]
+    }
     return AnalyticsEventSummary(
         total_events=int(total or 0),
-        by_event=[{"event_name": name, "count": int(count)} for name, count in by_event],
+        by_event=[
+            {
+                "event_name": name,
+                "count": int(count),
+                "authenticated": int(auth),
+                "anonymous": int(anon),
+            }
+            for name, count, auth, anon in by_event
+        ],
         by_day=[{"day": str(day), "count": int(count)} for day, count in by_day],
         attribution=_analytics_attribution_summary(
             [
@@ -6119,7 +6205,389 @@ async def analytics_events_summary(request: Request) -> AnalyticsEventSummary:
                 for account_ref, user_id, attribution in attribution_rows
             ]
         ),
+        events_24h=int(events_24h or 0),
+        active_accounts_24h=len(active_accounts_24h),
+        active_accounts_7d=len(active_accounts_7d),
     )
+
+
+@app.get("/analytics/dashboard", response_class=HTMLResponse, tags=["System"], summary="Live Operator Activity & Attribution Dashboard")
+async def analytics_dashboard(request: Request) -> HTMLResponse:
+    """Operator dashboard for real-time Foresea activity and attribution monitoring."""
+    _check_api_key(request)
+    html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Foresea • Activity & Attribution Desk</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔮</text></svg>">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: #111827;
+      --card-hover: #172033;
+      --border: #1f2937;
+      --border-subtle: #2d3748;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --accent: #6366f1;
+      --emerald: #10b981;
+      --emerald-dim: rgba(16, 185, 129, 0.15);
+      --amber: #f59e0b;
+      --indigo: #6366f1;
+      --indigo-dim: rgba(99, 102, 241, 0.15);
+      --slate: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      padding: 28px 20px 60px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .title-group { display: flex; align-items: center; gap: 12px; }
+    .logo-badge {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #4f46e5, #06b6d4);
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 18px;
+      color: white;
+    }
+    h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    .subtitle { font-size: 13px; color: var(--text-muted); }
+    .controls { display: flex; align-items: center; gap: 12px; }
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--emerald-dim);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .btn-refresh {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 7px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-refresh:hover { background: var(--card-hover); border-color: var(--border-subtle); }
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .stat-card:hover { border-color: var(--border-subtle); }
+    .stat-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 600; margin-bottom: 6px; }
+    .stat-val { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; color: var(--text); margin-bottom: 6px; line-height: 1.1; }
+    .stat-sub { font-size: 13px; color: var(--text-muted); }
+    .badge-auth { color: var(--emerald); font-weight: 600; }
+    .badge-anon { color: var(--slate); font-weight: 600; }
+    
+    .grid-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 900px) { .grid-panels { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title { font-size: 15px; font-weight: 600; color: var(--text); }
+    .panel-sub { font-size: 12px; color: var(--text-dim); }
+
+    /* Funnel Flow */
+    .funnel-step {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .funnel-name { font-size: 13px; font-weight: 500; }
+    .funnel-counts { display: flex; align-items: center; gap: 12px; }
+    .funnel-count { font-size: 14px; font-weight: 700; }
+    .funnel-conv { font-size: 12px; color: #a5b4fc; background: var(--indigo-dim); padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+
+    /* Event Table */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 8px 10px; color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    td { padding: 10px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+    tr:last-child td { border-bottom: none; }
+    .event-bar-wrap { width: 100%; height: 6px; background: #334155; border-radius: 3px; overflow: hidden; display: flex; margin-top: 4px; }
+    .bar-auth { background: var(--emerald); height: 100%; }
+    .bar-anon { background: var(--slate); height: 100%; }
+
+    /* Privacy Banner */
+    .privacy-banner {
+      background: rgba(16, 185, 129, 0.05);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 10px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 24px;
+      font-size: 13px;
+      color: #a7f3d0;
+    }
+    .privacy-icon { font-size: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title-group">
+        <div class="logo-badge">🔮</div>
+        <div>
+          <h1>Foresea Activity Desk</h1>
+          <div class="subtitle">Real-time user engagement & privacy-preserving attribution telemetry</div>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="live-indicator"><span class="pulse-dot"></span> Live Telemetry</div>
+        <button class="btn-refresh" id="refreshBtn" onclick="loadTelemetry()">Refresh</button>
+      </div>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="grid-stats">
+      <div class="stat-card">
+        <div class="stat-label">Daily Active Accounts (24h)</div>
+        <div class="stat-val" id="activeAccounts24h">--</div>
+        <div class="stat-sub"><span id="activeAccounts7d">--</span> active in trailing 7 days</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Events Velocity (24h)</div>
+        <div class="stat-val" id="events24h">--</div>
+        <div class="stat-sub"><span id="totalEvents">--</span> total product events (30d)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Visits Velocity (24h)</div>
+        <div class="stat-val" id="visits24h">--</div>
+        <div class="stat-sub"><span id="totalVisits">--</span> visits (<span id="uniqueVisitors">--</span> unique)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Authenticated Cohort</div>
+        <div class="stat-val" id="authRatio">--%</div>
+        <div class="stat-sub"><span class="badge-auth" id="authRecords">--</span> signed-in / <span class="badge-anon" id="anonRecords">--</span> anon</div>
+      </div>
+    </div>
+
+    <!-- Main Content Panels -->
+    <div class="grid-panels">
+      <!-- Funnel Flow -->
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Forecasting & Product Funnel</div>
+            <div class="panel-sub">Trailing 30-day conversion flow</div>
+          </div>
+        </div>
+        <div id="funnelFlow">
+          <div class="funnel-step">
+            <span class="funnel-name">1. Page Visits</span>
+            <div class="funnel-counts"><span class="funnel-count" id="fnVisits">--</span><span class="funnel-conv">100%</span></div>
+          </div>
+          <div class="funnel-step">
+            <span class="funnel-name">2. Forecast Started</span>
+            <div class="funnel-counts"><span class="funnel-count" id="fnStarted">--</span><span class="funnel-conv" id="fnConvStarted">--%</span></div>
+          </div>
+          <div class="funnel-step">
+            <span class="funnel-name">3. Forecast Completed</span>
+            <div class="funnel-counts"><span class="funnel-count" id="fnCompleted">--</span><span class="funnel-conv" id="fnConvCompleted">--%</span></div>
+          </div>
+          <div class="funnel-step">
+            <span class="funnel-name">4. Desk / Radar Opened</span>
+            <div class="funnel-counts"><span class="funnel-count" id="fnDesk">--</span><span class="funnel-conv" id="fnConvDesk">--%</span></div>
+          </div>
+          <div class="funnel-step">
+            <span class="funnel-name">5. Watchlist / Ledger Actions</span>
+            <div class="funnel-counts"><span class="funnel-count" id="fnActions">--</span><span class="funnel-conv" id="fnConvActions">--%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Events Breakdown -->
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Product Event Attribution</div>
+            <div class="panel-sub">Signed-in (<span style="color:var(--emerald)">■</span>) vs Anonymous (<span style="color:var(--slate)">■</span>)</div>
+          </div>
+        </div>
+        <div style="max-height: 290px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th style="text-align:right">Volume</th>
+                <th style="text-align:right">Split</th>
+              </tr>
+            </thead>
+            <tbody id="eventsTableBody">
+              <tr><td colspan="3" style="text-align:center; color:var(--text-dim)">Loading events...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Privacy Banner -->
+    <div class="privacy-banner">
+      <span class="privacy-icon">🛡️</span>
+      <div>
+        <strong>Privacy-Preserving Telemetry Guarantee:</strong> Foresea does not store raw user identities, email addresses, or IP addresses in analytics tables. Authenticated activity uses domain-separated HMAC-SHA256 account references with server-side secret salting.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function loadTelemetry() {
+      const btn = document.getElementById('refreshBtn');
+      if (btn) btn.innerText = 'Refreshing...';
+      try {
+        const [vRes, eRes] = await Promise.all([
+          fetch('/analytics/summary'),
+          fetch('/analytics/events/summary')
+        ]);
+        if (!vRes.ok || !eRes.ok) throw new Error('Analytics endpoints unreachable');
+        const visits = await vRes.json();
+        const events = await eRes.json();
+
+        // 1. Stats
+        document.getElementById('activeAccounts24h').innerText = (events.active_accounts_24h || 0).toLocaleString();
+        document.getElementById('activeAccounts7d').innerText = (events.active_accounts_7d || events.active_accounts_24h || 0).toLocaleString();
+        document.getElementById('events24h').innerText = (events.events_24h || 0).toLocaleString();
+        document.getElementById('totalEvents').innerText = (events.total_events || 0).toLocaleString();
+        document.getElementById('visits24h').innerText = (visits.visits_24h || 0).toLocaleString();
+        document.getElementById('totalVisits').innerText = (visits.total_visits || 0).toLocaleString();
+        document.getElementById('uniqueVisitors').innerText = (visits.unique_visitors || 0).toLocaleString();
+
+        const attr = events.attribution || {};
+        const authCount = attr.authenticated_records || 0;
+        const anonCount = attr.anonymous_records || 0;
+        const totalAttr = authCount + anonCount;
+        const ratio = totalAttr > 0 ? Math.round((authCount / totalAttr) * 100) : 0;
+        document.getElementById('authRatio').innerText = ratio + '%';
+        document.getElementById('authRecords').innerText = authCount.toLocaleString() + ' auth';
+        document.getElementById('anonRecords').innerText = anonCount.toLocaleString() + ' anon';
+
+        // 2. Funnel
+        const evMap = {};
+        (events.by_event || []).forEach(e => { evMap[e.event_name] = e.count; });
+        const vCount = visits.total_visits || 1;
+        const fnStarted = (evMap['forecast_started'] || 0) + (evMap['first_forecast'] || 0);
+        const fnCompleted = evMap['forecast_completed'] || 0;
+        const fnDesk = (evMap['track_record_opened'] || 0) + (evMap['edge_board_opened'] || 0);
+        const fnActions = (evMap['watchlist_add'] || 0) + (evMap['personal_ledger_add'] || 0) + (evMap['share_created'] || 0);
+
+        document.getElementById('fnVisits').innerText = vCount.toLocaleString();
+        document.getElementById('fnStarted').innerText = fnStarted.toLocaleString();
+        document.getElementById('fnConvStarted').innerText = Math.round((fnStarted / vCount) * 100) + '%';
+        document.getElementById('fnCompleted').innerText = fnCompleted.toLocaleString();
+        document.getElementById('fnConvCompleted').innerText = (fnStarted > 0 ? Math.round((fnCompleted / fnStarted) * 100) : 0) + '%';
+        document.getElementById('fnDesk').innerText = fnDesk.toLocaleString();
+        document.getElementById('fnConvDesk').innerText = (vCount > 0 ? Math.round((fnDesk / vCount) * 100) : 0) + '%';
+        document.getElementById('fnActions').innerText = fnActions.toLocaleString();
+        document.getElementById('fnConvActions').innerText = (fnCompleted > 0 ? Math.round((fnActions / fnCompleted) * 100) : 0) + '%';
+
+        // 3. Events Table
+        const tbody = document.getElementById('eventsTableBody');
+        if (events.by_event && events.by_event.length) {
+          tbody.innerHTML = events.by_event.map(e => {
+            const auth = e.authenticated || 0;
+            const anon = e.anonymous != null ? e.anonymous : (e.count - auth);
+            const total = e.count || 1;
+            const authPct = Math.round((auth / total) * 100);
+            const anonPct = 100 - authPct;
+            return `<tr>
+              <td>
+                <div style="font-weight:600">${e.event_name}</div>
+                <div class="event-bar-wrap">
+                  <div class="bar-auth" style="width:${authPct}%"></div>
+                  <div class="bar-anon" style="width:${anonPct}%"></div>
+                </div>
+              </td>
+              <td style="text-align:right; font-weight:700">${e.count.toLocaleString()}</td>
+              <td style="text-align:right; font-size:12px; color:var(--text-muted)">
+                <span class="badge-auth">${auth}</span> / <span class="badge-anon">${anon}</span>
+              </td>
+            </tr>`;
+          }).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim)">No events recorded yet</td></tr>';
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (btn) btn.innerText = 'Refresh';
+      }
+    }
+
+    loadTelemetry();
+    setInterval(loadTelemetry, 10000);
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html_content, media_type="text/html")
 
 
 @app.post("/forecasts/share", tags=["System"], response_model=SharedForecastResponse)
