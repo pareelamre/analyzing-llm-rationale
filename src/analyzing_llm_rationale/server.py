@@ -4197,6 +4197,8 @@ class AgentReport(BaseModel):
     skills: List[AgentSkillResult] = Field(default_factory=list)
     grounding: Optional[str] = Field(None, description="Track-record self-calibration note applied to the forecast.")
     tool_transcript: List[Dict[str, Any]] = Field(default_factory=list, description="Tool calls + observations when the tool loop ran.")
+    tool_loop_steps: Optional[int] = Field(None, description="Tool-call steps the loop actually ran, when tool_loop=true.")
+    tool_loop_truncated: Optional[bool] = Field(None, description="True if the loop hit max_tool_steps without the model giving a final answer.")
     agent_profile: Optional[AgentProfileReference] = Field(
         None,
         description="Immutable private research recipe used for this report, when one was selected.",
@@ -11411,6 +11413,20 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         market_probability=last.get("market_probability"),
         edge=edge,
     )
+    raw_answer = res.get("answer", "")
+    use_backstop_thesis = backstopped and bool(last.get("thesis"))
+    tool_transcript = list(res.get("transcript", []))
+    if use_backstop_thesis and raw_answer:
+        # The backstop's forecast becomes the thesis below (so the number it
+        # cites stays consistent with edge/recommendation), which would
+        # otherwise silently drop the model's own final-turn text -- keep it
+        # in the transcript so a malformed or off-contract tool call still
+        # leaves a trace in the durable run record.
+        tool_transcript.append({
+            "action": "final_text_before_backstop",
+            "args": {},
+            "observation": raw_answer[:4000],
+        })
     report = AgentReport(
         question=question, pipeline=pipeline,
         platform=market_platform,
@@ -11422,10 +11438,11 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         # When we had to backstop the forecast, the model's prose can cite a
         # different number than the structured forecast that drives the
         # recommendation — so use the forecast's own rationale to stay consistent.
-        thesis=(last.get("thesis") if backstopped and last.get("thesis") else res.get("answer", "")),
+        thesis=(last.get("thesis") if use_backstop_thesis else raw_answer),
         evidence_sources=last.get("evidence_sources", []),
         evidence_error=last.get("evidence_error"),
-        grounding=grounding_note, tool_transcript=res.get("transcript", []),
+        grounding=grounding_note, tool_transcript=tool_transcript,
+        tool_loop_steps=res.get("steps"), tool_loop_truncated=res.get("truncated"),
         live_trade_intent=live_trade_intent,
     )
     # Evolution loop: enrol the analysed market into the live track record (pointer only).

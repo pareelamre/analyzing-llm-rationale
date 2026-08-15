@@ -2156,6 +2156,17 @@ class ServerTests(unittest.TestCase):
         self.assertIn("tool_loop", report["pipeline"])
         self.assertIn("forecast", report["pipeline"])           # backstop forecast ran
         self.assertAlmostEqual(report["model_probability"], 0.7)  # populated, not null
+        # Regression test: run_tool_loop's steps/truncated were computed but
+        # never persisted, and the model's own raw final-turn text was
+        # silently dropped whenever the deterministic backstop ran -- both
+        # must now survive into the durable report.
+        self.assertEqual(report["tool_loop_steps"], 0)
+        self.assertFalse(report["tool_loop_truncated"])
+        backstop_entries = [
+            t for t in report["tool_transcript"] if t["action"] == "final_text_before_backstop"
+        ]
+        self.assertEqual(len(backstop_entries), 1)
+        self.assertIn("predicted_answer", backstop_entries[0]["observation"])
 
     def test_agent_analyze_benchmark_tool_loop_exposes_only_benchmark_tools(self):
         self.provider.response = {
