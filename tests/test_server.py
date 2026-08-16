@@ -3296,6 +3296,8 @@ class ServerTests(unittest.TestCase):
             ("/", "home", "no-cache"),
             ("/ask", "ask", "no-cache"),
             ("/edge", "edge", "no-cache"),
+            ("/edge/mtm", "edge", "no-cache"),
+            ("/edge/agentic", "edge", "no-cache"),
             ("/track", "track", "no-cache"),
             ("/ledger", "ledger", "no-cache"),
             ("/chat/conv_123", "chat", "no-cache"),
@@ -3315,6 +3317,11 @@ class ServerTests(unittest.TestCase):
                 self.assertEqual(context["canonical"], f"https://foresea.ink{path}")
                 self.assertEqual(context["api"]["radar"], "/radar")
                 self.assertIn("</head>", r.text)
+
+    def test_edge_panel_route_rejects_unknown_panel(self):
+        r = self.client.get("/edge/bogus")
+
+        self.assertEqual(r.status_code, 404)
 
     def test_chat_page_route_does_not_reflect_hostile_path_input(self):
         r = self.client.get("/chat/conv_%22%3E%3Cimg%20src=x%20onerror=alert(1)%3E")

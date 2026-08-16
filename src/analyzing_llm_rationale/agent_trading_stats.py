@@ -111,13 +111,26 @@ def agent_equity_curve(conn: sqlite3.Connection, agent_id: str) -> Dict[str, Any
     historical bid-marks for every past cycle aren't stored, so this proxy
     trades precision for being exactly reconstructable from data that is.
 
-    Only ``trade``/``settlement`` rows actually move cash. A rejected order
-    never reaches the exchange, so its row is included as a zero-height
-    marker rather than trusted for ``cash_delta`` -- defends against old rows
-    written before a bug fix stored the rejected order's hypothetical delta
-    there instead of 0, which cratered this curve for every future point.
+    Only ``trade``/``settlement``/``admin_correction``/``admin_reset`` rows
+    actually move cash. A rejected order never reaches the exchange, so its
+    row is included as a zero-height marker rather than trusted for
+    ``cash_delta`` -- defends against old rows written before a bug fix
+    stored the rejected order's hypothetical delta there instead of 0, which
+    cratered this curve for every future point.
+
+    ``admin_correction``/``admin_reset`` rows are manual account adjustments
+    (see scripts/reset_agent_trading_accounts.py) -- e.g. reversing profit a
+    pricing bug manufactured, or a full reset to starting_cash. Without
+    including them here, the curve would silently diverge from
+    agent_accounts.cash (which those adjustments do update directly) instead
+    of showing the correction as a visible point on the chart.
+
+    A full ``admin_reset`` deliberately starts the account over, so once one
+    has happened the curve (and the Sharpe/drawdown computed from it) only
+    covers the period since the *latest* one -- pre-reset history stays in
+    ``agent_actions`` for audit, it's just not what the chart or stats show.
     """
-    CASH_MOVING_ACTION_TYPES = {"trade", "settlement"}
+    CASH_MOVING_ACTION_TYPES = {"trade", "settlement", "admin_correction", "admin_reset"}
 
     acct_row = conn.execute(
         "SELECT starting_cash FROM agent_accounts WHERE agent_id = ?", (agent_id,),
@@ -142,6 +155,10 @@ def agent_equity_curve(conn: sqlite3.Connection, agent_id: str) -> Dict[str, Any
             "account_value": round(running_cash, 6),
             "event_type": row["action_type"],
         })
+
+    reset_indices = [i for i, p in enumerate(points) if p["event_type"] == "admin_reset"]
+    if reset_indices:
+        points = points[reset_indices[-1]:]
 
     risk = _sharpe_and_max_drawdown(points)
     return {
@@ -212,13 +229,19 @@ def recent_activity(
     limit: int = 50,
 ) -> List[Dict[str, Any]]:
     """Merge trades/settlements, per-cycle theses, and notes into one
-    newest-first transparency feed, capped at ``limit``."""
+    newest-first transparency feed, capped at ``limit``.
+
+    Manual account adjustments (``admin_correction``/``admin_reset``, see
+    scripts/reset_agent_trading_accounts.py) are included too -- an
+    adjustment that changed an agent's balance shouldn't be invisible in the
+    one feed meant to show what happened to that balance and why."""
     items: List[Dict[str, Any]] = []
 
     for row in conn.execute(
         "SELECT ts, agent_id, action_type, mode, platform, ticker, side, "
         "quantity, price, realized_pnl, outcome FROM agent_actions "
-        "WHERE action_type IN ('trade', 'settlement', 'rejected_trade') "
+        "WHERE action_type IN "
+        "('trade', 'settlement', 'rejected_trade', 'admin_correction', 'admin_reset') "
         "ORDER BY ts DESC LIMIT ?",
         (limit,),
     ):

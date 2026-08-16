@@ -209,6 +209,72 @@ class EquityCurveTests(unittest.TestCase):
         self.assertEqual(event_types, ["starting_cash", "trade", "rejected_trade", "trade"])
         self.assertEqual(values, [10_000.0, 9_950.0, 9_950.0, 9_920.0])
 
+    def test_admin_correction_moves_the_curve(self):
+        # Regression: an admin_correction row updates agent_accounts directly
+        # (see scripts/reset_agent_trading_accounts.py) -- without including
+        # it here, the curve would climb through the pre-correction trade and
+        # never show the adjustment, silently diverging from the corrected
+        # agent_accounts.cash it's supposed to be a running total of.
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a", starting_cash=10_000.0)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-11T00:00:00+00:00", cash_delta=6_000.0)
+            _insert_action(conn, "model-a", action_type="admin_correction",
+                            ts="2026-08-11T00:15:00+00:00", cash_delta=-5_500.0)
+            conn.commit()
+
+            curve = agent_trading_stats.agent_equity_curve(conn, "model-a")
+
+        values = [p["account_value"] for p in curve["value_curve"]]
+        event_types = [p["event_type"] for p in curve["value_curve"]]
+        self.assertEqual(event_types, ["starting_cash", "trade", "admin_correction"])
+        self.assertEqual(values, [10_000.0, 16_000.0, 10_500.0])
+
+    def test_admin_reset_trims_the_curve_to_the_reset_point(self):
+        # A full admin_reset means "start this account over" -- the chart
+        # (and the Sharpe/drawdown computed from it) should only cover what
+        # happened since then, not the pre-reset trades that got wiped.
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a", starting_cash=10_000.0)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-11T00:00:00+00:00", cash_delta=6_000.0)
+            _insert_action(conn, "model-a", action_type="admin_correction",
+                            ts="2026-08-11T00:15:00+00:00", cash_delta=-5_500.0)
+            _insert_action(conn, "model-a", action_type="admin_reset",
+                            ts="2026-08-11T00:30:00+00:00", cash_delta=-500.0)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-11T00:45:00+00:00", cash_delta=-25.0)
+            conn.commit()
+
+            curve = agent_trading_stats.agent_equity_curve(conn, "model-a")
+
+        values = [p["account_value"] for p in curve["value_curve"]]
+        event_types = [p["event_type"] for p in curve["value_curve"]]
+        # Neither the pre-reset trade (16_000.0) nor the correction
+        # (10_500.0) appear -- the curve starts at the admin_reset itself.
+        self.assertEqual(event_types, ["admin_reset", "trade"])
+        self.assertEqual(values, [10_000.0, 9_975.0])
+
+    def test_curve_trims_to_the_latest_of_multiple_resets(self):
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a", starting_cash=10_000.0)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-11T00:00:00+00:00", cash_delta=-1_000.0)
+            _insert_action(conn, "model-a", action_type="admin_reset",
+                            ts="2026-08-12T00:00:00+00:00", cash_delta=1_000.0)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-13T00:00:00+00:00", cash_delta=-2_000.0)
+            _insert_action(conn, "model-a", action_type="admin_reset",
+                            ts="2026-08-14T00:00:00+00:00", cash_delta=2_000.0)
+            conn.commit()
+
+            curve = agent_trading_stats.agent_equity_curve(conn, "model-a")
+
+        values = [p["account_value"] for p in curve["value_curve"]]
+        event_types = [p["event_type"] for p in curve["value_curve"]]
+        self.assertEqual(event_types, ["admin_reset"])
+        self.assertEqual(values, [10_000.0])
+
 
 class PromotionEligibilityTests(unittest.TestCase):
     def test_eligible_when_all_checks_pass(self):
@@ -269,6 +335,18 @@ class RecentActivityTests(unittest.TestCase):
             items = agent_trading_stats.recent_activity(conn, notes, limit=10)
 
         self.assertEqual([i["type"] for i in items], ["note", "thesis", "trade"])
+
+    def test_admin_reset_appears_in_the_feed(self):
+        # A balance adjustment shouldn't be invisible in the one feed meant
+        # to show what happened to that balance.
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a")
+            _insert_action(conn, "model-a", action_type="admin_reset",
+                            ts="2026-08-11T00:00:00+00:00", outcome="reset")
+            conn.commit()
+            items = agent_trading_stats.recent_activity(conn, {}, limit=10)
+        self.assertEqual([i["type"] for i in items], ["admin_reset"])
+        self.assertEqual(items[0]["outcome"], "reset")
 
     def test_limit_is_respected_after_merge(self):
         with _fixture_conn() as conn:
