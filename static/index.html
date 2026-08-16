@@ -2906,7 +2906,7 @@ function queueConversationSync(id) {
   }, 500);
 }
 
-async function syncConversationsAfterSignIn(user) {
+async function syncConversationsAfterSignIn(user, { updateHistory = true } = {}) {
   setSyncStatus('Loading your chats...');
   const anonymousStore = store;
   storageKey = userStorageKey(user);
@@ -2925,8 +2925,8 @@ async function syncConversationsAfterSignIn(user) {
 
   renderSidebar();
   const ids = sortedIds();
-  if (ids.length) activateConv(activeId && store.conversations[activeId] ? activeId : ids[0]);
-  else newConversation();
+  if (ids.length) activateConv(activeId && store.conversations[activeId] ? activeId : ids[0], { updateHistory });
+  else newConversation({ updateHistory });
 
   await Promise.allSettled(Object.values(store.conversations).map(saveRemoteConversation));
   setSyncStatus('Saved to your account');
@@ -10078,7 +10078,12 @@ async function initAuth() {
     const { token } = _loadStoredSession();
     _saveSession(token, user);
     updateAuthUI(user);
-    await syncConversationsAfterSignIn(user);
+    // updateHistory: false -- this is a silent restore that races the
+    // synchronous initial-route logic below; if it wins the race after
+    // currentView has already been set to 'app' by an overlay route (edge
+    // board, track record, ...), activateConv's default push would silently
+    // rewrite the URL to /chat/{id} and strand a refresh back on plain chat.
+    await syncConversationsAfterSignIn(user, { updateHistory: false });
   } else {
     updateAuthUI(null);  // reveal the Sign in entry points
   }
