@@ -856,6 +856,41 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn("event: error", body)
         self.assertIn("event: done", body)
 
+    def test_agent_analyze_stream_greeting_reply_goes_through_chat_response(self):
+        # agent_analyze_stream previously always called _build_typed_response, so a
+        # chat_mode reply's raw text -- including the internal [p:0.XX] marker --
+        # never went through _build_chat_response like predict() and /predict/stream
+        # do, and leaked into the visible rationale unstripped.
+        self.provider.stream_response = "Hi there! How can I help?\n[p:0.00]"
+        response = self.client.post(
+            "/agent/analyze/stream",
+            json={"question": "hello", "builtin_skills": True},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.text
+        done_payload = body.rsplit("event: done\ndata: ", 1)[1]
+        report = json.loads(done_payload)["report"]
+        self.assertEqual(report["question_type"], "chat")
+        self.assertEqual(report["thesis"], "**Forecast: 0%**\n\nHi there! How can I help?")
+
+    def test_agent_analyze_greeting_does_not_inject_self_calibration_note_into_history(self):
+        # The self-calibration note is forecast-specific (Brier/ECE, longshot bias)
+        # and irrelevant to a greeting -- injecting it as a fake prior "user" turn
+        # gave a weaker model nothing to do but echo it back to the user.
+        agg = {"n_snapshots_resolved": 5, "overall": {"skill_vs_market": 0.01}}
+        with mock.patch.object(server_module, "_read_live_track_record", return_value=agg):
+            response = self.client.post(
+                "/agent/analyze",
+                json={"question": "hello", "builtin_skills": True, "ground_in_record": True},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        sent_messages = self.provider.calls[0]
+        for message in sent_messages:
+            self.assertNotIn("Self-calibration context", message.get("content", ""))
+            self.assertNotIn("Forecaster self-calibration", message.get("content", ""))
+
     def test_market_forecast_stream_returns_model_probability(self):
         token = _issue_session("stream-user", "user@example.com", "Stream User", "")
         self.provider.stream_response = json.dumps(self.provider.response)

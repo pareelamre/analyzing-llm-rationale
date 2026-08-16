@@ -12386,16 +12386,6 @@ def _agent_prediction_request(
     quote: Optional[MarketQuote],
     grounding_note: Optional[str],
 ) -> PredictRequest:
-    history = list(req.history)
-    if grounding_note:
-        history = history + [{
-            "role": "user",
-            "content": f"[Self-calibration context — apply as a prior, not a hard rule]\n{grounding_note}",
-        }]
-    # AgentAnalyzeRequest.history allows up to 24 turns but PredictRequest.history
-    # caps at 12 -- truncate here (keeping the most recent turns, so an appended
-    # grounding_note always survives) or construction below raises a ValidationError.
-    history = history[-12:]
     has_market_context = bool(
         quote
         or req.market_url
@@ -12405,6 +12395,20 @@ def _agent_prediction_request(
         or req.market_probability is not None
     )
     is_greeting = not has_market_context and _is_greeting_or_meta(question)
+    history = list(req.history)
+    # The self-calibration note is forecast-specific (Brier/ECE, longshot bias) and
+    # irrelevant to a greeting -- injecting it as a fake prior "user" turn gives a
+    # weaker model nothing to do but echo it back, leaking internal track-record
+    # data into what should be a plain reply.
+    if grounding_note and not is_greeting:
+        history = history + [{
+            "role": "user",
+            "content": f"[Self-calibration context — apply as a prior, not a hard rule]\n{grounding_note}",
+        }]
+    # AgentAnalyzeRequest.history allows up to 24 turns but PredictRequest.history
+    # caps at 12 -- truncate here (keeping the most recent turns, so an appended
+    # grounding_note always survives) or construction below raises a ValidationError.
+    history = history[-12:]
     return PredictRequest(
         question=question,
         description=(
@@ -12819,9 +12823,17 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
             return
 
         text = "".join(chunks).strip()
-        parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
-                                             "rationale", "options", "p10", "p50", "p90", "unit"))
-        result = _build_typed_response(pred_req, parsed, text, evidence_articles, evidence_error)
+        # chat_mode (e.g. a greeting) must go through _build_chat_response, same as
+        # predict() and /predict/stream -- otherwise the raw [p:0.XX] marker and
+        # conversational prose get force-parsed as a JSON forecast, question_type
+        # never becomes "chat", and the frontend renders full report chrome
+        # (probability tag, grounding note) around what should be a plain reply.
+        if pred_req.chat_mode:
+            result = _build_chat_response(pred_req, text, evidence_articles, evidence_error)
+        else:
+            parsed = parse_model_response(text, ("type", "predicted_answer", "confidence",
+                                                 "rationale", "options", "p10", "p50", "p90", "unit"))
+            result = _build_typed_response(pred_req, parsed, text, evidence_articles, evidence_error)
         try:
             await _finalize_predict_response(pred_req, result, _optional_user_id(request))
         except Exception:
