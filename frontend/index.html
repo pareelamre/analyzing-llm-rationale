@@ -1750,7 +1750,10 @@
     .settings-nav {
       width: 176px; flex-shrink: 0; border-right: 1px solid var(--border);
       padding: 20px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: var(--border-2) transparent;
     }
+    .settings-nav::-webkit-scrollbar { width: 5px; }
+    .settings-nav::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 5px; }
     .settings-nav-title { font-size: 12px; font-weight: 700; color: var(--ink); padding: 4px 10px 10px; }
     .settings-nav-item {
       display: flex; align-items: center; justify-content: space-between; gap: 6px;
@@ -1761,7 +1764,13 @@
     .settings-nav-item:hover { background: var(--panel); color: var(--ink); }
     .settings-nav-item.active { background: var(--ink); color: #fff; }
     .settings-nav-badge { font-size: 10px; opacity: .8; }
-    .settings-body { flex: 1; padding: 26px 30px; overflow-y: auto; min-width: 0; }
+    .settings-body {
+      flex: 1; padding: 26px 30px; overflow-y: auto; min-width: 0;
+      scrollbar-width: thin; scrollbar-color: var(--border-2) transparent;
+    }
+    .settings-body::-webkit-scrollbar { width: 6px; }
+    .settings-body::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 6px; }
+    .settings-body::-webkit-scrollbar-thumb:hover { background: var(--text-mute); }
     .settings-section { display: none; }
     .settings-section.active { display: block; }
     .settings-section-title { font-size: 16px; font-weight: 600; color: var(--ink); margin: 0 0 6px; }
@@ -2494,7 +2503,7 @@
 <div id="settingsOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" aria-hidden="true" onclick="if(event.target===this)closeSettingsModal()">
   <div class="settings-card" style="position:relative">
     <button type="button" class="auth-close" onclick="closeSettingsModal()" aria-label="Close"><svg class="ui-icon" aria-hidden="true"><use href="#ui-x"></use></svg></button>
-    <nav class="settings-nav">
+    <nav class="settings-nav" data-lenis-prevent>
       <p class="settings-nav-title" id="settingsTitle">Settings</p>
       <button type="button" class="settings-nav-item active" data-settings-section="connections" onclick="_showSettingsSection('connections')">
         <span>Connections</span><span id="settingsConnectionsBadge" class="settings-nav-badge"></span>
@@ -2503,7 +2512,7 @@
         <span>Copied agents</span>
       </button>
     </nav>
-    <div class="settings-body">
+    <div class="settings-body" data-lenis-prevent>
       <section id="settingsSectionConnections" class="settings-section active">
         <p class="settings-section-title">Connect exchange</p>
         <p class="text-gray-400" style="font-size:11px;margin:0 0 14px;line-height:1.5">
