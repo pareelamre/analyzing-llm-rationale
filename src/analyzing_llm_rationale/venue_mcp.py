@@ -2,8 +2,21 @@
 
 When ``POLYMARKET_MCP_URL`` / ``KALSHI_MCP_URL`` are set, Foresea's agent loop can
 call those venues' own MCP servers as extra tools — for richer live data
-(orderbook, depth, recent trades) than the direct `market_data` quotes, and an
-execution path later.
+(orderbook, depth, recent trades) than the direct `market_data` quotes.
+
+This is a read-only context source, not an execution path — Foresea's real order
+placement always goes through trading.py's guardrail chain
+(_validate_live_trade_guardrails, the kill switch, CONFIRMATION_PHRASE), never
+through a discovered venue tool. A configured venue server is untrusted
+third-party code we don't control, and several public Kalshi/Polymarket MCP
+servers bundle trading tools alongside read-only ones, so discover_tools() drops
+anything whose name suggests a write/trading action before it can reach the
+agent loop at all (see _is_write_tool). A clear read prefix ("get_orderbook",
+"list_trades") is always allowed even though "order"/"trade" are otherwise
+ambiguous; an unprefixed name containing an exact write-verb token (e.g. a bare
+"close_position") is excluded even if it might be a read in a given server's
+vocabulary — deliberately biased toward over-excluding an ambiguous unprefixed
+name over ever letting a real trading tool through.
 
 Strictly additive and best-effort:
 - Unset or unreachable venues are silently skipped (the loop is unchanged).
@@ -17,13 +30,49 @@ if the SDK is missing, discovery just yields nothing.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import re
 from typing import Any, Awaitable, Callable, Dict, List, Tuple
+
+logger = logging.getLogger(__name__)
 
 _VENUE_ENV = {"polymarket": "POLYMARKET_MCP_URL", "kalshi": "KALSHI_MCP_URL"}
 _TIMEOUT_S = float(os.environ.get("VENUE_MCP_TIMEOUT_S", "20"))
 _MAX_OUTPUT = int(os.environ.get("VENUE_MCP_MAX_OUTPUT", "4000"))
 _MAX_TOOLS_PER_VENUE = int(os.environ.get("VENUE_MCP_MAX_TOOLS", "8"))
+
+# A configured venue server is untrusted third-party code we don't control, and
+# several public Kalshi/Polymarket MCP servers bundle trading tools alongside
+# read-only ones. This is read-only-context augmentation, not an execution path
+# -- any tool whose name suggests a write/trading action is dropped before it
+# can ever reach the agent loop, regardless of what a given server advertises.
+#
+# A tool clearly named as a read (starts with one of _READ_PREFIXES, e.g.
+# "get_orderbook") is always allowed, even though "order" would otherwise be
+# ambiguous -- order book depth and recent trades are exactly the data this
+# module exists to surface. Anything else is excluded if any name token is
+# exactly a write verb. This is deliberately biased toward over-excluding an
+# unprefixed, ambiguous name over ever letting a real trading tool through.
+_READ_PREFIXES = ("get", "fetch", "list", "read", "view", "check", "query", "show", "describe", "search")
+_WRITE_VERBS = frozenset((
+    "order", "trade", "buy", "sell", "cancel", "withdraw", "transfer",
+    "deposit", "close", "place", "execute", "submit", "create", "modify", "amend",
+))
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _tokens(name: str) -> List[str]:
+    # Splits on non-alphanumeric separators (_, -, space) and camelCase boundaries.
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name)
+    return _TOKEN_RE.findall(spaced.lower())
+
+
+def _is_write_tool(name: str) -> bool:
+    tokens = _tokens(name)
+    if tokens and tokens[0] in _READ_PREFIXES:
+        return False
+    return any(tok in _WRITE_VERBS for tok in tokens)
 
 
 def configured_venues() -> List[Tuple[str, str]]:
@@ -63,14 +112,23 @@ async def _call_tool(url: str, name: str, args: Dict[str, Any]) -> str:
 
 async def discover_tools() -> Dict[str, Dict[str, str]]:
     """{namespaced_name: {url, name, description}} across all configured venues.
-    Best-effort: a venue that fails to list is skipped."""
+    Best-effort: a venue that fails to list is skipped. Tools whose name suggests
+    a write/trading action are dropped -- see _is_write_tool."""
     out: Dict[str, Dict[str, str]] = {}
     for prefix, url in configured_venues():
         try:
             tools = await asyncio.wait_for(_list_tools(url), _TIMEOUT_S)
         except Exception:
             continue
-        for name, desc in tools[:_MAX_TOOLS_PER_VENUE]:
+        read_only = []
+        for name, desc in tools:
+            if _is_write_tool(name):
+                logger.warning(
+                    "venue MCP tool excluded (write/trading name): venue=%s tool=%s", prefix, name
+                )
+                continue
+            read_only.append((name, desc))
+        for name, desc in read_only[:_MAX_TOOLS_PER_VENUE]:
             out[f"{prefix}_{name}"] = {"url": url, "name": name,
                                        "description": f"[{prefix}] {desc}".strip()}
     return out
