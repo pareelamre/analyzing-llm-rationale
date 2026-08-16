@@ -1625,20 +1625,6 @@
       animation: agent-spin .7s linear infinite;
     }
     @keyframes agent-spin { to { transform: rotate(360deg); } }
-    .agent-steps { display: flex; flex-direction: column; gap: 7px; }
-    .agent-step {
-      display: flex; align-items: center; gap: 9px;
-      font-size: 13px; color: var(--text-mute);
-      opacity: .55; transition: opacity var(--dur-med), color var(--dur-med);
-    }
-    .agent-step .agent-dot {
-      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-      background: var(--border-2); transition: background var(--dur-med), transform var(--dur-med);
-    }
-    .agent-step.active { opacity: 1; color: var(--ink); }
-    .agent-step.active .agent-dot { background: var(--ink); transform: scale(1.25); }
-    .agent-step.done { opacity: .9; color: var(--text-dim); }
-    .agent-step.done .agent-dot { background: var(--signal); }
 
     /* ── Config panel (collapses model + agent skills) ────────────────────── */
     .config-panel { border: 0; }
@@ -4646,27 +4632,22 @@ function addTyping({ kind = 'lookup', surface = 'chat' } = {}) {
   return div;
 }
 
-// Agent steps advance only when the streaming endpoint reports a real phase.
+// A single, live-updating status line -- not a pre-declared checklist of
+// every stage the pipeline *might* reach. A plain "hello" and a genuine
+// forecasting question both just show whatever stage is actually
+// happening right now, instead of a wall of stage labels up front.
 function addAgentProgress(steps) {
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
   div.innerHTML = `<div class="msg-ai agent-run p-4 sm:p-5" role="status" aria-live="polite" aria-atomic="true">
     <div class="agent-run-head"><span class="agent-spinner"></span><span class="agent-progress-title">Agent working...</span></div>
-    <div class="agent-steps">${steps.map(s => `
-      <div class="agent-step"><span class="agent-dot"></span><span>${escHtml(s)}</span></div>`).join('')}</div>
   </div>`;
   document.getElementById('messages').appendChild(div);
   scrollBottom();
-  const stepEls = [...div.querySelectorAll('.agent-step')];
   div._setAgentProgress = label => {
-    const target = stepEls.findIndex(node => node.textContent.trim() === String(label || '').trim());
-    if (target < 0) return;
-    stepEls.forEach((node, index) => {
-      node.classList.toggle('done', index < target);
-      node.classList.toggle('active', index === target);
-    });
+    const el = div.querySelector('.agent-progress-title');
+    if (el && label) el.textContent = label;
   };
-  if (stepEls.length) div._setAgentProgress(steps[0]);
   return div;
 }
 
