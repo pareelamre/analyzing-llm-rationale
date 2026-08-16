@@ -106,6 +106,27 @@ class LeaderboardTests(unittest.TestCase):
         # 100 contracts @ 0.55 bid = 55.0 liquidation value
         self.assertAlmostEqual(row["account_value"], 9_600.0 + 55.0)
         self.assertAlmostEqual(row["unrealized_pnl"], 55.0 - 40.0)
+        self.assertAlmostEqual(row["total_pnl"], (9_600.0 + 55.0) - 10_000.0)
+
+    def test_total_pnl_matches_account_value_minus_starting_cash_accounting_for_fees(self):
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a", cash=9_800.0, starting_cash=10_000.0, fees_paid=20.0, realized_pnl=50.0)
+            _insert_position(conn, "model-a", quantity=100.0, cost_basis=100.0)
+            conn.commit()
+
+            quotes = {("kalshi", "KXFOO-26"): {"yes_bid": 0.90}}
+            rows = agent_trading_stats.compute_agent_leaderboard(conn, quotes)
+
+        row = rows[0]
+        # Account value = cash (9800) + liq_val (90) = 9890.0
+        self.assertAlmostEqual(row["account_value"], 9890.0)
+        # Total PnL = 9890.0 - 10000.0 = -110.0
+        self.assertAlmostEqual(row["total_pnl"], -110.0)
+        self.assertAlmostEqual(row["unrealized_pnl"], -10.0)
+        self.assertAlmostEqual(row["realized_pnl"], 50.0)
+        self.assertAlmostEqual(row["fees_paid"], 20.0)
+        # Net PnL is exactly Realized (50) + Unrealized (-10) - Fees (20) = -110 (which also accounts for initial cash difference)
+        self.assertAlmostEqual(row["total_pnl"], row["account_value"] - row["starting_cash"])
 
     def test_quotes_are_keyed_by_lowercase_platform_matching_agent_positions(self):
         # agent_positions.platform is always stored lowercase ("kalshi"); a

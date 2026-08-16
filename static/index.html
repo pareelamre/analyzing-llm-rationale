@@ -6002,7 +6002,10 @@ function renderAgentTradingBoard(d) {
   }).filter(Boolean);
 
   const tableRows = leaderboard.map((row, i) => {
-    const pnl = (Number(row.realized_pnl) || 0) + (Number(row.unrealized_pnl) || 0);
+    const startCash = Number(row.starting_cash) || 10000;
+    const pnl = row.total_pnl != null
+      ? Number(row.total_pnl)
+      : (Number(row.account_value) - startCash);
     const pnlColor = pnl >= 0 ? '#0a7' : '#c33';
     const winRate = row.win_rate == null ? '—' : `${Math.round(row.win_rate * 100)}%`;
     const agentId = String(row.agent_id || '');
@@ -6010,11 +6013,15 @@ function renderAgentTradingBoard(d) {
     const eligCell = elig && elig.eligible
       ? `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:#0a7">${uiIcon('check')}</span>`
       : `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:var(--text-dim)">—</span>`;
+    const feesPaid = Number(row.fees_paid) || 0;
+    const pnlTitle = feesPaid > 0
+      ? `Net P&L: ${_usd(pnl)} (Realized: ${_usd(row.realized_pnl || 0)}, Unrealized: ${_usd(row.unrealized_pnl || 0)}, Fees: ${_usd(feesPaid)})`
+      : `Net P&L: ${_usd(pnl)}`;
     return `<tr class="eb-row" data-model="${escAttr(row.agent_id || '')}">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(row.agent_id || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(row.agent_id || '')}</span></td>
       <td><b>${_usd(row.account_value)}</b></td>
-      <td style="color:${pnlColor};font-weight:600">${pnl >= 0 ? '+' : ''}${_usd(pnl)}</td>
+      <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnl >= 0 ? '+' : ''}${_usd(pnl)}</td>
       <td style="color:${pnlColor};font-weight:600">${_roiPct((Number(row.return_pct) || 0) / 100)}</td>
       <td>${winRate}</td>
       <td>${row.trade_count ?? 0}</td>

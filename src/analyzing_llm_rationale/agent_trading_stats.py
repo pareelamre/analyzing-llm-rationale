@@ -91,8 +91,9 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
         win_rate = (won_count / settled_count) if settled_count else None
 
         starting_cash = float(acct_row["starting_cash"])
+        total_pnl = snap["account_value"] - starting_cash
         return_pct = (
-            ((snap["account_value"] - starting_cash) / starting_cash) * 100.0
+            (total_pnl / starting_cash) * 100.0
             if starting_cash > 0 else 0.0
         )
         rows.append({
@@ -100,6 +101,7 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
             "starting_cash": round(starting_cash, 2),
             "cash": snap["cash"],
             "account_value": snap["account_value"],
+            "total_pnl": round(total_pnl, 6),
             "unrealized_pnl": snap["unrealized_pnl"],
             "realized_pnl": snap["realized_pnl"],
             "fees_paid": round(account.fees_paid, 6),
