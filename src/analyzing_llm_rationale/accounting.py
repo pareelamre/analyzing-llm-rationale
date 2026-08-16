@@ -151,9 +151,7 @@ class TradeFill:
     # Uncapped realized_pnl, before MAX_NETTING_ARB_PER_PAIR is applied.
     # Equal to realized_pnl unless this fill's netting arb was implausible.
     # Callers that want to reject implausible fills outright (rather than
-    # accept the capped credit) -- e.g. benchmark_tools._check_trade_guards,
-    # whose inputs are agent-supplied rather than historical market data --
-    # should compare against this, not realized_pnl.
+    # accept the capped credit) should compare against this, not realized_pnl.
     raw_realized_pnl: float = 0.0
 
     def as_dict(self) -> Dict[str, Any]:
@@ -176,11 +174,12 @@ class TradeFill:
 # A matched YES+NO pair always pays out exactly $1 combined, so realizing
 # more than a few cents of profit per pair on a netting fill almost always
 # means one of the two legs' recorded price doesn't reflect a real market,
-# not a real edge. Mirrors FORESEA_AGENT_MAX_NETTING_ARB_PER_PAIR / the
-# netting-arb guard in benchmark_tools.place_trade -- that guard rejects the
-# trade outright because its inputs are agent-supplied; here the inputs are
-# historical market data (a data-quality problem, not an adversarial one),
-# so buy() caps the credited profit instead of rejecting the fill.
+# not a real edge. Used only by callers that price fills off historical
+# market data (a data-quality problem, not an adversarial one) -- caps the
+# credited profit instead of rejecting the fill. benchmark_tools.place_trade
+# (the agent-trading path) does not use this: its fills are priced off a
+# live quote at call time via _resolve_shadow_marketability, so a large
+# netting profit there reflects a real market move, not bad data.
 MAX_NETTING_ARB_PER_PAIR = 0.15
 
 

@@ -515,18 +515,20 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(closed["risk_guard"]["market_cost_basis_after"], 0.0)
         self.assertEqual(closed["account"]["n_open_positions"], 0)
 
-    def test_place_trade_rejects_implausible_netting_arb(self):
-        # Regression test for the shadow-fill exploit: buying YES and NO on
-        # the same ticker at the same lowball price used to net a ~76%
-        # "riskless" profit with zero market settlements (this is what
-        # inflated the public agent-trading leaderboard). A real market would
-        # never quote both sides at 0.12 (they'd sum to ~1.0, not ~0.24), but
-        # a live-quote check can only be as good as the quote feed behind it
-        # -- mocking a genuinely bad/manipulated-looking quote (rather than
-        # relying on "no quote available", which now makes an order
-        # unmarketable instead of trusting the caller) proves the netting-arb
-        # guard in _check_trade_guards independently catches this even when
-        # _resolve_shadow_marketability's own check is fooled.
+    def test_place_trade_allows_a_large_quote_verified_netting_profit(self):
+        # This codebase's netting-arb guard used to reject any netting close
+        # realizing more than a flat $0.15/pair, regardless of why -- but
+        # PredictionArena's own methodology (whose design this benchmark
+        # follows) applies no such cap: realized PnL on a netting close is
+        # simply payout minus both legs' cost (see its "Selling: Buy NO to
+        # Sell YES" worked example). A YES+NO close at the SAME price on the
+        # same ticker (as if a real market briefly summed to ~$0.24, not
+        # ~$1.00) is a degenerate case that can't happen on Kalshi in
+        # practice -- yes_ask/no_ask are derived from the same unified order
+        # book -- but it's the simplest way to force a large arb_per_pair and
+        # confirm the guard no longer rejects it, since the trade's price was
+        # still quote-verified by _resolve_shadow_marketability (not
+        # agent-guessed), so the resulting profit is trusted like any other.
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
         with tempfile.TemporaryDirectory() as td:
@@ -556,17 +558,11 @@ class BenchmarkToolTests(unittest.TestCase):
                 )
 
         self.assertTrue(opened["ok"])
-        self.assertFalse(closed["ok"])
-        self.assertTrue(closed["rejected"])
-        self.assertEqual(closed["reason"], "implausible_netting_arb")
-        # risk_guard reflects the dry-run buy() used to evaluate the guards
-        # (same as the existing insolvency/concentration rejection tests),
-        # not what was actually persisted -- rejected trades never reach
-        # _apply_trade_to_account_tables, so nothing was actually netted.
-        self.assertGreater(
-            closed["risk_guard"]["arb_per_pair"],
-            closed["risk_guard"]["max_netting_arb_per_pair"],
-        )
+        self.assertTrue(closed["ok"])
+        self.assertEqual(closed["risk_guard"]["netting_payout"], 10.0)
+        # payout(10) - old_basis(1.2) - new_basis(1.2) - fee_alloc(0.07392),
+        # realized in full, not capped at $0.15/pair.
+        self.assertAlmostEqual(closed["account"]["realized_pnl"], 7.52608, places=4)
 
     def test_place_trade_shadow_fill_clamps_to_live_ask(self):
         # A marketable shadow order (price crosses the real ask) should fill
@@ -926,7 +922,10 @@ class BenchmarkToolTests(unittest.TestCase):
         account_entity = client.get(client.key("AgentTradingAccount", "model-a"))
         self.assertAlmostEqual(float(account_entity["cash"]), closed["account"]["cash"])
 
-    def test_place_trade_datastore_backend_rejects_implausible_netting_arb(self):
+    def test_place_trade_datastore_backend_allows_a_large_quote_verified_netting_profit(self):
+        # Datastore-backend twin of the SQLite test above -- same degenerate
+        # same-price quote, confirming the guard's removal applies to both
+        # account-store backends, not just the default SQLite one.
         _install_fake_datastore(self)
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
@@ -956,8 +955,9 @@ class BenchmarkToolTests(unittest.TestCase):
                 )
 
         self.assertTrue(opened["ok"])
-        self.assertFalse(closed["ok"])
-        self.assertEqual(closed["reason"], "implausible_netting_arb")
+        self.assertTrue(closed["ok"])
+        self.assertEqual(closed["risk_guard"]["netting_payout"], 10.0)
+        self.assertAlmostEqual(closed["account"]["realized_pnl"], 7.52608, places=4)
 
     def test_place_trade_datastore_backend_settles_open_positions(self):
         _install_fake_datastore(self)
