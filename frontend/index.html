@@ -3423,6 +3423,14 @@ function tradeRunHandoffHtml(data) {
   return '';
 }
 
+// Honest, fixed caption (never model-generated) so a thinner analysis pass
+// is never silent — shown only for the "simple" tier; standard/deep stay
+// exactly as before, unannounced.
+function effortTierCaptionHtml(data) {
+  if (data?.effort_tier !== 'simple') return '';
+  return `<div class="pt-2 text-xs text-gray-400">Quick take — this looked straightforward, so I skipped the deeper multi-angle pass. Ask a follow-up if you want the full analysis.</div>`;
+}
+
 async function addForecastToPersonalLedger(btn) {
   if (!currentUser) {
     openAuthModal('login');
@@ -3710,6 +3718,7 @@ function makeAIBubble(data, variant, options = {}) {
         ${sourceFeedHtml(sources, data.evidence_error)}
         ${isChatForecast && options.includeActions !== false ? forecastActionsHtml(data, { ledgerOnly: true }) : ''}
         ${options.includeActions !== false ? tradeRunHandoffHtml(data) : ''}
+        ${effortTierCaptionHtml(data)}
         <div class="pt-2 flex items-center gap-2 text-xs text-gray-400">
           <span class="logo-dot" style="width:5px;height:5px"></span>
           ${escHtml(modelKey)}
@@ -4414,7 +4423,8 @@ async function sendQuestion(options = {}) {
       const copiedAgent = _activeCopiedAgent();
       const agentBody = {
         question,
-        evidence_top_k: 20,
+        // evidence_top_k intentionally omitted — the server picks a depth
+        // based on the question's estimated complexity when unset.
         history,  // full thread context — only a new brief resets it
         conversation_steer: conversationSteer,
         skills: _agentSkillsForRun().map(s => ({ name: s.name, instruction: s.instruction })),
@@ -9110,6 +9120,7 @@ function _agentReportData(report) {
     evidence_error: d.evidence_error || '',
     live_trade_intent: d.live_trade_intent || null,
     agent_run: d.agent_run || null,
+    effort_tier: d.effort_tier || null,
   };
 }
 
