@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const kalshiEventsURL = "https://api.elections.kalshi.com/trade-api/v2/events"
@@ -90,15 +91,16 @@ func normalizeKalshi(ev *kalshiEvent, m *kalshiMarket) (Market, bool) {
 	}
 	yc, nc := yesNoCents(prob)
 	out := Market{
-		Platform:    "Kalshi",
-		Ident:       m.Ticker,
-		Question:    question,
-		MarketURL:   kalshiMarketURL(ev, m),
-		Category:    categoryFor(question, ev.Category),
-		Probability: &prob,
-		YesCents:    &yc,
-		NoCents:     &nc,
-		CloseTime:   m.CloseTime,
+		Platform:     "Kalshi",
+		Ident:        m.Ticker,
+		Question:     question,
+		MarketURL:    kalshiMarketURL(ev, m),
+		Category:     categoryFor(question, ev.Category),
+		Probability:  &prob,
+		YesCents:     &yc,
+		NoCents:      &nc,
+		CloseTime:    m.CloseTime,
+		SeriesTicker: ev.SeriesTicker,
 	}
 	if v := m.Volume24hFP.ptr(); v != nil {
 		out.Volume = v
@@ -141,4 +143,64 @@ func kalshiMarketURL(ev *kalshiEvent, m *kalshiMarket) string {
 		return ""
 	}
 	return "https://kalshi.com/markets/" + series
+}
+
+const kalshiCandlesticksURL = "https://api.elections.kalshi.com/trade-api/v2/series/%s/markets/%s/candlesticks"
+
+type kalshiCandlestickResp struct {
+	Candlesticks []kalshiCandlestick `json:"candlesticks"`
+}
+
+type kalshiCandlestick struct {
+	EndPeriodTs int64            `json:"end_period_ts"`
+	Price       kalshiPriceRange `json:"price"`
+	VolumeFP    flexFloat        `json:"volume_fp"`
+}
+
+type kalshiPriceRange struct {
+	OpenDollars  *flexFloat `json:"open_dollars"`
+	LowDollars   *flexFloat `json:"low_dollars"`
+	HighDollars  *flexFloat `json:"high_dollars"`
+	CloseDollars *flexFloat `json:"close_dollars"`
+}
+
+// Candlesticks fetches recent hourly OHLC candles for one market. seriesTicker
+// comes from the Market's SeriesTicker field (set in normalizeKalshi) -- Kalshi
+// requires both the series and market ticker, there's no by-ticker-alone lookup.
+// Public endpoint (no auth headers), unlike the order book endpoint.
+func (c *KalshiClient) Candlesticks(ctx context.Context, seriesTicker, ticker string, lookback time.Duration) ([]Candle, error) {
+	now := time.Now().UTC()
+	params := url.Values{}
+	params.Set("start_ts", fmt.Sprintf("%d", now.Add(-lookback).Unix()))
+	params.Set("end_ts", fmt.Sprintf("%d", now.Unix()))
+	params.Set("period_interval", "60") // hourly
+
+	reqURL := fmt.Sprintf(kalshiCandlesticksURL, url.PathEscape(seriesTicker), url.PathEscape(ticker)) + "?" + params.Encode()
+	var resp kalshiCandlestickResp
+	if err := c.api.getJSON(ctx, reqURL, &resp); err != nil {
+		return nil, err
+	}
+	return normalizeKalshiCandles(resp), nil
+}
+
+func normalizeKalshiCandles(resp kalshiCandlestickResp) []Candle {
+	out := make([]Candle, 0, len(resp.Candlesticks))
+	for _, cs := range resp.Candlesticks {
+		out = append(out, Candle{
+			EndTime: time.Unix(cs.EndPeriodTs, 0).UTC().Format(time.RFC3339),
+			Open:    flexPtr(cs.Price.OpenDollars),
+			High:    flexPtr(cs.Price.HighDollars),
+			Low:     flexPtr(cs.Price.LowDollars),
+			Close:   flexPtr(cs.Price.CloseDollars),
+			Volume:  cs.VolumeFP.ptr(),
+		})
+	}
+	return out
+}
+
+func flexPtr(f *flexFloat) *float64 {
+	if f == nil {
+		return nil
+	}
+	return f.ptr()
 }

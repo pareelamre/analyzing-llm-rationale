@@ -14,12 +14,25 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
 
+// _MAX_BATCH_REFS bounds a /quotes request so one caller can't force unbounded
+// concurrent upstream fan-out.
+const maxBatchRefs = 50
+
+// kalshiCandleLookback is how far back /quote and /quotes request Kalshi
+// candlesticks for -- enough for a same-day price trend without an unbounded
+// history fetch.
+const kalshiCandleLookback = 24 * time.Hour
+
 type server struct {
 	ingestor *Ingestor
+	kalshi   *KalshiClient
+	poly     *PolymarketClient
 	cache    *ttlCache[[]Market]
 	log      *slog.Logger
 }
@@ -29,13 +42,14 @@ func main() {
 
 	httpClient := &http.Client{Timeout: 15 * time.Second}
 	api := newAPIClient(httpClient)
-	ingestor := NewIngestor(
-		NewPolymarketClient(api),
-		NewKalshiClient(api),
-	)
+	polyClient := NewPolymarketClient(api)
+	kalshiClient := NewKalshiClient(api)
+	ingestor := NewIngestor(polyClient, kalshiClient)
 
 	srv := &server{
 		ingestor: ingestor,
+		kalshi:   kalshiClient,
+		poly:     polyClient,
 		cache:    newTTLCache[[]Market](cacheTTL()),
 		log:      log,
 	}
@@ -45,6 +59,8 @@ func main() {
 	mux.HandleFunc("GET /health", srv.handleHealth)
 	mux.HandleFunc("GET /healthz", srv.handleHealth) // alias
 	mux.HandleFunc("GET /markets", srv.handleMarkets)
+	mux.HandleFunc("GET /quote", srv.handleQuote)
+	mux.HandleFunc("GET /quotes", srv.handleQuotes)
 
 	addr := ":" + envOr("PORT", "8090")
 	httpServer := &http.Server{
@@ -106,6 +122,109 @@ func (s *server) handleMarkets(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleQuote serves GET /quote?platform=&ident=&extra= -- depth/candles for one
+// market. extra is series_ticker for Kalshi (required; candlesticks need both
+// the series and market ticker) or the YES-outcome token_id for Polymarket
+// (required; order book / price history are keyed on it, not the slug).
+func (s *server) handleQuote(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	q := s.fetchQuote(ctx, r.URL.Query().Get("platform"), r.URL.Query().Get("ident"), r.URL.Query().Get("extra"))
+	writeJSON(w, http.StatusOK, q)
+}
+
+// handleQuotes serves GET /quotes?ref=platform:ident:extra&ref=... -- the batch
+// tool: N markets resolve concurrently, in the time of the slowest one rather
+// than the sum, with per-ref fault isolation (one bad ref never fails the batch).
+func (s *server) handleQuotes(w http.ResponseWriter, r *http.Request) {
+	refs := r.URL.Query()["ref"]
+	truncated := false
+	if len(refs) > maxBatchRefs {
+		refs = refs[:maxBatchRefs]
+		truncated = true
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+
+	quotes := make([]Quote, len(refs))
+	var wg sync.WaitGroup
+	for i, raw := range refs {
+		wg.Add(1)
+		go func(i int, raw string) {
+			defer wg.Done()
+			platform, ident, extra := parseRef(raw)
+			quotes[i] = s.fetchQuote(ctx, platform, ident, extra)
+		}(i, raw)
+	}
+	wg.Wait()
+
+	writeJSON(w, http.StatusOK, quotesResponse{Quotes: quotes, Count: len(quotes), Truncated: truncated})
+}
+
+// fetchQuote dispatches to the venue-specific depth calls. Kalshi order book
+// requires signed requests (KALSHI-ACCESS-KEY/SIGNATURE/TIMESTAMP) which this
+// credential-free public service intentionally does not implement -- Kalshi
+// quotes here carry candles only.
+func (s *server) fetchQuote(ctx context.Context, platform, ident, extra string) Quote {
+	q := Quote{Platform: platform, Ident: ident, FetchedAt: time.Now().UTC().Format(time.RFC3339)}
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "kalshi":
+		if extra == "" {
+			q.Error = "kalshi requires extra=series_ticker"
+			return q
+		}
+		candles, err := s.kalshi.Candlesticks(ctx, extra, ident, kalshiCandleLookback)
+		if err != nil {
+			q.Error = err.Error()
+			return q
+		}
+		q.Candles = candles
+	case "polymarket":
+		if extra == "" {
+			q.Error = "polymarket requires extra=token_id"
+			return q
+		}
+		book, bookErr := s.poly.OrderBook(ctx, extra)
+		candles, historyErr := s.poly.PriceHistory(ctx, extra)
+		if bookErr != nil && historyErr != nil {
+			q.Error = bookErr.Error()
+			return q
+		}
+		if bookErr == nil {
+			q.OrderBook = book
+		}
+		if historyErr == nil {
+			q.Candles = candles
+		}
+	default:
+		q.Error = "platform must be \"kalshi\" or \"polymarket\""
+	}
+	return q
+}
+
+// parseRef splits "platform:ident:extra" (extra optional). ident/extra may not
+// themselves contain ":" -- Kalshi tickers and Polymarket slugs/token ids don't.
+func parseRef(raw string) (platform, ident, extra string) {
+	parts := strings.SplitN(raw, ":", 3)
+	if len(parts) > 0 {
+		platform = parts[0]
+	}
+	if len(parts) > 1 {
+		ident = parts[1]
+	}
+	if len(parts) > 2 {
+		extra = parts[2]
+	}
+	return platform, ident, extra
+}
+
+type quotesResponse struct {
+	Quotes    []Quote `json:"quotes"`
+	Count     int     `json:"count"`
+	Truncated bool    `json:"truncated,omitempty"`
+}
+
 func (s *server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -140,6 +259,8 @@ endpoints below return JSON.</p>
   <li><a href="/markets?limit=10">/markets?limit=10</a> — trending, ranked by volume</li>
   <li><a href="/markets?category=Crypto&limit=10">/markets?category=Crypto&amp;limit=10</a> — by category</li>
   <li><a href="/markets?q=election&limit=10">/markets?q=election&amp;limit=10</a> — keyword search</li>
+  <li><code>/quote?platform=&amp;ident=&amp;extra=</code> — depth/candles for one market (extra = Kalshi series_ticker or Polymarket token_id, both from a Market's SeriesTicker/TokenID field)</li>
+  <li><code>/quotes?ref=platform:ident:extra&amp;ref=...</code> — the same, batched (up to 50 refs, concurrent, per-ref fault isolation)</li>
   <li><a href="/health">/health</a> — liveness</li>
 </ul>
 <p class="foot">Stateless · concurrent (goroutines + context) · per-source fault isolation · TTL-cached.</p>

@@ -12,17 +12,23 @@ import (
 // Market is the venue-agnostic, normalized shape every source is mapped onto.
 // Probability is P(Yes) in [0,1]; YesCents/NoCents are the same expressed the way
 // prediction markets quote them (0–100¢).
+//
+// SeriesTicker (Kalshi only) and TokenID (Polymarket only, the YES-outcome CLOB
+// token) are carried through so a caller who already has a Market from /markets
+// can fetch candles / order book for it without a second lookup.
 type Market struct {
-	Platform    string   `json:"platform"`
-	Ident       string   `json:"ident"`
-	Question    string   `json:"question"`
-	MarketURL   string   `json:"market_url"`
-	Category    string   `json:"category"`
-	Probability *float64 `json:"probability"`
-	YesCents    *int     `json:"yes_cents,omitempty"`
-	NoCents     *int     `json:"no_cents,omitempty"`
-	CloseTime   string   `json:"close_time,omitempty"`
-	Volume      *float64 `json:"volume,omitempty"`
+	Platform     string   `json:"platform"`
+	Ident        string   `json:"ident"`
+	Question     string   `json:"question"`
+	MarketURL    string   `json:"market_url"`
+	Category     string   `json:"category"`
+	Probability  *float64 `json:"probability"`
+	YesCents     *int     `json:"yes_cents,omitempty"`
+	NoCents      *int     `json:"no_cents,omitempty"`
+	CloseTime    string   `json:"close_time,omitempty"`
+	Volume       *float64 `json:"volume,omitempty"`
+	SeriesTicker string   `json:"series_ticker,omitempty"`
+	TokenID      string   `json:"token_id,omitempty"`
 }
 
 // flexFloat decodes a numeric value whether the venue encodes it as a JSON
@@ -55,6 +61,43 @@ type Query struct {
 	Keyword  string
 	Category string
 	Limit    int
+}
+
+// OrderBookLevel is one price/size pair on one side of a book.
+type OrderBookLevel struct {
+	Price float64 `json:"price"`
+	Size  float64 `json:"size"`
+}
+
+// OrderBook is bids/asks for the YES side of a binary market, best price first.
+type OrderBook struct {
+	Bids []OrderBookLevel `json:"bids"`
+	Asks []OrderBookLevel `json:"asks"`
+}
+
+// Candle is one OHLC period. Any of Open/High/Low/Close/Volume may be nil if the
+// venue didn't report it for that period.
+type Candle struct {
+	EndTime string   `json:"end_time"` // RFC3339
+	Open    *float64 `json:"open,omitempty"`
+	High    *float64 `json:"high,omitempty"`
+	Low     *float64 `json:"low,omitempty"`
+	Close   *float64 `json:"close,omitempty"`
+	Volume  *float64 `json:"volume,omitempty"`
+}
+
+// Quote is depth/candle data for one market -- a focused enrichment endpoint,
+// not a re-derivation of the base listing fields /markets already serves.
+// FetchedAt is the staleness signal every response carries. Error is set (with
+// the other fields left empty) when this one ref failed, so a batch of refs
+// degrades per-ref rather than failing as a whole.
+type Quote struct {
+	Platform  string     `json:"platform"`
+	Ident     string     `json:"ident"`
+	OrderBook *OrderBook `json:"order_book,omitempty"`
+	Candles   []Candle   `json:"candles,omitempty"`
+	FetchedAt string     `json:"fetched_at"`
+	Error     string     `json:"error,omitempty"`
 }
 
 // Fetcher is one external market source (e.g. Polymarket, Kalshi). Implementations
