@@ -1917,7 +1917,7 @@
       .nav-collapse { display: none; }
       .btn-signin { padding: 7px 13px; }
     }
-  </style>
+  </style>
   <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
@@ -5025,8 +5025,17 @@ const _LEGACY_HASH_VIEW = {
 function normaliseAppPath(pathname = window.location.pathname) {
   return pathname.replace(/\/+$/, '') || '/';
 }
-function historyUrlFor(view, convId = null) {
-  return view === 'chat' && convId ? conversationPath(convId) : (_VIEW_URL[view] ?? '/ask');
+// Edge board sub-panels (Markets/MTM/Agentic) get their own path segment off
+// /edge so a refresh lands back on whichever panel was open, not always Markets.
+function parseEdgePath(pathname) {
+  const m = /^\/edge(?:\/(mtm|agentic))?$/.exec(pathname);
+  return m ? { panel: m[1] || 'markets' } : null;
+}
+function historyUrlFor(view, convId = null, panel = null) {
+  if (view === 'chat' && convId) return conversationPath(convId);
+  const base = _VIEW_URL[view] ?? '/ask';
+  if ((view === 'edge-app' || view === 'edge-landing') && panel && panel !== 'markets') return `${base}/${panel}`;
+  return base;
 }
 function legacyRouteFromHash(hash = window.location.hash) {
   const convId = conversationIdFromLegacyHash(hash);
@@ -5037,10 +5046,10 @@ function legacyRouteFromHash(hash = window.location.hash) {
 
 function setHistoryState(view, mode = 'push', options = {}) {
   if (isApplyingHistory || !window.history) return;
-  const state = { view, convId: options.convId || null };
-  const url = historyUrlFor(view, state.convId);
+  const state = { view, convId: options.convId || null, panel: options.panel || null };
+  const url = historyUrlFor(view, state.convId, state.panel);
   if (mode === 'replace') history.replaceState(state, '', url);
-  else if (history.state?.view !== view || history.state?.convId !== state.convId) history.pushState(state, '', url);
+  else if (history.state?.view !== view || history.state?.convId !== state.convId || history.state?.panel !== state.panel) history.pushState(state, '', url);
 }
 function showLanding({ updateHistory = true } = {}) {
   closeSidebar();
@@ -5701,9 +5710,10 @@ document.addEventListener('visibilitychange', () => {
   loadCrypto5mEquity();
 });
 
-async function openEdgeBoard({ updateHistory = true } = {}) {
+async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
   const ov = document.getElementById('edgeOverlay');
   _edgeOpenSeq++;
+  if (panel) _ebSetView(panel);
   if (ov.classList.contains('open')) {
     // Either genuinely already open, or mid fade-out from a close() that ran
     // moments ago (applyHistoryState closes every overlay before re-opening the
@@ -5718,7 +5728,7 @@ async function openEdgeBoard({ updateHistory = true } = {}) {
   ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
   trackEvent('edge_board_opened', { source: currentView === 'app' ? 'app' : 'landing' });
-  if (updateHistory) setHistoryState(currentView === 'app' ? 'edge-app' : 'edge-landing');
+  if (updateHistory) setHistoryState(currentView === 'app' ? 'edge-app' : 'edge-landing', 'push', { panel: _ebView });
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   }
@@ -5784,6 +5794,9 @@ async function loadEdgeBoard() {
     if (!r.ok) throw new Error('unavailable');
     host.innerHTML = renderEdgeBoard(await _readJson(r));
     _attachEdgeBoardChartHovers(host);
+    // Deep link / refresh straight into the Agentic panel: renderEdgeBoard() only
+    // emits a placeholder for it since its data isn't part of this payload.
+    if (_ebView === 'agentic') loadAgentTradingSection();
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#edgeBody .tr-stat',
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
@@ -7184,6 +7197,7 @@ document.addEventListener('click', (event) => {
   if (viewBtn) {
     event.preventDefault();
     _ebSetView(viewBtn.dataset.ebView);
+    setHistoryState(currentView === 'app' ? 'edge-app' : 'edge-landing', 'replace', { panel: _ebView });
     return;
   }
   const sizingBtn = event.target.closest('[data-mtm-sizing-mode]');
@@ -7481,11 +7495,14 @@ function applyHistoryState(state) {
   // Infer a route from the path when state is missing (e.g. a direct link or refresh).
   const legacyRoute = legacyRouteFromHash();
   const urlConversationId = state?.convId || conversationIdFromPath() || legacyRoute?.convId;
+  const edgePath = parseEdgePath(normaliseAppPath());
   const view = state?.view
     || (urlConversationId ? 'chat' : null)
     || legacyRoute?.view
+    || (edgePath ? 'edge-landing' : null)
     || _PATH_VIEW[normaliseAppPath()]
     || 'landing';
+  const edgePanel = state?.panel || (edgePath ? edgePath.panel : null);
 
   // Close all overlays first — avoids every case having to enumerate which to close
   closeTrackRecord({ updateHistory: false });
@@ -7505,13 +7522,13 @@ function applyHistoryState(state) {
     openTrackRecord({ updateHistory: false });
   } else if (view === 'edge-app') {
     launchApp({ updateHistory: false });
-    openEdgeBoard({ updateHistory: false });
+    openEdgeBoard({ updateHistory: false, panel: edgePanel });
   } else if (view === 'track-landing') {
     showLanding({ updateHistory: false });
     openTrackRecord({ updateHistory: false });
   } else if (view === 'edge-landing') {
     showLanding({ updateHistory: false });
-    openEdgeBoard({ updateHistory: false });
+    openEdgeBoard({ updateHistory: false, panel: edgePanel });
   } else if (view === 'watch-app') {
     launchApp({ updateHistory: false });
     openWatchlistPage({ updateHistory: false });
@@ -10093,10 +10110,12 @@ if (_legacyInitialRoute) {
   );
 }
 const _initConversationId = conversationIdFromPath();
+const _initEdgePath = parseEdgePath(normaliseAppPath());
 const _initView = _initConversationId
   ? 'chat'
-  : (history.state?.view || _PATH_VIEW[normaliseAppPath()] || 'landing');
-setHistoryState(_initView, 'replace', { convId: _initConversationId });
+  : (history.state?.view || (_initEdgePath ? 'edge-landing' : null) || _PATH_VIEW[normaliseAppPath()] || 'landing');
+const _initPanel = history.state?.panel || (_initEdgePath ? _initEdgePath.panel : null);
+setHistoryState(_initView, 'replace', { convId: _initConversationId, panel: _initPanel });
 syncSidebarA11y();
 recordPageVisit();
 updateVariantDesc();
@@ -10112,7 +10131,7 @@ const _initialActiveId = _initConversationId && store.conversations[_initConvers
   : ids[0];
 if (_initialActiveId) activateConv(_initialActiveId, { updateHistory: false });
 else newConversation({ updateHistory: false });
-if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView, convId: _initConversationId });
+if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView, convId: _initConversationId, panel: _initPanel });
 
 // ── Smooth scroll + entrance choreography ────────────────────────────────────
 (function initMotion() {

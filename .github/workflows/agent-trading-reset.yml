@@ -1,0 +1,49 @@
+name: Agent trading reset (admin)
+
+# Manual-only admin tool: resets one or more agentic-board shadow accounts
+# back to a clean starting state via scripts/reset_agent_trading_accounts.py.
+# Used after a bug in place_trade/PredictionMarketAccount.buy() has already
+# been fixed (see PR #230, #233) but historical GCS-stored account data
+# still reflects trades made under the old, buggy code -- see that script's
+# docstring for exactly what a reset does and preserves.
+#
+# workflow_dispatch only, never scheduled: a reset is a deliberate one-off
+# admin action, not something that should ever fire on a timer.
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: "Space-separated model names to reset, or 'all' for every chat-enabled model."
+        required: true
+        default: "all"
+        type: string
+
+jobs:
+  reset:
+    name: reset (${{ inputs.models }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install --quiet -e ".[serve]"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Run reset
+        env:
+          MODELS: ${{ inputs.models }}
+        run: |
+          if [ "$MODELS" = "all" ]; then
+            python scripts/reset_agent_trading_accounts.py --all
+          else
+            python scripts/reset_agent_trading_accounts.py $MODELS
+          fi
