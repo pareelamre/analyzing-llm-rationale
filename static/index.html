@@ -1797,6 +1797,82 @@
     .settings-section { display: none; }
     .settings-section.active { display: block; }
     .settings-section-title { font-size: 16px; font-weight: 600; color: var(--ink); margin: 0 0 6px; }
+
+    /* Model Providers */
+    .mp-category-pills { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 2px; }
+    .mp-pill {
+      font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--panel); color: var(--text-dim);
+      cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
+    }
+    .mp-pill:hover { border-color: var(--border-2); color: var(--ink); background: var(--bg); }
+    .mp-pill.active { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+
+    .mp-card {
+      border: 1px solid var(--border); border-radius: 12px; background: var(--panel);
+      padding: 12px 14px; transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .mp-card:hover { border-color: var(--border-2); }
+    .mp-card.is-connected { border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.02); }
+
+    .mp-card-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .mp-card-title-group { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .mp-logo-badge {
+      width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
+      font-size: 10.5px; font-weight: 700; background: var(--bg); border: 1px solid var(--border); color: var(--ink);
+      flex-shrink: 0; letter-spacing: -0.02em;
+    }
+    .mp-name { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.2; }
+    .mp-category-tag {
+      font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+      padding: 1px 5px; border-radius: 4px; background: var(--bg); color: var(--text-mute); border: 1px solid var(--border);
+    }
+    .mp-status-badge {
+      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .mp-status-badge.connected { background: #ecfdf5; color: #059669; }
+    .mp-status-badge.disconnected { background: var(--bg); color: var(--text-mute); }
+
+    .mp-card-body { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .mp-desc { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; margin: 0; }
+    .mp-input-row { display: flex; flex-direction: column; gap: 4px; }
+    .mp-label-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .mp-label { font-size: 10.5px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+    .mp-link { font-size: 10.5px; color: var(--brand, #4f46e5); text-decoration: none; font-weight: 500; }
+    .mp-link:hover { text-decoration: underline; }
+    
+    .mp-key-input-wrapper { position: relative; display: flex; align-items: center; }
+    .mp-key-input { width: 100%; padding-right: 32px; font-family: monospace; font-size: 11.5px; }
+    .mp-peek-btn {
+      position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; padding: 4px; cursor: pointer; color: var(--text-mute);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mp-peek-btn:hover { color: var(--ink); }
+
+    .mp-actions-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; flex-wrap: wrap;
+    }
+    .mp-btn-group { display: flex; align-items: center; gap: 6px; }
+    .mp-btn {
+      font-size: 11.5px; font-weight: 500; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--border); transition: all 0.15s ease;
+    }
+    .mp-btn-primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .mp-btn-primary:hover { opacity: 0.9; }
+    .mp-btn-test { background: var(--bg); color: var(--ink); border-color: var(--border-2); }
+    .mp-btn-test:hover { background: var(--panel); border-color: var(--ink); }
+    .mp-btn-disconnect { background: transparent; color: #dc2626; border-color: transparent; }
+    .mp-btn-disconnect:hover { background: #fef2f2; border-color: #fecaca; }
+
+    .mp-test-result {
+      font-size: 11px; padding: 6px 10px; border-radius: 6px; margin-top: 4px; display: none; line-height: 1.4;
+    }
+    .mp-test-result.success { display: block; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .mp-test-result.error { display: block; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
     @media (max-width: 640px) {
       .settings-card { flex-direction: column; max-height: 90vh; }
       .settings-nav { width: 100%; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 10px; }
@@ -1949,7 +2025,7 @@
       .nav-collapse { display: none; }
       .btn-signin { padding: 7px 13px; }
     }
-  </style>
+  </style>
   <script>
     // Pre-paint routing (see the [data-boot-view] CSS rules above): decide
     // the initial route before the browser paints anything, so a direct
@@ -2001,6 +2077,8 @@
     <symbol id="ui-triangle-up" viewBox="0 0 24 24"><path d="m12 6 7 12H5L12 6Z"/></symbol>
     <symbol id="ui-triangle-down" viewBox="0 0 24 24"><path d="m12 18-7-12h14l-7 12Z"/></symbol>
     <symbol id="ui-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="ui-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="ui-eye-off" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24m-6.3-1.42A9 9 0 0 1 2 12s3-7 10-7a9 9 0 0 1 5.3 1.7M21.73 17.73A9 9 0 0 1 12 19c-7 0-10-7-10-7a13.3 13.3 0 0 1 2.2-3.3M3 3l18 18"/></symbol>
   </defs>
 </svg>
 
@@ -2555,7 +2633,10 @@
     <nav class="settings-nav" data-lenis-prevent>
       <p class="settings-nav-title" id="settingsTitle">Settings</p>
       <button type="button" class="settings-nav-item active" data-settings-section="connections" onclick="_showSettingsSection('connections')">
-        <span>Connections</span><span id="settingsConnectionsBadge" class="settings-nav-badge"></span>
+        <span>Exchange</span><span id="settingsConnectionsBadge" class="settings-nav-badge"></span>
+      </button>
+      <button type="button" class="settings-nav-item" data-settings-section="model-providers" onclick="_showSettingsSection('model-providers')">
+        <span>Model providers</span><span id="settingsModelProvidersBadge" class="settings-nav-badge"></span>
       </button>
     </nav>
     <div class="settings-body" data-lenis-prevent>
@@ -2599,6 +2680,34 @@
         </details>
         <div id="venueErr" class="model-form-error" hidden></div>
         <button type="button" class="model-add-btn ui-icon-label" onclick="openTradeModal()">Place an order <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></button>
+      </section>
+
+      <section id="settingsSectionModelProviders" class="settings-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <p class="settings-section-title" style="margin:0">Connect model providers</p>
+          <span id="modelProvidersSecBadge" style="font-size:10px;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#4f46e5;font-weight:600">Encrypted (KMS)</span>
+        </div>
+        <p class="text-gray-400" style="font-size:11px;margin:0 0 14px;line-height:1.5">
+          Connect your own API keys for frontier reasoning, open weights, and cloud inference models.
+          Keys are encrypted server-side with Cloud KMS envelope encryption, never sent back in plaintext,
+          and used for your signed-in research and chat queries.
+        </p>
+
+        <!-- Category filter pills -->
+        <div class="mp-category-pills">
+          <button type="button" class="mp-pill active" onclick="filterModelProviderCategory('all', this)">All</button>
+          <button type="button" class="mp-pill" onclick="filterModelProviderCategory('frontier', this)">Frontier</button>
+          <button type="button" class="mp-pill" onclick="filterModelProviderCategory('open_weights', this)">Open Weights</button>
+          <button type="button" class="mp-pill" onclick="filterModelProviderCategory('inference_cloud', this)">Inference Cloud</button>
+          <button type="button" class="mp-pill" onclick="filterModelProviderCategory('specialized', this)">Specialized</button>
+          <button type="button" class="mp-pill" onclick="filterModelProviderCategory('custom', this)">Custom / Local</button>
+        </div>
+
+        <!-- Provider Cards Container -->
+        <div id="modelProvidersList" style="display:flex;flex-direction:column;gap:10px">
+          <!-- Dynamically populated by renderModelProviderCards() -->
+        </div>
+        <div id="modelProviderGlobalErr" class="model-form-error" hidden style="margin-top:12px"></div>
       </section>
     </div>
   </div>
@@ -7604,12 +7713,11 @@ async function addUrlAttachment() {
 function isChatMode() { return true; }
 function loadChatModeToggle() { /* toggle removed; chat is the default */ }
 
-// ── Custom model manager (Ollama-style) ───────────────────────────────────────
-// Models live in localStorage as `or_models` (array) with `or_active` (id, or
-// '' for the server default). Each model: {id, name, provider, baseUrl, apiKey, model}.
+// ── Custom model manager (Ollama-style & BYO Providers) ───────────────────────
+let userChatModels = [];
 function _activeBuiltinModel() { return localStorage.getItem('foresea_chat_model') || 'gpt-oss-120b'; }
 function _builtinModelByKey(key) {
-  return builtinChatModels.find(m => m.key === key) || null;
+  return builtinChatModels.find(m => m.key === key) || (userChatModels || []).find(m => m.key === key) || null;
 }
 function _builtinModelLabel(key) {
   const m = _builtinModelByKey(key);
@@ -7635,16 +7743,24 @@ function renderBuiltinChatModelSelect() {
     const suffix = (m.fallbacks || []).length ? ` (fallbacks: ${(m.fallbacks || []).join(' -> ')})` : '';
     return `<option value="${escAttr(m.key)}" title="${escAttr((m.model || m.key) + suffix)}">${escHtml(m.label || m.key)}</option>`;
   });
-  select.innerHTML = options.join('');
+  if (userChatModels && userChatModels.length) {
+    const userOpts = userChatModels.map(m => {
+      return `<option value="${escAttr(m.key)}" title="${escAttr(m.model || m.key)}">${escHtml(m.label || m.key)}</option>`;
+    });
+    select.innerHTML = `<optgroup label="Foresea Hosted">${options.join('')}</optgroup><optgroup label="Your Connected Models">${userOpts.join('')}</optgroup>`;
+  } else {
+    select.innerHTML = options.join('');
+  }
   select.value = active;
 }
 async function loadBuiltinChatModels() {
   renderBuiltinChatModelSelect();
   try {
-    const resp = await _liveJsonFetch('/chat/models');
+    const resp = await fetch('/chat/models', { headers: authHeaders() });
     const data = await resp.json();
     if (resp.ok && Array.isArray(data.models) && data.models.length) {
       builtinChatModels = data.models.filter(m => m && m.key && m.label);
+      userChatModels = Array.isArray(data.user_models) ? data.user_models : [];
       if (_activeBuiltinModel() && !getActiveBuiltinModelId()) {
         localStorage.removeItem('foresea_chat_model');
       }
@@ -8004,6 +8120,525 @@ function _initVenueAccounts() {
   renderVenueStatus();
   if (removedLegacy) _venueErr('Security update: browser-stored exchange credentials were removed. Reconnect securely to trade.');
   _loadVenueConnections();
+}
+
+// ── BYO Model Providers Manager ───────────────────────────────────────────────
+const _DEFAULT_MODEL_PROVIDERS = [
+  {
+    provider_id: "openai",
+    name: "OpenAI",
+    category: "frontier",
+    description: "Industry-standard GPT-4o, o1, o3-mini, and GPT-4.5 models.",
+    connected: false,
+    default_model: "gpt-4o",
+    popular_models: ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini", "gpt-4.5-preview"],
+    default_base_url: "https://api.openai.com/v1",
+    docs_url: "https://platform.openai.com/api-keys",
+    key_prefix: "sk-",
+    requires_key: true,
+  },
+  {
+    provider_id: "anthropic",
+    name: "Anthropic",
+    category: "frontier",
+    description: "Claude 3.7 Sonnet (hybrid reasoning), Claude 3.5 Sonnet, and Claude 3.5 Haiku.",
+    connected: false,
+    default_model: "claude-3-7-sonnet-20250219",
+    popular_models: ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
+    default_base_url: "https://api.anthropic.com/v1/messages",
+    docs_url: "https://console.anthropic.com/settings/keys",
+    key_prefix: "sk-ant-",
+    requires_key: true,
+  },
+  {
+    provider_id: "google",
+    name: "Google Gemini",
+    category: "frontier",
+    description: "Gemini 2.0 Flash, Gemini 2.0 Pro Exp, and Gemini 1.5 Pro via Google AI Studio.",
+    connected: false,
+    default_model: "gemini-2.0-flash",
+    popular_models: ["gemini-2.0-flash", "gemini-2.0-pro-exp-02-05", "gemini-1.5-pro", "gemini-1.5-flash"],
+    default_base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
+    docs_url: "https://aistudio.google.com/app/apikey",
+    key_prefix: "AIza",
+    requires_key: true,
+  },
+  {
+    provider_id: "deepseek",
+    name: "DeepSeek",
+    category: "open_weights",
+    description: "DeepSeek-V3 and DeepSeek-R1 deep reasoning models via DeepSeek Open Platform.",
+    connected: false,
+    default_model: "deepseek-chat",
+    popular_models: ["deepseek-chat", "deepseek-reasoner"],
+    default_base_url: "https://api.deepseek.com/v1",
+    docs_url: "https://platform.deepseek.com/api_keys",
+    key_prefix: "sk-",
+    requires_key: true,
+  },
+  {
+    provider_id: "qwen",
+    name: "Qwen (Alibaba DashScope)",
+    category: "open_weights",
+    description: "Qwen 2.5 72B, Qwen Max, Qwen Plus, and QwQ reasoning via Alibaba Cloud DashScope.",
+    connected: false,
+    default_model: "qwen-max",
+    popular_models: ["qwen-max", "qwen-plus", "qwen-turbo", "qwen2.5-72b-instruct", "qwq-32b-preview"],
+    default_base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    docs_url: "https://dashscope.console.aliyun.com/apiKey",
+    key_prefix: "sk-",
+    requires_key: true,
+  },
+  {
+    provider_id: "kimi",
+    name: "Kimi (Moonshot AI)",
+    category: "frontier",
+    description: "Moonshot AI long-context and Kimi reasoning models.",
+    connected: false,
+    default_model: "moonshot-v1-8k",
+    popular_models: ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k", "kimi-latest"],
+    default_base_url: "https://api.moonshot.cn/v1",
+    docs_url: "https://platform.moonshot.cn/console/api-keys",
+    key_prefix: "sk-",
+    requires_key: true,
+  },
+  {
+    provider_id: "meta",
+    name: "Meta (Llama)",
+    category: "open_weights",
+    description: "Llama 3.3 70B, Llama 3.1 405B, and Llama 3.1 8B via Groq/OpenRouter/Together.",
+    connected: false,
+    default_model: "llama-3.3-70b-versatile",
+    popular_models: ["llama-3.3-70b-versatile", "llama-3.1-405b", "llama-3.1-8b-instant"],
+    default_base_url: "https://api.groq.com/openai/v1",
+    docs_url: "https://console.groq.com/keys",
+    key_prefix: "gsk_",
+    requires_key: true,
+  },
+  {
+    provider_id: "mistral",
+    name: "Mistral AI",
+    category: "frontier",
+    description: "Mistral Large, Pixtral Large, Codestral, and Mistral Small via La Plateforme.",
+    connected: false,
+    default_model: "mistral-large-latest",
+    popular_models: ["mistral-large-latest", "pixtral-large-latest", "codestral-latest", "mistral-small-latest"],
+    default_base_url: "https://api.mistral.ai/v1",
+    docs_url: "https://console.mistral.ai/api-keys",
+    key_prefix: "",
+    requires_key: true,
+  },
+  {
+    provider_id: "xai",
+    name: "xAI (Grok)",
+    category: "frontier",
+    description: "Grok 2 and Grok Vision frontier models via xAI platform.",
+    connected: false,
+    default_model: "grok-2-latest",
+    popular_models: ["grok-2-latest", "grok-2-vision-1212", "grok-beta"],
+    default_base_url: "https://api.x.ai/v1",
+    docs_url: "https://console.x.ai",
+    key_prefix: "xai-",
+    requires_key: true,
+  },
+  {
+    provider_id: "groq",
+    name: "Groq",
+    category: "inference_cloud",
+    description: "Ultra-low latency LPU inference for Llama 3.3, DeepSeek R1 Distill, and Gemma 2.",
+    connected: false,
+    default_model: "llama-3.3-70b-versatile",
+    popular_models: ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b", "gemma2-9b-it"],
+    default_base_url: "https://api.groq.com/openai/v1",
+    docs_url: "https://console.groq.com/keys",
+    key_prefix: "gsk_",
+    requires_key: true,
+  },
+  {
+    provider_id: "together",
+    name: "Together AI",
+    category: "inference_cloud",
+    description: "Fast open-source inference for Llama 3.3, DeepSeek V3, and Qwen 2.5.",
+    connected: false,
+    default_model: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    popular_models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "deepseek-ai/DeepSeek-V3", "Qwen/Qwen2.5-72B-Instruct-Turbo"],
+    default_base_url: "https://api.together.xyz/v1",
+    docs_url: "https://api.together.ai/settings/api-keys",
+    key_prefix: "",
+    requires_key: true,
+  },
+  {
+    provider_id: "openrouter",
+    name: "OpenRouter",
+    category: "inference_cloud",
+    description: "Unified API routing across 200+ models from every major provider.",
+    connected: false,
+    default_model: "openrouter/auto",
+    popular_models: ["openrouter/auto", "anthropic/claude-3.7-sonnet", "deepseek/deepseek-r1", "openai/gpt-4o"],
+    default_base_url: "https://openrouter.ai/api/v1",
+    docs_url: "https://openrouter.ai/keys",
+    key_prefix: "sk-or-",
+    requires_key: true,
+  },
+  {
+    provider_id: "perplexity",
+    name: "Perplexity AI",
+    category: "specialized",
+    description: "Online search-grounded reasoning models (Sonar Reasoning Pro, Sonar Pro).",
+    connected: false,
+    default_model: "sonar-reasoning-pro",
+    popular_models: ["sonar-reasoning-pro", "sonar-reasoning", "sonar-pro", "sonar"],
+    default_base_url: "https://api.perplexity.ai",
+    docs_url: "https://www.perplexity.ai/settings/api",
+    key_prefix: "pplx-",
+    requires_key: true,
+  },
+  {
+    provider_id: "cohere",
+    name: "Cohere",
+    category: "specialized",
+    description: "Command R+ and Command R enterprise reasoning and tool-use models.",
+    connected: false,
+    default_model: "command-r-plus-08-2024",
+    popular_models: ["command-r-plus-08-2024", "command-r-08-2024"],
+    default_base_url: "https://api.cohere.com/v2",
+    docs_url: "https://dashboard.cohere.com/api-keys",
+    key_prefix: "",
+    requires_key: true,
+  },
+  {
+    provider_id: "huggingface",
+    name: "Hugging Face",
+    category: "inference_cloud",
+    description: "Hugging Face Serverless Inference and Dedicated Endpoints.",
+    connected: false,
+    default_model: "meta-llama/Llama-3.3-70B-Instruct",
+    popular_models: ["meta-llama/Llama-3.3-70B-Instruct", "Qwen/Qwen2.5-72B-Instruct", "deepseek-ai/DeepSeek-R1"],
+    default_base_url: "https://router.huggingface.co/v1",
+    docs_url: "https://huggingface.co/settings/tokens",
+    key_prefix: "hf_",
+    requires_key: true,
+  },
+  {
+    provider_id: "custom",
+    name: "Custom / Local / Self-Hosted",
+    category: "custom",
+    description: "Connect any custom vLLM, Ollama, TGI, SGLang, or private OpenAI-compatible endpoint.",
+    connected: false,
+    default_model: "custom-model",
+    popular_models: ["custom-model"],
+    default_base_url: "http://localhost:11434/v1",
+    docs_url: "",
+    key_prefix: "",
+    requires_key: false,
+  },
+];
+
+let _modelProvidersData = JSON.parse(JSON.stringify(_DEFAULT_MODEL_PROVIDERS));
+let _modelProvidersCategory = 'all';
+
+function _getProviderLogoInitial(id) {
+  const map = {
+    openai: 'OA',
+    anthropic: 'AN',
+    google: 'GM',
+    deepseek: 'DS',
+    qwen: 'QW',
+    kimi: 'KM',
+    meta: 'MT',
+    mistral: 'MI',
+    xai: 'XA',
+    groq: 'GQ',
+    together: 'TG',
+    openrouter: 'OR',
+    perplexity: 'PX',
+    cohere: 'CO',
+    huggingface: 'HF',
+    custom: 'CU',
+  };
+  return map[id] || (id ? id.slice(0, 2).toUpperCase() : 'AI');
+}
+
+function filterModelProviderCategory(cat, btn) {
+  _modelProvidersCategory = cat;
+  document.querySelectorAll('.mp-pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderModelProviderCards();
+}
+
+function toggleKeyVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isPass = input.type === 'password';
+  input.type = isPass ? 'text' : 'password';
+  btn.innerHTML = isPass
+    ? '<svg class="ui-icon" style="width:13px;height:13px" aria-hidden="true"><use href="#ui-eye-off"></use></svg>'
+    : '<svg class="ui-icon" style="width:13px;height:13px" aria-hidden="true"><use href="#ui-eye"></use></svg>';
+}
+
+function _onMpModelSelectChange(providerId, val) {
+  const customInput = document.getElementById(`mpModelCustom_${providerId}`);
+  if (customInput) {
+    customInput.style.display = val === '__custom__' ? 'block' : 'none';
+    if (val === '__custom__') customInput.focus();
+  }
+}
+
+async function _loadModelProviders() {
+  if (!currentUser) {
+    _modelProvidersData = JSON.parse(JSON.stringify(_DEFAULT_MODEL_PROVIDERS));
+    renderModelProviderCards();
+    renderModelProviderBadge();
+    return;
+  }
+  try {
+    const r = await fetch('/api/user/model-providers', { headers: authHeaders() });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && Array.isArray(d.providers)) {
+      _modelProvidersData = d.providers;
+    }
+  } catch (e) {
+    console.warn('Could not load user model providers:', e);
+  }
+  renderModelProviderCards();
+  renderModelProviderBadge();
+}
+
+function renderModelProviderBadge() {
+  const connectedCount = _modelProvidersData.filter(p => p.connected).length;
+  const badge = document.getElementById('settingsModelProvidersBadge');
+  if (badge) badge.textContent = connectedCount > 0 ? `${connectedCount} connected` : '';
+}
+
+function renderModelProviderCards() {
+  const container = document.getElementById('modelProvidersList');
+  if (!container) return;
+
+  const filtered = _modelProvidersCategory === 'all'
+    ? _modelProvidersData
+    : _modelProvidersData.filter(p => p.category === _modelProvidersCategory);
+
+  if (!filtered.length) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-mute);font-size:12px">No providers found in this category.</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(p => {
+    const pid = p.provider_id;
+    const isConn = Boolean(p.connected);
+    const popular = Array.isArray(p.popular_models) ? p.popular_models : [p.default_model];
+    const defaultM = p.default_model || popular[0] || '';
+    const isCustomModel = !popular.includes(defaultM);
+
+    const modelOptions = popular.map(m =>
+      `<option value="${escAttr(m)}" ${(!isCustomModel && m === defaultM) ? 'selected' : ''}>${escHtml(m)}</option>`
+    );
+    modelOptions.push(`<option value="__custom__" ${isCustomModel ? 'selected' : ''}>Custom model write-in...</option>`);
+
+    const keyRow = p.requires_key !== false ? `
+      <div class="mp-input-row">
+        <div class="mp-label-bar">
+          <span class="mp-label">API Key ${p.key_prefix ? `(starts with ${escHtml(p.key_prefix)})` : ''}</span>
+          ${p.docs_url ? `<a href="${escAttr(p.docs_url)}" target="_blank" rel="noopener" class="mp-link">Get key</a>` : ''}
+        </div>
+        <div class="mp-key-input-wrapper">
+          <input type="password" id="mpKey_${pid}" class="variant-select text-xs mp-key-input" placeholder="${isConn ? (p.masked_key || '••••••••••••') : 'Enter your API key'}" autocomplete="off" />
+          <button type="button" class="mp-peek-btn" onclick="toggleKeyVisibility('mpKey_${pid}', this)" title="Toggle key visibility" aria-label="Toggle key visibility">
+            <svg class="ui-icon" style="width:13px;height:13px" aria-hidden="true"><use href="#ui-eye"></use></svg>
+          </button>
+        </div>
+      </div>
+    ` : '';
+
+    return `
+      <div class="mp-card ${isConn ? 'is-connected' : ''}" id="mpCard_${pid}">
+        <div class="mp-card-header">
+          <div class="mp-card-title-group">
+            <span class="mp-logo-badge">${_getProviderLogoInitial(pid)}</span>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span class="mp-name">${escHtml(p.name)}</span>
+              <span class="mp-category-tag">${escHtml((p.category || '').replace('_', ' '))}</span>
+            </div>
+          </div>
+          <span class="mp-status-badge ${isConn ? 'connected' : 'disconnected'}">
+            ${isConn ? `Connected ${uiIcon('check')}` : 'Not connected'}
+          </span>
+        </div>
+
+        <div class="mp-card-body">
+          <p class="mp-desc">${escHtml(p.description || '')}</p>
+
+          ${keyRow}
+
+          <div class="mp-input-row">
+            <div class="mp-label-bar">
+              <span class="mp-label">Model</span>
+            </div>
+            <select id="mpModelSelect_${pid}" class="variant-select text-xs" onchange="_onMpModelSelectChange('${pid}', this.value)">
+              ${modelOptions.join('')}
+            </select>
+            <input id="mpModelCustom_${pid}" class="variant-select text-xs" placeholder="e.g. ${escAttr(defaultM || 'model-name')}" value="${isCustomModel ? escAttr(defaultM) : ''}" style="${isCustomModel ? 'display:block;' : 'display:none;'}margin-top:4px" />
+          </div>
+
+          <details style="margin-top:2px">
+            <summary style="font-size:10.5px;color:var(--text-mute);cursor:pointer;user-select:none">Base URL override (optional)</summary>
+            <input id="mpBaseUrl_${pid}" class="variant-select text-xs" placeholder="${escAttr(p.default_base_url || '')}" value="${escAttr(p.custom_base_url || '')}" style="margin-top:4px" autocomplete="off" />
+          </details>
+
+          <div class="mp-actions-bar">
+            <div class="mp-btn-group">
+              <button type="button" class="mp-btn mp-btn-primary" onclick="saveModelProvider('${pid}')">
+                ${isConn ? 'Update connection' : 'Connect securely'}
+              </button>
+              <button type="button" class="mp-btn mp-btn-test" id="mpTestBtn_${pid}" onclick="testModelProvider('${pid}')">
+                Test
+              </button>
+            </div>
+            ${isConn ? `<button type="button" class="mp-btn mp-btn-disconnect" onclick="disconnectModelProvider('${pid}')">Disconnect</button>` : ''}
+          </div>
+
+          <div id="mpTestResult_${pid}" class="mp-test-result"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function testModelProvider(providerId) {
+  const resultEl = document.getElementById(`mpTestResult_${providerId}`);
+  const btn = document.getElementById(`mpTestBtn_${providerId}`);
+  if (resultEl) { resultEl.style.display = 'none'; resultEl.className = 'mp-test-result'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Testing...'; }
+
+  const keyInput = document.getElementById(`mpKey_${providerId}`);
+  const modelSelect = document.getElementById(`mpModelSelect_${providerId}`);
+  const customModelInput = document.getElementById(`mpModelCustom_${providerId}`);
+  const baseInput = document.getElementById(`mpBaseUrl_${providerId}`);
+
+  let modelName = modelSelect ? modelSelect.value : '';
+  if (modelName === '__custom__' && customModelInput) {
+    modelName = customModelInput.value.trim();
+  }
+  const apiKey = keyInput ? keyInput.value.trim() : '';
+  const customBaseUrl = baseInput ? baseInput.value.trim() : '';
+
+  try {
+    const r = await fetch(`/api/user/model-providers/${encodeURIComponent(providerId)}/test`, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        api_key: apiKey || null,
+        model_name: modelName || null,
+        custom_base_url: customBaseUrl || null,
+      }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (resultEl) {
+      resultEl.style.display = 'block';
+      if (r.ok && d.ok) {
+        resultEl.className = 'mp-test-result success';
+        resultEl.innerHTML = `<strong>Verified (${d.latency_ms || 0}ms)</strong>: ${escHtml(d.message || 'Connected successfully')}`;
+      } else {
+        resultEl.className = 'mp-test-result error';
+        resultEl.innerHTML = `<strong>Verification failed</strong>: ${escHtml(d.error || d.detail || 'Invalid credentials or endpoint unreachable.')}`;
+      }
+    }
+  } catch (e) {
+    if (resultEl) {
+      resultEl.style.display = 'block';
+      resultEl.className = 'mp-test-result error';
+      resultEl.innerHTML = `<strong>Connection error</strong>: ${escHtml(e.message)}`;
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Test'; }
+  }
+}
+
+async function saveModelProvider(providerId) {
+  _mpErr('');
+  if (!currentUser) {
+    _mpErr('Please sign in to save your encrypted model provider credentials.');
+    openAuthModal('login');
+    return;
+  }
+
+  const keyInput = document.getElementById(`mpKey_${providerId}`);
+  const modelSelect = document.getElementById(`mpModelSelect_${providerId}`);
+  const customModelInput = document.getElementById(`mpModelCustom_${providerId}`);
+  const baseInput = document.getElementById(`mpBaseUrl_${providerId}`);
+
+  let modelName = modelSelect ? modelSelect.value : '';
+  if (modelName === '__custom__' && customModelInput) {
+    modelName = customModelInput.value.trim();
+  }
+  const apiKey = keyInput ? keyInput.value.trim() : '';
+  const customBaseUrl = baseInput ? baseInput.value.trim() : '';
+
+  try {
+    const r = await fetch(`/api/user/model-providers/${encodeURIComponent(providerId)}`, {
+      method: 'PUT',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        api_key: apiKey || null,
+        default_model: modelName || null,
+        custom_base_url: customBaseUrl || null,
+      }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      _mpErr(d.detail || 'Could not save credentials.');
+      return;
+    }
+
+    const idx = _modelProvidersData.findIndex(p => p.provider_id === providerId);
+    if (idx >= 0) {
+      _modelProvidersData[idx] = d;
+    }
+    renderModelProviderCards();
+    renderModelProviderBadge();
+    loadBuiltinChatModels();
+
+    const updatedResEl = document.getElementById(`mpTestResult_${providerId}`);
+    if (updatedResEl) {
+      updatedResEl.style.display = 'block';
+      updatedResEl.className = 'mp-test-result success';
+      updatedResEl.innerHTML = `<strong>Saved securely</strong> with envelope encryption. Ready to use in chat.`;
+    }
+  } catch (e) {
+    _mpErr('Failed to save connection: ' + e.message);
+  }
+}
+
+async function disconnectModelProvider(providerId) {
+  _mpErr('');
+  if (!currentUser) return;
+  try {
+    const r = await fetch(`/api/user/model-providers/${encodeURIComponent(providerId)}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      _mpErr(d.detail || 'Could not disconnect model provider.');
+      return;
+    }
+    const idx = _modelProvidersData.findIndex(p => p.provider_id === providerId);
+    if (idx >= 0) {
+      _modelProvidersData[idx] = d;
+    }
+    renderModelProviderCards();
+    renderModelProviderBadge();
+    loadBuiltinChatModels();
+  } catch (e) {
+    _mpErr('Failed to disconnect: ' + e.message);
+  }
+}
+
+function _mpErr(msg) {
+  const el = document.getElementById('modelProviderGlobalErr');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.hidden = !msg;
 }
 
 // ── Trade modal ──────────────────────────────────────────────────────────────
@@ -9798,7 +10433,7 @@ function openSettingsModal(section) {
   _closeAcctMenu();
   _showSettingsSection(section || 'connections');
   renderVenueStatus();
-  renderCopiedAgentList();
+  _loadModelProviders();
   const overlay = document.getElementById('settingsOverlay');
   overlay.classList.add('show');
   overlay.setAttribute('aria-hidden', 'false');
@@ -9811,7 +10446,10 @@ function closeSettingsModal() {
 }
 
 function _showSettingsSection(name) {
-  const sections = { connections: 'settingsSectionConnections' };
+  const sections = {
+    connections: 'settingsSectionConnections',
+    'model-providers': 'settingsSectionModelProviders',
+  };
   if (!sections[name]) return;
   document.querySelectorAll('.settings-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.settingsSection === name);
@@ -9819,6 +10457,9 @@ function _showSettingsSection(name) {
   document.querySelectorAll('.settings-section').forEach(el => {
     el.classList.toggle('active', el.id === sections[name]);
   });
+  if (name === 'model-providers') {
+    _loadModelProviders();
+  }
 }
 
 // ── Feedback modal ──────────────────────────────────────────────────────────

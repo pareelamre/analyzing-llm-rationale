@@ -356,6 +356,150 @@ class OpenRouterProvider(OpenAICompatibleProvider):
 
 
 @dataclass
+class AnthropicProvider(ChatProvider):
+    """Direct Anthropic Messages API provider (/v1/messages)."""
+    model_name: str = "claude-3-7-sonnet-20250219"
+    api_key: str = ""
+    request_timeout_s: float = 120.0
+    base_url: str = "https://api.anthropic.com/v1/messages"
+    anthropic_version: str = "2023-06-01"
+    missing_api_key_message: str = "Anthropic API key required."
+    last_response_model: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        import requests
+
+        self.model_name = clean_provider_string(self.model_name)
+        self.api_key = clean_http_header_value(self.api_key)
+        self.base_url = clean_provider_string(self.base_url) or "https://api.anthropic.com/v1/messages"
+        if not self.base_url.endswith("/messages") and not self.base_url.endswith("/chat/completions"):
+            self.base_url = self.base_url.rstrip("/") + "/messages"
+        if not self.api_key:
+            raise ValueError(self.missing_api_key_message)
+
+        self._requests = requests
+        self._session = requests.Session()
+
+    def _headers(self) -> Dict[str, str]:
+        return {
+            "x-api-key": self.api_key,
+            "anthropic-version": self.anthropic_version,
+            "content-type": "application/json",
+        }
+
+    def _payload(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        *,
+        stream: bool = False,
+    ) -> Dict[str, Any]:
+        system_parts = []
+        anthropic_msgs = []
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            if role == "system":
+                system_parts.append(content)
+            else:
+                anthropic_msgs.append({"role": role, "content": content})
+        if not anthropic_msgs:
+            anthropic_msgs = [{"role": "user", "content": "Hello"}]
+        payload: Dict[str, Any] = {
+            "model": self.model_name,
+            "messages": anthropic_msgs,
+            "max_tokens": max_tokens or 4096,
+            "temperature": temperature,
+        }
+        if system_parts:
+            payload["system"] = "\n\n".join(system_parts)
+        if stream:
+            payload["stream"] = True
+        return payload
+
+    def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        reasoning_effort: Optional[str] = None,
+    ) -> str:
+        del reasoning_effort
+        payload = self._payload(messages, temperature, max_tokens)
+        response = self._session.post(
+            self.base_url,
+            headers=self._headers(),
+            json=payload,
+            timeout=self.request_timeout_s,
+        )
+        response_text = response.text[:500]
+        if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
+            raise RetryableProviderError(f"status={response.status_code} body={response_text}")
+        if response.status_code != 200:
+            raise ProviderResponseError(f"status={response.status_code} body={response_text}")
+        try:
+            data = response.json()
+            response_model = data.get("model")
+            self.last_response_model = response_model if isinstance(response_model, str) else None
+            blocks = data.get("content") or []
+            text_blocks = [b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text"]
+            text = "".join(text_blocks)
+            if not text.strip():
+                raise RetryableProviderError("Empty content in Anthropic response")
+            return text
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise RetryableProviderError(f"Malformed Anthropic response: {exc}") from exc
+
+    def stream_chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        reasoning_effort: Optional[str] = None,
+    ) -> Iterator[str]:
+        del reasoning_effort
+        self.last_response_model = None
+        response = self._session.post(
+            self.base_url,
+            headers=self._headers(),
+            json=self._payload(messages, temperature, max_tokens, stream=True),
+            timeout=self.request_timeout_s,
+            stream=True,
+        )
+        response_text = response.text[:500] if response.status_code != 200 else ""
+        if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
+            raise RetryableProviderError(f"status={response.status_code} body={response_text}")
+        if response.status_code != 200:
+            raise ProviderResponseError(f"status={response.status_code} body={response_text}")
+
+        for raw in response.iter_lines(decode_unicode=True):
+            if not raw:
+                continue
+            line = raw.strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                obj = json.loads(data)
+                evt_type = obj.get("type")
+                if evt_type == "message_start":
+                    msg = obj.get("message") or {}
+                    if isinstance(msg.get("model"), str):
+                        self.last_response_model = msg["model"]
+                elif evt_type == "content_block_delta":
+                    delta = obj.get("delta") or {}
+                    if delta.get("type") == "text_delta":
+                        text = delta.get("text")
+                        if text:
+                            yield text
+            except (AttributeError, IndexError, TypeError, ValueError):
+                continue
+
+
+@dataclass
 class OllamaProvider(OpenAICompatibleProvider):
     """Local or self-hosted Ollama — no API key required."""
     base_url: str = "http://localhost:11434/v1/chat/completions"
