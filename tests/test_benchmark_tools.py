@@ -4,16 +4,127 @@ import os
 import sqlite3
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from analyzing_llm_rationale import benchmark_tools  # noqa: E402
+from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
+
+
+class _FakeDsKey:
+    """Mimics google.cloud.datastore.Key enough for benchmark_tools' Datastore
+    account store: multi-segment ancestor paths, equality/hashing by path."""
+
+    def __init__(self, path_parts):
+        self.path_parts = tuple(path_parts)
+        self.kind = path_parts[-2]
+        self.name = path_parts[-1]
+
+    def __eq__(self, other):
+        return isinstance(other, _FakeDsKey) and self.path_parts == other.path_parts
+
+    def __hash__(self):
+        return hash(self.path_parts)
+
+
+class _FakeDsEntity(dict):
+    def __init__(self, key=None, exclude_from_indexes=()):
+        super().__init__()
+        self.key = key
+
+
+class _FakeDsQuery:
+    def __init__(self, store, kind, ancestor):
+        self._store = store
+        self._kind = kind
+        self._ancestor_prefix = ancestor.path_parts if ancestor is not None else None
+
+    def fetch(self):
+        out = []
+        for key, entity in self._store.items():
+            if key.kind != self._kind:
+                continue
+            if self._ancestor_prefix is not None and key.path_parts[: len(self._ancestor_prefix)] != self._ancestor_prefix:
+                continue
+            out.append(entity)
+        return out
+
+
+class _FakeDsTransaction:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakeDsClient:
+    """In-memory stand-in for google.cloud.datastore.Client, covering just
+    the operations benchmark_tools' _ds_* account store uses: multi-segment
+    ancestor keys, get/put/delete, kind+ancestor queries, and a transaction
+    context manager (no real conflict simulation -- this tests the happy
+    path's read/write shape, not Datastore's optimistic-concurrency retry)."""
+
+    def __init__(self):
+        self.store = {}
+
+    def key(self, *path_parts):
+        return _FakeDsKey(path_parts)
+
+    def get(self, key):
+        return self.store.get(key)
+
+    def put(self, entity):
+        self.store[entity.key] = entity
+
+    def delete(self, key):
+        self.store.pop(key, None)
+
+    def query(self, kind=None, ancestor=None):
+        return _FakeDsQuery(self.store, kind, ancestor)
+
+    def transaction(self):
+        return _FakeDsTransaction()
+
+
+def _install_fake_datastore(test_case: unittest.TestCase) -> _FakeDsClient:
+    """Patch benchmark_tools onto a fresh in-memory fake Datastore client and
+    stub the google.cloud.datastore module so `_ds.Entity(...)` works
+    offline -- same approach tests/test_auth_dedup.py uses for server.py."""
+    client = _FakeDsClient()
+    patcher = mock.patch.object(benchmark_tools, "_get_account_datastore", lambda: client)
+    patcher.start()
+    test_case.addCleanup(patcher.stop)
+    original_module = sys.modules.get("google.cloud.datastore")
+    sys.modules["google.cloud.datastore"] = types.SimpleNamespace(Entity=_FakeDsEntity)
+
+    def _restore():
+        if original_module is not None:
+            sys.modules["google.cloud.datastore"] = original_module
+        else:
+            sys.modules.pop("google.cloud.datastore", None)
+
+    test_case.addCleanup(_restore)
+    return client
 
 
 class BenchmarkToolTests(unittest.TestCase):
+    def setUp(self):
+        # place_trade's shadow path checks live Kalshi quotes (see
+        # _resolve_shadow_marketability); default to "no quote available" so
+        # existing tests keep exercising the old trust-the-caller-price
+        # behavior without making real network calls. Tests that care about
+        # quote-aware fills override this locally with mock.patch.
+        patcher = mock.patch(
+            "analyzing_llm_rationale.market_data.fetch_kalshi",
+            side_effect=market_data.MarketDataError("market data disabled in tests"),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_manage_notes_add_search_edit_delete_with_limits(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "notes.json"
@@ -328,6 +439,104 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(closed["risk_guard"]["market_cost_basis_after"], 0.0)
         self.assertEqual(closed["account"]["n_open_positions"], 0)
 
+    def test_place_trade_rejects_implausible_netting_arb(self):
+        # Regression test for the shadow-fill exploit: buying YES and NO on
+        # the same ticker at the same lowball price used to net a ~76%
+        # "riskless" profit with zero market settlements (this is what
+        # inflated the public agent-trading leaderboard). Quote lookups are
+        # disabled (see setUp), so this isolates the netting-arb guard added
+        # to _check_trade_guards from the live-quote check added in
+        # _resolve_shadow_marketability.
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "1000",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                opened = benchmark_tools.place_trade(
+                    {"ticker": "KXARB", "side": "yes", "price": 0.12, "quantity": 10},
+                    ctx,
+                )
+                closed = benchmark_tools.place_trade(
+                    {"ticker": "KXARB", "side": "no", "price": 0.12, "quantity": 10},
+                    ctx,
+                )
+
+        self.assertTrue(opened["ok"])
+        self.assertFalse(closed["ok"])
+        self.assertTrue(closed["rejected"])
+        self.assertEqual(closed["reason"], "implausible_netting_arb")
+        # risk_guard reflects the dry-run buy() used to evaluate the guards
+        # (same as the existing insolvency/concentration rejection tests),
+        # not what was actually persisted -- rejected trades never reach
+        # _apply_trade_to_account_tables, so nothing was actually netted.
+        self.assertGreater(
+            closed["risk_guard"]["arb_per_pair"],
+            closed["risk_guard"]["max_netting_arb_per_pair"],
+        )
+
+    def test_place_trade_shadow_fill_clamps_to_live_ask(self):
+        # A marketable shadow order (price crosses the real ask) should fill
+        # at the real ask, not at whatever more-aggressive price was asked
+        # for -- mirrors how a real IOC order can't pay worse than the book.
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    return_value={"yes_bid": 0.85, "yes_ask": 0.88},
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXQUOTED", "side": "yes", "price": 0.95, "quantity": 2},
+                    ctx,
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["execution"]["filled_quantity"], 2.0)
+        self.assertEqual(result["normalized_order"]["price"], 0.88)
+
+    def test_place_trade_shadow_order_below_market_does_not_fill(self):
+        # A shadow order priced below the real ask would never cross a real
+        # book -- it should record zero fill, not "assume full" at a price
+        # no real counterparty would take.
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    return_value={"yes_bid": 0.85, "yes_ask": 0.88},
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXQUOTED", "side": "yes", "price": 0.10, "quantity": 2},
+                    ctx,
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["execution"]["filled_quantity"], 0.0)
+        self.assertEqual(result["execution"]["fill_status"], "shadow_unfilled_below_market")
+        self.assertEqual(result["account"]["n_open_positions"], 0)
+
     def test_place_trade_rejects_per_cycle_spend_over_limit(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
@@ -530,6 +739,119 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(row["thesis"], "Held flat this cycle.")
         self.assertEqual(row["steps"], 2)
         self.assertEqual(row["truncated"], 0)
+
+    # -- Datastore-backed account store (used when FORESEA_AGENT_ACCOUNT_DB_PATH
+    # is unset -- the live Cloud Run case, which has no persistent volume for
+    # the SQLite default). These mirror the equivalent SQLite-path tests
+    # above to confirm the two backends behave identically from place_trade's
+    # perspective.
+
+    def test_place_trade_datastore_backend_nets_positions(self):
+        client = _install_fake_datastore(self)
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "10",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                self.assertNotIn("FORESEA_AGENT_ACCOUNT_DB_PATH", os.environ)
+                opened = benchmark_tools.place_trade(
+                    {"ticker": "KXDSNET", "side": "yes", "price": 0.40, "quantity": 10},
+                    ctx,
+                )
+                closed = benchmark_tools.place_trade(
+                    {"ticker": "KXDSNET", "side": "no", "price": 0.59, "quantity": 10},
+                    ctx,
+                )
+
+        self.assertTrue(opened["ok"])
+        self.assertTrue(closed["ok"])
+        self.assertEqual(closed["risk_guard"]["netting_payout"], 10.0)
+        self.assertEqual(closed["risk_guard"]["cash_required"], 0.0)
+        self.assertEqual(closed["account"]["n_open_positions"], 0)
+        # Confirms the fake client actually persisted to its store (not just
+        # that place_trade's in-memory response looked right), and that the
+        # two agree with each other.
+        account_entity = client.get(client.key("AgentTradingAccount", "model-a"))
+        self.assertAlmostEqual(float(account_entity["cash"]), closed["account"]["cash"])
+
+    def test_place_trade_datastore_backend_rejects_implausible_netting_arb(self):
+        _install_fake_datastore(self)
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "1000",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                opened = benchmark_tools.place_trade(
+                    {"ticker": "KXDSARB", "side": "yes", "price": 0.12, "quantity": 10},
+                    ctx,
+                )
+                closed = benchmark_tools.place_trade(
+                    {"ticker": "KXDSARB", "side": "no", "price": 0.12, "quantity": 10},
+                    ctx,
+                )
+
+        self.assertTrue(opened["ok"])
+        self.assertFalse(closed["ok"])
+        self.assertEqual(closed["reason"], "implausible_netting_arb")
+
+    def test_place_trade_datastore_backend_settles_open_positions(self):
+        _install_fake_datastore(self)
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            base_env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
+                "FORESEA_AGENT_SETTLEMENT_FEE_RATE": "0.014",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+
+            def resolve(ticker):
+                return 1 if ticker == "KXDSSETTLE" else None
+
+            with (
+                mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-1"}, clear=False),
+                mock.patch("analyzing_llm_rationale.market_data.resolve_kalshi", side_effect=resolve),
+            ):
+                opened = benchmark_tools.place_trade(
+                    {"ticker": "KXDSSETTLE", "side": "yes", "price": 0.40, "quantity": 10},
+                    ctx,
+                )
+
+            with (
+                mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-2"}, clear=False),
+                mock.patch("analyzing_llm_rationale.market_data.resolve_kalshi", side_effect=resolve),
+            ):
+                after_settlement = benchmark_tools.place_trade(
+                    {"ticker": "KXDSOTHER", "side": "yes", "price": 0.10, "quantity": 1},
+                    ctx,
+                )
+
+        self.assertTrue(opened["ok"])
+        self.assertTrue(after_settlement["ok"])
+        self.assertEqual(
+            after_settlement["risk_guard"]["settlements_before_trade"][0]["ticker"], "KXDSSETTLE"
+        )
+        settlement = after_settlement["risk_guard"]["settlements_before_trade"][0]
+        self.assertAlmostEqual(settlement["payout"], 10.0)
+        self.assertAlmostEqual(settlement["settlement_fee"], 0.14)
+        self.assertAlmostEqual(settlement["realized_pnl"], 5.86)
 
 
 if __name__ == "__main__":
