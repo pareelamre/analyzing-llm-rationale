@@ -12363,6 +12363,10 @@ def _agent_prediction_request(
             "role": "user",
             "content": f"[Self-calibration context — apply as a prior, not a hard rule]\n{grounding_note}",
         }]
+    # AgentAnalyzeRequest.history allows up to 24 turns but PredictRequest.history
+    # caps at 12 -- truncate here (keeping the most recent turns, so an appended
+    # grounding_note always survives) or construction below raises a ValidationError.
+    history = history[-12:]
     has_market_context = bool(
         quote
         or req.market_url

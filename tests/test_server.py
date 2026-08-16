@@ -702,6 +702,31 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(runs.status_code, 200)
         self.assertEqual(runs.json()["runs"][0]["status"], "completed")
 
+    def test_agent_analyze_stream_truncates_long_history_instead_of_erroring(self):
+        # AgentAnalyzeRequest.history allows up to 24 turns but PredictRequest.history
+        # (built from it in _agent_prediction_request) caps at 12 -- a long-running
+        # conversation used to blow past that cap and crash stream setup with
+        # "The streaming agent request could not be prepared."
+        self.provider.stream_response = json.dumps(self.provider.response)
+        long_history = [
+            {"role": "user" if i % 2 == 0 else "assistant", "content": f"Turn {i}"}
+            for i in range(20)
+        ]
+        response = self.client.post(
+            "/agent/analyze/stream",
+            json={
+                "question": "hello",
+                "builtin_skills": True,
+                "history": long_history,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.text
+        self.assertNotIn("could not be prepared", body)
+        self.assertNotIn("event: error", body)
+        self.assertIn("event: done", body)
+
     def test_market_forecast_stream_returns_model_probability(self):
         token = _issue_session("stream-user", "user@example.com", "Stream User", "")
         self.provider.stream_response = json.dumps(self.provider.response)
