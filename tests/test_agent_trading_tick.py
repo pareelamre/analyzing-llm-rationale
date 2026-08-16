@@ -295,8 +295,11 @@ class PortfolioBlockTests(unittest.TestCase):
 
 
 class RunCycleTests(unittest.TestCase):
-    def _fake_report(self, thesis="Passed this cycle.", transcript=None):
-        return SimpleNamespace(thesis=thesis, tool_transcript=transcript or [])
+    def _fake_report(self, thesis="Passed this cycle.", transcript=None, truncated=False):
+        return SimpleNamespace(
+            thesis=thesis, tool_transcript=transcript or [], truncated=truncated,
+            stages={"research": {}, "sizing": {}, "thesis": {}},
+        )
 
     def test_run_cycle_persists_thesis_and_candidates(self):
         with tempfile.TemporaryDirectory() as td:
@@ -305,15 +308,18 @@ class RunCycleTests(unittest.TestCase):
                 "FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json"),
                 "FORESEA_AGENT_CYCLE_ID": "test-cycle-1",
             }
+
+            async def _fake_pipeline(portfolio_block, candidates_block):
+                return self._fake_report(thesis="Bought KXNEW on a genuine edge.",
+                                          transcript=[{"action": "place_trade"}])
+
             with (
                 mock.patch.dict(os.environ, env, clear=False),
                 mock.patch.object(agent_trading_tick, "_init_local_agent"),
                 mock.patch.object(market_data, "list_kalshi", return_value=[_quote("KXNEW")]),
                 mock.patch.object(
-                    agent_trading_tick, "_call_agent_analyze",
-                    return_value=self._fake_report(thesis="Bought KXNEW on a genuine edge.",
-                                                     transcript=[{"action": "place_trade"}]),
-                ) as call_mock,
+                    agent_trading_tick, "_run_specialist_pipeline", side_effect=_fake_pipeline,
+                ) as pipeline_mock,
             ):
                 agent_trading_tick.run_cycle("model-c")
 
@@ -327,10 +333,11 @@ class RunCycleTests(unittest.TestCase):
         self.assertEqual(row["thesis"], "Bought KXNEW on a genuine edge.")
         self.assertEqual(row["steps"], 1)
         self.assertIn("KXNEW", row["transcript_json"])
-        # The question passed to the tool loop must actually mention the candidate.
-        question_arg = call_mock.call_args[0][0]
-        self.assertIn("KXNEW", question_arg)
-        self.assertIn("Your portfolio", question_arg)
+        # The portfolio/candidates blocks passed to the pipeline must actually
+        # mention the candidate and the account state.
+        portfolio_arg, candidates_arg = pipeline_mock.call_args[0]
+        self.assertIn("KXNEW", candidates_arg)
+        self.assertIn("Your portfolio", portfolio_arg)
 
     def test_run_cycle_configures_order_notional_from_current_account_value_before_the_tool_loop(self):
         # Regression: _configure_max_order_notional() used to run before
@@ -346,7 +353,7 @@ class RunCycleTests(unittest.TestCase):
             }
             seen = {}
 
-            async def _capture_env(question):
+            async def _capture_env(portfolio_block, candidates_block):
                 seen["FORESEA_MAX_ORDER_NOTIONAL"] = os.environ.get("FORESEA_MAX_ORDER_NOTIONAL")
                 seen["FORESEA_AGENT_ACCOUNT_VALUE"] = os.environ.get("FORESEA_AGENT_ACCOUNT_VALUE")
                 return self._fake_report()
@@ -355,7 +362,7 @@ class RunCycleTests(unittest.TestCase):
                 mock.patch.dict(os.environ, env, clear=False),
                 mock.patch.object(agent_trading_tick, "_init_local_agent"),
                 mock.patch.object(market_data, "list_kalshi", return_value=[]),
-                mock.patch.object(agent_trading_tick, "_call_agent_analyze", side_effect=_capture_env),
+                mock.patch.object(agent_trading_tick, "_run_specialist_pipeline", side_effect=_capture_env),
             ):
                 agent_trading_tick.run_cycle("model-d")
 
@@ -378,6 +385,9 @@ class RunCycleTests(unittest.TestCase):
                         {"ticker": "KXHELD", "side": "yes", "price": 0.5, "quantity": 3}, ctx,
                     )
 
+                async def _fake_pipeline(portfolio_block, candidates_block):
+                    return self._fake_report()
+
                 with (
                     mock.patch.object(agent_trading_tick, "_init_local_agent"),
                     mock.patch.object(market_data, "list_kalshi", return_value=[]),
@@ -385,20 +395,98 @@ class RunCycleTests(unittest.TestCase):
                         market_data, "fetch_kalshi", return_value=_quote("KXHELD", question="Held market"),
                     ),
                     mock.patch.object(
-                        agent_trading_tick, "_call_agent_analyze",
-                        return_value=self._fake_report(),
-                    ) as call_mock,
+                        agent_trading_tick, "_run_specialist_pipeline", side_effect=_fake_pipeline,
+                    ) as pipeline_mock,
                 ):
                     agent_trading_tick.run_cycle("model-d")
 
-        question_arg = call_mock.call_args[0][0]
-        self.assertIn("KXHELD", question_arg)
-        self.assertIn("currently hold", question_arg)
+        portfolio_arg, candidates_arg = pipeline_mock.call_args[0]
+        self.assertIn("KXHELD", candidates_arg)
+        self.assertIn("currently hold", candidates_arg)
 
     def test_run_cycle_refuses_when_not_shadow(self):
         with mock.patch.dict(os.environ, {"FORESEA_AGENT_PLACE_TRADE_MODE": "live"}, clear=False):
             with self.assertRaises(RuntimeError):
                 agent_trading_tick.run_cycle("model-e")
+
+
+class SpecialistPipelineTests(unittest.TestCase):
+    def _report(self, thesis="", transcript=None, truncated=False):
+        return SimpleNamespace(thesis=thesis, tool_transcript=transcript or [], tool_loop_truncated=truncated)
+
+    def test_calls_three_stages_with_the_right_tool_names_and_step_budgets(self):
+        import asyncio
+
+        calls = []
+
+        async def _fake(question, *, tool_names=None, max_steps=None):
+            calls.append((tool_names, max_steps))
+            if tool_names == []:
+                return self._report(thesis='{"action": "no_trade", "rationale": "nothing to do"}')
+            return self._report(thesis="stage answer")
+
+        with mock.patch.object(agent_trading_tick, "_call_agent_analyze", side_effect=_fake):
+            asyncio.run(agent_trading_tick._run_specialist_pipeline("PORTFOLIO", "CANDIDATES"))
+
+        self.assertEqual(calls[0], (["web_search"], agent_trading_tick.RESEARCH_MAX_STEPS))
+        self.assertEqual(calls[1], ([], agent_trading_tick.SIZING_MAX_STEPS))
+        self.assertEqual(calls[2], (["place_trade", "manage_notes"], agent_trading_tick.THESIS_MAX_STEPS))
+
+    def test_sizing_recommendation_reaches_the_execution_stage_prompt(self):
+        # Real-value check: the sizing stage's number must actually flow into
+        # the execution stage's question, not just be computed and discarded
+        # -- otherwise this is three calls doing the work of one.
+        import asyncio
+
+        questions = []
+
+        async def _fake(question, *, tool_names=None, max_steps=None):
+            questions.append(question)
+            if tool_names == []:
+                return self._report(
+                    thesis='{"action": "trade", "ticker": "KXFOO", "side": "YES", '
+                           '"price": 0.42, "quantity": 5, "rationale": "edge"}'
+                )
+            return self._report(thesis="ok")
+
+        with mock.patch.object(agent_trading_tick, "_call_agent_analyze", side_effect=_fake):
+            asyncio.run(agent_trading_tick._run_specialist_pipeline("PORTFOLIO", "CANDIDATES"))
+
+        execution_question = questions[2]
+        self.assertIn("KXFOO", execution_question)
+        self.assertIn("qty=5", execution_question)
+        self.assertIn("price=0.42", execution_question)
+
+    def test_malformed_sizing_json_falls_back_to_no_trade_instead_of_crashing(self):
+        import asyncio
+
+        async def _fake(question, *, tool_names=None, max_steps=None):
+            if tool_names == []:
+                return self._report(thesis="not json at all, the model rambled instead")
+            return self._report(thesis="ok")
+
+        with mock.patch.object(agent_trading_tick, "_call_agent_analyze", side_effect=_fake):
+            result = asyncio.run(agent_trading_tick._run_specialist_pipeline("PORTFOLIO", "CANDIDATES"))
+
+        self.assertEqual(result.stages["sizing"]["parsed"]["action"], "no_trade")
+
+    def test_combined_report_aggregates_transcripts_and_truncation(self):
+        import asyncio
+
+        reports = [
+            self._report(transcript=[{"action": "web_search"}], truncated=False),
+            self._report(thesis='{"action": "no_trade", "rationale": "n/a"}', truncated=True),
+            self._report(transcript=[{"action": "place_trade"}], truncated=False),
+        ]
+
+        async def _fake(question, *, tool_names=None, max_steps=None):
+            return reports.pop(0)
+
+        with mock.patch.object(agent_trading_tick, "_call_agent_analyze", side_effect=_fake):
+            result = asyncio.run(agent_trading_tick._run_specialist_pipeline("PORTFOLIO", "CANDIDATES"))
+
+        self.assertEqual(len(result.tool_transcript), 2)
+        self.assertTrue(result.truncated)
 
 
 class AgentAnalyzeRetryTests(unittest.TestCase):

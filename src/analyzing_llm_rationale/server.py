@@ -4433,6 +4433,16 @@ class AgentAnalyzeRequest(BaseModel):
     ground_in_record: bool = Field(False, description="Condition the forecast on the model's own live track-record calibration.")
     tool_loop: bool = Field(False, description="Use a ReAct tool-using loop (model plans + calls tools) instead of the fixed pipeline.")
     benchmark_tools: bool = Field(False, description="When tool_loop=true, expose only benchmark tools: place_trade, web_search, manage_notes.")
+    benchmark_tool_names: Optional[List[str]] = Field(
+        None,
+        max_length=3,
+        description=(
+            "When benchmark_tools=true, restrict the exposed tool set to this subset "
+            "of place_trade/web_search/manage_notes -- e.g. a research-only call passes "
+            "['web_search', 'manage_notes'], a pure-reasoning call passes [] (no tools, "
+            "so the model must answer on its first turn). Unset exposes all three."
+        ),
+    )
     max_tool_steps: int = Field(5, ge=1, le=8, description="Max tool calls in the loop.")
     effort_tier: Optional[Literal["simple", "standard", "deep"]] = Field(
         None,
@@ -13201,8 +13211,18 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         {"name": "manage_notes", "args": "action, id?, text?, query?, tags?", "description": "Store, search, edit, list, or delete persistent notes. Max 50 notes per agent, 1200 characters each."},
     ]
     if req.benchmark_tools:
-        tools = dict(benchmark_tool_map)
-        specs = list(benchmark_specs)
+        allowed_names = req.benchmark_tool_names
+        if allowed_names is None:
+            tools = dict(benchmark_tool_map)
+            specs = list(benchmark_specs)
+        else:
+            # Silently ignore any name outside the known three rather than
+            # erroring -- callers only ever build this list from constants,
+            # never user input, so a typo here is a caller bug best caught
+            # by the resulting tool being (correctly) unavailable.
+            allowed = set(allowed_names)
+            tools = {name: fn for name, fn in benchmark_tool_map.items() if name in allowed}
+            specs = [s for s in benchmark_specs if s["name"] in allowed]
     else:
         # Benchmark tools (place_trade above all) must never reach the standard
         # tool loop -- /agent/analyze's documented contract is that it never
@@ -13243,26 +13263,43 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             "market with scan_markets/get_market, call forecast with that market's "
             "question and its market_probability, then base your answer on that result.")
     if req.benchmark_tools:
-        rule = (
-            "Benchmark mode: you have exactly three tools: `place_trade`, `web_search`, "
-            "and `manage_notes`. Use `place_trade` for Kalshi trade decisions. There is "
-            "no sell tool; exit by buying the opposite side. `place_trade` uses "
-            "immediate-or-cancel execution only: unfilled quantity is cancelled and no "
-            "order rests. Cash, positions, actions, weighted-average entry price, "
-            "netting PnL, and market settlements persist across cycles; settlements "
-            "are checked before a new cycle's trade. "
-            "This account is shadow (paper) mode: no real order ever reaches an exchange "
-            "and no real money is ever at risk -- but calling `place_trade` always "
-            "actually executes and permanently records the paper trade against your "
-            "persistent account when it passes the guards below. It is never disabled, "
-            "never a no-op, and never waiting on some other 'live trading' switch. If "
-            "you decide to trade this cycle, calling `place_trade` is the only way to do "
-            "it -- do not conclude no trade can happen because this is a shadow account. "
-            "`place_trade` is guarded by account solvency including fees/netting payouts, "
-            "a 15% single-market cost-basis cap, and a per-cycle spend limit; a rejection "
-            "names which specific guard tripped, not that trading is unavailable. Use "
-            "`web_search` for current evidence and `manage_notes` for memory across cycles."
-        )
+        active = set(tools.keys())
+        if not active:
+            # A specialist-pipeline stage that deliberately hands over zero
+            # tools (e.g. a pure sizing/reasoning turn) -- run_tool_loop still
+            # expects extra_rules to make sense standing alone.
+            rule = "No tools are available this turn. Give your final answer directly."
+        else:
+            rule_parts = [
+                "Benchmark mode: you have {n} tool{s} available this turn: {names}.".format(
+                    n=len(active), s="" if len(active) == 1 else "s",
+                    names=", ".join(f"`{name}`" for name in sorted(active)),
+                )
+            ]
+            if "place_trade" in active:
+                rule_parts.append(
+                    "Use `place_trade` for Kalshi trade decisions. There is no sell tool; "
+                    "exit by buying the opposite side. `place_trade` uses immediate-or-cancel "
+                    "execution only: unfilled quantity is cancelled and no order rests. Cash, "
+                    "positions, actions, weighted-average entry price, netting PnL, and market "
+                    "settlements persist across cycles; settlements are checked before a new "
+                    "cycle's trade. This account is shadow (paper) mode: no real order ever "
+                    "reaches an exchange and no real money is ever at risk -- but calling "
+                    "`place_trade` always actually executes and permanently records the paper "
+                    "trade against your persistent account when it passes the guards below. It "
+                    "is never disabled, never a no-op, and never waiting on some other 'live "
+                    "trading' switch. If you decide to trade this cycle, calling `place_trade` "
+                    "is the only way to do it -- do not conclude no trade can happen because "
+                    "this is a shadow account. `place_trade` is guarded by account solvency "
+                    "including fees/netting payouts, a 15% single-market cost-basis cap, and a "
+                    "per-cycle spend limit; a rejection names which specific guard tripped, not "
+                    "that trading is unavailable."
+                )
+            if "web_search" in active:
+                rule_parts.append("Use `web_search` for current evidence.")
+            if "manage_notes" in active:
+                rule_parts.append("Use `manage_notes` for memory across cycles.")
+            rule = " ".join(rule_parts)
     backstopped = False
     try:
         res = await agent_capabilities.run_tool_loop(

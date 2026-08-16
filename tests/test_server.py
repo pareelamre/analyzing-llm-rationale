@@ -3082,6 +3082,49 @@ class ServerTests(unittest.TestCase):
         self.assertIn("web_search(", system_prompt)
         self.assertIn("manage_notes(", system_prompt)
         self.assertNotIn("forecast(", system_prompt)
+
+    def test_agent_analyze_benchmark_tool_names_restricts_to_a_subset(self):
+        # A specialist-pipeline stage (e.g. research-only) passes an explicit
+        # subset so it structurally cannot reach place_trade, rather than
+        # relying on the model to just not call it.
+        self.provider.response = {"thought": "looking", "final": "no trade decided"}
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Research this market.",
+                "tool_loop": True,
+                "benchmark_tools": True,
+                "benchmark_tool_names": ["web_search", "manage_notes"],
+                "max_tool_steps": 1,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertIn("web_search(", system_prompt)
+        self.assertIn("manage_notes(", system_prompt)
+        self.assertNotIn("place_trade(", system_prompt)
+        # The place_trade-specific shadow-mode safety paragraph must not leak
+        # into a call where place_trade isn't even offered.
+        self.assertNotIn("shadow (paper) mode", system_prompt)
+
+    def test_agent_analyze_benchmark_tool_names_empty_list_offers_no_tools(self):
+        self.provider.response = {"thought": "deciding", "final": '{"action": "no_trade"}'}
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Size this trade.",
+                "tool_loop": True,
+                "benchmark_tools": True,
+                "benchmark_tool_names": [],
+                "max_tool_steps": 1,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertNotIn("place_trade(", system_prompt)
+        self.assertNotIn("web_search(", system_prompt)
+        self.assertNotIn("manage_notes(", system_prompt)
+        self.assertIn("No tools are available this turn", system_prompt)
         self.assertNotIn("scan_markets(", system_prompt)
 
     def test_agent_analyze_tool_loop_without_benchmark_tools_excludes_place_trade(self):
