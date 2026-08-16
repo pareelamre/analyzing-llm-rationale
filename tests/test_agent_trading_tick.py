@@ -204,6 +204,19 @@ class CandidateLineFormattingTests(unittest.TestCase):
         line = agent_trading_tick._fmt_candidate_line(quote)
         self.assertIn("unknown", line)
 
+    def test_candidate_line_shows_the_derived_no_price_not_just_yes(self):
+        # Regression: a real live position was rejected trying to close a
+        # YES holding by buying NO at ~its YES entry price (implausible
+        # netting arb) -- the candidate line only ever showed yes bid/ask,
+        # so the agent had no live NO price to read and had to guess one
+        # instead of pricing off the real market. NO isn't a field Kalshi
+        # returns; it's derived from the YES book the same way
+        # place_trade's own guards derive it (accounting.MarketQuote), so
+        # what's shown here is guaranteed to match what execution checks.
+        line = agent_trading_tick._fmt_candidate_line(_quote("KXFOO", bid=0.40, ask=0.45))
+        self.assertIn("yes bid/ask 0.40/0.45", line)
+        self.assertIn("no bid/ask 0.55/0.60", line)
+
 
 class BuildQuestionTests(unittest.TestCase):
     def test_instructs_checking_the_resolution_window_before_trading_on_news(self):

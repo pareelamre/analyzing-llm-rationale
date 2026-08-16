@@ -13196,7 +13196,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "manage_notes": _tool_manage_notes,
     }
     benchmark_specs = [
-        {"name": "place_trade", "args": "ticker, side, price, quantity", "description": "Buy YES or NO contracts on Kalshi using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. There is no sell tool; exiting is represented by buying the opposite side. Trades update persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit. Defaults to shadow mode unless live trading is explicitly enabled."},
+        {"name": "place_trade", "args": "ticker, side, price, quantity", "description": "Buy YES or NO contracts on Kalshi using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit -- a rejection means one of those guards tripped, not that trading itself is unavailable."},
         {"name": "web_search", "args": "query", "description": "Research market events with OpenAI web search. CoinMarketCap and other blacklisted domains are excluded from results."},
         {"name": "manage_notes", "args": "action, id?, text?, query?, tags?", "description": "Store, search, edit, list, or delete persistent notes. Max 50 notes per agent, 1200 characters each."},
     ]
@@ -13251,8 +13251,16 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             "order rests. Cash, positions, actions, weighted-average entry price, "
             "netting PnL, and market settlements persist across cycles; settlements "
             "are checked before a new cycle's trade. "
+            "This account is shadow (paper) mode: no real order ever reaches an exchange "
+            "and no real money is ever at risk -- but calling `place_trade` always "
+            "actually executes and permanently records the paper trade against your "
+            "persistent account when it passes the guards below. It is never disabled, "
+            "never a no-op, and never waiting on some other 'live trading' switch. If "
+            "you decide to trade this cycle, calling `place_trade` is the only way to do "
+            "it -- do not conclude no trade can happen because this is a shadow account. "
             "`place_trade` is guarded by account solvency including fees/netting payouts, "
-            "a 15% single-market cost-basis cap, and a per-cycle spend limit. Use "
+            "a 15% single-market cost-basis cap, and a per-cycle spend limit; a rejection "
+            "names which specific guard tripped, not that trading is unavailable. Use "
             "`web_search` for current evidence and `manage_notes` for memory across cycles."
         )
     backstopped = False
