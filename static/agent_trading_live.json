@@ -117,7 +117,7 @@
       "min_sharpe_required": 0.5,
       "return_pct": -0.0051,
       "settled_count": 0,
-      "sharpe": -0.6455
+      "sharpe": -0.5401
     },
     "scads-alias-code": {
       "agent_id": "scads-alias-code",
@@ -272,7 +272,7 @@
     "qwen3-coder-30b-a3b-instruct": {
       "agent_id": "qwen3-coder-30b-a3b-instruct",
       "max_drawdown": 0.0007,
-      "sharpe": -0.6455,
+      "sharpe": -0.5401,
       "value_curve": [
         {
           "account_value": 9999.991387,
@@ -308,6 +308,16 @@
           "account_value": 9993.081847,
           "event_type": "rejected_trade",
           "ts": "2026-08-16T14:32:42.381827+00:00"
+        },
+        {
+          "account_value": 9993.081847,
+          "event_type": "trade",
+          "ts": "2026-08-16T14:54:08.081247+00:00"
+        },
+        {
+          "account_value": 9993.081847,
+          "event_type": "rejected_trade",
+          "ts": "2026-08-16T15:05:24.339559+00:00"
         }
       ]
     },
@@ -373,7 +383,7 @@
       ]
     }
   },
-  "generated_at": "2026-08-16T14:49:49.420385+00:00",
+  "generated_at": "2026-08-16T15:17:35.902238+00:00",
   "leaderboard": [
     {
       "account_value": 10000.0,
@@ -514,9 +524,9 @@
       "return_pct": -0.0051,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "trade_count": 5,
+      "trade_count": 6,
       "unrealized_pnl": -0.2,
-      "updated_at": "2026-08-16T12:51:00.926369+00:00",
+      "updated_at": "2026-08-16T14:54:08.080697+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -630,6 +640,88 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985436",
+      "thesis": "I cannot take any action this cycle. My Franklin Arias position (KXMLBDEBUT-FARIAS-26SEP01) cannot be closed due to 'implausible_netting_arb' restrictions, despite his strong performance at Double-A and projected late 2026 call-up timeline. For Kameron Anderson (KXMLBDEBUT-KANDERSON-26SEP01), I searched for current information about his MLB status for 2026 but could not find reliable, specific information to justify any trades. Without definitive information about either player's status before Sep 1, 2026, no trades will be placed.",
+      "ts": "2026-08-16T15:11:31.241330+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985436",
+      "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01.",
+      "ts": "2026-08-16T15:08:37.904567+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985436",
+      "thesis": "I cannot place a trade to exit the current position because the system rejected the order due to risk management guards. The trade was rejected with reason 'implausible_netting_arb', meaning the potential netting payout from exiting this position would exceed the system's allowed threshold for arbitrage opportunities. This is a protective measure to prevent potentially manipulative trades or excessive risk-taking. The system calculated that exiting the 20 'yes' contracts would create a netting payout that represents 0.324523 of the account value, exceeding the maximum allowed netting arb per pair of 0.15. Since we're operating in shadow mode with live trading disabled, no actual trade can be executed. This is a risk management feature designed to maintain market integrity.",
+      "ts": "2026-08-16T15:05:29.230611+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "mode": "shadow",
+      "outcome": "rejected",
+      "platform": "kalshi",
+      "price": 0.33,
+      "quantity": 20.0,
+      "realized_pnl": 0.0,
+      "side": "no",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-16T15:05:24.339559+00:00",
+      "type": "rejected_trade"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985436",
+      "thesis": "I will not place a trade this cycle.",
+      "ts": "2026-08-16T15:05:02.213243+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985435",
+      "thesis": "I'll research the MLB prospects and check on the Cabinet market before deciding what to do.",
+      "ts": "2026-08-16T14:59:53.139207+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985435",
+      "thesis": "I cannot take any action this cycle. My Franklin Arias position (KXMLBDEBUT-FARIAS-26SEP01) cannot be closed due to 'implausible_netting_arb' restrictions, despite his Triple-A debut. For Kameron Anderson (KXMLBDEBUT-KANDERSON-26SEP01), I searched for current information about his MLB status for 2026 but could not find reliable, specific information to justify any trades. Without definitive information about either player's status before Sep 1, 2026, no trades will be placed.",
+      "ts": "2026-08-16T14:55:24.982540+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985435",
+      "thesis": "I've analyzed the situation and decided to exit the current position. The user holds 20 'yes' contracts for Kade Anderson playing in MLB before Sep 1, 2026. Based on my research, the MLB Futures Game (which would be the relevant event) is scheduled for around July 12, 2026, which is outside the resolution window (August 14 - September 1, 2026). Therefore, the event did not occur during the resolution window, and the contracts should resolve as 'no'. \n\nI attempted to place a trade to buy 'no' contracts to exit the position, but since we're in shadow mode, the trade was only recorded and not executed. In a real trading scenario, this would close the position with a profit. I've noted this decision for future reference.\n\nThe current position remains unchanged in shadow mode, but the analysis shows that exiting would be the correct decision based on the timing of the event relative to the resolution window.",
+      "ts": "2026-08-16T14:54:11.447553+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.67,
+      "quantity": 0.0,
+      "realized_pnl": 0.0,
+      "side": "no",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-16T14:54:08.081247+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "glm-5.2-fp8",
+      "cycle_id": "15m:1985435",
+      "thesis": "{\"thought\": \"The search results suggest Kade Anderson is the Mariners' top pitching prospect and there are hints about his 2026 MLB timeline. Let me search for more specific details about when he might debut and also look into the other markets.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Kade Anderson Mariners 2026 MLB debut plan executive rotation update\"}}",
+      "ts": "2026-08-16T14:53:09.317363+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "scads-alias-ha",
       "cycle_id": "15m:1985435",
@@ -932,82 +1024,6 @@
       "cycle_id": "15m:1985422",
       "thesis": "I will not place a trade this cycle.",
       "ts": "2026-08-16T11:33:50.244587+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985422",
-      "thesis": "I cannot take any action this cycle regarding my positions. My Franklin Arias position (KXMLBDEBUT-FARIAS-26SEP01) cannot be closed due to 'implausible_netting_arb' restrictions, despite the fact that Franklin Arias appears to be active in MLB for 2026 based on my research. I've documented this situation in my notes for future reference. I'm maintaining both positions as they are, with no trades executed this cycle. The Franklin Arias market is currently trading at 0.09/0.10, which is at or slightly above my entry price of 0.10, while the Kade Anderson position remains unchanged. I'll need to wait for either the market conditions to change or for the trading restrictions to be lifted before I can close these positions.",
-      "ts": "2026-08-16T11:33:22.274278+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985422",
-      "thesis": "Looking at my portfolio and the market conditions, I need to research the current state of Trump's Cabinet before making any trading decisions. Let me search for the latest information.",
-      "ts": "2026-08-16T11:32:18.764077+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985421",
-      "thesis": "I will maintain the current position of 20 YES contracts on KXMLBDEBUT-KANDERSON-26SEP01. The search results show Kade Anderson made his spring debut in 2026 and the Mariners are planning his role for the 2026 season, but there's no specific information about whether he will play in MLB games before September 1, 2026. No compelling new information has emerged that would justify changing this position. The market is at break-even and there are no compelling reasons to alter the existing position given the current bid/ask of 0.32/0.33.",
-      "ts": "2026-08-16T11:30:54.537602+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "cycle_id": "15m:1985421",
-      "thesis": "{\"thought\": \"I need to research all three markets. Let me search for information on each simultaneously.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Kade Anderson LSU baseball MLB draft prospect debut timeline 2025 2026\"}}}",
-      "ts": "2026-08-16T11:29:49.941697+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985420",
-      "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01 and not take any further action this cycle.",
-      "ts": "2026-08-16T11:08:53.427310+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985420",
-      "thesis": "I cannot execute the trade to close my Franklin Arias position because it was rejected by risk guards due to 'implausible_netting_arb' restrictions, even in shadow mode. The system detected that closing this position would create an arbitrage opportunity that's too implausible. \n\nI'm maintaining both positions for now:\n- 10 YES contracts on Franklin Arias (KXMLBDEBUT-FARIAS-26SEP01) at $0.10 entry, currently priced at 0.09/0.10 (break-even)\n- 10 YES contracts on Kade Anderson (KXMLBDEBUT-KANDERSON-26SEP01) at $0.33 entry\n\nI don't have sufficient evidence to confidently trade on Kade Anderson's market either, as there's uncertainty about his MLB debut timing. The risk guards are preventing me from taking action that would create an apparent arbitrage situation, so I'm keeping both positions open for now.",
-      "ts": "2026-08-16T11:08:30.796187+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "mode": "shadow",
-      "outcome": "rejected",
-      "platform": "kalshi",
-      "price": 0.1,
-      "quantity": 10.0,
-      "realized_pnl": 0.0,
-      "side": "no",
-      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
-      "ts": "2026-08-16T11:08:27.700588+00:00",
-      "type": "rejected_trade"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985420",
-      "thesis": "Based on the provided information, I recommend maintaining the current position. The user has no compelling new information about Kade Anderson's playing status that would justify changing their position. They are at break-even and have no new information suggesting he won't play in MLB before Sep 1, 2026. The current bid/ask of 0.32/0.33 doesn't present a clear opportunity to improve their position, and the user's reasoning indicates no reason to alter their 20 YES contracts at an average entry of 0.33.",
-      "ts": "2026-08-16T11:05:04.881251+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985420",
-      "thesis": "I will not place a trade this cycle.",
-      "ts": "2026-08-16T11:05:00.731763+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "cycle_id": "15m:1985420",
-      "thesis": "I'll research all three markets to find actionable opportunities. Let me start with parallel searches.{\"thought\": \"I need to research all three markets. Let me search for Trump cabinet departures and the two MLB prospects simultaneously.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Trump cabinet departures 2025 2026 who might leave\"}}}",
-      "ts": "2026-08-16T11:01:53.222662+00:00",
       "type": "thesis"
     }
   ]
