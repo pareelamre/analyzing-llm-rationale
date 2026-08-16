@@ -1548,8 +1548,14 @@ def _check_trade_guards(
     concentration_cap = policy.account_value * policy.concentration_limit
     cash_required = max(0.0, -float(fill.cash_delta))
     cycle_spend_after = cycle_spend_before + cash_required
+    # accounting.PredictionMarketAccount.buy() itself caps realized_pnl at
+    # MAX_NETTING_ARB_PER_PAIR (a data-quality backstop for its other
+    # callers, which trade off historical market data). This guard's inputs
+    # are agent-supplied, not historical data, so it checks the pre-cap
+    # raw_realized_pnl to keep rejecting implausible trades outright instead
+    # of silently accepting them at the capped credit.
     arb_per_pair = (
-        float(fill.realized_pnl) / float(fill.realized_pairs)
+        float(fill.raw_realized_pnl) / float(fill.realized_pairs)
         if fill.realized_pairs > 1e-12
         else 0.0
     )

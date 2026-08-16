@@ -59,6 +59,28 @@ class PredictionMarketAccountTests(unittest.TestCase):
         self.assertEqual(account.open_positions(), [])
         self.assertAlmostEqual(account.cash, 100.33)
 
+    def test_netting_caps_implausible_arb_instead_of_crediting_it(self):
+        # Regression for the shadow-fill exploit that inflated the public
+        # agent-trading leaderboard: buying YES and NO on the same market at
+        # a matching lowball price nets a ~76% "riskless" profit that no
+        # real market spread could produce. benchmark_tools.place_trade
+        # rejects this outright for agent-supplied prices; here the inputs
+        # are historical market data (not adversarial), so buy() caps the
+        # credited profit at MAX_NETTING_ARB_PER_PAIR instead of trusting it.
+        account = PredictionMarketAccount(starting_cash=100.0)
+        account.buy(platform="Kalshi", ident="KXARB", side=YES, quantity=10, price=0.12)
+
+        fill = account.buy(platform="Kalshi", ident="KXARB", side=NO, quantity=10, price=0.12)
+
+        self.assertEqual(fill.settlement_status, "realized")
+        self.assertEqual(fill.realized_pairs, 10)
+        # Uncapped this would be ~7.6 (a 76% single-trade "return"); capped
+        # at 0.15/pair it's 1.5.
+        self.assertAlmostEqual(fill.realized_pnl, 1.5)
+        self.assertAlmostEqual(account.realized_pnl, 1.5)
+        self.assertAlmostEqual(account.cash, 101.5)
+        self.assertEqual(account.open_positions(), [])
+
     def test_settlement_records_realized_pnl(self):
         account = PredictionMarketAccount(starting_cash=100.0)
         account.buy(platform="Kalshi", ident="KXTEST", side=YES, quantity=2, price=0.40)
