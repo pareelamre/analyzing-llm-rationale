@@ -1625,20 +1625,6 @@
       animation: agent-spin .7s linear infinite;
     }
     @keyframes agent-spin { to { transform: rotate(360deg); } }
-    .agent-steps { display: flex; flex-direction: column; gap: 7px; }
-    .agent-step {
-      display: flex; align-items: center; gap: 9px;
-      font-size: 13px; color: var(--text-mute);
-      opacity: .55; transition: opacity var(--dur-med), color var(--dur-med);
-    }
-    .agent-step .agent-dot {
-      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-      background: var(--border-2); transition: background var(--dur-med), transform var(--dur-med);
-    }
-    .agent-step.active { opacity: 1; color: var(--ink); }
-    .agent-step.active .agent-dot { background: var(--ink); transform: scale(1.25); }
-    .agent-step.done { opacity: .9; color: var(--text-dim); }
-    .agent-step.done .agent-dot { background: var(--signal); }
 
     /* ── Config panel (collapses model + agent skills) ────────────────────── */
     .config-panel { border: 0; }
@@ -1750,6 +1736,41 @@
       transition: background var(--dur-med), color var(--dur-med);
     }
     .auth-close:hover { background: var(--panel); color: var(--ink); }
+    /* ── Settings modal (traditional sectioned settings, replacing the old
+       account-popover-nested "Preferences" pattern for the sections it hosts) */
+    .settings-card {
+      width: 100%; max-width: 660px; margin: auto; padding: 0;
+      background: #ffffff; border: 1px solid var(--border); border-radius: 24px;
+      box-shadow: 0 20px 40px rgba(15, 15, 16, 0.08), 0 1px 3px rgba(15, 15, 16, 0.02);
+      transform: translateY(12px) scale(.985); opacity: 0;
+      transition: transform var(--dur-slow) var(--ease-soft), opacity var(--dur-med) var(--ease-soft);
+      display: flex; min-height: 440px; max-height: 82vh; overflow: hidden;
+    }
+    .auth-overlay.show .settings-card { transform: none; opacity: 1; }
+    .settings-nav {
+      width: 176px; flex-shrink: 0; border-right: 1px solid var(--border);
+      padding: 20px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto;
+    }
+    .settings-nav-title { font-size: 12px; font-weight: 700; color: var(--ink); padding: 4px 10px 10px; }
+    .settings-nav-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      padding: 9px 10px; border-radius: 10px; border: 0; background: transparent;
+      font-size: 13px; font-weight: 500; color: var(--text-mute); cursor: pointer; text-align: left;
+      transition: background var(--dur-med), color var(--dur-med);
+    }
+    .settings-nav-item:hover { background: var(--panel); color: var(--ink); }
+    .settings-nav-item.active { background: var(--ink); color: #fff; }
+    .settings-nav-badge { font-size: 10px; opacity: .8; }
+    .settings-body { flex: 1; padding: 26px 30px; overflow-y: auto; min-width: 0; }
+    .settings-section { display: none; }
+    .settings-section.active { display: block; }
+    .settings-section-title { font-size: 16px; font-weight: 600; color: var(--ink); margin: 0 0 6px; }
+    @media (max-width: 640px) {
+      .settings-card { flex-direction: column; max-height: 90vh; }
+      .settings-nav { width: 100%; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 10px; }
+      .settings-nav-title { display: none; }
+      .settings-body { padding: 20px; }
+    }
     .feedback-star {
       font-size: 24px; cursor: pointer; color: var(--border);
       transition: color 0.15s; user-select: none;
@@ -1904,6 +1925,7 @@
 <svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
   <defs>
     <symbol id="ui-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="ui-settings" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></symbol>
     <symbol id="ui-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="ui-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
     <symbol id="ui-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
@@ -2335,13 +2357,6 @@
         <p class="text-gray-400" style="font-size:10px;margin-top:2px">Foresea uses these alongside evidence gathering, forecasting, and edge analysis.</p>
       </div>
 
-      <!-- Copied public agents -->
-      <div class="config-group">
-        <p class="label" style="margin:0">Copied agents</p>
-        <div id="copiedAgentList" class="model-list"></div>
-        <p id="copiedAgentHint" class="text-gray-400" style="font-size:10px;margin-top:2px">Copy a public agent from the Agentic board. This copies its model and research setup only — never its private context, account history, or exchange connection.</p>
-      </div>
-
       <!-- Knowledge base -->
       <div class="config-group">
         <p class="label" style="margin:0">Knowledge base</p>
@@ -2367,57 +2382,13 @@
     </div>
   </details>
 
-  <!-- Exchange accounts (bring-your-own trading) — top-level so it's easy to find -->
-  <details class="config-panel" id="tradingPanel">
-    <summary class="config-summary">
-      <svg class="config-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
-        <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>Connect exchange</span>
-      <span id="tradingPanelStatus" class="config-active"></span>
-    </summary>
-    <div class="config-body" onclick="event.stopPropagation()">
-      <p class="text-gray-400" style="font-size:10px;margin:0 0 8px;line-height:1.5">
-        Connect your own Kalshi or Polymarket account to place real orders.
-        Credentials are encrypted before they are stored with your Foresea account and
-        are never returned to this browser. They are used server-side only for your signed-in trading actions.
-      </p>
-      <details class="model-form" style="margin-top:0">
-        <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
-          Kalshi <span id="kalshiChip" style="font-size:10px;padding:1px 7px;border-radius:999px;background:#eee;color:#777">Not connected</span>
-        </summary>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
-          <input id="vcKalshiKeyId" class="variant-select text-xs" placeholder="API key ID" autocomplete="off" />
-          <textarea id="vcKalshiPriv" class="variant-select text-xs" rows="3" placeholder="RSA private key (PEM)" style="resize:vertical;min-height:54px;font-family:monospace;font-size:11px"></textarea>
-          <input id="vcKalshiBase" class="variant-select text-xs" placeholder="Base URL (optional)" autocomplete="off" />
-          <div class="model-form-actions">
-            <button type="button" class="model-save" onclick="saveVenueCreds('kalshi')">Connect securely</button>
-            <button type="button" class="model-cancel" onclick="disconnectVenue('kalshi')">Disconnect</button>
-          </div>
-        </div>
-      </details>
-      <details class="model-form" style="margin-top:6px">
-        <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
-          Polymarket <span id="polyChip" style="font-size:10px;padding:1px 7px;border-radius:999px;background:#eee;color:#777">Not connected</span>
-        </summary>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
-          <input id="vcPolyPriv" type="password" class="variant-select text-xs" placeholder="Wallet private key" autocomplete="off" />
-          <input id="vcPolyKey" class="variant-select text-xs" placeholder="CLOB API key" autocomplete="off" />
-          <input id="vcPolySecret" type="password" class="variant-select text-xs" placeholder="CLOB API secret" autocomplete="off" />
-          <input id="vcPolyPass" type="password" class="variant-select text-xs" placeholder="CLOB API passphrase" autocomplete="off" />
-          <input id="vcPolyHost" class="variant-select text-xs" placeholder="CLOB host (optional)" autocomplete="off" />
-          <input id="vcPolyFunder" class="variant-select text-xs" placeholder="Funder address (optional)" autocomplete="off" />
-          <div class="model-form-actions">
-            <button type="button" class="model-save" onclick="saveVenueCreds('polymarket')">Connect securely</button>
-            <button type="button" class="model-cancel" onclick="disconnectVenue('polymarket')">Disconnect</button>
-          </div>
-        </div>
-      </details>
-      <div id="venueErr" class="model-form-error" hidden></div>
-      <button type="button" class="model-add-btn ui-icon-label" onclick="openTradeModal()">Place an order <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></button>
-    </div>
-  </details>
-
+  <!-- Exchange connections and copied agents now live in the Settings modal
+       (gear icon next to the account chip) — this is just a pointer for
+       anyone used to finding them in this menu. -->
+  <button type="button" class="workspace-action" style="margin:6px 0" onclick="_closeAcctMenu();openSettingsModal('connections')">
+    <strong>Settings</strong>
+    <span>Connect exchange accounts, manage copied agents, and more.</span>
+  </button>
 
     <div id="sidebarSignedOut" class="acct-section" hidden>
       <button type="button" class="btn-signin sidebar-signin" onclick="openAuthModal('login')">Sign in</button>
@@ -2429,14 +2400,19 @@
     </div>
   </div><!-- /acctMenu -->
 
-  <button type="button" id="sidebarUserChip" class="acct-btn" onclick="toggleAcctMenu(event)" aria-haspopup="true">
-    <img id="sidebarUserAvatar" class="user-avatar" src="" alt="" />
-    <span class="account-meta">
-      <span id="sidebarUserName" class="user-name">Account</span>
-      <span id="sidebarUserEmail" class="account-email"></span>
-    </span>
-    <svg class="acct-chevron" width="12" height="12" viewBox="0 0 10 10" fill="none"><path d="M2 6.5 5 3.5 8 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  </button>
+  <div style="display:flex;align-items:center;gap:6px">
+    <button type="button" id="sidebarUserChip" class="acct-btn" onclick="toggleAcctMenu(event)" aria-haspopup="true" style="flex:1;min-width:0">
+      <img id="sidebarUserAvatar" class="user-avatar" src="" alt="" />
+      <span class="account-meta">
+        <span id="sidebarUserName" class="user-name">Account</span>
+        <span id="sidebarUserEmail" class="account-email"></span>
+      </span>
+      <svg class="acct-chevron" width="12" height="12" viewBox="0 0 10 10" fill="none"><path d="M2 6.5 5 3.5 8 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button type="button" class="acct-btn" style="flex:0 0 auto;width:38px;justify-content:center;padding:8px" onclick="openSettingsModal()" title="Settings" aria-label="Settings">
+      <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-settings"></use></svg>
+    </button>
+  </div>
   </div>
 
 </aside>
@@ -2650,6 +2626,71 @@
       <button type="button" id="authSwitchBtn" onclick="toggleAuthMode()">Create an account</button>
     </p>
     <p class="auth-fineprint">By continuing you agree this is decision support only — verify important markets.</p>
+  </div>
+</div>
+
+<!-- ── Settings ── -->
+<div id="settingsOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" aria-hidden="true" onclick="if(event.target===this)closeSettingsModal()">
+  <div class="settings-card" style="position:relative">
+    <button type="button" class="auth-close" onclick="closeSettingsModal()" aria-label="Close"><svg class="ui-icon" aria-hidden="true"><use href="#ui-x"></use></svg></button>
+    <nav class="settings-nav">
+      <p class="settings-nav-title" id="settingsTitle">Settings</p>
+      <button type="button" class="settings-nav-item active" data-settings-section="connections" onclick="_showSettingsSection('connections')">
+        <span>Connections</span><span id="settingsConnectionsBadge" class="settings-nav-badge"></span>
+      </button>
+      <button type="button" class="settings-nav-item" data-settings-section="agents" onclick="_showSettingsSection('agents')">
+        <span>Copied agents</span>
+      </button>
+    </nav>
+    <div class="settings-body">
+      <section id="settingsSectionConnections" class="settings-section active">
+        <p class="settings-section-title">Connect exchange</p>
+        <p class="text-gray-400" style="font-size:11px;margin:0 0 14px;line-height:1.5">
+          Connect your own Kalshi or Polymarket account to place real orders.
+          Credentials are encrypted before they are stored with your Foresea account and
+          are never returned to this browser. They are used server-side only for your signed-in trading actions.
+        </p>
+        <details class="model-form" style="margin-top:0" open>
+          <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
+            Kalshi <span id="kalshiChip" style="font-size:10px;padding:1px 7px;border-radius:999px;background:#eee;color:#777">Not connected</span>
+          </summary>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+            <input id="vcKalshiKeyId" class="variant-select text-xs" placeholder="API key ID" autocomplete="off" />
+            <textarea id="vcKalshiPriv" class="variant-select text-xs" rows="3" placeholder="RSA private key (PEM)" style="resize:vertical;min-height:54px;font-family:monospace;font-size:11px"></textarea>
+            <input id="vcKalshiBase" class="variant-select text-xs" placeholder="Base URL (optional)" autocomplete="off" />
+            <div class="model-form-actions">
+              <button type="button" class="model-save" onclick="saveVenueCreds('kalshi')">Connect securely</button>
+              <button type="button" class="model-cancel" onclick="disconnectVenue('kalshi')">Disconnect</button>
+            </div>
+          </div>
+        </details>
+        <details class="model-form" style="margin-top:6px" open>
+          <summary style="cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
+            Polymarket <span id="polyChip" style="font-size:10px;padding:1px 7px;border-radius:999px;background:#eee;color:#777">Not connected</span>
+          </summary>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+            <input id="vcPolyPriv" type="password" class="variant-select text-xs" placeholder="Wallet private key" autocomplete="off" />
+            <input id="vcPolyKey" class="variant-select text-xs" placeholder="CLOB API key" autocomplete="off" />
+            <input id="vcPolySecret" type="password" class="variant-select text-xs" placeholder="CLOB API secret" autocomplete="off" />
+            <input id="vcPolyPass" type="password" class="variant-select text-xs" placeholder="CLOB API passphrase" autocomplete="off" />
+            <input id="vcPolyHost" class="variant-select text-xs" placeholder="CLOB host (optional)" autocomplete="off" />
+            <input id="vcPolyFunder" class="variant-select text-xs" placeholder="Funder address (optional)" autocomplete="off" />
+            <div class="model-form-actions">
+              <button type="button" class="model-save" onclick="saveVenueCreds('polymarket')">Connect securely</button>
+              <button type="button" class="model-cancel" onclick="disconnectVenue('polymarket')">Disconnect</button>
+            </div>
+          </div>
+        </details>
+        <div id="venueErr" class="model-form-error" hidden></div>
+        <button type="button" class="model-add-btn ui-icon-label" onclick="openTradeModal()">Place an order <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></button>
+      </section>
+      <section id="settingsSectionAgents" class="settings-section">
+        <p class="settings-section-title">Copied agents</p>
+        <p class="text-gray-400" style="font-size:11px;margin:0 0 14px;line-height:1.5">Copy a public agent from the Agentic board. This copies its model and research setup only — never its private context, account history, or exchange connection.</p>
+        <div id="copiedAgentList" class="model-list"></div>
+        <p id="copiedAgentHint" class="text-gray-400" style="font-size:10px;margin-top:8px"></p>
+      </section>
+    </div>
   </div>
 </div>
 
@@ -4646,27 +4687,22 @@ function addTyping({ kind = 'lookup', surface = 'chat' } = {}) {
   return div;
 }
 
-// Agent steps advance only when the streaming endpoint reports a real phase.
+// A single, live-updating status line -- not a pre-declared checklist of
+// every stage the pipeline *might* reach. A plain "hello" and a genuine
+// forecasting question both just show whatever stage is actually
+// happening right now, instead of a wall of stage labels up front.
 function addAgentProgress(steps) {
   const div = document.createElement('div');
   div.className = 'max-w-2xl mx-auto w-full';
   div.innerHTML = `<div class="msg-ai agent-run p-4 sm:p-5" role="status" aria-live="polite" aria-atomic="true">
     <div class="agent-run-head"><span class="agent-spinner"></span><span class="agent-progress-title">Agent working...</span></div>
-    <div class="agent-steps">${steps.map(s => `
-      <div class="agent-step"><span class="agent-dot"></span><span>${escHtml(s)}</span></div>`).join('')}</div>
   </div>`;
   document.getElementById('messages').appendChild(div);
   scrollBottom();
-  const stepEls = [...div.querySelectorAll('.agent-step')];
   div._setAgentProgress = label => {
-    const target = stepEls.findIndex(node => node.textContent.trim() === String(label || '').trim());
-    if (target < 0) return;
-    stepEls.forEach((node, index) => {
-      node.classList.toggle('done', index < target);
-      node.classList.toggle('active', index === target);
-    });
+    const el = div.querySelector('.agent-progress-title');
+    if (el && label) el.textContent = label;
   };
-  if (stepEls.length) div._setAgentProgress(steps[0]);
   return div;
 }
 
@@ -7990,7 +8026,7 @@ function renderVenueStatus() {
     chip.style.background = on ? '#dcfce7' : '#eee';
     chip.style.color = on ? '#15803d' : '#777';
   });
-  const summary = document.getElementById('tradingPanelStatus');
+  const summary = document.getElementById('settingsConnectionsBadge');
   if (summary) summary.textContent = connected ? `${connected} connected` : '';
 }
 
@@ -9831,6 +9867,34 @@ function closeAuthModal({ preserveLedgerIntent = false } = {}) {
   if (!preserveLedgerIntent) clearPersonalLedgerSignInIntent();
 }
 
+// ── Settings modal ───────────────────────────────────────────────────────────
+function openSettingsModal(section) {
+  _closeAcctMenu();
+  _showSettingsSection(section || 'connections');
+  renderVenueStatus();
+  renderCopiedAgentList();
+  const overlay = document.getElementById('settingsOverlay');
+  overlay.classList.add('show');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeSettingsModal() {
+  const overlay = document.getElementById('settingsOverlay');
+  overlay.classList.remove('show');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function _showSettingsSection(name) {
+  const sections = { connections: 'settingsSectionConnections', agents: 'settingsSectionAgents' };
+  if (!sections[name]) return;
+  document.querySelectorAll('.settings-nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.settingsSection === name);
+  });
+  document.querySelectorAll('.settings-section').forEach(el => {
+    el.classList.toggle('active', el.id === sections[name]);
+  });
+}
+
 // ── Feedback modal ──────────────────────────────────────────────────────────
 let _feedbackRating = 0;
 
@@ -10030,6 +10094,9 @@ async function initAuth() {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('authOverlay').classList.contains('show')) {
     closeAuthModal();
+  }
+  if (e.key === 'Escape' && document.getElementById('settingsOverlay').classList.contains('show')) {
+    closeSettingsModal();
   }
 });
 
