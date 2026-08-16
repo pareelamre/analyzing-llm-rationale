@@ -155,6 +155,47 @@ class LeaderboardTests(unittest.TestCase):
             rows = agent_trading_stats.compute_agent_leaderboard(conn, {})
         self.assertEqual([r["agent_id"] for r in rows], ["model-high", "model-low"])
 
+    def test_admin_reset_scopes_trade_count_and_win_rate_to_since_the_reset(self):
+        # Regression: agent_equity_curve() trims its chart to start at the
+        # latest admin_reset (see EquityCurveTests), but this leaderboard row
+        # is what the table shows next to that chart. Before this fix,
+        # trade_count/settled_count/win_rate here kept counting every
+        # pre-reset action forever, so the table and chart visibly disagreed
+        # about how much history the account had.
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a", cash=10_000.0)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-11T00:00:00+00:00", cash_delta=-40.0)
+            _insert_action(conn, "model-a", action_type="settlement",
+                            ts="2026-08-11T00:05:00+00:00", realized_pnl=-10.0)
+            _insert_action(conn, "model-a", action_type="admin_reset",
+                            ts="2026-08-12T00:00:00+00:00", cash_delta=40.0)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-13T00:00:00+00:00", cash_delta=-25.0)
+            _insert_action(conn, "model-a", action_type="settlement",
+                            ts="2026-08-13T00:05:00+00:00", realized_pnl=20.0)
+            conn.commit()
+
+            row = agent_trading_stats.compute_agent_leaderboard(conn, {})[0]
+
+        self.assertEqual(row["trade_count"], 1)
+        self.assertEqual(row["settled_count"], 1)
+        self.assertEqual(row["won_count"], 1)
+        self.assertAlmostEqual(row["win_rate"], 1.0)
+
+    def test_no_reset_still_counts_all_time_activity(self):
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a", cash=10_000.0)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-11T00:00:00+00:00", cash_delta=-40.0)
+            _insert_action(conn, "model-a", action_type="trade",
+                            ts="2026-08-12T00:00:00+00:00", cash_delta=-25.0)
+            conn.commit()
+
+            row = agent_trading_stats.compute_agent_leaderboard(conn, {})[0]
+
+        self.assertEqual(row["trade_count"], 2)
+
 
 class EquityCurveTests(unittest.TestCase):
     def test_curve_is_a_running_cash_total_starting_from_starting_cash(self):

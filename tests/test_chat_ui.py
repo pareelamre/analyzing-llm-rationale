@@ -418,6 +418,24 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         )[0]
         self.assertIn("await syncConversationsAfterSignIn(user);", after_sign_in_body)
 
+    def test_settings_modal_scrolls_past_the_global_lenis_smooth_scroll(self) -> None:
+        # Regression: the app runs Lenis globally for buttery document-level
+        # smooth scroll (see initMotion). Every other overlay's scrollable
+        # body (trackBody/edgeBody/watchBody/ledgerBody, the chat messages
+        # pane, the sidebar) opts out via data-lenis-prevent so Lenis lets
+        # native overflow scrolling happen inside them instead of hijacking
+        # the wheel event for the document. The Settings modal never got
+        # that attribute, so scrolling inside it silently did nothing.
+        settings_modal = self.index_html.split('id="settingsOverlay"', 1)[1].split(
+            "<!-- ── Track record overlay", 1
+        )[0]
+        self.assertIn('class="settings-nav" data-lenis-prevent', settings_modal)
+        self.assertIn('class="settings-body" data-lenis-prevent', settings_modal)
+        # And a visible, app-consistent thin scrollbar instead of the
+        # default browser one.
+        self.assertIn(".settings-nav::-webkit-scrollbar", self.index_html)
+        self.assertIn(".settings-body::-webkit-scrollbar", self.index_html)
+
     def test_browser_history_closes_personal_ledger_overlay(self) -> None:
         history_body = self.index_html.split("function applyHistoryState", 1)[1].split(
             "window.addEventListener('popstate'", 1
