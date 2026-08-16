@@ -1,7 +1,11 @@
 """Unit tests for BYO model providers registry, envelope encryption, and API endpoints."""
 
+import sys
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fastapi.testclient import TestClient
 
@@ -231,6 +235,22 @@ class ModelProvidersTests(unittest.TestCase):
         r_del = client.delete("/api/user/model-providers/anthropic", headers=headers)
         self.assertEqual(r_del.status_code, 200)
         self.assertFalse(r_del.json()["connected"])
+
+    def test_provider_logo_symbols_present_in_html(self) -> None:
+        """Verify that all 16 credible model providers have defined SVG logo symbols in index.html."""
+        static_index = (Path(__file__).resolve().parents[1] / "static" / "index.html").read_text(
+            encoding="utf-8"
+        )
+        for pid in CREDIBLE_PROVIDERS:
+            symbol_id = f'id="logo-{pid}"'
+            self.assertIn(
+                symbol_id,
+                static_index,
+                f"Missing SVG logo symbol {symbol_id} in static/index.html",
+            )
+        self.assertIn("_getProviderLogo(id)", static_index)
+        self.assertIn("mp-logo-badge", static_index)
+        self.assertIn("mp-logo-icon", static_index)
 
 
 if __name__ == "__main__":
