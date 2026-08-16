@@ -696,7 +696,32 @@ def _upsert_user(sub: str, email: str, name: str, picture: str) -> str:
             entity["created_at"] = now
     entity.update(email=email, name=name, picture=picture, last_login=now)
     client.put(entity)
+    _sync_user_duckdb(entity.key.name or sub, email, name, picture, entity.get("created_at") or now, now)
     return entity.key.name or sub
+
+
+def _sync_user_duckdb(sub: str, email: str, name: str, picture: str, created_at: Any, last_login: Any) -> None:
+    """Mirror user entity into DuckDB users table for unified analytics and local dev."""
+    try:
+        conn = _analytics_conn()
+        try:
+            conn.execute(
+                """
+                INSERT INTO users (sub, email, name, picture, created_at, last_login)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (sub) DO UPDATE SET
+                    email = excluded.email,
+                    name = excluded.name,
+                    picture = excluded.picture,
+                    last_login = excluded.last_login
+                """,
+                [sub, email, name, picture, created_at, last_login],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
 
 
 # Datastore kind: agent-forecast markets to enrol into the live track record.
@@ -4549,6 +4574,7 @@ class AnalyticsAttributionSummary(BaseModel):
     authenticated_records: int = 0
     anonymous_records: int = 0
     authenticated_accounts: int = 0
+    total_registered_users: int = 0
 
 
 class AnalyticsSummary(BaseModel):
@@ -4596,6 +4622,20 @@ class RecentAnalyticsEvent(BaseModel):
 
 class RecentAnalyticsEventsResponse(BaseModel):
     events: List[RecentAnalyticsEvent] = Field(default_factory=list)
+
+
+class RegisteredUserItem(BaseModel):
+    user_id: str
+    email: str = ""
+    name: str = ""
+    picture: str = ""
+    created_at: Optional[str] = None
+    last_login: Optional[str] = None
+
+
+class RegisteredUsersResponse(BaseModel):
+    total: int = 0
+    users: List[RegisteredUserItem] = Field(default_factory=list)
 
 
 class GoogleAuthRequest(BaseModel):
@@ -5926,6 +5966,18 @@ def _analytics_conn():
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            sub TEXT PRIMARY KEY,
+            email TEXT,
+            name TEXT,
+            picture TEXT,
+            created_at TIMESTAMP,
+            last_login TIMESTAMP
+        )
+        """
+    )
     return conn
 
 
@@ -5973,7 +6025,10 @@ def _analytics_attribution(request: Optional[Request]) -> tuple[str, Optional[st
     return "authenticated", _analytics_account_ref(user_id)
 
 
-def _analytics_attribution_summary(records: Iterable[Dict[str, Any]]) -> AnalyticsAttributionSummary:
+def _analytics_attribution_summary(
+    records: Iterable[Dict[str, Any]],
+    total_registered: Optional[int] = None,
+) -> AnalyticsAttributionSummary:
     """Summarize records without exposing account references or legacy raw IDs."""
     authenticated_records = 0
     anonymous_records = 0
@@ -5989,10 +6044,12 @@ def _analytics_attribution_summary(records: Iterable[Dict[str, Any]]) -> Analyti
             accounts.add(str(account_ref))
         else:
             anonymous_records += 1
+    total_reg = total_registered if total_registered is not None else _count_registered_users()
     return AnalyticsAttributionSummary(
         authenticated_records=authenticated_records,
         anonymous_records=anonymous_records,
         authenticated_accounts=len(accounts),
+        total_registered_users=int(total_reg or 0),
     )
 
 
@@ -6288,6 +6345,83 @@ def _recent_analytics_events_duckdb(limit: int = 20) -> List[Dict[str, Any]]:
             "metadata": meta,
         })
     return events
+
+
+def _count_registered_users() -> int:
+    """Return the total count of registered user accounts."""
+    client = _get_datastore()
+    if client is not None:
+        try:
+            q = client.query(kind="User")
+            q.keys_only()
+            return len(list(q.fetch()))
+        except Exception:
+            pass
+    try:
+        conn = _analytics_conn()
+        try:
+            return int(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] or 0)
+        finally:
+            conn.close()
+    except Exception:
+        return 0
+
+
+def _get_registered_users_datastore(limit: int = 500) -> List[Dict[str, Any]]:
+    """Fetch registered users with their verified email IDs and timestamps from Datastore."""
+    client = _get_datastore()
+    if client is None:
+        return []
+    lim = int(limit) if isinstance(limit, (int, str)) and str(limit).isdigit() else 500
+    query = client.query(kind="User")
+    entities = list(query.fetch(limit=lim))
+    users = []
+    for e in entities:
+        c_at = e.get("created_at")
+        l_in = e.get("last_login")
+        c_at_str = c_at.isoformat() if hasattr(c_at, "isoformat") else (str(c_at) if c_at else None)
+        l_in_str = l_in.isoformat() if hasattr(l_in, "isoformat") else (str(l_in) if l_in else None)
+        users.append({
+            "user_id": e.key.name or str(e.key.id or ""),
+            "email": str(e.get("email") or ""),
+            "name": str(e.get("name") or ""),
+            "picture": str(e.get("picture") or ""),
+            "created_at": c_at_str,
+            "last_login": l_in_str,
+        })
+    users.sort(key=lambda u: u.get("last_login") or u.get("created_at") or "", reverse=True)
+    return users
+
+
+def _get_registered_users_duckdb(limit: int = 500) -> List[Dict[str, Any]]:
+    """Fetch registered users with their verified email IDs and timestamps from DuckDB."""
+    lim = int(limit) if isinstance(limit, (int, str)) and str(limit).isdigit() else 500
+    conn = _analytics_conn()
+    try:
+        rows = conn.execute(
+            """
+            SELECT sub, email, name, picture, created_at, last_login
+            FROM users
+            ORDER BY last_login DESC NULLS LAST
+            LIMIT ?
+            """,
+            [lim],
+        ).fetchall()
+    finally:
+        conn.close()
+    users = []
+    for sub, email, name, picture, c_at, l_in in rows:
+        c_at_str = c_at.isoformat() if hasattr(c_at, "isoformat") else (str(c_at) if c_at else None)
+        l_in_str = l_in.isoformat() if hasattr(l_in, "isoformat") else (str(l_in) if l_in else None)
+        users.append({
+            "user_id": str(sub or ""),
+            "email": str(email or ""),
+            "name": str(name or ""),
+            "picture": str(picture or ""),
+            "created_at": c_at_str,
+            "last_login": l_in_str,
+        })
+    return users
 
 
 def _radar_id(platform: str, market_url: Optional[str], question: str) -> str:
@@ -6904,16 +7038,44 @@ async def recent_analytics_events(
 
 
 @app.get(
+    "/analytics/users",
+    tags=["System"],
+    response_model=RegisteredUsersResponse,
+    summary="List registered users and verified email IDs for operators",
+)
+async def list_registered_users(
+    request: Request,
+    limit: int = Query(500, ge=1, le=1000, description="Max users to return"),
+) -> RegisteredUsersResponse:
+    """Return the list of registered accounts and verified email IDs for operators."""
+    _check_api_key(request)
+    lim = int(limit) if isinstance(limit, (int, str)) and str(limit).isdigit() else 500
+    if _get_datastore() is not None:
+        try:
+            users = await asyncio.get_running_loop().run_in_executor(
+                None, _get_registered_users_datastore, lim
+            )
+            return RegisteredUsersResponse(total=len(users), users=users)
+        except Exception:
+            logger.warning("datastore users list failed; falling back to duckdb", exc_info=True)
+    users = await asyncio.get_running_loop().run_in_executor(
+        None, _get_registered_users_duckdb, lim
+    )
+    return RegisteredUsersResponse(total=len(users), users=users)
+
+
+@app.get(
     "/analytics/export",
     tags=["System"],
-    summary="Export aggregate privacy-preserving analytics summary in CSV format",
+    summary="Export aggregate privacy-preserving analytics summary and registered users in CSV format",
 )
 async def export_analytics_csv(request: Request) -> Response:
-    """Export 30-day aggregate traffic and event counts in CSV format."""
+    """Export 30-day aggregate traffic, event counts, and registered users in CSV format."""
     _check_api_key(request)
     visits_task = analytics_summary(request)
     events_task = analytics_events_summary(request)
-    visits, events = await asyncio.gather(visits_task, events_task)
+    users_task = list_registered_users(request, limit=500)
+    visits, events, users = await asyncio.gather(visits_task, events_task, users_task)
 
     lines = ["# Foresea Analytics Summary Export", ""]
     lines.append("Metric,Value")
@@ -6924,6 +7086,7 @@ async def export_analytics_csv(request: Request) -> Response:
     lines.append(f"Events (24h),{events.events_24h}")
     lines.append(f"Active Accounts (24h),{events.active_accounts_24h}")
     lines.append(f"Active Accounts (7d),{events.active_accounts_7d}")
+    lines.append(f"Total Registered Users,{events.attribution.total_registered_users}")
     lines.append(f"Authenticated Records (30d),{events.attribution.authenticated_records}")
     lines.append(f"Anonymous Records (30d),{events.attribution.anonymous_records}")
     lines.append("")
@@ -6938,6 +7101,10 @@ async def export_analytics_csv(request: Request) -> Response:
     lines.append("Model,Forecast Count")
     for row in events.by_model:
         lines.append(f"{row.get('model')},{row.get('count', 0)}")
+    lines.append("")
+    lines.append("User ID,Email,Name,Created At,Last Login")
+    for u in users.users:
+        lines.append(f'"{u.user_id}","{u.email}","{u.name}","{u.created_at or ""}","{u.last_login or ""}"')
 
     csv_content = "\n".join(lines)
     filename = f"foresea_analytics_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
@@ -7173,9 +7340,9 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
     <!-- Stat Cards -->
     <div class="grid-stats">
       <div class="stat-card">
-        <div class="stat-label">Daily Active Accounts (24h)</div>
-        <div class="stat-val" id="activeAccounts24h">--</div>
-        <div class="stat-sub"><span id="activeAccounts7d">--</span> active in trailing 7 days</div>
+        <div class="stat-label">Registered Accounts</div>
+        <div class="stat-val" id="registeredAccounts">--</div>
+        <div class="stat-sub"><span id="activeAccounts24h">--</span> active in 24h / <span id="activeAccounts7d">--</span> in 7d</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Events Velocity (24h)</div>
@@ -7293,31 +7460,68 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
       </div>
     </div>
 
+    <!-- Row 3 Panel: Registered User Accounts & Email Directory -->
+    <div class="panel" style="margin-bottom: 24px;">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Registered User Directory</div>
+          <div class="panel-sub">Verified accounts created via Google One-Tap / OAuth</div>
+        </div>
+        <div id="userCountBadge" class="panel-sub" style="font-weight:600; color:var(--emerald);">-- users</div>
+      </div>
+      <div style="max-height: 320px; overflow-y: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Verified Email</th>
+              <th style="text-align:right">Registered Date</th>
+              <th style="text-align:right">Last Active</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <tr><td colspan="4" style="text-align:center; color:var(--text-dim)">Loading registered users...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Privacy Banner -->
     <div class="privacy-banner">
       <span class="privacy-icon">🛡️</span>
       <div>
-        <strong>Privacy-Preserving Telemetry Guarantee:</strong> Foresea does not store raw user identities, email addresses, or IP addresses in analytics tables. Authenticated activity uses domain-separated HMAC-SHA256 account references with server-side secret salting.
+        <strong>Operator Privacy Notice:</strong> User email directory is available exclusively on operator-authenticated dashboard endpoints. Public forecast and search streams remain strictly zero-PII with HMAC-SHA256 account reference separation.
       </div>
     </div>
   </div>
 
   <script>
+    function esc(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
     async function loadTelemetry() {
       const btn = document.getElementById('refreshBtn');
       if (btn) btn.innerText = 'Refreshing...';
       try {
-        const [vRes, eRes, rRes] = await Promise.all([
+        const [vRes, eRes, rRes, uRes] = await Promise.all([
           fetch('/analytics/summary'),
           fetch('/analytics/events/summary'),
-          fetch('/analytics/events/recent?limit=15')
+          fetch('/analytics/events/recent?limit=15'),
+          fetch('/analytics/users?limit=200')
         ]);
         if (!vRes.ok || !eRes.ok) throw new Error('Analytics endpoints unreachable');
         const visits = await vRes.json();
         const events = await eRes.json();
         const recents = rRes.ok ? await rRes.json() : { events: [] };
+        const usersData = uRes.ok ? await uRes.json() : { total: 0, users: [] };
 
         // 1. Stats
+        const regTotal = events.attribution && events.attribution.total_registered_users != null
+          ? events.attribution.total_registered_users
+          : (usersData.total || 0);
+        document.getElementById('registeredAccounts').innerText = regTotal.toLocaleString();
         document.getElementById('activeAccounts24h').innerText = (events.active_accounts_24h || 0).toLocaleString();
         document.getElementById('activeAccounts7d').innerText = (events.active_accounts_7d || events.active_accounts_24h || 0).toLocaleString();
         document.getElementById('events24h').innerText = (events.events_24h || 0).toLocaleString();
@@ -7365,7 +7569,7 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
             const anonPct = 100 - authPct;
             return `<tr>
               <td>
-                <div style="font-weight:600">${e.event_name}</div>
+                <div style="font-weight:600">${esc(e.event_name)}</div>
                 <div class="event-bar-wrap">
                   <div class="bar-auth" style="width:${authPct}%"></div>
                   <div class="bar-anon" style="width:${anonPct}%"></div>
@@ -7391,7 +7595,7 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
             const tsStr = ev.ts ? new Date(ev.ts).toLocaleTimeString() : '';
             return `<div class="activity-item">
               <div style="display:flex; align-items:center; gap:8px;">
-                <span style="font-weight:600">${ev.event_name}</span>
+                <span style="font-weight:600">${esc(ev.event_name)}</span>
                 <span class="activity-tag ${tagClass}">${tagLabel}</span>
               </div>
               <span style="color:var(--text-dim); font-size:12px;">${tsStr}</span>
@@ -7410,7 +7614,7 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
             const pct = Math.round((mCount / totalModelForecasts) * 100);
             return `<tr>
               <td>
-                <div style="font-weight:600">${m.model}</div>
+                <div style="font-weight:600">${esc(m.model)}</div>
                 <div class="event-bar-wrap">
                   <div style="background:#6366f1; width:${pct}%; height:100%;"></div>
                 </div>
@@ -7421,6 +7625,33 @@ async def analytics_dashboard(request: Request) -> HTMLResponse:
           }).join('');
         } else {
           modelTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim)">No model forecasts recorded yet</td></tr>';
+        }
+
+        // 6. Registered User Directory Table
+        const userTbody = document.getElementById('usersTableBody');
+        const countBadge = document.getElementById('userCountBadge');
+        if (usersData.users && usersData.users.length) {
+          countBadge.innerText = usersData.users.length + ' account' + (usersData.users.length === 1 ? '' : 's');
+          userTbody.innerHTML = usersData.users.map(u => {
+            const nameStr = u.name || 'Anonymous User';
+            const emailStr = u.email || '<span style="color:var(--text-dim)">No email recorded</span>';
+            const cDate = u.created_at ? new Date(u.created_at).toLocaleDateString() : '--';
+            const lDate = u.last_login ? new Date(u.last_login).toLocaleString() : '--';
+            return `<tr>
+              <td>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div style="width:26px; height:26px; border-radius:50%; background:var(--indigo-dim); color:#a5b4fc; display:grid; place-items:center; font-weight:700; font-size:11px;">${esc(nameStr.charAt(0).toUpperCase())}</div>
+                  <div style="font-weight:600">${esc(nameStr)}</div>
+                </div>
+              </td>
+              <td><span style="font-family:monospace; color:#60a5fa; font-size:12px;">${esc(emailStr)}</span></td>
+              <td style="text-align:right; color:var(--text-muted); font-size:12px;">${cDate}</td>
+              <td style="text-align:right; color:var(--emerald); font-size:12px; font-weight:500;">${lDate}</td>
+            </tr>`;
+          }).join('');
+        } else {
+          countBadge.innerText = '0 accounts';
+          userTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-dim)">No registered users found</td></tr>';
         }
       } catch (err) {
         console.error(err);

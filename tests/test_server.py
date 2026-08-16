@@ -1379,6 +1379,7 @@ class ServerTests(unittest.TestCase):
             "authenticated_records": 1,
             "anonymous_records": 0,
             "authenticated_accounts": 1,
+            "total_registered_users": 0,
         })
         self.assertEqual(visit_summary, event_summary)
 
@@ -1387,9 +1388,10 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/html", response.headers.get("content-type", ""))
         self.assertIn("Foresea Activity Desk", response.text)
-        self.assertIn("Daily Active Accounts", response.text)
+        self.assertIn("Registered Accounts", response.text)
         self.assertIn("Product Funnel", response.text)
         self.assertIn("Live Activity Stream", response.text)
+        self.assertIn("Registered User Directory", response.text)
         self.assertIn("Export CSV", response.text)
 
     def test_analytics_events_recent_returns_events(self):
@@ -1406,7 +1408,34 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["events"][0]["attribution"], "anonymous")
         self.assertEqual(payload["events"][0]["metadata"]["model"], "test-model")
 
+    def test_registered_users_endpoint_returns_user_list(self):
+        server_module._sync_user_duckdb(
+            "user_test_123",
+            "trader@example.com",
+            "Test Trader",
+            "https://example.com/pic.png",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
+        response = self.client.get("/analytics/users?limit=50")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("users", payload)
+        self.assertGreaterEqual(payload["total"], 1)
+        user = next((u for u in payload["users"] if u["email"] == "trader@example.com"), None)
+        self.assertIsNotNone(user)
+        self.assertEqual(user["name"], "Test Trader")
+        self.assertEqual(user["user_id"], "user_test_123")
+
     def test_analytics_export_returns_csv(self):
+        server_module._sync_user_duckdb(
+            "user_export_456",
+            "export_trader@example.com",
+            "Export Trader",
+            "",
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc),
+        )
         self.client.post(
             "/analytics/visit",
             json={"path": "/", "referrer": "", "timezone": "UTC"},
@@ -1422,6 +1451,8 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Total Visits (30d)", response.text)
         self.assertIn("forecast_completed", response.text)
         self.assertIn("gpt-oss-120b", response.text)
+        self.assertIn("Total Registered Users", response.text)
+        self.assertIn("export_trader@example.com", response.text)
 
     def test_share_forecast_creates_public_page(self):
         response = self.client.post(
