@@ -951,6 +951,27 @@ def _list_messages(user_id: str, conversation_id: str) -> List[Dict[str, Any]]:
     return messages
 
 
+def _unindexed_nested(_ds: Any, value: Any) -> Any:
+    """Recursively rebuild dict values as Datastore Entities with every key
+    excluded from indexes.
+
+    ``exclude_from_indexes`` on a parent property only marks that property's
+    own value as unindexed -- it does not cascade into a nested dict's
+    properties, which the client library otherwise auto-wraps into a fresh
+    Entity with no exclusions of its own (so they'd stay indexed and subject
+    to Datastore's 1500-byte indexed-string limit). Rebuilding each nested
+    dict as its own Entity with its own keys excluded fixes that at every
+    depth, including dicts nested inside lists.
+    """
+    if isinstance(value, dict):
+        nested = _ds.Entity(key=None, exclude_from_indexes=tuple(value.keys()))
+        nested.update({k: _unindexed_nested(_ds, v) for k, v in value.items()})
+        return nested
+    if isinstance(value, list):
+        return [_unindexed_nested(_ds, v) for v in value]
+    return value
+
+
 def _put_conversation(user_id: str, conversation: Dict[str, Any]) -> Dict[str, Any]:
     client = _get_datastore()
     messages = [
@@ -986,12 +1007,20 @@ def _put_conversation(user_id: str, conversation: Dict[str, Any]) -> Dict[str, A
             client.delete_multi(stale_keys)
         # Only index the short scalar fields used for ordering/identity;
         # exclude everything else to stay under Datastore's 1500-byte limit.
+        # Datastore indexes each property of an embedded (dict) entity
+        # independently, so excluding the parent key (e.g. "data") from
+        # indexes does NOT cascade to its nested fields (e.g.
+        # "data.model_rationale") -- each nested dict must be rebuilt as its
+        # own Entity with its own keys excluded, recursively.
         _MSG_INDEXED = frozenset({"id", "role", "createdAt", "updatedAt", "index"})
         message_entities = []
         for message, message_key in zip(messages, message_keys):
             exclude = tuple(k for k in message if k not in _MSG_INDEXED)
             message_entity = _ds.Entity(key=message_key, exclude_from_indexes=exclude)
-            message_entity.update(message)
+            message_entity.update({
+                k: (_unindexed_nested(_ds, v) if k not in _MSG_INDEXED else v)
+                for k, v in message.items()
+            })
             message_entities.append(message_entity)
         if message_entities:
             client.put_multi(message_entities)

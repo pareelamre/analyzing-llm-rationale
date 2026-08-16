@@ -17,6 +17,9 @@ os.environ["ANALYTICS_DB"] = str(Path(tempfile.gettempdir()) / "foresea_test_ana
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from google.api_core.exceptions import InvalidArgument  # noqa: E402
+from google.cloud import datastore as _real_datastore  # noqa: E402
+from google.cloud.datastore import helpers as _real_datastore_helpers  # noqa: E402
 
 from analyzing_llm_rationale import server as server_module  # noqa: E402
 from analyzing_llm_rationale import trading as trading_module  # noqa: E402
@@ -112,6 +115,132 @@ class FakeEvidencePipeline:
                 "search_query": "Federal Reserve rate cut July 2026",
             }
         ]
+
+
+_DATASTORE_INDEXED_STRING_LIMIT = 1500
+
+
+def _assert_within_datastore_index_limits(entity):
+    """Raise the same error Cloud Datastore raises server-side when an
+    indexed string/bytes property exceeds its 1500-byte limit.
+
+    Reuses the real ``google.cloud.datastore`` protobuf conversion (rather
+    than reimplementing its indexing rules by hand) so this check reflects
+    actual client-library behavior -- notably that excluding a parent dict
+    property from indexes does NOT exempt its nested properties; each nested
+    dict must be its own Entity with its own exclusions to be unindexed.
+    """
+    proxy = _real_datastore.Entity(key=None, exclude_from_indexes=tuple(entity.exclude_from_indexes))
+    proxy.update(dict(entity))
+    _walk_datastore_pb(_real_datastore_helpers.entity_to_protobuf(proxy))
+
+
+def _walk_datastore_pb(entity_pb):
+    for name, value_pb in entity_pb.properties.items():
+        _check_datastore_value_pb(name, value_pb)
+        if value_pb._pb.WhichOneof("value_type") == "array_value":
+            for item_pb in value_pb.array_value.values:
+                _check_datastore_value_pb(name, item_pb)
+
+
+def _check_datastore_value_pb(name, value_pb):
+    which = value_pb._pb.WhichOneof("value_type")
+    if which == "entity_value":
+        _walk_datastore_pb(value_pb.entity_value)
+        return
+    if value_pb.exclude_from_indexes:
+        return
+    if which == "string_value":
+        size = len(value_pb.string_value.encode("utf-8"))
+    elif which == "blob_value":
+        size = len(value_pb.blob_value)
+    else:
+        return
+    if size > _DATASTORE_INDEXED_STRING_LIMIT:
+        raise InvalidArgument(
+            f'The value of property "{name}" is longer than {_DATASTORE_INDEXED_STRING_LIMIT} bytes.'
+        )
+
+
+class _FakeConversationDsKey:
+    """Mimics google.cloud.datastore.Key enough for _put_conversation's
+    multi-segment ancestor paths: equality/hashing by path, like
+    tests/test_benchmark_tools.py's _FakeDsKey."""
+
+    def __init__(self, path_parts):
+        self.path_parts = tuple(path_parts)
+        self.kind = path_parts[-2]
+        self.name = path_parts[-1]
+
+    def __eq__(self, other):
+        return isinstance(other, _FakeConversationDsKey) and self.path_parts == other.path_parts
+
+    def __hash__(self):
+        return hash(self.path_parts)
+
+
+class _FakeConversationDsQuery:
+    def __init__(self, store, kind, ancestor):
+        self._store = store
+        self._kind = kind
+        self._ancestor_prefix = ancestor.path_parts if ancestor is not None else None
+
+    def keys_only(self):
+        return None
+
+    def add_filter(self, *args, **kwargs):
+        return None
+
+    def fetch(self, limit=None):
+        out = [
+            entity for key, entity in self._store.items()
+            if key.kind == self._kind
+            and (self._ancestor_prefix is None or key.path_parts[: len(self._ancestor_prefix)] == self._ancestor_prefix)
+        ]
+        return out[:limit] if limit else out
+
+
+class _FakeConversationDsTransaction:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakeConversationDsClient:
+    """In-memory stand-in for google.cloud.datastore.Client covering just
+    what _put_conversation uses (multi-segment keys, ancestor queries,
+    transactions, put/put_multi/delete_multi), but backed by the real
+    Entity/protobuf conversion so put/put_multi enforce Datastore's actual
+    1500-byte indexed-property limit -- the thing this harness exists to
+    test."""
+
+    def __init__(self):
+        self.store = {}
+
+    def key(self, *path_parts):
+        return _FakeConversationDsKey(path_parts)
+
+    def query(self, kind=None, ancestor=None):
+        return _FakeConversationDsQuery(self.store, kind, ancestor)
+
+    def transaction(self):
+        return _FakeConversationDsTransaction()
+
+    def put(self, entity):
+        _assert_within_datastore_index_limits(entity)
+        self.store[entity.key] = entity
+
+    def put_multi(self, entities):
+        for entity in entities:
+            _assert_within_datastore_index_limits(entity)
+        for entity in entities:
+            self.store[entity.key] = entity
+
+    def delete_multi(self, keys):
+        for key in keys:
+            self.store.pop(key, None)
 
 
 class FailingProvider:
@@ -4009,6 +4138,60 @@ class ServerTests(unittest.TestCase):
         delete_response = self.client.delete("/chat/conversations/conv_test", headers=headers)
         self.assertEqual(delete_response.status_code, 200)
         self.assertEqual(self.client.get("/chat/conversations", headers=headers).json()["conversations"], [])
+
+    def test_saving_conversation_with_long_nested_model_rationale_does_not_500(self):
+        """Regression test: an assistant message's embedded forecast (`data`)
+        can carry a `model_rationale` past Datastore's 1500-byte indexed-string
+        limit. Excluding the top-level `data` key from indexes does not exempt
+        its nested properties (see _unindexed_nested in server.py) -- without
+        that fix, saving this conversation raises InvalidArgument and the PUT
+        500s. Uses a fake Datastore client backed by the real Entity/protobuf
+        conversion so the size limit is actually enforced (see
+        _FakeConversationDsClient), unlike the default in-memory fallback the
+        other chat-conversation tests use."""
+        fake_client = _FakeConversationDsClient()
+        token = _issue_session("user-rationale", "rationale@example.com", "Rationale User", "")
+        headers = {"Authorization": f"Bearer {token}"}
+        long_rationale = "R" * 2000  # exceeds Datastore's 1500-byte indexed-string limit
+        conversation = {
+            "id": "conv_long_rationale",
+            "title": "Long rationale forecast",
+            "createdAt": 1000,
+            "updatedAt": 2000,
+            "messages": [
+                {
+                    "id": "msg_user",
+                    "role": "user",
+                    "content": "Will the Fed cut rates before July 2026?",
+                    "createdAt": 1001,
+                },
+                {
+                    "id": "msg_assistant",
+                    "role": "assistant",
+                    "content": "Probably yes.",
+                    "createdAt": 1002,
+                    "data": {
+                        "rationale": "Probably yes.",
+                        "model_rationale": long_rationale,
+                    },
+                },
+            ],
+        }
+
+        with mock.patch.object(server_module, "_get_datastore", return_value=fake_client):
+            save_response = self.client.put(
+                "/chat/conversations/conv_long_rationale",
+                json=conversation,
+                headers=headers,
+            )
+            self.assertEqual(save_response.status_code, 200)
+
+            list_response = self.client.get("/chat/conversations", headers=headers)
+
+        self.assertEqual(list_response.status_code, 200)
+        saved = list_response.json()["conversations"][0]
+        saved_assistant = next(m for m in saved["messages"] if m["id"] == "msg_assistant")
+        self.assertEqual(saved_assistant["data"]["model_rationale"], long_rationale)
 
     def test_authenticated_user_can_manage_a_personal_ledger(self):
         token = _issue_session("user-ledger", "ledger@example.com", "Ledger User", "")
