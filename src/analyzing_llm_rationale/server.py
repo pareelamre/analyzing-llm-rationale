@@ -239,6 +239,28 @@ def _detect_trading_intent(question: str) -> bool:
     return bool(_TRADING_INTENT_RE.search(question))
 
 
+_GREETING_RE = re.compile(
+    r"^(hi|hello|hey+|yo|sup|howdy|greetings|good\s+(morning|afternoon|evening|day)|"
+    r"who are you|what are you|what is foresea|what does foresea do|"
+    r"what can you do|how does this work|how do (i|you) use (this|foresea))\b",
+    re.IGNORECASE,
+)
+
+
+def _is_greeting_or_meta(question: str) -> bool:
+    """Zero-cost check for a greeting or a meta question about Foresea itself
+    (e.g. "hello", "what can you do?") rather than a forecasting question.
+
+    Requires the whole message to be short so a real forecasting question that
+    happens to open with a greeting ("Hi, will the Fed cut rates?") is never
+    misrouted away from evidence retrieval.
+    """
+    q = (question or "").strip()
+    if not q or len(q.split()) > 8:
+        return False
+    return bool(_GREETING_RE.match(q))
+
+
 _MULTI_PART_RE = re.compile(
     r"\b(and|or|versus|vs\.?|compared to|relative to|as well as)\b", re.IGNORECASE
 )
@@ -3786,8 +3808,17 @@ class PredictRequest(BaseModel):
     @model_validator(mode="after")
     def _standalone_question_must_be_substantive(self) -> "PredictRequest":
         # A standalone question must be substantive; a follow-up (history present)
-        # can be short, e.g. "why?" or "what about June?".
-        if not self.history and len((self.question or "").strip()) < 10:
+        # can be short, e.g. "why?" or "what about June?". A recognized greeting
+        # or meta question ("hello", "what can you do?") is exempt too -- it was
+        # never going to attempt a forecast, so "substantive" doesn't apply. This
+        # is deliberately narrower than "any chat_mode request" (chat_mode
+        # defaults True): an ambiguous short question like "why?" should still
+        # be rejected when it isn't a recognized greeting and has no history.
+        if (
+            not self.history
+            and not _is_greeting_or_meta(self.question)
+            and len((self.question or "").strip()) < 10
+        ):
             raise ValueError("question must be at least 10 characters (or include conversation history).")
         return self
 
@@ -5548,6 +5579,24 @@ async def _fetch_evidence_with_cache(
         return [], f"Evidence retrieval failed: {exc}", "error"
 
 
+def _greeting_system_prompt_addition(req: "PredictRequest") -> str:
+    """Extra system-prompt instruction for a first-turn greeting/meta question
+    ("hello", "what can you do?") — introduces Foresea briefly instead of
+    letting the model guess. Empty on any later turn, so an ongoing thread's
+    "thanks!" just gets a brief acknowledgment, not a repeated pitch."""
+    if req.history or not _is_greeting_or_meta(req.question):
+        return ""
+    return (
+        "\n\nThe user just said hello or asked what this is, and this is the very "
+        "start of a new conversation. Reply with a brief, warm introduction (2-3 "
+        "sentences): Foresea turns forecasting questions into calibrated "
+        "probabilities backed by evidence and, when a market price is available, "
+        "how your estimate compares to it. Invite them to ask a forecasting "
+        "question or paste a Polymarket/Kalshi market link to get started. Do not "
+        "attempt a forecast or use the [p:0.XX] marker in this reply."
+    )
+
+
 @_tracer.start_as_current_span("forecast.context_prepare")
 async def _prepare_predict_messages(
     req: "PredictRequest",
@@ -5594,7 +5643,7 @@ async def _prepare_predict_messages(
             "rules_present": "false",
             "outcome": "skipped_simple_chat",
         })
-        system_prompt = _CHAT_SYSTEM_PROMPT
+        system_prompt = _CHAT_SYSTEM_PROMPT + _greeting_system_prompt_addition(req)
         user_prompt = build_user_prompt(record, "[question]", "full")
         steering = (req.conversation_steer or "").strip()
         if steering:
@@ -5801,7 +5850,7 @@ async def _prepare_predict_messages(
         # Conversational mode: drop the JSON-only forecast template entirely so the
         # model replies in natural language. Pass an empty template so the user
         # prompt is just the question + evidence/market context, no JSON suffix.
-        system_prompt = _CHAT_SYSTEM_PROMPT
+        system_prompt = _CHAT_SYSTEM_PROMPT + _greeting_system_prompt_addition(req)
         if not evidence_articles and evidence_error:
             system_prompt += (
                 "\n\nEvidence status: no relevant live sources were retrieved. "
@@ -12277,6 +12326,15 @@ def _agent_prediction_request(
             "role": "user",
             "content": f"[Self-calibration context — apply as a prior, not a hard rule]\n{grounding_note}",
         }]
+    has_market_context = bool(
+        quote
+        or req.market_url
+        or req.market_platform
+        or req.platform
+        or req.market_ident
+        or req.market_probability is not None
+    )
+    is_greeting = not has_market_context and _is_greeting_or_meta(question)
     return PredictRequest(
         question=question,
         description=(
@@ -12292,7 +12350,14 @@ def _agent_prediction_request(
             *(quote.venue_news_articles if quote else []),
             *req.news_articles,
         ],
-        attach_evidence=True,
+        # A greeting or meta question ("hello", "what can you do?") with no
+        # market attached skips evidence retrieval and the JSON-forecast
+        # contract entirely -- otherwise the model is force-fed a "respond
+        # with ONLY one JSON forecast object" instruction with no escape
+        # hatch, and either hallucinates a fake Yes/No forecast about "hello"
+        # or breaks format in a way nothing downstream is designed to expect.
+        attach_evidence=not is_greeting,
+        chat_mode=is_greeting,
         evidence_top_k=req.evidence_top_k,
         variant=req.variant,
         history=history,
@@ -12315,7 +12380,6 @@ def _agent_prediction_request(
         openrouter_model=req.openrouter_model,
         model=req.model,
         provider_base_url=req.provider_base_url,
-        chat_mode=False,
     )
 
 
@@ -12370,6 +12434,11 @@ async def _run_agent_skills(
     pred_req: PredictRequest,
     result: PredictResponse,
 ) -> tuple[List[AgentSkillResult], bool, Optional[str]]:
+    if pred_req.chat_mode:
+        # A greeting/meta reply never tried to forecast anything -- running a
+        # research skill (base rate, red team, ...) against "hello" makes no
+        # sense and would be pure wasted LLM spend.
+        return [], False, None
     skills_to_run: List[AgentSkill] = []
     skill_marker: Optional[str] = None
     if req.builtin_skills:

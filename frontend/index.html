@@ -9050,7 +9050,12 @@ function _agentReportToMarkdown(d, options = {}) {
 
   if (d.thesis) md += (md ? '\n\n' : '') + d.thesis;
 
-  if (d.market_probability == null) {
+  // A plain conversational reply (greetings, "what can you do?") never tried
+  // to forecast anything or pull evidence -- the market-price/low-confidence
+  // captions below only make sense for an actual forecast attempt.
+  const isChatReply = d.question_type === 'chat';
+
+  if (!isChatReply && d.market_probability == null) {
     md += `\n\n*Give me the market price (start with "Market at 42%: …") or paste a Polymarket/Kalshi link, and I'll tell you whether there's an edge.*`;
   }
 
@@ -9058,7 +9063,7 @@ function _agentReportToMarkdown(d, options = {}) {
 
   if (d.grounding) md += `\n\n> _${d.grounding.replace(/\n/g, ' ')}_`;
 
-  if (includeSources) {
+  if (includeSources && !isChatReply) {
   // Clickable, de-duplicated source citations.
   const seen = new Set();
   const links = [];

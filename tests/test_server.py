@@ -2532,6 +2532,70 @@ class ServerTests(unittest.TestCase):
                     expected,
                 )
 
+    def test_is_greeting_or_meta_boundaries(self):
+        cases = [
+            ("hello", True),
+            ("hi there", True),
+            ("hey!", True),
+            ("what can you do?", True),
+            ("who are you?", True),
+            ("what is foresea?", True),
+            ("good morning", True),
+            ("", False),
+            ("thanks!", False),
+            ("Will the Fed cut rates before September 30, 2026?", False),
+            # A real forecasting question that happens to open with a greeting
+            # must never be misrouted away from evidence retrieval.
+            ("Hi, will the Fed cut rates before September 30, 2026?", False),
+        ]
+        for question, expected in cases:
+            with self.subTest(question=question):
+                self.assertEqual(server_module._is_greeting_or_meta(question), expected)
+
+    def test_agent_analyze_routes_a_greeting_to_a_plain_chat_reply(self):
+        self.provider.response = "Hi! Foresea turns forecasting questions into calibrated probabilities."
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "hello", "builtin_skills": True},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["question_type"], "chat")
+        self.assertEqual(payload["skills"], [])
+        self.assertEqual(self.evidence_pipeline.calls, [])
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertIn("brief, warm introduction", system_prompt)
+
+    def test_agent_analyze_greeting_intro_only_fires_on_the_first_turn(self):
+        self.provider.response = "You're welcome!"
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "hello again",
+                "builtin_skills": True,
+                "history": [
+                    {"role": "user", "content": "Will the Fed cut rates?"},
+                    {"role": "assistant", "content": "I'd put Yes at around 60%."},
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertNotIn("brief, warm introduction", system_prompt)
+
+    def test_agent_analyze_does_not_misroute_a_forecasting_question_that_opens_with_a_greeting(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Hi, will the Fed cut rates before September 30, 2026?",
+                "builtin_skills": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertNotEqual(payload["question_type"], "chat")
+        self.assertEqual(len(self.evidence_pipeline.calls), 1)
+
     def test_agent_analyze_reduces_evidence_and_skills_for_a_simple_question(self):
         response = self.client.post(
             "/agent/analyze",
