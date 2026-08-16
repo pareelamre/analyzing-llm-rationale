@@ -83,7 +83,7 @@
       "min_sharpe_required": 0.5,
       "return_pct": -0.2548,
       "settled_count": 0,
-      "sharpe": 0.0741
+      "sharpe": 0.0735
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
@@ -433,7 +433,7 @@
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
       "max_drawdown": 0.6585,
-      "sharpe": 0.0741,
+      "sharpe": 0.0735,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -734,6 +734,11 @@
           "account_value": 9654.530612,
           "event_type": "trade",
           "ts": "2026-08-16T09:15:12.921370+00:00"
+        },
+        {
+          "account_value": 9654.530612,
+          "event_type": "rejected_trade",
+          "ts": "2026-08-16T09:48:30.917555+00:00"
         }
       ]
     },
@@ -1783,7 +1788,7 @@
       ]
     }
   },
-  "generated_at": "2026-08-16T09:36:02.234752+00:00",
+  "generated_at": "2026-08-16T10:01:40.904444+00:00",
   "leaderboard": [
     {
       "account_value": 10000.0,
@@ -2007,6 +2012,61 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985415",
+      "thesis": "I will maintain my current position on Kade Anderson's market (KXMLBDEBUT-KANDERSON-26SEP01) without placing any additional trades. My reasoning is that I have no compelling new information about Kade Anderson that would justify changing my position. The market indicates he will play in MLB before Sep 1, 2026, which aligns with my existing view. My current position is at a break-even point (entry at $0.33, current ask at $0.33), and I don't see a clear opportunity to improve my position or realize gains at this time. I'm not taking any action as my position is consistent with the market's indication of a 'yes' outcome.",
+      "ts": "2026-08-16T09:55:49.937934+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "glm-5.2-fp8",
+      "cycle_id": "15m:1985414",
+      "thesis": "Looking at this situation, I need to research the available markets to make informed decisions. Let me start by gathering information on the Trump cabinet departure market and the MLB debut markets.{\"thought\": \"I need to research the available markets. Let me start with the Trump cabinet departure market and the MLB debut markets simultaneously.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Trump cabinet departures 2025 2026 who might leave\"}}}",
+      "ts": "2026-08-16T09:51:52.206031+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985415",
+      "thesis": "I will hold my current position in KXMLBDEBUT-KANDERSON-26SEP01 and not take any action on the new candidate markets.",
+      "ts": "2026-08-16T09:50:36.454189+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985415",
+      "thesis": "No further actions will be taken this cycle.",
+      "ts": "2026-08-16T09:48:34.096486+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "mode": "shadow",
+      "outcome": "rejected",
+      "platform": "kalshi",
+      "price": 0.33,
+      "quantity": 1000.0,
+      "realized_pnl": 0.0,
+      "side": "no",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-16T09:48:30.917555+00:00",
+      "type": "rejected_trade"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985415",
+      "thesis": "No trades will be placed this cycle. Kade Anderson's market has already resolved as 'YES' since he played in the Futures Game on July 12, 2026, which is before the September 1, 2026 deadline. For Franklin Arias, there isn't sufficient evidence to support a trade decision, and the current market price of 0.09/0.1 indicates a low probability of him making his MLB debut before the deadline. My reasoning is consistent with the available information and the requirement not to place any trades this cycle.",
+      "ts": "2026-08-16T09:48:13.453658+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985415",
+      "thesis": "I need to research the current status of this market carefully. Let me search for the latest news on Trump's Cabinet departures.",
+      "ts": "2026-08-16T09:48:11.439223+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "qwen3-coder-30b-a3b-instruct",
       "cycle_id": "15m:1985414",
@@ -2468,61 +2528,6 @@
       "side": "no",
       "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
       "ts": "2026-08-16T07:40:43.533312+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985406",
-      "thesis": "Based on the available information and the constraints of the trading system, I cannot take any action this cycle. The user's position in the Kade Anderson MLB debut market cannot be exited due to the 15% single-market cost-basis cap restriction that prevents creating arbitrage opportunities. The market remains open with a bid/ask of 0.32/0.33, and despite searching for updated information about Anderson's status, there is insufficient evidence to determine whether he will play in MLB before September 1, 2026. The position must remain open until either the resolution date or until trading restrictions are lifted, which appears to be governed by the system's risk management parameters rather than market fundamentals. The user should continue monitoring the position but cannot act on it within the current constraints.",
-      "ts": "2026-08-16T07:38:24.604829+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985404",
-      "thesis": "I will hold my current positions in KXMLBDEBUT-FARIAS-26SEP01 and KXMLBDEBUT-KANDERSON-26SEP01.",
-      "ts": "2026-08-16T07:08:02.121713+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985404",
-      "thesis": "No actions will be taken this cycle.",
-      "ts": "2026-08-16T07:07:37.328245+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985404",
-      "thesis": "I need to research whether any Trump Cabinet members have actually left before Sep 2, 2026, since this market resolves in just days. Let me search.```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary resign leave 2026\"}}\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet member leave before September 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet official fired resigned 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet departure 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet member leave May 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary resign May 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary fired 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary resign June 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave July 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave August 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary resign 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary resign 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\", \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\", \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\", \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary leave 2026\"}}\n```json\n{\"action\", \"web_search\", \"args: {\"query\": \"Trump Cabinet",
-      "ts": "2026-08-16T07:06:01.811881+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "cycle_id": "15m:1985404",
-      "thesis": "{\"thought\": \"I need to research current Trump cabinet departure news to evaluate my large YES position on KXCABLEAVE-26MAY22-26SEP. The market covers departures between May 22, 2026 and Sep 2, 2026. I hold 9224 YES at avg entry 0.16, and current YES bid/ask is 0.11/0.16. Let me search for the latest news.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Trump cabinet departures 2025 2026 who might leave\"}}}",
-      "ts": "2026-08-16T07:01:18.575551+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985403",
-      "thesis": "I decided to buy 10 YES contracts on Kade Anderson's debut market (KXMLBDEBUT-KANDERSON-26SEP01) at $0.33 each, for a total investment of $3.30. My reasoning is that Anderson was named to the 2026 Futures Game (held in mid-July 2026) and actually pitched in the game on July 12, 2026, which strongly indicates he will make his MLB debut before the September 1, 2026 deadline. The current market price of 0.32/0.33 seems undervalued given this evidence. I've recorded this trade in my notes for future reference. I did not place any trades on Franklin Arias' market as the evidence for his MLB debut timeline is less definitive, and the market was priced much lower at 0.09/0.10.",
-      "ts": "2026-08-16T06:57:10.759941+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.33,
-      "quantity": 10.0,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
-      "ts": "2026-08-16T06:57:07.110933+00:00",
       "type": "trade"
     }
   ]
