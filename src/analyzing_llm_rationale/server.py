@@ -4058,6 +4058,9 @@ class MarketQuote(BaseModel):
     floor_strike: Optional[Any] = None
     cap_strike: Optional[Any] = None
     category: Optional[str] = None
+    fetched_at: Optional[str] = Field(
+        None, description="ISO 8601 UTC time this quote was actually fetched from the venue (not when it was served from cache)."
+    )
 
 
 class VenueCredentials(BaseModel):
@@ -7884,6 +7887,10 @@ async def _fetch_market_quote(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Market provider error: {exc}") from exc
 
+    # Stamp before caching so a cache hit still reports when the data was
+    # actually pulled from the venue, not when it was served -- the staleness
+    # signal callers (e.g. /market/batch) need to make their own trust call.
+    quote["fetched_at"] = datetime.now(timezone.utc).isoformat()
     _cache_set(cache_key, quote, _MARKET_CACHE_TTL)
     return MarketQuote(**quote)
 
@@ -7912,6 +7919,119 @@ async def market_kalshi(request: Request, ticker: str) -> "MarketQuote":
     if not ticker.strip():
         raise HTTPException(status_code=422, detail="Provide a Kalshi 'ticker'.")
     return await _fetch_market_quote("kalshi", ticker=ticker)
+
+
+class BatchQuoteItem(BaseModel):
+    platform: str
+    ident: str
+    question: Optional[str] = None
+    probability: Optional[float] = None
+    market_url: Optional[str] = None
+    volume: Optional[float] = None
+    close_time: Optional[str] = None
+    order_book: Optional[Dict[str, Any]] = Field(
+        None, description="Present only when the ref included its extra id (Kalshi series_ticker / Polymarket token_id)."
+    )
+    candles: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Present only when the ref included its extra id."
+    )
+    fetched_at: Optional[str] = Field(None, description="ISO 8601 UTC time the price/volume fields were fetched.")
+    age_seconds: Optional[float] = Field(None, description="How old fetched_at is, in seconds -- the trust signal.")
+    error: Optional[str] = Field(None, description="Set (with other fields empty) when this one ref failed.")
+
+
+class BatchQuoteResponse(BaseModel):
+    quotes: List[BatchQuoteItem]
+    count: int
+    truncated: bool = Field(False, description="True if more than _MAX_BATCH_REFS refs were requested; the extras were dropped, not silently merged.")
+
+
+_MAX_BATCH_REFS = 50
+
+
+def _parse_batch_ref(raw: str) -> tuple[str, str, Optional[str]]:
+    """"platform:ident[:extra]" -> (platform, ident, extra). extra is the Kalshi
+    series_ticker or Polymarket CLOB token_id that unlocks order book/candles;
+    Kalshi tickers and Polymarket slugs/token ids never contain ":"."""
+    parts = raw.split(":", 2)
+    platform = (parts[0] if parts else "").strip().lower()
+    ident = parts[1].strip() if len(parts) > 1 else ""
+    extra = parts[2].strip() if len(parts) > 2 and parts[2].strip() else None
+    return platform, ident, extra
+
+
+async def _one_batch_quote(platform: str, ident: str) -> "BatchQuoteItem":
+    item = BatchQuoteItem(platform=platform, ident=ident)
+    if not ident:
+        item.error = f"missing market identifier for platform {platform!r}"
+        return item
+    try:
+        if platform == "kalshi":
+            quote = await _fetch_market_quote("kalshi", ticker=ident)
+        elif platform == "polymarket":
+            quote = await _fetch_market_quote("polymarket", slug=ident)
+        else:
+            item.error = 'platform must be "kalshi" or "polymarket"'
+            return item
+    except HTTPException as exc:
+        item.error = str(exc.detail)
+        return item
+    item.question = quote.question
+    item.probability = quote.probability
+    item.market_url = quote.market_url
+    item.volume = quote.volume
+    item.close_time = quote.close_time
+    item.fetched_at = quote.fetched_at
+    fetched = _parse_trading_timestamp(quote.fetched_at)
+    if fetched:
+        item.age_seconds = max(0.0, (datetime.now(timezone.utc) - fetched).total_seconds())
+    return item
+
+
+@app.get("/market/batch", tags=["Markets"], summary="Current state for N markets in one call", response_model=BatchQuoteResponse)
+async def market_batch(
+    request: Request,
+    refs: List[str] = Query(  # noqa: B008
+        ...,
+        description='Repeat this param per market: "platform:ident" or "platform:ident:extra" '
+                    '(extra = Kalshi series_ticker or Polymarket CLOB token_id, adds order book + candles). '
+                    "Up to 50 refs.",
+    ),
+) -> "BatchQuoteResponse":
+    """Fetch current price/volume for up to 50 markets in one call, so a watchlist
+    check doesn't need N sequential tool calls. Every quote carries `fetched_at`
+    and `age_seconds` -- the freshness signal to make your own trust call on,
+    since both venues rate-limit hard and a quote can otherwise look fresh when
+    it isn't. One bad ref returns an error on that entry only; the rest of the
+    batch still succeeds."""
+    _check_rate_limit(request)
+    truncated = False
+    if len(refs) > _MAX_BATCH_REFS:
+        refs = refs[:_MAX_BATCH_REFS]
+        truncated = True
+
+    parsed = [_parse_batch_ref(r) for r in refs]
+    items = await asyncio.gather(*(_one_batch_quote(p, i) for p, i, _e in parsed))
+    by_key: Dict[tuple[str, str], BatchQuoteItem] = {(it.platform, it.ident): it for it in items}
+
+    # Depth enrichment: one marketd call carrying every ref that supplied an
+    # extra id -- marketd fans these out concurrently itself, so this is one
+    # round trip total, not one per market.
+    depth_refs = [f"{p}:{i}:{e}" for p, i, e in parsed if e and (p, i) in by_key and not by_key[(p, i)].error]
+    if depth_refs:
+        loop = asyncio.get_running_loop()
+        depth_quotes = await loop.run_in_executor(None, _marketd_quotes_sync, depth_refs)
+        for dq in depth_quotes or []:
+            if not isinstance(dq, dict) or dq.get("error"):
+                continue  # depth failed but the base quote is still useful -- don't overwrite it
+            key = (str(dq.get("platform") or "").lower(), str(dq.get("ident") or ""))
+            item = by_key.get(key)
+            if item is None:
+                continue
+            item.order_book = dq.get("order_book")
+            item.candles = dq.get("candles")
+
+    return BatchQuoteResponse(quotes=list(by_key.values()), count=len(by_key), truncated=truncated)
 
 
 @app.get("/radar", tags=["Markets"], summary="Live Foresea market radar", response_model=RadarResponse)
@@ -11020,6 +11140,33 @@ def _marketd_search_sync(query: str, category: str, limit: int) -> Optional[List
             "category": m.get("category"),
         })
     return out
+
+
+def _marketd_quotes_sync(refs: List[str]) -> Optional[List[Dict[str, Any]]]:
+    """Fetch depth/candle data for a batch of "platform:ident:extra" refs from
+    marketd's /quotes. Returns None if marketd is unconfigured or the whole
+    request fails; a single bad ref is already carried as that item's own
+    "error" field by marketd itself, not a None here."""
+    if not _MARKETD_URL or not refs:
+        return None
+    import requests
+
+    headers = {}
+    token = _marketd_token(_MARKETD_URL)
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        resp = requests.get(
+            f"{_MARKETD_URL}/quotes",
+            params=[("ref", r) for r in refs],
+            headers=headers, timeout=12,
+        )
+        if resp.status_code != 200:
+            return None
+        quotes = resp.json().get("quotes")
+    except Exception:
+        return None
+    return quotes if isinstance(quotes, list) else None
 
 
 @app.get("/markets/search", tags=["Markets"], summary="Search markets to add to a watchlist")
