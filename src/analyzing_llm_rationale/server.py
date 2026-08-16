@@ -239,6 +239,68 @@ def _detect_trading_intent(question: str) -> bool:
     return bool(_TRADING_INTENT_RE.search(question))
 
 
+_MULTI_PART_RE = re.compile(
+    r"\b(and|or|versus|vs\.?|compared to|relative to|as well as)\b", re.IGNORECASE
+)
+_SCENARIO_RE = re.compile(
+    r"\b(if|unless|assuming|suppose|in the event|either|both|conditional on|"
+    r"depends on|scenario|what happens if)\b",
+    re.IGNORECASE,
+)
+_ENTITY_RE = re.compile(r"\b[A-Z][a-zA-Z0-9&]*(?:\s+[A-Z][a-zA-Z0-9&]*)*\b")
+_NUMERIC_ANCHOR_RE = re.compile(r"\b(19|20)\d{2}\b|\$\d|\d+(\.\d+)?%")
+_EFFORT_STOPWORD_CAPS = {
+    "I", "Will", "The", "What", "When", "Is", "Are", "Does", "Do", "How", "Why", "Should",
+}
+
+
+def _estimate_question_effort(question: str, history_len: int = 0) -> str:
+    """Zero-cost, zero-LLM-call effort tier for a question: simple/standard/deep.
+
+    Pure regex/string scoring, mirroring _detect_trading_intent's shape. Never
+    raises; an empty question returns "standard" (today's fixed behavior),
+    so a misclassification can only ever narrow or widen effort within
+    already-validated bounds, never break the pipeline.
+    """
+    q = (question or "").strip()
+    if not q:
+        return "standard"
+    words = q.split()
+    entities = {m for m in _ENTITY_RE.findall(q) if m not in _EFFORT_STOPWORD_CAPS}
+    score = (
+        (2 if len(words) > 30 else 1 if len(words) > 14 else 0)
+        + min(len(_MULTI_PART_RE.findall(q)), 3)
+        + 2 * min(len(_SCENARIO_RE.findall(q)), 2)
+        + (1 if q.count("?") > 1 else 0)
+        + (1 if len(entities) >= 3 else 0)
+        + (1 if len(_NUMERIC_ANCHOR_RE.findall(q)) >= 2 else 0)
+        + (1 if (q.count(",") + q.count(";")) >= 2 else 0)
+        + (1 if history_len >= 6 else 0)
+    )
+    if score <= 1 and len(words) <= 14:
+        return "simple"
+    if score >= 5:
+        return "deep"
+    return "standard"
+
+
+_EFFORT_EVIDENCE_TOP_K = {"simple": 8, "standard": 20, "deep": 40}
+_EFFORT_MAX_TOOL_STEPS = {"simple": 2, "standard": 5, "deep": 8}
+
+
+def _apply_effort_tier(req: "AgentAnalyzeRequest", question: str) -> None:
+    """Fill req.effort_tier (and the fields it controls) in place, unless the
+    caller already set them explicitly — an explicit value always wins."""
+    fields_set = req.model_fields_set
+    if "effort_tier" not in fields_set:
+        req.effort_tier = _estimate_question_effort(question, len(req.history))
+    tier = req.effort_tier or "standard"
+    if "evidence_top_k" not in fields_set:
+        req.evidence_top_k = _EFFORT_EVIDENCE_TOP_K[tier]
+    if "max_tool_steps" not in fields_set:
+        req.max_tool_steps = min(req.max_tool_steps, _EFFORT_MAX_TOOL_STEPS[tier])
+
+
 def _strategy_filter_edge_entry(entry: dict, strategy: str) -> bool:
     """Apply a paper-pnl strategy's filter logic to a live edge board entry."""
     entry_price = entry.get("entry_price", 0.5)
@@ -4218,6 +4280,14 @@ class AgentAnalyzeRequest(BaseModel):
     tool_loop: bool = Field(False, description="Use a ReAct tool-using loop (model plans + calls tools) instead of the fixed pipeline.")
     benchmark_tools: bool = Field(False, description="When tool_loop=true, expose only benchmark tools: place_trade, web_search, manage_notes.")
     max_tool_steps: int = Field(5, ge=1, le=8, description="Max tool calls in the loop.")
+    effort_tier: Optional[Literal["simple", "standard", "deep"]] = Field(
+        None,
+        description=(
+            "How much analysis effort this question gets (evidence fetch depth, which "
+            "built-in skills run, tool-loop step budget). Set explicitly to override; "
+            "left unset, the server estimates it from the question."
+        ),
+    )
     history: List[Dict[str, str]] = Field(default_factory=list, max_length=24, description="Prior conversation turns for follow-up context.")
     conversation_steer: str = Field("", max_length=1000, description="Optional per-conversation steering instruction.")
     openrouter_api_key: Optional[str] = Field(None, max_length=256)
@@ -4273,6 +4343,10 @@ class AgentReport(BaseModel):
     evidence_error: Optional[str] = None
     skills: List[AgentSkillResult] = Field(default_factory=list)
     grounding: Optional[str] = Field(None, description="Track-record self-calibration note applied to the forecast.")
+    effort_tier: Optional[str] = Field(
+        None,
+        description="How much analysis effort this question got: simple, standard, or deep.",
+    )
     tool_transcript: List[Dict[str, Any]] = Field(default_factory=list, description="Tool calls + observations when the tool loop ran.")
     tool_loop_steps: Optional[int] = Field(None, description="Tool-call steps the loop actually ran, when tool_loop=true.")
     tool_loop_truncated: Optional[bool] = Field(None, description="True if the loop hit max_tool_steps without the model giving a final answer.")
@@ -4418,6 +4492,10 @@ class PredictResponse(BaseModel):
     evidence_articles: List[NewsArticle] = Field(default_factory=list, description="Full evidence articles passed to the model.")
     evidence_error: Optional[str] = Field(None, description="Non-null if evidence retrieval failed (prediction still returned).")
     market_analysis: Optional[MarketAnalysis] = Field(None, description="Optional comparison against a supplied prediction-market probability.")
+    complexity: Optional[str] = Field(
+        None,
+        description="Model's own self-reported difficulty for this question: `low` or `high`.",
+    )
 
 
 class VertexPredictRequest(BaseModel):
@@ -4894,19 +4972,19 @@ def _append_chat_source_attribution(response: PredictResponse) -> None:
 _TYPE_SCHEMAS = {
     "binary": (
         '{"type":"binary","predicted_answer":"Yes"|"No",'
-        '"confidence":0-1,"rationale":"..."}'
+        '"confidence":0-1,"complexity":"low"|"high","rationale":"..."}'
     ),
     "multiple_choice": (
         '{"type":"multiple_choice","options":[{"label":"...","probability":0-1}],'
-        '"rationale":"..."}'
+        '"complexity":"low"|"high","rationale":"..."}'
     ),
     "numeric": (
         '{"type":"numeric","p10":<low>,"p50":<median>,"p90":<high>,'
-        '"unit":"...","rationale":"..."}'
+        '"unit":"...","complexity":"low"|"high","rationale":"..."}'
     ),
     "date": (
         '{"type":"date","p10":"YYYY-MM-DD","p50":"YYYY-MM-DD",'
-        '"p90":"YYYY-MM-DD","rationale":"..."}'
+        '"p90":"YYYY-MM-DD","complexity":"low"|"high","rationale":"..."}'
     ),
 }
 
@@ -4953,7 +5031,28 @@ def _typing_instruction(
         "Ground your rationale directly in the provided evidence articles, citing their specific publisher or source name. "
         "Do not reveal the checklist; only return the requested JSON."
     )
+    instr += (
+        "\nAlso set `complexity`: \"low\" for an ordinary question you can answer confidently "
+        "off well-established evidence or a clean base rate; \"high\" only if the evidence is "
+        "sparse or conflicting, there are 3+ genuinely uncertain drivers, there's no clean base "
+        "rate, or your rationale could plausibly flip under a serious challenge. Default to "
+        "\"low\"; if genuinely unsure which applies, prefer \"high\"."
+    )
     return instr
+
+
+def _normalize_complexity(value: Any) -> Optional[str]:
+    """Normalize the model's self-reported complexity to {"low","high",None}.
+
+    No response_format/JSON-schema is enforced on this contract anywhere in
+    this file, so a malformed or missing value must fail open (None), never
+    raise — a downstream gate treats None exactly like a low-confidence signal.
+    """
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in ("low", "high"):
+            return v
+    return None
 
 
 def _to_str(value: Any) -> Optional[str]:
@@ -5108,6 +5207,7 @@ def _build_typed_response(
             confidence=confidence,
             rationale=rationale,
             model_rationale=rationale,
+            complexity=_normalize_complexity(parsed.get("complexity")),
             market_analysis=_build_market_analysis(
                 req, "multiple_choice", predicted_answer, confidence, opts
             ),
@@ -5128,6 +5228,7 @@ def _build_typed_response(
             confidence=None,
             rationale=rationale,
             model_rationale=rationale,
+            complexity=_normalize_complexity(parsed.get("complexity")),
             market_analysis=_build_market_analysis(
                 req, qtype, _to_str(parsed.get("p50")), None, []
             ),
@@ -5135,7 +5236,7 @@ def _build_typed_response(
         )
 
     # binary (default) — reuse the battle-tested parser
-    bparsed = parse_model_response(content, ("predicted_answer", "confidence", "rationale"))
+    bparsed = parse_model_response(content, ("predicted_answer", "confidence", "rationale", "complexity"))
     # If no structured forecast fields were found and the response doesn't look like JSON,
     # treat it as a plain conversational reply.
     if not bparsed.get("predicted_answer") and not content.strip().startswith("{"):
@@ -5153,6 +5254,7 @@ def _build_typed_response(
         confidence=confidence,
         rationale=brat,
         model_rationale=brat,
+        complexity=_normalize_complexity(bparsed.get("complexity")),
         market_analysis=_build_market_analysis(
             req, "binary", predicted_answer, confidence, []
         ),
@@ -12012,18 +12114,44 @@ def _select_agent_provider(req: "AgentAnalyzeRequest"):
     )
 
 
+def _should_reduce_builtin_skills(req: "AgentAnalyzeRequest", result: "PredictResponse") -> bool:
+    """True only when the heuristic tier says "simple" and nothing about the
+    forecast itself contradicts that. This can only ever narrow the simple
+    tier back toward standard — it never downgrades a "standard"/"deep" tier,
+    since a shallow answer and a shallow self-report share a common cause and
+    are not a trustworthy basis for reducing work on their own."""
+    if req.effort_tier != "simple":
+        return False
+    if result.complexity == "high":
+        return False
+    if (
+        result.question_type == "binary"
+        and result.confidence is not None
+        and 0.45 <= result.confidence <= 0.55
+    ):
+        return False
+    return True
+
+
 async def _run_agent_skills(
     req: AgentAnalyzeRequest,
     question: str,
     pred_req: PredictRequest,
     result: PredictResponse,
-) -> tuple[List[AgentSkillResult], bool]:
+) -> tuple[List[AgentSkillResult], bool, Optional[str]]:
     skills_to_run: List[AgentSkill] = []
+    skill_marker: Optional[str] = None
     if req.builtin_skills:
-        skills_to_run.extend(AgentSkill(**s) for s in agent_capabilities.builtin_skills())
+        builtins = [AgentSkill(**s) for s in agent_capabilities.builtin_skills()]
+        if _should_reduce_builtin_skills(req, result):
+            builtins = [s for s in builtins if s.name == "Key drivers"]
+            skill_marker = "skills_reduced_low_complexity"
+        elif req.effort_tier == "simple":
+            skill_marker = "skills_escalated_from_self_report"
+        skills_to_run.extend(builtins)
     skills_to_run.extend(req.skills)
     if not skills_to_run:
-        return [], False
+        return [], False, skill_marker
 
     provider, temperature, max_tokens = _select_agent_provider(req)
     sources_txt = "\n".join(
@@ -12040,7 +12168,7 @@ async def _run_agent_skills(
     skill_results = await asyncio.gather(
         *(_run_agent_skill(s, context, provider, temperature, max_tokens) for s in skills_to_run)
     )
-    return list(skill_results), True
+    return list(skill_results), True, skill_marker
 
 
 async def _agent_report_from_prediction(
@@ -12063,9 +12191,11 @@ async def _agent_report_from_prediction(
     if analysis is not None:
         pipeline.append("price_edge")
 
-    skill_results, ran_skills = await _run_agent_skills(req, question, pred_req, result)
+    skill_results, ran_skills, skill_marker = await _run_agent_skills(req, question, pred_req, result)
     if ran_skills:
         pipeline.append("skills")
+    if skill_marker:
+        pipeline.append(skill_marker)
     pipeline.append("recommend")
 
     market_platform = quote.platform if quote else (req.platform or req.market_platform)
@@ -12102,6 +12232,7 @@ async def _agent_report_from_prediction(
         evidence_error=result.evidence_error,
         skills=list(skill_results),
         grounding=grounding_note,
+        effort_tier=req.effort_tier,
         agent_profile=agent_profile,
         live_trade_intent=live_trade_intent,
     )
@@ -12127,6 +12258,7 @@ async def _agent_analyze_durable(
                 req, agent_profile = _resolve_agent_profile_request(req, user_id)
 
             question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+            _apply_effort_tier(req, question)
             if agent_profile is not None:
                 pipeline.insert(0, "agent_profile")
             run = _advance_agent_run(
@@ -12196,6 +12328,7 @@ async def agent_analyze(req: AgentAnalyzeRequest, request: Request = None) -> Ag
         req, agent_profile = _resolve_agent_profile_request(req, claims["sub"])
 
     question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+    _apply_effort_tier(req, question)
     if agent_profile is not None:
         pipeline.insert(0, "agent_profile")
 
@@ -12246,6 +12379,7 @@ async def agent_analyze_stream(req: AgentAnalyzeRequest, request: Request) -> St
         yield _sse_event("meta", {"status": "resolving", "agent_run": _agent_run_reference(run).model_dump(mode="json")})
         try:
             question, quote, grounding_note, pipeline = await _resolve_agent_question(req)
+            _apply_effort_tier(req, question)
             if agent_profile is not None:
                 pipeline.insert(0, "agent_profile")
             run = _advance_agent_run(
@@ -12610,6 +12744,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         evidence_error=last.get("evidence_error"),
         grounding=grounding_note, tool_transcript=tool_transcript,
         tool_loop_steps=res.get("steps"), tool_loop_truncated=res.get("truncated"),
+        effort_tier=req.effort_tier,
         live_trade_intent=live_trade_intent,
     )
     # Evolution loop: enrol the analysed market into the live track record (pointer only).

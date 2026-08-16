@@ -153,6 +153,35 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("Choose a fresh limit price and size in the terminal.", self.index_html)
         self.assertIn("no exchange credentials, price, or size", self.index_html)
 
+    def test_effort_tier_caption_only_appears_for_the_simple_tier(self) -> None:
+        # A thinner analysis pass must never be silent -- but standard/deep
+        # responses (the vast majority) must stay exactly as before.
+        self.assertIn("function effortTierCaptionHtml", self.index_html)
+        self.assertIn("${effortTierCaptionHtml(data)}", self.index_html)
+        script = r'''
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync('frontend/index.html', 'utf8');
+const fn = source.match(/function effortTierCaptionHtml[\s\S]*?\n}\r?\n/)[0];
+const sandbox = {};
+vm.runInNewContext(fn, sandbox);
+
+const simple = sandbox.effortTierCaptionHtml({ effort_tier: 'simple' });
+if (!simple.includes('Quick take')) throw new Error('missing quick-take caption: ' + simple);
+
+for (const tier of ['standard', 'deep', null, undefined]) {
+  const out = sandbox.effortTierCaptionHtml({ effort_tier: tier });
+  if (out !== '') throw new Error(`expected empty string for tier=${tier}, got: ${out}`);
+}
+'''
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_agent_runs_show_private_research_progress_and_keep_trade_review_explicit(self) -> None:
         self.assertIn(">Agent runs<", self.index_html)
         self.assertIn("function syncAgentRunsFromServer", self.index_html)

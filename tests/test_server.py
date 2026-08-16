@@ -2471,11 +2471,143 @@ class ServerTests(unittest.TestCase):
                 "question": "Will the Fed cut rates before September 30, 2026?",
                 "evidence_top_k": 2,
                 "builtin_skills": True,
+                "effort_tier": "standard",
             },
         )
         self.assertEqual(response.status_code, 200)
         names = {s["name"] for s in response.json()["skills"]}
         self.assertEqual(names, {"Base rate", "Scenario decomposition", "Red team", "Key drivers"})
+
+    def test_estimate_question_effort_tier_boundaries(self):
+        cases = [
+            ("", 0, "standard"),
+            ("Will it rain tomorrow?", 0, "simple"),
+            ("Will the Fed and the ECB cut rates in September 2026?", 0, "standard"),
+            (
+                "If the Fed cuts rates in September, will housing starts rise, "
+                "and how does that compare to the 2019 easing cycle, assuming "
+                "mortgage rates also fall below 6%?",
+                0,
+                "deep",
+            ),
+            # A borderline-simple question crosses into "standard" once a long
+            # ongoing thread (history_len >= 6) is factored in.
+            ("Will the Fed and Congress agree?", 8, "standard"),
+        ]
+        for question, history_len, expected in cases:
+            with self.subTest(question=question, history_len=history_len):
+                self.assertEqual(
+                    server_module._estimate_question_effort(question, history_len),
+                    expected,
+                )
+
+    def test_agent_analyze_reduces_evidence_and_skills_for_a_simple_question(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will it rain tomorrow?",
+                "builtin_skills": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["effort_tier"], "simple")
+        names = {s["name"] for s in payload["skills"]}
+        self.assertEqual(names, {"Key drivers"})
+        self.assertIn("skills_reduced_low_complexity", payload["pipeline"])
+        self.assertEqual(self.evidence_pipeline.calls, [("Will it rain tomorrow?", 8)])
+
+    def test_agent_analyze_explicit_effort_tier_and_evidence_top_k_override_the_heuristic(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will it rain tomorrow?",
+                "builtin_skills": True,
+                "effort_tier": "deep",
+                "evidence_top_k": 33,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["effort_tier"], "deep")
+        names = {s["name"] for s in payload["skills"]}
+        self.assertEqual(names, {"Base rate", "Scenario decomposition", "Red team", "Key drivers"})
+        self.assertEqual(self.evidence_pipeline.calls, [("Will it rain tomorrow?", 33)])
+
+    def test_agent_analyze_escalates_skills_when_self_report_says_high_complexity(self):
+        self.provider.response = {
+            "predicted_answer": "Yes",
+            "confidence": 0.7,
+            "complexity": "high",
+            "rationale": "Evidence is thin and conflicting.",
+        }
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will it rain tomorrow?",
+                "builtin_skills": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["effort_tier"], "simple")
+        names = {s["name"] for s in payload["skills"]}
+        self.assertEqual(names, {"Base rate", "Scenario decomposition", "Red team", "Key drivers"})
+        self.assertIn("skills_escalated_from_self_report", payload["pipeline"])
+
+    def test_agent_analyze_never_downgrades_an_explicit_standard_tier_from_self_report(self):
+        # A "low" self-report must never be used to REDUCE work outside the
+        # simple tier -- a shallow answer and a shallow self-grade share a
+        # common cause, so it's only ever trusted as an escalation signal.
+        self.provider.response = {
+            "predicted_answer": "Yes",
+            "confidence": 0.7,
+            "complexity": "low",
+            "rationale": "Straightforward.",
+        }
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will it rain tomorrow?",
+                "builtin_skills": True,
+                "effort_tier": "standard",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["effort_tier"], "standard")
+        names = {s["name"] for s in payload["skills"]}
+        self.assertEqual(names, {"Base rate", "Scenario decomposition", "Red team", "Key drivers"})
+        self.assertNotIn("skills_reduced_low_complexity", payload["pipeline"])
+
+    def test_predict_complexity_field_round_trips_and_normalizes_stray_values(self):
+        self.provider.response = {
+            "predicted_answer": "Yes",
+            "confidence": 0.7,
+            "complexity": "HIGH",
+            "rationale": "Evidence supports a yes forecast.",
+        }
+        response = self.client.post(
+            "/predict",
+            json={"question": "Will the Fed cut rates before July 31, 2026?", "chat_mode": False},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["complexity"], "high")
+
+        self.provider.response = {
+            "predicted_answer": "Yes",
+            "confidence": 0.7,
+            "complexity": "medium",  # not a valid tier -- must fail open, not 500
+            "rationale": "Evidence supports a yes forecast.",
+        }
+        response = self.client.post(
+            # A distinct question avoids the /predict response cache from the
+            # first call above, which would otherwise mask this second call.
+            "/predict",
+            json={"question": "Will the ECB cut rates before July 31, 2026?", "chat_mode": False},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["complexity"])
 
     def test_agent_analyze_red_team_skill_gets_structured_verdict(self):
         # Red team runs strictly after the forecast is already computed and is
@@ -2789,6 +2921,7 @@ class ServerTests(unittest.TestCase):
             "/agent/analyze",
             json={
                 "question": "Will Project Atlas launch before December 31, 2026?",
+                "effort_tier": "standard",
                 "market_platform": "Kalshi",
                 "market_probability": 0.45,
                 "description": "The venue's background for Project Atlas.",
