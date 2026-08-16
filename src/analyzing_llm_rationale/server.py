@@ -1183,7 +1183,7 @@ _AGENT_RUN_FIELDS = (
     "id", "status", "title", "question", "platform", "recommendation",
     "model_probability", "market_probability", "edge", "agent_profile",
     "request", "report", "timeline", "steps", "created_at", "updated_at",
-    "completed_at", "error_code",
+    "completed_at", "error_code", "client_run_key",
 )
 _MAX_AGENT_RUNS_PER_USER = 100
 
@@ -4458,6 +4458,13 @@ class AgentAnalyzeRequest(BaseModel):
         pattern=r"^agent_[a-zA-Z0-9_-]{12,150}$",
         description="Private copied-agent recipe. Its research model and instructions are server-resolved.",
     )
+    client_run_key: Optional[str] = Field(
+        None,
+        max_length=120,
+        description="Caller-supplied idempotency key, stored on the durable AgentRun this request creates. "
+                    "If your own request times out waiting for a response, the run may still be progressing "
+                    "server-side -- look it up with GET /agent/runs?client_run_key=... instead of restarting.",
+    )
 
 
 class LiveTradeIntent(BaseModel):
@@ -4547,6 +4554,7 @@ class AgentRunSummary(BaseModel):
     updated_at: str
     completed_at: Optional[str] = None
     error_code: Optional[str] = None
+    client_run_key: Optional[str] = None
 
 
 class AgentRunResponse(AgentRunSummary):
@@ -10766,13 +10774,22 @@ async def delete_agent_profile(profile_id: str, request: Request) -> Dict[str, b
 
 
 @app.get("/agent/runs", tags=["Agents"], response_model=AgentRunList)
-async def list_agent_runs(request: Request) -> AgentRunList:
+async def list_agent_runs(
+    request: Request,
+    client_run_key: Optional[str] = Query(
+        None, max_length=120,
+        description="Filter to the run created with this caller-supplied idempotency key -- "
+                    "how an API-key client looks its own run back up by client_run_key after a timeout.",
+    ),
+) -> AgentRunList:
     """List the signed-in user's durable research runs, newest activity first."""
     _check_rate_limit(request)
-    claims = _require_session(request)
+    claims = _require_auth(request)
     with _tracer.start_as_current_span("agent.run.list") as span:
         span.set_attribute("user.id", claims["sub"])
         runs = _list_agent_runs(claims["sub"])
+        if client_run_key:
+            runs = [r for r in runs if r.get("client_run_key") == client_run_key]
         span.set_attribute("agent.run.count", len(runs))
         _agent_run_actions.add(1, {"action": "list", "outcome": "success"})
         return AgentRunList(runs=[_agent_run_summary(run) for run in runs])
@@ -10782,7 +10799,7 @@ async def list_agent_runs(request: Request) -> AgentRunList:
 async def read_agent_run(run_id: str, request: Request) -> AgentRunResponse:
     """Read one private research run, including its completed report when available."""
     _check_rate_limit(request)
-    claims = _require_session(request)
+    claims = _require_auth(request)
     with _tracer.start_as_current_span("agent.run.read") as span:
         span.set_attributes({"user.id": claims["sub"], "agent.run.id": run_id})
         run = _read_agent_run(claims["sub"], run_id)
@@ -12128,6 +12145,7 @@ def _new_agent_run(user_id: str, req: AgentAnalyzeRequest) -> Dict[str, Any]:
             "updated_at": now,
             "completed_at": None,
             "error_code": None,
+            "client_run_key": req.client_run_key,
         },
     )
 
@@ -12280,6 +12298,7 @@ def _agent_run_summary(record: Dict[str, Any]) -> AgentRunSummary:
         updated_at=str(record["updated_at"]),
         completed_at=record.get("completed_at"),
         error_code=record.get("error_code"),
+        client_run_key=record.get("client_run_key"),
     )
 
 

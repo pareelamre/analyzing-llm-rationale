@@ -2493,6 +2493,42 @@ class ServerTests(unittest.TestCase):
 
         self.assertEqual(self.client.get(f"/agent/runs/{run_id}", headers=other_headers).status_code, 404)
 
+    def test_agent_runs_endpoints_accept_api_key_style_auth_not_just_session(self):
+        # Regression: these endpoints used to call _require_session directly
+        # (Bearer session cookie only), while /agent/analyze -- which creates the
+        # very runs these endpoints read -- uses _require_auth (session OR API
+        # key). An API-key-authenticated MCP client could create a durable run
+        # but never read it back. No Authorization header at all still exercises
+        # _require_auth here (this suite's fake_require_auth accepts any
+        # request, standing in for how a real X-API-Key header authenticates
+        # under the real implementation) -- the old _require_session would have
+        # hard-401'd on a missing Bearer header regardless.
+        self.assertEqual(self.client.get("/agent/runs").status_code, 200)
+        self.assertEqual(self.client.get("/agent/runs/agent_run_doesnotexist").status_code, 404)
+
+    def test_agent_analyze_stores_and_filters_by_client_run_key(self):
+        # An MCP client generates a client_run_key up front so that if its own
+        # request times out, it can still find the durable run it created and
+        # pick up the result instead of restarting.
+        owner_headers = {"Authorization": f"Bearer {_issue_session('key-owner', 'keyowner@example.com', 'Owner', '')}"}
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "Will it rain tomorrow?", "builtin_skills": True, "client_run_key": "my-idempotency-key"},
+            headers=owner_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        run_id = response.json()["agent_run"]["id"]
+
+        filtered = self.client.get("/agent/runs?client_run_key=my-idempotency-key", headers=owner_headers)
+        self.assertEqual(filtered.status_code, 200)
+        self.assertEqual(len(filtered.json()["runs"]), 1)
+        self.assertEqual(filtered.json()["runs"][0]["id"], run_id)
+        self.assertEqual(filtered.json()["runs"][0]["client_run_key"], "my-idempotency-key")
+
+        empty = self.client.get("/agent/runs?client_run_key=no-such-key", headers=owner_headers)
+        self.assertEqual(empty.status_code, 200)
+        self.assertEqual(empty.json()["runs"], [])
+
     def test_agent_analyze_tool_loop_persists_steps_incrementally(self):
         # Regression test: _agent_tool_loop ran the entire ReAct loop as one
         # opaque await with zero intermediate persistence -- a crash mid-loop

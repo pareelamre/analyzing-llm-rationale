@@ -126,6 +126,40 @@ class ForeseaClientTests(unittest.TestCase):
         self.assertEqual(call["url"], "https://foresea.test/market/batch")
         self.assertEqual(call["params"], {"refs": ["kalshi:KXFED-25JUN-H", "polymarket:fed-cut-2026"]})
 
+    def test_check_run_returns_running_status_without_fetching_detail(self):
+        session = FakeSession(FakeResponse(payload={
+            "runs": [{"id": "agent_run_abc", "status": "running", "client_run_key": "key1"}],
+        }))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", session=session)
+
+        result = client.check_run("key1")
+
+        self.assertEqual(result, {"status": "running", "id": "agent_run_abc", "detail": "Still in progress -- check back again shortly."})
+        self.assertEqual(len(session.calls), 1)  # no second request for detail
+        self.assertEqual(session.calls[0]["params"], {"client_run_key": "key1"})
+
+    def test_check_run_fetches_full_detail_once_the_run_is_complete(self):
+        session = FakeSession(
+            FakeResponse(payload={"runs": [{"id": "agent_run_abc", "status": "completed", "client_run_key": "key1"}]}),
+            FakeResponse(payload={"report": {"predicted_answer": "Yes"}}),
+        )
+        client = mcp.ForeseaClient(base_url="https://foresea.test", session=session)
+
+        result = client.check_run("key1")
+
+        self.assertEqual(result, {"report": {"predicted_answer": "Yes"}})
+        self.assertEqual(len(session.calls), 2)
+        self.assertEqual(session.calls[1]["url"], "https://foresea.test/agent/runs/agent_run_abc")
+
+    def test_check_run_raises_404_when_no_run_matches_the_key(self):
+        session = FakeSession(FakeResponse(payload={"runs": []}))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", session=session)
+
+        with self.assertRaises(mcp.ForeseaApiError) as ctx:
+            client.check_run("no-such-key")
+
+        self.assertEqual(ctx.exception.status_code, 404)
+
     def test_http_error_parses_detail(self):
         session = FakeSession(FakeResponse(status_code=422, payload={"detail": "bad request"}))
         client = mcp.ForeseaClient(base_url="https://foresea.test", session=session)
@@ -176,6 +210,62 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
         call = session.calls[0]
         self.assertEqual(call["url"], "https://foresea.test/market/batch")
         self.assertEqual(call["params"], {"refs": ["kalshi:T"]})
+
+    async def test_async_analyze_resilient_stamps_a_client_run_key(self):
+        session = FakeAsyncSession(FakeResponse(payload={"predicted_answer": "Yes"}))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", async_session=session)
+
+        await client.aanalyze_resilient({"question": "Will X happen?"})
+
+        sent_key = session.calls[0]["json"]["client_run_key"]
+        self.assertTrue(sent_key)  # a uuid4 hex was generated
+
+    async def test_async_analyze_resilient_preserves_a_caller_supplied_client_run_key(self):
+        session = FakeAsyncSession(FakeResponse(payload={"predicted_answer": "Yes"}))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", async_session=session)
+
+        await client.aanalyze_resilient({"question": "Will X happen?", "client_run_key": "caller-chosen-key"})
+
+        self.assertEqual(session.calls[0]["json"]["client_run_key"], "caller-chosen-key")
+
+    async def test_async_analyze_resilient_names_the_run_key_on_timeout(self):
+        import httpx
+
+        class TimeoutSession(FakeAsyncSession):
+            async def request(self, *args, **kwargs):
+                raise httpx.TimeoutException("read timed out")
+
+        client = mcp.ForeseaClient(base_url="https://foresea.test", async_session=TimeoutSession())
+
+        with self.assertRaises(mcp.ForeseaApiError) as ctx:
+            await client.aanalyze_resilient({"question": "Will X happen?", "client_run_key": "my-key"})
+
+        self.assertEqual(ctx.exception.status_code, 504)
+        self.assertIn("my-key", ctx.exception.detail)
+        self.assertIn("foresea_check_run", ctx.exception.detail)
+
+    async def test_async_check_run_returns_running_status_without_fetching_detail(self):
+        session = FakeAsyncSession(FakeResponse(payload={
+            "runs": [{"id": "agent_run_abc", "status": "running", "client_run_key": "key1"}],
+        }))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", async_session=session)
+
+        result = await client.acheck_run("key1")
+
+        self.assertEqual(result["status"], "running")
+        self.assertEqual(len(session.calls), 1)
+
+    async def test_async_check_run_fetches_full_detail_once_complete(self):
+        session = FakeAsyncSession(
+            FakeResponse(payload={"runs": [{"id": "agent_run_abc", "status": "completed"}]}),
+            FakeResponse(payload={"report": {"predicted_answer": "Yes"}}),
+        )
+        client = mcp.ForeseaClient(base_url="https://foresea.test", async_session=session)
+
+        result = await client.acheck_run("key1")
+
+        self.assertEqual(result, {"report": {"predicted_answer": "Yes"}})
+        self.assertEqual(session.calls[1]["url"], "https://foresea.test/agent/runs/agent_run_abc")
 
     async def test_async_http_error_parses_detail(self):
         session = FakeAsyncSession(FakeResponse(status_code=503, payload={"detail": "temporarily unavailable"}))
