@@ -387,6 +387,64 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         self.assertIn("history.replaceState(", self.index_html)
         self.assertIn("const _initConversationId = conversationIdFromPath();", self.index_html)
 
+    def test_direct_route_load_skips_the_landing_page_flash(self) -> None:
+        # Regression: the whole SPA shell renders the landing page visible by
+        # default in the raw HTML -- JS only hides it and opens the right
+        # overlay/app-shell once the big inline <script> near the end of
+        # <body> runs. On a direct load or refresh of e.g. /edge, that gap
+        # showed the landing page (mid entrance animation) before flipping to
+        # the edge board a moment later. A tiny inline script at the end of
+        # <head> now computes the route before first paint and stamps it as
+        # data-boot-view on <html>; CSS keyed off that attribute shows the
+        # right shell/overlay immediately, and _bootRouting suppresses the
+        # overlay's own fade-in Motion.animate call for that one initial
+        # open only (it's already visible, so fading it from 0 would itself
+        # flash) without touching later user-driven opens.
+        head = self.index_html.split("<head>", 1)[1].split("</head>", 1)[0]
+        self.assertIn("data-boot-view", head)
+        self.assertIn("history.state && history.state.view", head)
+        self.assertIn("/^\\/edge(?:\\/(mtm|agentic))?$/", head)
+        self.assertIn("/^\\/chat\\/[^/]+$/", head)
+
+        self.assertIn(
+            'html[data-boot-view]:not([data-boot-view="landing"]) #landingPage { display: none !important; }',
+            self.index_html,
+        )
+        self.assertIn('html[data-boot-view="edge-app"] #appShell', self.index_html)
+        self.assertIn('html[data-boot-view^="edge-"] #edgeOverlay', self.index_html)
+        self.assertIn('html[data-boot-view^="track-"] #trackOverlay', self.index_html)
+        self.assertIn('html[data-boot-view^="watch-"] #watchOverlay', self.index_html)
+        self.assertIn('html[data-boot-view^="ledger-"] #ledgerOverlay', self.index_html)
+
+        self.assertIn("let _bootRouting = false;", self.index_html)
+        self.assertIn(
+            "_bootRouting = true;\nif (!_maybeStandaloneWatchlist()) "
+            "applyHistoryState({ view: _initView, convId: _initConversationId, panel: _initPanel });\n"
+            "_bootRouting = false;",
+            self.index_html,
+        )
+        # Every overlay/app-shell fade-in is guarded, so the first (boot)
+        # open never re-fades content the boot CSS already made visible.
+        for guarded in (
+            "if (!_bootRouting && window.Motion && !prefersReduced()) {\n"
+            "    Motion.animate(app, { opacity: [0, 1]",
+            "if (!_bootRouting && window.Motion && !prefersReduced()) {\n"
+            "    Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });\n"
+            "  }\n"
+            "  if (!trackLoaded)",
+            "if (!_bootRouting && window.Motion && !prefersReduced()) {\n"
+            "    Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });\n"
+            "  }\n"
+            "  if (!edgeLoaded)",
+            "if (!_bootRouting && window.Motion && !prefersReduced()) "
+            "Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });\n"
+            "  renderWatchlistPage();",
+            "if (!_bootRouting && window.Motion && !prefersReduced()) "
+            "Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });\n"
+            "  await refreshPersonalLedger();",
+        ):
+            self.assertIn(guarded, self.index_html)
+
     def test_silent_session_restore_does_not_hijack_the_current_route(self) -> None:
         # Regression: initAuth() restores a saved session on every page load,
         # racing the synchronous initial-route logic below it. If that restore
