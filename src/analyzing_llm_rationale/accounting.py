@@ -148,6 +148,13 @@ class TradeFill:
     realized_pairs: float = 0.0
     realized_pnl: float = 0.0
     cash_delta: float = 0.0
+    # Uncapped realized_pnl, before MAX_NETTING_ARB_PER_PAIR is applied.
+    # Equal to realized_pnl unless this fill's netting arb was implausible.
+    # Callers that want to reject implausible fills outright (rather than
+    # accept the capped credit) -- e.g. benchmark_tools._check_trade_guards,
+    # whose inputs are agent-supplied rather than historical market data --
+    # should compare against this, not realized_pnl.
+    raw_realized_pnl: float = 0.0
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -161,8 +168,20 @@ class TradeFill:
             "settlement_status": self.settlement_status,
             "realized_pairs": round(self.realized_pairs, 6),
             "realized_pnl": round(self.realized_pnl, 6),
+            "raw_realized_pnl": round(self.raw_realized_pnl, 6),
             "cash_delta": round(self.cash_delta, 6),
         }
+
+
+# A matched YES+NO pair always pays out exactly $1 combined, so realizing
+# more than a few cents of profit per pair on a netting fill almost always
+# means one of the two legs' recorded price doesn't reflect a real market,
+# not a real edge. Mirrors FORESEA_AGENT_MAX_NETTING_ARB_PER_PAIR / the
+# netting-arb guard in benchmark_tools.place_trade -- that guard rejects the
+# trade outright because its inputs are agent-supplied; here the inputs are
+# historical market data (a data-quality problem, not an adversarial one),
+# so buy() caps the credited profit instead of rejecting the fill.
+MAX_NETTING_ARB_PER_PAIR = 0.15
 
 
 class PredictionMarketAccount:
@@ -215,6 +234,7 @@ class PredictionMarketAccount:
 
         realized_pairs = 0.0
         realized_pnl = 0.0
+        raw_realized_pnl = 0.0
         remaining = quantity
         opposite_pos = self._active_position(platform, ident, _opposite(side))
         if opposite_pos is not None:
@@ -223,8 +243,12 @@ class PredictionMarketAccount:
                 fee_alloc = fee * (realized_pairs / quantity)
                 old_basis = opposite_pos.avg_entry_price * realized_pairs
                 new_basis = price * realized_pairs
-                realized_pnl = realized_pairs - old_basis - new_basis - fee_alloc
-                self.cash += realized_pairs
+                raw_realized_pnl = realized_pairs - old_basis - new_basis - fee_alloc
+                realized_pnl = min(raw_realized_pnl, MAX_NETTING_ARB_PER_PAIR * realized_pairs)
+                # Credit exactly what was paid for both legs plus the
+                # (possibly capped) profit, rather than the full $1/pair --
+                # equivalent to += realized_pairs when nothing was capped.
+                self.cash += old_basis + new_basis + fee_alloc + realized_pnl
                 self.realized_pnl += realized_pnl
                 opposite_pos.quantity -= realized_pairs
                 opposite_pos.cost_basis -= old_basis
@@ -249,6 +273,7 @@ class PredictionMarketAccount:
             settlement_status="realized" if realized_pairs > 0 else "open",
             realized_pairs=realized_pairs,
             realized_pnl=realized_pnl,
+            raw_realized_pnl=raw_realized_pnl,
             cash_delta=self.cash - cash_before,
         )
         self.trades.append(fill)
