@@ -39,6 +39,7 @@ class FakeProvider:
         self.last_response_model = "fake-model"
         self.calls = []
         self.max_tokens = []
+        self.reasoning_efforts = []
         self.response = {
             "predicted_answer": "Yes",
             "confidence": 0.7,
@@ -47,17 +48,19 @@ class FakeProvider:
         self.responses = None  # optional queue of per-call responses, popped in order
         self.stream_response = "Streaming answer."
 
-    def chat_completion(self, messages, temperature, max_tokens):
+    def chat_completion(self, messages, temperature, max_tokens, reasoning_effort=None):
         self.calls.append(messages)
         self.max_tokens.append(max_tokens)
+        self.reasoning_efforts.append(reasoning_effort)
         response = self.responses.pop(0) if self.responses else self.response
         if isinstance(response, str):
             return response
         return json.dumps(response)
 
-    def stream_chat_completion(self, messages, temperature, max_tokens):
+    def stream_chat_completion(self, messages, temperature, max_tokens, reasoning_effort=None):
         self.calls.append(messages)
         self.max_tokens.append(max_tokens)
+        self.reasoning_efforts.append(reasoning_effort)
         mid = max(1, len(self.stream_response) // 2)
         yield self.stream_response[:mid]
         yield self.stream_response[mid:]
@@ -116,7 +119,7 @@ class FailingProvider:
         self.model_name = model_name
         self.calls = 0
 
-    def chat_completion(self, messages, temperature, max_tokens):
+    def chat_completion(self, messages, temperature, max_tokens, reasoning_effort=None):
         self.calls += 1
         raise RetryableProviderError("upstream unavailable")
 
@@ -127,14 +130,14 @@ class SlowStreamProvider:
     def __init__(self):
         self.calls = 0
 
-    def stream_chat_completion(self, messages, temperature, max_tokens):
+    def stream_chat_completion(self, messages, temperature, max_tokens, reasoning_effort=None):
         self.calls += 1
         time.sleep(0.05)
         yield "late primary"
 
 
 class EmptyStreamProvider(FakeProvider):
-    def stream_chat_completion(self, messages, temperature, max_tokens):
+    def stream_chat_completion(self, messages, temperature, max_tokens, reasoning_effort=None):
         self.calls.append(messages)
         self.max_tokens.append(max_tokens)
         if False:
@@ -2532,6 +2535,70 @@ class ServerTests(unittest.TestCase):
                     expected,
                 )
 
+    def test_is_greeting_or_meta_boundaries(self):
+        cases = [
+            ("hello", True),
+            ("hi there", True),
+            ("hey!", True),
+            ("what can you do?", True),
+            ("who are you?", True),
+            ("what is foresea?", True),
+            ("good morning", True),
+            ("", False),
+            ("thanks!", False),
+            ("Will the Fed cut rates before September 30, 2026?", False),
+            # A real forecasting question that happens to open with a greeting
+            # must never be misrouted away from evidence retrieval.
+            ("Hi, will the Fed cut rates before September 30, 2026?", False),
+        ]
+        for question, expected in cases:
+            with self.subTest(question=question):
+                self.assertEqual(server_module._is_greeting_or_meta(question), expected)
+
+    def test_agent_analyze_routes_a_greeting_to_a_plain_chat_reply(self):
+        self.provider.response = "Hi! Foresea turns forecasting questions into calibrated probabilities."
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "hello", "builtin_skills": True},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["question_type"], "chat")
+        self.assertEqual(payload["skills"], [])
+        self.assertEqual(self.evidence_pipeline.calls, [])
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertIn("brief, warm introduction", system_prompt)
+
+    def test_agent_analyze_greeting_intro_only_fires_on_the_first_turn(self):
+        self.provider.response = "You're welcome!"
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "hello again",
+                "builtin_skills": True,
+                "history": [
+                    {"role": "user", "content": "Will the Fed cut rates?"},
+                    {"role": "assistant", "content": "I'd put Yes at around 60%."},
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertNotIn("brief, warm introduction", system_prompt)
+
+    def test_agent_analyze_does_not_misroute_a_forecasting_question_that_opens_with_a_greeting(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Hi, will the Fed cut rates before September 30, 2026?",
+                "builtin_skills": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertNotEqual(payload["question_type"], "chat")
+        self.assertEqual(len(self.evidence_pipeline.calls), 1)
+
     def test_agent_analyze_reduces_evidence_and_skills_for_a_simple_question(self):
         response = self.client.post(
             "/agent/analyze",
@@ -2564,6 +2631,75 @@ class ServerTests(unittest.TestCase):
         names = {s["name"] for s in payload["skills"]}
         self.assertEqual(names, {"Base rate", "Scenario decomposition", "Red team", "Key drivers"})
         self.assertEqual(self.evidence_pipeline.calls, [("Will it rain tomorrow?", 33)])
+
+    def test_chat_timeout_s_only_scales_up_for_deep_tier_chat_mode_calls(self):
+        cases = [
+            (False, None, None),
+            (False, "deep", None),  # non-chat calls keep the generous default budget regardless of tier
+            (True, None, server_module._CHAT_PROVIDER_TIMEOUT_S),
+            (True, "standard", server_module._CHAT_PROVIDER_TIMEOUT_S),
+            (True, "simple", server_module._CHAT_PROVIDER_TIMEOUT_S),
+            (True, "deep", server_module._CHAT_DEEP_PROVIDER_TIMEOUT_S),
+        ]
+        for chat_mode, effort_tier, expected in cases:
+            with self.subTest(chat_mode=chat_mode, effort_tier=effort_tier):
+                req = server_module.PredictRequest(
+                    question="Will X happen by 2027, given several conditions?",
+                    variant="variant0_neutral_baseline",
+                    chat_mode=chat_mode,
+                    effort_tier=effort_tier,
+                )
+                self.assertEqual(server_module._chat_timeout_s(req), expected)
+
+    def test_agent_analyze_sends_low_reasoning_effort_for_a_simple_question(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "Will it rain tomorrow?", "builtin_skills": True},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["effort_tier"], "simple")
+        self.assertIn("low", self.provider.reasoning_efforts)
+
+    def test_agent_analyze_sends_no_reasoning_effort_for_a_standard_question(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": "Will the Fed and the ECB cut rates in September 2026?",
+                "builtin_skills": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["effort_tier"], "standard")
+        # No reasoning-effort hint at all for the default tier -- today's exact behavior.
+        self.assertTrue(all(e is None for e in self.provider.reasoning_efforts))
+
+    def test_agent_analyze_sends_high_reasoning_effort_for_a_deep_question(self):
+        response = self.client.post(
+            "/agent/analyze",
+            json={
+                "question": (
+                    "If the Fed cuts rates in September, will housing starts rise, "
+                    "and how does that compare to the 2019 easing cycle, assuming "
+                    "mortgage rates also fall below 6%?"
+                ),
+                "builtin_skills": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["effort_tier"], "deep")
+        self.assertIn("high", self.provider.reasoning_efforts)
+
+    def test_predict_explicit_reasoning_effort_is_sent_verbatim(self):
+        response = self.client.post(
+            "/predict",
+            json={
+                "question": "Will the Fed cut rates before July 31, 2026?",
+                "chat_mode": False,
+                "effort_tier": "deep",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("high", self.provider.reasoning_efforts)
 
     def test_agent_analyze_escalates_skills_when_self_report_says_high_complexity(self):
         self.provider.response = {
@@ -4450,7 +4586,7 @@ class ServerTests(unittest.TestCase):
             def __init__(self, model_name, api_key, base_url):
                 captured.update(model=model_name, key=api_key, base_url=base_url)
 
-            def chat_completion(self, messages, temperature, max_tokens):
+            def chat_completion(self, messages, temperature, max_tokens, reasoning_effort=None):
                 return json.dumps(
                     {"predicted_answer": "Yes", "confidence": 0.6, "rationale": "ok"}
                 )

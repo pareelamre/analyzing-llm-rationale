@@ -1917,7 +1917,7 @@
       .nav-collapse { display: none; }
       .btn-signin { padding: 7px 13px; }
     }
-  </style>
+  </style>
   <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
@@ -2240,145 +2240,6 @@
         ></textarea>
         <p id="conversationSteerStatus" class="text-xs text-gray-500 mt-2 px-1"></p>
       </div>
-    </div>
-  </details>
-
-  <!-- Workspace: everyday choices first; technical controls stay available below. -->
-  <details class="config-panel" id="configDetails">
-    <summary class="config-summary">
-      <svg class="config-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
-        <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>Your workspace</span>
-      <span class="config-active">Personal</span>
-    </summary>
-    <div class="config-body" onclick="event.stopPropagation()">
-      <section class="workspace-group" aria-labelledby="workspace-context-title">
-        <p class="workspace-title" id="workspace-context-title">Your saved context</p>
-        <p id="workspaceContextSummary" class="workspace-copy">No notes added</p>
-        <button type="button" class="workspace-action" onclick="openWorkspaceContext()">
-          <strong>Add a note or link</strong>
-          <span>Use it as evidence in future forecasts.</span>
-        </button>
-      </section>
-
-      <section class="workspace-group" aria-labelledby="workspace-record-title">
-        <p class="workspace-title" id="workspace-record-title">Your record</p>
-        <p id="workspaceLedgerSummary" class="workspace-copy">Sign in to see your saved forecasts.</p>
-      </section>
-
-      <section class="workspace-group" aria-labelledby="workspace-agent-runs-title">
-        <p class="workspace-title" id="workspace-agent-runs-title">Agent runs</p>
-        <p id="workspaceAgentRunsSummary" class="workspace-copy">Sign in to see research progress and trade handoffs.</p>
-        <div id="workspaceAgentRunsTimeline" class="model-list" style="margin-top:10px"></div>
-      </section>
-
-      <details class="advanced-panel workspace-preferences" id="workspacePreferences">
-        <summary role="button" aria-label="Show preferences and advanced controls">Preferences</summary>
-        <div>
-
-      <!-- Model -->
-      <div class="config-group">
-        <p class="label" style="margin:0 0 2px">Model</p>
-        <div id="modelList" class="model-list"></div>
-        <button type="button" id="addModelBtn" class="model-add-btn ui-icon-label" onclick="startAddModel()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-plus"></use></svg>Add a model</button>
-        <div id="modelForm" class="model-form" hidden>
-          <div>
-            <label class="label block mb-1" for="mfName">Name</label>
-            <input id="mfName" class="variant-select text-xs" placeholder="e.g. My GPT-4o" autocomplete="off" />
-          </div>
-          <div>
-            <label class="label block mb-1" for="mfProvider">Provider</label>
-            <select id="mfProvider" class="variant-select text-xs" onchange="_mfToggleBaseUrl()">
-              <option value="openrouter">OpenRouter</option>
-              <option value="ollama">Ollama (local / self-hosted)</option>
-              <option value="custom">Custom (OpenAI-compatible)</option>
-            </select>
-          </div>
-          <div id="mfBaseUrlRow" hidden>
-            <label class="label block mb-1" for="mfBaseUrl">Base URL</label>
-            <input id="mfBaseUrl" type="url" class="variant-select text-xs" placeholder="http://localhost:11434" autocomplete="off" />
-            <p id="mfBaseUrlHint" class="text-gray-400 mt-1" style="font-size:10px"></p>
-          </div>
-          <div id="mfKeyRow">
-            <label class="label block mb-1" for="mfKey">API key</label>
-            <input id="mfKey" type="password" class="variant-select text-xs" placeholder="sk-…" autocomplete="off" />
-            <p id="mfKeyHint" class="text-gray-400 mt-1" style="font-size:10px">Get an OpenRouter key at <a href="https://openrouter.ai/keys" target="_blank" class="underline">openrouter.ai/keys</a>.</p>
-          </div>
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label class="label" for="mfModel">Model</label>
-              <button type="button" id="mfFetchModels" class="model-cancel" style="font-size:10px;padding:2px 8px" onclick="_mfFetchModels()" hidden>Fetch models</button>
-            </div>
-            <input id="mfModel" class="variant-select text-xs" list="orModelList" placeholder="e.g. openai/gpt-4o" autocomplete="off" />
-            <datalist id="orModelList">
-              <option value="openai/gpt-4o"></option>
-              <option value="openai/gpt-4o-mini"></option>
-              <option value="openai/o3-mini"></option>
-              <option value="anthropic/claude-sonnet-4-5"></option>
-              <option value="anthropic/claude-3.5-haiku"></option>
-              <option value="google/gemini-2.5-pro-preview-05-06"></option>
-              <option value="google/gemini-2.0-flash-001"></option>
-              <option value="meta-llama/llama-3.3-70b-instruct"></option>
-              <option value="deepseek/deepseek-r1"></option>
-              <option value="deepseek/deepseek-chat-v3-0324"></option>
-              <option value="mistralai/mistral-small-3.1-24b-instruct"></option>
-            </datalist>
-          </div>
-          <div id="mfError" class="model-form-error" hidden></div>
-          <div class="model-form-actions">
-            <button type="button" class="model-save" onclick="saveModelForm()">Save</button>
-            <button type="button" class="model-cancel" onclick="cancelModelForm()">Cancel</button>
-          </div>
-          <p class="text-gray-400" style="font-size:10px">Keys are stored only in your browser.</p>
-        </div>
-      </div>
-
-      <!-- Research skills -->
-      <div class="config-group">
-        <p class="label" style="margin:0">Research skills</p>
-        <div id="skillList" class="model-list"></div>
-        <button type="button" id="addSkillBtn" class="model-add-btn ui-icon-label" onclick="startAddSkill()"><svg class="ui-icon" aria-hidden="true"><use href="#ui-plus"></use></svg>Add a skill</button>
-        <div id="skillForm" class="model-form" hidden>
-          <div>
-            <label class="label block mb-1" for="sfName">Name</label>
-            <input id="sfName" class="variant-select text-xs" placeholder="e.g. Base rate check" autocomplete="off" />
-          </div>
-          <div>
-            <label class="label block mb-1" for="sfInstruction">Instruction</label>
-            <textarea id="sfInstruction" class="variant-select text-xs" rows="3" placeholder="What should this skill analyse?" style="resize:vertical;min-height:56px"></textarea>
-          </div>
-          <div id="sfError" class="model-form-error" hidden></div>
-          <div class="model-form-actions">
-            <button type="button" class="model-save" onclick="saveSkillForm()">Save</button>
-            <button type="button" class="model-cancel" onclick="cancelSkillForm()">Cancel</button>
-          </div>
-        </div>
-        <p class="text-gray-400" style="font-size:10px;margin-top:2px">Foresea uses these alongside evidence gathering, forecasting, and edge analysis.</p>
-      </div>
-
-      <!-- Knowledge base -->
-      <div class="config-group">
-        <p class="label" style="margin:0">Knowledge base</p>
-        <div id="kbList" class="model-list"></div>
-        <div class="model-form" style="margin-top:0">
-          <input id="kbTitle" class="variant-select text-xs" placeholder="Title (optional)" autocomplete="off" />
-          <textarea id="kbText" class="variant-select text-xs" rows="2" placeholder="Paste text, or a URL to fetch" style="resize:vertical;min-height:46px"></textarea>
-          <div id="kbError" class="model-form-error" hidden></div>
-          <div class="model-form-actions">
-            <button type="button" class="model-save" onclick="ingestKb()">Add to knowledge base</button>
-          </div>
-        </div>
-        <p id="kbHint" class="text-gray-400" style="font-size:10px">Sign in to add docs. They're retrieved as evidence in your forecasts.</p>
-      </div>
-
-      <!-- API docs -->
-      <div class="pt-2 border-t border-gray-200">
-        <a href="/agents" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs ui-icon-label">Agent integration <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></a><br />
-        <a href="/docs" target="_blank" class="text-gray-900 underline underline-offset-2 hover:opacity-70 text-xs ui-icon-label">API docs <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></a>
-      </div>
-        </div>
-      </details>
     </div>
   </details>
 
@@ -9205,7 +9066,12 @@ function _agentReportToMarkdown(d, options = {}) {
 
   if (d.thesis) md += (md ? '\n\n' : '') + d.thesis;
 
-  if (d.market_probability == null) {
+  // A plain conversational reply (greetings, "what can you do?") never tried
+  // to forecast anything or pull evidence -- the market-price/low-confidence
+  // captions below only make sense for an actual forecast attempt.
+  const isChatReply = d.question_type === 'chat';
+
+  if (!isChatReply && d.market_probability == null) {
     md += `\n\n*Give me the market price (start with "Market at 42%: …") or paste a Polymarket/Kalshi link, and I'll tell you whether there's an edge.*`;
   }
 
@@ -9213,7 +9079,7 @@ function _agentReportToMarkdown(d, options = {}) {
 
   if (d.grounding) md += `\n\n> _${d.grounding.replace(/\n/g, ' ')}_`;
 
-  if (includeSources) {
+  if (includeSources && !isChatReply) {
   // Clickable, de-duplicated source citations.
   const seen = new Set();
   const links = [];

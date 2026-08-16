@@ -151,6 +151,19 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("saveVenueCreds('kalshi')", self.index_html)
         self.assertIn("removeCopiedAgent(", self.index_html)
 
+    def test_your_workspace_panel_is_removed_from_the_sidebar(self) -> None:
+        # The old sidebar panel (saved context, record, agent runs, and a
+        # nested "Preferences" with model/skills/knowledge base) was removed
+        # outright, not folded into Settings -- Settings only hosts
+        # Connections and Copied agents.
+        self.assertNotIn(">Your workspace<", self.index_html)
+        self.assertNotIn('id="configDetails"', self.index_html)
+        self.assertNotIn('id="workspacePreferences"', self.index_html)
+        self.assertNotIn('id="modelList"', self.index_html)
+        self.assertNotIn('id="skillList"', self.index_html)
+        self.assertNotIn('id="kbList"', self.index_html)
+        self.assertNotIn('id="workspaceAgentRunsTimeline"', self.index_html)
+
     def test_signed_in_analytics_uses_the_session_header_not_send_beacon(self) -> None:
         self.assertIn("function _sendAnalytics(url, payload)", self.index_html)
         self.assertIn("const { token } = _loadStoredSession();", self.index_html)
@@ -333,14 +346,6 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_agent_runs_show_private_research_progress_and_keep_trade_review_explicit(self) -> None:
-        self.assertIn(">Agent runs<", self.index_html)
-        self.assertIn("function syncAgentRunsFromServer", self.index_html)
-        self.assertIn("function renderAgentRunTimeline", self.index_html)
-        self.assertIn("function openAgentRunTrade", self.index_html)
-        self.assertIn("/agent/runs", self.index_html)
-        self.assertIn("agent_run: d.agent_run || null", self.index_html)
-
     def test_agent_run_steps_are_visible_via_an_expandable_panel(self) -> None:
         self.assertIn("function toggleAgentRunSteps", self.index_html)
         self.assertIn("function _agentRunStepRowHtml", self.index_html)
@@ -412,23 +417,6 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
             "function ", 1
         )[0]
         self.assertIn("await syncConversationsAfterSignIn(user);", after_sign_in_body)
-
-    def test_workspace_panel_uses_plain_language_controls(self) -> None:
-        self.assertIn(">Your workspace<", self.index_html)
-        self.assertIn("Your saved context", self.index_html)
-        self.assertIn("Add a note or link", self.index_html)
-        self.assertIn("Your record", self.index_html)
-        self.assertIn("function openWorkspaceContext", self.index_html)
-        self.assertIn("Research is Foresea's always-on answering workflow.", self.index_html)
-        self.assertNotIn("workspaceStandardMode", self.index_html)
-        self.assertNotIn("setWorkspaceAnswerMode", self.index_html)
-        self.assertNotIn("How Foresea answers", self.index_html)
-
-    def test_workspace_panel_summarizes_private_context_and_ledger(self) -> None:
-        self.assertIn("No notes added", self.index_html)
-        self.assertIn("note${_workspaceKbDocs.length === 1 ? '' : 's'} saved", self.index_html)
-        self.assertIn("marked correct or wrong", self.index_html)
-        self.assertIn("renderWorkspacePanel();", self.index_html)
 
     def test_browser_history_closes_personal_ledger_overlay(self) -> None:
         history_body = self.index_html.split("function applyHistoryState", 1)[1].split(

@@ -43,7 +43,7 @@ class FlakyProvider:
         self.ok = ok
         self.calls = 0
 
-    def chat_completion(self, messages, temperature, max_tokens):
+    def chat_completion(self, messages, temperature, max_tokens, reasoning_effort=None):
         self.calls += 1
         if self.calls <= self.fail_times:
             raise self.error
@@ -98,7 +98,7 @@ class ProviderRetryUnitTests(unittest.TestCase):
         class SlowProvider:
             model_name = "slow"
 
-            def chat_completion(self, messages, temperature, max_tokens):
+            def chat_completion(self, messages, temperature, max_tokens, reasoning_effort=None):
                 time.sleep(0.05)
                 return "{}"
 

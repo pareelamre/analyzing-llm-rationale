@@ -38,6 +38,7 @@ class ChatProvider:
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: int,
+        reasoning_effort: Optional[str] = None,
     ) -> str:
         raise NotImplementedError
 
@@ -46,8 +47,9 @@ class ChatProvider:
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: int,
+        reasoning_effort: Optional[str] = None,
     ) -> Iterator[str]:
-        yield self.chat_completion(messages, temperature, max_tokens)
+        yield self.chat_completion(messages, temperature, max_tokens, reasoning_effort)
 
 
 def resolve_hf_token() -> Optional[str]:
@@ -164,6 +166,7 @@ class OpenAICompatibleProvider(ChatProvider):
         max_tokens: int,
         *,
         stream: bool = False,
+        reasoning_effort: Optional[str] = None,
     ) -> Dict[str, Any]:
         payload = {
             "model": self.model_name,
@@ -183,6 +186,12 @@ class OpenAICompatibleProvider(ChatProvider):
             payload["max_tokens"] = max_tokens
         if stream:
             payload["stream"] = True
+        if reasoning_effort:
+            # OpenRouter-style reasoning control, widely mirrored by other
+            # OpenAI-compatible servers. Best-effort only: a provider that
+            # doesn't recognise this key ignores it rather than rejecting the
+            # request, so it's safe to send unconditionally when requested.
+            payload["reasoning"] = {"effort": reasoning_effort}
         return payload
 
     def _headers(self) -> Dict[str, str]:
@@ -196,8 +205,9 @@ class OpenAICompatibleProvider(ChatProvider):
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: int,
+        reasoning_effort: Optional[str] = None,
     ) -> str:
-        payload = self._payload(messages, temperature, max_tokens)
+        payload = self._payload(messages, temperature, max_tokens, reasoning_effort=reasoning_effort)
         response = self._session.post(
             self.base_url,
             headers=self._headers(),
@@ -233,12 +243,13 @@ class OpenAICompatibleProvider(ChatProvider):
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: int,
+        reasoning_effort: Optional[str] = None,
     ) -> Iterator[str]:
         self.last_response_model = None
         response = self._session.post(
             self.base_url,
             headers=self._headers(),
-            json=self._payload(messages, temperature, max_tokens, stream=True),
+            json=self._payload(messages, temperature, max_tokens, stream=True, reasoning_effort=reasoning_effort),
             timeout=self.request_timeout_s,
             stream=True,
         )
@@ -295,6 +306,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         max_tokens: int,
         *,
         stream: bool = False,
+        reasoning_effort: Optional[str] = None,
     ) -> Dict[str, Any]:
         payload = {
             "model": self.model_name,
@@ -304,6 +316,10 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         }
         if stream:
             payload["stream"] = True
+        if reasoning_effort:
+            # https://openrouter.ai/docs/use-cases/reasoning-tokens -- ignored
+            # by models/providers that don't support it, not rejected.
+            payload["reasoning"] = {"effort": reasoning_effort}
         return payload
 
     def _headers(self) -> Dict[str, str]:
@@ -319,8 +335,9 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: int,
+        reasoning_effort: Optional[str] = None,
     ) -> str:
-        payload = self._payload(messages, temperature, max_tokens)
+        payload = self._payload(messages, temperature, max_tokens, reasoning_effort=reasoning_effort)
         response = self._session.post(
             self.base_url,
             headers=self._headers(),
@@ -479,7 +496,11 @@ class LocalQwenProvider(ChatProvider):
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: int,
+        reasoning_effort: Optional[str] = None,
     ) -> str:
+        # Local generation has no reasoning-effort concept to map to; Qwen3's
+        # thinking mode is already unconditionally disabled below for clean JSON.
+        del reasoning_effort
         self._ensure_loaded()
 
         import torch

@@ -36,5 +36,27 @@ class ProviderHeaderSanitizationTests(unittest.TestCase):
             value.encode("latin-1")
 
 
+class ReasoningEffortPayloadTests(unittest.TestCase):
+    def test_reasoning_effort_omitted_by_default(self):
+        for provider in (
+            OpenAICompatibleProvider(model_name="model", api_key="sk-test", base_url="https://llm.scads.ai/v1"),
+            OpenRouterProvider(model_name="model", api_key="sk-test"),
+        ):
+            with self.subTest(provider=type(provider).__name__):
+                payload = provider._payload([{"role": "user", "content": "hi"}], 0.0, 64)
+                self.assertNotIn("reasoning", payload)
+
+    def test_reasoning_effort_included_when_requested(self):
+        for provider in (
+            OpenAICompatibleProvider(model_name="model", api_key="sk-test", base_url="https://llm.scads.ai/v1"),
+            OpenRouterProvider(model_name="model", api_key="sk-test"),
+        ):
+            with self.subTest(provider=type(provider).__name__):
+                payload = provider._payload(
+                    [{"role": "user", "content": "hi"}], 0.0, 64, reasoning_effort="high"
+                )
+                self.assertEqual(payload["reasoning"], {"effort": "high"})
+
+
 if __name__ == "__main__":
     unittest.main()
