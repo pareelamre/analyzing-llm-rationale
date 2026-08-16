@@ -124,6 +124,11 @@ def agent_equity_curve(conn: sqlite3.Connection, agent_id: str) -> Dict[str, Any
     including them here, the curve would silently diverge from
     agent_accounts.cash (which those adjustments do update directly) instead
     of showing the correction as a visible point on the chart.
+
+    A full ``admin_reset`` deliberately starts the account over, so once one
+    has happened the curve (and the Sharpe/drawdown computed from it) only
+    covers the period since the *latest* one -- pre-reset history stays in
+    ``agent_actions`` for audit, it's just not what the chart or stats show.
     """
     CASH_MOVING_ACTION_TYPES = {"trade", "settlement", "admin_correction", "admin_reset"}
 
@@ -150,6 +155,10 @@ def agent_equity_curve(conn: sqlite3.Connection, agent_id: str) -> Dict[str, Any
             "account_value": round(running_cash, 6),
             "event_type": row["action_type"],
         })
+
+    reset_indices = [i for i, p in enumerate(points) if p["event_type"] == "admin_reset"]
+    if reset_indices:
+        points = points[reset_indices[-1]:]
 
     risk = _sharpe_and_max_drawdown(points)
     return {
