@@ -132,6 +132,25 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertNotIn("_allVenueCreds", self.index_html)
         self.assertIn("localStorage.removeItem('foresea_venue_creds')", self.index_html)
 
+    def test_settings_modal_hosts_connections_and_copied_agents_with_no_duplicate_ids(self) -> None:
+        # Both sections moved out of the old nested account-popover "Preferences"
+        # details into a dedicated, easy-to-find Settings modal -- reusing the
+        # exact same production connection flow and copied-agent functions,
+        # not new ones, and each hosting element must exist exactly once.
+        self.assertIn("function openSettingsModal", self.index_html)
+        self.assertIn("function closeSettingsModal", self.index_html)
+        self.assertIn("function _showSettingsSection", self.index_html)
+        self.assertIn('id="settingsOverlay"', self.index_html)
+        self.assertNotIn('id="tradingPanel"', self.index_html)
+        for hosting_id in ("copiedAgentList", "kalshiChip", "polyChip", "vcKalshiKeyId", "vcPolyPriv"):
+            self.assertEqual(
+                self.index_html.count(f'id="{hosting_id}"'), 1,
+                f'expected exactly one id="{hosting_id}" (relocated, not duplicated)',
+            )
+        self.assertIn("onclick=\"openSettingsModal()\"", self.index_html)
+        self.assertIn("saveVenueCreds('kalshi')", self.index_html)
+        self.assertIn("removeCopiedAgent(", self.index_html)
+
     def test_signed_in_analytics_uses_the_session_header_not_send_beacon(self) -> None:
         self.assertIn("function _sendAnalytics(url, payload)", self.index_html)
         self.assertIn("const { token } = _loadStoredSession();", self.index_html)
@@ -258,6 +277,53 @@ for (const tier of ['standard', 'deep', null, undefined]) {
   const out = sandbox.effortTierCaptionHtml({ effort_tier: tier });
   if (out !== '') throw new Error(`expected empty string for tier=${tier}, got: ${out}`);
 }
+'''
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_agent_progress_is_a_single_evolving_line_not_a_stage_checklist(self) -> None:
+        # A plain "hello" (or any message) must not render a wall of
+        # pre-declared research-pipeline stage labels -- only whatever
+        # stage is actually happening right now, as one line of text.
+        self.assertNotIn('class="agent-steps"', self.index_html)
+        self.assertNotIn('class="agent-step"', self.index_html)
+        script = r'''
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync('frontend/index.html', 'utf8');
+const fn = source.match(/function addAgentProgress[\s\S]*?\n}\r?\n/)[0];
+const document = {
+  createElement: () => ({ set innerHTML(html) { this._html = html; }, get innerHTML() { return this._html; },
+    querySelector(sel) {
+      if (sel === '.agent-progress-title') {
+        const m = /class="agent-progress-title">([^<]*)</.exec(this._html);
+        const node = this;
+        return {
+          get textContent() { return m ? m[1] : null; },
+          set textContent(v) { node._html = node._html.replace(/(class="agent-progress-title">)[^<]*(<)/, `$1${v}$2`); },
+        };
+      }
+      return null;
+    },
+    querySelectorAll: () => [],
+  }),
+  getElementById: () => ({ appendChild: () => {} }),
+};
+const sandbox = { document, scrollBottom: () => {}, escHtml: s => s };
+vm.createContext(sandbox);
+vm.runInContext(fn, sandbox);
+
+const bubble = sandbox.addAgentProgress(['Resolving the market', 'Gathering evidence', 'Forecasting', 'Pricing the edge', 'Recommending']);
+if (bubble.innerHTML.includes('agent-step')) throw new Error('checklist markup must not be rendered: ' + bubble.innerHTML);
+if (!bubble.innerHTML.includes('Agent working...')) throw new Error('missing initial status line: ' + bubble.innerHTML);
+
+bubble._setAgentProgress('Gathering evidence');
+if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status line did not update in place: ' + bubble.innerHTML);
 '''
         result = subprocess.run(
             ["node", "-e", script],
