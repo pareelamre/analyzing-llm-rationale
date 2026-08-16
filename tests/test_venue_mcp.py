@@ -38,6 +38,41 @@ class VenueMcpTests(unittest.TestCase):
         self.assertTrue(all(k.startswith("polymarket_") for k in out))
         self.assertEqual(out["polymarket_t0"]["name"], "t0")
 
+    def test_discover_tools_excludes_write_and_trading_tool_names(self):
+        # Several public venue MCP servers bundle trading tools (place_order,
+        # cancel_order, ...) alongside read-only ones. discover_tools() must never
+        # let those reach the agent loop -- Foresea's real order placement only
+        # ever goes through trading.py's guardrail chain, never a discovered tool.
+        async def fake_list(url):
+            return [
+                ("get_orderbook", "read-only order book depth"),
+                ("place_order", "submit a live order"),
+                ("cancel_order", "cancel a resting order"),
+                ("get_recent_trades", "recent trade history"),
+                ("withdraw_funds", "withdraw account balance"),
+            ]
+        with mock.patch.object(venue_mcp, "configured_venues",
+                               return_value=[("kalshi", "https://kalshi")]), \
+                mock.patch.object(venue_mcp, "_list_tools", side_effect=fake_list):
+            out = asyncio.run(venue_mcp.discover_tools())
+
+        self.assertNotIn("kalshi_place_order", out)
+        self.assertNotIn("kalshi_cancel_order", out)
+        self.assertNotIn("kalshi_withdraw_funds", out)
+        # Read tools -- including ones containing an otherwise-ambiguous word like
+        # "order" -- must survive; order book depth and trade history are exactly
+        # the data this module exists to surface.
+        self.assertIn("kalshi_get_orderbook", out)
+        self.assertIn("kalshi_get_recent_trades", out)
+
+    def test_is_write_tool_handles_unprefixed_and_camelcase_names(self):
+        # A bare noun like "orderbook" (no verb, no separator) is not a write tool.
+        self.assertFalse(venue_mcp._is_write_tool("orderbook"))
+        self.assertFalse(venue_mcp._is_write_tool("getOrderBook"))
+        self.assertTrue(venue_mcp._is_write_tool("placeOrder"))
+        self.assertTrue(venue_mcp._is_write_tool("cancel_order"))
+        self.assertFalse(venue_mcp._is_write_tool("get_positions"))
+
     def test_call_tool_safe_truncates_and_never_raises(self):
         async def fake_call(url, name, args):
             return "x" * 99999
