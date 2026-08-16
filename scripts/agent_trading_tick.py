@@ -50,7 +50,6 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 from analyzing_llm_rationale.accounting import MarketQuote  # noqa: E402
-from analyzing_llm_rationale.pipeline import parse_model_response  # noqa: E402
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -76,20 +75,6 @@ MAX_QUESTION_CHARS = 1900
 # guards already define "account value" (FORESEA_AGENT_ACCOUNT_VALUE, the
 # static starting baseline, not a fluctuating mark-to-market figure).
 MAX_ORDER_NOTIONAL_PCT = float(os.environ.get("FORESEA_AGENT_MAX_ORDER_NOTIONAL_PCT", "0.08"))
-# Specialist pipeline: research (evidence only, no trade opinion) -> sizing
-# (a number-only decision, no tools, computed BEFORE any narrative exists) ->
-# execution (place_trade against that number, or an explicit justified
-# override). This isn't just a relabeling of one call into three: an LLM
-# asked in a single breath to both write a persuasive thesis and size the
-# trade tends to anchor the size to whatever "sounds right" for the case it
-# just built. Forcing sizing into its own tool-less, JSON-only turn -- fed
-# the same live prices and portfolio state, but not yet the thesis -- makes
-# it an independent check, and the execution stage is then held to that
-# number (must place exactly it, or explain in its final answer why it's
-# overriding it).
-RESEARCH_MAX_STEPS = max(1, int(os.environ.get("AGENT_TRADING_RESEARCH_MAX_STEPS", "2")))
-SIZING_MAX_STEPS = max(1, int(os.environ.get("AGENT_TRADING_SIZING_MAX_STEPS", "1")))
-THESIS_MAX_STEPS = max(1, int(os.environ.get("AGENT_TRADING_THESIS_MAX_STEPS", "2")))
 
 
 def _assert_shadow_mode() -> None:
@@ -265,20 +250,14 @@ def _current_account_value(conn, agent_id: str, held_quotes: List[Dict[str, Any]
     return summary["cash"] + liquidation_value
 
 
-async def _call_agent_analyze(
-    question: str,
-    *,
-    tool_names: Optional[List[str]] = None,
-    max_steps: Optional[int] = None,
-):
+async def _call_agent_analyze(question: str):
     from analyzing_llm_rationale.server import AgentAnalyzeRequest, agent_analyze
 
     req = AgentAnalyzeRequest(
         question=question,
         tool_loop=True,
         benchmark_tools=True,
-        benchmark_tool_names=tool_names,
-        max_tool_steps=max_steps or MAX_TOOL_STEPS,
+        max_tool_steps=MAX_TOOL_STEPS,
     )
     last_exc: Optional[Exception] = None
     for attempt in range(AGENT_ANALYZE_RETRIES):
@@ -314,8 +293,8 @@ _TRADING_INSTRUCTION = (
 )
 
 
-def _build_question(portfolio_block: str, candidates_block: str, instruction: str = _TRADING_INSTRUCTION) -> str:
-    question = "\n\n".join([portfolio_block, candidates_block, instruction])
+def _build_question(portfolio_block: str, candidates_block: str) -> str:
+    question = "\n\n".join([portfolio_block, candidates_block, _TRADING_INSTRUCTION])
     if len(question) <= MAX_QUESTION_CHARS:
         return question
     # Over the server's hard 2000-char limit -- trim the candidates block
@@ -325,131 +304,7 @@ def _build_question(portfolio_block: str, candidates_block: str, instruction: st
     overage = len(question) - MAX_QUESTION_CHARS
     keep = max(0, len(candidates_block) - overage - 1)
     trimmed_candidates = candidates_block[:keep].rstrip() + "…"
-    return "\n\n".join([portfolio_block, trimmed_candidates, instruction])
-
-
-_RESEARCH_INSTRUCTION = (
-    "You are the RESEARCH specialist on a 3-agent trading team (research -> "
-    "sizing -> execution). Your only job this cycle is to gather evidence on "
-    "the markets listed above using web_search -- do NOT recommend a trade, "
-    "a price, or a size; other specialists own that. In your final answer, "
-    "summarize the concrete, dated facts you found for each ticker you "
-    "looked into (or state plainly that you found nothing new). Be specific: "
-    "what you found, when it happened, and whether it actually falls inside "
-    "that ticker's resolution window (shown above)."
-)
-
-_SIZING_INSTRUCTION_TEMPLATE = (
-    "You are the SIZING specialist on a 3-agent trading team. You do not "
-    "write the trade thesis -- you output ONE number-only decision that the "
-    "execution specialist will be held to, decided before any narrative is "
-    "written. Research findings from this cycle:\n{research}\n\n"
-    "Using ONLY the live prices already shown above (never invent a price) "
-    "and the portfolio state above (never size past available cash, and "
-    "size smaller for markets the research above leaves uncertain), decide "
-    "AT MOST ONE trade for this cycle. Respond with EXACTLY ONE JSON object "
-    "and nothing else -- no markdown fences, no prose before or after it:\n"
-    '{{"action": "trade" or "no_trade", "ticker": "<ticker or null>", '
-    '"side": "YES" or "NO" (or null), "price": <the exact live bid/ask you '
-    'are pricing off, or null>, "quantity": <integer contracts, or null>, '
-    '"rationale": "<one sentence>"}}\n'
-    'Set action to "no_trade" and leave the other fields null if nothing on '
-    "the board justifies a trade."
-)
-
-_THESIS_INSTRUCTION_TEMPLATE = (
-    "You are the EXECUTION specialist on a 3-agent trading team. The sizing "
-    "specialist, working from the same live prices and portfolio shown "
-    "above, recommends:\n{sizing}\n\n"
-    "Research findings from this cycle:\n{research}\n\n"
-    "If you agree, call place_trade with exactly that ticker, side, price, "
-    "and quantity, then give your final answer explaining the trade. If you "
-    "disagree, do NOT place a trade -- your final answer must explain "
-    "exactly why you are overriding the sizing recommendation, citing the "
-    "research or portfolio state above; a disagreement without a stated "
-    "reason is not acceptable. Either way you may use manage_notes to "
-    "record anything worth remembering next cycle."
-)
-
-_SIZING_FIELDS = ("action", "ticker", "side", "price", "quantity", "rationale")
-
-
-def _coerce_sizing(raw: Dict[str, Any]) -> Dict[str, Any]:
-    def _num(value: Any, cast):
-        if value in (None, ""):
-            return None
-        try:
-            return cast(value)
-        except (TypeError, ValueError):
-            return None
-
-    action = (raw.get("action") or "").strip().lower()
-    return {
-        "action": "trade" if action == "trade" else "no_trade",
-        "ticker": raw.get("ticker") or None,
-        "side": raw.get("side") or None,
-        "price": _num(raw.get("price"), float),
-        "quantity": _num(raw.get("quantity"), int),
-        "rationale": raw.get("rationale") or "",
-    }
-
-
-def _fmt_sizing(sizing: Dict[str, Any]) -> str:
-    if sizing["action"] != "trade":
-        return f"no_trade -- {sizing['rationale'] or '(no rationale given)'}"
-    return (
-        f"trade {sizing['ticker']} {sizing['side']} qty={sizing['quantity']} "
-        f"price={sizing['price']} -- {sizing['rationale'] or '(no rationale given)'}"
-    )
-
-
-async def _run_specialist_pipeline(portfolio_block: str, candidates_block: str) -> SimpleNamespace:
-    """Research -> sizing -> execution, each its own agent_analyze call with
-    its own tool budget (see the constants above for why sizing gets no
-    tools and runs before the narrative). Every stage's transcript is kept
-    so the record shows what each specialist actually saw and decided, not
-    just the final trade."""
-    research_question = _build_question(portfolio_block, candidates_block, _RESEARCH_INSTRUCTION)
-    research_report = await _call_agent_analyze(
-        research_question, tool_names=["web_search"], max_steps=RESEARCH_MAX_STEPS
-    )
-    research_digest = _excerpt(research_report.thesis, MAX_LAST_THESIS_CHARS) or "(none)"
-
-    sizing_question = _build_question(
-        portfolio_block, candidates_block,
-        _SIZING_INSTRUCTION_TEMPLATE.format(research=research_digest),
-    )
-    sizing_report = await _call_agent_analyze(sizing_question, tool_names=[], max_steps=SIZING_MAX_STEPS)
-    sizing = _coerce_sizing(parse_model_response(sizing_report.thesis or "", _SIZING_FIELDS))
-
-    thesis_question = _build_question(
-        portfolio_block, candidates_block,
-        _THESIS_INSTRUCTION_TEMPLATE.format(sizing=_fmt_sizing(sizing), research=research_digest),
-    )
-    thesis_report = await _call_agent_analyze(
-        thesis_question, tool_names=["place_trade", "manage_notes"], max_steps=THESIS_MAX_STEPS
-    )
-
-    tool_transcript = [
-        *research_report.tool_transcript,
-        *sizing_report.tool_transcript,
-        *thesis_report.tool_transcript,
-    ]
-    truncated = bool(
-        research_report.tool_loop_truncated
-        or sizing_report.tool_loop_truncated
-        or thesis_report.tool_loop_truncated
-    )
-    return SimpleNamespace(
-        thesis=thesis_report.thesis,
-        tool_transcript=tool_transcript,
-        truncated=truncated,
-        stages={
-            "research": {"thesis": research_report.thesis, "tool_transcript": research_report.tool_transcript},
-            "sizing": {"thesis": sizing_report.thesis, "parsed": sizing, "tool_transcript": sizing_report.tool_transcript},
-            "thesis": {"thesis": thesis_report.thesis, "tool_transcript": thesis_report.tool_transcript},
-        },
-    )
+    return "\n\n".join([portfolio_block, trimmed_candidates, _TRADING_INSTRUCTION])
 
 
 def _configure_max_order_notional() -> float:
@@ -503,9 +358,9 @@ def run_cycle(model: str) -> None:
         os.environ["FORESEA_AGENT_ACCOUNT_VALUE"] = str(_current_account_value(conn, agent_id, held_quotes))
     _configure_max_order_notional()
 
-    candidates_block = _build_candidates_block(held_quotes, new_quotes)
+    question = _build_question(portfolio_block, _build_candidates_block(held_quotes, new_quotes))
 
-    report = asyncio.run(_run_specialist_pipeline(portfolio_block, candidates_block))
+    report = asyncio.run(_call_agent_analyze(question))
 
     candidates_offered = [q.get("ident") for q in (*held_quotes, *new_quotes)]
     with benchmark_tools._account_transaction() as conn:
@@ -523,10 +378,9 @@ def run_cycle(model: str) -> None:
                 json.dumps({
                     "candidates_offered": candidates_offered,
                     "tool_transcript": report.tool_transcript,
-                    "stages": report.stages,
                 }),
                 len(report.tool_transcript),
-                1 if report.truncated else 0,
+                1 if len(report.tool_transcript) >= MAX_TOOL_STEPS else 0,
             ),
         )
 

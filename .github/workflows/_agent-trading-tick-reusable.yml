@@ -49,11 +49,7 @@ jobs:
   trade:
     name: trade (${{ inputs.model }})
     runs-on: ubuntu-latest
-    # 30, not 20: the tick now runs a 3-stage specialist pipeline (research ->
-    # sizing -> execution), each its own agent_analyze call, instead of one --
-    # more sequential LLM round trips per cycle even though each stage's own
-    # tool-step budget is smaller than the old single-stage cap.
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
