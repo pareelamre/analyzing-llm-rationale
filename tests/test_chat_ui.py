@@ -132,6 +132,25 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertNotIn("_allVenueCreds", self.index_html)
         self.assertIn("localStorage.removeItem('foresea_venue_creds')", self.index_html)
 
+    def test_settings_modal_hosts_connections_and_copied_agents_with_no_duplicate_ids(self) -> None:
+        # Both sections moved out of the old nested account-popover "Preferences"
+        # details into a dedicated, easy-to-find Settings modal -- reusing the
+        # exact same production connection flow and copied-agent functions,
+        # not new ones, and each hosting element must exist exactly once.
+        self.assertIn("function openSettingsModal", self.index_html)
+        self.assertIn("function closeSettingsModal", self.index_html)
+        self.assertIn("function _showSettingsSection", self.index_html)
+        self.assertIn('id="settingsOverlay"', self.index_html)
+        self.assertNotIn('id="tradingPanel"', self.index_html)
+        for hosting_id in ("copiedAgentList", "kalshiChip", "polyChip", "vcKalshiKeyId", "vcPolyPriv"):
+            self.assertEqual(
+                self.index_html.count(f'id="{hosting_id}"'), 1,
+                f'expected exactly one id="{hosting_id}" (relocated, not duplicated)',
+            )
+        self.assertIn("onclick=\"openSettingsModal()\"", self.index_html)
+        self.assertIn("saveVenueCreds('kalshi')", self.index_html)
+        self.assertIn("removeCopiedAgent(", self.index_html)
+
     def test_signed_in_analytics_uses_the_session_header_not_send_beacon(self) -> None:
         self.assertIn("function _sendAnalytics(url, payload)", self.index_html)
         self.assertIn("const { token } = _loadStoredSession();", self.index_html)
