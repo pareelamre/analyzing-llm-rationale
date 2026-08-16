@@ -387,6 +387,37 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         self.assertIn("history.replaceState(", self.index_html)
         self.assertIn("const _initConversationId = conversationIdFromPath();", self.index_html)
 
+    def test_silent_session_restore_does_not_hijack_the_current_route(self) -> None:
+        # Regression: initAuth() restores a saved session on every page load,
+        # racing the synchronous initial-route logic below it. If that restore
+        # won the race after currentView was already 'app' (e.g. the edge
+        # board or track record overlay open on top of the chat shell),
+        # activateConv's default history push silently rewrote the URL to
+        # /chat/{id} -- so a *later* refresh landed on plain chat instead of
+        # whatever overlay/route the user actually had open.
+        init_auth_body = self.index_html.split("async function initAuth", 1)[1].split(
+            "// Close the auth modal on Escape.", 1
+        )[0]
+        self.assertIn(
+            "await syncConversationsAfterSignIn(user, { updateHistory: false });",
+            init_auth_body,
+        )
+        self.assertIn(
+            "async function syncConversationsAfterSignIn(user, { updateHistory = true } = {}) {",
+            self.index_html,
+        )
+        self.assertIn(
+            "activateConv(activeId && store.conversations[activeId] ? activeId : ids[0], { updateHistory });",
+            self.index_html,
+        )
+        self.assertIn("else newConversation({ updateHistory });", self.index_html)
+        # The explicit sign-in flow (_afterSignIn) is a real user action, not
+        # a silent restore, and should keep pushing history as before.
+        after_sign_in_body = self.index_html.split("async function _afterSignIn", 1)[1].split(
+            "function ", 1
+        )[0]
+        self.assertIn("await syncConversationsAfterSignIn(user);", after_sign_in_body)
+
     def test_browser_history_closes_personal_ledger_overlay(self) -> None:
         history_body = self.index_html.split("function applyHistoryState", 1)[1].split(
             "window.addEventListener('popstate'", 1
