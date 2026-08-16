@@ -38,7 +38,7 @@
       "agent_id": "gpt-oss-120b",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": true,
+        "positive_return": false,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
@@ -47,9 +47,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 35.0818,
+      "return_pct": -20.2351,
       "settled_count": 0,
-      "sharpe": 0.1174
+      "sharpe": 0.1149
     },
     "kimi-k2.7-code": {
       "agent_id": "kimi-k2.7-code",
@@ -72,7 +72,7 @@
       "agent_id": "llama-3.3-70b-instruct",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": true,
+        "positive_return": false,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
@@ -81,9 +81,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 70.4845,
+      "return_pct": -37.4295,
       "settled_count": 0,
-      "sharpe": 0.2842
+      "sharpe": 0.2813
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
@@ -106,7 +106,7 @@
       "agent_id": "qwen3-coder-30b-a3b-instruct",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": true,
+        "positive_return": false,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
@@ -115,15 +115,15 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.7957,
+      "return_pct": -0.2882,
       "settled_count": 0,
-      "sharpe": 0.268
+      "sharpe": 0.2652
     },
     "scads-alias-code": {
       "agent_id": "scads-alias-code",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": true,
+        "positive_return": false,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
@@ -132,15 +132,15 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.6093,
+      "return_pct": -0.2051,
       "settled_count": 0,
-      "sharpe": 0.2708
+      "sharpe": 0.2901
     },
     "scads-alias-ha": {
       "agent_id": "scads-alias-ha",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": true,
+        "positive_return": false,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
@@ -149,15 +149,15 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 20.5164,
+      "return_pct": -13.7588,
       "settled_count": 0,
-      "sharpe": 0.1317
+      "sharpe": 0.1305
     },
     "scads-alias-reasoning": {
       "agent_id": "scads-alias-reasoning",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": true,
+        "positive_return": false,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
@@ -166,9 +166,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 2.3162,
+      "return_pct": -0.708,
       "settled_count": 0,
-      "sharpe": 0.2465
+      "sharpe": 0.2333
     }
   },
   "equity_curves": {
@@ -254,7 +254,7 @@
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
       "max_drawdown": 0.2079,
-      "sharpe": 0.1174,
+      "sharpe": 0.1149,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -370,6 +370,11 @@
           "account_value": 12244.281215,
           "event_type": "trade",
           "ts": "2026-08-15T19:38:06.299123+00:00"
+        },
+        {
+          "account_value": 12244.281215,
+          "event_type": "admin_correction",
+          "ts": "2026-08-16T06:20:44.671703+00:00"
         }
       ]
     },
@@ -388,7 +393,7 @@
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
       "max_drawdown": 0.0666,
-      "sharpe": 0.2842,
+      "sharpe": 0.2813,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -659,6 +664,11 @@
           "account_value": 16638.454235,
           "event_type": "trade",
           "ts": "2026-08-15T23:52:46.530811+00:00"
+        },
+        {
+          "account_value": 16638.454235,
+          "event_type": "admin_correction",
+          "ts": "2026-08-16T06:20:44.678155+00:00"
         }
       ]
     },
@@ -762,7 +772,7 @@
     "qwen3-coder-30b-a3b-instruct": {
       "agent_id": "qwen3-coder-30b-a3b-instruct",
       "max_drawdown": 0.0015,
-      "sharpe": 0.268,
+      "sharpe": 0.2652,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -1013,13 +1023,18 @@
           "account_value": 10073.165812,
           "event_type": "trade",
           "ts": "2026-08-15T23:49:31.205731+00:00"
+        },
+        {
+          "account_value": 10073.165812,
+          "event_type": "admin_correction",
+          "ts": "2026-08-16T06:20:44.685199+00:00"
         }
       ]
     },
     "scads-alias-code": {
       "agent_id": "scads-alias-code",
       "max_drawdown": 0.0007,
-      "sharpe": 0.2708,
+      "sharpe": 0.2901,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -1257,16 +1272,16 @@
           "ts": "2026-08-16T04:19:40.421623+00:00"
         },
         {
-          "account_value": 10057.726386,
-          "event_type": "trade",
-          "ts": "2026-08-16T05:39:16.460055+00:00"
+          "account_value": 10061.181156,
+          "event_type": "admin_correction",
+          "ts": "2026-08-16T06:20:44.694138+00:00"
         }
       ]
     },
     "scads-alias-ha": {
       "agent_id": "scads-alias-ha",
       "max_drawdown": 0.0974,
-      "sharpe": 0.1317,
+      "sharpe": 0.1305,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -1557,13 +1572,18 @@
           "account_value": 11641.635108,
           "event_type": "trade",
           "ts": "2026-08-15T11:55:10.411397+00:00"
+        },
+        {
+          "account_value": 11641.635108,
+          "event_type": "admin_correction",
+          "ts": "2026-08-16T06:20:44.701044+00:00"
         }
       ]
     },
     "scads-alias-reasoning": {
       "agent_id": "scads-alias-reasoning",
       "max_drawdown": 0.0055,
-      "sharpe": 0.2465,
+      "sharpe": 0.2333,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -1609,192 +1629,17 @@
           "account_value": 10219.718724,
           "event_type": "trade",
           "ts": "2026-08-14T06:06:05.848672+00:00"
+        },
+        {
+          "account_value": 10219.718724,
+          "event_type": "admin_correction",
+          "ts": "2026-08-16T06:20:44.707674+00:00"
         }
       ]
     }
   },
-  "generated_at": "2026-08-16T05:54:32.214899+00:00",
+  "generated_at": "2026-08-16T06:31:15.241557+00:00",
   "leaderboard": [
-    {
-      "account_value": 17048.454235,
-      "agent_id": "llama-3.3-70b-instruct",
-      "cash": 16638.454235,
-      "fees_paid": 362.175765,
-      "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.12,
-          "cost_basis": 120.0,
-          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.34,
-          "cost_basis": 340.0,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 7294.887612,
-      "return_pct": 70.4845,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "trade_count": 53,
-      "unrealized_pnl": -50.0,
-      "updated_at": "2026-08-15T23:52:46.530264+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 13508.181215,
-      "agent_id": "gpt-oss-120b",
-      "cash": 12244.281215,
-      "fees_paid": 307.868785,
-      "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.16,
-          "cost_basis": 1838.4,
-          "ident": "KXCABLEAVE-26MAY22-26SEP",
-          "platform": "kalshi",
-          "quantity": 11490.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 4305.461759,
-      "return_pct": 35.0818,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "trade_count": 22,
-      "unrealized_pnl": -574.5,
-      "updated_at": "2026-08-15T19:38:06.298559+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 12051.635108,
-      "agent_id": "scads-alias-ha",
-      "cash": 11641.635108,
-      "fees_paid": 134.564892,
-      "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.12,
-          "cost_basis": 120.0,
-          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.34,
-          "cost_basis": 340.0,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 2180.7208,
-      "return_pct": 20.5164,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "trade_count": 57,
-      "unrealized_pnl": -50.0,
-      "updated_at": "2026-08-15T11:55:10.410823+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 10231.618724,
-      "agent_id": "scads-alias-reasoning",
-      "cash": 10219.718724,
-      "fees_paid": 5.281276,
-      "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.16,
-          "cost_basis": 16.0,
-          "ident": "KXCABLEAVE-26MAY22-26SEP",
-          "platform": "kalshi",
-          "quantity": 100.0,
-          "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.95,
-          "cost_basis": 9.5,
-          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
-          "platform": "kalshi",
-          "quantity": 10.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 249.493022,
-      "return_pct": 2.3162,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "trade_count": 8,
-      "unrealized_pnl": -13.6,
-      "updated_at": "2026-08-14T06:06:05.848139+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 10079.565812,
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cash": 10073.165812,
-      "fees_paid": 4.934188,
-      "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.34,
-          "cost_basis": 6.8,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 20.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 82.712787,
-      "return_pct": 0.7957,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "trade_count": 49,
-      "unrealized_pnl": -0.4,
-      "updated_at": "2026-08-15T23:49:31.205212+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 10060.926386,
-      "agent_id": "scads-alias-code",
-      "cash": 10057.726386,
-      "fees_paid": 4.933614,
-      "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.33,
-          "cost_basis": 3.3,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 10.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 63.588498,
-      "return_pct": 0.6093,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "trade_count": 47,
-      "unrealized_pnl": -0.1,
-      "updated_at": "2026-08-16T05:39:16.459512+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
     {
       "account_value": 10000.0,
       "agent_id": "kimi-k2.7-code",
@@ -1809,6 +1654,49 @@
       "trade_count": 0,
       "unrealized_pnl": 0.0,
       "updated_at": "2026-08-11T01:12:33.609972+00:00",
+      "win_rate": null,
+      "won_count": 0
+    },
+    {
+      "account_value": 9979.489248,
+      "agent_id": "scads-alias-code",
+      "cash": 9979.489248,
+      "fees_paid": 3.790752,
+      "illiquid_positions": [],
+      "open_positions": [],
+      "realized_pnl": 0.942606,
+      "return_pct": -0.2051,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "trade_count": 46,
+      "unrealized_pnl": 0.0,
+      "updated_at": "2026-08-16T06:20:44.693187+00:00",
+      "win_rate": null,
+      "won_count": 0
+    },
+    {
+      "account_value": 9971.184425,
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cash": 9964.784425,
+      "fees_paid": 3.725575,
+      "illiquid_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.34,
+          "cost_basis": 6.8,
+          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
+          "platform": "kalshi",
+          "quantity": 20.0,
+          "side": "YES"
+        }
+      ],
+      "realized_pnl": -0.091503,
+      "return_pct": -0.2882,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "trade_count": 49,
+      "unrealized_pnl": -0.4,
+      "updated_at": "2026-08-16T06:20:44.684466+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -1851,6 +1739,40 @@
       "trade_count": 2,
       "unrealized_pnl": -51.2,
       "updated_at": "2026-08-12T07:48:13.089606+00:00",
+      "win_rate": null,
+      "won_count": 0
+    },
+    {
+      "account_value": 9929.198854,
+      "agent_id": "scads-alias-reasoning",
+      "cash": 9917.298854,
+      "fees_paid": 4.801146,
+      "illiquid_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.16,
+          "cost_basis": 16.0,
+          "ident": "KXCABLEAVE-26MAY22-26SEP",
+          "platform": "kalshi",
+          "quantity": 100.0,
+          "side": "YES"
+        },
+        {
+          "avg_entry_price": 0.95,
+          "cost_basis": 9.5,
+          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
+          "platform": "kalshi",
+          "quantity": 10.0,
+          "side": "YES"
+        }
+      ],
+      "realized_pnl": -3.326848,
+      "return_pct": -0.708,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "trade_count": 8,
+      "unrealized_pnl": -13.6,
+      "updated_at": "2026-08-16T06:20:44.706748+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -1905,6 +1827,100 @@
       "updated_at": "2026-08-12T20:52:12.541691+00:00",
       "win_rate": null,
       "won_count": 0
+    },
+    {
+      "account_value": 8624.122704,
+      "agent_id": "scads-alias-ha",
+      "cash": 8214.122704,
+      "fees_paid": 90.197296,
+      "illiquid_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.12,
+          "cost_basis": 120.0,
+          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
+          "platform": "kalshi",
+          "quantity": 1000.0,
+          "side": "YES"
+        },
+        {
+          "avg_entry_price": 0.34,
+          "cost_basis": 340.0,
+          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
+          "platform": "kalshi",
+          "quantity": 1000.0,
+          "side": "YES"
+        }
+      ],
+      "realized_pnl": -363.371604,
+      "return_pct": -13.7588,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "trade_count": 57,
+      "unrealized_pnl": -50.0,
+      "updated_at": "2026-08-16T06:20:44.700048+00:00",
+      "win_rate": null,
+      "won_count": 0
+    },
+    {
+      "account_value": 7976.489815,
+      "agent_id": "gpt-oss-120b",
+      "cash": 6712.589815,
+      "fees_paid": 271.960185,
+      "illiquid_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.16,
+          "cost_basis": 1838.4,
+          "ident": "KXCABLEAVE-26MAY22-26SEP",
+          "platform": "kalshi",
+          "quantity": 11490.0,
+          "side": "YES"
+        }
+      ],
+      "realized_pnl": -256.309641,
+      "return_pct": -20.2351,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "trade_count": 22,
+      "unrealized_pnl": -574.5,
+      "updated_at": "2026-08-16T06:20:44.669450+00:00",
+      "win_rate": null,
+      "won_count": 0
+    },
+    {
+      "account_value": 6257.046623,
+      "agent_id": "llama-3.3-70b-instruct",
+      "cash": 5847.046623,
+      "fees_paid": 237.663377,
+      "illiquid_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.12,
+          "cost_basis": 120.0,
+          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
+          "platform": "kalshi",
+          "quantity": 1000.0,
+          "side": "YES"
+        },
+        {
+          "avg_entry_price": 0.34,
+          "cost_basis": 340.0,
+          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
+          "platform": "kalshi",
+          "quantity": 1000.0,
+          "side": "YES"
+        }
+      ],
+      "realized_pnl": -640.6528,
+      "return_pct": -37.4295,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "trade_count": 53,
+      "unrealized_pnl": -50.0,
+      "updated_at": "2026-08-16T06:20:44.677216+00:00",
+      "win_rate": null,
+      "won_count": 0
     }
   ],
   "mode": "shadow",
@@ -1924,30 +1940,23 @@
   "recent_activity": [
     {
       "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985401",
+      "thesis": "I need to research whether any Trump Cabinet members have actually left before Sep 2, 2026, since this market resolves in just days. Let me search.```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary resign leave 2026\"}}\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet member leave before September 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet official fired resigned 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary State Defense leave office 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet vacancy 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary resign 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet member leave 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary State Defense leave office 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet official fired resigned 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet vacancy 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary resign 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary State Defense leave office 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet official fired resigned 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet vacancy 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary resign 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary State Defense leave office 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet official fired resigned 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet vacancy 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary resign 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary State Defense leave office 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet official fired resigned 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet vacancy 2026\"}}\n```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Secretary resign 2026\"}}\n```json\n{\"action}",
+      "ts": "2026-08-16T06:17:50.773923+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "glm-5.2-fp8",
+      "cycle_id": "15m:1985400",
+      "thesis": "{\"thought\": \"I need to research current Trump cabinet departure news to evaluate my large YES position on KXCABLEAVE-26MAY22-26SEP. The market covers departures between May 22, 2026 and Sep 2, 2026. I hold 9224 YES at avg entry 0.16, and current YES bid/ask is 0.11/0.16. Let me search for the latest news.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Trump cabinet departures 2025 2026 who might leave\"}}}",
+      "ts": "2026-08-16T06:04:56.195779+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
       "cycle_id": "15m:1985399",
       "thesis": "I need to research whether any Trump Cabinet members have actually left before Sep 2, 2026, since this market resolves in just days. Let me search.```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary resign leave 2026\"}}\n``````json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet member leave before September 2026\"}}\n```",
       "ts": "2026-08-16T05:53:14.236332+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985399",
-      "thesis": "I will hold my current positions in KXMLBDEBUT-FARIAS-26SEP01 and KXMLBDEBUT-KANDERSON-26SEP01.",
-      "ts": "2026-08-16T05:51:58.959323+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985399",
-      "thesis": "No actions will be taken this cycle.",
-      "ts": "2026-08-16T05:50:31.208845+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985399",
-      "thesis": "{\"thought\": \"I need to analyze the situation carefully. The market is for Kade Anderson playing in MLB BEFORE Sep 1, 2026. The resolution window is from August 14, 2026 to September 1, 2026. I currently hold 20 YES contracts at an average entry of 0.34 (cost basis $6.80). The current bid/ask is 0.32/0.33. \n\nThe key issue is timing. The Futures Game was in July 2026, which is BEFORE the resolution window starts (August 14, 2026). So even though he played in the Futures Game, that doesn't count toward this specific market since it's asking about games BEFORE Sep 1, 2026, and the resolution window is specifically from August 14 to September 1. \n\nLet me search for more recent information about his actual MLB debut to see if there's been a confirmed game appearance during the resolution window.\", \"action\": \"web_search\", \"args\": {\"query\": \"Kade Anderson MLB debut date 2026\"}}",
-      "ts": "2026-08-16T05:46:54.799553+00:00",
       "type": "thesis"
     },
     {
@@ -1956,26 +1965,6 @@
       "thesis": "{\"thought\": \"I need to research current Trump cabinet departure news to evaluate my large YES position on KXCABLEAVE-26MAY22-26SEP. The market covers departures between May 22, 2026 and Sep 2, 2026. I hold 9224 YES at avg entry 0.16, and current YES bid/ask is 0.11/0.16. Let me search for the latest news.\",\" \"action\": \"web_search\", \"args\": {\"query\": \"Trump cabinet departures 2025 2026 who might leave\"}}}",
       "ts": "2026-08-16T05:45:19.987850+00:00",
       "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985398",
-      "thesis": "I decided to buy 10 YES contracts on Kade Anderson's market (KXMLBDEBUT-KANDERSON-26SEP01) at 0.33 price. My reasoning is that Kade Anderson was named to the 2026 Futures Game on July 12, 2026, which indicates he's a top prospect likely to be promoted to the majors soon. Given that the market asks whether he debuts before September 1, 2026, and considering his Futures Game appearance, it seems reasonable to expect a debut before the deadline. The current market price of 0.32/0.33 appears undervalued compared to the evidence. I did not trade Franklin Arias because there's insufficient evidence that he'll debut before September 1st, and his market is appropriately priced at 0.09/0.10. My position is now open with a cost basis of $3.30.",
-      "ts": "2026-08-16T05:39:20.522028+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.33,
-      "quantity": 10.0,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
-      "ts": "2026-08-16T05:39:16.460055+00:00",
-      "type": "trade"
     },
     {
       "agent_id": "scads-alias-ha",
@@ -2307,6 +2296,27 @@
       "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
       "ts": "2026-08-15T23:52:46.530811+00:00",
       "type": "trade"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985375",
+      "thesis": "I decided to buy 10 YES contracts on Kade Anderson (KXMLBDEBUT-KANDERSON-26SEP01) at 0.34. Anderson has stronger evidence for an early MLB debut with his Futures Game AL starter designation, while Franklin Arias lacks similar indicators. This trade reflects a moderate risk bet based on available evidence, executed in shadow mode as per the paper trading guidelines.",
+      "ts": "2026-08-15T23:51:57.496258+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985375",
+      "thesis": "I need to research whether any Trump Cabinet member has actually left before deciding what to do with my position. Let me search for news.```json\n{\"action\": \"web_search\", \"args: {\"query\": \"Trump Cabinet secretary resign leave 2026\"}}\n```",
+      "ts": "2026-08-15T23:51:05.591612+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985375",
+      "thesis": "I maintained my position by placing a trade for 10 additional YES contracts on KXMLBDEBUT-KANDERSON-26SEP01 at $0.34 each. This brings my total position to 20 YES contracts at an average entry price of $0.34. The trade was executed in shadow mode since live trading is disabled. My reasoning remains unchanged: there's no compelling reason to exit this position given the current market conditions and the information available about Kade Anderson's progression toward an MLB debut. The market is still open with bid/ask prices at 0.31/0.34, matching my entry price, and I don't see an immediate profit opportunity to close the position.",
+      "ts": "2026-08-15T23:49:32.337588+00:00",
+      "type": "thesis"
     }
   ]
 }
