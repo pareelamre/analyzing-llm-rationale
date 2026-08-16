@@ -291,14 +291,18 @@ def _extract_filled_quantity(
     *,
     live: bool,
     shadow_marketable: bool = True,
+    shadow_unfilled_status: str = "shadow_unfilled_below_market",
 ) -> tuple[float, str]:
     requested = _as_float(normalized.get("quantity"))
     if not live:
         if not shadow_marketable:
-            # The requested price never crossed a live quote for this side,
-            # so a real IOC order here would fill zero -- match that instead
-            # of assuming a fill at a price no real book would have given.
-            return 0.0, "shadow_unfilled_below_market"
+            # The requested price never crossed a live quote for this side
+            # (or no live quote could be fetched at all), so a real IOC order
+            # here would fill zero -- match that instead of assuming a fill
+            # at a price no real book confirmed. shadow_unfilled_status
+            # distinguishes the two reasons for the caller (see
+            # _resolve_shadow_marketability).
+            return 0.0, shadow_unfilled_status
         return requested, "shadow_assumed_full"
     body = ((result.get("venue_response") or {}).get("body") or {})
     filled_keys = (
@@ -365,9 +369,11 @@ def _normalize_fill_for_accounting(
     guard: Mapping[str, Any],
     live: bool,
     shadow_marketable: bool = True,
+    shadow_unfilled_status: str = "shadow_unfilled_below_market",
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
     filled_quantity, fill_status = _extract_filled_quantity(
-        result, normalized, live=live, shadow_marketable=shadow_marketable
+        result, normalized, live=live, shadow_marketable=shadow_marketable,
+        shadow_unfilled_status=shadow_unfilled_status,
     )
     accounting_order = dict(normalized)
     accounting_order["quantity"] = filled_quantity
@@ -1611,11 +1617,20 @@ def _resolve_shadow_marketability(ticker: str, side: str, requested_price: float
     live quote is available we fill at the real ask (never worse for the
     caller than their own request) and only fill at all if the requested
     price actually crosses it, mirroring how the immediate-or-cancel orders
-    this tool issues would behave against a real book. If the quote can't be
-    fetched (unknown ticker, provider hiccup) we fall back to trusting the
-    caller's price rather than making every shadow trade depend on venue
-    uptime -- the netting-arb guard in `_check_trade_guards` still catches
-    the case where that trust is abused.
+    this tool issues would behave against a real book.
+
+    If the quote can't be fetched (unknown ticker, provider hiccup), the
+    order doesn't fill -- a real IOC order has no book to route against
+    either in that situation. This previously fell back to trusting the
+    caller's price instead, reasoning that the netting-arb guard in
+    `_check_trade_guards` would still catch the abuse case; it doesn't fully:
+    that guard only fires on the *closing* leg of a netted pair, so a single
+    directional entry booked at a fabricated price during a quote outage can
+    sit open indefinitely, marked to market later against a real quote --
+    silently inflating the shown unrealized P&L on exactly the leaderboard
+    numbers a go/no-go call on live trading would be based on. A missed fill
+    during a transient outage is a lost opportunity; a corrupted ledger entry
+    is worse and harder to notice.
     """
     try:
         from analyzing_llm_rationale import market_data
@@ -1628,7 +1643,7 @@ def _resolve_shadow_marketability(ticker: str, side: str, requested_price: float
 
     if real_ask is None:
         return {
-            "marketable": True,
+            "marketable": False,
             "price": requested_price,
             "real_ask": None,
             "status": "shadow_quote_unavailable",
@@ -1699,6 +1714,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 )
 
             shadow_marketable = True
+            shadow_unfilled_status = "shadow_unfilled_below_market"
             try:
                 requested_price = float(order.get("price"))
             except (TypeError, ValueError):
@@ -1706,6 +1722,8 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             if requested_price is not None and requested_price > 0:
                 market_check = _resolve_shadow_marketability(ticker, side, requested_price)
                 shadow_marketable = market_check["marketable"]
+                if not shadow_marketable:
+                    shadow_unfilled_status = market_check["status"]
                 if market_check["real_ask"] is not None:
                     # Fill at the real ask (never worse than what was asked
                     # for) instead of whatever price the caller guessed.
@@ -1791,6 +1809,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 guard=guard,
                 live=live,
                 shadow_marketable=shadow_marketable,
+                shadow_unfilled_status=shadow_unfilled_status,
             )
             fill_status = str(accounting_guard.get("fill_status") or "unknown")
             filled_quantity = _as_float(accounting_guard.get("filled_quantity"))
