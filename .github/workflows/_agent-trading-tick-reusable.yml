@@ -12,8 +12,17 @@ name: Agent trading tick (reusable)
 # need a cross-workflow concurrency lock, and 10 serialized runs (pip install
 # + a multi-step LLM tool loop each) can plausibly take longer than the
 # 15-minute cadence, growing an ever-deepening queue. Separate objects mean
-# every model's read-modify-write cycle is independent -- no lock, no queue,
-# no risk of one model's upload clobbering another's concurrent change.
+# every model's read-modify-write cycle is independent of every OTHER
+# model's -- no cross-model lock, no queue.
+#
+# That does NOT cover two runs of the SAME model overlapping (a slow run
+# still in flight when the next 15-minute trigger fires, or a manual
+# workflow_dispatch layered on top of a scheduled run) -- each would
+# download the same starting store, decide independently, and upload back
+# to the same GCS object, so whichever finishes last silently overwrites
+# the other's trades. The per-model concurrency group below (matching the
+# pattern every other GCS-synced workflow in this repo already uses, e.g.
+# track-record-tick.yml) queues same-model runs instead of letting them race.
 #
 # Shadow (paper) trading only. FORESEA_AGENT_PLACE_TRADE_MODE is hard-pinned
 # to "shadow" below and is never a workflow input -- no caller can override it.
@@ -31,6 +40,10 @@ on:
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
   AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
+
+concurrency:
+  group: agent-trading-tick-${{ inputs.model }}
+  cancel-in-progress: false
 
 jobs:
   trade:

@@ -111,13 +111,51 @@ def _install_fake_datastore(test_case: unittest.TestCase) -> _FakeDsClient:
     return client
 
 
+def _fetch_kalshi_quotes(quotes):
+    """Build a fetch_kalshi side_effect from a per-ticker spec, for tests
+    that need place_trade's shadow order to be marketable (see
+    _resolve_shadow_marketability -- an order with no live quote no longer
+    fills at all, so most place_trade tests need one).
+
+    ``quotes[ticker]`` may be:
+      - a float: used as both yes_ask and no_ask (fine when a test only
+        trades one side, or deliberately wants an implausible quote where
+        both sides are quoted cheap, e.g. the netting-arb tests).
+      - a dict: passed through as the raw quote payload (for yes_ask/no_ask
+        that must differ, e.g. opening then closing a position).
+      - a list: consumed one entry per call for that ticker (each entry a
+        float or dict as above), for a test whose ask must change between
+        successive calls on the same ticker (e.g. averaging in at two
+        different prices).
+    A ticker with no entry raises MarketDataError, matching a real lookup
+    failure for an unmocked ticker rather than silently defaulting.
+    """
+    call_counts: dict = {}
+
+    def _fetch(ticker):
+        spec = quotes.get(ticker)
+        if spec is None:
+            raise market_data.MarketDataError(f"no mock quote configured for {ticker}")
+        if isinstance(spec, list):
+            idx = call_counts.get(ticker, 0)
+            call_counts[ticker] = idx + 1
+            spec = spec[min(idx, len(spec) - 1)]
+        if isinstance(spec, (int, float)):
+            return {"yes_ask": spec, "no_ask": spec}
+        return dict(spec)
+
+    return _fetch
+
+
 class BenchmarkToolTests(unittest.TestCase):
     def setUp(self):
         # place_trade's shadow path checks live Kalshi quotes (see
-        # _resolve_shadow_marketability); default to "no quote available" so
-        # existing tests keep exercising the old trust-the-caller-price
-        # behavior without making real network calls. Tests that care about
-        # quote-aware fills override this locally with mock.patch.
+        # _resolve_shadow_marketability) and no longer fills an order with no
+        # live quote at all -- default to "no quote available" so a test that
+        # forgets to mock a quote fails loudly (MarketDataError propagating
+        # into an unfilled/rejected result) instead of silently depending on
+        # real network access. Tests that need a fill mock fetch_kalshi
+        # locally via _fetch_kalshi_quotes(...).
         patcher = mock.patch(
             "analyzing_llm_rationale.market_data.fetch_kalshi",
             side_effect=market_data.MarketDataError("market data disabled in tests"),
@@ -221,7 +259,13 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXTEST": 0.42}),
+                ),
+            ):
                 result = benchmark_tools.place_trade(
                     {"ticker": "KXTEST", "side": "yes", "price": 0.42, "quantity": 2},
                     ctx,
@@ -250,7 +294,13 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXIOC": 0.42}),
+                ),
+            ):
                 result = benchmark_tools.place_trade(
                     {
                         "ticker": "KXIOC",
@@ -316,7 +366,13 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXCONC": 0.10}),
+                ),
+            ):
                 first = benchmark_tools.place_trade(
                     {"ticker": "KXCONC", "side": "yes", "price": 0.10, "quantity": 100},
                     ctx,
@@ -352,7 +408,13 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXCONC": 0.10}),
+                ),
+            ):
                 first = benchmark_tools.place_trade(
                     {"ticker": "KXCONC", "side": "yes", "price": 0.10, "quantity": 100},
                     ctx,
@@ -398,7 +460,13 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXSOLV": 0.95}),
+                ),
+            ):
                 result = benchmark_tools.place_trade(
                     {"ticker": "KXSOLV", "side": "yes", "price": 0.95, "quantity": 10.5},
                     ctx,
@@ -422,7 +490,15 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes(
+                        {"KXNET": {"yes_ask": 0.40, "no_ask": 0.59}}
+                    ),
+                ),
+            ):
                 opened = benchmark_tools.place_trade(
                     {"ticker": "KXNET", "side": "yes", "price": 0.40, "quantity": 10},
                     ctx,
@@ -443,10 +519,14 @@ class BenchmarkToolTests(unittest.TestCase):
         # Regression test for the shadow-fill exploit: buying YES and NO on
         # the same ticker at the same lowball price used to net a ~76%
         # "riskless" profit with zero market settlements (this is what
-        # inflated the public agent-trading leaderboard). Quote lookups are
-        # disabled (see setUp), so this isolates the netting-arb guard added
-        # to _check_trade_guards from the live-quote check added in
-        # _resolve_shadow_marketability.
+        # inflated the public agent-trading leaderboard). A real market would
+        # never quote both sides at 0.12 (they'd sum to ~1.0, not ~0.24), but
+        # a live-quote check can only be as good as the quote feed behind it
+        # -- mocking a genuinely bad/manipulated-looking quote (rather than
+        # relying on "no quote available", which now makes an order
+        # unmarketable instead of trusting the caller) proves the netting-arb
+        # guard in _check_trade_guards independently catches this even when
+        # _resolve_shadow_marketability's own check is fooled.
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
         with tempfile.TemporaryDirectory() as td:
@@ -459,7 +539,13 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXARB": 0.12}),
+                ),
+            ):
                 opened = benchmark_tools.place_trade(
                     {"ticker": "KXARB", "side": "yes", "price": 0.12, "quantity": 10},
                     ctx,
@@ -537,6 +623,37 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(result["execution"]["fill_status"], "shadow_unfilled_below_market")
         self.assertEqual(result["account"]["n_open_positions"], 0)
 
+    def test_place_trade_does_not_fill_when_no_live_quote_is_available(self):
+        # Regression: _resolve_shadow_marketability used to trust the
+        # caller's price outright when a live quote couldn't be fetched,
+        # reasoning that the netting-arb guard would catch abuse -- it
+        # doesn't fully, since that guard only fires on the *closing* leg of
+        # a netted pair. A single directional entry booked at a fabricated
+        # price during a quote outage could sit open indefinitely, marked to
+        # market later against a real quote and silently inflating the shown
+        # unrealized P&L. No live quote now means no fill, same as a real IOC
+        # order would see with no book to route against.
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
+            # setUp's default fetch_kalshi mock raises MarketDataError for
+            # every ticker -- exercise that default directly rather than
+            # overriding it, since it's exactly the "no quote available" case.
+            with mock.patch.dict(os.environ, env, clear=False):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXNOQUOTE", "side": "yes", "price": 0.05, "quantity": 100},
+                    ctx,
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["execution"]["filled_quantity"], 0.0)
+        self.assertEqual(result["execution"]["fill_status"], "shadow_quote_unavailable")
+        self.assertEqual(result["account"]["n_open_positions"], 0)
+
     def test_place_trade_rejects_per_cycle_spend_over_limit(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
@@ -550,7 +667,13 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXCYCLE1": 0.40, "KXCYCLE2": 0.10}),
+                ),
+            ):
                 first = benchmark_tools.place_trade(
                     {"ticker": "KXCYCLE1", "side": "yes", "price": 0.40, "quantity": 2},
                     ctx,
@@ -610,7 +733,13 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXAVG": [0.60, 0.70]}),
+                ),
+            ):
                 first = benchmark_tools.place_trade(
                     {"ticker": "KXAVG", "side": "yes", "price": 0.60, "quantity": 10},
                     ctx,
@@ -661,6 +790,10 @@ class BenchmarkToolTests(unittest.TestCase):
             with (
                 mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-1"}, clear=False),
                 mock.patch("analyzing_llm_rationale.market_data.resolve_kalshi", side_effect=resolve),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXSETTLE": 0.40}),
+                ),
             ):
                 opened = benchmark_tools.place_trade(
                     {"ticker": "KXSETTLE", "side": "yes", "price": 0.40, "quantity": 10},
@@ -670,6 +803,10 @@ class BenchmarkToolTests(unittest.TestCase):
             with (
                 mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-2"}, clear=False),
                 mock.patch("analyzing_llm_rationale.market_data.resolve_kalshi", side_effect=resolve),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXOTHER": 0.10}),
+                ),
             ):
                 after_settlement = benchmark_tools.place_trade(
                     {"ticker": "KXOTHER", "side": "yes", "price": 0.10, "quantity": 1},
@@ -759,7 +896,15 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes(
+                        {"KXDSNET": {"yes_ask": 0.40, "no_ask": 0.59}}
+                    ),
+                ),
+            ):
                 self.assertNotIn("FORESEA_AGENT_ACCOUNT_DB_PATH", os.environ)
                 opened = benchmark_tools.place_trade(
                     {"ticker": "KXDSNET", "side": "yes", "price": 0.40, "quantity": 10},
@@ -794,7 +939,13 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
                 "FORESEA_MAX_ORDER_NOTIONAL": "1000",
             }
-            with mock.patch.dict(os.environ, env, clear=False):
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXDSARB": 0.12}),
+                ),
+            ):
                 opened = benchmark_tools.place_trade(
                     {"ticker": "KXDSARB", "side": "yes", "price": 0.12, "quantity": 10},
                     ctx,
@@ -828,6 +979,10 @@ class BenchmarkToolTests(unittest.TestCase):
             with (
                 mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-1"}, clear=False),
                 mock.patch("analyzing_llm_rationale.market_data.resolve_kalshi", side_effect=resolve),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXDSSETTLE": 0.40}),
+                ),
             ):
                 opened = benchmark_tools.place_trade(
                     {"ticker": "KXDSSETTLE", "side": "yes", "price": 0.40, "quantity": 10},
@@ -837,6 +992,10 @@ class BenchmarkToolTests(unittest.TestCase):
             with (
                 mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-2"}, clear=False),
                 mock.patch("analyzing_llm_rationale.market_data.resolve_kalshi", side_effect=resolve),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXDSOTHER": 0.10}),
+                ),
             ):
                 after_settlement = benchmark_tools.place_trade(
                     {"ticker": "KXDSOTHER", "side": "yes", "price": 0.10, "quantity": 1},

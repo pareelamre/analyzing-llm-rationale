@@ -46,8 +46,21 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
     def test_uses_per_model_gcs_objects_not_a_shared_file(self):
         self.assertIn("agent_trading_store__${MODEL}.sqlite", self.workflow)
         self.assertIn("agent_trading_notes__${MODEL}.json", self.workflow)
-        # No shared-object concurrency lock -- each model's objects are its own.
-        self.assertNotIn("concurrency:", self.workflow)
+
+    def test_concurrency_is_scoped_per_model_not_a_single_shared_lock(self):
+        # Regression: this workflow originally had no concurrency group at
+        # all, reasoning that per-model GCS objects meant no lock was needed
+        # -- true for two DIFFERENT models running in parallel, but not for
+        # two overlapping runs of the SAME model (a slow run still in flight
+        # when the next 15-minute trigger fires, or a manual dispatch layered
+        # on a scheduled run). Both would download the same starting store,
+        # decide independently, and upload back to the same object -- the
+        # last one to finish silently erases the other's trades. The group
+        # name must key off inputs.model so different models still queue
+        # independently of each other, not share one global lock.
+        self.assertIn("concurrency:", self.workflow)
+        self.assertIn("group: agent-trading-tick-${{ inputs.model }}", self.workflow)
+        self.assertIn("cancel-in-progress: false", self.workflow)
 
     def test_download_is_tolerant_of_a_missing_object(self):
         self.assertIn("|| echo", self.workflow)

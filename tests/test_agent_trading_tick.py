@@ -104,7 +104,12 @@ class CurrentAccountValueTests(unittest.TestCase):
                 # Opens 10 contracts @ 0.40 (cost basis $4); the market has
                 # since moved to a 0.60 bid -- the guards must see the
                 # current $6 mark, not the stale $4 cost basis.
-                benchmark_tools.place_trade({"ticker": "KXTEST", "side": "yes", "price": 0.40, "quantity": 10}, ctx)
+                with mock.patch.object(
+                    market_data, "fetch_kalshi", return_value=_quote("KXTEST", bid=0.38, ask=0.40),
+                ):
+                    benchmark_tools.place_trade(
+                        {"ticker": "KXTEST", "side": "yes", "price": 0.40, "quantity": 10}, ctx,
+                    )
                 with benchmark_tools._account_transaction() as conn:
                     value = agent_trading_tick._current_account_value(
                         conn, "model-a", [_quote("KXTEST", bid=0.60, ask=0.62)]
@@ -120,7 +125,12 @@ class CurrentAccountValueTests(unittest.TestCase):
                 os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}, clear=False
             ):
                 ctx = benchmark_tools.ToolContext(agent_id="model-a")
-                benchmark_tools.place_trade({"ticker": "KXTEST", "side": "yes", "price": 0.40, "quantity": 10}, ctx)
+                with mock.patch.object(
+                    market_data, "fetch_kalshi", return_value=_quote("KXTEST", bid=0.38, ask=0.40),
+                ):
+                    benchmark_tools.place_trade(
+                        {"ticker": "KXTEST", "side": "yes", "price": 0.40, "quantity": 10}, ctx,
+                    )
                 with benchmark_tools._account_transaction() as conn:
                     # held_quotes is empty -- as if the re-quote fetch failed.
                     value = agent_trading_tick._current_account_value(conn, "model-a", [])
@@ -228,9 +238,12 @@ class PortfolioBlockTests(unittest.TestCase):
                 os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}, clear=False
             ):
                 ctx = benchmark_tools.ToolContext(agent_id="model-a")
-                benchmark_tools.place_trade(
-                    {"ticker": "KXTEST", "side": "yes", "price": 0.42, "quantity": 2}, ctx,
-                )
+                with mock.patch.object(
+                    market_data, "fetch_kalshi", return_value=_quote("KXTEST", bid=0.40, ask=0.42),
+                ):
+                    benchmark_tools.place_trade(
+                        {"ticker": "KXTEST", "side": "yes", "price": 0.42, "quantity": 2}, ctx,
+                    )
                 with benchmark_tools._account_transaction() as conn:
                     block = agent_trading_tick._build_portfolio_block(conn, "model-a", "Held flat last time.")
 
@@ -345,9 +358,12 @@ class RunCycleTests(unittest.TestCase):
             }
             with mock.patch.dict(os.environ, env, clear=False):
                 ctx = benchmark_tools.ToolContext(agent_id="model-d")
-                benchmark_tools.place_trade(
-                    {"ticker": "KXHELD", "side": "yes", "price": 0.5, "quantity": 3}, ctx,
-                )
+                with mock.patch.object(
+                    market_data, "fetch_kalshi", return_value=_quote("KXHELD", bid=0.48, ask=0.50),
+                ):
+                    benchmark_tools.place_trade(
+                        {"ticker": "KXHELD", "side": "yes", "price": 0.5, "quantity": 3}, ctx,
+                    )
 
                 with (
                     mock.patch.object(agent_trading_tick, "_init_local_agent"),
