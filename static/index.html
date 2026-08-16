@@ -2301,12 +2301,12 @@
     </div>
   </details>
 
-  <!-- Exchange connections and copied agents now live in the Settings modal
+  <!-- Exchange connections live in the Settings modal
        (gear icon next to the account chip) — this is just a pointer for
        anyone used to finding them in this menu. -->
   <button type="button" class="workspace-action" style="margin:6px 0" onclick="_closeAcctMenu();openSettingsModal('connections')">
     <strong>Settings</strong>
-    <span>Connect exchange accounts, manage copied agents, and more.</span>
+    <span>Connect exchange accounts, place orders, and manage settings.</span>
   </button>
 
     <div id="sidebarSignedOut" class="acct-section" hidden>
@@ -2557,9 +2557,6 @@
       <button type="button" class="settings-nav-item active" data-settings-section="connections" onclick="_showSettingsSection('connections')">
         <span>Connections</span><span id="settingsConnectionsBadge" class="settings-nav-badge"></span>
       </button>
-      <button type="button" class="settings-nav-item" data-settings-section="agents" onclick="_showSettingsSection('agents')">
-        <span>Copied agents</span>
-      </button>
     </nav>
     <div class="settings-body" data-lenis-prevent>
       <section id="settingsSectionConnections" class="settings-section active">
@@ -2602,12 +2599,6 @@
         </details>
         <div id="venueErr" class="model-form-error" hidden></div>
         <button type="button" class="model-add-btn ui-icon-label" onclick="openTradeModal()">Place an order <svg class="ui-icon" aria-hidden="true"><use href="#ui-external"></use></svg></button>
-      </section>
-      <section id="settingsSectionAgents" class="settings-section">
-        <p class="settings-section-title">Copied agents</p>
-        <p class="text-gray-400" style="font-size:11px;margin:0 0 14px;line-height:1.5">Copy a public agent from the Agentic board. This copies its model and research setup only — never its private context, account history, or exchange connection.</p>
-        <div id="copiedAgentList" class="model-list"></div>
-        <p id="copiedAgentHint" class="text-gray-400" style="font-size:10px;margin-top:8px"></p>
       </section>
     </div>
   </div>
@@ -6019,9 +6010,6 @@ function renderAgentTradingBoard(d) {
     const eligCell = elig && elig.eligible
       ? `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:#0a7">${uiIcon('check')}</span>`
       : `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:var(--text-dim)">—</span>`;
-    const copyButton = /^[a-zA-Z0-9._-]{1,120}$/.test(agentId)
-      ? `<button type="button" class="wl-act" onclick="copyPublicAgent(${JSON.stringify(agentId).replace(/&/g, '&amp;').replace(/"/g, '&quot;')})">Copy agent</button>`
-      : '';
     return `<tr class="eb-row" data-model="${escAttr(row.agent_id || '')}">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(row.agent_id || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(row.agent_id || '')}</span></td>
@@ -6032,7 +6020,6 @@ function renderAgentTradingBoard(d) {
       <td>${row.trade_count ?? 0}</td>
       <td>${(row.open_positions || []).length}</td>
       <td>${eligCell}</td>
-      <td>${copyButton}</td>
     </tr>`;
   }).join('');
 
@@ -6048,7 +6035,7 @@ function renderAgentTradingBoard(d) {
 
   host.innerHTML = `${banner}
     <div id="agentTradingSvg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th><th>Workspace</th></tr></thead><tbody>${tableRows}</tbody></table>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}</tbody></table>
     <h4 class="eb-h" style="margin-top:24px">Recent activity</h4>
     ${activityRows || '<p class="text-sm text-gray-500">No activity yet.</p>'}`;
   const svgEl = document.getElementById('agentTradingSvg');
@@ -9815,7 +9802,7 @@ function closeSettingsModal() {
 }
 
 function _showSettingsSection(name) {
-  const sections = { connections: 'settingsSectionConnections', agents: 'settingsSectionAgents' };
+  const sections = { connections: 'settingsSectionConnections' };
   if (!sections[name]) return;
   document.querySelectorAll('.settings-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.settingsSection === name);
