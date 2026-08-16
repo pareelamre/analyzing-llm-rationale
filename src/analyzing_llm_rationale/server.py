@@ -189,6 +189,11 @@ _INTERACTIVE_DEFAULT_MODEL = os.environ.get("INTERACTIVE_DEFAULT_MODEL", "gemma-
 _INTERACTIVE_MAX_TOKENS = int(os.environ.get("INTERACTIVE_MAX_TOKENS", "768"))
 _CHAT_PROVIDER_TIMEOUT_S = float(os.environ.get("CHAT_PROVIDER_TIMEOUT_S", "15"))
 _CHAT_PROVIDER_MAX_RETRIES = int(os.environ.get("CHAT_PROVIDER_MAX_RETRIES", "1"))
+# A "deep"-tier question is deliberately allowed to reason harder (see
+# _REASONING_EFFORT_BY_TIER below), which routinely exceeds the 15s chat
+# budget above -- give it a bigger one instead of just timing out more often.
+_CHAT_DEEP_PROVIDER_TIMEOUT_S = float(os.environ.get("CHAT_DEEP_PROVIDER_TIMEOUT_S", "45"))
+_REASONING_EFFORT_BY_TIER = {"simple": "low", "standard": None, "deep": "high"}
 # Council members run concurrently, so retrying each member multiplies load
 # without improving quorum availability. Bound each member independently and
 # let the successful subset produce the forecast.
@@ -2268,6 +2273,7 @@ async def _provider_chat(
     timeout_s: Optional[float] = None,
     max_retries: Optional[int] = None,
     call_site: str = "predict",
+    reasoning_effort: Optional[str] = None,
 ) -> str:
     """Run a blocking ``chat_completion`` in the default executor with a
     per-attempt timeout and bounded exponential backoff (+jitter) on transient
@@ -2312,7 +2318,9 @@ async def _provider_chat(
                 result = await asyncio.wait_for(
                     loop.run_in_executor(
                         None,
-                        lambda: provider.chat_completion(messages, temperature, max_tokens),
+                        lambda: provider.chat_completion(
+                            messages, temperature, max_tokens, reasoning_effort
+                        ),
                     ),
                     timeout=effective_timeout_s,
                 )
@@ -2352,6 +2360,7 @@ async def _provider_stream_chat(
     max_tokens,
     *,
     first_token_timeout_s: Optional[float] = None,
+    reasoning_effort: Optional[str] = None,
 ):
     """Yield provider tokens from a blocking stream without blocking the event loop."""
     q: "queue.Queue[Any]" = queue.Queue()
@@ -2359,7 +2368,9 @@ async def _provider_stream_chat(
 
     def worker() -> None:
         try:
-            for chunk in provider.stream_chat_completion(messages, temperature, max_tokens):
+            for chunk in provider.stream_chat_completion(
+                messages, temperature, max_tokens, reasoning_effort
+            ):
                 if chunk:
                     q.put(chunk)
         except Exception as exc:
@@ -3779,6 +3790,14 @@ class PredictRequest(BaseModel):
         description=(
             "When `true`, skips the forecast output template entirely. "
             "The model responds in plain natural language with no structured JSON."
+        ),
+    )
+    effort_tier: Optional[Literal["simple", "standard", "deep"]] = Field(
+        None,
+        description=(
+            "How much reasoning effort the model call uses, when the provider "
+            "supports it (best-effort; unsupported providers ignore it). Set "
+            "explicitly to override; left unset, no reasoning-effort hint is sent."
         ),
     )
     max_tokens: Optional[int] = Field(
@@ -12004,6 +12023,12 @@ def _chat_fallback_providers(req: "PredictRequest", primary_provider) -> List[An
     return providers
 
 
+def _chat_timeout_s(req: "PredictRequest") -> Optional[float]:
+    if not req.chat_mode:
+        return None
+    return _CHAT_DEEP_PROVIDER_TIMEOUT_S if req.effort_tier == "deep" else _CHAT_PROVIDER_TIMEOUT_S
+
+
 async def _provider_chat_with_chat_fallbacks(
     req: "PredictRequest",
     provider,
@@ -12012,6 +12037,7 @@ async def _provider_chat_with_chat_fallbacks(
     max_tokens,
 ) -> tuple[str, Any]:
     providers = [provider, *_chat_fallback_providers(req, provider)]
+    reasoning_effort = _REASONING_EFFORT_BY_TIER.get(req.effort_tier or "standard")
     last_exc: Optional[Exception] = None
     for idx, candidate in enumerate(providers):
         try:
@@ -12020,9 +12046,10 @@ async def _provider_chat_with_chat_fallbacks(
                 messages,
                 temperature,
                 max_tokens,
-                timeout_s=(_CHAT_PROVIDER_TIMEOUT_S if req.chat_mode else None),
+                timeout_s=_chat_timeout_s(req),
                 max_retries=(_CHAT_PROVIDER_MAX_RETRIES if req.chat_mode else None),
                 call_site="predict" if idx == 0 else "predict_fallback",
+                reasoning_effort=reasoning_effort,
             )
             return content, candidate
         except Exception as exc:
@@ -12049,6 +12076,7 @@ async def _provider_stream_chat_with_chat_fallbacks(
     used_provider_ref: Dict[str, Any],
 ):
     providers = [provider, *_chat_fallback_providers(req, provider)]
+    reasoning_effort = _REASONING_EFFORT_BY_TIER.get(req.effort_tier or "standard")
     for idx, candidate in enumerate(providers):
         used_provider_ref["provider"] = candidate
         emitted = False
@@ -12058,7 +12086,8 @@ async def _provider_stream_chat_with_chat_fallbacks(
                 messages,
                 temperature,
                 max_tokens,
-                first_token_timeout_s=(_CHAT_PROVIDER_TIMEOUT_S if req.chat_mode else None),
+                first_token_timeout_s=_chat_timeout_s(req),
+                reasoning_effort=reasoning_effort,
             ):
                 emitted = True
                 yield chunk
@@ -12358,6 +12387,7 @@ def _agent_prediction_request(
         # or breaks format in a way nothing downstream is designed to expect.
         attach_evidence=not is_greeting,
         chat_mode=is_greeting,
+        effort_tier=req.effort_tier,
         evidence_top_k=req.evidence_top_k,
         variant=req.variant,
         history=history,
