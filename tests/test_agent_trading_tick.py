@@ -428,6 +428,11 @@ class SpecialistPipelineTests(unittest.TestCase):
         with mock.patch.object(agent_trading_tick, "_call_agent_analyze", side_effect=_fake):
             asyncio.run(agent_trading_tick._run_specialist_pipeline("PORTFOLIO", "CANDIDATES"))
 
+        # Exactly 3, not >=3 -- each stage is a full LLM round trip, so a
+        # stray extra call (e.g. a retry loop, or a 4th stage added later
+        # without updating this test) is a real latency/cost regression,
+        # not a no-op.
+        self.assertEqual(len(calls), 3)
         self.assertEqual(calls[0], (["web_search"], agent_trading_tick.RESEARCH_MAX_STEPS))
         self.assertEqual(calls[1], ([], agent_trading_tick.SIZING_MAX_STEPS))
         self.assertEqual(calls[2], (["place_trade", "manage_notes"], agent_trading_tick.THESIS_MAX_STEPS))
@@ -487,6 +492,84 @@ class SpecialistPipelineTests(unittest.TestCase):
 
         self.assertEqual(len(result.tool_transcript), 2)
         self.assertTrue(result.truncated)
+
+
+class PipelineLatencyBudgetTests(unittest.TestCase):
+    """The specialist pipeline trades latency for an independent sizing
+    check: 3 sequential LLM round trips instead of 1. These tests pin down
+    HOW MUCH worse that gets, as a tripwire against a future stage-budget
+    bump silently blowing past what the reusable workflow's timeout-minutes
+    (bumped 20 -> 30 for exactly this) actually covers -- see
+    run_tool_loop() in agent_capabilities.py: a stage's worst case is
+    max_steps sequential chat calls, plus one more if it's forced to a
+    final answer after running out of steps."""
+
+    def _worst_case_llm_calls(self, max_steps: int) -> int:
+        return max_steps + 1  # +1: run_tool_loop's forced-final call on truncation.
+
+    def test_sizing_stage_gets_zero_tools_so_it_is_the_cheapest_stage(self):
+        # The sizing stage is deliberately the fastest of the three -- no
+        # tool round trips at all, just one reasoning turn over data already
+        # in the prompt -- specifically so splitting it out doesn't cost as
+        # much as splitting out a research-grade stage would.
+        self.assertEqual(agent_trading_tick.SIZING_MAX_STEPS, 1)
+        self.assertLessEqual(agent_trading_tick.SIZING_MAX_STEPS, agent_trading_tick.RESEARCH_MAX_STEPS)
+        self.assertLessEqual(agent_trading_tick.SIZING_MAX_STEPS, agent_trading_tick.THESIS_MAX_STEPS)
+
+    def test_worst_case_sequential_llm_calls_stays_within_the_timeout_headroom(self):
+        worst_case = sum(
+            self._worst_case_llm_calls(steps)
+            for steps in (
+                agent_trading_tick.RESEARCH_MAX_STEPS,
+                agent_trading_tick.SIZING_MAX_STEPS,
+                agent_trading_tick.THESIS_MAX_STEPS,
+            )
+        )
+        # 8 with the current defaults (2+1, 1+1, 2+1). If this test starts
+        # failing because a stage budget grew, the workflow's
+        # timeout-minutes needs a matching look, not just a bump here.
+        self.assertLessEqual(worst_case, 8)
+
+    def test_worst_case_llm_calls_is_at_most_double_the_old_single_stage_design(self):
+        # Before this pipeline, one agent_analyze call capped at
+        # MAX_TOOL_STEPS had a worst case of MAX_TOOL_STEPS + 1 sequential
+        # LLM calls. Splitting into 3 stages necessarily costs more (each
+        # stage always makes at least 1 full round trip even in the best
+        # case), but it should stay a bounded multiple of the old cost, not
+        # an open-ended one a future stage-budget edit could blow out.
+        old_worst_case = self._worst_case_llm_calls(agent_trading_tick.MAX_TOOL_STEPS)
+        new_worst_case = sum(
+            self._worst_case_llm_calls(steps)
+            for steps in (
+                agent_trading_tick.RESEARCH_MAX_STEPS,
+                agent_trading_tick.SIZING_MAX_STEPS,
+                agent_trading_tick.THESIS_MAX_STEPS,
+            )
+        )
+        self.assertLessEqual(new_worst_case, old_worst_case * 2)
+
+    def test_pipeline_never_calls_a_stage_more_than_once_even_when_every_stage_truncates(self):
+        # The retry wrapper lives in _call_agent_analyze (per-stage, on
+        # transport failure) -- _run_specialist_pipeline itself must not add
+        # a second layer of retries/repeats on top of that when a stage
+        # merely runs out of steps (truncates) rather than raising.
+        import asyncio
+
+        calls = []
+
+        async def _fake(question, *, tool_names=None, max_steps=None):
+            calls.append(tool_names)
+            thesis = '{"action": "no_trade", "rationale": "out of steps"}' if tool_names == [] else "truncated stage"
+            return self._make_report(thesis, truncated=True)
+
+        with mock.patch.object(agent_trading_tick, "_call_agent_analyze", side_effect=_fake):
+            result = asyncio.run(agent_trading_tick._run_specialist_pipeline("PORTFOLIO", "CANDIDATES"))
+
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(result.truncated)
+
+    def _make_report(self, thesis, truncated=False):
+        return SimpleNamespace(thesis=thesis, tool_transcript=[], tool_loop_truncated=truncated)
 
 
 class AgentAnalyzeRetryTests(unittest.TestCase):
