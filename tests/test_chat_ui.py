@@ -150,8 +150,93 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("Review Trade Run", self.index_html)
         self.assertIn("function openTradeRunFromBubble", self.index_html)
         self.assertIn("function tradeRunHandoff", self.index_html)
-        self.assertIn("Choose a fresh limit price and size in the terminal.", self.index_html)
+        self.assertIn(
+            "I've prepared this as a reviewable order — nothing is placed. "
+            "Choose your own price and size in the terminal.",
+            self.index_html,
+        )
         self.assertIn("no exchange credentials, price, or size", self.index_html)
+
+    def test_trade_run_handoff_html_explains_a_trading_question_with_no_resolved_market(self) -> None:
+        # tradeRunHandoffHtml must never stay silent on a trading-flavored
+        # question just because no market was resolved this turn — but it
+        # must also never say anything implying Foresea itself can execute.
+        script = r'''
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync('frontend/index.html', 'utf8');
+const helpers = source.match(/const _TRADING_INTENT_RE[\s\S]*?\n}\r?\n\r?\nasync function addForecastToPersonalLedger/)[0]
+  .replace(/\r?\n\r?\nasync function addForecastToPersonalLedger$/, '');
+const sandbox = { uiIcon: () => '' };
+vm.runInNewContext(`${helpers}\nfunction tradeRunHandoff(){ return null; }`, sandbox);
+
+const withIntent = sandbox.tradeRunHandoffHtml({ question: 'should I buy this or sell it?' });
+if (!withIntent.includes("I can't place trades directly")) throw new Error('missing honest no-market note: ' + withIntent);
+if (withIntent.includes('Review Trade Run')) throw new Error('must not render the button without a resolved handoff');
+
+const withoutIntent = sandbox.tradeRunHandoffHtml({ question: 'What will the weather be like tomorrow?' });
+if (withoutIntent !== '') throw new Error('ordinary forecast question must render nothing: ' + withoutIntent);
+'''
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_market_context_from_a_card_persists_across_conversation_turns(self) -> None:
+        # A market card only attaches its context to the very next message
+        # (_pendingMarketCtx is one-shot); a plain follow-up like "can you
+        # place a trade on that?" must still see the market via the
+        # conversation's remembered activeMarketCtx, not lose it silently.
+        script = r'''
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync('frontend/index.html', 'utf8');
+const sandbox = {
+  localStorage: (() => {
+    const data = {};
+    return {
+      getItem: k => (k in data ? data[k] : null),
+      setItem: (k, v) => { data[k] = String(v); },
+      removeItem: k => { delete data[k]; },
+    };
+  })(),
+};
+vm.createContext(sandbox);
+vm.runInContext(source.match(/let storageKey = STORAGE_KEY;[\s\S]*?function upsertConv[\s\S]*?\n}\r?\n/)[0]
+  .replace('let storageKey = STORAGE_KEY;', "let storageKey = 'test'; const STORAGE_KEY = 'test'; function queueConversationSync(){}"),
+  sandbox);
+
+const convId = 'conv_test';
+sandbox.upsertConv(convId, { id: convId, messages: [] });
+
+// Simulate the market-card-attached turn's bookkeeping.
+const mCtx = { market_probability: 0.42, market_url: 'https://polymarket.com/event/x', market_platform: 'Polymarket', market_ident: 'x', model: 'some-model' };
+const marketOnly = Object.assign({}, mCtx);
+delete marketOnly.model;
+sandbox.upsertConv(convId, { activeMarketCtx: marketOnly });
+
+// A later, plain-text turn with no fresh card falls back to the remembered context.
+const remembered = sandbox.getConv(convId).activeMarketCtx;
+if (!remembered || remembered.market_ident !== 'x' || remembered.market_platform !== 'Polymarket') {
+  throw new Error('remembered market context missing or wrong: ' + JSON.stringify(remembered));
+}
+if ('model' in remembered) throw new Error('model preference must not be carried forward with the market context');
+
+// A different market card click overwrites the remembered value.
+sandbox.upsertConv(convId, { activeMarketCtx: { market_platform: 'Kalshi', market_ident: 'y' } });
+const overwritten = sandbox.getConv(convId).activeMarketCtx;
+if (overwritten.market_ident !== 'y') throw new Error('a new market card must overwrite the remembered one');
+'''
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_effort_tier_caption_only_appears_for_the_simple_tier(self) -> None:
         # A thinner analysis pass must never be silent -- but standard/deep
