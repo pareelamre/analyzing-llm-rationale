@@ -4117,6 +4117,48 @@ class TradingConnectionsResponse(BaseModel):
     connections: Dict[str, TradingConnectionStatus]
 
 
+class UserModelProviderStatus(BaseModel):
+    provider_id: str
+    name: str
+    category: str
+    description: str
+    connected: bool
+    default_model: str
+    popular_models: List[str]
+    default_base_url: str
+    custom_base_url: Optional[str] = None
+    docs_url: str = ""
+    updated_at: Optional[str] = None
+    key_prefix: str = ""
+    masked_key: Optional[str] = None
+
+
+class UserModelProvidersResponse(BaseModel):
+    providers: List[UserModelProviderStatus]
+    encryption_configured: bool = True
+
+
+class SaveUserModelProviderRequest(BaseModel):
+    api_key: Optional[str] = Field(None, max_length=1000)
+    default_model: Optional[str] = Field(None, max_length=200)
+    custom_base_url: Optional[str] = Field(None, max_length=500)
+
+
+class TestUserModelProviderRequest(BaseModel):
+    api_key: Optional[str] = Field(None, max_length=1000)
+    model_name: Optional[str] = Field(None, max_length=200)
+    custom_base_url: Optional[str] = Field(None, max_length=500)
+
+
+class TestUserModelProviderResponse(BaseModel):
+    ok: bool
+    latency_ms: Optional[float] = None
+    message: Optional[str] = None
+    model: Optional[str] = None
+    sample_response: Optional[str] = None
+    error: Optional[str] = None
+
+
 class CancelTradingOrderRequest(BaseModel):
     confirmation: str = Field(..., max_length=80)
 
@@ -9375,6 +9417,144 @@ async def delete_trading_connection(platform: str, request: Request) -> TradingC
             raise _trading_http_exception(exc) from exc
 
 
+# ── BYO Model Providers Endpoints ─────────────────────────────────────────────
+
+@app.get(
+    "/api/user/model-providers",
+    tags=["Model Providers"],
+    summary="List safe BYO model provider connection statuses",
+    response_model=UserModelProvidersResponse,
+)
+async def list_user_model_providers(request: Request) -> UserModelProvidersResponse:
+    """Return configured model provider statuses without leaking secret API keys."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    from analyzing_llm_rationale import model_providers
+
+    try:
+        statuses = model_providers.get_user_provider_status_list(claims["sub"])
+        return UserModelProvidersResponse(
+            providers=[UserModelProviderStatus(**s.__dict__) for s in statuses],
+            encryption_configured=True,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch model provider statuses: {exc}") from exc
+
+
+@app.put(
+    "/api/user/model-providers/{provider_id}",
+    tags=["Model Providers"],
+    summary="Encrypt and save credentials for one AI model provider",
+    response_model=UserModelProviderStatus,
+)
+async def save_user_model_provider(
+    provider_id: str, req: SaveUserModelProviderRequest, request: Request
+) -> UserModelProviderStatus:
+    """Validate and store one model provider connection with server-side envelope encryption."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    from analyzing_llm_rationale import model_providers
+
+    clean_pid = str(provider_id).strip().lower()
+    if clean_pid not in model_providers.CREDIBLE_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Unsupported model provider '{provider_id}'.")
+
+    try:
+        # If user is updating model/URL without retyping the API key, reuse existing key
+        api_key = req.api_key or ""
+        if not api_key:
+            existing = model_providers.read_user_model_provider(claims["sub"], clean_pid)
+            if existing and existing.get("encrypted_secret"):
+                secret = model_providers._decrypt_provider_secret(claims["sub"], clean_pid, existing)
+                api_key = secret.get("api_key", "")
+
+        status = model_providers.put_user_model_provider(
+            user_id=claims["sub"],
+            provider_id=clean_pid,
+            api_key=api_key,
+            default_model=req.default_model,
+            custom_base_url=req.custom_base_url,
+        )
+        return UserModelProviderStatus(**status.__dict__)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete(
+    "/api/user/model-providers/{provider_id}",
+    tags=["Model Providers"],
+    summary="Delete encrypted credentials for one AI model provider",
+    response_model=UserModelProviderStatus,
+)
+async def delete_user_model_provider(provider_id: str, request: Request) -> UserModelProviderStatus:
+    """Delete encrypted credentials for the specified provider."""
+    _check_rate_limit(request)
+    claims = _require_session(request)
+    from analyzing_llm_rationale import model_providers
+
+    clean_pid = str(provider_id).strip().lower()
+    desc = model_providers.CREDIBLE_PROVIDERS.get(clean_pid)
+    if not desc:
+        raise HTTPException(status_code=400, detail=f"Unsupported model provider '{provider_id}'.")
+
+    try:
+        model_providers.delete_user_model_provider(claims["sub"], clean_pid)
+        return UserModelProviderStatus(
+            provider_id=desc.id,
+            name=desc.name,
+            category=desc.category,
+            description=desc.description,
+            connected=False,
+            default_model=desc.default_model,
+            popular_models=desc.popular_models,
+            default_base_url=desc.default_base_url,
+            custom_base_url=None,
+            docs_url=desc.docs_url,
+            updated_at=None,
+            key_prefix=desc.key_prefix,
+            masked_key=None,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/user/model-providers/{provider_id}/test",
+    tags=["Model Providers"],
+    summary="Live-test credentials against the provider API",
+    response_model=TestUserModelProviderResponse,
+)
+async def test_user_model_provider(
+    provider_id: str, req: TestUserModelProviderRequest, request: Request
+) -> TestUserModelProviderResponse:
+    """Send a minimal test request to verify API key validity and measure response latency."""
+    _check_rate_limit(request)
+    from analyzing_llm_rationale import model_providers
+
+    clean_pid = str(provider_id).strip().lower()
+    if clean_pid not in model_providers.CREDIBLE_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Unsupported model provider '{provider_id}'.")
+
+    api_key = req.api_key or ""
+    if not api_key:
+        try:
+            claims = _require_session(request)
+            existing = model_providers.read_user_model_provider(claims["sub"], clean_pid)
+            if existing and existing.get("encrypted_secret"):
+                secret = model_providers._decrypt_provider_secret(claims["sub"], clean_pid, existing)
+                api_key = secret.get("api_key", "")
+        except Exception:
+            pass
+
+    res = model_providers.test_provider_credentials(
+        provider_id=clean_pid,
+        api_key=api_key,
+        model_name=req.model_name,
+        custom_base_url=req.custom_base_url,
+    )
+    return TestUserModelProviderResponse(**res)
+
+
 def _resolve_order_credentials(user_id: str, req: TradeOrderRequest) -> Optional[Dict[str, Any]]:
     """Prefer a secure per-user connection and block deprecated inline secrets."""
     if req.venue_credentials is not None:
@@ -10495,7 +10675,7 @@ async def read_agent_run(run_id: str, request: Request) -> AgentRunResponse:
 
 @app.get("/chat/models", tags=["System"], include_in_schema=False)
 async def chat_models(request: Request) -> Dict[str, Any]:
-    """Chat-capable server-hosted models exposed in the prompt selector."""
+    """Chat-capable server-hosted models and connected user BYO models exposed in the prompt selector."""
     _check_rate_limit(request)
     default_key = _state.get("model_key") or "gpt-oss-120b"
     models = [
@@ -10508,7 +10688,24 @@ async def chat_models(request: Request) -> Dict[str, Any]:
         }
         for cfg in _SCADS_CHAT_MODEL_OPTIONS
     ]
-    return {"default_model": default_key, "models": models}
+    user_models = []
+    user_id = _optional_user_id(request)
+    if user_id:
+        try:
+            from analyzing_llm_rationale import model_providers
+            statuses = model_providers.get_user_provider_status_list(user_id)
+            for s in statuses:
+                if s.connected:
+                    user_models.append({
+                        "key": f"byo:{s.provider_id}:{s.default_model}",
+                        "label": f"{s.name} ({s.default_model})",
+                        "model": s.default_model,
+                        "provider": s.provider_id,
+                        "custom": True,
+                    })
+        except Exception:
+            pass
+    return {"default_model": default_key, "models": models, "user_models": user_models}
 
 
 @app.get("/chat/{conversation_id}", include_in_schema=False)
