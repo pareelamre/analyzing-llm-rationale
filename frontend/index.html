@@ -932,6 +932,29 @@
       display: none; flex-direction: column;
     }
     .tr-overlay.open { display: flex; }
+
+    /* ── Pre-paint routing ───────────────────────────────────────────────
+       A tiny inline script at the end of <head> computes the initial route
+       before first paint (same priority order as _initView below: history
+       state, then path) and stamps it as data-boot-view on <html>. These
+       rules show the right shell/overlay immediately so a direct load or
+       refresh of a non-landing URL doesn't flash the landing page (with its
+       entrance animations) before the main script settles the same route a
+       moment later. Superseded seamlessly once the real hidden-view/open
+       classes land -- same end state, just applied earlier. Keep the boot
+       script's route table in sync with _VIEW_URL/_PATH_VIEW/parseEdgePath
+       if a route is ever added, renamed, or removed. */
+    html[data-boot-view]:not([data-boot-view="landing"]) #landingPage { display: none !important; }
+    html[data-boot-view="chat"] #appShell,
+    html[data-boot-view="app"] #appShell,
+    html[data-boot-view="track-app"] #appShell,
+    html[data-boot-view="edge-app"] #appShell,
+    html[data-boot-view="watch-app"] #appShell,
+    html[data-boot-view="ledger-app"] #appShell { display: flex !important; }
+    html[data-boot-view^="track-"] #trackOverlay,
+    html[data-boot-view^="edge-"] #edgeOverlay,
+    html[data-boot-view^="watch-"] #watchOverlay,
+    html[data-boot-view^="ledger-"] #ledgerOverlay { display: flex !important; }
     .tr-head {
       display: flex; align-items: center; justify-content: space-between;
       padding: 14px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;
@@ -1928,6 +1951,32 @@
     }
   </style>
   <script type="module" src="/src/page-context.ts"></script>
+  <script>
+    // Pre-paint routing (see the [data-boot-view] CSS rules above): decide
+    // the initial route before the browser paints anything, so a direct
+    // load or refresh of a non-landing URL shows its real content straight
+    // away instead of flashing the landing page first. Deliberately a
+    // small, self-contained subset of the real routing logic near the
+    // bottom of this file (history.state, then a path table, then the
+    // /edge/{mtm,agentic} sub-panel pattern, then /chat/{id}) -- legacy
+    // #hash links aren't handled here and just keep today's flash on that
+    // one path, since resolving them needs functions this early script runs
+    // before. Never throw over a routing guess; worst case is the flash.
+    (function () {
+      try {
+        var path = location.pathname.replace(/\/+$/, '') || '/';
+        var pathView = {
+          '/': 'landing', '/ask': 'app', '/track': 'track-landing',
+          '/edge': 'edge-landing', '/watchlist': 'watch-landing', '/ledger': 'ledger-landing',
+        }[path];
+        var isEdge = /^\/edge(?:\/(mtm|agentic))?$/.test(path);
+        var isChat = /^\/chat\/[^/]+$/.test(path);
+        var view = isChat ? 'chat'
+          : ((history.state && history.state.view) || (isEdge ? 'edge-landing' : null) || pathView || 'landing');
+        document.documentElement.setAttribute('data-boot-view', view);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
 
@@ -2668,6 +2717,12 @@ let activeId = null;
 let currentView = 'landing';
 let lastFocusedBeforeDialog = null;
 let isApplyingHistory = false;
+// True only during the synchronous initial-route applyHistoryState() call at
+// the bottom of this script. The pre-paint boot script in <head> (see
+// data-boot-view) already shows the right shell/overlay before this script
+// even runs, so the very first launchApp()/openXBoard() fade-in would just
+// flash the content transparent-then-back -- skip it that one time only.
+let _bootRouting = false;
 let activeRequest = null;
 
 // ── Persistence ──────────────────────────────────────────────────────────────
@@ -4939,7 +4994,7 @@ function launchApp({ updateHistory = true } = {}) {
   document.body.style.overflow = 'hidden';
   currentView = 'app';
   if (updateHistory) setHistoryState('app');
-  if (window.Motion && !prefersReduced()) {
+  if (!_bootRouting && window.Motion && !prefersReduced()) {
     Motion.animate(app, { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
       { duration: 0.45, easing: EASE });
   }
@@ -5151,7 +5206,7 @@ async function openTrackRecord({ updateHistory = true } = {}) {
   document.body.style.overflow = 'hidden';
   trackEvent('track_record_opened', { source: currentView === 'app' ? 'app' : 'landing' });
   if (updateHistory) setHistoryState(currentView === 'app' ? 'track-app' : 'track-landing');
-  if (window.Motion && !prefersReduced()) {
+  if (!_bootRouting && window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   }
   if (!trackLoaded) { trackLoaded = true; await loadTrackRecord(); }
@@ -5599,7 +5654,7 @@ async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
   document.body.style.overflow = 'hidden';
   trackEvent('edge_board_opened', { source: currentView === 'app' ? 'app' : 'landing' });
   if (updateHistory) setHistoryState(currentView === 'app' ? 'edge-app' : 'edge-landing', 'push', { panel: _ebView });
-  if (window.Motion && !prefersReduced()) {
+  if (!_bootRouting && window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   }
   if (!edgeLoaded) { edgeLoaded = true; loadEdgeBoard(); }
@@ -5688,7 +5743,7 @@ async function openWatchlistPage({ updateHistory = true } = {}) {
   document.body.style.overflow = 'hidden';
   trackEvent('watchlist_opened', { source: currentView === 'app' ? 'app' : 'landing' });
   if (updateHistory) setHistoryState(currentView === 'app' ? 'watch-app' : 'watch-landing');
-  if (window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
+  if (!_bootRouting && window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   renderWatchlistPage();
   await _syncFavoritesFromServer();
   renderWatchlistPage();
@@ -5777,7 +5832,7 @@ async function openPersonalLedger({ updateHistory = true } = {}) {
   document.body.style.overflow = 'hidden';
   trackEvent('personal_ledger_opened', { source: currentView === 'app' ? 'app' : 'landing' });
   if (updateHistory) setHistoryState(currentView === 'app' ? 'ledger-app' : 'ledger-landing');
-  if (window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
+  if (!_bootRouting && window.Motion && !prefersReduced()) Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   await refreshPersonalLedger();
   setTimeout(() => document.getElementById('ledgerCloseBtn')?.focus(), 0);
 }
@@ -10011,7 +10066,9 @@ const _initialActiveId = _initConversationId && store.conversations[_initConvers
   : ids[0];
 if (_initialActiveId) activateConv(_initialActiveId, { updateHistory: false });
 else newConversation({ updateHistory: false });
+_bootRouting = true;
 if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView, convId: _initConversationId, panel: _initPanel });
+_bootRouting = false;
 
 // ── Smooth scroll + entrance choreography ────────────────────────────────────
 (function initMotion() {
