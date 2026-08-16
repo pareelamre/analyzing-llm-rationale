@@ -56,6 +56,10 @@ DEFAULT_CYCLE_MINUTES = 15
 KALSHI_FEE_COEFFICIENT = 0.07
 DEFAULT_SETTLEMENT_FEE_RATE = 0.014
 IMMEDIATE_TIME_IN_FORCE = "immediate_or_cancel"
+# Real Kalshi/Polymarket YES+NO spreads are a few cents wide at most, so a
+# reciprocal-netting fill implying more than this much riskless profit per
+# paired contract almost certainly reflects a bad price, not a real edge.
+DEFAULT_MAX_NETTING_ARB_PER_PAIR = 0.15
 
 
 @dataclass(frozen=True)
@@ -71,6 +75,7 @@ class RiskGuardPolicy:
     concentration_limit: float
     per_cycle_spend_limit: float
     cycle_id: str
+    max_netting_arb_per_pair: float = DEFAULT_MAX_NETTING_ARB_PER_PAIR
 
 
 def _now() -> str:
@@ -204,11 +209,16 @@ def _risk_guard_policy() -> RiskGuardPolicy:
     )
     if per_cycle_spend_limit_pct <= 0:
         raise ValueError("FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT must be greater than 0")
+    max_netting_arb_per_pair = _env_float(
+        "FORESEA_AGENT_MAX_NETTING_ARB_PER_PAIR",
+        DEFAULT_MAX_NETTING_ARB_PER_PAIR,
+    )
     return RiskGuardPolicy(
         account_value=account_value,
         concentration_limit=concentration_limit,
         per_cycle_spend_limit=account_value * per_cycle_spend_limit_pct,
         cycle_id=_current_cycle_id(),
+        max_netting_arb_per_pair=max_netting_arb_per_pair,
     )
 
 
@@ -275,9 +285,20 @@ def _first_float(mapping: Mapping[str, Any], keys: Iterable[str]) -> Optional[fl
     return None
 
 
-def _extract_filled_quantity(result: Mapping[str, Any], normalized: Mapping[str, Any], *, live: bool) -> tuple[float, str]:
+def _extract_filled_quantity(
+    result: Mapping[str, Any],
+    normalized: Mapping[str, Any],
+    *,
+    live: bool,
+    shadow_marketable: bool = True,
+) -> tuple[float, str]:
     requested = _as_float(normalized.get("quantity"))
     if not live:
+        if not shadow_marketable:
+            # The requested price never crossed a live quote for this side,
+            # so a real IOC order here would fill zero -- match that instead
+            # of assuming a fill at a price no real book would have given.
+            return 0.0, "shadow_unfilled_below_market"
         return requested, "shadow_assumed_full"
     body = ((result.get("venue_response") or {}).get("body") or {})
     filled_keys = (
@@ -343,8 +364,11 @@ def _normalize_fill_for_accounting(
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
     live: bool,
+    shadow_marketable: bool = True,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
-    filled_quantity, fill_status = _extract_filled_quantity(result, normalized, live=live)
+    filled_quantity, fill_status = _extract_filled_quantity(
+        result, normalized, live=live, shadow_marketable=shadow_marketable
+    )
     accounting_order = dict(normalized)
     accounting_order["quantity"] = filled_quantity
     accounting_order["estimated_notional"] = round(_as_float(normalized.get("price")) * filled_quantity, 6)
@@ -625,6 +649,12 @@ def _record_rejected_account_action(
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
 ) -> None:
+    if _use_datastore_account_store():
+        _ds_record_rejected_account_action(
+            agent_id=agent_id, mode=mode, ticker=ticker, side=side,
+            normalized=normalized, guard=guard,
+        )
+        return
     with _account_transaction() as conn:
         _ensure_agent_account(conn, agent_id, _as_float(guard.get("account_value"), DEFAULT_AGENT_ACCOUNT_VALUE))
         _record_account_action(
@@ -666,6 +696,11 @@ def _apply_trade_to_account_tables(
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
 ) -> Dict[str, Any]:
+    if _use_datastore_account_store():
+        return _ds_apply_trade(
+            agent_id=agent_id, policy=policy, mode=mode, submitted=submitted,
+            ticker=ticker, side=side, normalized=normalized, guard=guard,
+        )
     platform = "kalshi"
     opposite_side = _opposite_side(side)
     price = _as_float(normalized.get("price"))
@@ -785,6 +820,8 @@ def _apply_trade_to_account_tables(
 
 def _settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> List[Dict[str, Any]]:
     """Settle resolved Kalshi markets once per agent/cycle before trading."""
+    if _use_datastore_account_store():
+        return _ds_settle_agent_open_positions(agent_id, policy)
     settled: List[Dict[str, Any]] = []
     with tracer.start_as_current_span("benchmark_tools.settle_agent_positions") as span:
         span.set_attributes({"agent.id": agent_id, "cycle.id": policy.cycle_id})
@@ -918,6 +955,506 @@ def _settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> List
             return []
 
 
+# ---------------------------------------------------------------------------
+# Datastore-backed account store
+#
+# _account_db_path() falls back to a file under /tmp when
+# FORESEA_AGENT_ACCOUNT_DB_PATH is unset. That's fine for the scheduled
+# GitHub Actions trading-tick workflow (which always sets it explicitly, to
+# a file it downloads from and re-uploads to GCS after each run) but not for
+# the live Cloud Run service, which has no persistent volume for it: that
+# ledger silently resets on every deploy and diverges across concurrent
+# instances. When the env var is unset -- the Cloud Run case -- the account
+# store below is used instead, backed by Google Cloud Datastore: already
+# this app's primary datastore (see server.py's _get_datastore()), already
+# provisioned, no new GCP resources or IAM needed. The scheduled workflow's
+# GCS-backed SQLite files are untouched by this.
+#
+# Each _ds_* write path is wrapped in a Datastore transaction (with retry on
+# conflict via _ds_run_in_transaction), so concurrent trades against the
+# same agent -- the expected case, since agent_id is the model name, not a
+# per-session id -- can't corrupt the netting math the way two racing SQLite
+# writers could. What this does NOT do is re-validate the risk-guard
+# thresholds against post-conflict state inside that transaction; the guard
+# decision is still made once, earlier, against a snapshot (same as the
+# SQLite path today). So two concurrent trades that both look acceptable
+# against a stale snapshot can still both apply -- correctly, with no data
+# corruption, just possibly exceeding a limit in aggregate. Closing that
+# fully would mean merging the guard check and the apply into one
+# transaction, which is a larger control-flow change shared with the SQLite
+# path; left as a follow-up rather than risking that rewrite here.
+# ---------------------------------------------------------------------------
+
+_DS_ACCOUNT_KIND = "AgentTradingAccount"
+_DS_POSITION_KIND = "AgentTradingPosition"
+_DS_ACTION_KIND = "AgentTradingAction"
+_DS_CYCLE_SETTLEMENT_KIND = "AgentTradingCycleSettlement"
+_DS_TRANSACTION_RETRIES = 3
+
+_ds_account_client: Any = None
+
+
+def _use_datastore_account_store() -> bool:
+    return not os.environ.get("FORESEA_AGENT_ACCOUNT_DB_PATH")
+
+
+def _get_account_datastore() -> Any:
+    global _ds_account_client
+    if _ds_account_client is None:
+        try:
+            from google.cloud import datastore as _ds
+
+            _ds_account_client = _ds.Client()
+        except Exception:
+            logger.warning("agent trading Datastore client unavailable", exc_info=True)
+    return _ds_account_client
+
+
+def _ds_account_key(client: Any, agent_id: str) -> Any:
+    return client.key(_DS_ACCOUNT_KIND, agent_id)
+
+
+def _ds_position_key(client: Any, agent_id: str, platform: str, ticker: str, side: str) -> Any:
+    return client.key(_DS_ACCOUNT_KIND, agent_id, _DS_POSITION_KIND, f"{platform}:{ticker}:{side}")
+
+
+def _ds_action_key(client: Any, agent_id: str, action_id: str) -> Any:
+    return client.key(_DS_ACCOUNT_KIND, agent_id, _DS_ACTION_KIND, action_id)
+
+
+def _ds_cycle_settlement_key(client: Any, agent_id: str, cycle_id: str) -> Any:
+    return client.key(_DS_ACCOUNT_KIND, agent_id, _DS_CYCLE_SETTLEMENT_KIND, cycle_id)
+
+
+def _ds_new_account_entity(client: Any, agent_id: str, starting_cash: float) -> Any:
+    from google.cloud import datastore as _ds
+
+    entity = _ds.Entity(key=_ds_account_key(client, agent_id))
+    entity.update({
+        "starting_cash": starting_cash,
+        "cash": starting_cash,
+        "realized_pnl": 0.0,
+        "fees_paid": 0.0,
+        "settlement_fees_paid": 0.0,
+        "updated_at": _now(),
+    })
+    return entity
+
+
+def _ds_ensure_account(client: Any, agent_id: str, starting_cash: float) -> Any:
+    entity = client.get(_ds_account_key(client, agent_id))
+    if entity is None:
+        entity = _ds_new_account_entity(client, agent_id, starting_cash)
+        client.put(entity)
+    return entity
+
+
+def _ds_positions(client: Any, agent_id: str) -> List[Dict[str, Any]]:
+    account_key = _ds_account_key(client, agent_id)
+    return [
+        dict(p)
+        for p in client.query(kind=_DS_POSITION_KIND, ancestor=account_key).fetch()
+        if float(p.get("quantity") or 0) > 1e-12
+    ]
+
+
+def _ds_account_summary(client: Any, agent_id: str, starting_cash: float) -> Dict[str, Any]:
+    account = _ds_ensure_account(client, agent_id, starting_cash)
+    positions = sorted(
+        _ds_positions(client, agent_id),
+        key=lambda p: (str(p.get("platform")), str(p.get("ticker")), str(p.get("side"))),
+    )
+    open_cost_basis = sum(float(p["cost_basis"]) for p in positions)
+    return {
+        "cash": round(float(account["cash"]), 6),
+        "starting_cash": round(float(account["starting_cash"]), 6),
+        "realized_pnl": round(float(account["realized_pnl"]), 6),
+        "fees_paid": round(float(account["fees_paid"]), 6),
+        "settlement_fees_paid": round(float(account["settlement_fees_paid"]), 6),
+        "open_cost_basis": round(open_cost_basis, 6),
+        "n_open_positions": len(positions),
+        "open_positions": [
+            {
+                "platform": p["platform"],
+                "ticker": p["ticker"],
+                "side": p["side"],
+                "quantity": round(float(p["quantity"]), 6),
+                "cost_basis": round(float(p["cost_basis"]), 6),
+                "avg_entry_price": round(float(p["avg_entry_price"]), 6),
+            }
+            for p in positions
+        ],
+    }
+
+
+def _ds_upsert_position(
+    client: Any,
+    *,
+    agent_id: str,
+    platform: str,
+    ticker: str,
+    side: str,
+    quantity: float,
+    cost_basis: float,
+) -> None:
+    from google.cloud import datastore as _ds
+
+    key = _ds_position_key(client, agent_id, platform, ticker, side)
+    if quantity <= 1e-12:
+        client.delete(key)
+        return
+    entity = _ds.Entity(key=key)
+    entity.update({
+        "platform": platform,
+        "ticker": ticker,
+        "side": side,
+        "quantity": quantity,
+        "cost_basis": cost_basis,
+        "avg_entry_price": cost_basis / quantity,
+        "updated_at": _now(),
+    })
+    client.put(entity)
+
+
+def _ds_record_action(client: Any, *, agent_id: str, action_type: str, cycle_id: str, **fields: Any) -> str:
+    from google.cloud import datastore as _ds
+
+    action_id = str(uuid.uuid4())
+    entity = _ds.Entity(
+        key=_ds_action_key(client, agent_id, action_id),
+        exclude_from_indexes=("metadata_json",),
+    )
+    metadata = fields.pop("metadata", None)
+    entity.update({
+        "ts": _now(),
+        "agent_id": agent_id,
+        "action_type": action_type,
+        "cycle_id": cycle_id,
+        "mode": fields.get("mode"),
+        "submitted": bool(fields.get("submitted", False)),
+        "platform": fields.get("platform"),
+        "ticker": fields.get("ticker"),
+        "side": fields.get("side"),
+        "price": fields.get("price"),
+        "quantity": fields.get("quantity"),
+        "notional": fields.get("notional", 0.0),
+        "fee": fields.get("fee", 0.0),
+        "settlement_fee": fields.get("settlement_fee", 0.0),
+        "payout": fields.get("payout", 0.0),
+        "netting_payout": fields.get("netting_payout", 0.0),
+        "cash_required": fields.get("cash_required", 0.0),
+        "cash_delta": fields.get("cash_delta", 0.0),
+        "realized_pnl": fields.get("realized_pnl", 0.0),
+        "realized_pairs": fields.get("realized_pairs", 0.0),
+        "client_order_id": fields.get("client_order_id"),
+        "outcome": fields.get("outcome"),
+        "metadata_json": json.dumps(dict(metadata or {}), sort_keys=True),
+    })
+    client.put(entity)
+    return action_id
+
+
+def _ds_run_in_transaction(client: Any, fn: Any) -> Any:
+    """Run fn(txn) with a small retry loop for optimistic-concurrency
+    conflicts. google.cloud.datastore transactions don't auto-retry, and a
+    second writer to the same agent is the expected case here, not an edge
+    case -- agent_id is the model name, not a per-session id."""
+    from google.api_core import exceptions as _gax_exceptions
+
+    last_exc: Optional[BaseException] = None
+    for _ in range(_DS_TRANSACTION_RETRIES):
+        try:
+            with client.transaction() as txn:
+                return fn(txn)
+        except _gax_exceptions.Aborted as exc:
+            last_exc = exc
+            continue
+    raise last_exc or RuntimeError("Datastore transaction retries exhausted")
+
+
+def _ds_record_rejected_account_action(
+    *,
+    agent_id: str,
+    mode: str,
+    ticker: str,
+    side: str,
+    normalized: Mapping[str, Any],
+    guard: Mapping[str, Any],
+) -> None:
+    client = _get_account_datastore()
+    if client is None:
+        return
+
+    def _run(_txn: Any) -> None:
+        _ds_ensure_account(
+            client, agent_id, _as_float(guard.get("account_value"), DEFAULT_AGENT_ACCOUNT_VALUE)
+        )
+        _ds_record_action(
+            client,
+            agent_id=agent_id,
+            action_type="rejected_trade",
+            cycle_id=str(guard.get("cycle_id") or ""),
+            mode=mode,
+            submitted=False,
+            platform="kalshi",
+            ticker=ticker,
+            side=side,
+            price=_as_float(normalized.get("price")),
+            quantity=_as_float(normalized.get("quantity")),
+            notional=_as_float(guard.get("notional")),
+            fee=_as_float(guard.get("fee")),
+            netting_payout=_as_float(guard.get("netting_payout")),
+            cash_required=_as_float(guard.get("cash_required")),
+            cash_delta=0.0,
+            realized_pairs=_as_float(guard.get("netting_payout")),
+            client_order_id=normalized.get("exchange_order", {}).get("client_order_id"),
+            outcome="rejected",
+            metadata={"risk_guard": dict(guard)},
+        )
+
+    _ds_run_in_transaction(client, _run)
+
+
+def _ds_apply_trade(
+    *,
+    agent_id: str,
+    policy: RiskGuardPolicy,
+    mode: str,
+    submitted: bool,
+    ticker: str,
+    side: str,
+    normalized: Mapping[str, Any],
+    guard: Mapping[str, Any],
+) -> Dict[str, Any]:
+    client = _get_account_datastore()
+    if client is None:
+        # _load_guard_account degrades to an empty in-memory account when
+        # Datastore is unreachable, so the guard check upstream may have
+        # already said "allowed". Silently no-op-ing here would report a
+        # trade as successful without ever persisting it -- fail loudly
+        # instead, same as a real venue outage would.
+        raise RuntimeError("Datastore is unavailable for the agent trading account store")
+    platform = "kalshi"
+    opposite_side = _opposite_side(side)
+    price = _as_float(normalized.get("price"))
+    quantity = _as_float(normalized.get("quantity"))
+    fee = _as_float(guard.get("filled_fee", guard.get("fee")))
+    notional = price * quantity
+
+    def _run(_txn: Any) -> Dict[str, Any]:
+        account_entity = client.get(_ds_account_key(client, agent_id))
+        if account_entity is None:
+            account_entity = _ds_new_account_entity(client, agent_id, policy.account_value)
+        cash_before = float(account_entity["cash"])
+        realized_pnl_before = float(account_entity["realized_pnl"])
+        fees_paid_before = float(account_entity["fees_paid"])
+
+        remaining = quantity
+        realized_pairs = 0.0
+        realized_pnl = 0.0
+        opposite = client.get(_ds_position_key(client, agent_id, platform, ticker, opposite_side))
+        if opposite is not None:
+            opposite_qty = float(opposite["quantity"])
+            if opposite_qty > 1e-12:
+                realized_pairs = min(remaining, opposite_qty)
+                old_basis = float(opposite["avg_entry_price"]) * realized_pairs
+                new_basis = price * realized_pairs
+                fee_alloc = fee * (realized_pairs / quantity) if quantity else 0.0
+                realized_pnl = realized_pairs - old_basis - new_basis - fee_alloc
+                new_opposite_qty = opposite_qty - realized_pairs
+                new_opposite_basis = max(0.0, float(opposite["cost_basis"]) - old_basis)
+                _ds_upsert_position(
+                    client,
+                    agent_id=agent_id,
+                    platform=platform,
+                    ticker=ticker,
+                    side=opposite_side,
+                    quantity=new_opposite_qty,
+                    cost_basis=new_opposite_basis,
+                )
+                remaining -= realized_pairs
+
+        if remaining > 1e-12:
+            same = client.get(_ds_position_key(client, agent_id, platform, ticker, side))
+            same_qty = float(same["quantity"]) if same is not None else 0.0
+            same_basis = float(same["cost_basis"]) if same is not None else 0.0
+            _ds_upsert_position(
+                client,
+                agent_id=agent_id,
+                platform=platform,
+                ticker=ticker,
+                side=side,
+                quantity=same_qty + remaining,
+                cost_basis=same_basis + (remaining * price),
+            )
+
+        cash_delta = -notional - fee + realized_pairs
+        cash_required = max(0.0, -cash_delta)
+        cash_after = cash_before + cash_delta
+        account_entity.update({
+            "cash": cash_after,
+            "realized_pnl": realized_pnl_before + realized_pnl,
+            "fees_paid": fees_paid_before + fee,
+            "updated_at": _now(),
+        })
+        client.put(account_entity)
+
+        action_id = _ds_record_action(
+            client,
+            agent_id=agent_id,
+            action_type="trade",
+            cycle_id=policy.cycle_id,
+            mode=mode,
+            submitted=submitted,
+            platform=platform,
+            ticker=ticker,
+            side=side,
+            price=price,
+            quantity=quantity,
+            notional=notional,
+            fee=fee,
+            netting_payout=realized_pairs,
+            cash_required=cash_required,
+            cash_delta=cash_delta,
+            realized_pnl=realized_pnl,
+            realized_pairs=realized_pairs,
+            client_order_id=normalized.get("exchange_order", {}).get("client_order_id"),
+            outcome="realized" if realized_pairs > 0 else "open",
+            metadata={"risk_guard": dict(guard)},
+        )
+        summary = _ds_account_summary(client, agent_id, policy.account_value)
+        return {
+            "action_id": action_id,
+            "notional": round(notional, 6),
+            "fee": round(fee, 6),
+            "cash_required": round(cash_required, 6),
+            "cash_delta": round(cash_delta, 6),
+            "netting_payout": round(realized_pairs, 6),
+            "realized_pairs": round(realized_pairs, 6),
+            "realized_pnl": round(realized_pnl, 6),
+            "account": summary,
+        }
+
+    return _ds_run_in_transaction(client, _run)
+
+
+def _ds_settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> List[Dict[str, Any]]:
+    client = _get_account_datastore()
+    if client is None:
+        return []
+
+    def _run(_txn: Any) -> List[Dict[str, Any]]:
+        from analyzing_llm_rationale import market_data
+
+        _ds_ensure_account(client, agent_id, policy.account_value)
+        if client.get(_ds_cycle_settlement_key(client, agent_id, policy.cycle_id)) is not None:
+            return []
+
+        positions = _ds_positions(client, agent_id)
+        markets = sorted({(str(p["platform"]).lower(), str(p["ticker"]).upper()) for p in positions})
+        settled: List[Dict[str, Any]] = []
+        for plat, ticker in markets:
+            if plat != "kalshi" or not ticker:
+                continue
+            try:
+                outcome_value = market_data.resolve_kalshi(ticker)
+            except Exception:
+                logger.warning("agent settlement lookup failed ticker=%s", ticker, exc_info=True)
+                continue
+            if outcome_value is None:
+                continue
+            winning_side = "yes" if int(outcome_value) == 1 else "no"
+            market_positions = [
+                p for p in positions
+                if str(p["platform"]).lower() == plat and str(p["ticker"]).upper() == ticker
+            ]
+            if not market_positions:
+                continue
+            settled_contracts = sum(float(p["quantity"]) for p in market_positions)
+            settled_basis = sum(float(p["cost_basis"]) for p in market_positions)
+            payout = sum(float(p["quantity"]) for p in market_positions if str(p["side"]) == winning_side)
+            settlement_fee = payout * _settlement_fee_rate()
+            cash_delta = payout - settlement_fee
+            realized_pnl = cash_delta - settled_basis
+
+            account_entity = client.get(_ds_account_key(client, agent_id))
+            account_entity.update({
+                "cash": float(account_entity["cash"]) + cash_delta,
+                "realized_pnl": float(account_entity["realized_pnl"]) + realized_pnl,
+                "settlement_fees_paid": float(account_entity["settlement_fees_paid"]) + settlement_fee,
+                "updated_at": _now(),
+            })
+            client.put(account_entity)
+            for p in market_positions:
+                client.delete(_ds_position_key(client, agent_id, plat, ticker, str(p["side"])))
+            action_id = _ds_record_action(
+                client,
+                agent_id=agent_id,
+                action_type="settlement",
+                cycle_id=policy.cycle_id,
+                platform=plat,
+                ticker=ticker,
+                side=winning_side,
+                quantity=settled_contracts,
+                settlement_fee=settlement_fee,
+                payout=payout,
+                cash_delta=cash_delta,
+                realized_pnl=realized_pnl,
+                outcome=winning_side,
+                metadata={"settled_basis": round(settled_basis, 6)},
+            )
+            settled.append({
+                "action_id": action_id,
+                "ticker": ticker,
+                "outcome": winning_side,
+                "settled_contracts": round(settled_contracts, 6),
+                "payout": round(payout, 6),
+                "settlement_fee": round(settlement_fee, 6),
+                "realized_pnl": round(realized_pnl, 6),
+                "cash_delta": round(cash_delta, 6),
+            })
+
+        from google.cloud import datastore as _ds
+
+        marker = _ds.Entity(key=_ds_cycle_settlement_key(client, agent_id, policy.cycle_id))
+        marker.update({"checked_at": _now()})
+        client.put(marker)
+        return settled
+
+    try:
+        settled = _ds_run_in_transaction(client, _run)
+        settlement_actions.add(len(settled), {"outcome": "success"})
+        return settled
+    except Exception:
+        settlement_actions.add(1, {"outcome": "failure"})
+        logger.warning("agent settlement pass failed (datastore)", exc_info=True)
+        return []
+
+
+def _ds_load_guard_account(agent_id: str, policy: RiskGuardPolicy) -> tuple[Any, float]:
+    from analyzing_llm_rationale.accounting import PredictionMarketAccount
+
+    client = _get_account_datastore()
+    account = PredictionMarketAccount(starting_cash=policy.account_value)
+    if client is None:
+        return account, 0.0
+    row = _ds_ensure_account(client, agent_id, policy.account_value)
+    account.cash = float(row["cash"])
+    account.realized_pnl = float(row["realized_pnl"])
+    account.fees_paid = float(row["fees_paid"])
+    for pos in _ds_positions(client, agent_id):
+        loaded = account._position(str(pos["platform"]), str(pos["ticker"]), str(pos["side"]))
+        loaded.quantity = float(pos["quantity"])
+        loaded.cost_basis = float(pos["cost_basis"])
+    account_key = _ds_account_key(client, agent_id)
+    cycle_spend = sum(
+        float(a.get("cash_required") or 0.0)
+        for a in client.query(kind=_DS_ACTION_KIND, ancestor=account_key).fetch()
+        if a.get("cycle_id") == policy.cycle_id and a.get("action_type") == "trade"
+    )
+    return account, cycle_spend
+
+
 def _iter_ledger_events() -> Iterable[Dict[str, Any]]:
     path = _ledger_path()
     if path is None or not path.exists():
@@ -950,6 +1487,8 @@ def _market_cost_basis(account: Any, ticker: str) -> float:
 
 
 def _load_guard_account(agent_id: str, policy: RiskGuardPolicy) -> tuple[Any, float]:
+    if _use_datastore_account_store():
+        return _ds_load_guard_account(agent_id, policy)
     from analyzing_llm_rationale.accounting import PredictionMarketAccount
 
     account = PredictionMarketAccount(starting_cash=policy.account_value)
@@ -1009,6 +1548,11 @@ def _check_trade_guards(
     concentration_cap = policy.account_value * policy.concentration_limit
     cash_required = max(0.0, -float(fill.cash_delta))
     cycle_spend_after = cycle_spend_before + cash_required
+    arb_per_pair = (
+        float(fill.realized_pnl) / float(fill.realized_pairs)
+        if fill.realized_pairs > 1e-12
+        else 0.0
+    )
     reasons: List[str] = []
     if market_cost_basis_after > concentration_cap + 1e-9:
         reasons.append("concentration_limit")
@@ -1016,6 +1560,12 @@ def _check_trade_guards(
         reasons.append("solvency")
     if cycle_spend_after > policy.per_cycle_spend_limit + 1e-9:
         reasons.append("per_cycle_spend")
+    if arb_per_pair > policy.max_netting_arb_per_pair + 1e-9:
+        # A YES+NO pair always pays out exactly $1 combined, so netting them
+        # can only "realize" more than a few cents of riskless profit per
+        # pair if one of the two legs was filled at a price that doesn't
+        # reflect a real market -- reject rather than mint free money.
+        reasons.append("implausible_netting_arb")
 
     detail = {
         "allowed": not reasons,
@@ -1035,12 +1585,56 @@ def _check_trade_guards(
         "cash_required": round(cash_required, 6),
         "cash_delta": round(float(fill.cash_delta), 6),
         "settlements_before_trade": settlements,
+        "max_netting_arb_per_pair": policy.max_netting_arb_per_pair,
+        "arb_per_pair": round(arb_per_pair, 6),
     }
     outcome = "allowed" if detail["allowed"] else "rejected"
     risk_guard_checks.add(1, {"outcome": outcome})
     if reasons:
         risk_guard_rejections.add(1, {"reason": reasons[0]})
     return detail["allowed"], detail, policy
+
+
+def _resolve_shadow_marketability(ticker: str, side: str, requested_price: float) -> Dict[str, Any]:
+    """Check a shadow-mode Kalshi order against a live quote before filling it.
+
+    Shadow mode otherwise trusts whatever price the caller supplies, which
+    lets a mispriced (or hallucinated) order "fill" at a price no real book
+    would ever give -- and once that lands opposite an existing position,
+    reciprocal netting turns it straight into manufactured profit. When a
+    live quote is available we fill at the real ask (never worse for the
+    caller than their own request) and only fill at all if the requested
+    price actually crosses it, mirroring how the immediate-or-cancel orders
+    this tool issues would behave against a real book. If the quote can't be
+    fetched (unknown ticker, provider hiccup) we fall back to trusting the
+    caller's price rather than making every shadow trade depend on venue
+    uptime -- the netting-arb guard in `_check_trade_guards` still catches
+    the case where that trust is abused.
+    """
+    try:
+        from analyzing_llm_rationale import market_data
+        from analyzing_llm_rationale.accounting import MarketQuote
+
+        quote = MarketQuote.from_mapping(market_data.fetch_kalshi(ticker))
+        real_ask = quote.ask(side)
+    except Exception:
+        real_ask = None
+
+    if real_ask is None:
+        return {
+            "marketable": True,
+            "price": requested_price,
+            "real_ask": None,
+            "status": "shadow_quote_unavailable",
+        }
+
+    marketable = requested_price + 1e-9 >= real_ask
+    return {
+        "marketable": marketable,
+        "price": round(real_ask, 4) if marketable else requested_price,
+        "real_ask": round(real_ask, 4),
+        "status": "shadow_filled_at_market" if marketable else "shadow_unfilled_below_market",
+    }
 
 
 def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
@@ -1097,6 +1691,19 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "tool surface is shadow/paper trading only and cannot place real "
                     "orders; use /trading/preview and /trading/orders for real execution."
                 )
+
+            shadow_marketable = True
+            try:
+                requested_price = float(order.get("price"))
+            except (TypeError, ValueError):
+                requested_price = None
+            if requested_price is not None and requested_price > 0:
+                market_check = _resolve_shadow_marketability(ticker, side, requested_price)
+                shadow_marketable = market_check["marketable"]
+                if market_check["real_ask"] is not None:
+                    # Fill at the real ask (never worse than what was asked
+                    # for) instead of whatever price the caller guessed.
+                    order["price"] = market_check["price"]
 
             preview = trading.preview_order(order)
             normalized = preview.get("normalized_order") or {}
@@ -1177,6 +1784,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 normalized=normalized,
                 guard=guard,
                 live=live,
+                shadow_marketable=shadow_marketable,
             )
             fill_status = str(accounting_guard.get("fill_status") or "unknown")
             filled_quantity = _as_float(accounting_guard.get("filled_quantity"))
