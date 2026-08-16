@@ -2498,6 +2498,14 @@ async def edge_page(request: Request) -> Response:
     return await _spa_page(request, "edge")
 
 
+@app.get("/edge/{panel:path}", include_in_schema=False)
+async def edge_panel_page(panel: str, request: Request) -> Response:
+    """Refresh-safe URL for one edge-board sub-panel (markets/mtm/agentic)."""
+    if panel not in ("mtm", "agentic"):
+        raise HTTPException(status_code=404)
+    return await _spa_page(request, "edge")
+
+
 @app.get("/track", include_in_schema=False)
 async def track_page(request: Request) -> Response:
     return await _spa_page(request, "track")
