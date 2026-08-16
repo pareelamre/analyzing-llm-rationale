@@ -36,6 +36,15 @@ def _account_from_rows(acct_row: sqlite3.Row, position_rows: List[sqlite3.Row]) 
     return account
 
 
+def _latest_reset_ts(conn: sqlite3.Connection, agent_id: str) -> Any:
+    row = conn.execute(
+        "SELECT ts FROM agent_actions WHERE agent_id = ? AND action_type = 'admin_reset' "
+        "ORDER BY ts DESC LIMIT 1",
+        (agent_id,),
+    ).fetchone()
+    return row["ts"] if row else None
+
+
 def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> List[Dict[str, Any]]:
     """One row per agent account in ``conn``, mark-to-market valued against
     ``quotes`` (keyed ``(platform, ticker)`` -- platform lowercase, e.g.
@@ -46,6 +55,12 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
     'settlement'`` rows) -- rejected trades never reach the exchange and
     open positions haven't resolved yet, so neither belongs in a win/loss
     count.
+
+    Like ``agent_equity_curve``, ``trade_count``/``settled_count``/
+    ``won_count``/``win_rate`` only cover activity since the agent's latest
+    ``admin_reset`` (all of it, if there hasn't been one) -- otherwise these
+    would keep counting pre-reset trades the equity chart no longer shows,
+    silently disagreeing with it.
     """
     rows: List[Dict[str, Any]] = []
     for acct_row in conn.execute("SELECT * FROM agent_accounts ORDER BY agent_id"):
@@ -58,17 +73,19 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
         account = _account_from_rows(acct_row, position_rows)
         snap = account.snapshot(quotes)
 
-        trade_count = conn.execute(
-            "SELECT COUNT(*) FROM agent_actions WHERE agent_id = ? AND action_type = 'trade'",
-            (agent_id,),
-        ).fetchone()[0]
-        settlement_pnls = [
-            float(r[0]) for r in conn.execute(
-                "SELECT realized_pnl FROM agent_actions "
-                "WHERE agent_id = ? AND action_type = 'settlement'",
-                (agent_id,),
-            )
-        ]
+        since_ts = _latest_reset_ts(conn, agent_id)
+        trade_sql = "SELECT COUNT(*) FROM agent_actions WHERE agent_id = ? AND action_type = 'trade'"
+        settlement_sql = (
+            "SELECT realized_pnl FROM agent_actions WHERE agent_id = ? AND action_type = 'settlement'"
+        )
+        params: List[Any] = [agent_id]
+        if since_ts is not None:
+            trade_sql += " AND ts >= ?"
+            settlement_sql += " AND ts >= ?"
+            params.append(since_ts)
+
+        trade_count = conn.execute(trade_sql, params).fetchone()[0]
+        settlement_pnls = [float(r[0]) for r in conn.execute(settlement_sql, params)]
         settled_count = len(settlement_pnls)
         won_count = sum(1 for pnl in settlement_pnls if pnl > 0)
         win_rate = (won_count / settled_count) if settled_count else None
