@@ -268,19 +268,29 @@ if (overwritten.market_ident !== 'y') throw new Error('a new market card must ov
 
     def test_effort_tier_caption_only_appears_for_the_simple_tier(self) -> None:
         # A thinner analysis pass must never be silent -- but standard/deep
-        # responses (the vast majority) must stay exactly as before.
+        # responses (the vast majority) must stay exactly as before. A plain
+        # chat reply with no forecast component (a greeting) has no "analysis
+        # pass" to caption, so it must stay silent even at the simple tier.
         self.assertIn("function effortTierCaptionHtml", self.index_html)
         self.assertIn("${effortTierCaptionHtml(data)}", self.index_html)
         script = r'''
 const fs = require('fs');
 const vm = require('vm');
 const source = fs.readFileSync('frontend/index.html', 'utf8');
+const clamp01Fn = source.match(/function clamp01[\s\S]*?\n}\r?\n/)[0];
+const normalizedProbabilityFn = source.match(/function normalizedProbability[\s\S]*?\n}\r?\n/)[0];
 const fn = source.match(/function effortTierCaptionHtml[\s\S]*?\n}\r?\n/)[0];
 const sandbox = {};
-vm.runInNewContext(fn, sandbox);
+vm.runInNewContext(clamp01Fn + normalizedProbabilityFn + fn, sandbox);
 
 const simple = sandbox.effortTierCaptionHtml({ effort_tier: 'simple' });
 if (!simple.includes('Quick take')) throw new Error('missing quick-take caption: ' + simple);
+
+const simpleChatForecast = sandbox.effortTierCaptionHtml({ effort_tier: 'simple', question_type: 'chat', model_probability: 0.6 });
+if (!simpleChatForecast.includes('Quick take')) throw new Error('missing quick-take caption for a simple-tier chat forecast: ' + simpleChatForecast);
+
+const simpleGreeting = sandbox.effortTierCaptionHtml({ effort_tier: 'simple', question_type: 'chat', model_probability: null });
+if (simpleGreeting !== '') throw new Error(`expected empty string for a plain chat greeting, got: ${simpleGreeting}`);
 
 for (const tier of ['standard', 'deep', null, undefined]) {
   const out = sandbox.effortTierCaptionHtml({ effort_tier: tier });

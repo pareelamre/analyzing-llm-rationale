@@ -3382,9 +3382,11 @@ function tradeRunHandoffHtml(data) {
 
 // Honest, fixed caption (never model-generated) so a thinner analysis pass
 // is never silent — shown only for the "simple" tier; standard/deep stay
-// exactly as before, unannounced.
+// exactly as before, unannounced. Plain chat replies with no forecast
+// component (greetings, general Q&A) have no "analysis pass" to caption.
 function effortTierCaptionHtml(data) {
   if (data?.effort_tier !== 'simple') return '';
+  if (data?.question_type === 'chat' && normalizedProbability(data.model_probability) == null) return '';
   return `<div class="pt-2 text-xs text-gray-400">Quick take — this looked straightforward, so I skipped the deeper multi-angle pass. Ask a follow-up if you want the full analysis.</div>`;
 }
 
