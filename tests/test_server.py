@@ -1195,6 +1195,85 @@ class ServerTests(unittest.TestCase):
             response = self.client.get("/markets/kalshi?ticker=NOPE")
         self.assertEqual(response.status_code, 404)
 
+    def test_market_batch_returns_current_state_with_staleness_fields(self):
+        import analyzing_llm_rationale.market_data as md
+
+        with mock.patch.object(md, "fetch_kalshi", return_value={
+            "platform": "Kalshi", "ident": "KXFED-25JUN-H", "question": "Fed cuts?",
+            "market_url": "https://kalshi.com/markets/kxfed", "probability": 0.4, "volume": 1000.0,
+        }), mock.patch.object(md, "fetch_polymarket", return_value={
+            "platform": "Polymarket", "ident": "fed-cut-2026", "question": "Fed cuts in 2026?",
+            "market_url": "https://polymarket.com/market/fed-cut-2026", "probability": 0.55, "volume": 500.0,
+        }):
+            response = self.client.get("/market/batch?refs=kalshi:KXFED-25JUN-H&refs=polymarket:fed-cut-2026")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 2)
+        self.assertFalse(payload["truncated"])
+        by_ident = {q["ident"]: q for q in payload["quotes"]}
+        self.assertEqual(by_ident["KXFED-25JUN-H"]["probability"], 0.4)
+        self.assertIsNone(by_ident["KXFED-25JUN-H"]["error"])
+        self.assertIsNotNone(by_ident["KXFED-25JUN-H"]["fetched_at"])
+        self.assertIsInstance(by_ident["KXFED-25JUN-H"]["age_seconds"], (int, float))
+        self.assertLess(by_ident["KXFED-25JUN-H"]["age_seconds"], 5)
+        self.assertEqual(by_ident["fed-cut-2026"]["probability"], 0.55)
+
+    def test_market_batch_isolates_one_bad_ref_from_the_rest(self):
+        import analyzing_llm_rationale.market_data as md
+
+        def boom(ticker):
+            raise md.MarketDataError("Kalshi market not found.")
+
+        with mock.patch.object(md, "fetch_kalshi", boom), mock.patch.object(md, "fetch_polymarket", return_value={
+            "platform": "Polymarket", "ident": "fed-cut-2026", "question": "Fed cuts in 2026?",
+            "market_url": "https://polymarket.com/market/fed-cut-2026", "probability": 0.55, "volume": 500.0,
+        }):
+            response = self.client.get("/market/batch?refs=kalshi:BADTICKER&refs=polymarket:fed-cut-2026")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        by_ident = {q["ident"]: q for q in payload["quotes"]}
+        self.assertIn("not found", by_ident["BADTICKER"]["error"])
+        self.assertIsNone(by_ident["BADTICKER"]["probability"])
+        self.assertIsNone(by_ident["fed-cut-2026"]["error"])
+        self.assertEqual(by_ident["fed-cut-2026"]["probability"], 0.55)
+
+    def test_market_batch_rejects_unsupported_platform_per_ref(self):
+        response = self.client.get("/market/batch?refs=dydx:some-market")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("platform", payload["quotes"][0]["error"])
+
+    def test_market_batch_truncates_over_max_refs(self):
+        import analyzing_llm_rationale.market_data as md
+
+        with mock.patch.object(md, "fetch_kalshi", return_value={
+            "platform": "Kalshi", "ident": "T", "question": "Q", "probability": 0.5,
+        }):
+            refs = "&".join(f"refs=kalshi:T{i}" for i in range(60))
+            response = self.client.get(f"/market/batch?{refs}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["truncated"])
+        self.assertEqual(payload["count"], 50)
+
+    def test_market_batch_merges_marketd_depth_when_extra_id_supplied(self):
+        import analyzing_llm_rationale.market_data as md
+
+        with mock.patch.object(md, "fetch_kalshi", return_value={
+            "platform": "Kalshi", "ident": "KXFED-25JUN-H", "question": "Fed cuts?", "probability": 0.4,
+        }), mock.patch.object(server_module, "_marketd_quotes_sync", return_value=[
+            {"platform": "kalshi", "ident": "KXFED-25JUN-H", "candles": [{"end_time": "2026-01-01T00:00:00Z", "close": 0.4}]},
+        ]) as marketd_mock:
+            response = self.client.get("/market/batch?refs=kalshi:KXFED-25JUN-H:KXFED")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["quotes"][0]["candles"], [{"end_time": "2026-01-01T00:00:00Z", "close": 0.4}])
+        marketd_mock.assert_called_once_with(["kalshi:KXFED-25JUN-H:KXFED"])
+
     def test_radar_endpoint_returns_markets(self):
         response = self.client.get("/radar")
         self.assertEqual(response.status_code, 200)

@@ -114,6 +114,18 @@ class ForeseaClientTests(unittest.TestCase):
             "query": "fed",
         })
 
+    def test_batch_quotes_sends_refs_as_repeated_query_params(self):
+        session = FakeSession(FakeResponse(payload={"quotes": [], "count": 0}))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", session=session)
+
+        result = client.batch_quotes(["kalshi:KXFED-25JUN-H", "polymarket:fed-cut-2026"])
+
+        self.assertEqual(result, {"quotes": [], "count": 0})
+        call = session.calls[0]
+        self.assertEqual(call["method"], "GET")
+        self.assertEqual(call["url"], "https://foresea.test/market/batch")
+        self.assertEqual(call["params"], {"refs": ["kalshi:KXFED-25JUN-H", "polymarket:fed-cut-2026"]})
+
     def test_http_error_parses_detail(self):
         session = FakeSession(FakeResponse(status_code=422, payload={"detail": "bad request"}))
         client = mcp.ForeseaClient(base_url="https://foresea.test", session=session)
@@ -153,6 +165,17 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call["headers"]["X-API-Key"], "secret")
         self.assertEqual(call["json"], {"question": "Will Y happen?"})
         self.assertEqual(call["timeout"], 11)
+
+    async def test_async_batch_quotes_sends_refs_as_repeated_query_params(self):
+        session = FakeAsyncSession(FakeResponse(payload={"quotes": [{"platform": "kalshi", "ident": "T"}], "count": 1}))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", async_session=session)
+
+        result = await client.abatch_quotes(["kalshi:T"])
+
+        self.assertEqual(result["count"], 1)
+        call = session.calls[0]
+        self.assertEqual(call["url"], "https://foresea.test/market/batch")
+        self.assertEqual(call["params"], {"refs": ["kalshi:T"]})
 
     async def test_async_http_error_parses_detail(self):
         session = FakeAsyncSession(FakeResponse(status_code=503, payload={"detail": "temporarily unavailable"}))

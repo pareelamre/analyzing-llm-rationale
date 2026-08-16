@@ -35,6 +35,9 @@ def _mcp_tool_context(fn_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]
         return {k: payload[k] for k in ("platform", "slug", "ticker", "market_id", "question") if k in payload}
     if fn_name == "ascan_markets":
         return {k: kwargs[k] for k in ("platform", "query", "min_edge") if k in kwargs}
+    if fn_name == "abatch_quotes":
+        refs = args[0] if args else kwargs.get("refs") or []
+        return {"ref_count": len(refs)}
     return {}
 
 
@@ -45,6 +48,7 @@ _TOOL_NAMES = {
     "scan_markets": "foresea_scan_markets", "ascan_markets": "foresea_scan_markets",
     "track_record": "foresea_track_record", "atrack_record": "foresea_track_record",
     "edge_board": "foresea_edge_board", "aedge_board": "foresea_edge_board",
+    "batch_quotes": "foresea_batch_quotes", "abatch_quotes": "foresea_batch_quotes",
 }
 
 DEFAULT_FORESEA_BASE_URL = "https://foresea.ink"
@@ -289,6 +293,12 @@ class ForeseaClient:
         })
         return await self._arequest("GET", "/agent/scan", params=params)
 
+    def batch_quotes(self, refs: List[str]) -> Dict[str, Any]:
+        return self._request("GET", "/market/batch", params={"refs": refs})
+
+    async def abatch_quotes(self, refs: List[str]) -> Dict[str, Any]:
+        return await self._arequest("GET", "/market/batch", params={"refs": refs})
+
     def track_record(self) -> Dict[str, Any]:
         return self._request("GET", "/track-record")
 
@@ -498,6 +508,23 @@ def create_mcp_server(
             evidence_top_k=evidence_top_k,
             query=query,
         )
+
+    @mcp.tool()
+    async def foresea_batch_quotes(refs: List[str]) -> Dict[str, Any]:
+        """Call this when the user wants current price/volume for several markets
+        at once -- a watchlist, a portfolio, "check on these 5 markets" -- instead
+        of calling foresea_analyze_market once per market. Each ref is
+        "platform:ident", e.g. "kalshi:KXFED-25JUN-H" or
+        "polymarket:some-market-slug". Every quote carries fetched_at and
+        age_seconds so you can judge freshness yourself -- both venues rate-limit
+        hard, so don't assume a quote is live without checking age_seconds. One
+        bad ref returns an error on that entry only; the rest of the batch still
+        succeeds. Up to 50 refs per call.
+        Example: refs=["kalshi:KXFED-25JUN-H", "polymarket:fed-cut-2026"]
+        → {quotes: [{platform, ident, probability, volume, fetched_at,
+        age_seconds, error}], count, truncated}."""
+
+        return await _call_tool_async(client.abatch_quotes, refs)
 
     @mcp.tool()
     async def foresea_track_record() -> Dict[str, Any]:
