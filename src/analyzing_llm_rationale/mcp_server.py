@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -30,7 +31,7 @@ def _mcp_tool_context(fn_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]
         payload = args[0] if args else {}
         q = str(payload.get("question", ""))
         return {"question": q[:140] + ("…" if len(q) > 140 else "")}
-    if fn_name == "aanalyze":
+    if fn_name in ("aanalyze", "aanalyze_resilient"):
         payload = args[0] if args else {}
         return {k: payload[k] for k in ("platform", "slug", "ticker", "market_id", "question") if k in payload}
     if fn_name == "ascan_markets":
@@ -38,6 +39,8 @@ def _mcp_tool_context(fn_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]
     if fn_name == "abatch_quotes":
         refs = args[0] if args else kwargs.get("refs") or []
         return {"ref_count": len(refs)}
+    if fn_name == "acheck_run":
+        return {"client_run_key": args[0] if args else kwargs.get("client_run_key")}
     return {}
 
 
@@ -45,10 +48,12 @@ def _mcp_tool_context(fn_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]
 _TOOL_NAMES = {
     "forecast": "foresea_forecast", "aforecast": "foresea_forecast",
     "analyze": "foresea_analyze_market", "aanalyze": "foresea_analyze_market",
+    "aanalyze_resilient": "foresea_analyze_market",
     "scan_markets": "foresea_scan_markets", "ascan_markets": "foresea_scan_markets",
     "track_record": "foresea_track_record", "atrack_record": "foresea_track_record",
     "edge_board": "foresea_edge_board", "aedge_board": "foresea_edge_board",
     "batch_quotes": "foresea_batch_quotes", "abatch_quotes": "foresea_batch_quotes",
+    "check_run": "foresea_check_run", "acheck_run": "foresea_check_run",
 }
 
 DEFAULT_FORESEA_BASE_URL = "https://foresea.ink"
@@ -67,6 +72,13 @@ class ForeseaApiError(RuntimeError):
 
 def _strip_empty(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in payload.items() if v is not None and v != []}
+
+
+def _match_run_from_listing(listing: Dict[str, Any], client_run_key: str) -> Dict[str, Any]:
+    runs = listing.get("runs") or []
+    if not runs:
+        raise ForeseaApiError(404, f'No run found for client_run_key="{client_run_key}".')
+    return runs[0]
 
 
 def _timeout_from_env() -> float:
@@ -257,6 +269,26 @@ class ForeseaClient:
     async def aanalyze(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return await self._arequest("POST", "/agent/analyze", json_body=payload)
 
+    async def aanalyze_resilient(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Like aanalyze, but stamps a client_run_key up front and, on a
+        client-side timeout, raises an error naming it instead of just failing
+        -- the durable run this created may still be progressing server-side
+        even though this call gave up waiting. Call check_run/acheck_run with
+        the key to pick the result up later instead of restarting."""
+        import httpx
+
+        client_run_key = payload.get("client_run_key") or uuid.uuid4().hex
+        payload["client_run_key"] = client_run_key
+        try:
+            return await self.aanalyze(payload)
+        except httpx.TimeoutException as exc:
+            raise ForeseaApiError(
+                504,
+                "Timed out waiting for the analysis, but the run may still be in progress "
+                f'server-side. Call foresea_check_run(client_run_key="{client_run_key}") in a '
+                "moment instead of restarting.",
+            ) from exc
+
     def scan_markets(
         self,
         *,
@@ -298,6 +330,20 @@ class ForeseaClient:
 
     async def abatch_quotes(self, refs: List[str]) -> Dict[str, Any]:
         return await self._arequest("GET", "/market/batch", params={"refs": refs})
+
+    def check_run(self, client_run_key: str) -> Dict[str, Any]:
+        listing = self._request("GET", "/agent/runs", params={"client_run_key": client_run_key})
+        run = _match_run_from_listing(listing, client_run_key)
+        if run.get("status") == "running":
+            return {"status": "running", "id": run["id"], "detail": "Still in progress -- check back again shortly."}
+        return self._request("GET", f"/agent/runs/{run['id']}")
+
+    async def acheck_run(self, client_run_key: str) -> Dict[str, Any]:
+        listing = await self._arequest("GET", "/agent/runs", params={"client_run_key": client_run_key})
+        run = _match_run_from_listing(listing, client_run_key)
+        if run.get("status") == "running":
+            return {"status": "running", "id": run["id"], "detail": "Still in progress -- check back again shortly."}
+        return await self._arequest("GET", f"/agent/runs/{run['id']}")
 
     def track_record(self) -> Dict[str, Any]:
         return self._request("GET", "/track-record")
@@ -480,7 +526,7 @@ def create_mcp_server(
             tool_loop=tool_loop,
             max_tool_steps=max_tool_steps,
         )
-        return await _call_tool_async(client.aanalyze, payload)
+        return await _call_tool_async(client.aanalyze_resilient, payload)
 
     @mcp.tool()
     async def foresea_scan_markets(
@@ -525,6 +571,19 @@ def create_mcp_server(
         age_seconds, error}], count, truncated}."""
 
         return await _call_tool_async(client.abatch_quotes, refs)
+
+    @mcp.tool()
+    async def foresea_check_run(client_run_key: str) -> Dict[str, Any]:
+        """Call this after foresea_analyze_market timed out or errored with a
+        message naming a client_run_key -- the research it started may still be
+        running server-side. Returns {"status": "running", ...} if it's not done
+        yet (call again in a bit), or the full report once it is. Do not call
+        this speculatively; only use the client_run_key a prior
+        foresea_analyze_market call actually gave you.
+        Example: client_run_key="a1b2c3..." → {status:"running", id:"agent_run_..."}
+        or the full report once complete."""
+
+        return await _call_tool_async(client.acheck_run, client_run_key)
 
     @mcp.tool()
     async def foresea_track_record() -> Dict[str, Any]:
