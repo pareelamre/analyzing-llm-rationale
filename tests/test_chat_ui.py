@@ -133,23 +133,19 @@ for (const [rationale, explicit, expected] of cases) {
         self.assertIn("localStorage.removeItem('foresea_venue_creds')", self.index_html)
 
     def test_settings_modal_hosts_connections_and_copied_agents_with_no_duplicate_ids(self) -> None:
-        # Both sections moved out of the old nested account-popover "Preferences"
-        # details into a dedicated, easy-to-find Settings modal -- reusing the
-        # exact same production connection flow and copied-agent functions,
-        # not new ones, and each hosting element must exist exactly once.
         self.assertIn("function openSettingsModal", self.index_html)
         self.assertIn("function closeSettingsModal", self.index_html)
         self.assertIn("function _showSettingsSection", self.index_html)
         self.assertIn('id="settingsOverlay"', self.index_html)
         self.assertNotIn('id="tradingPanel"', self.index_html)
-        for hosting_id in ("copiedAgentList", "kalshiChip", "polyChip", "vcKalshiKeyId", "vcPolyPriv"):
+        self.assertNotIn('id="copiedAgentList"', self.index_html)
+        for hosting_id in ("kalshiChip", "polyChip", "vcKalshiKeyId", "vcPolyPriv"):
             self.assertEqual(
                 self.index_html.count(f'id="{hosting_id}"'), 1,
                 f'expected exactly one id="{hosting_id}" (relocated, not duplicated)',
             )
         self.assertIn("onclick=\"openSettingsModal()\"", self.index_html)
         self.assertIn("saveVenueCreds('kalshi')", self.index_html)
-        self.assertIn("removeCopiedAgent(", self.index_html)
 
     def test_your_workspace_panel_is_removed_from_the_sidebar(self) -> None:
         # The old sidebar panel (saved context, record, agent runs, and a
@@ -367,9 +363,9 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         self.assertIn(">Eligible</th>", self.index_html)
 
     def test_users_can_copy_a_public_agent_without_private_trading_state(self) -> None:
-        self.assertIn("Copy agent", self.index_html)
-        self.assertIn("function copyPublicAgent", self.index_html)
-        self.assertIn("/agent-profiles/copy", self.index_html)
+        self.assertNotIn("Copy agent", self.index_html)
+        self.assertNotIn(">Copied agents<", self.index_html)
+        self.assertNotIn('id="copiedAgentList"', self.index_html)
         self.assertIn("function syncCopiedAgentsFromServer", self.index_html)
         self.assertIn("function _agentSkillsForRun", self.index_html)
         self.assertIn("agentBody.agent_profile_id = copiedAgent.profileId", self.index_html)
