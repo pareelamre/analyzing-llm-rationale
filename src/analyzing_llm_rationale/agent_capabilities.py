@@ -103,10 +103,16 @@ TOOL_ALIASES: Dict[str, str] = {
     "search": "web_search",
     "google_search": "web_search",
     "web_search_google": "web_search",
-    "search_evidence": "web_search",
     "news_search": "web_search",
     "fetch_market": "get_market",
     "scan": "scan_markets",
+    "probability_forecast": "forecast",
+    "get_track_record": "track_record",
+    "grounding_note": "track_record",
+    "calibration": "track_record",
+    "news": "search_evidence",
+    "evidence": "search_evidence",
+    "fetch_evidence": "search_evidence",
 }
 
 
