@@ -218,7 +218,83 @@ def _as_float(value: Any, default: float = 0.0) -> float:
     return float(value)
 
 
+# Memoized per process (not a "rate" -> value dict of size >1): a shadow-
+# trading cycle is a fresh process each run (see agent_trading_tick.py), so
+# this naturally refreshes every ~15 minutes without needing its own
+# cache-invalidation logic. The "rate" key's presence (not its value)
+# distinguishes "not yet looked up" from "looked up, no credentials/request
+# failed" so a misconfigured or rate-limited endpoint isn't retried on every
+# trade within one cycle.
+_KALSHI_TAKER_FEE_RATE_CACHE: Dict[str, Optional[float]] = {}
+
+
+def _first_valid_rate(raw: Any) -> Optional[float]:
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw) if 0.0 <= raw < 1.0 else None
+    if isinstance(raw, list):
+        for entry in raw:
+            rate = _first_valid_rate(entry)
+            if rate is not None:
+                return rate
+        return None
+    if isinstance(raw, dict):
+        for key in ("rate", "fee_rate", "taker_fee_rate", "value"):
+            if key in raw:
+                rate = _first_valid_rate(raw[key])
+                if rate is not None:
+                    return rate
+    return None
+
+
+def _parse_taker_fee_rate(tiers: Mapping[str, Any]) -> Optional[float]:
+    """Pull a usable taker rate out of /margin/fee_tiers's response.
+
+    place_trade only ever takes liquidity (immediate-or-cancel, no resting
+    orders), so taker is always the applicable rate -- maker never applies
+    here. The exact response shape (a flat rate vs. a list of volume tiers)
+    isn't verified against Kalshi's docs from this codebase; handle both
+    defensively and return None rather than guess if nothing parses cleanly.
+    """
+    raw = tiers.get("taker_fee_rates", tiers.get("taker_fee_rate"))
+    return _first_valid_rate(raw)
+
+
+def _fetch_kalshi_taker_fee_rate() -> Optional[float]:
+    try:
+        from analyzing_llm_rationale import trading
+
+        tiers = trading.get_kalshi_fee_tiers()
+    except Exception:
+        logger.warning(
+            "Kalshi fee-tiers lookup failed; falling back to the estimated fee formula",
+            exc_info=True,
+        )
+        return None
+    rate = _parse_taker_fee_rate(tiers)
+    if rate is None:
+        logger.warning(
+            "Kalshi fee-tiers response had no usable taker rate; falling back to the "
+            "estimated fee formula: %r", tiers,
+        )
+    return rate
+
+
+def _kalshi_taker_fee_rate() -> Optional[float]:
+    if "rate" not in _KALSHI_TAKER_FEE_RATE_CACHE:
+        _KALSHI_TAKER_FEE_RATE_CACHE["rate"] = _fetch_kalshi_taker_fee_rate()
+    return _KALSHI_TAKER_FEE_RATE_CACHE["rate"]
+
+
 def _kalshi_fee(price: float, quantity: float) -> float:
+    rate = _kalshi_taker_fee_rate()
+    if rate is not None:
+        # Kalshi's fee-tiers endpoint documents this rate as applied
+        # directly to notional, not plugged into the parabolic
+        # price*(1-price) shape the flat KALSHI_FEE_COEFFICIENT estimate
+        # below approximates.
+        return max(0.0, rate * quantity * price)
     return max(0.0, KALSHI_FEE_COEFFICIENT * quantity * price * (1.0 - price))
 
 

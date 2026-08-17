@@ -843,6 +843,19 @@ def _kalshi_request(
     return _response_json(response, operation=f"Kalshi {method.upper()} {endpoint_path}")
 
 
+def get_kalshi_fee_tiers(creds: Creds = None) -> Dict[str, Any]:
+    """Fetch this account's live Kalshi maker/taker fee schedule.
+
+    Requires signed Kalshi credentials (KALSHI_ACCESS_KEY_ID /
+    KALSHI_PRIVATE_KEY_FILE, or per-request creds) -- raises the same
+    TradingNotConfiguredError/TradingExecutionError as any other signed
+    Kalshi call in this module if they're missing or the request fails.
+    Callers that want a fee estimate without configured credentials (e.g.
+    shadow/paper trading) should catch and fall back, not call this directly.
+    """
+    return _kalshi_request("GET", "/margin/fee_tiers", creds=creds)
+
+
 def _number(value: Any) -> Optional[float]:
     if value in (None, ""):
         return None

@@ -1013,5 +1013,77 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertAlmostEqual(settlement["realized_pnl"], 5.86)
 
 
+class KalshiTakerFeeRateTests(unittest.TestCase):
+    """place_trade only ever takes liquidity (immediate-or-cancel, no
+    resting orders), so _kalshi_fee should prefer Kalshi's own live taker
+    rate over the flat KALSHI_FEE_COEFFICIENT estimate when it's available,
+    and fall back safely (never raise) when it isn't."""
+
+    def _fresh_cache(self):
+        return mock.patch.dict(benchmark_tools._KALSHI_TAKER_FEE_RATE_CACHE, {}, clear=True)
+
+    def test_parses_a_flat_taker_fee_rate(self):
+        self.assertEqual(benchmark_tools._parse_taker_fee_rate({"taker_fee_rates": 0.05}), 0.05)
+
+    def test_parses_the_first_tier_from_a_tiered_list(self):
+        tiers = {"taker_fee_rates": [{"rate": 0.06}, {"rate": 0.02}]}
+        self.assertEqual(benchmark_tools._parse_taker_fee_rate(tiers), 0.06)
+
+    def test_returns_none_for_an_unparseable_or_missing_shape(self):
+        self.assertIsNone(benchmark_tools._parse_taker_fee_rate({"taker_fee_rates": "garbage"}))
+        self.assertIsNone(benchmark_tools._parse_taker_fee_rate({}))
+        self.assertIsNone(benchmark_tools._parse_taker_fee_rate({"taker_fee_rates": [{"rate": "n/a"}]}))
+
+    def test_kalshi_fee_applies_the_live_rate_directly_to_notional(self):
+        with (
+            self._fresh_cache(),
+            mock.patch(
+                "analyzing_llm_rationale.trading.get_kalshi_fee_tiers",
+                return_value={"taker_fee_rates": 0.05},
+            ),
+        ):
+            fee = benchmark_tools._kalshi_fee(0.40, 10)
+        # rate * price * quantity, NOT the parabolic price*(1-price) estimate.
+        self.assertAlmostEqual(fee, 0.05 * 0.40 * 10)
+
+    def test_kalshi_fee_falls_back_to_the_estimate_when_the_lookup_fails(self):
+        with (
+            self._fresh_cache(),
+            mock.patch(
+                "analyzing_llm_rationale.trading.get_kalshi_fee_tiers",
+                side_effect=RuntimeError("KALSHI_API_KEY_ID is not configured."),
+            ),
+        ):
+            fee = benchmark_tools._kalshi_fee(0.40, 10)
+        self.assertAlmostEqual(
+            fee, benchmark_tools.KALSHI_FEE_COEFFICIENT * 10 * 0.40 * (1.0 - 0.40)
+        )
+
+    def test_kalshi_fee_falls_back_when_the_response_has_no_usable_rate(self):
+        with (
+            self._fresh_cache(),
+            mock.patch(
+                "analyzing_llm_rationale.trading.get_kalshi_fee_tiers",
+                return_value={"unrelated_field": 1},
+            ),
+        ):
+            fee = benchmark_tools._kalshi_fee(0.40, 10)
+        self.assertAlmostEqual(
+            fee, benchmark_tools.KALSHI_FEE_COEFFICIENT * 10 * 0.40 * (1.0 - 0.40)
+        )
+
+    def test_live_rate_lookup_is_memoized_within_a_process(self):
+        with (
+            self._fresh_cache(),
+            mock.patch(
+                "analyzing_llm_rationale.trading.get_kalshi_fee_tiers",
+                return_value={"taker_fee_rates": 0.05},
+            ) as get_tiers,
+        ):
+            benchmark_tools._kalshi_taker_fee_rate()
+            benchmark_tools._kalshi_taker_fee_rate()
+        self.assertEqual(get_tiers.call_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
