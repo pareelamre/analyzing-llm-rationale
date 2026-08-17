@@ -143,6 +143,12 @@ TOOL_ALIASES: Dict[str, str] = {
     "game_stats": "live_data",
     "event_live_data": "live_data",
     "get_live_data": "live_data",
+    "series": "polymarket_meta",
+    "polymarket_series": "polymarket_meta",
+    "comments": "polymarket_meta",
+    "polymarket_comments": "polymarket_meta",
+    "sports": "polymarket_meta",
+    "polymarket_sports": "polymarket_meta",
 }
 
 

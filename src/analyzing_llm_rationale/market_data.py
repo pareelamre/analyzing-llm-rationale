@@ -22,6 +22,9 @@ POLYMARKET_GAMMA_URL = "https://gamma-api.polymarket.com/markets"
 POLYMARKET_TAGS_URL = "https://gamma-api.polymarket.com/tags"
 POLYMARKET_CLOB_BOOK_URL = "https://clob.polymarket.com/book"
 POLYMARKET_HISTORY_URL = "https://clob.polymarket.com/prices-history"
+POLYMARKET_SPORTS_URL = "https://gamma-api.polymarket.com/sports"
+POLYMARKET_COMMENTS_URL = "https://gamma-api.polymarket.com/comments"
+POLYMARKET_SERIES_URL = "https://gamma-api.polymarket.com/series"
 KALSHI_API_URL = "https://api.elections.kalshi.com/trade-api/v2/markets"
 KALSHI_EVENTS_URL = "https://api.elections.kalshi.com/trade-api/v2/events"
 KALSHI_EXCHANGE_STATUS_URL = "https://api.elections.kalshi.com/trade-api/v2/exchange/status"
@@ -663,3 +666,20 @@ def fetch_kalshi_live_data(event_ticker: str = "", data_type: str = "") -> Dict[
     url = f"{KALSHI_LIVE_DATA_URL}/{data_type}" if data_type else KALSHI_LIVE_DATA_URL
     data = _get_json(url, params=params if not data_type else None)
     return data if isinstance(data, dict) else {}
+def fetch_polymarket_sports() -> List[Dict[str, Any]]:
+    """Fetch active sports leagues and market types from Polymarket Gamma API."""
+    data = _get_json(POLYMARKET_SPORTS_URL)
+    return [s for s in data if isinstance(s, dict)] if isinstance(data, list) else []
+
+
+def fetch_polymarket_comments(market_id: str = "") -> List[Dict[str, Any]]:
+    """Fetch public community comments for a Polymarket event/market."""
+    params = {"market": market_id} if market_id else None
+    data = _get_json(POLYMARKET_COMMENTS_URL, params=params)
+    return [c for c in data if isinstance(c, dict)] if isinstance(data, list) else []
+
+
+def fetch_polymarket_series() -> List[Dict[str, Any]]:
+    """Fetch active event series listings from Polymarket Gamma API."""
+    data = _get_json(POLYMARKET_SERIES_URL)
+    return [s for s in data if isinstance(s, dict)] if isinstance(data, list) else []
