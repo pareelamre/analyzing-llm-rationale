@@ -9867,13 +9867,11 @@ function _agentReportToMarkdown(d, options = {}) {
   // captions below only make sense for an actual forecast attempt.
   const isChatReply = d.question_type === 'chat';
 
-  if (!isChatReply && d.market_probability == null) {
-    md += `\n\n*Give me the market price (start with "Market at 42%: …") or paste a Polymarket/Kalshi link, and I'll tell you whether there's an edge.*`;
-  }
-
   (d.skills || []).forEach(s => { md += `\n\n**${s.name}.** ${s.output}`; });
 
-  if (d.grounding) md += `\n\n> _${d.grounding.replace(/\n/g, ' ')}_`;
+  // The report's grounding field is internal self-calibration metadata (API
+  // transparency field), not answer text -- intentionally not rendered into
+  // the chat bubble here.
 
   if (includeSources && !isChatReply) {
   // Clickable, de-duplicated source citations.
@@ -9890,6 +9888,13 @@ function _agentReportToMarkdown(d, options = {}) {
     md += `\n\n*I couldn't pull solid sources on this one, so I'm low-confidence. Paste an article or link (the 📎 button) and I'll factor it in, or sharpen the question — e.g. add the exact threshold and date.*`;
   }
   }
+
+  // Placed last so it reads as an invitation to keep going, not a mid-reply
+  // instruction.
+  if (!isChatReply && d.market_probability == null) {
+    md += `\n\n*Curious if there's an edge? Drop the market price (e.g. "Market at 42%: …") or a Polymarket/Kalshi link and I'll check it for you.*`;
+  }
+
   return md;
 }
 

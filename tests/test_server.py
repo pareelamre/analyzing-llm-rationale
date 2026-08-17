@@ -891,6 +891,61 @@ class ServerTests(unittest.TestCase):
             self.assertNotIn("Self-calibration context", message.get("content", ""))
             self.assertNotIn("Forecaster self-calibration", message.get("content", ""))
 
+    def test_agent_tool_loop_puts_self_calibration_note_in_system_rules_not_question(self):
+        # Unlike the greeting-history leak above (fixed separately), a real
+        # forecast question DOES go through the tool loop with grounding
+        # enabled -- this used to splice the raw note into the literal
+        # "Question: ..." user turn (server.py's q = f"{question}\n\n..."),
+        # which a weaker model would just quote back into its final answer.
+        # It must live in the system rules instead, marked non-quotable.
+        agg = {"n_snapshots_resolved": 5, "overall": {"skill_vs_market": 0.01}}
+        with mock.patch.object(server_module, "_read_live_track_record", return_value=agg):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Will it rain tomorrow?",
+                    "tool_loop": True,
+                    "ground_in_record": True,
+                    "max_tool_steps": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        system_message, user_message = self.provider.calls[0][0], self.provider.calls[0][1]
+        self.assertEqual(system_message["role"], "system")
+        self.assertIn("Forecaster self-calibration", system_message["content"])
+        self.assertIn("do not quote, repeat, or reference this note", system_message["content"])
+        self.assertEqual(user_message["role"], "user")
+        self.assertNotIn("Forecaster self-calibration", user_message["content"])
+        self.assertNotIn("Self-calibration context", user_message["content"])
+        self.assertEqual(user_message["content"], "Question: Will it rain tomorrow?")
+
+    def test_self_calibration_echo_regex_strips_leaked_note_but_keeps_the_rest(self):
+        # Defense in depth for _agent_tool_loop: extra_rules tells the model
+        # not to repeat build_grounding_note()'s text, but if a model echoes
+        # it into its final turn anyway, this scrub (applied to raw_answer
+        # before it becomes report.thesis) must remove it -- mirrors how
+        # _build_chat_response already strips the internal [p:0.XX] marker.
+        leaked = (
+            "It should rain tomorrow.\n\n"
+            "[Self-calibration context]\n"
+            "Forecaster self-calibration (live track record, 5 resolved forecasts):\n"
+            "- Overall skill vs market: +0.010 Brier (beating the market price).\n"
+            "- Known tendency: this model has overpriced low-probability/longshot "
+            "outcomes. Treat that as a prior and shade tail YES estimates down, not a hard rule.\n\n"
+            "I expect YES."
+        )
+        cleaned = server_module._SELF_CALIBRATION_ECHO_RE.sub("", leaked).strip()
+
+        self.assertNotIn("Forecaster self-calibration", cleaned)
+        self.assertNotIn("Self-calibration context", cleaned)
+        self.assertIn("It should rain tomorrow.", cleaned)
+        self.assertIn("I expect YES.", cleaned)
+
+        # A normal answer with no leak must pass through untouched.
+        normal = "It should rain tomorrow. I expect YES."
+        self.assertEqual(server_module._SELF_CALIBRATION_ECHO_RE.sub("", normal).strip(), normal)
+
     def test_market_forecast_stream_returns_model_probability(self):
         token = _issue_session("stream-user", "user@example.com", "Stream User", "")
         self.provider.stream_response = json.dumps(self.provider.response)
