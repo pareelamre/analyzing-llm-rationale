@@ -60,7 +60,6 @@ class ToolAliasTests(unittest.TestCase):
         obs = res["transcript"][0]["observation"]
         self.assertIn("unknown tool 'nonexistent_tool'", obs)
         self.assertIn("available tools: 'place_trade', 'web_search'", obs)
-
     def test_normalize_api_aliases(self):
         obj1 = ac.parse_action('{"action": "http_get", "args": {"url": "https://api.com/v1"}}')
         self.assertEqual(obj1["action"], "fetch_api")
