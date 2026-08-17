@@ -185,7 +185,7 @@ logger = logging.getLogger("foresea")
 _PROVIDER_MAX_RETRIES = int(os.environ.get("PROVIDER_MAX_RETRIES", "2"))      # attempts = retries + 1
 _PROVIDER_TIMEOUT_S = float(os.environ.get("PROVIDER_TIMEOUT_S", "90"))       # per-attempt wall-clock budget
 _PROVIDER_BACKOFF_BASE_S = float(os.environ.get("PROVIDER_BACKOFF_BASE_S", "0.5"))
-_INTERACTIVE_DEFAULT_MODEL = os.environ.get("INTERACTIVE_DEFAULT_MODEL", "gemma-4-31b-it").strip()
+_INTERACTIVE_DEFAULT_MODEL = os.environ.get("INTERACTIVE_DEFAULT_MODEL", "gemma-4-26b-a4b-it").strip()
 _INTERACTIVE_MAX_TOKENS = int(os.environ.get("INTERACTIVE_MAX_TOKENS", "768"))
 _CHAT_PROVIDER_TIMEOUT_S = float(os.environ.get("CHAT_PROVIDER_TIMEOUT_S", "15"))
 _CHAT_PROVIDER_MAX_RETRIES = int(os.environ.get("CHAT_PROVIDER_MAX_RETRIES", "1"))
@@ -12071,12 +12071,14 @@ except Exception as exc:  # pragma: no cover - defensive production fallback.
     logger.warning("failed to load SCADS model allowlist from config: %s", exc)
     _SCADS_MODEL_ALLOWLIST = {
         "gpt-oss-120b": "openai/gpt-oss-120b",
+        "gemma-4-26b-a4b-it": "google/gemma-4-26B-A4B-it",
         "gemma-4-31b-it": "google/gemma-4-31B-it",
         "scads-alias-reasoning": "alias-reasoning",
+        "kimi-k3": "moonshotai/Kimi-K3",
         "kimi-k2.7-code": "moonshotai/Kimi-K2.7-Code",
     }
     _SCADS_CHAT_MODEL_OPTIONS = ()
-    _SCADS_MODEL_FALLBACKS = {"gpt-oss-120b": ("google/gemma-4-31B-it",)}
+    _SCADS_MODEL_FALLBACKS = {"gpt-oss-120b": ("google/gemma-4-26B-A4B-it",)}
 
 
 def _scads_alt_provider(

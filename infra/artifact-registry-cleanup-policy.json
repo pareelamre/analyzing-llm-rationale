@@ -1,25 +1,16 @@
 [
   {
-    "name": "delete-old-docker-images",
-    "action": {"type": "Delete"},
-    "condition": {
-      "tagState": "any",
-      "olderThan": "7d"
-    }
-  },
-  {
     "name": "keep-recent-versions",
     "action": {"type": "Keep"},
     "mostRecentVersions": {
-      "keepCount": 5
+      "keepCount": 3
     }
   },
   {
-    "name": "keep-main-tag",
-    "action": {"type": "Keep"},
+    "name": "delete-old-images",
+    "action": {"type": "Delete"},
     "condition": {
-      "tagState": "tagged",
-      "tagPrefixes": ["main"]
+      "olderThan": "3d"
     }
   }
 ]
