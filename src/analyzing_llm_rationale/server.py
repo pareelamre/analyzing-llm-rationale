@@ -13466,6 +13466,20 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         except Exception as exc:
             return f"(Market tags fetch failed: {exc})"
 
+    async def _tool_price_history(args):
+        ticker = str(args.get("ticker") or args.get("market") or "").strip()
+        series_ticker = str(args.get("series_ticker") or "").strip()
+        if not ticker:
+            return "ticker or market argument required."
+        try:
+            if ticker.startswith("KX") or "-" in ticker:
+                candles = await loop.run_in_executor(None, lambda: market_data.fetch_kalshi_candlesticks(ticker, series_ticker))
+                return f"Kalshi Candlesticks for {ticker}:\n{json.dumps(candles[:10], indent=2)[:3500]}"
+            hist = await loop.run_in_executor(None, lambda: market_data.fetch_polymarket_price_history(ticker))
+            return f"Polymarket Price History for {ticker}:\n{json.dumps(hist[:10], indent=2)[:3500]}"
+        except Exception as exc:
+            return f"(Price history fetch failed: {exc})"
+
     benchmark_tool_map = {
         "place_trade": _tool_place_trade,
         "web_search": _tool_web_search,
@@ -13481,6 +13495,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "exchange_status": _tool_exchange_status,
         "orderbook": _tool_orderbook,
         "market_tags": _tool_market_tags,
+        "price_history": _tool_price_history,
     }
     benchmark_specs = [
         {"name": "place_trade", "args": "ticker, side, price, quantity", "description": "Buy YES or NO contracts on Kalshi using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit -- a rejection means one of those guards tripped, not that trading itself is unavailable."},
@@ -13497,6 +13512,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         {"name": "exchange_status", "args": "", "description": "Get Kalshi exchange operational status (trading_active) and schedule."},
         {"name": "orderbook", "args": "ticker|token_id", "description": "Fetch live orderbook bids/asks for Kalshi ticker or Polymarket token."},
         {"name": "market_tags", "args": "", "description": "Fetch active market categories and tags on Polymarket."},
+        {"name": "price_history", "args": "ticker|market, series_ticker?", "description": "Fetch historical prices or OHLC candlesticks for a market."},
     ]
     if req.benchmark_tools:
         allowed_names = req.benchmark_tool_names
@@ -13512,7 +13528,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                  "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,
                  "batch_quotes": _tool_batch_quotes, "fetch_api": _tool_fetch_api,
                  "exchange_status": _tool_exchange_status, "orderbook": _tool_orderbook,
-                 "market_tags": _tool_market_tags}
+                 "market_tags": _tool_market_tags, "price_history": _tool_price_history}
         specs = [
             {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
             {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
@@ -13525,6 +13541,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             {"name": "exchange_status", "args": "", "description": "Get Kalshi exchange operational status (trading_active) and schedule."},
             {"name": "orderbook", "args": "ticker|token_id", "description": "Fetch live orderbook bids/asks for Kalshi ticker or Polymarket token."},
             {"name": "market_tags", "args": "", "description": "Fetch active market categories and tags on Polymarket."},
+            {"name": "price_history", "args": "ticker|market, series_ticker?", "description": "Fetch historical prices or OHLC candlesticks for a market."},
         ]
 
     # Optional: proxy the venues' own MCP tools (orderbook/depth/etc.) when

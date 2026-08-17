@@ -135,6 +135,10 @@ TOOL_ALIASES: Dict[str, str] = {
     "get_tags": "market_tags",
     "categories": "market_tags",
     "polymarket_tags": "market_tags",
+    "candlesticks": "price_history",
+    "history": "price_history",
+    "ohlc": "price_history",
+    "get_price_history": "price_history",
 }
 
 
