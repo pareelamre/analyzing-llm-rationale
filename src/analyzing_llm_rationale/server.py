@@ -13434,7 +13434,6 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             return await loop.run_in_executor(None, _http_call)
         except Exception as exc:
             return f"(API request failed: {exc})"
-
     async def _tool_exchange_status(args):
         try:
             status = await loop.run_in_executor(None, market_data.fetch_kalshi_exchange_status)
@@ -13511,7 +13510,6 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     else:
         tools = {"forecast": _tool_forecast, "get_market": _tool_get_market,
                  "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,
-                 "track_record": _tool_track_record, "edge_board": _tool_edge_board,
                  "batch_quotes": _tool_batch_quotes, "fetch_api": _tool_fetch_api,
                  "exchange_status": _tool_exchange_status, "orderbook": _tool_orderbook,
                  "market_tags": _tool_market_tags}

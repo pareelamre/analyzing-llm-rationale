@@ -72,7 +72,6 @@ class ToolAliasTests(unittest.TestCase):
 
         obj4 = ac.parse_action('{"action": "foresea_batch_quotes", "args": {"refs": ["KX1"]}}')
         self.assertEqual(obj4["action"], "batch_quotes")
-
         obj5 = ac.parse_action('{"action": "get_exchange_status", "args": {}}')
         self.assertEqual(obj5["action"], "exchange_status")
 
