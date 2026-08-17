@@ -109,8 +109,7 @@ jobs:
             --cpu-throttling \
             --cpu-boost \
             --update-secrets SCADS_AI_API_KEY=SCADS_AI_API_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,SESSION_SECRET=SESSION_SECRET:latest \
-            --update-env-vars MODEL_DEVICE=cpu,CUSTOM_DOMAIN=foresea.ink,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json,INTERACTIVE_DEFAULT_MODEL=gemma-4-31b-it,INTERACTIVE_MAX_TOKENS=384,CHAT_PROVIDER_TIMEOUT_S=15,CHAT_PROVIDER_MAX_RETRIES=0,EVIDENCE_TIMEOUT_S=0,EVIDENCE_MAX_CONCURRENCY=4,FORESEA_ENABLE_BYO_TRADING=true,FORESEA_TRADING_KMS_KEY_NAME=projects/brave-drive-471109-d9/locations/us-central1/keyRings/foresea-trading/cryptoKeys/exchange-connections \
-            --remove-env-vars MARKETD_URL \
+            --update-env-vars MODEL_DEVICE=cpu,CUSTOM_DOMAIN=foresea.ink,EMBED_MODEL_PATH=/app/models/all-MiniLM-L6-v2,CRYPTO_5M_EQUITY_FILE=/app/models/crypto_5m/equity_payload.json,INTERACTIVE_DEFAULT_MODEL=gemma-4-31b-it,INTERACTIVE_MAX_TOKENS=384,CHAT_PROVIDER_TIMEOUT_S=15,CHAT_PROVIDER_MAX_RETRIES=0,EVIDENCE_TIMEOUT_S=0,EVIDENCE_MAX_CONCURRENCY=4,FORESEA_ENABLE_BYO_TRADING=true,FORESEA_TRADING_KMS_KEY_NAME=projects/brave-drive-471109-d9/locations/us-central1/keyRings/foresea-trading/cryptoKeys/exchange-connections,MARKETD_URL=https://marketd-664177666636.us-central1.run.app \
             --project ${{ env.GCP_PROJECT_ID }}
           # The RAG embedding model is served from a GCS volume mounted at
           # /app/models (volume 'models' -> gs://brave-drive-471109-d9-models),
