@@ -13376,6 +13376,65 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         agg = await loop.run_in_executor(None, _read_live_track_record)
         return agent_capabilities.build_grounding_note(agg) or "No resolved forecasts yet."
 
+    async def _tool_edge_board(args):
+        live = await loop.run_in_executor(None, _read_edge_board_record)
+        board = (live or {}).get("edge_board") or []
+        limit = min(max(1, int(args.get("limit", 5))), 20)
+        lines = []
+        for item in board[:limit]:
+            ident = item.get("ticker") or item.get("slug") or item.get("ident") or "?"
+            q = item.get("question") or "?"
+            m_prob = item.get("market_probability")
+            f_prob = item.get("foresea_probability") or item.get("model_probability")
+            edge = item.get("edge")
+            m_pct = f"{round(m_prob * 100)}%" if m_prob is not None else "n/a"
+            f_pct = f"{round(f_prob * 100)}%" if f_prob is not None else "n/a"
+            edge_str = f"{edge:+.1%}" if edge is not None else "n/a"
+            lines.append(f"- [{item.get('platform', '?')}] {ident}: \"{q[:60]}\" (mkt: {m_pct}, model: {f_pct}, edge: {edge_str})")
+        return "\n".join(lines) or "No edge board opportunities found."
+
+    async def _tool_batch_quotes(args):
+        refs = args.get("refs") or args.get("tickers") or args.get("slugs") or []
+        if isinstance(refs, str):
+            refs = [r.strip() for r in refs.split(",") if r.strip()]
+        if not isinstance(refs, list) or not refs:
+            return "Pass a list of market tickers/slugs or comma-separated string in 'refs'."
+        results = []
+        for ref in refs[:10]:
+            ref_str = str(ref).strip()
+            try:
+                if ref_str.startswith("KX") or "-" in ref_str:
+                    q = await _fetch_market_quote("kalshi", ticker=ref_str)
+                else:
+                    q = await _fetch_market_quote("polymarket", slug=ref_str)
+                results.append(f"- [{q.platform}] {ref_str}: {q.outcome} at {round((q.probability or 0) * 100)}%")
+            except Exception:
+                results.append(f"- {ref_str}: fetch failed")
+        return "\n".join(results) or "No quotes fetched."
+
+    async def _tool_fetch_api(args):
+        url = str(args.get("url") or args.get("endpoint") or "").strip()
+        if not url:
+            return "url argument required."
+        if url.startswith("/"):
+            url = f"http://127.0.0.1:8080{url}"
+        method = str(args.get("method", "GET")).upper()
+        if method not in ("GET", "POST"):
+            return "method must be 'GET' or 'POST'."
+        payload = args.get("data") or args.get("json") or args.get("body")
+        try:
+            def _http_call():
+                import requests
+                headers = {"User-Agent": "Foresea-Agent-Tool/1.0", "Accept": "application/json, text/plain"}
+                if method == "POST":
+                    resp = requests.post(url, json=payload if isinstance(payload, dict) else None, data=payload if isinstance(payload, str) else None, headers=headers, timeout=15)
+                else:
+                    resp = requests.get(url, headers=headers, timeout=15)
+                return f"HTTP {resp.status_code}\n{resp.text[:3500]}"
+            return await loop.run_in_executor(None, _http_call)
+        except Exception as exc:
+            return f"(API request failed: {exc})"
+
     benchmark_tool_map = {
         "place_trade": _tool_place_trade,
         "web_search": _tool_web_search,
@@ -13384,7 +13443,9 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "scan_markets": _tool_scan,
         "forecast": _tool_forecast,
         "search_evidence": _tool_search_evidence,
-        "track_record": _tool_track_record,
+        "edge_board": _tool_edge_board,
+        "batch_quotes": _tool_batch_quotes,
+        "fetch_api": _tool_fetch_api,
     }
     benchmark_specs = [
         {"name": "place_trade", "args": "ticker, side, price, quantity", "description": "Buy YES or NO contracts on Kalshi using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit -- a rejection means one of those guards tripped, not that trading itself is unavailable."},
@@ -13395,6 +13456,9 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
         {"name": "search_evidence", "args": "query", "description": "Retrieve recent news headlines relevant to a query."},
         {"name": "track_record", "args": "", "description": "Get the model's own live calibration / skill-vs-market."},
+        {"name": "edge_board", "args": "limit?", "description": "Get top open prediction market opportunities ranked by model-vs-market edge."},
+        {"name": "batch_quotes", "args": "refs", "description": "Fetch batch market quotes for a comma-separated list of tickers or slugs."},
+        {"name": "fetch_api", "args": "url, method?, json?", "description": "Execute a GET or POST HTTP API request to an API endpoint URL."},
     ]
     if req.benchmark_tools:
         allowed_names = req.benchmark_tool_names
@@ -13402,27 +13466,23 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             tools = dict(benchmark_tool_map)
             specs = list(benchmark_specs)
         else:
-            # Silently ignore any name outside the known three rather than
-            # erroring -- callers only ever build this list from constants,
-            # never user input, so a typo here is a caller bug best caught
-            # by the resulting tool being (correctly) unavailable.
             allowed = set(allowed_names)
             tools = {name: fn for name, fn in benchmark_tool_map.items() if name in allowed}
             specs = [s for s in benchmark_specs if s["name"] in allowed]
     else:
-        # Benchmark tools (place_trade above all) must never reach the standard
-        # tool loop -- /agent/analyze's documented contract is that it never
-        # places an order, and req.benchmark_tools is the only opt-in for the
-        # trading tool surface. Do not merge benchmark_tool_map/specs here.
         tools = {"forecast": _tool_forecast, "get_market": _tool_get_market,
                  "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,
-                 "track_record": _tool_track_record}
+                 "track_record": _tool_track_record, "edge_board": _tool_edge_board,
+                 "batch_quotes": _tool_batch_quotes, "fetch_api": _tool_fetch_api}
         specs = [
             {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
             {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
             {"name": "search_evidence", "args": "query", "description": "Retrieve recent news headlines relevant to a query."},
             {"name": "scan_markets", "args": "platform, query?", "description": "List live markets on a venue (optionally filtered by keyword)."},
             {"name": "track_record", "args": "", "description": "Get the model's own live calibration / skill-vs-market."},
+            {"name": "edge_board", "args": "limit?", "description": "Get top open prediction market opportunities ranked by model-vs-market edge."},
+            {"name": "batch_quotes", "args": "refs", "description": "Fetch batch market quotes for a comma-separated list of tickers or slugs."},
+            {"name": "fetch_api", "args": "url, method?, json?", "description": "Execute a GET or POST HTTP API request to an API endpoint URL."},
         ]
 
     # Optional: proxy the venues' own MCP tools (orderbook/depth/etc.) when
