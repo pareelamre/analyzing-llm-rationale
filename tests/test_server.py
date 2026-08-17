@@ -1616,7 +1616,8 @@ class ServerTests(unittest.TestCase):
         expected = scads_hosted_model_allowlist(server_module._REPO_ROOT / "configs" / "models.yaml")
         self.assertEqual(server_module._SCADS_MODEL_ALLOWLIST, expected)
         self.assertIn("scads-alias-reasoning", server_module._SCADS_MODEL_ALLOWLIST)
-        self.assertIn("kimi-k2.7-code", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertIn("kimi-k3", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertIn("gemma-4-26b-a4b-it", server_module._SCADS_MODEL_ALLOWLIST)
         self.assertIn("deepseek-v3", server_module._SCADS_MODEL_ALLOWLIST)
         self.assertIn("kimi-k2.6", server_module._SCADS_MODEL_ALLOWLIST)
 

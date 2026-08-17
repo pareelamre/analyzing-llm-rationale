@@ -97,9 +97,9 @@ class TrackRecordTickTests(unittest.TestCase):
             "scads-alias-huge-no-thinking",
             "llama-3.3-70b-instruct",
             "gpt-oss-120b",
-            "gemma-4-31b-it",
+            "gemma-4-26b-a4b-it",
             "minimax-m3",
-            "kimi-k2.7-code",
+            "kimi-k3",
             "kimi-k2.6",
             "qwen3-coder-30b-a3b-instruct",
             "glm-5.2-fp8",
@@ -108,8 +108,8 @@ class TrackRecordTickTests(unittest.TestCase):
             self.assertIn(model, track_record_tick.TRACK_MODELS)
         # These carry `track_record_enabled: false` in configs/models.yaml --
         # either not in the active CI matrix (llama-4-scout-17b-16e-instruct,
-        # qwen3-vl-8b-instruct, deepseek-v3, kimi-k2.5) or actively failing on
-        # every attempt due to a SCADS AI team-permission error
+        # qwen3-vl-8b-instruct, deepseek-v3, kimi-k2.5, gemma-4-31b-it, kimi-k2.7-code)
+        # or actively failing on every attempt due to a SCADS AI team-permission error
         # (llama-3.1-8b-instruct) -- so their MTM/edge-Kelly accounts would
         # otherwise sit frozen at the starting balance forever.
         for model in (
@@ -118,6 +118,8 @@ class TrackRecordTickTests(unittest.TestCase):
             "qwen3-vl-8b-instruct",
             "deepseek-v3",
             "kimi-k2.5",
+            "gemma-4-31b-it",
+            "kimi-k2.7-code",
         ):
             self.assertNotIn(model, track_record_tick.TRACK_MODELS)
         self.assertNotIn("model: llama-3.1-8b-instruct", workflow)

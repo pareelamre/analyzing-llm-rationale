@@ -2030,7 +2030,8 @@
       .nav-collapse { display: none; }
       .btn-signin { padding: 7px 13px; }
     }
-  </style>
+  </style>
+
   <script>
     // Pre-paint routing (see the [data-boot-view] CSS rules above): decide
     // the initial route before the browser paints anything, so a direct
@@ -2820,15 +2821,17 @@ const MARKET_EXAMPLES = [
   'When will SpaceX complete its next major Starship milestone?'
 ];
 const BUILTIN_CHAT_MODELS_FALLBACK = [
-  { key: 'scads-alias-code', label: 'Alias Code', model: 'alias-code', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-31B-it'] },
-  { key: 'scads-alias-ha', label: 'Alias HA', model: 'alias-ha', fallbacks: ['google/gemma-4-31B-it', 'openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'scads-alias-code', label: 'Alias Code', model: 'alias-code', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-26B-A4B-it'] },
+  { key: 'scads-alias-ha', label: 'Alias HA', model: 'alias-ha', fallbacks: ['google/gemma-4-26B-A4B-it', 'openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
   { key: 'scads-alias-reasoning', label: 'Alias Reasoning', model: 'alias-reasoning', fallbacks: ['openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
-  { key: 'gpt-oss-120b', label: 'GPT-OSS-120B', model: 'openai/gpt-oss-120b', fallbacks: ['google/gemma-4-31B-it'] },
+  { key: 'gpt-oss-120b', label: 'GPT-OSS-120B', model: 'openai/gpt-oss-120b', fallbacks: ['google/gemma-4-26B-A4B-it'] },
+  { key: 'gemma-4-26b-a4b-it', label: 'Gemma-4-26B', model: 'google/gemma-4-26B-A4B-it', fallbacks: ['openai/gpt-oss-120b', 'meta-llama/Llama-3.3-70B-Instruct'] },
   { key: 'gemma-4-31b-it', label: 'Gemma-4-31B', model: 'google/gemma-4-31B-it', fallbacks: ['openai/gpt-oss-120b', 'meta-llama/Llama-3.3-70B-Instruct'] },
-  { key: 'llama-3.3-70b-instruct', label: 'Llama-3.3-70B', model: 'meta-llama/Llama-3.3-70B-Instruct', fallbacks: ['google/gemma-4-31B-it', 'openai/gpt-oss-120b'] },
-  { key: 'minimax-m3', label: 'MiniMax-M3', model: 'MiniMaxAI/MiniMax-M3-MXFP8', fallbacks: ['moonshotai/Kimi-K2.7-Code'] },
+  { key: 'llama-3.3-70b-instruct', label: 'Llama-3.3-70B', model: 'meta-llama/Llama-3.3-70B-Instruct', fallbacks: ['google/gemma-4-26B-A4B-it', 'openai/gpt-oss-120b'] },
+  { key: 'minimax-m3', label: 'MiniMax-M3', model: 'MiniMaxAI/MiniMax-M3-MXFP8', fallbacks: ['moonshotai/Kimi-K3'] },
+  { key: 'kimi-k3', label: 'Kimi-K3', model: 'moonshotai/Kimi-K3', fallbacks: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
   { key: 'kimi-k2.7-code', label: 'Kimi-K2.7-Code', model: 'moonshotai/Kimi-K2.7-Code', fallbacks: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
-  { key: 'qwen3-coder-30b-a3b-instruct', label: 'Qwen3 Coder 30B', model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-31B-it'] },
+  { key: 'qwen3-coder-30b-a3b-instruct', label: 'Qwen3 Coder 30B', model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-26B-A4B-it'] },
   { key: 'glm-5.2-fp8', label: 'GLM-5.2-FP8', model: 'zai-org/GLM-5.2-FP8', fallbacks: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
 ];
 let builtinChatModels = BUILTIN_CHAT_MODELS_FALLBACK.slice();
@@ -5511,10 +5514,12 @@ const _MTM_MODEL_COLORS = {
   'llama-4-scout-17b-16e-instruct': '#06b6d4',
   'deepseek-v3': '#f59e0b',
   'gpt-oss-120b': '#a78bfa',
+  'gemma-4-26b-a4b-it': '#f97316',
   'gemma-4-31b-it': '#f97316',
   'kimi-k2.5': '#ef4444',
   'kimi-k2.6': '#ec4899',
   'kimi-k2.7-code': '#f43f5e',
+  'kimi-k3': '#f43f5e',
   'minimax-m3': '#22c55e',
   'qwen3-coder-30b-a3b-instruct': '#14b8a6',
   'glm-5.2-fp8': '#eab308',
@@ -6564,6 +6569,7 @@ function _ebModelHead(model) {
   if (raw.includes('minimax')) return 'MM';
   if (raw.includes('qwen3-coder')) return 'Q3C';
   if (raw.includes('glm')) return 'GLM';
+  if (raw.includes('kimi-k3') || raw === 'kimi-k3') return 'K3';
   if (raw.includes('kimi-k2.7')) return 'K27';
   if (raw.includes('kimi-k2.6')) return 'K26';
   if (raw.includes('kimi-k2.5')) return 'K25';
@@ -6643,6 +6649,59 @@ function _ebSetView(view) {
   _attachEdgeBoardChartHovers(host);
   refreshEdgePrices();
   if (_ebView === 'agentic') loadAgentTradingSection();
+}
+
+function _modelLogoSvg(modelOrLabel, color) {
+  const raw = String(modelOrLabel || '').toLowerCase();
+  if (raw.includes('gemma')) {
+    // Google Gemma sparkle diamond
+    return `<path d="M0 -5.5 C0.6 -1.6 1.6 -0.6 5.5 0 C1.6 0.6 0.6 1.6 0 5.5 C-0.6 1.6 -1.6 0.6 -5.5 0 C-1.6 -0.6 -0.6 -1.6 0 -5.5 Z" fill="${color}"/>`;
+  }
+  if (raw.includes('gpt') || raw === 'gpt') {
+    // OpenAI swirl
+    return `<circle cx="0" cy="0" r="4.8" fill="none" stroke="${color}" stroke-width="1.1"/><circle cx="0" cy="-2.2" r="2" fill="none" stroke="${color}" stroke-width="0.8"/><circle cx="2.2" cy="0" r="2" fill="none" stroke="${color}" stroke-width="0.8"/><circle cx="0" cy="2.2" r="2" fill="none" stroke="${color}" stroke-width="0.8"/><circle cx="-2.2" cy="0" r="2" fill="none" stroke="${color}" stroke-width="0.8"/>`;
+  }
+  if (raw.includes('kimi') || raw === 'k3' || raw === 'k27' || raw === 'k26' || raw === 'k25') {
+    // Moonshot Kimi crescent moon
+    return `<path d="M-1.8 -4.8 A 4.8 4.8 0 1 0 3.8 3.8 A 3.8 3.8 0 0 1 -1.8 -4.8 Z" fill="${color}"/>`;
+  }
+  if (raw.includes('llama') || raw === 'l33' || raw === 'l31') {
+    // Meta infinity
+    return `<path d="M-4.2 1.8 C-4.2 -2.2 -0.8 -3 0 -0.8 C0.8 -3 4.2 -2.2 4.2 1.8 C4.2 3.4 2.5 4.2 0 4.2 C-2.5 4.2 -4.2 3.4 -4.2 1.8 Z" fill="none" stroke="${color}" stroke-width="1.2"/>`;
+  }
+  if (raw.includes('minimax') || raw === 'mm') {
+    // MiniMax twin-peak M
+    return `<path d="M-4.5 3.5 L-4.5 -2.5 L-2.2 1 L0 -2.5 L2.2 1 L4.5 -2.5 L4.5 3.5" fill="none" stroke="${color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  if (raw.includes('qwen') || raw === 'q3c') {
+    // Qwen faceted crystal
+    return `<path d="M0 -4.8 L4 -2.2 L4 2.2 L0 4.8 L-4 2.2 L-4 -2.2 Z M0.8 1.2 L3 3.5" fill="none" stroke="${color}" stroke-width="1.1" stroke-linecap="round"/>`;
+  }
+  if (raw.includes('glm')) {
+    // GLM zigzag
+    return `<path d="M-3.5 -3.5 L3.5 -3.5 L-1 0 L3.5 3.5 L-3.5 3.5" fill="none" stroke="${color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  if (raw.includes('alias-code') || raw === 'cod') {
+    // Code angle brackets
+    return `<path d="M-1.8 -2.5 L-4.2 0 L-1.8 2.5 M1.8 -2.5 L4.2 0 L1.8 2.5 M-0.5 3.2 L0.5 -3.2" fill="none" stroke="${color}" stroke-width="1" stroke-linecap="round"/>`;
+  }
+  if (raw.includes('alias-ha') || raw === 'ha') {
+    // High availability bolt
+    return `<path d="M0.8 -5 L-3 0.5 L-0.5 0.5 L-0.8 5 L3 -0.5 L0.5 -0.5 Z" fill="${color}"/>`;
+  }
+  if (raw.includes('alias-reasoning') || raw === 'rsn') {
+    // Reasoning brain / bulb
+    return `<path d="M-2.5 -3.2 C-4.2 -3.2 -4.2 0.2 -2.5 1.8 L-1.6 3.4 L1.6 3.4 L2.5 1.8 C4.2 0.2 4.2 -3.2 2.5 -3.2 Z M-1.2 4.6 L1.2 4.6" fill="none" stroke="${color}" stroke-width="1" stroke-linecap="round"/>`;
+  }
+  if (raw.includes('council') || raw.includes('foresea') || raw === 'for') {
+    // Foresea boat mark
+    return `<path d="M-4.2 0.8 C-4.2 0.8 -2.5 3 0 3 C2.5 3 4.2 0.8 4.2 0.8 C4.2 0.8 3.4 3.8 -0.4 3.8 C-3.8 3.8 -4.2 0.8 -4.2 0.8 Z M-0.4 0.8 V-3.8 H1.2" fill="${color}"/>`;
+  }
+  if (raw.includes('crowd') || raw.includes('market') || raw === 'mkt' || raw === 'base') {
+    // Market baseline user group
+    return `<circle cx="0" cy="-2" r="1.8" fill="${color}"/><path d="M-3.8 3.8 C-3.8 1.6 3.8 1.6 3.8 3.8 Z" fill="${color}"/>`;
+  }
+  return null;
 }
 
 function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}) {
@@ -6738,14 +6797,16 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
     if (!c.head || !c.points.length) return null;
     const i = c.points.length - 1;
     const rawLabel = String(c.head);
+    const modelKey = c.model || c.label || '';
     return {
       ci,
+      model: modelKey,
       color: c.color,
       x: toX(i, c.times && c.times[i], c.points.length),
       y: toY(c.points[i]),
       label: escHtml(rawLabel.slice(0, 4)),
       title: escHtml(c.headTitle || c.label || ''),
-      r: rawLabel.length > 3 ? 12 : 11,
+      r: 12,
       fs: rawLabel.length > 3 ? 6.5 : 7.2,
     };
   }).filter(Boolean);
@@ -6765,7 +6826,9 @@ function _equitySvg(curves, W = 460, H = 110, {asPct = false, yPrefix = ''} = {}
     const leader = Math.abs(ty - h.y) > 1.5
       ? `<line x1="${h.x.toFixed(1)}" y1="${h.y.toFixed(1)}" x2="${h.x.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${h.color}" stroke-width="0.75" opacity="0.45"/>`
       : '';
-    return `${leader}<g class="eq-head" transform="translate(${h.x.toFixed(1)} ${ty.toFixed(1)})"><title>${h.title}</title><circle r="${h.r}" fill="#fff" stroke="${h.color}" stroke-width="1.5"/><text y="3.2" text-anchor="middle" font-size="${h.fs}" font-weight="700" fill="${h.color}">${h.label}</text></g>`;
+    const logo = _modelLogoSvg(h.model || h.label, h.color);
+    const inner = logo || `<text y="3.2" text-anchor="middle" font-size="${h.fs}" font-weight="700" fill="${h.color}">${h.label}</text>`;
+    return `${leader}<g class="eq-head" transform="translate(${h.x.toFixed(1)} ${ty.toFixed(1)})"><title>${h.title}</title><circle r="${h.r}" fill="#fff" stroke="${h.color}" stroke-width="1.5"/>${inner}</g>`;
   }).join('');
   const maxLabelLen = Math.max(8, ...curves.map(c => String(c.label || '').length));
   const legendItemW = Math.max(150, Math.min(205, 42 + maxLabelLen * 5.5));

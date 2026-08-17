@@ -571,7 +571,8 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("scads-alias-code", scads_models)
         self.assertIn("scads-alias-reasoning", scads_models)
         track_model_labels = scads_track_model_labels(repo_root / "configs" / "models.yaml")
-        self.assertIn("kimi-k2.7-code", track_model_labels)
+        self.assertIn("kimi-k3", track_model_labels)
+        self.assertIn("gemma-4-26b-a4b-it", track_model_labels)
         self.assertIn("deepseek-v3", scads_models)
         self.assertTrue(all(cfg.forecasting_enabled for cfg in models.values()))
         # deepseek-v3 stays /predict-able and chat-eligible (forecasting_enabled
@@ -580,19 +581,21 @@ class PipelineTests(unittest.TestCase):
         # would otherwise sit frozen at the starting balance forever.
         self.assertFalse(models["deepseek-v3"].track_record_enabled)
         self.assertNotIn("deepseek-v3", track_model_labels)
-        self.assertTrue(models["kimi-k2.7-code"].track_record_enabled)
+        self.assertTrue(models["kimi-k3"].track_record_enabled)
         self.assertNotIn("gpt-5", scads_models)
         self.assertEqual(
             models["scads-alias-code"].fallback_model_chain,
-            ("openai/gpt-oss-120b", "google/gemma-4-31B-it"),
+            ("openai/gpt-oss-120b", "google/gemma-4-26B-A4B-it"),
         )
         self.assertEqual(
             models["minimax-m3"].fallback_model_chain,
-            ("moonshotai/Kimi-K2.7-Code", "google/gemma-4-31B-it"),
+            ("moonshotai/Kimi-K3", "google/gemma-4-26B-A4B-it"),
         )
         chat_models = {cfg.name for cfg in scads_chat_model_options(repo_root / "configs" / "models.yaml")}
         self.assertIn("qwen3-coder-30b-a3b-instruct", chat_models)
         self.assertIn("glm-5.2-fp8", chat_models)
+        self.assertIn("kimi-k3", chat_models)
+        self.assertIn("gemma-4-26b-a4b-it", chat_models)
         self.assertNotIn("qwen3-vl-8b-instruct", chat_models)
         self.assertEqual(temperature_to_tag(0.7), "temperature_07")
 

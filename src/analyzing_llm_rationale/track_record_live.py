@@ -1296,7 +1296,7 @@ _LIQUIDITY_BUCKETS = [
 # Keep the comparison to models with real accumulated history until a new
 # model actually builds one; MTM is intentionally NOT filtered by this list.
 _RESOLVED_QUALITY_MODELS = {
-    "council", "crowd-follow", "gpt-oss-120b", "gemma-4-31b-it", "kimi-k2.6",
+    "council", "crowd-follow", "gpt-oss-120b", "gemma-4-26b-a4b-it", "gemma-4-31b-it", "kimi-k3", "kimi-k2.6",
 }
 
 

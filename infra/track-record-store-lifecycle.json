@@ -1,0 +1,21 @@
+{
+  "rule": [
+    {
+      "action": {
+        "type": "Delete"
+      },
+      "condition": {
+        "daysSinceNoncurrentTime": 1
+      }
+    },
+    {
+      "action": {
+        "type": "Delete"
+      },
+      "condition": {
+        "isLive": false,
+        "numNewerVersions": 1
+      }
+    }
+  ]
+}
