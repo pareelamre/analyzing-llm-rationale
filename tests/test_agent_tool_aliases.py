@@ -80,3 +80,5 @@ class ToolAliasTests(unittest.TestCase):
 
         obj7 = ac.parse_action('{"action": "polymarket_tags", "args": {}}')
         self.assertEqual(obj7["action"], "market_tags")
+        obj8 = ac.parse_action('{"action": "candlesticks", "args": {"ticker": "KX1"}}')
+        self.assertEqual(obj8["action"], "price_history")

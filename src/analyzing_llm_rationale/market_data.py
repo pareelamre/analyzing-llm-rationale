@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 POLYMARKET_GAMMA_URL = "https://gamma-api.polymarket.com/markets"
 POLYMARKET_TAGS_URL = "https://gamma-api.polymarket.com/tags"
 POLYMARKET_CLOB_BOOK_URL = "https://clob.polymarket.com/book"
+POLYMARKET_HISTORY_URL = "https://clob.polymarket.com/prices-history"
 KALSHI_API_URL = "https://api.elections.kalshi.com/trade-api/v2/markets"
 KALSHI_EVENTS_URL = "https://api.elections.kalshi.com/trade-api/v2/events"
 KALSHI_EXCHANGE_STATUS_URL = "https://api.elections.kalshi.com/trade-api/v2/exchange/status"
@@ -635,3 +636,21 @@ def fetch_polymarket_orderbook(token_id: str) -> Dict[str, Any]:
     """Fetch live CLOB orderbook for a Polymarket token ID."""
     data = _get_json(POLYMARKET_CLOB_BOOK_URL, params={"token_id": token_id})
     return data if isinstance(data, dict) else {}
+
+
+def fetch_polymarket_price_history(market: str, interval: str = "1d") -> List[Dict[str, Any]]:
+    """Fetch historical prices for a Polymarket market condition or token."""
+    data = _get_json(POLYMARKET_HISTORY_URL, params={"market": market, "interval": interval})
+    if isinstance(data, dict) and "history" in data:
+        return data["history"]
+    return data if isinstance(data, list) else []
+
+
+def fetch_kalshi_candlesticks(ticker: str, series_ticker: str = "") -> List[Dict[str, Any]]:
+    """Fetch historical OHLC candlesticks for a Kalshi market ticker."""
+    s_ticker = series_ticker or ticker.split("-")[0]
+    url = f"https://api.elections.kalshi.com/trade-api/v2/series/{s_ticker}/markets/{ticker}/candlesticks"
+    data = _get_json(url)
+    if isinstance(data, dict) and "candlesticks" in data:
+        return data["candlesticks"]
+    return data if isinstance(data, list) else []
