@@ -186,6 +186,16 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         for i, label in enumerate(labels)
     ]
     outcome, probability = _primary_outcome(options)
+    # The YES-outcome CLOB token id -- what /market/batch needs to fetch order
+    # book depth / price history for this market from marketd. Only set for a
+    # clean binary Yes/No market (matches services/marketd/polymarket.go's
+    # normalizePolymarket, which is equally conservative).
+    token_ids = _as_list(market.get("clobTokenIds"))
+    token_id = None
+    for i, label in enumerate(labels):
+        if str(label).strip().lower() == "yes" and i < len(token_ids):
+            token_id = str(token_ids[i]).strip() or None
+            break
     slug = market.get("slug") or ""
     events = market.get("events") or []
     event = events[0] if events and isinstance(events[0], dict) else {}
@@ -232,6 +242,7 @@ def _polymarket_quote(market: Dict[str, Any]) -> Dict[str, Any]:
         ).strip() or None,
         "venue_news_articles": _venue_news_articles(market, "Polymarket"),
         "category": market.get("category"),
+        "token_id": token_id,
     }
 
 
@@ -418,6 +429,12 @@ def _kalshi_quote(
         events[0] if events and isinstance(events[0], dict) else {}
     )
     ticker = (market.get("ticker") or "").strip().upper()
+    # The raw series ticker -- what /market/batch needs to fetch candlesticks
+    # for this market from marketd (which requires both series_ticker and
+    # ticker). Distinct from _kalshi_series_ticker() below, which lowercases
+    # and falls back to a derived value for building a *display* URL; the
+    # candlesticks API needs the exact, canonically-cased value or nothing.
+    series_ticker = (market.get("series_ticker") or event.get("series_ticker") or "").strip() or None
     # Kalshi prices are in the *_dollars fields (0..1). Use the current
     # actionable book midpoint before last trade: a thin contract's last print
     # can be days old and create a fake council-vs-crowd discrepancy even though
@@ -492,6 +509,7 @@ def _kalshi_quote(
         "floor_strike": market.get("floor_strike"),
         "cap_strike": market.get("cap_strike"),
         "category": None,  # set from the event in list_kalshi
+        "series_ticker": series_ticker,
     }
 
 
