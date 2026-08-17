@@ -50,17 +50,26 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and push image (Cloud Build)
-        working-directory: services/marketd
-        run: |
-          gcloud builds submit \
-            --tag "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/docker/${{ env.SERVICE_NAME }}:sha-$(git rev-parse --short HEAD)" \
-            --project ${{ env.GCP_PROJECT_ID }} .
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/marketd
+          push: true
+          tags: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/docker/${{ env.SERVICE_NAME }}:sha-${{ github.sha }}
+          # Same as docker.yml: provenance/SBOM attestations are the common
+          # cause of "unknown blob" push failures; Cloud Run just needs the image.
+          provenance: false
+          sbom: false
 
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/docker/${{ env.SERVICE_NAME }}:sha-$(git rev-parse --short HEAD)" \
+            --image "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/docker/${{ env.SERVICE_NAME }}:sha-${{ github.sha }}" \
             --region ${{ env.GCP_REGION }} \
             --platform managed \
             --no-allow-unauthenticated \
