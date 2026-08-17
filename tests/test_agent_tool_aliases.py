@@ -60,3 +60,16 @@ class ToolAliasTests(unittest.TestCase):
         obs = res["transcript"][0]["observation"]
         self.assertIn("unknown tool 'nonexistent_tool'", obs)
         self.assertIn("available tools: 'place_trade', 'web_search'", obs)
+
+    def test_normalize_api_aliases(self):
+        obj1 = ac.parse_action('{"action": "http_get", "args": {"url": "https://api.com/v1"}}')
+        self.assertEqual(obj1["action"], "fetch_api")
+
+        obj2 = ac.parse_action('{"action": "call_api", "args": {"url": "/edge-board"}}')
+        self.assertEqual(obj2["action"], "fetch_api")
+
+        obj3 = ac.parse_action('{"action": "foresea_edge_board", "args": {}}')
+        self.assertEqual(obj3["action"], "edge_board")
+
+        obj4 = ac.parse_action('{"action": "foresea_batch_quotes", "args": {"refs": ["KX1"]}}')
+        self.assertEqual(obj4["action"], "batch_quotes")

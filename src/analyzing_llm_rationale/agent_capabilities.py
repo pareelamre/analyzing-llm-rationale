@@ -113,6 +113,17 @@ TOOL_ALIASES: Dict[str, str] = {
     "news": "search_evidence",
     "evidence": "search_evidence",
     "fetch_evidence": "search_evidence",
+    "http_request": "fetch_api",
+    "http_get": "fetch_api",
+    "call_api": "fetch_api",
+    "api_request": "fetch_api",
+    "curl": "fetch_api",
+    "api": "fetch_api",
+    "web_get": "fetch_api",
+    "foresea_edge_board": "edge_board",
+    "get_edge_board": "edge_board",
+    "foresea_batch_quotes": "batch_quotes",
+    "get_batch_quotes": "batch_quotes",
 }
 
 
