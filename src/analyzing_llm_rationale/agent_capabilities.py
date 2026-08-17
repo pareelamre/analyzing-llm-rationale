@@ -124,6 +124,17 @@ TOOL_ALIASES: Dict[str, str] = {
     "get_edge_board": "edge_board",
     "foresea_batch_quotes": "batch_quotes",
     "get_batch_quotes": "batch_quotes",
+    "get_exchange_status": "exchange_status",
+    "kalshi_status": "exchange_status",
+    "exchange_schedule": "exchange_status",
+    "kalshi_schedule": "exchange_status",
+    "get_orderbook": "orderbook",
+    "clob_orderbook": "orderbook",
+    "depth": "orderbook",
+    "tags": "market_tags",
+    "get_tags": "market_tags",
+    "categories": "market_tags",
+    "polymarket_tags": "market_tags",
 }
 
 
