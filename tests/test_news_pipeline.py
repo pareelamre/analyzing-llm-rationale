@@ -349,6 +349,39 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertEqual(articles, fallback)
         pipeline._web_ap_news.assert_called_once_with("Trump Cabinet departure", 5)
 
+    def test_fetch_web_filters_out_blocked_social_media_domains(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._searxng_url = None
+        pipeline._tavily_key = "tvly-key"
+        pipeline._serper_key = None
+        pipeline._brave_key = None
+        pipeline._web_tavily = mock.Mock(return_value=[
+            {"title": "Reddit thread speculating on the outcome", "source": "reddit.com"},
+            {"title": "www.reddit.com mirror", "source": "www.reddit.com"},
+            {"title": "Reuters wire report", "source": "reuters.com"},
+        ])
+
+        articles = pipeline._fetch_web("Trump Cabinet departure", limit=5)
+
+        self.assertEqual([a["source"] for a in articles], ["reuters.com"])
+
+    def test_fetch_web_falls_through_when_provider_is_entirely_blocked_domains(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._searxng_url = None
+        pipeline._tavily_key = "tvly-key"
+        pipeline._serper_key = None
+        pipeline._brave_key = None
+        pipeline._web_tavily = mock.Mock(return_value=[
+            {"title": "Reddit thread", "source": "reddit.com"},
+        ])
+        fallback = [{"title": "Fallback result", "source": "apnews.com"}]
+        pipeline._web_duckduckgo = mock.Mock(return_value=fallback)
+
+        articles = pipeline._fetch_web("Trump Cabinet departure", limit=5)
+
+        self.assertEqual(articles, fallback)
+        pipeline._web_duckduckgo.assert_called_once_with("Trump Cabinet departure", 5)
+
     def test_ap_news_fallback_parses_search_results(self):
         class FakeResp:
             text = (

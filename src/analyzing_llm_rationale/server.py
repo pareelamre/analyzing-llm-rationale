@@ -234,6 +234,14 @@ _CHAT_SYSTEM_PROMPT = (
 
 _CHAT_PROB_RE = re.compile(r"\[p:(0(?:\.\d+)?|1(?:\.0+)?)\]\s*$", re.MULTILINE)
 
+# Defense-in-depth for the tool-loop path: build_grounding_note()'s text is
+# meant as background context, never a quotable answer -- strip it if a model
+# echoes it into its final turn anyway (extra_rules already tells it not to).
+_SELF_CALIBRATION_ECHO_RE = re.compile(
+    r"\n*(?:\[Self-calibration context\]\n)?Forecaster self-calibration\b.*?(?=\n\n|\Z)",
+    re.DOTALL,
+)
+
 _TRADING_INTENT_RE = re.compile(
     r"\b(bet|order|trade|place|buy|sell|position|recommend|suggest|should i|what to|portfolio|stake|wager)\b",
     re.IGNORECASE,
@@ -13423,8 +13431,6 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         return await _provider_chat(provider, messages, temperature, max_tokens)
 
     q = question
-    if grounding_note:
-        q = f"{question}\n\n[Self-calibration context]\n{grounding_note}"
     rule = ("You MUST call the `forecast` tool before your final answer — it produces "
             "the probability and edge the report needs. Never state a probability "
             "without having called `forecast` for it. For example, after finding a "
@@ -13468,6 +13474,16 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             if "manage_notes" in active:
                 rule_parts.append("Use `manage_notes` for memory across cycles.")
             rule = " ".join(rule_parts)
+    if grounding_note:
+        # Background context for calibration only -- goes in the system rules,
+        # not the user-visible question, and is explicitly marked
+        # non-quotable so the model doesn't echo it into its final answer
+        # (which the frontend and API both treat as the visible response).
+        rule = (
+            f"{rule}\n\n[Internal self-calibration context — use this to calibrate "
+            "your probability, but do not quote, repeat, or reference this note "
+            f"in your final answer]\n{grounding_note}"
+        )
     backstopped = False
     try:
         res = await agent_capabilities.run_tool_loop(
@@ -13507,7 +13523,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         market_probability=last.get("market_probability"),
         edge=edge,
     )
-    raw_answer = res.get("answer", "")
+    raw_answer = _SELF_CALIBRATION_ECHO_RE.sub("", res.get("answer", "")).strip()
     use_backstop_thesis = backstopped and bool(last.get("thesis"))
     tool_transcript = list(res.get("transcript", []))
     if use_backstop_thesis and raw_answer:

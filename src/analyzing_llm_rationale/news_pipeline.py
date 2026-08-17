@@ -57,6 +57,22 @@ HIGH_CREDIBILITY_SOURCES = {
     "wall street journal",
     "washington post",
 }
+# Social-media/UGC domains are excluded from web-search evidence entirely --
+# unlike news outlets, a single post or thread carries no editorial vetting,
+# and the model's "always name the source domain" rule (prompts/system.txt)
+# would otherwise cite them as if they were a normal news source.
+BLOCKED_WEB_DOMAINS = frozenset({
+    "reddit.com",
+    "redd.it",
+    "twitter.com",
+    "x.com",
+    "facebook.com",
+    "instagram.com",
+    "tiktok.com",
+    "quora.com",
+    "pinterest.com",
+})
+
 CHANNEL_CREDIBILITY = {
     "web": 0.74,
     "newsapi": 0.75,
@@ -441,7 +457,10 @@ class NewsPipeline:
     def _fetch_web(self, query: str, limit: int = 10) -> List[dict]:
         """General web search. Uses the first configured provider — preferring a
         self-hosted SearXNG, then Tavily, Serper, Brave — else a keyless
-        DuckDuckGo fallback. Each provider fails open to an empty list."""
+        DuckDuckGo fallback. Each provider fails open to an empty list.
+        Social-media/UGC results are filtered out (see BLOCKED_WEB_DOMAINS) --
+        a provider whose results are entirely blocked domains is treated as
+        having returned nothing, so the next provider in the chain is tried."""
         providers = (
             ("_searxng_url", self._web_searxng),
             ("_tavily_key", self._web_tavily),
@@ -450,18 +469,29 @@ class NewsPipeline:
         )
         for setting, provider in providers:
             if getattr(self, setting, None):
-                articles = provider(query, limit)
+                articles = self._filter_blocked_domains(provider(query, limit))
                 if articles:
                     return articles
-        articles = self._web_duckduckgo(query, limit)
+        articles = self._filter_blocked_domains(self._web_duckduckgo(query, limit))
         if articles:
             return articles
-        return self._web_ap_news(query, limit)
+        return self._filter_blocked_domains(self._web_ap_news(query, limit))
 
     @staticmethod
     def _domain(url: str) -> str:
         from urllib.parse import urlparse
         return (urlparse(url).netloc or "").replace("www.", "") or "Web"
+
+    @staticmethod
+    def _filter_blocked_domains(articles: List[dict]) -> List[dict]:
+        def _blocked(source: str) -> bool:
+            domain = (source or "").lower()
+            if domain.startswith("www."):
+                domain = domain[4:]
+            return domain in BLOCKED_WEB_DOMAINS or any(
+                domain.endswith("." + d) for d in BLOCKED_WEB_DOMAINS
+            )
+        return [a for a in articles if not _blocked(a.get("source", ""))]
 
     def _web_tavily(self, query: str, limit: int = 10) -> List[dict]:
         try:
