@@ -371,6 +371,45 @@ def _get_price_history(client, ident: str, limit: int = 8) -> List[Dict[str, Any
     return []
 
 
+def _normalize_venue_candle(candle: Dict[str, Any]) -> Dict[str, Any]:
+    """Reshape a marketd Candle ({end_time, open, high, low, close, volume})
+    onto the same {ts, probability, volume, ...} shape _get_price_history's
+    self-observed points already use, since that's what pipeline.py's prompt
+    renderer reads (pt["ts"]/pt["probability"], see pipeline.py:370-382).
+    Prices ARE probabilities for these markets, so close maps onto probability."""
+    out: Dict[str, Any] = {"ts": candle.get("end_time")}
+    if candle.get("close") is not None:
+        out["probability"] = candle["close"]
+    if candle.get("volume") is not None:
+        out["volume"] = candle["volume"]
+    return out
+
+
+def _merge_price_history(
+    self_observed: List[Dict[str, Any]],
+    venue_candles: List[Dict[str, Any]],
+    limit: int = 8,
+) -> List[Dict[str, Any]]:
+    """Combine Foresea's own self-observed snapshots with real venue candle
+    history into one newest-first list, deduplicated by timestamp and capped
+    at `limit` (matches market_price_history's documented cap) so prompt size
+    doesn't grow. Self-observed points carry fields venue candles don't have
+    (bid/ask/liquidity); venue candles fill in real depth of history for a
+    market Foresea only just started tracking. Sorted by timestamp, not by
+    source -- venue candlestick APIs are typically chronological (oldest
+    first), the opposite of this field's documented newest-first contract, so
+    input order from either source can't be trusted."""
+    if not venue_candles:
+        return self_observed[:limit]
+    normalized = [_normalize_venue_candle(c) for c in venue_candles if c.get("end_time")]
+    by_ts: Dict[str, Dict[str, Any]] = {}
+    for point in (*self_observed, *normalized):
+        ts = point.get("ts")
+        if ts and ts not in by_ts:
+            by_ts[ts] = point
+    return sorted(by_ts.values(), key=lambda p: p["ts"], reverse=True)[:limit]
+
+
 def _get_forecast_history(
     client,
     platform: str,
@@ -608,6 +647,7 @@ async def record_snapshots(
     target_shard_count: int = 1,
     target_shard_index: int = 0,
     max_targets: Optional[int] = None,
+    fetch_venue_candles: Optional[Callable[[List[str]], Dict[Tuple[str, str], List[Dict[str, Any]]]]] = None,
 ) -> int:
     """Take today's forecast snapshot for every tracked-still-open market, plus
     agent-enrolled ``seed_idents`` and newly-discovered markets, capturing the live
@@ -621,7 +661,14 @@ async def record_snapshots(
     ``price_drift_threshold``: if the live market price has moved more than this
     many probability points since today's snapshot was taken, discard it and
     re-forecast so the edge board reflects the new information rather than a
-    stale model opinion paired with a current price."""
+    stale model opinion paired with a current price.
+
+    ``fetch_venue_candles``: optional ``refs -> {(platform, ident): candles}``
+    callable (dependency-injected so this stays unit-testable with fakes, same
+    as ``market_data``/``forecast_fn``). Called once for the whole tick's final
+    target list -- not per market, not per (market, model) -- to supplement
+    each market's self-observed price history with real venue candle data.
+    ``None`` (the default) skips enrichment entirely, unchanged from before."""
     model_list = list(models) if models else [default_model]
     tick_now = _now()
     today = tick_now.strftime("%Y-%m-%d")
@@ -729,6 +776,24 @@ async def record_snapshots(
         max_targets=max_targets,
     )
 
+    # Real venue candle history to supplement each market's self-observed price
+    # history with -- one call for the whole tick's target list (fetch_venue_candles
+    # is expected to batch/chunk internally), not one per market.
+    venue_candles_by_market: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    if fetch_venue_candles is not None:
+        refs = []
+        for q in targets:
+            extra = q.get("series_ticker") or q.get("token_id")
+            ident = _quote_ident(q)
+            platform = str(q.get("platform") or "").lower()
+            if extra and ident and platform:
+                refs.append(f"{platform}:{ident}:{extra}")
+        if refs:
+            try:
+                venue_candles_by_market = fetch_venue_candles(refs) or {}
+            except Exception:
+                venue_candles_by_market = {}
+
     import asyncio as _asyncio
 
     def _write_snapshot(key, quote, ident, model, scored, lead, market_prob, existing, today):
@@ -795,6 +860,13 @@ async def record_snapshots(
         lead = _lead_time_days(quote.get("close_time"), ref=tick_now)
         if lead is not None and lead <= 0:
             continue
+        # Once per market, not once per (market, model): _get_price_history is a
+        # local read so this was harmless before, but venue_candles_by_market
+        # came from a network call and must not be re-merged per model.
+        price_history = _merge_price_history(
+            _get_price_history(client, ident),
+            venue_candles_by_market.get((str(quote.get("platform") or "").lower(), ident), []),
+        )
         slot = _snapshot_slot(
             lead,
             now=tick_now,
@@ -840,7 +912,7 @@ async def record_snapshots(
                         if not quote.get(_f) and existing_hydrated.get(_f):
                             stored_ctx[_f] = existing_hydrated[_f]
                 quote_with_history = {**quote, **stored_ctx,
-                                      "market_price_history": _get_price_history(client, ident),
+                                      "market_price_history": price_history,
                                       "forecast_history": _get_forecast_history(
                                           client, quote.get("platform") or "", ident, model)}
                 llm_tasks.append((key, quote, ident, model, lead, market_prob, existing,

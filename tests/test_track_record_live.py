@@ -299,6 +299,93 @@ class TrajectoryTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_normalize_venue_candle_maps_close_to_probability(self):
+        # Prices ARE probabilities for these markets; pipeline.py's prompt
+        # renderer reads pt["ts"]/pt["probability"], not marketd's Candle shape.
+        out = trl._normalize_venue_candle({"end_time": "2026-06-01T00:00:00Z", "close": 0.42, "volume": 100.0})
+        self.assertEqual(out, {"ts": "2026-06-01T00:00:00Z", "probability": 0.42, "volume": 100.0})
+
+    def test_merge_price_history_sorts_by_timestamp_not_source_order(self):
+        # Venue candlestick APIs are typically chronological (oldest first) --
+        # the opposite of market_price_history's documented newest-first
+        # contract -- so the merge must sort explicitly, not trust input order.
+        self_observed = [{"ts": "2026-06-03T00:00:00Z", "probability": 0.50}]
+        venue_candles = [
+            {"end_time": "2026-06-01T00:00:00Z", "close": 0.40},
+            {"end_time": "2026-06-02T00:00:00Z", "close": 0.45},
+        ]
+        merged = trl._merge_price_history(self_observed, venue_candles)
+        self.assertEqual([p["ts"] for p in merged], [
+            "2026-06-03T00:00:00Z", "2026-06-02T00:00:00Z", "2026-06-01T00:00:00Z",
+        ])
+
+    def test_merge_price_history_dedupes_by_timestamp_preferring_self_observed(self):
+        # A self-observed point has bid/ask/liquidity a venue candle doesn't;
+        # on a timestamp collision, keep the richer self-observed entry.
+        self_observed = [{"ts": "2026-06-01T00:00:00Z", "probability": 0.40, "bid": 0.39, "ask": 0.41}]
+        venue_candles = [{"end_time": "2026-06-01T00:00:00Z", "close": 0.99}]
+        merged = trl._merge_price_history(self_observed, venue_candles)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["probability"], 0.40)
+        self.assertEqual(merged[0]["bid"], 0.39)
+
+    def test_merge_price_history_caps_at_limit(self):
+        self_observed = [{"ts": f"2026-06-{d:02d}T00:00:00Z", "probability": 0.5} for d in range(1, 6)]
+        venue_candles = [{"end_time": f"2026-05-{d:02d}T00:00:00Z", "close": 0.4} for d in range(1, 10)]
+        merged = trl._merge_price_history(self_observed, venue_candles, limit=8)
+        self.assertEqual(len(merged), 8)
+
+    def test_merge_price_history_returns_self_observed_unchanged_without_venue_candles(self):
+        self_observed = [{"ts": "2026-06-01T00:00:00Z", "probability": 0.4}]
+        self.assertEqual(trl._merge_price_history(self_observed, []), self_observed)
+
+    def test_record_snapshots_calls_fetch_venue_candles_once_and_merges_the_result(self):
+        far = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        md._poly["token_id"] = "tok-123"  # only Polymarket's fake carries an extra id
+        seen_quotes = []
+        fetch_calls = []
+
+        async def forecast_fn(quote, top_k, model=None):
+            seen_quotes.append(dict(quote))
+            return {"model_probability": 0.70, "market_probability": quote["probability"], "evidence_count": 2}
+
+        def fake_fetch_venue_candles(refs):
+            fetch_calls.append(list(refs))
+            return {("polymarket", "slug-a"): [
+                {"end_time": "2026-06-01T00:00:00Z", "close": 0.35, "volume": 500.0},
+            ]}
+
+        with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, tzinfo=timezone.utc)):
+            asyncio.run(trl.record_snapshots(
+                self.client, md, forecast_fn, default_model="m", per_venue=1,
+                fetch_venue_candles=fake_fetch_venue_candles))
+
+        # Called exactly once for the whole tick (not once per market, not once
+        # per (market, model)) -- Kalshi's fake carries no series_ticker/token_id
+        # so only Polymarket's ref is included.
+        self.assertEqual(len(fetch_calls), 1)
+        self.assertEqual(fetch_calls[0], ["polymarket:slug-a:tok-123"])
+
+        poly_quote = next(q for q in seen_quotes if q.get("question") == "Will A happen?")
+        history = poly_quote["market_price_history"]
+        self.assertTrue(any(p.get("ts") == "2026-06-01T00:00:00Z" and p.get("probability") == 0.35 for p in history))
+
+    def test_record_snapshots_skips_venue_candles_when_fetch_venue_candles_is_none(self):
+        # Default behavior (no fetch_venue_candles passed) is unchanged from
+        # before this feature existed.
+        far = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        md._poly["token_id"] = "tok-123"
+
+        async def forecast_fn(quote, top_k, model=None):
+            return {"model_probability": 0.70, "market_probability": quote["probability"], "evidence_count": 2}
+
+        with mock.patch.object(trl, "_now", return_value=datetime(2026, 6, 3, tzinfo=timezone.utc)):
+            recorded = asyncio.run(trl.record_snapshots(
+                self.client, md, forecast_fn, default_model="m", per_venue=1))
+        self.assertEqual(recorded, 2)
+
     def test_duckdb_backend_normalizes_market_fields_into_markets_table(self):
         # Against the real DuckDBStore (production's backend), question/
         # market_url/description/resolution_criteria/publish_time/close_time/

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -828,6 +829,54 @@ class TrackRecordTickTests(unittest.TestCase):
             ):
                 rc = asyncio.run(track_record_tick.main())
         self.assertEqual(rc, 1)
+
+
+def _fake_urlopen_response(payload: dict):
+    resp = mock.MagicMock()
+    resp.read.return_value = json.dumps(payload).encode()
+    resp.__enter__.return_value = resp
+    resp.__exit__.return_value = False
+    return resp
+
+
+class FetchVenueCandlesBatchTests(unittest.TestCase):
+    def test_returns_a_platform_ident_keyed_lookup_and_skips_errored_refs(self):
+        response = _fake_urlopen_response({"quotes": [
+            {"platform": "kalshi", "ident": "KXTEST",
+             "candles": [{"end_time": "2026-06-01T00:00:00Z", "close": 0.4}]},
+            {"platform": "polymarket", "ident": "will-x", "error": "not found"},
+        ]})
+        with mock.patch.object(track_record_tick.urllib.request, "urlopen", return_value=response) as urlopen_mock:
+            result = track_record_tick._fetch_venue_candles_batch(
+                ["kalshi:KXTEST:KXSERIES", "polymarket:will-x:tok"])
+
+        self.assertEqual(result, {
+            ("kalshi", "KXTEST"): [{"end_time": "2026-06-01T00:00:00Z", "close": 0.4}],
+        })
+        urlopen_mock.assert_called_once()
+
+    def test_chunks_at_fifty_refs_per_market_batch_call(self):
+        refs = [f"kalshi:T{i}:S{i}" for i in range(120)]
+        response = _fake_urlopen_response({"quotes": []})
+        with mock.patch.object(track_record_tick.urllib.request, "urlopen", return_value=response) as urlopen_mock:
+            track_record_tick._fetch_venue_candles_batch(refs)
+
+        self.assertEqual(urlopen_mock.call_count, 3)  # 120 refs / 50 per chunk
+
+    def test_fails_open_to_empty_dict_on_a_chunk_error(self):
+        with mock.patch.object(
+            track_record_tick.urllib.request, "urlopen",
+            side_effect=urllib.error.URLError("upstream unavailable"),
+        ):
+            result = track_record_tick._fetch_venue_candles_batch(["kalshi:KXTEST:KXSERIES"])
+
+        self.assertEqual(result, {})
+
+    def test_empty_refs_makes_no_request(self):
+        with mock.patch.object(track_record_tick.urllib.request, "urlopen") as urlopen_mock:
+            result = track_record_tick._fetch_venue_candles_batch([])
+        self.assertEqual(result, {})
+        urlopen_mock.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -42,6 +42,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import Counter
 from pathlib import Path
@@ -603,6 +604,37 @@ def _mark_enrolled(idents: list[str]) -> None:
         print(f"  mark-enrolled failed: {exc}", file=sys.stderr)
 
 
+_MARKET_BATCH_CHUNK = 50
+
+
+def _fetch_venue_candles_batch(refs: list[str]) -> dict[tuple[str, str], list[dict]]:
+    """Real venue candle history for record_snapshots' market_price_history
+    enrichment (trl._merge_price_history) -- one (or a few, chunked at
+    /market/batch's own 50-ref cap) GET(s) for the whole tick's target list,
+    not one call per market. Fail-open to {}: any error/timeout/non-200 for a
+    chunk just means no enrichment for those markets this tick, same as every
+    other best-effort call in this script (_get_pending_markets, etc.)."""
+    out: dict[tuple[str, str], list[dict]] = {}
+    for i in range(0, len(refs), _MARKET_BATCH_CHUNK):
+        chunk = refs[i:i + _MARKET_BATCH_CHUNK]
+        query = urllib.parse.urlencode([("refs", r) for r in chunk])
+        req = urllib.request.Request(f"{BASE_URL}/market/batch?{query}")
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+        except Exception as exc:  # noqa: BLE001
+            print(f"  market batch candle fetch failed: {exc}", file=sys.stderr)
+            continue
+        for q in data.get("quotes") or []:
+            if not isinstance(q, dict) or q.get("error") or not q.get("candles"):
+                continue
+            platform = str(q.get("platform") or "").lower()
+            ident = str(q.get("ident") or "")
+            if platform and ident:
+                out[(platform, ident)] = q["candles"]
+    return out
+
+
 @_context_tracer.start_as_current_span("forecast.context_deliver")
 async def forecast_fn(quote: dict, evidence_top_k: int, model: str | None = None) -> dict | None:
     """Forecast one market via /predict with a chosen model; mirror
@@ -957,7 +989,8 @@ async def _record_snapshots_with_retries(
                     convergence_per_venue=CONVERGENCE_PER_VENUE,
                     target_shard_count=TRACK_TARGET_SHARD_COUNT,
                     target_shard_index=TRACK_TARGET_SHARD_INDEX,
-                    max_targets=TRACK_FORECAST_MAX_TARGETS)
+                    max_targets=TRACK_FORECAST_MAX_TARGETS,
+                    fetch_venue_candles=_fetch_venue_candles_batch)
                 pass_attempts = _predict_stats["attempts"] - attempts_before
                 pass_successes = _predict_stats["successes"] - successes_before
                 if pass_successes > 0 or pass_attempts == 0:

@@ -84,6 +84,35 @@ class MarketDataTests(unittest.TestCase):
         self.assertEqual(quote["description"], "Latest context about X.")
         self.assertEqual(capture[0][1]["slug"], "will-x")
 
+    def test_polymarket_captures_yes_token_id(self):
+        # The YES-outcome CLOB token id is what /market/batch needs to fetch
+        # order book depth / price history for this market from marketd.
+        payload = [{
+            "question": "Will X happen?",
+            "slug": "will-x",
+            "outcomes": '["Yes", "No"]',
+            "outcomePrices": '["0.62", "0.38"]',
+            "clobTokenIds": '["111111", "222222"]',
+        }]
+        sys.modules["requests"] = _fake_requests(payload)
+
+        quote = fetch_polymarket(slug="will-x")
+
+        self.assertEqual(quote["token_id"], "111111")
+
+    def test_polymarket_token_id_is_none_without_clob_token_ids(self):
+        payload = [{
+            "question": "Will X happen?",
+            "slug": "will-x",
+            "outcomes": '["Yes", "No"]',
+            "outcomePrices": '["0.62", "0.38"]',
+        }]
+        sys.modules["requests"] = _fake_requests(payload)
+
+        quote = fetch_polymarket(slug="will-x")
+
+        self.assertIsNone(quote["token_id"])
+
     def test_polymarket_requires_identifier(self):
         with self.assertRaises(MarketDataError):
             fetch_polymarket()
@@ -156,6 +185,59 @@ class MarketDataTests(unittest.TestCase):
             quote["venue_news_articles"][0]["title"],
             "Event-level update",
         )
+
+    def test_kalshi_captures_raw_series_ticker_from_market(self):
+        # Distinct from the URL-building helper (_kalshi_series_ticker), which
+        # lowercases and derives a fallback -- the candlesticks API needs the
+        # exact, canonically-cased series_ticker or nothing.
+        payload = {"market": {
+            "ticker": "KXTEST",
+            "series_ticker": "KXTEST",
+            "title": "Will Y?",
+            "last_price_dollars": "0.42",
+        }}
+        sys.modules["requests"] = _fake_requests(payload)
+
+        quote = fetch_kalshi("KXTEST")
+
+        self.assertEqual(quote["series_ticker"], "KXTEST")
+
+    def test_kalshi_captures_series_ticker_from_event_when_absent_on_market(self):
+        payloads = [
+            {"market": {
+                "ticker": "KXTEST-YES",
+                "event_ticker": "KXTEST",
+                "title": "Will Y?",
+                "last_price_dollars": "0.42",
+            }},
+            {"event": {
+                "event_ticker": "KXTEST",
+                "series_ticker": "KXTEST",
+            }},
+        ]
+
+        class SequencedRequests:
+            @staticmethod
+            def get(url, params=None, headers=None, timeout=None):
+                return FakeResponse(payloads.pop(0))
+
+        sys.modules["requests"] = SequencedRequests()
+
+        quote = fetch_kalshi("KXTEST-YES")
+
+        self.assertEqual(quote["series_ticker"], "KXTEST")
+
+    def test_kalshi_series_ticker_is_none_when_unavailable(self):
+        payload = {"market": {
+            "ticker": "KXTEST",
+            "title": "Will Y?",
+            "last_price_dollars": "0.42",
+        }}
+        sys.modules["requests"] = _fake_requests(payload)
+
+        quote = fetch_kalshi("KXTEST")
+
+        self.assertIsNone(quote["series_ticker"])
 
     def test_kalshi_url_uses_series_ticker_not_event_ticker(self):
         payload = {"market": {

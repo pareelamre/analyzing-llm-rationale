@@ -4061,6 +4061,8 @@ class MarketQuote(BaseModel):
     fetched_at: Optional[str] = Field(
         None, description="ISO 8601 UTC time this quote was actually fetched from the venue (not when it was served from cache)."
     )
+    series_ticker: Optional[str] = Field(None, description="Kalshi series ticker -- the 'extra' id /market/batch needs for candlesticks.")
+    token_id: Optional[str] = Field(None, description="Polymarket YES-outcome CLOB token id -- the 'extra' id /market/batch needs for order book/price history.")
 
 
 class VenueCredentials(BaseModel):
