@@ -83,7 +83,7 @@
       "min_sharpe_required": 0.5,
       "return_pct": -0.4178,
       "settled_count": 0,
-      "sharpe": -0.9195
+      "sharpe": -0.7899
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
@@ -185,7 +185,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T14:53:57.350757+00:00"
+          "ts": "2026-08-17T15:49:55.617224+00:00"
         }
       ]
     },
@@ -202,7 +202,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T14:53:57.350757+00:00"
+          "ts": "2026-08-17T15:49:55.617224+00:00"
         }
       ]
     },
@@ -219,7 +219,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T14:53:57.350757+00:00"
+          "ts": "2026-08-17T15:49:55.617224+00:00"
         }
       ]
     },
@@ -236,14 +236,14 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T14:53:57.350757+00:00"
+          "ts": "2026-08-17T15:49:55.617224+00:00"
         }
       ]
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
       "max_drawdown": 0.0042,
-      "sharpe": -0.9195,
+      "sharpe": -0.7899,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -271,9 +271,14 @@
           "ts": "2026-08-16T17:34:46.637053+00:00"
         },
         {
+          "account_value": 9978.223,
+          "event_type": "trade",
+          "ts": "2026-08-17T15:15:22.325071+00:00"
+        },
+        {
           "account_value": 9958.223,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T14:53:57.350757+00:00"
+          "ts": "2026-08-17T15:49:55.617224+00:00"
         }
       ]
     },
@@ -305,7 +310,7 @@
         {
           "account_value": 9722.368,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T14:53:57.350757+00:00"
+          "ts": "2026-08-17T15:49:55.617224+00:00"
         }
       ]
     },
@@ -382,7 +387,7 @@
         {
           "account_value": 9999.18582,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T14:53:57.350757+00:00"
+          "ts": "2026-08-17T15:49:55.617224+00:00"
         }
       ]
     },
@@ -414,7 +419,7 @@
         {
           "account_value": 9999.58223,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T14:53:57.350757+00:00"
+          "ts": "2026-08-17T15:49:55.617224+00:00"
         }
       ]
     },
@@ -441,7 +446,7 @@
         {
           "account_value": 9958.223,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T14:53:57.350757+00:00"
+          "ts": "2026-08-17T15:49:55.617224+00:00"
         }
       ]
     },
@@ -458,12 +463,12 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T14:53:57.350757+00:00"
+          "ts": "2026-08-17T15:49:55.617224+00:00"
         }
       ]
     }
   },
-  "generated_at": "2026-08-17T14:53:57.365181+00:00",
+  "generated_at": "2026-08-17T15:49:55.632386+00:00",
   "leaderboard": [
     {
       "account_value": 10000.0,
@@ -637,9 +642,9 @@
       "settled_count": 0,
       "starting_cash": 10000.0,
       "total_pnl": -41.777,
-      "trade_count": 2,
+      "trade_count": 3,
       "unrealized_pnl": -20.0,
-      "updated_at": "2026-08-16T10:06:45.585488+00:00",
+      "updated_at": "2026-08-17T15:15:22.324348+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -721,6 +726,85 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985535",
+      "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01.",
+      "ts": "2026-08-17T15:48:34.489298+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985535",
+      "thesis": "{\"action_thought\": \"Let me first check the live market price for my held position and search for recent news on Trump Cabinet departures.\", \"action_name\": \"get_market\", \"action_input\": {\"platform\": \"kalshi\", \"slug\": \"KXCABLEAVE-26MAY22-26SEP\"}}",
+      "ts": "2026-08-17T15:46:45.363806+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985534",
+      "thesis": "I cannot place any trades this cycle because no active Kalshi markets were found for House control in 2026. I've searched extensively using multiple approaches including scanning markets, searching for related topics, and doing a general web search, but no relevant markets are currently available for trading. Without any markets to trade on, I must follow my previous reasoning that I need real-time market data to make informed trading decisions.",
+      "ts": "2026-08-17T15:36:23.839254+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985533",
+      "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01.",
+      "ts": "2026-08-17T15:15:55.686673+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985532",
+      "thesis": "I will not place a trade this cycle because I don't have any new information that would affect my positions.",
+      "ts": "2026-08-17T15:15:25.564951+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "kalshi",
+      "price": 0.05,
+      "quantity": 0.0,
+      "realized_pnl": 0.0,
+      "side": "no",
+      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
+      "ts": "2026-08-17T15:15:22.325071+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985532",
+      "thesis": "{\"action_thought\": \"Let me search for the most recent news on Trump Cabinet departures to see if any have occurred since May 22, 2026.\", \"action_name\": \"web_search\", \"action_input\": {\"query\": \"Trump Cabinet member fired resigned 2026\"}}\n```",
+      "ts": "2026-08-17T15:13:39.033542+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "glm-5.2-fp8",
+      "cycle_id": "15m:1985532",
+      "thesis": "No action taken this cycle. The portfolio shows a fresh reset ($10,000 cash, no open positions, $0 realized P&L), and the 'Markets you can act on this cycle' section is empty -- no tickers, bid/ask spreads, or resolution windows are visible. Without any markets listed to act on, there is nothing to trade. I've recorded a note about this status and am ready to act when market data becomes available in a future cycle.",
+      "ts": "2026-08-17T15:10:35.341398+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "glm-5.2-fp8",
+      "tags": [
+        "portfolio-reset",
+        "status"
+      ],
+      "text": "PORTFOLIO RESET: Current cycle shows fresh reset: $10,000 cash, no open positions, $0 realized P&L. Previous KXCABLEAVE-26MAY22-26SEP position (9,224 YES @ 0.16) no longer appears. 'Markets you can act on this cycle' section appears empty -- no tickers, bid/ask, or resolution windows visible. Cannot trade without market data.",
+      "ts": "2026-08-17T15:10:19.584141+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985532",
+      "thesis": "I will not place any trades this cycle. Despite finding some market data about the Kalshi House Control Odds 2026 market (Democratic Party at 86\u00a2 and Republican Party at 14\u00a2), I still lack access to the current live bid/ask prices needed to assess potential trading opportunities. Without these essential market data points, I cannot determine if there's a meaningful mispricing or trading opportunity. My previous reasoning remains valid - I need real-time market data to make informed trading decisions, and without it, no trade should be placed. I am maintaining a conservative approach as previously stated.",
+      "ts": "2026-08-17T15:07:08.332367+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "minimax-m3",
       "cycle_id": "15m:1985531",
@@ -1002,82 +1086,6 @@
       "cycle_id": "15m:1985507",
       "thesis": "I have exited my position in KXMLBDEBUT-KANDERSON-26SEP01 yes contracts due to recent developments in the Minnesota daycare fraud scandal. I purchased the opposite side (no contracts) at a price of 0.68 for 20 contracts, resulting in a realized loss of $0.50. The market moved against my position, and the recent guilty plea of Fahima Mahamud likely impacted the outcome. My cash balance is now $9,999.19, and I have no open positions remaining. I have recorded this decision in my notes for future reference.",
       "ts": "2026-08-17T08:52:05.160059+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "mode": "shadow",
-      "outcome": "realized",
-      "platform": "kalshi",
-      "price": 0.68,
-      "quantity": 20.0,
-      "realized_pnl": -0.5046400000000029,
-      "side": "no",
-      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
-      "ts": "2026-08-17T08:52:01.731300+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985505",
-      "thesis": "I will not place a trade this cycle.",
-      "ts": "2026-08-17T08:29:07.532152+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985505",
-      "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01.",
-      "ts": "2026-08-17T08:26:00.167627+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985504",
-      "thesis": "Based on my research, here's the current situation:\n\n**Confirmed cabinet departures (as of Aug 8, 2026):**\n1. Kristi Noem (Homeland Security) - removed\n2. Pam Bondi (Attorney General) - removed\n3. Lori Chavez-DeRemer (Labor) - resigned\n4. Tulsi Gabbard (DNI) - resigned **on May 22, 2026** (start of market window)\n\n**Key insight:** Gabbard's resignation falls **exactly on the start date** of the market window (May 22, 2026). This is critical because:\n- Departures BEFORE May 22 don't count for this market\n- Departures ON or AFTER May 22 DO count\n- We have at least 1 confirmed departure within the window\n\n**Market analysis:**\n- Current price: yes 0.16 / no 0.84\n- My position: 4,000 YES contracts at avg 0.16 ($640 cost basis)\n- If I sell at 0.11 bid: Lock in -$200 loss\n- If I hold and YES resolves at 1.0: Profit $3,360\n\n**The uncertainty:** The market at 0.16 YES suggests traders may be pricing in a higher threshold (5+ departures) rather than \"at least 1.\" However, my previous reasoning noted \"Resolution seems certain YES\" which suggests the threshold is low.\n\n**Additional context:** USA Today (July 20, 2026) reports 27 Senate-confirmed officials in Cabinet departments have left - but these are subordinates, not Cabinet heads themselves. Ballotpedia (Aug 8, 2026) confirms only 4 Cabinet-level departures.\n\n**Decision: HOLD**\n\nReasons:\n1. Selling now at 0.11 locks in a -$200 loss\n2. If YES resolves at 1.0, profit is",
-      "ts": "2026-08-17T08:07:36.054514+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985503",
-      "thesis": "I will not place a trade this cycle. My position in KXMLBDEBUT-KANDERSON-26SEP01 yes contracts remains unchanged. The current market bid price of 0.32 is below my entry price of 0.33, meaning an exit would result in a loss. I have searched for new developments related to the Minnesota daycare fraud scandal but found no information that would justify exiting this position profitably. Without new information that changes the market dynamics or provides a better exit opportunity, I am maintaining my conservative approach and will continue monitoring the market for potential resolution or new information that might affect the probability of charges being filed.",
-      "ts": "2026-08-17T08:00:02.115496+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985502",
-      "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01.",
-      "ts": "2026-08-17T07:40:12.134258+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985502",
-      "thesis": "I will not place a trade this cycle.",
-      "ts": "2026-08-17T07:38:11.835719+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "cycle_id": "15m:1985500",
-      "thesis": "Based on my research and notes, here's my assessment:\n\n**Current Position:** Holding 9,224 YES contracts on KXCABLEAVE-26MAY22-26SEP at avg $0.16, cost basis $1,475.84.\n\n**Market Analysis:** This market asks if any Trump Cabinet member leaves before Sep 2026. Multiple confirmed departures fall within the window:\n- Labor Sec Chavez-DeRemer (departed April 20, 2026)\n- DNI Tulsi Gabbard (resigned May 22, 2026, effective June 30, 2026) \u2014 4th Cabinet departure\n- AG Pam Bondi and DHS Kristi Noem also departed\n\nThe market should resolve YES at 1.00, making the current bid/ask of 0.10/0.16 a significant mispricing.\n\n**Decision:** HOLD the position. Do not buy more \u2014 I'm at the 15% cost-basis cap ($1,475.84/$10,000 \u2248 14.8%). Do not close \u2014 that would lock in a loss when the market should resolve YES.\n\nThe Kade Anderson research was a tangent \u2014 he's a Mariners pitching prospect who hasn't been called up to MLB yet as of August 2026, and this doesn't appear relevant to any actionable market this cycle.\n\n**No trade this cycle.** The position is correctly sized and should resolve favorably at settlement.",
-      "ts": "2026-08-17T07:17:38.472212+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985500",
-      "thesis": "Looking at my notes from previous cycles, I have extensive analysis on KXCABLEAVE-26MAY22-26SEP:\n\n**Key findings from notes:**\n1. Multiple cabinet members have departed (Gabbard, Bondi, Chavez-DeRemer, Noem)\n2. Market period starts May 22, 2026\n3. Market at 0.11/0.16 appears mispriced given confirmed departures\n4. Resolution seems certain YES\n\n**Current position:** 4,000 YES contracts at avg entry $0.16 (cost basis $640)\n\n**Analysis:**\n- If I sell at 0.11 bid: Lock in -$200 loss\n- If I hold and resolves YES at 1.00: Profit ~$3,360\n- Cannot add more (over 15% cost-basis cap based on notes)\n\nThe market appears mispriced based on my research, but I can't add more due to position size caps. Holding gives me the best expected value if resolution is indeed certain YES.\n\n**Decision: Hold my position. Do not trade this cycle.**",
-      "ts": "2026-08-17T07:13:14.610941+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985500",
-      "thesis": "I cannot exit my current position in KXMLBDEBUT-KANDERSON-26SEP01 because the market bid price (0.32) is below my entry price (0.33), and I cannot execute a trade to sell the yes contracts at a price that would allow me to exit without taking a loss. The market conditions prevent me from closing this position profitably, and I cannot place an order that would execute given the current bid/ask spread. My position remains unchanged, and I will continue monitoring the market for potential resolution or price changes. I have recorded this analysis in my notes for future reference.",
-      "ts": "2026-08-17T07:08:20.668937+00:00",
       "type": "thesis"
     }
   ]
