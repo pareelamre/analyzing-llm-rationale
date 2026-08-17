@@ -2030,8 +2030,7 @@
       .nav-collapse { display: none; }
       .btn-signin { padding: 7px 13px; }
     }
-  </style>
-  <script type="module" src="/src/page-context.ts"></script>
+  </style>
   <script>
     // Pre-paint routing (see the [data-boot-view] CSS rules above): decide
     // the initial route before the browser paints anything, so a direct
@@ -2058,6 +2057,7 @@
       } catch (e) {}
     })();
   </script>
+  <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
 
@@ -5348,13 +5348,12 @@ async function openTrackRecord({ updateHistory = true } = {}) {
 function closeTrackRecord({ updateHistory = true } = {}) {
   const ov = document.getElementById('trackOverlay');
   if (!ov.classList.contains('open')) return;
-  const currentOverlayView = history.state?.view;
-  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
     ov.classList.remove('open');
     ov.setAttribute('aria-hidden', 'true');
     ov.style.opacity = '';
-    document.body.style.overflow = inApp ? 'hidden' : 'auto';
+    const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
+    document.body.style.overflow = isAppVisible ? 'hidden' : 'auto';
     if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) {
       lastFocusedBeforeDialog.focus();
     }
@@ -5364,14 +5363,9 @@ function closeTrackRecord({ updateHistory = true } = {}) {
   } else { finish(); }
 
   if (updateHistory) {
-    if (currentOverlayView === 'track-app' || currentOverlayView === 'track-landing') {
-      if (window.history.length > 1 && history.state?.view === currentOverlayView) {
-        history.back();
-      } else {
-        const targetView = inApp ? 'app' : 'landing';
-        setHistoryState(targetView, 'replace');
-      }
-    }
+    const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
+    const targetView = isAppVisible ? 'app' : 'landing';
+    setHistoryState(targetView, 'push');
   }
 }
 function pct(x) { return Math.round((x || 0) * 100); }
@@ -5813,15 +5807,14 @@ function closeEdgeBoard({ updateHistory = true } = {}) {
   const ov = document.getElementById('edgeOverlay');
   if (!ov.classList.contains('open')) return;
   const seq = ++_edgeOpenSeq;
-  const currentOverlayView = history.state?.view;
-  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
     // Re-opened while we were fading out — leave it open, polling is already back.
     if (seq !== _edgeOpenSeq) { ov.style.opacity = ''; return; }
     ov.classList.remove('open');
     ov.setAttribute('aria-hidden', 'true');
     ov.style.opacity = '';
-    document.body.style.overflow = inApp ? 'hidden' : 'auto';
+    const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
+    document.body.style.overflow = isAppVisible ? 'hidden' : 'auto';
     if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
   };
   if (window.Motion && !prefersReduced()) {
@@ -5829,14 +5822,9 @@ function closeEdgeBoard({ updateHistory = true } = {}) {
   } else { finish(); }
 
   if (updateHistory) {
-    if (currentOverlayView === 'edge-app' || currentOverlayView === 'edge-landing') {
-      if (window.history.length > 1 && history.state?.view === currentOverlayView) {
-        history.back();
-      } else {
-        const targetView = inApp ? 'app' : 'landing';
-        setHistoryState(targetView, 'replace');
-      }
-    }
+    const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
+    const targetView = isAppVisible ? 'app' : 'landing';
+    setHistoryState(targetView, 'push');
   }
 }
 function _ebAskQuestion(ident) {
@@ -5906,13 +5894,12 @@ function closeWatchlistPage({ updateHistory = true } = {}) {
   _watchPriceTimer = null;
   const ov = document.getElementById('watchOverlay');
   if (!ov.classList.contains('open')) return;
-  const currentOverlayView = history.state?.view;
-  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
     ov.classList.remove('open');
     ov.setAttribute('aria-hidden', 'true');
     ov.style.opacity = '';
-    document.body.style.overflow = inApp ? 'hidden' : 'auto';
+    const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
+    document.body.style.overflow = isAppVisible ? 'hidden' : 'auto';
     if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
   };
   if (window.Motion && !prefersReduced()) {
@@ -5920,14 +5907,9 @@ function closeWatchlistPage({ updateHistory = true } = {}) {
   } else { finish(); }
 
   if (updateHistory) {
-    if (currentOverlayView === 'watch-app' || currentOverlayView === 'watch-landing') {
-      if (window.history.length > 1 && history.state?.view === currentOverlayView) {
-        history.back();
-      } else {
-        const targetView = inApp ? 'app' : 'landing';
-        setHistoryState(targetView, 'replace');
-      }
-    }
+    const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
+    const targetView = isAppVisible ? 'app' : 'landing';
+    setHistoryState(targetView, 'push');
   }
 }
 
@@ -5997,13 +5979,12 @@ async function openPersonalLedger({ updateHistory = true } = {}) {
 function closePersonalLedger({ updateHistory = true } = {}) {
   const ov = document.getElementById('ledgerOverlay');
   if (!ov.classList.contains('open')) return;
-  const currentOverlayView = history.state?.view;
-  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
     ov.classList.remove('open');
     ov.setAttribute('aria-hidden', 'true');
     ov.style.opacity = '';
-    document.body.style.overflow = inApp ? 'hidden' : 'auto';
+    const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
+    document.body.style.overflow = isAppVisible ? 'hidden' : 'auto';
     if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
   };
   if (window.Motion && !prefersReduced()) {
@@ -6011,14 +5992,9 @@ function closePersonalLedger({ updateHistory = true } = {}) {
   } else { finish(); }
 
   if (updateHistory) {
-    if (currentOverlayView === 'ledger-app' || currentOverlayView === 'ledger-landing') {
-      if (window.history.length > 1 && history.state?.view === currentOverlayView) {
-        history.back();
-      } else {
-        const targetView = inApp ? 'app' : 'landing';
-        setHistoryState(targetView, 'replace');
-      }
-    }
+    const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
+    const targetView = isAppVisible ? 'app' : 'landing';
+    setHistoryState(targetView, 'push');
   }
 }
 
