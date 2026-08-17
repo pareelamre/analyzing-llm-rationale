@@ -115,9 +115,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -0.0051,
+      "return_pct": -0.0081,
       "settled_count": 0,
-      "sharpe": -0.4495
+      "sharpe": -0.0287
     },
     "scads-alias-code": {
       "agent_id": "scads-alias-code",
@@ -282,7 +282,7 @@
     "qwen3-coder-30b-a3b-instruct": {
       "agent_id": "qwen3-coder-30b-a3b-instruct",
       "max_drawdown": 0.0007,
-      "sharpe": -0.4495,
+      "sharpe": -0.0287,
       "value_curve": [
         {
           "account_value": 9999.991387,
@@ -343,6 +343,11 @@
           "account_value": 9993.081847,
           "event_type": "trade",
           "ts": "2026-08-17T05:54:57.881534+00:00"
+        },
+        {
+          "account_value": 9999.177207,
+          "event_type": "trade",
+          "ts": "2026-08-17T08:52:01.731300+00:00"
         }
       ]
     },
@@ -408,7 +413,7 @@
       ]
     }
   },
-  "generated_at": "2026-08-17T08:07:02.245697+00:00",
+  "generated_at": "2026-08-17T09:00:26.632954+00:00",
   "leaderboard": [
     {
       "account_value": 10000.0,
@@ -536,29 +541,20 @@
       "won_count": 0
     },
     {
-      "account_value": 9999.49046,
+      "account_value": 9999.18582,
       "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cash": 9993.09046,
-      "fees_paid": 0.30954,
+      "cash": 9999.18582,
+      "fees_paid": 0.61418,
       "illiquid_positions": [],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.33,
-          "cost_basis": 6.6,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 20.0,
-          "side": "YES"
-        }
-      ],
-      "realized_pnl": 0.0,
-      "return_pct": -0.0051,
+      "open_positions": [],
+      "realized_pnl": -0.50464,
+      "return_pct": -0.0081,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "total_pnl": -0.50954,
-      "trade_count": 9,
-      "unrealized_pnl": -0.2,
-      "updated_at": "2026-08-17T05:54:57.880603+00:00",
+      "total_pnl": -0.81418,
+      "trade_count": 10,
+      "unrealized_pnl": 0.0,
+      "updated_at": "2026-08-17T08:52:01.730656+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -675,6 +671,54 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985507",
+      "thesis": "Based on my research from the previous cycle, here's my analysis:\n\n**My position:** KXCABLEAVE-26MAY22-26SEP yes, 4000 contracts at avg entry 0.16, cost basis $640.00\n\n**Key facts:**\n- Market resolves: \"Will any Trump cabinet official leave office between May 22, 2026 and September 26, 2026?\"\n- Gabbard (DNI) resigned on May 22, 2026 \u2014 exactly the start of the window\n- This should count as a \"yes\" resolution\n\n**Current market price:** Yes at 0.16 bid/ask\n\n**My view:** The market price at 0.16 (16% implied probability) seems too low if Gabbard's resignation on May 22, 2026 is confirmed. This should resolve at $1.00 (100%).\n\n**Why I'm holding (not trading):**\n1. I already have a large position (4000 contracts) \u2014 adding more would increase risk\n2. The market price seems mispriced in my favor \u2014 I should benefit from the correction\n3. If Gabbard's resignation is confirmed, this resolves yes at $1.00, giving me $4,000 - $640 = $3,360 profit\n4. The risk is if there's some technicality that makes it resolve no (e.g., if the resignation date is disputed)\n\n**Why I'm not adding more:**\n- I already have significant exposure ($640 cost basis)\n- The market might stay at 0.16 for a while if there's uncertainty\n- I don't want to overcommit\n\n**Decision:** Hold my position. The market appears mispriced based on my research, and I should benefit when it resolves. No trade this cycle.",
+      "ts": "2026-08-17T08:58:45.712742+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985507",
+      "thesis": "I have exited my position in KXMLBDEBUT-KANDERSON-26SEP01 yes contracts due to recent developments in the Minnesota daycare fraud scandal. I purchased the opposite side (no contracts) at a price of 0.68 for 20 contracts, resulting in a realized loss of $0.50. The market moved against my position, and the recent guilty plea of Fahima Mahamud likely impacted the outcome. My cash balance is now $9,999.19, and I have no open positions remaining. I have recorded this decision in my notes for future reference.",
+      "ts": "2026-08-17T08:52:05.160059+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.68,
+      "quantity": 20.0,
+      "realized_pnl": -0.5046400000000029,
+      "side": "no",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-17T08:52:01.731300+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985505",
+      "thesis": "I will not place a trade this cycle.",
+      "ts": "2026-08-17T08:29:07.532152+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985505",
+      "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01.",
+      "ts": "2026-08-17T08:26:00.167627+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985504",
+      "thesis": "Based on my research, here's the current situation:\n\n**Confirmed cabinet departures (as of Aug 8, 2026):**\n1. Kristi Noem (Homeland Security) - removed\n2. Pam Bondi (Attorney General) - removed\n3. Lori Chavez-DeRemer (Labor) - resigned\n4. Tulsi Gabbard (DNI) - resigned **on May 22, 2026** (start of market window)\n\n**Key insight:** Gabbard's resignation falls **exactly on the start date** of the market window (May 22, 2026). This is critical because:\n- Departures BEFORE May 22 don't count for this market\n- Departures ON or AFTER May 22 DO count\n- We have at least 1 confirmed departure within the window\n\n**Market analysis:**\n- Current price: yes 0.16 / no 0.84\n- My position: 4,000 YES contracts at avg 0.16 ($640 cost basis)\n- If I sell at 0.11 bid: Lock in -$200 loss\n- If I hold and YES resolves at 1.0: Profit $3,360\n\n**The uncertainty:** The market at 0.16 YES suggests traders may be pricing in a higher threshold (5+ departures) rather than \"at least 1.\" However, my previous reasoning noted \"Resolution seems certain YES\" which suggests the threshold is low.\n\n**Additional context:** USA Today (July 20, 2026) reports 27 Senate-confirmed officials in Cabinet departments have left - but these are subordinates, not Cabinet heads themselves. Ballotpedia (Aug 8, 2026) confirms only 4 Cabinet-level departures.\n\n**Decision: HOLD**\n\nReasons:\n1. Selling now at 0.11 locks in a -$200 loss\n2. If YES resolves at 1.0, profit is",
+      "ts": "2026-08-17T08:07:36.054514+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "qwen3-coder-30b-a3b-instruct",
       "cycle_id": "15m:1985503",
@@ -999,48 +1043,6 @@
       "cycle_id": "15m:1985471",
       "thesis": "I will not place a trade this cycle.",
       "ts": "2026-08-16T23:52:39.955931+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985471",
-      "thesis": "I cannot take any action this cycle. While Franklin Arias has been promoted to Triple-A Worcester, making his MLB call-up more likely, I am restricted from closing this position due to 'implausible_netting_arb' restrictions. For Kameron Anderson, I found no reliable, specific information about his MLB status for 2026 that would justify any trades. Without definitive information about either player's status and with the existing restriction on Franklin Arias, I am unable to make any trades this cycle. Both positions will remain unchanged.",
-      "ts": "2026-08-16T23:52:21.998896+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985471",
-      "thesis": "I need to research the latest news on both markets before making any decisions. Let me search for relevant information.```tool\n{\"name\": \"web_search\", \"args\": {\"query\": Trump Cabinet member leaves resigns 2026 latest news\"}}\n{\"name\": \"web_search\", \"args\": {\"query\": Kade Anderson Franklin Arias MLB debut prospect 2026\"}}\n```",
-      "ts": "2026-08-16T23:51:39.130547+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985471",
-      "thesis": "No trade action is needed. The user's position of 20 'yes' contracts at $0.33 avg entry is appropriate given the current market price of 0.32/0.33. Kade Anderson's current status at Double-A doesn't change the market dynamics for his debut before September 1, 2026. The user's reasoning from the previous cycle remains valid and no changes are warranted.",
-      "ts": "2026-08-16T23:49:43.349328+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985470",
-      "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01.",
-      "ts": "2026-08-16T23:33:57.331497+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985470",
-      "thesis": "I will not place a trade this cycle.",
-      "ts": "2026-08-16T23:32:21.280934+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1985470",
-      "thesis": "I cannot take any action this cycle. Franklin Arias has been promoted to Triple-A Worcester, making his MLB call-up much more likely, but I cannot close this position due to 'implausible_netting_arb' restrictions. For Kameron Anderson, I searched for current information about his MLB status but could not find reliable, specific information to justify any trades. Without definitive information about either player's status, I am unable to make any trades. I have documented these findings for the next cycle.",
-      "ts": "2026-08-16T23:32:12.585722+00:00",
       "type": "thesis"
     }
   ]
