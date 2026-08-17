@@ -1,22 +1,5 @@
 {
   "eligibility": {
-    "gemma-4-31b-it": {
-      "agent_id": "gemma-4-31b-it",
-      "checks": {
-        "drawdown_within_cap": true,
-        "positive_return": false,
-        "sharpe_above_floor": false,
-        "sufficient_sample": false
-      },
-      "eligible": false,
-      "max_drawdown": 0.0,
-      "max_drawdown_allowed": 0.25,
-      "min_settled_trades_required": 30,
-      "min_sharpe_required": 0.5,
-      "return_pct": 0.0,
-      "settled_count": 0,
-      "sharpe": null
-    },
     "glm-5.2-fp8": {
       "agent_id": "glm-5.2-fp8",
       "checks": {
@@ -36,23 +19,6 @@
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
-      "checks": {
-        "drawdown_within_cap": true,
-        "positive_return": false,
-        "sharpe_above_floor": false,
-        "sufficient_sample": false
-      },
-      "eligible": false,
-      "max_drawdown": 0.0,
-      "max_drawdown_allowed": 0.25,
-      "min_settled_trades_required": 30,
-      "min_sharpe_required": 0.5,
-      "return_pct": 0.0,
-      "settled_count": 0,
-      "sharpe": null
-    },
-    "kimi-k2.7-code": {
-      "agent_id": "kimi-k2.7-code",
       "checks": {
         "drawdown_within_cap": true,
         "positive_return": false,
@@ -172,20 +138,15 @@
     }
   },
   "equity_curves": {
-    "gemma-4-31b-it": {
-      "agent_id": "gemma-4-31b-it",
-      "max_drawdown": 0.0,
+    "gemma-4-26b-a4b-it": {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "max_drawdown": null,
       "sharpe": null,
       "value_curve": [
         {
-          "account_value": 10000.0,
-          "event_type": "admin_reset",
-          "ts": "2026-08-16T09:01:34.881158+00:00"
-        },
-        {
-          "account_value": 10000.0,
-          "event_type": "mark_to_market",
-          "ts": "2026-08-17T22:49:38.264999+00:00"
+          "account_value": 0.0,
+          "event_type": "starting_cash",
+          "ts": null
         }
       ]
     },
@@ -207,7 +168,7 @@
         {
           "account_value": 9949.046,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T22:49:38.264999+00:00"
+          "ts": "2026-08-17T23:18:10.297204+00:00"
         }
       ]
     },
@@ -224,24 +185,19 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T22:49:38.264999+00:00"
+          "ts": "2026-08-17T23:18:10.297204+00:00"
         }
       ]
     },
-    "kimi-k2.7-code": {
-      "agent_id": "kimi-k2.7-code",
-      "max_drawdown": 0.0,
+    "kimi-k3": {
+      "agent_id": "kimi-k3",
+      "max_drawdown": null,
       "sharpe": null,
       "value_curve": [
         {
-          "account_value": 10000.0,
-          "event_type": "admin_reset",
-          "ts": "2026-08-16T09:01:37.309347+00:00"
-        },
-        {
-          "account_value": 10000.0,
-          "event_type": "mark_to_market",
-          "ts": "2026-08-17T22:49:38.264999+00:00"
+          "account_value": 0.0,
+          "event_type": "starting_cash",
+          "ts": null
         }
       ]
     },
@@ -283,7 +239,7 @@
         {
           "account_value": 9958.223,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T22:49:38.264999+00:00"
+          "ts": "2026-08-17T23:18:10.297204+00:00"
         }
       ]
     },
@@ -315,7 +271,7 @@
         {
           "account_value": 9722.368,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T22:49:38.264999+00:00"
+          "ts": "2026-08-17T23:18:10.297204+00:00"
         }
       ]
     },
@@ -397,7 +353,7 @@
         {
           "account_value": 9999.18582,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T22:49:38.264999+00:00"
+          "ts": "2026-08-17T23:18:10.297204+00:00"
         }
       ]
     },
@@ -429,7 +385,7 @@
         {
           "account_value": 9999.58223,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T22:49:38.264999+00:00"
+          "ts": "2026-08-17T23:18:10.297204+00:00"
         }
       ]
     },
@@ -466,7 +422,7 @@
         {
           "account_value": 9926.691,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T22:49:38.264999+00:00"
+          "ts": "2026-08-17T23:18:10.297204+00:00"
         }
       ]
     },
@@ -483,31 +439,13 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-17T22:49:38.264999+00:00"
+          "ts": "2026-08-17T23:18:10.297204+00:00"
         }
       ]
     }
   },
-  "generated_at": "2026-08-17T22:49:38.279513+00:00",
+  "generated_at": "2026-08-17T23:18:10.311733+00:00",
   "leaderboard": [
-    {
-      "account_value": 10000.0,
-      "agent_id": "gemma-4-31b-it",
-      "cash": 10000.0,
-      "fees_paid": 0.0,
-      "illiquid_positions": [],
-      "open_positions": [],
-      "realized_pnl": 0.0,
-      "return_pct": 0.0,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "total_pnl": 0.0,
-      "trade_count": 0,
-      "unrealized_pnl": 0.0,
-      "updated_at": "2026-08-16T09:01:34.881002+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
     {
       "account_value": 10000.0,
       "agent_id": "gpt-oss-120b",
@@ -523,24 +461,6 @@
       "trade_count": 0,
       "unrealized_pnl": 0.0,
       "updated_at": "2026-08-16T09:01:36.643007+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 10000.0,
-      "agent_id": "kimi-k2.7-code",
-      "cash": 10000.0,
-      "fees_paid": 0.0,
-      "illiquid_positions": [],
-      "open_positions": [],
-      "realized_pnl": 0.0,
-      "return_pct": 0.0,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "total_pnl": 0.0,
-      "trade_count": 0,
-      "unrealized_pnl": 0.0,
-      "updated_at": "2026-08-16T09:01:37.309214+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -734,10 +654,10 @@
   ],
   "mode": "shadow",
   "models": [
-    "gemma-4-31b-it",
+    "gemma-4-26b-a4b-it",
     "glm-5.2-fp8",
     "gpt-oss-120b",
-    "kimi-k2.7-code",
+    "kimi-k3",
     "llama-3.3-70b-instruct",
     "minimax-m3",
     "qwen3-coder-30b-a3b-instruct",
@@ -747,6 +667,20 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985564",
+      "thesis": "I will not place a trade this cycle because I don't see any mispricings in the markets I'm holding.",
+      "ts": "2026-08-17T23:05:22.384674+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985563",
+      "thesis": "Based on the current market conditions, I recommend maintaining the current stance without placing any trades this cycle. The user holds 10 YES contracts in the Kalshi market KXMLBDEBUT-KANDERSON-26SEP01 at an entry price of 0.33, and the market has moved slightly to 32% probability (0.32) with a current bid/ask of 0.32/0.33. Since the user is long YES contracts, selling now would result in a small loss. There is no compelling reason to adjust the position based on the current market movement.",
+      "ts": "2026-08-17T22:54:50.064882+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "llama-3.3-70b-instruct",
       "cycle_id": "15m:1985562",
@@ -1105,20 +1039,6 @@
       "cycle_id": "15m:1985541",
       "thesis": "I will hold my current positions in KXMLBDEBUT-KANDERSON-26SEP01 and KXMLBDEBUT-FARIAS-26SEP01.",
       "ts": "2026-08-17T17:18:40.260163+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985540",
-      "thesis": "I need to first check the live market price for my held position and search for recent news on Trump Cabinet departures to inform my decision.",
-      "ts": "2026-08-17T17:14:53.589923+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985540",
-      "thesis": "I will not place a trade this cycle because I don't see any mispricings in the markets I'm holding.",
-      "ts": "2026-08-17T17:14:53.582192+00:00",
       "type": "thesis"
     }
   ]
