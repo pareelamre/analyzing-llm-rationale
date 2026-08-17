@@ -27,8 +27,9 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("const _MTM_MODEL_COLORS", index)
         self.assertIn("'scads-alias-code':", index)
         self.assertIn("'scads-alias-reasoning':", index)
-        self.assertIn("'kimi-k2.7-code':", index)
-        self.assertIn("raw.includes('kimi-k2.7')", index)
+        self.assertIn("'kimi-k3':", index)
+        self.assertIn("'gemma-4-26b-a4b-it':", index)
+        self.assertIn("raw.includes('kimi-k3')", index)
         # padR is derived from the head-bubble radius so the newest value is
         # never clipped at the right edge.
         self.assertIn("const padL = 60, padR = HEAD_R + 24, padT = 26", index)

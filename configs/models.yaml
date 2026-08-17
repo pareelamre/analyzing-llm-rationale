@@ -31,7 +31,7 @@ models:
     access: hosted
     chat_interface_enabled: true
     fallback_model_chain:
-      - google/gemma-4-31B-it
+      - google/gemma-4-26B-A4B-it
       - openai/gpt-oss-120b
   llama-3.1-8b-instruct:
     result_label: Llama-3.1-8B-Instruct
@@ -71,7 +71,7 @@ models:
     chat_interface_enabled: true
     fallback_model_chain:
       - openai/gpt-oss-120b
-      - google/gemma-4-31B-it
+      - google/gemma-4-26B-A4B-it
   scads-alias-ha:
     result_label: SCADS Alias HA
     provider: openai-compatible
@@ -83,7 +83,7 @@ models:
     access: hosted
     chat_interface_enabled: true
     fallback_model_chain:
-      - google/gemma-4-31B-it
+      - google/gemma-4-26B-A4B-it
       - openai/gpt-oss-120b
       - MiniMaxAI/MiniMax-M3-MXFP8
   scads-alias-reasoning:
@@ -141,7 +141,7 @@ models:
     chat_interface_enabled: true
     fallback_model_chain:
       - openai/gpt-oss-120b
-      - google/gemma-4-31B-it
+      - google/gemma-4-26B-A4B-it
   minimax-m3:
     result_label: MiniMax-M3
     provider: openai-compatible
@@ -153,8 +153,22 @@ models:
     access: hosted
     chat_interface_enabled: true
     fallback_model_chain:
-      - moonshotai/Kimi-K2.7-Code
-      - google/gemma-4-31B-it
+      - moonshotai/Kimi-K3
+      - google/gemma-4-26B-A4B-it
+  kimi-k3:
+    result_label: Kimi-K3
+    provider: openai-compatible
+    local_model_name: moonshotai/Kimi-K3
+    router_model_name: moonshotai/Kimi-K3
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+    chat_interface_enabled: true
+    track_record_enabled: true
+    fallback_model_chain:
+      - MiniMaxAI/MiniMax-M3-MXFP8
+      - openai/gpt-oss-120b
   kimi-k2.7-code:
     result_label: Kimi-K2.7-Code
     provider: openai-compatible
@@ -164,9 +178,8 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    chat_interface_enabled: true
-    fallback_model_chain:
-      - MiniMaxAI/MiniMax-M3-MXFP8
+    chat_interface_enabled: false
+    track_record_enabled: false
   glm-5.2-fp8:
     result_label: GLM-5.2-FP8
     provider: openai-compatible
@@ -220,7 +233,21 @@ models:
     access: hosted
     chat_interface_enabled: true
     fallback_model_chain:
-      - google/gemma-4-31B-it
+      - google/gemma-4-26B-A4B-it
+  gemma-4-26b-a4b-it:
+    result_label: Gemma-4-26B-A4B-it
+    provider: openai-compatible
+    local_model_name: google/gemma-4-26B-A4B-it
+    router_model_name: google/gemma-4-26B-A4B-it
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+    chat_interface_enabled: true
+    track_record_enabled: true
+    fallback_model_chain:
+      - openai/gpt-oss-120b
+      - meta-llama/Llama-3.3-70B-Instruct
   gemma-4-31b-it:
     result_label: Gemma-4-31B-it
     provider: openai-compatible
@@ -230,10 +257,8 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    chat_interface_enabled: true
-    fallback_model_chain:
-      - openai/gpt-oss-120b
-      - meta-llama/Llama-3.3-70B-Instruct
+    chat_interface_enabled: false
+    track_record_enabled: false
   kimi-k2.5:
     result_label: Kimi-K2.5
     provider: openai-compatible
