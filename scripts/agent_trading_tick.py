@@ -168,8 +168,8 @@ def _fmt_px(value: Optional[float]) -> str:
 def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     opens = quote.get("created_time") or "unknown"
     close = quote.get("close_time") or "unknown"
-    # NO isn't a separate field Kalshi returns -- it's derived from the YES
-    # book (no_ask = 1 - yes_bid, etc., see accounting.MarketQuote.ask/bid),
+    # NO isn't always a separate field the venue returns -- it's derived from
+    # the YES book when absent (no_ask = 1 - yes_bid, etc., see accounting.MarketQuote.ask/bid),
     # the same derivation place_trade's own guards use to price a closing
     # order. Showing both sides here (not just YES) means an agent can read
     # the real price to close a position off this line instead of having to
@@ -178,8 +178,9 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     q = MarketQuote.from_mapping(quote)
     yes_bid, yes_ask = q.bid("YES"), q.ask("YES")
     no_bid, no_ask = q.bid("NO"), q.ask("NO")
+    platform = str(quote.get("platform") or "Kalshi").strip().lower()
     return (
-        f"  - {quote.get('ident')}: \"{quote.get('question')}\" "
+        f"  - [{platform}] {quote.get('ident')}: \"{quote.get('question')}\" "
         f"(yes bid/ask {_fmt_px(yes_bid)}/{_fmt_px(yes_ask)}, "
         f"no bid/ask {_fmt_px(no_bid)}/{_fmt_px(no_ask)}, "
         f"resolution window {opens} -> {close})"
@@ -187,7 +188,7 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
 
 
 def _build_candidates_block(held_quotes: List[Dict[str, Any]], new_quotes: List[Dict[str, Any]]) -> str:
-    lines = ["=== Markets you can act on this cycle (Kalshi only) ==="]
+    lines = ["=== Markets you can act on this cycle (Kalshi and Polymarket) ==="]
     if held_quotes:
         lines.append("Markets you currently hold (buying the opposite side closes the position):")
         lines.extend(_fmt_candidate_line(q) for q in held_quotes)
@@ -199,36 +200,55 @@ def _build_candidates_block(held_quotes: List[Dict[str, Any]], new_quotes: List[
     return "\n".join(lines)
 
 
-def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
-    new_quotes: List[Dict[str, Any]] = []
+def _list_venue(platform: str, limit: int) -> List[Dict[str, Any]]:
     try:
-        listed = market_data.list_kalshi(
-            limit=CANDIDATE_COUNT * 3,
-            min_close_days=MIN_CLOSE_DAYS,
-            max_close_days=MAX_CLOSE_DAYS,
-            paginate=True,
+        if platform == "polymarket":
+            return market_data.list_polymarket(
+                limit=limit, min_close_days=MIN_CLOSE_DAYS, max_close_days=MAX_CLOSE_DAYS,
+            )
+        return market_data.list_kalshi(
+            limit=limit, min_close_days=MIN_CLOSE_DAYS, max_close_days=MAX_CLOSE_DAYS, paginate=True,
         )
     except market_data.MarketDataError as exc:
-        print(f"  candidate discovery failed: {exc}", file=sys.stderr)
-        return new_quotes
-    for quote in listed:
-        ident = quote.get("ident")
-        if not ident or ident in known_tickers or quote.get("probability") is None:
-            continue
-        new_quotes.append(quote)
-        known_tickers.add(ident)
-        if len(new_quotes) >= CANDIDATE_COUNT:
-            break
+        print(f"  candidate discovery failed ({platform}): {exc}", file=sys.stderr)
+        return []
+
+
+def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
+    new_quotes: List[Dict[str, Any]] = []
+    # Round-robin one candidate at a time across venues (rather than filling
+    # Kalshi's share first) so a shortfall in one venue's listing doesn't
+    # starve the other's, and consecutive candidates aren't all one venue.
+    per_venue_limit = CANDIDATE_COUNT * 3
+    iterators = [iter(_list_venue(p, per_venue_limit)) for p in ("kalshi", "polymarket")]
+    active = list(iterators)
+    while active and len(new_quotes) < CANDIDATE_COUNT:
+        for it in list(active):
+            try:
+                quote = next(it)
+            except StopIteration:
+                active.remove(it)
+                continue
+            ident = quote.get("ident")
+            if not ident or ident in known_tickers or quote.get("probability") is None:
+                continue
+            new_quotes.append(quote)
+            known_tickers.add(ident)
+            if len(new_quotes) >= CANDIDATE_COUNT:
+                break
     return new_quotes
 
 
-def _requote_held(tickers: List[str]) -> List[Dict[str, Any]]:
+def _requote_held(positions: List[tuple]) -> List[Dict[str, Any]]:
     quotes = []
-    for ticker in tickers:
+    for platform, ticker in positions:
         try:
-            quotes.append(market_data.fetch_kalshi(ticker))
+            if platform == "polymarket":
+                quotes.append(market_data.fetch_polymarket(slug=ticker))
+            else:
+                quotes.append(market_data.fetch_kalshi(ticker))
         except market_data.MarketDataError as exc:
-            print(f"  could not re-quote held position {ticker}: {exc}", file=sys.stderr)
+            print(f"  could not re-quote held position [{platform}] {ticker}: {exc}", file=sys.stderr)
     return quotes
 
 
@@ -238,10 +258,13 @@ def _current_account_value(conn, agent_id: str, held_quotes: List[Dict[str, Any]
     size, concentration, per-cycle spend) scales with the account's REAL
     performance, not a frozen starting baseline."""
     summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
-    quotes_by_ticker = {q["ident"]: MarketQuote.from_mapping(q) for q in held_quotes if q.get("ident")}
+    quotes_by_key = {
+        (str(q.get("platform") or "").lower(), q["ident"]): MarketQuote.from_mapping(q)
+        for q in held_quotes if q.get("ident")
+    }
     liquidation_value = 0.0
     for pos in summary["open_positions"]:
-        quote = quotes_by_ticker.get(pos["ticker"])
+        quote = quotes_by_key.get((str(pos["platform"]).lower(), pos["ticker"]))
         bid = quote.bid(pos["side"]) if quote else None
         # No live bid (re-quote failed, or the position isn't in held_quotes)
         # -- fall back to cost basis rather than dropping it from the total,
@@ -274,8 +297,9 @@ async def _call_agent_analyze(question: str):
 
 _TRADING_INSTRUCTION = (
     "Decide what, if anything, to do this cycle. You may place_trade on any "
-    "ticker listed above (buying the opposite side of a held position "
-    "closes it), use web_search for research, and manage_notes to record "
+    "ticker listed above -- each is tagged [kalshi] or [polymarket]; pass "
+    "that same platform to place_trade (buying the opposite side of a held "
+    "position closes it), use web_search for research, and manage_notes to record "
     "anything worth remembering next cycle. Price every order off the live "
     "yes/no bid/ask shown above for that ticker -- both sides are the real "
     "current market, not an estimate. Never guess a price, and never reuse "
@@ -332,10 +356,10 @@ def run_cycle(model: str) -> None:
     cycle_id = benchmark_tools._current_cycle_id()
 
     with benchmark_tools._account_transaction() as conn:
-        held_tickers = [
-            row["ticker"]
+        held_positions = [
+            (str(row["platform"] or "kalshi").lower(), row["ticker"])
             for row in conn.execute(
-                "SELECT DISTINCT ticker FROM agent_positions WHERE agent_id = ? AND quantity > 0",
+                "SELECT DISTINCT platform, ticker FROM agent_positions WHERE agent_id = ? AND quantity > 0",
                 (agent_id,),
             )
         ]
@@ -346,7 +370,7 @@ def run_cycle(model: str) -> None:
         last_thesis = last_cycle["thesis"] if last_cycle else None
         portfolio_block = _build_portfolio_block(conn, agent_id, last_thesis)
 
-    held_quotes = _requote_held(held_tickers)
+    held_quotes = _requote_held(held_positions)
     known = {q.get("ident") for q in held_quotes if q.get("ident")}
     new_quotes = _discover_candidates(known)
 

@@ -137,11 +137,21 @@ class CurrentAccountValueTests(unittest.TestCase):
         self.assertAlmostEqual(value, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE - 0.168)
 
 
+def _poly_quote(ident, question="Q?", bid=0.4, ask=0.45, close="2026-09-01T00:00:00Z",
+                 opens="2026-05-01T00:00:00Z"):
+    return {
+        "platform": "Polymarket", "ident": ident, "question": question,
+        "probability": (bid + ask) / 2, "yes_bid": bid, "yes_ask": ask,
+        "close_time": close, "created_time": opens,
+    }
+
+
 class CandidateSelectionTests(unittest.TestCase):
     def test_discover_candidates_excludes_known_tickers_and_caps_count(self):
         listed = [_quote("KXA"), _quote("KXB"), _quote("KXC"), _quote("KXD")]
         with (
             mock.patch.object(market_data, "list_kalshi", return_value=listed),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
             mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 2),
         ):
             found = agent_trading_tick._discover_candidates({"KXA"})
@@ -150,13 +160,19 @@ class CandidateSelectionTests(unittest.TestCase):
     def test_discover_candidates_skips_unpriced_markets(self):
         unpriced = dict(_quote("KXE"))
         unpriced["probability"] = None
-        with mock.patch.object(market_data, "list_kalshi", return_value=[unpriced, _quote("KXF")]):
+        with (
+            mock.patch.object(market_data, "list_kalshi", return_value=[unpriced, _quote("KXF")]),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+        ):
             found = agent_trading_tick._discover_candidates(set())
         self.assertEqual([q["ident"] for q in found], ["KXF"])
 
     def test_discover_candidates_survives_market_data_error(self):
-        with mock.patch.object(
-            market_data, "list_kalshi", side_effect=market_data.MarketDataError("boom")
+        with (
+            mock.patch.object(
+                market_data, "list_kalshi", side_effect=market_data.MarketDataError("boom")
+            ),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
         ):
             found = agent_trading_tick._discover_candidates(set())
         self.assertEqual(found, [])
@@ -167,9 +183,42 @@ class CandidateSelectionTests(unittest.TestCase):
         # live, does) contain zero markets in the close-day window even though
         # thousands of qualifying markets exist on later pages -- silently
         # starving every cycle of candidates.
-        with mock.patch.object(market_data, "list_kalshi", return_value=[_quote("KXA")]) as mocked:
+        with (
+            mock.patch.object(market_data, "list_kalshi", return_value=[_quote("KXA")]) as mocked,
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+        ):
             agent_trading_tick._discover_candidates(set())
         self.assertTrue(mocked.call_args.kwargs.get("paginate") is True)
+
+    def test_discover_candidates_round_robins_across_both_venues(self):
+        # A shortfall in one venue's listing must not starve the other's --
+        # both venues get a look-in every round, in venue order.
+        with (
+            mock.patch.object(market_data, "list_kalshi", return_value=[_quote("KXA"), _quote("KXB")]),
+            mock.patch.object(market_data, "list_polymarket", return_value=[_poly_quote("poly-a"), _poly_quote("poly-b")]),
+            mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 3),
+        ):
+            found = agent_trading_tick._discover_candidates(set())
+        self.assertEqual([q["ident"] for q in found], ["KXA", "poly-a", "KXB"])
+
+    def test_discover_candidates_fills_from_the_other_venue_when_one_is_short(self):
+        with (
+            mock.patch.object(market_data, "list_kalshi", return_value=[_quote("KXA")]),
+            mock.patch.object(market_data, "list_polymarket", return_value=[_poly_quote("poly-a"), _poly_quote("poly-b")]),
+            mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 3),
+        ):
+            found = agent_trading_tick._discover_candidates(set())
+        self.assertEqual([q["ident"] for q in found], ["KXA", "poly-a", "poly-b"])
+
+    def test_discover_candidates_survives_polymarket_market_data_error(self):
+        with (
+            mock.patch.object(market_data, "list_kalshi", return_value=[_quote("KXA")]),
+            mock.patch.object(
+                market_data, "list_polymarket", side_effect=market_data.MarketDataError("boom")
+            ),
+        ):
+            found = agent_trading_tick._discover_candidates(set())
+        self.assertEqual([q["ident"] for q in found], ["KXA"])
 
     def test_requote_held_skips_failed_lookups(self):
         def fake_fetch(ticker):
@@ -178,8 +227,19 @@ class CandidateSelectionTests(unittest.TestCase):
             return _quote(ticker)
 
         with mock.patch.object(market_data, "fetch_kalshi", side_effect=fake_fetch):
-            quotes = agent_trading_tick._requote_held(["KXGOOD", "KXBAD"])
+            quotes = agent_trading_tick._requote_held([("kalshi", "KXGOOD"), ("kalshi", "KXBAD")])
         self.assertEqual([q["ident"] for q in quotes], ["KXGOOD"])
+
+    def test_requote_held_routes_polymarket_positions_to_fetch_polymarket(self):
+        with (
+            mock.patch.object(market_data, "fetch_kalshi", return_value=_quote("KXGOOD")),
+            mock.patch.object(market_data, "fetch_polymarket", return_value=_poly_quote("poly-a")) as poly_mock,
+        ):
+            quotes = agent_trading_tick._requote_held(
+                [("kalshi", "KXGOOD"), ("polymarket", "poly-a")]
+            )
+        self.assertEqual([q["ident"] for q in quotes], ["KXGOOD", "poly-a"])
+        poly_mock.assert_called_once_with(slug="poly-a")
 
 
 class CandidateLineFormattingTests(unittest.TestCase):
@@ -203,6 +263,12 @@ class CandidateLineFormattingTests(unittest.TestCase):
         del quote["created_time"]
         line = agent_trading_tick._fmt_candidate_line(quote)
         self.assertIn("unknown", line)
+
+    def test_candidate_line_shows_the_venue_tag(self):
+        kalshi_line = agent_trading_tick._fmt_candidate_line(_quote("KXFOO"))
+        poly_line = agent_trading_tick._fmt_candidate_line(_poly_quote("some-poly-slug"))
+        self.assertIn("[kalshi]", kalshi_line)
+        self.assertIn("[polymarket]", poly_line)
 
     def test_candidate_line_shows_the_derived_no_price_not_just_yes(self):
         # Regression: a real live position was rejected trying to close a
@@ -309,6 +375,7 @@ class RunCycleTests(unittest.TestCase):
                 mock.patch.dict(os.environ, env, clear=False),
                 mock.patch.object(agent_trading_tick, "_init_local_agent"),
                 mock.patch.object(market_data, "list_kalshi", return_value=[_quote("KXNEW")]),
+                mock.patch.object(market_data, "list_polymarket", return_value=[]),
                 mock.patch.object(
                     agent_trading_tick, "_call_agent_analyze",
                     return_value=self._fake_report(thesis="Bought KXNEW on a genuine edge.",
@@ -355,6 +422,7 @@ class RunCycleTests(unittest.TestCase):
                 mock.patch.dict(os.environ, env, clear=False),
                 mock.patch.object(agent_trading_tick, "_init_local_agent"),
                 mock.patch.object(market_data, "list_kalshi", return_value=[]),
+                mock.patch.object(market_data, "list_polymarket", return_value=[]),
                 mock.patch.object(agent_trading_tick, "_call_agent_analyze", side_effect=_capture_env),
             ):
                 agent_trading_tick.run_cycle("model-d")
@@ -381,6 +449,7 @@ class RunCycleTests(unittest.TestCase):
                 with (
                     mock.patch.object(agent_trading_tick, "_init_local_agent"),
                     mock.patch.object(market_data, "list_kalshi", return_value=[]),
+                    mock.patch.object(market_data, "list_polymarket", return_value=[]),
                     mock.patch.object(
                         market_data, "fetch_kalshi", return_value=_quote("KXHELD", question="Held market"),
                     ),

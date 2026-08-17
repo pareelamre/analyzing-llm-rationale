@@ -1,8 +1,9 @@
 name: Agent trading board publish
 
 # Cheap aggregation-only heartbeat: no LLM calls, just reads all 10 agent
-# models' own GCS-synced shadow-account stores, fetches live Kalshi quotes for
-# whatever they currently hold, and republishes the public leaderboard/equity
+# models' own GCS-synced shadow-account stores, fetches a live quote (Kalshi
+# or Polymarket, matching each position's own venue) for whatever they
+# currently hold, and republishes the public leaderboard/equity
 # curve/transparency-feed JSON that GET /agent-trading/board serves. Runs less
 # often than the per-model trade crons (staggered minutes 0-9) to avoid adding
 # back the schedule pressure that agent-trading-cron-stagger and the

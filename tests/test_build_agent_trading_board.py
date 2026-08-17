@@ -70,7 +70,7 @@ class HeldTickersAndQuotesTests(unittest.TestCase):
                 conn = board_script._open_store("model-a")
                 held = board_script._held_tickers(conn)
                 conn.close()
-        self.assertEqual(held, {"KXFOO-26"})
+        self.assertEqual(held, {("kalshi", "KXFOO-26")})
 
     def test_fetch_quotes_skips_failed_lookups_and_keys_lowercase_platform(self):
         def fake_fetch(ticker):
@@ -79,8 +79,51 @@ class HeldTickersAndQuotesTests(unittest.TestCase):
             return {"platform": "Kalshi", "ident": ticker, "yes_bid": 0.5}
 
         with mock.patch.object(market_data, "fetch_kalshi", side_effect=fake_fetch):
-            quotes = board_script._fetch_quotes({"KXGOOD", "KXBAD"})
+            quotes = board_script._fetch_quotes({("kalshi", "KXGOOD"), ("kalshi", "KXBAD")})
         self.assertEqual(set(quotes.keys()), {("kalshi", "KXGOOD")})
+
+    def test_fetch_quotes_routes_polymarket_positions_to_fetch_polymarket(self):
+        def fake_fetch_poly(slug=None, market_id=None):
+            return {"platform": "Polymarket", "ident": slug, "yes_bid": 0.3}
+
+        with (
+            mock.patch.object(market_data, "fetch_kalshi", return_value={"platform": "Kalshi", "ident": "KXGOOD", "yes_bid": 0.5}),
+            mock.patch.object(market_data, "fetch_polymarket", side_effect=fake_fetch_poly) as poly_mock,
+        ):
+            quotes = board_script._fetch_quotes({("kalshi", "KXGOOD"), ("polymarket", "some-poly-slug")})
+        self.assertEqual(
+            set(quotes.keys()), {("kalshi", "KXGOOD"), ("polymarket", "some-poly-slug")},
+        )
+        poly_mock.assert_called_once_with(slug="some-poly-slug")
+
+    def test_held_tickers_reports_polymarket_positions_lowercase_and_case_preserved(self):
+        with tempfile.TemporaryDirectory() as td:
+            model_dir = Path(td) / "model-a"
+            model_dir.mkdir()
+            path = model_dir / "store.sqlite"
+            conn = sqlite3.connect(str(path))
+            conn.row_factory = sqlite3.Row
+            benchmark_tools._ensure_account_schema(conn)
+            conn.execute(
+                "INSERT INTO agent_accounts (agent_id, starting_cash, cash, realized_pnl, "
+                "fees_paid, settlement_fees_paid, updated_at) VALUES (?, 10000, 9950, 0, 0, 0, ?)",
+                ("model-a", "2026-08-11T00:00:00+00:00"),
+            )
+            conn.execute(
+                "INSERT INTO agent_positions (agent_id, platform, ticker, side, quantity, "
+                "cost_basis, avg_entry_price, updated_at) VALUES (?, 'polymarket', "
+                "'will-something-happen', 'yes', 10, 4, 0.4, ?)",
+                ("model-a", "2026-08-11T00:00:00+00:00"),
+            )
+            conn.commit()
+            conn.close()
+            with mock.patch.object(board_script, "STORE_DIR", Path(td)):
+                conn = board_script._open_store("model-a")
+                held = board_script._held_tickers(conn)
+                conn.close()
+        # Slug case must round-trip exactly -- fetch_polymarket(slug=...) is
+        # case-sensitive, unlike Kalshi tickers which are always uppercase.
+        self.assertEqual(held, {("polymarket", "will-something-happen")})
 
 
 class BuildBoardTests(unittest.TestCase):

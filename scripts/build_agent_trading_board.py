@@ -4,7 +4,8 @@
 Each of the 10 SCADS models trades through its own isolated GCS-synced SQLite
 store (see scripts/agent_trading_tick.py); this script reads all 10 (already
 downloaded locally, one directory per model, by the publish workflow),
-fetches live Kalshi quotes for every ticker anyone currently holds, and writes
+fetches a live quote (Kalshi or Polymarket, matching each position's own
+venue) for every ticker anyone currently holds, and writes
 static/agent_trading_live.json -- the artifact GET /agent-trading/board serves,
 following the same committed-static-JSON pattern as track_record_live.json /
 mark_to_market_live.json (raw.githubusercontent.com, no dedicated read API
@@ -60,20 +61,24 @@ def _load_model_notes(model: str) -> Dict[str, List[Dict[str, Any]]]:
     return benchmark_tools._load_notes(path if path.exists() else None)
 
 
-def _held_tickers(conn: sqlite3.Connection) -> Set[str]:
+def _held_tickers(conn: sqlite3.Connection) -> Set[tuple]:
     return {
-        str(row["ticker"])
-        for row in conn.execute("SELECT DISTINCT ticker FROM agent_positions WHERE quantity > 0")
+        (str(row["platform"] or "kalshi").lower(), str(row["ticker"]))
+        for row in conn.execute("SELECT DISTINCT platform, ticker FROM agent_positions WHERE quantity > 0")
     }
 
 
-def _fetch_quotes(tickers: Set[str]) -> Dict[Any, Dict[str, Any]]:
+def _fetch_quotes(positions: Set[tuple]) -> Dict[Any, Dict[str, Any]]:
     quotes: Dict[Any, Dict[str, Any]] = {}
-    for ticker in sorted(tickers):
+    for platform, ticker in sorted(positions):
         try:
-            quotes[("kalshi", ticker)] = market_data.fetch_kalshi(ticker)
+            quotes[(platform, ticker)] = (
+                market_data.fetch_polymarket(slug=ticker)
+                if platform == "polymarket"
+                else market_data.fetch_kalshi(ticker)
+            )
         except market_data.MarketDataError as exc:
-            print(f"  could not quote {ticker} for the board: {exc}", file=sys.stderr)
+            print(f"  could not quote [{platform}] {ticker} for the board: {exc}", file=sys.stderr)
     return quotes
 
 
@@ -81,7 +86,7 @@ def build_board() -> Dict[str, Any]:
     models = _chat_capable_models()
     conns = {model: _open_store(model) for model in models}
     try:
-        held: Set[str] = set()
+        held: Set[tuple] = set()
         for conn in conns.values():
             held |= _held_tickers(conn)
         quotes = _fetch_quotes(held)

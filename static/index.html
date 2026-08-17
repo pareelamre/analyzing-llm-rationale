@@ -2030,7 +2030,7 @@
       .nav-collapse { display: none; }
       .btn-signin { padding: 7px 13px; }
     }
-  </style>
+  </style>
   <script>
     // Pre-paint routing (see the [data-boot-view] CSS rules above): decide
     // the initial route before the browser paints anything, so a direct
@@ -2056,7 +2056,7 @@
         document.documentElement.setAttribute('data-boot-view', view);
       } catch (e) {}
     })();
-  </script>
+  </script>
   <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
@@ -6086,16 +6086,17 @@ async function loadAgentTradingSection() {
 }
 
 function _agentTradingActivityLine(a) {
+  const platformTag = a.platform ? `<span style="opacity:0.6">[${escHtml(String(a.platform))}]</span> ` : '';
   if (a.type === 'trade') {
-    return `<b>${escHtml((a.side || '').toUpperCase())}</b> ${a.quantity ?? ''} ${escHtml(a.ticker || '')} @ ${a.price ?? ''}`;
+    return `${platformTag}<b>${escHtml((a.side || '').toUpperCase())}</b> ${a.quantity ?? ''} ${escHtml(a.ticker || '')} @ ${a.price ?? ''}`;
   }
   if (a.type === 'settlement') {
     const pnl = Number(a.realized_pnl) || 0;
     const pnlColor = pnl >= 0 ? '#0a7' : '#c33';
-    return `Settled ${escHtml(a.ticker || '')} — <span style="color:${pnlColor};font-weight:600">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span>`;
+    return `${platformTag}Settled ${escHtml(a.ticker || '')} — <span style="color:${pnlColor};font-weight:600">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span>`;
   }
   if (a.type === 'rejected_trade') {
-    return `Trade rejected: ${escHtml(a.ticker || '')}`;
+    return `${platformTag}Trade rejected: ${escHtml(a.ticker || '')}`;
   }
   if (a.type === 'thesis') {
     return escHtml(a.thesis || '');

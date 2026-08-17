@@ -3222,7 +3222,14 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(len(backstop_entries), 1)
         self.assertIn("predicted_answer", backstop_entries[0]["observation"])
 
-    def test_agent_analyze_benchmark_tool_loop_exposes_only_benchmark_tools(self):
+    def test_agent_analyze_benchmark_tool_loop_exposes_place_trade_among_full_toolset(self):
+        # Since #268 ("expose all foresea tools ... to edgeboard agents"),
+        # benchmark mode's default (no explicit benchmark_tool_names filter)
+        # exposes the full research toolset alongside place_trade/web_search/
+        # manage_notes, not just those three in isolation -- the safety
+        # boundary that actually matters (place_trade never reaching the
+        # NON-benchmark path) is covered separately by
+        # test_agent_analyze_tool_loop_without_benchmark_tools_excludes_place_trade.
         self.provider.response = {
             "thought": "remember this",
             "action": "manage_notes",
@@ -3251,7 +3258,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("place_trade(", system_prompt)
         self.assertIn("web_search(", system_prompt)
         self.assertIn("manage_notes(", system_prompt)
-        self.assertNotIn("forecast(", system_prompt)
+        self.assertIn("forecast(", system_prompt)
 
     def test_agent_analyze_benchmark_tool_names_restricts_to_a_subset(self):
         # A specialist-pipeline stage (e.g. research-only) passes an explicit
