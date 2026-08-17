@@ -94,23 +94,87 @@ def build_system_prompt(tool_specs: List[Dict[str, str]], max_steps: int, extra_
     return "\n".join(lines)
 
 
+TOOL_ALIASES: Dict[str, str] = {
+    "place_order": "place_trade",
+    "buy": "place_trade",
+    "buy_order": "place_trade",
+    "place_trade_order": "place_trade",
+    "execute_trade": "place_trade",
+    "search": "web_search",
+    "google_search": "web_search",
+    "web_search_google": "web_search",
+    "news_search": "web_search",
+    "fetch_market": "get_market",
+    "scan": "scan_markets",
+    "probability_forecast": "forecast",
+    "get_track_record": "track_record",
+    "grounding_note": "track_record",
+    "calibration": "track_record",
+    "news": "search_evidence",
+    "evidence": "search_evidence",
+    "fetch_evidence": "search_evidence",
+    "http_request": "fetch_api",
+    "http_get": "fetch_api",
+    "call_api": "fetch_api",
+    "api_request": "fetch_api",
+    "curl": "fetch_api",
+    "api": "fetch_api",
+    "web_get": "fetch_api",
+    "foresea_edge_board": "edge_board",
+    "get_edge_board": "edge_board",
+    "foresea_batch_quotes": "batch_quotes",
+    "get_batch_quotes": "batch_quotes",
+    "get_exchange_status": "exchange_status",
+    "kalshi_status": "exchange_status",
+    "exchange_schedule": "exchange_status",
+    "kalshi_schedule": "exchange_status",
+    "get_orderbook": "orderbook",
+    "clob_orderbook": "orderbook",
+    "depth": "orderbook",
+    "tags": "market_tags",
+    "get_tags": "market_tags",
+    "categories": "market_tags",
+    "polymarket_tags": "market_tags",
+    "candlesticks": "price_history",
+    "history": "price_history",
+    "ohlc": "price_history",
+    "get_price_history": "price_history",
+    "kalshi_live_data": "live_data",
+    "game_stats": "live_data",
+    "event_live_data": "live_data",
+    "get_live_data": "live_data",
+    "series": "polymarket_meta",
+    "polymarket_series": "polymarket_meta",
+    "comments": "polymarket_meta",
+    "polymarket_comments": "polymarket_meta",
+    "sports": "polymarket_meta",
+    "polymarket_sports": "polymarket_meta",
+}
+
+
 def _normalize_action(obj: Dict[str, Any]) -> Dict[str, Any]:
     """Recognize a model's native function-calling JSON shape and normalize it
-    to this loop's own {"action": ..., "args": ...} schema.
+    to this loop's own {"action": ..., "args": ...} schema, while mapping known
+    tool name aliases (e.g. place_order -> place_trade, search -> web_search).
 
     Not every model reliably follows the schema given in the system prompt --
     observed live: minimax-m3 defaulting to OpenAI-style
     {"name": "web_search", "parameters": {...}} instead, which parsed as valid
     JSON but was silently treated as a "final answer" (that JSON, verbatim)
     because it had no "action" key -- the tool never actually ran even though
-    the model was clearly trying to call it. Left untouched if the model
-    already used the prompted schema (has "action" or "final").
+    the model was clearly trying to call it.
     """
-    if "action" in obj or "final" in obj:
+    if "action" in obj:
+        act = obj.get("action")
+        if isinstance(act, str) and act in TOOL_ALIASES:
+            obj["action"] = TOOL_ALIASES[act]
+        return obj
+    if "final" in obj:
         return obj
     name = obj.get("name")
     if not isinstance(name, str) or not name:
         return obj
+    name = TOOL_ALIASES.get(name, name)
     params = obj.get("parameters", obj.get("arguments"))
     if isinstance(params, str):
         try:
@@ -200,9 +264,16 @@ async def run_tool_loop(
             except Exception:
                 pass
         tool = tools.get(name)
+        if tool is None and name in TOOL_ALIASES:
+            name = TOOL_ALIASES[name]
+            tool = tools.get(name)
         errored = tool is None
         try:
-            obs = await tool(args) if tool else f"(unknown tool '{name}')"
+            if tool:
+                obs = await tool(args)
+            else:
+                avail = ", ".join(f"'{k}'" for k in sorted(tools.keys()))
+                obs = f"(unknown tool '{name}'; available tools: {avail})" if avail else f"(unknown tool '{name}')"
         except Exception:
             obs = f"(tool '{name}' failed)"
             errored = True

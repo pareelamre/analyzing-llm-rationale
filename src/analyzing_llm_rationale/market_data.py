@@ -19,8 +19,17 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 POLYMARKET_GAMMA_URL = "https://gamma-api.polymarket.com/markets"
+POLYMARKET_TAGS_URL = "https://gamma-api.polymarket.com/tags"
+POLYMARKET_CLOB_BOOK_URL = "https://clob.polymarket.com/book"
+POLYMARKET_HISTORY_URL = "https://clob.polymarket.com/prices-history"
+POLYMARKET_SPORTS_URL = "https://gamma-api.polymarket.com/sports"
+POLYMARKET_COMMENTS_URL = "https://gamma-api.polymarket.com/comments"
+POLYMARKET_SERIES_URL = "https://gamma-api.polymarket.com/series"
 KALSHI_API_URL = "https://api.elections.kalshi.com/trade-api/v2/markets"
 KALSHI_EVENTS_URL = "https://api.elections.kalshi.com/trade-api/v2/events"
+KALSHI_EXCHANGE_STATUS_URL = "https://api.elections.kalshi.com/trade-api/v2/exchange/status"
+KALSHI_EXCHANGE_SCHEDULE_URL = "https://api.elections.kalshi.com/trade-api/v2/exchange/schedule"
+KALSHI_LIVE_DATA_URL = "https://api.elections.kalshi.com/trade-api/v2/live-data"
 _TIMEOUT_S = 12
 _HEADERS = {"User-Agent": "foresea-market-bot/1.0"}
 
@@ -598,3 +607,79 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
     # Prefer soonest-resolving so the track record accrues scored outcomes sooner.
     quotes.sort(key=lambda q: q.get("close_time") or "9999")
     return quotes[:limit]
+
+
+def fetch_kalshi_exchange_status() -> Dict[str, Any]:
+    """Fetch live exchange status from Kalshi API (/exchange/status)."""
+    data = _get_json(KALSHI_EXCHANGE_STATUS_URL)
+    return data if isinstance(data, dict) else {"exchange_active": True, "trading_active": True}
+
+
+def fetch_kalshi_exchange_schedule() -> Dict[str, Any]:
+    """Fetch trading schedule and maintenance windows from Kalshi API (/exchange/schedule)."""
+    data = _get_json(KALSHI_EXCHANGE_SCHEDULE_URL)
+    return data if isinstance(data, dict) else {"schedule": []}
+
+
+def fetch_kalshi_orderbook(ticker: str) -> Dict[str, Any]:
+    """Fetch live orderbook depth for a Kalshi market ticker."""
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ticker}/orderbook"
+    data = _get_json(url)
+    if isinstance(data, dict) and "orderbook" in data:
+        return data["orderbook"]
+    return data if isinstance(data, dict) else {}
+
+
+def fetch_polymarket_tags() -> List[Dict[str, Any]]:
+    """Fetch active categories/tags from Polymarket Gamma API."""
+    data = _get_json(POLYMARKET_TAGS_URL)
+    return [t for t in data if isinstance(t, dict)] if isinstance(data, list) else []
+
+
+def fetch_polymarket_orderbook(token_id: str) -> Dict[str, Any]:
+    """Fetch live CLOB orderbook for a Polymarket token ID."""
+    data = _get_json(POLYMARKET_CLOB_BOOK_URL, params={"token_id": token_id})
+    return data if isinstance(data, dict) else {}
+
+
+def fetch_polymarket_price_history(market: str, interval: str = "1d") -> List[Dict[str, Any]]:
+    """Fetch historical prices for a Polymarket market condition or token."""
+    data = _get_json(POLYMARKET_HISTORY_URL, params={"market": market, "interval": interval})
+    if isinstance(data, dict) and "history" in data:
+        return data["history"]
+    return data if isinstance(data, list) else []
+
+
+def fetch_kalshi_candlesticks(ticker: str, series_ticker: str = "") -> List[Dict[str, Any]]:
+    """Fetch historical OHLC candlesticks for a Kalshi market ticker."""
+    s_ticker = series_ticker or ticker.split("-")[0]
+    url = f"https://api.elections.kalshi.com/trade-api/v2/series/{s_ticker}/markets/{ticker}/candlesticks"
+    data = _get_json(url)
+    if isinstance(data, dict) and "candlesticks" in data:
+        return data["candlesticks"]
+    return data if isinstance(data, list) else []
+def fetch_kalshi_live_data(event_ticker: str = "", data_type: str = "") -> Dict[str, Any]:
+    """Fetch real-time sports game stats and live event feeds from Kalshi (/live-data)."""
+    params = {}
+    if event_ticker:
+        params["event_ticker"] = event_ticker
+    url = f"{KALSHI_LIVE_DATA_URL}/{data_type}" if data_type else KALSHI_LIVE_DATA_URL
+    data = _get_json(url, params=params if not data_type else None)
+    return data if isinstance(data, dict) else {}
+def fetch_polymarket_sports() -> List[Dict[str, Any]]:
+    """Fetch active sports leagues and market types from Polymarket Gamma API."""
+    data = _get_json(POLYMARKET_SPORTS_URL)
+    return [s for s in data if isinstance(s, dict)] if isinstance(data, list) else []
+
+
+def fetch_polymarket_comments(market_id: str = "") -> List[Dict[str, Any]]:
+    """Fetch public community comments for a Polymarket event/market."""
+    params = {"market": market_id} if market_id else None
+    data = _get_json(POLYMARKET_COMMENTS_URL, params=params)
+    return [c for c in data if isinstance(c, dict)] if isinstance(data, list) else []
+
+
+def fetch_polymarket_series() -> List[Dict[str, Any]]:
+    """Fetch active event series listings from Polymarket Gamma API."""
+    data = _get_json(POLYMARKET_SERIES_URL)
+    return [s for s in data if isinstance(s, dict)] if isinstance(data, list) else []
