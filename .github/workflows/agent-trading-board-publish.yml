@@ -38,7 +38,7 @@ jobs:
 
       - name: Install deps
         run: >-
-          pip install --quiet -e ".[serve,pipeline]" requests pyyaml
+          pip install --quiet requests pyyaml
           opentelemetry-sdk
           opentelemetry-exporter-otlp-proto-http
           opentelemetry-instrumentation-logging
@@ -65,7 +65,7 @@ jobs:
           done
 
       - name: Build the public agent-trading board
-        run: python scripts/build_agent_trading_board.py
+        run: PYTHONPATH=src python scripts/build_agent_trading_board.py
 
       - name: Commit updated board artifact
         env:

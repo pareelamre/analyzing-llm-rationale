@@ -5039,6 +5039,24 @@ function handleKey(e) {
 function handleLandingKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitLandingQuestion(e); }
 }
+function showLanding({ updateHistory = true } = {}) {
+  closeSidebar();
+  closeTrackRecord({ updateHistory: false });
+  closeEdgeBoard({ updateHistory: false });
+  closeWatchlistPage({ updateHistory: false });
+  closePersonalLedger({ updateHistory: false });
+  closeSettingsModal();
+  closeAuthModal();
+  closeTradeModal();
+  closeFeedback();
+  document.getElementById('appShell').classList.add('hidden-view');
+  document.getElementById('landingPage').classList.remove('hidden-view');
+  document.body.style.overflow = 'auto';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  currentView = 'landing';
+  startTransparencyAutoRefresh();
+  if (updateHistory) setHistoryState('landing');
+}
 function updateVariantDesc() {
   const v = document.getElementById('variantSelect').value;
   document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
@@ -5260,7 +5278,38 @@ function _landingReset() {
   answerEl.classList.remove('visible');
   const input = document.getElementById('landingQuestionInput');
   input.value = '';
-  input.focus();
+}
+
+function closeEdgeBoard({ updateHistory = true } = {}) {
+  _stopEdgeTimers();
+  const ov = document.getElementById('edgeOverlay');
+  if (!ov.classList.contains('open')) return;
+  const seq = ++_edgeOpenSeq;
+  const currentOverlayView = history.state?.view;
+  const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
+  const finish = () => {
+    // Re-opened while we were fading out — leave it open, polling is already back.
+    if (seq !== _edgeOpenSeq) { ov.style.opacity = ''; return; }
+    ov.classList.remove('open');
+    ov.setAttribute('aria-hidden', 'true');
+    ov.style.opacity = '';
+    document.body.style.overflow = inApp ? 'hidden' : 'auto';
+    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
+  };
+  if (window.Motion && !prefersReduced()) {
+    Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
+  } else { finish(); }
+
+  if (updateHistory) {
+    if (currentOverlayView === 'edge-app' || currentOverlayView === 'edge-landing') {
+      if (window.history.length > 1 && history.state?.view === currentOverlayView) {
+        history.back();
+      } else {
+        const targetView = inApp ? 'app' : 'landing';
+        setHistoryState(targetView, 'replace');
+      }
+    }
+  }
 }
 
 function startForecast(question, ctx = null) {
