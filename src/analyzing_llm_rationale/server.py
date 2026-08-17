@@ -13381,19 +13381,17 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "web_search": _tool_web_search,
         "manage_notes": _tool_manage_notes,
     }
-    import inspect as _dbg_inspect
-    print(f"DEBUG_SRC server.py __file__={__file__!r} "
-          f"_agent_tool_loop.__code__.co_filename={_agent_tool_loop.__code__.co_filename!r} "
-          f"_agent_tool_loop.__code__.co_firstlineno={_agent_tool_loop.__code__.co_firstlineno!r} "
-          f"benchmark_tool_map_right_after_literal={sorted(benchmark_tool_map.keys())!r}",
-          flush=True)
     try:
-        _src_lines = _dbg_inspect.getsource(_agent_tool_loop).splitlines()
-        _idx = next((i for i, ln in enumerate(_src_lines) if "benchmark_tool_map = {" in ln), None)
-        if _idx is not None:
-            print("DEBUG_SRC_SNIPPET " + " | ".join(_src_lines[_idx:_idx + 6]), flush=True)
+        with open(__file__, "rb") as _dbg_f:
+            _raw = _dbg_f.read()
+        _needle = b"benchmark_tool_map = {"
+        _pos = _raw.find(_needle)
+        _count = _raw.count(_needle)
+        _snippet = _raw[_pos:_pos + 400].decode("utf-8", "replace") if _pos >= 0 else "NOT_FOUND"
+        print(f"DEBUG_RAW file_size={len(_raw)} occurrences={_count} first_pos={_pos} "
+              f"snippet={_snippet!r}", flush=True)
     except Exception as _dbg_exc:
-        print(f"DEBUG_SRC_SNIPPET_ERROR {_dbg_exc!r}", flush=True)
+        print(f"DEBUG_RAW_ERROR {_dbg_exc!r}", flush=True)
     benchmark_specs = [
         {"name": "place_trade", "args": "ticker, side, price, quantity, platform?", "description": "Buy YES or NO contracts on Kalshi or Polymarket using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. Pass platform='kalshi' or platform='polymarket' (defaults to kalshi if omitted) -- ticker is the Kalshi ticker or the Polymarket market slug, matching whichever venue a candidate line came from. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit -- a rejection means one of those guards tripped, not that trading itself is unavailable."},
         {"name": "web_search", "args": "query", "description": "Research market events with OpenAI web search. CoinMarketCap and other blacklisted domains are excluded from results."},
