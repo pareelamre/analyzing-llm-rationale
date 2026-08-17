@@ -13435,6 +13435,38 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         except Exception as exc:
             return f"(API request failed: {exc})"
 
+    async def _tool_exchange_status(args):
+        try:
+            status = await loop.run_in_executor(None, market_data.fetch_kalshi_exchange_status)
+            schedule = await loop.run_in_executor(None, market_data.fetch_kalshi_exchange_schedule)
+            active = status.get("exchange_active", True) and status.get("trading_active", True)
+            res = f"Kalshi Exchange Status: {'ACTIVE' if active else 'PAUSED/INACTIVE'}\nRaw Status: {status}\nSchedule: {schedule}"
+            return res[:3500]
+        except Exception as exc:
+            return f"(Exchange status fetch failed: {exc})"
+
+    async def _tool_orderbook(args):
+        ticker = str(args.get("ticker") or args.get("symbol") or "").strip()
+        token_id = str(args.get("token_id") or "").strip()
+        if not ticker and not token_id:
+            return "Specify 'ticker' for Kalshi or 'token_id' for Polymarket."
+        try:
+            if ticker:
+                ob = await loop.run_in_executor(None, lambda: market_data.fetch_kalshi_orderbook(ticker))
+                return f"Kalshi Orderbook for {ticker}:\n{json.dumps(ob, indent=2)[:3500]}"
+            ob = await loop.run_in_executor(None, lambda: market_data.fetch_polymarket_orderbook(token_id))
+            return f"Polymarket Orderbook for token {token_id}:\n{json.dumps(ob, indent=2)[:3500]}"
+        except Exception as exc:
+            return f"(Orderbook fetch failed: {exc})"
+
+    async def _tool_market_tags(args):
+        try:
+            tags = await loop.run_in_executor(None, market_data.fetch_polymarket_tags)
+            names = [f"- {t.get('label') or t.get('name') or t.get('id', '?')}" for t in (tags or [])[:20]]
+            return f"Polymarket Market Categories/Tags ({len(tags)} total):\n" + "\n".join(names)
+        except Exception as exc:
+            return f"(Market tags fetch failed: {exc})"
+
     benchmark_tool_map = {
         "place_trade": _tool_place_trade,
         "web_search": _tool_web_search,
@@ -13443,9 +13475,13 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "scan_markets": _tool_scan,
         "forecast": _tool_forecast,
         "search_evidence": _tool_search_evidence,
+        "track_record": _tool_track_record,
         "edge_board": _tool_edge_board,
         "batch_quotes": _tool_batch_quotes,
         "fetch_api": _tool_fetch_api,
+        "exchange_status": _tool_exchange_status,
+        "orderbook": _tool_orderbook,
+        "market_tags": _tool_market_tags,
     }
     benchmark_specs = [
         {"name": "place_trade", "args": "ticker, side, price, quantity", "description": "Buy YES or NO contracts on Kalshi using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit -- a rejection means one of those guards tripped, not that trading itself is unavailable."},
@@ -13459,6 +13495,9 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         {"name": "edge_board", "args": "limit?", "description": "Get top open prediction market opportunities ranked by model-vs-market edge."},
         {"name": "batch_quotes", "args": "refs", "description": "Fetch batch market quotes for a comma-separated list of tickers or slugs."},
         {"name": "fetch_api", "args": "url, method?, json?", "description": "Execute a GET or POST HTTP API request to an API endpoint URL."},
+        {"name": "exchange_status", "args": "", "description": "Get Kalshi exchange operational status (trading_active) and schedule."},
+        {"name": "orderbook", "args": "ticker|token_id", "description": "Fetch live orderbook bids/asks for Kalshi ticker or Polymarket token."},
+        {"name": "market_tags", "args": "", "description": "Fetch active market categories and tags on Polymarket."},
     ]
     if req.benchmark_tools:
         allowed_names = req.benchmark_tool_names
@@ -13473,7 +13512,9 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         tools = {"forecast": _tool_forecast, "get_market": _tool_get_market,
                  "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,
                  "track_record": _tool_track_record, "edge_board": _tool_edge_board,
-                 "batch_quotes": _tool_batch_quotes, "fetch_api": _tool_fetch_api}
+                 "batch_quotes": _tool_batch_quotes, "fetch_api": _tool_fetch_api,
+                 "exchange_status": _tool_exchange_status, "orderbook": _tool_orderbook,
+                 "market_tags": _tool_market_tags}
         specs = [
             {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
             {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
@@ -13483,6 +13524,9 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             {"name": "edge_board", "args": "limit?", "description": "Get top open prediction market opportunities ranked by model-vs-market edge."},
             {"name": "batch_quotes", "args": "refs", "description": "Fetch batch market quotes for a comma-separated list of tickers or slugs."},
             {"name": "fetch_api", "args": "url, method?, json?", "description": "Execute a GET or POST HTTP API request to an API endpoint URL."},
+            {"name": "exchange_status", "args": "", "description": "Get Kalshi exchange operational status (trading_active) and schedule."},
+            {"name": "orderbook", "args": "ticker|token_id", "description": "Fetch live orderbook bids/asks for Kalshi ticker or Polymarket token."},
+            {"name": "market_tags", "args": "", "description": "Fetch active market categories and tags on Polymarket."},
         ]
 
     # Optional: proxy the venues' own MCP tools (orderbook/depth/etc.) when
