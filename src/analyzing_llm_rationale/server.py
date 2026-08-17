@@ -13382,7 +13382,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "manage_notes": _tool_manage_notes,
     }
     benchmark_specs = [
-        {"name": "place_trade", "args": "ticker, side, price, quantity", "description": "Buy YES or NO contracts on Kalshi using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit -- a rejection means one of those guards tripped, not that trading itself is unavailable."},
+        {"name": "place_trade", "args": "ticker, side, price, quantity, platform?", "description": "Buy YES or NO contracts on Kalshi or Polymarket using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. Pass platform='kalshi' or platform='polymarket' (defaults to kalshi if omitted) -- ticker is the Kalshi ticker or the Polymarket market slug, matching whichever venue a candidate line came from. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit -- a rejection means one of those guards tripped, not that trading itself is unavailable."},
         {"name": "web_search", "args": "query", "description": "Research market events with OpenAI web search. CoinMarketCap and other blacklisted domains are excluded from results."},
         {"name": "manage_notes", "args": "action, id?, text?, query?, tags?", "description": "Store, search, edit, list, or delete persistent notes. Max 50 notes per agent, 1200 characters each."},
     ]
@@ -13452,7 +13452,10 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             ]
             if "place_trade" in active:
                 rule_parts.append(
-                    "Use `place_trade` for Kalshi trade decisions. There is no sell tool; "
+                    "Use `place_trade` for Kalshi or Polymarket trade decisions -- pass "
+                    "platform='kalshi' or platform='polymarket' matching whichever venue the "
+                    "candidate came from (defaults to kalshi if omitted); ticker is the Kalshi "
+                    "ticker or the Polymarket market slug. There is no sell tool; "
                     "exit by buying the opposite side. `place_trade` uses immediate-or-cancel "
                     "execution only: unfilled quantity is cancelled and no order rests. Cash, "
                     "positions, actions, weighted-average entry price, netting PnL, and market "

@@ -157,8 +157,14 @@ def _clean_side(value: Any) -> str:
     raise ValueError("side must be 'yes' or 'no'")
 
 
-def _clean_ticker(value: Any) -> str:
-    ticker = str(value or "").strip().upper()
+def _clean_ticker(value: Any, *, platform: str = "kalshi") -> str:
+    # Kalshi tickers are conventionally uppercase (e.g. "KXFED-25DEC-T");
+    # Polymarket idents are lowercase-hyphenated slugs, and every downstream
+    # lookup (fetch_polymarket, resolve_polymarket, position/quote keys) is
+    # case-sensitive against that exact slug, so only Kalshi gets uppercased.
+    ticker = str(value or "").strip()
+    if platform == "kalshi":
+        ticker = ticker.upper()
     if not ticker:
         raise ValueError("ticker is required")
     if len(ticker) > 120:
@@ -302,7 +308,7 @@ def _settlement_fee_rate() -> float:
     return _env_float("FORESEA_AGENT_SETTLEMENT_FEE_RATE", DEFAULT_SETTLEMENT_FEE_RATE)
 
 
-def _order_fee(args: Mapping[str, Any], normalized: Mapping[str, Any]) -> float:
+def _order_fee(args: Mapping[str, Any], normalized: Mapping[str, Any], *, platform: str = "kalshi") -> float:
     for source in (args, normalized):
         for key in ("fee", "estimated_fee", "kalshi_fee"):
             if source.get(key) not in (None, ""):
@@ -310,6 +316,11 @@ def _order_fee(args: Mapping[str, Any], normalized: Mapping[str, Any]) -> float:
                 if fee < 0:
                     raise ValueError("fee must be non-negative")
                 return fee
+    if platform != "kalshi":
+        # Polymarket's CLOB charges no per-trade maker/taker fee (unlike
+        # Kalshi's tiered taker fee below) -- an explicit fee/estimated_fee
+        # arg above still overrides this if a caller ever needs to model one.
+        return 0.0
     return _kalshi_fee(
         _as_float(normalized.get("price")),
         _as_float(normalized.get("quantity")),
@@ -436,6 +447,7 @@ def _normalize_fill_for_accounting(
     live: bool,
     shadow_marketable: bool = True,
     shadow_unfilled_status: str = "shadow_unfilled_below_market",
+    platform: str = "kalshi",
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
     filled_quantity, fill_status = _extract_filled_quantity(
         result, normalized, live=live, shadow_marketable=shadow_marketable,
@@ -448,7 +460,7 @@ def _normalize_fill_for_accounting(
     price = _as_float(accounting_order.get("price"))
     venue_fee = _extract_fee_from_result(result) if live else None
     fee = venue_fee if venue_fee is not None else (
-        _order_fee(args, accounting_order) if filled_quantity > 0 else 0.0
+        _order_fee(args, accounting_order, platform=platform) if filled_quantity > 0 else 0.0
     )
     accounting_guard.update({
         "requested_quantity": round(_as_float(normalized.get("quantity")), 6),
@@ -720,11 +732,12 @@ def _record_rejected_account_action(
     side: str,
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
+    platform: str = "kalshi",
 ) -> None:
     if _use_datastore_account_store():
         _ds_record_rejected_account_action(
             agent_id=agent_id, mode=mode, ticker=ticker, side=side,
-            normalized=normalized, guard=guard,
+            normalized=normalized, guard=guard, platform=platform,
         )
         return
     with _account_transaction() as conn:
@@ -735,7 +748,7 @@ def _record_rejected_account_action(
             action_type="rejected_trade",
             mode=mode,
             submitted=False,
-            platform="kalshi",
+            platform=platform,
             ticker=ticker,
             side=side,
             price=_as_float(normalized.get("price")),
@@ -767,13 +780,13 @@ def _apply_trade_to_account_tables(
     side: str,
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
+    platform: str = "kalshi",
 ) -> Dict[str, Any]:
     if _use_datastore_account_store():
         return _ds_apply_trade(
             agent_id=agent_id, policy=policy, mode=mode, submitted=submitted,
-            ticker=ticker, side=side, normalized=normalized, guard=guard,
+            ticker=ticker, side=side, normalized=normalized, guard=guard, platform=platform,
         )
-    platform = "kalshi"
     opposite_side = _opposite_side(side)
     price = _as_float(normalized.get("price"))
     quantity = _as_float(normalized.get("quantity"))
@@ -891,7 +904,7 @@ def _apply_trade_to_account_tables(
 
 
 def _settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> List[Dict[str, Any]]:
-    """Settle resolved Kalshi markets once per agent/cycle before trading."""
+    """Settle resolved Kalshi or Polymarket markets once per agent/cycle before trading."""
     if _use_datastore_account_store():
         return _ds_settle_agent_open_positions(agent_id, policy)
     settled: List[Dict[str, Any]] = []
@@ -926,11 +939,18 @@ def _settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> List
                 ]
                 for market in markets:
                     platform = str(market["platform"] or "").lower()
-                    ticker = str(market["ticker"] or "").upper()
-                    if platform != "kalshi" or not ticker:
+                    # Kalshi tickers are stored uppercase; Polymarket slugs are
+                    # case-sensitive and must round-trip exactly as stored.
+                    raw_ticker = str(market["ticker"] or "")
+                    ticker = raw_ticker.upper() if platform == "kalshi" else raw_ticker
+                    if not ticker or platform not in ("kalshi", "polymarket"):
                         continue
                     try:
-                        outcome_value = market_data.resolve_kalshi(ticker)
+                        outcome_value = (
+                            market_data.resolve_kalshi(ticker)
+                            if platform == "kalshi"
+                            else market_data.resolve_polymarket(ticker)
+                        )
                     except Exception:
                         logger.warning("agent settlement lookup failed ticker=%s", ticker, exc_info=True)
                         continue
@@ -1252,6 +1272,7 @@ def _ds_record_rejected_account_action(
     side: str,
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
+    platform: str = "kalshi",
 ) -> None:
     client = _get_account_datastore()
     if client is None:
@@ -1268,7 +1289,7 @@ def _ds_record_rejected_account_action(
             cycle_id=str(guard.get("cycle_id") or ""),
             mode=mode,
             submitted=False,
-            platform="kalshi",
+            platform=platform,
             ticker=ticker,
             side=side,
             price=_as_float(normalized.get("price")),
@@ -1297,6 +1318,7 @@ def _ds_apply_trade(
     side: str,
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
+    platform: str = "kalshi",
 ) -> Dict[str, Any]:
     client = _get_account_datastore()
     if client is None:
@@ -1306,7 +1328,6 @@ def _ds_apply_trade(
         # trade as successful without ever persisting it -- fail loudly
         # instead, same as a real venue outage would.
         raise RuntimeError("Datastore is unavailable for the agent trading account store")
-    platform = "kalshi"
     opposite_side = _opposite_side(side)
     price = _as_float(normalized.get("price"))
     quantity = _as_float(normalized.get("quantity"))
@@ -1423,25 +1444,32 @@ def _ds_settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> L
             return []
 
         positions = _ds_positions(client, agent_id)
-        markets = sorted({(str(p["platform"]).lower(), str(p["ticker"]).upper()) for p in positions})
+        # Kalshi tickers are stored uppercase; Polymarket slugs are
+        # case-sensitive and must round-trip exactly as stored. Group by the
+        # normalized (platform, ticker) key up front instead of re-deriving
+        # it per comparison, so the grouping key and the filter can't drift.
+        by_market: Dict[tuple[str, str], List[Any]] = {}
+        for p in positions:
+            plat = str(p["platform"]).lower()
+            ticker = str(p["ticker"]).upper() if plat == "kalshi" else str(p["ticker"])
+            by_market.setdefault((plat, ticker), []).append(p)
+
         settled: List[Dict[str, Any]] = []
-        for plat, ticker in markets:
-            if plat != "kalshi" or not ticker:
+        for (plat, ticker), market_positions in sorted(by_market.items()):
+            if not ticker or plat not in ("kalshi", "polymarket"):
                 continue
             try:
-                outcome_value = market_data.resolve_kalshi(ticker)
+                outcome_value = (
+                    market_data.resolve_kalshi(ticker)
+                    if plat == "kalshi"
+                    else market_data.resolve_polymarket(ticker)
+                )
             except Exception:
                 logger.warning("agent settlement lookup failed ticker=%s", ticker, exc_info=True)
                 continue
             if outcome_value is None:
                 continue
             winning_side = "yes" if int(outcome_value) == 1 else "no"
-            market_positions = [
-                p for p in positions
-                if str(p["platform"]).lower() == plat and str(p["ticker"]).upper() == ticker
-            ]
-            if not market_positions:
-                continue
             settled_contracts = sum(float(p["quantity"]) for p in market_positions)
             settled_basis = sum(float(p["cost_basis"]) for p in market_positions)
             payout = sum(float(p["quantity"]) for p in market_positions if str(p["side"]) == winning_side)
@@ -1550,11 +1578,11 @@ def _iter_ledger_events() -> Iterable[Dict[str, Any]]:
     return events
 
 
-def _market_cost_basis(account: Any, ticker: str) -> float:
+def _market_cost_basis(account: Any, ticker: str, *, platform: str = "kalshi") -> float:
     return sum(
         float(pos.cost_basis)
         for pos in account.open_positions()
-        if str(pos.platform).lower() == "kalshi" and str(pos.ident).upper() == ticker
+        if str(pos.platform).lower() == platform and str(pos.ident) == ticker
     )
 
 
@@ -1600,23 +1628,24 @@ def _check_trade_guards(
     agent_id: str,
     ticker: str,
     side: str,
+    platform: str = "kalshi",
 ) -> tuple[bool, Dict[str, Any], RiskGuardPolicy]:
     policy = _risk_guard_policy()
     settlements = _settle_agent_open_positions(agent_id, policy)
     account, cycle_spend_before = _load_guard_account(agent_id, policy)
     price = _as_float(normalized.get("price"))
     quantity = _as_float(normalized.get("quantity"))
-    fee = _order_fee(args, normalized)
+    fee = _order_fee(args, normalized, platform=platform)
     cash_before = float(account.cash)
     fill = account.buy(
-        platform="kalshi",
+        platform=platform,
         ident=ticker,
         side=side,
         quantity=quantity,
         price=price,
         fee=fee,
     )
-    market_cost_basis_after = _market_cost_basis(account, ticker)
+    market_cost_basis_after = _market_cost_basis(account, ticker, platform=platform)
     concentration_cap = policy.account_value * policy.concentration_limit
     cash_required = max(0.0, -float(fill.cash_delta))
     cycle_spend_after = cycle_spend_before + cash_required
@@ -1655,8 +1684,10 @@ def _check_trade_guards(
     return detail["allowed"], detail, policy
 
 
-def _resolve_shadow_marketability(ticker: str, side: str, requested_price: float) -> Dict[str, Any]:
-    """Check a shadow-mode Kalshi order against a live quote before filling it.
+def _resolve_shadow_marketability(
+    ticker: str, side: str, requested_price: float, *, platform: str = "kalshi"
+) -> Dict[str, Any]:
+    """Check a shadow-mode Kalshi or Polymarket order against a live quote before filling it.
 
     Shadow mode otherwise trusts whatever price the caller supplies, which
     lets a mispriced (or hallucinated) order "fill" at a price no real book
@@ -1684,7 +1715,12 @@ def _resolve_shadow_marketability(ticker: str, side: str, requested_price: float
         from analyzing_llm_rationale import market_data
         from analyzing_llm_rationale.accounting import MarketQuote
 
-        quote = MarketQuote.from_mapping(market_data.fetch_kalshi(ticker))
+        raw_quote = (
+            market_data.fetch_polymarket(slug=ticker)
+            if platform != "kalshi"
+            else market_data.fetch_kalshi(ticker)
+        )
+        quote = MarketQuote.from_mapping(raw_quote)
         real_ask = quote.ask(side)
     except Exception:
         real_ask = None
@@ -1707,12 +1743,12 @@ def _resolve_shadow_marketability(ticker: str, side: str, requested_price: float
 
 
 def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
-    """Place a Kalshi trade through the benchmark tool surface.
+    """Place a Kalshi or Polymarket trade through the benchmark tool surface.
 
     This is shadow/paper trading only: it records a shadow action and returns
-    the normalized Kalshi order, and never calls trading.place_order. This
-    tool is reachable from an autonomous LLM tool loop, which cannot supply
-    real human confirmation and does not route through create_trading_run,
+    the normalized order, and never calls trading.place_order. This tool is
+    reachable from an autonomous LLM tool loop, which cannot supply real
+    human confirmation and does not route through create_trading_run,
     execute_trading_run, the guardrail chain, or the kill switch -- real
     execution must go through POST /trading/preview then POST /trading/orders.
     """
@@ -1720,28 +1756,46 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     tool = "place_trade"
     agent_id = _bounded_agent_id(ctx.agent_id)
     with tracer.start_as_current_span("benchmark_tools.place_trade") as span:
+        # Best-effort venue tag for tracing -- the validated value (which can
+        # raise) is parsed just below, inside the try block that already
+        # catches and reports every failure mode for this tool.
         span.set_attributes({
             "agent.id": agent_id,
             "tool.name": tool,
-            "market.venue": "kalshi",
+            "market.venue": str(args.get("platform") or "kalshi").strip().lower(),
         })
         try:
             from analyzing_llm_rationale import trading
 
+            platform = trading._clean_platform(args.get("platform") or "kalshi")
             side = _clean_side(args.get("side") or args.get("outcome"))
-            ticker = _clean_ticker(args.get("ticker") or args.get("ident"))
+            ticker = _clean_ticker(args.get("ticker") or args.get("ident"), platform=platform)
             order = {
-                "platform": "kalshi",
+                "platform": platform,
                 "action": "buy",
                 "outcome": side,
                 "order_type": "limit",
                 "ticker": ticker,
                 "price": args.get("price"),
                 "quantity": args.get("quantity", 1),
-                "time_in_force": IMMEDIATE_TIME_IN_FORCE,
+                # trading._preview_polymarket only accepts GTC/GTD for a
+                # limit order (IOC-style limit orders aren't a Polymarket
+                # CLOB concept) -- this is purely the informational
+                # "exchange_order" shape trading.preview_order would submit;
+                # the actual immediate-fill-or-nothing behavior below (via
+                # _resolve_shadow_marketability / _extract_filled_quantity)
+                # is identical for both venues and doesn't read this field.
+                "time_in_force": IMMEDIATE_TIME_IN_FORCE if platform == "kalshi" else "GTC",
                 "post_only": False,
                 "client_order_id": str(args.get("client_order_id") or f"foresea-agent-{uuid.uuid4()}"),
             }
+            if platform == "polymarket":
+                # trading._preview_polymarket reads slug/market_id/token_id,
+                # not ticker -- ticker doubles as the slug here so callers
+                # keep using one ident field regardless of venue.
+                order["slug"] = ticker
+                if args.get("token_id"):
+                    order["token_id"] = str(args["token_id"])
             execution_warnings = _immediate_order_adjustments(args)
             for key in ("reduce_only", "cancel_order_on_pause", "subaccount"):
                 if key in args:
@@ -1768,7 +1822,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             except (TypeError, ValueError):
                 requested_price = None
             if requested_price is not None and requested_price > 0:
-                market_check = _resolve_shadow_marketability(ticker, side, requested_price)
+                market_check = _resolve_shadow_marketability(ticker, side, requested_price, platform=platform)
                 shadow_marketable = market_check["marketable"]
                 if not shadow_marketable:
                     shadow_unfilled_status = market_check["status"]
@@ -1785,6 +1839,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 agent_id=agent_id,
                 ticker=ticker,
                 side=side,
+                platform=platform,
             )
             if not allowed:
                 event = {
@@ -1796,7 +1851,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "rejection_reasons": guard["reasons"],
                     "mode": mode,
                     "submitted": False,
-                    "platform": "kalshi",
+                    "platform": platform,
                     "ticker": ticker,
                     "side": side,
                     "price": normalized.get("price"),
@@ -1818,6 +1873,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     side=side,
                     normalized=normalized,
                     guard=guard,
+                    platform=platform,
                 )
                 span.set_attributes({
                     "outcome": "rejected",
@@ -1858,6 +1914,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 live=live,
                 shadow_marketable=shadow_marketable,
                 shadow_unfilled_status=shadow_unfilled_status,
+                platform=platform,
             )
             fill_status = str(accounting_guard.get("fill_status") or "unknown")
             filled_quantity = _as_float(accounting_guard.get("filled_quantity"))
@@ -1876,6 +1933,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 side=side,
                 normalized=accounting_normalized,
                 guard=accounting_guard,
+                platform=platform,
             )
             event = {
                 "ts": _now(),
@@ -1885,7 +1943,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "rejected": False,
                 "mode": mode,
                 "submitted": submitted,
-                "platform": "kalshi",
+                "platform": platform,
                 "ticker": ticker,
                 "side": side,
                 "price": normalized.get("price"),
@@ -1920,9 +1978,9 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "mode": mode,
                 "submitted": submitted,
                 "message": (
-                    "Live Kalshi order submitted."
+                    f"Live {platform.capitalize()} order submitted."
                     if submitted
-                    else "Shadow Kalshi trade recorded; no exchange order was submitted."
+                    else f"Shadow {platform.capitalize()} trade recorded; no exchange order was submitted."
                 ),
                 "normalized_order": normalized,
                 "risk_guard": accounting_guard,

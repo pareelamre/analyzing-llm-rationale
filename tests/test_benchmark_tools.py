@@ -836,6 +836,187 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertAlmostEqual(settlement[2], 5.86)
         self.assertEqual(remaining, 0)
 
+    def test_place_trade_polymarket_defaults_to_shadow_buy(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_polymarket",
+                    return_value={"yes_ask": 0.30, "no_ask": 0.30},
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {
+                        "platform": "polymarket",
+                        # Deliberately mixed-case, lowercase-hyphenated slug --
+                        # unlike a Kalshi ticker this must NOT be uppercased,
+                        # since fetch_polymarket(slug=...) is case-sensitive.
+                        "ticker": "some-poly-market-slug",
+                        "side": "yes", "price": 0.30, "quantity": 2,
+                        "token_id": "12345",  # skips the live token-id resolution HTTP call
+                    },
+                    ctx,
+                )
+
+            conn = sqlite3.connect(db_path)
+            try:
+                row = conn.execute(
+                    "SELECT platform, ticker FROM agent_positions WHERE agent_id = 'model-a'",
+                ).fetchone()
+            finally:
+                conn.close()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["mode"], "shadow")
+        self.assertEqual(result["normalized_order"]["platform"], "polymarket")
+        self.assertEqual(result["normalized_order"]["token_id"], "12345")
+        self.assertEqual(result["execution"]["filled_quantity"], 2.0)
+        self.assertTrue(result["risk_guard"]["allowed"])
+        # Polymarket's CLOB charges no per-trade taker fee, unlike Kalshi.
+        self.assertAlmostEqual(result["risk_guard"]["fee"], 0.0)
+        self.assertIn("Shadow Polymarket trade recorded", result["message"])
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row[0], "polymarket")
+        # Case must round-trip exactly, not get uppercased like a Kalshi ticker.
+        self.assertEqual(row[1], "some-poly-market-slug")
+
+    def test_place_trade_kalshi_and_polymarket_positions_stay_independent(self):
+        # Same nominal quantity/side on both venues must not net against each
+        # other -- positions are keyed by (agent, platform, ticker, side).
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXSAME": 0.40}),
+                ),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_polymarket",
+                    return_value={"yes_ask": 0.40, "no_ask": 0.40},
+                ),
+            ):
+                kalshi_result = benchmark_tools.place_trade(
+                    {"platform": "kalshi", "ticker": "KXSAME", "side": "yes", "price": 0.40, "quantity": 5},
+                    ctx,
+                )
+                poly_result = benchmark_tools.place_trade(
+                    {
+                        "platform": "polymarket", "ticker": "KXSAME", "side": "no",
+                        "price": 0.40, "quantity": 5, "token_id": "12345",
+                    },
+                    ctx,
+                )
+
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            try:
+                rows = conn.execute(
+                    "SELECT platform, ticker, side, quantity FROM agent_positions "
+                    "WHERE agent_id = ? ORDER BY platform", ("model-a",),
+                ).fetchall()
+            finally:
+                conn.close()
+
+        self.assertTrue(kalshi_result["ok"])
+        self.assertTrue(poly_result["ok"])
+        # Netting only happens within the same (platform, ticker) -- a
+        # kalshi YES and a polymarket NO on an identically-named ticker must
+        # both remain open, not net against each other.
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({(r["platform"], r["side"]) for r in rows}, {("kalshi", "yes"), ("polymarket", "no")})
+        for r in rows:
+            self.assertAlmostEqual(r["quantity"], 5.0)
+
+    def test_place_trade_polymarket_settles_open_positions_before_new_cycle(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            base_env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
+                "FORESEA_AGENT_SETTLEMENT_FEE_RATE": "0.014",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+
+            def resolve(slug):
+                return 1 if slug == "poly-settle" else None
+
+            with (
+                mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-1"}, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_polymarket",
+                    return_value={"yes_ask": 0.40, "no_ask": 0.40},
+                ),
+            ):
+                opened = benchmark_tools.place_trade(
+                    {
+                        "platform": "polymarket", "ticker": "poly-settle", "side": "yes",
+                        "price": 0.40, "quantity": 10, "token_id": "12345",
+                    },
+                    ctx,
+                )
+
+            with (
+                mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-2"}, clear=False),
+                mock.patch("analyzing_llm_rationale.market_data.resolve_polymarket", side_effect=resolve),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_polymarket",
+                    return_value={"yes_ask": 0.10, "no_ask": 0.10},
+                ),
+            ):
+                after_settlement = benchmark_tools.place_trade(
+                    {
+                        "platform": "polymarket", "ticker": "poly-other", "side": "yes",
+                        "price": 0.10, "quantity": 1, "token_id": "67890",
+                    },
+                    ctx,
+                )
+
+            conn = sqlite3.connect(db_path)
+            try:
+                settlement = conn.execute(
+                    """
+                    SELECT payout, settlement_fee, realized_pnl
+                    FROM agent_actions
+                    WHERE action_type = 'settlement' AND ticker = 'poly-settle'
+                    """
+                ).fetchone()
+                remaining = conn.execute(
+                    "SELECT COUNT(*) FROM agent_positions WHERE ticker = 'poly-settle'"
+                ).fetchone()[0]
+            finally:
+                conn.close()
+
+        self.assertTrue(opened["ok"])
+        self.assertTrue(after_settlement["ok"])
+        self.assertEqual(after_settlement["risk_guard"]["settlements_before_trade"][0]["ticker"], "poly-settle")
+        self.assertIsNotNone(settlement)
+        self.assertAlmostEqual(settlement[0], 10.0)
+        self.assertAlmostEqual(settlement[1], 0.14)
+        self.assertAlmostEqual(settlement[2], 5.86)
+        self.assertEqual(remaining, 0)
+
     def test_agent_cycles_table_round_trips(self):
         # Stores per-cycle thesis/transcript/candidates -- the source for the
         # agentic-trading transparency feed. Not written by any existing
