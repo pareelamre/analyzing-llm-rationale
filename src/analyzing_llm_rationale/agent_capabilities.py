@@ -139,6 +139,10 @@ TOOL_ALIASES: Dict[str, str] = {
     "history": "price_history",
     "ohlc": "price_history",
     "get_price_history": "price_history",
+    "kalshi_live_data": "live_data",
+    "game_stats": "live_data",
+    "event_live_data": "live_data",
+    "get_live_data": "live_data",
 }
 
 

@@ -26,6 +26,7 @@ KALSHI_API_URL = "https://api.elections.kalshi.com/trade-api/v2/markets"
 KALSHI_EVENTS_URL = "https://api.elections.kalshi.com/trade-api/v2/events"
 KALSHI_EXCHANGE_STATUS_URL = "https://api.elections.kalshi.com/trade-api/v2/exchange/status"
 KALSHI_EXCHANGE_SCHEDULE_URL = "https://api.elections.kalshi.com/trade-api/v2/exchange/schedule"
+KALSHI_LIVE_DATA_URL = "https://api.elections.kalshi.com/trade-api/v2/live-data"
 _TIMEOUT_S = 12
 _HEADERS = {"User-Agent": "foresea-market-bot/1.0"}
 
@@ -654,3 +655,13 @@ def fetch_kalshi_candlesticks(ticker: str, series_ticker: str = "") -> List[Dict
     if isinstance(data, dict) and "candlesticks" in data:
         return data["candlesticks"]
     return data if isinstance(data, list) else []
+
+
+def fetch_kalshi_live_data(event_ticker: str = "", data_type: str = "") -> Dict[str, Any]:
+    """Fetch real-time sports game stats and live event feeds from Kalshi (/live-data)."""
+    params = {}
+    if event_ticker:
+        params["event_ticker"] = event_ticker
+    url = f"{KALSHI_LIVE_DATA_URL}/{data_type}" if data_type else KALSHI_LIVE_DATA_URL
+    data = _get_json(url, params=params if not data_type else None)
+    return data if isinstance(data, dict) else {}
