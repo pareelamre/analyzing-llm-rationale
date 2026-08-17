@@ -5106,9 +5106,17 @@ function setHistoryState(view, mode = 'push', options = {}) {
 function showLanding({ updateHistory = true } = {}) {
   closeSidebar();
   closeTrackRecord({ updateHistory: false });
+  closeEdgeBoard({ updateHistory: false });
+  closeWatchlistPage({ updateHistory: false });
+  closePersonalLedger({ updateHistory: false });
+  closeSettingsModal();
+  closeAuthModal();
+  closeTradeModal();
+  closeFeedback();
   document.getElementById('appShell').classList.add('hidden-view');
   document.getElementById('landingPage').classList.remove('hidden-view');
   document.body.style.overflow = 'auto';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   currentView = 'landing';
   startTransparencyAutoRefresh();
   if (updateHistory) setHistoryState('landing');
@@ -5342,10 +5350,7 @@ async function openTrackRecord({ updateHistory = true } = {}) {
 function closeTrackRecord({ updateHistory = true } = {}) {
   const ov = document.getElementById('trackOverlay');
   if (!ov.classList.contains('open')) return;
-  if (updateHistory && (history.state?.view === 'track-app' || history.state?.view === 'track-landing')) {
-    history.back();
-    return;
-  }
+  const currentOverlayView = history.state?.view;
   const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
     ov.classList.remove('open');
@@ -5359,6 +5364,17 @@ function closeTrackRecord({ updateHistory = true } = {}) {
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
+
+  if (updateHistory) {
+    if (currentOverlayView === 'track-app' || currentOverlayView === 'track-landing') {
+      if (window.history.length > 1 && history.state?.view === currentOverlayView) {
+        history.back();
+      } else {
+        const targetView = inApp ? 'app' : 'landing';
+        setHistoryState(targetView, 'replace');
+      }
+    }
+  }
 }
 function pct(x) { return Math.round((x || 0) * 100); }
 async function loadTrackRecord() {
@@ -5799,10 +5815,7 @@ function closeEdgeBoard({ updateHistory = true } = {}) {
   const ov = document.getElementById('edgeOverlay');
   if (!ov.classList.contains('open')) return;
   const seq = ++_edgeOpenSeq;
-  if (updateHistory && (history.state?.view === 'edge-app' || history.state?.view === 'edge-landing')) {
-    history.back();
-    return;
-  }
+  const currentOverlayView = history.state?.view;
   const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
     // Re-opened while we were fading out — leave it open, polling is already back.
@@ -5816,6 +5829,17 @@ function closeEdgeBoard({ updateHistory = true } = {}) {
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
+
+  if (updateHistory) {
+    if (currentOverlayView === 'edge-app' || currentOverlayView === 'edge-landing') {
+      if (window.history.length > 1 && history.state?.view === currentOverlayView) {
+        history.back();
+      } else {
+        const targetView = inApp ? 'app' : 'landing';
+        setHistoryState(targetView, 'replace');
+      }
+    }
+  }
 }
 function _ebAskQuestion(ident) {
   const entry = (_ebBoardData || []).find(e => (e.ident || e.market_url || '') === ident);
@@ -5884,10 +5908,7 @@ function closeWatchlistPage({ updateHistory = true } = {}) {
   _watchPriceTimer = null;
   const ov = document.getElementById('watchOverlay');
   if (!ov.classList.contains('open')) return;
-  if (updateHistory && (history.state?.view === 'watch-app' || history.state?.view === 'watch-landing')) {
-    history.back();
-    return;
-  }
+  const currentOverlayView = history.state?.view;
   const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
     ov.classList.remove('open');
@@ -5899,6 +5920,17 @@ function closeWatchlistPage({ updateHistory = true } = {}) {
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
+
+  if (updateHistory) {
+    if (currentOverlayView === 'watch-app' || currentOverlayView === 'watch-landing') {
+      if (window.history.length > 1 && history.state?.view === currentOverlayView) {
+        history.back();
+      } else {
+        const targetView = inApp ? 'app' : 'landing';
+        setHistoryState(targetView, 'replace');
+      }
+    }
+  }
 }
 
 let personalLedgerEntries = [];
@@ -5967,10 +5999,7 @@ async function openPersonalLedger({ updateHistory = true } = {}) {
 function closePersonalLedger({ updateHistory = true } = {}) {
   const ov = document.getElementById('ledgerOverlay');
   if (!ov.classList.contains('open')) return;
-  if (updateHistory && (history.state?.view === 'ledger-app' || history.state?.view === 'ledger-landing')) {
-    history.back();
-    return;
-  }
+  const currentOverlayView = history.state?.view;
   const inApp = !document.getElementById('appShell').classList.contains('hidden-view');
   const finish = () => {
     ov.classList.remove('open');
@@ -5982,6 +6011,17 @@ function closePersonalLedger({ updateHistory = true } = {}) {
   if (window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
+
+  if (updateHistory) {
+    if (currentOverlayView === 'ledger-app' || currentOverlayView === 'ledger-landing') {
+      if (window.history.length > 1 && history.state?.view === currentOverlayView) {
+        history.back();
+      } else {
+        const targetView = inApp ? 'app' : 'landing';
+        setHistoryState(targetView, 'replace');
+      }
+    }
+  }
 }
 
 function personalLedgerRationalePreview(rationale, maxLength = 220) {
@@ -6110,7 +6150,11 @@ function _eligibilityReasonText(elig) {
 function renderAgentTradingBoard(d) {
   const host = document.getElementById('eb-agentic-section');
   if (!host) return;
-  const banner = `<p class="tr-method" style="margin-top:0">SCADS-hosted models given real tool-use trading agency — each decides for itself whether and how much to trade, with genuine cash/position accounting and risk guards, unlike the fixed Kelly-sizing ledgers on the MTM tab.</p>
+  const genAt = d && d.generated_at ? new Date(d.generated_at) : null;
+  const gen = genAt && !Number.isNaN(genAt.getTime()) ? genAt.toLocaleString() : '';
+  const staleBadge = d && d.freshness && d.freshness.stale ? ' · <span style="color:#b45309;font-weight:600">Stale</span>' : '';
+  const updatedStr = gen ? ` Updated ${escHtml(gen)}${staleBadge}.` : '';
+  const banner = `<p class="tr-method" style="margin-top:0">SCADS-hosted models given real tool-use trading agency — each decides for itself whether and how much to trade, with genuine cash/position accounting and risk guards, unlike the fixed Kelly-sizing ledgers on the MTM tab.${updatedStr}</p>
     <p class="text-sm" style="margin:0 0 16px;padding:8px 12px;border-radius:8px;background:#fef3c7;color:#92400e;font-weight:600">Shadow / paper trading only — no real money is ever at risk.</p>`;
   if (d && d.error) {
     host.innerHTML = `${banner}<p class="text-sm text-gray-500">${escHtml(d.error)}</p>`;
