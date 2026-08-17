@@ -655,8 +655,6 @@ def fetch_kalshi_candlesticks(ticker: str, series_ticker: str = "") -> List[Dict
     if isinstance(data, dict) and "candlesticks" in data:
         return data["candlesticks"]
     return data if isinstance(data, list) else []
-
-
 def fetch_kalshi_live_data(event_ticker: str = "", data_type: str = "") -> Dict[str, Any]:
     """Fetch real-time sports game stats and live event feeds from Kalshi (/live-data)."""
     params = {}
