@@ -6167,15 +6167,63 @@ function renderAgentTradingBoard(d) {
     ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
     : '—';
 
+  const genTime = genAt && !Number.isNaN(genAt.getTime()) ? genAt.getTime() : Date.now();
+
+  // Find global time bounds across all equity curve timestamps
+  let globalTMin = Infinity;
+  leaderboard.forEach(row => {
+    const raw = (equityCurves[row.agent_id]?.value_curve || []);
+    raw.forEach(p => {
+      if (p && p.ts) {
+        const t = new Date(p.ts).getTime();
+        if (Number.isFinite(t) && t < globalTMin) globalTMin = t;
+      }
+    });
+  });
+  if (!Number.isFinite(globalTMin)) globalTMin = genTime - 86400000;
+  if (globalTMin >= genTime) globalTMin = genTime - 3600000;
+
   const curves = leaderboard.map((row, i) => {
-    const curvePoints = (equityCurves[row.agent_id]?.value_curve || []).filter(p => p.ts);
-    const points = curvePoints.map(p => Number(p.account_value)).filter(Number.isFinite);
-    if (!points.length) return null;
-    const times = curvePoints.map(p => new Date(p.ts).getTime());
+    const rawCurve = (equityCurves[row.agent_id]?.value_curve || []);
+    const validPoints = rawCurve.filter(p => p && p.ts && Number.isFinite(Number(p.account_value)));
+    const startCash = Number(row.starting_cash) || 10000;
+    const currentAcctVal = Number(row.account_value);
+    const currentVal = Number.isFinite(currentAcctVal) ? currentAcctVal : startCash;
+
+    let points = [];
+    let times = [];
+
+    if (validPoints.length > 0) {
+      points = validPoints.map(p => Number(p.account_value));
+      times = validPoints.map(p => new Date(p.ts).getTime());
+    }
+
+    if (points.length === 0) {
+      points = [startCash, currentVal];
+      times = [globalTMin, genTime];
+    } else {
+      if (times[0] > globalTMin) {
+        times.unshift(globalTMin);
+        points.unshift(startCash);
+      }
+      const lastIdx = times.length - 1;
+      if (times[lastIdx] < genTime) {
+        times.push(genTime);
+        points.push(currentVal);
+      } else {
+        points[lastIdx] = currentVal;
+      }
+    }
+
     const label = _ebModelLabel(row.agent_id);
     return {
-      points, times, color: _mtmModelColor(row.agent_id, i), label, head: _ebModelHead(row.agent_id),
-      headTitle: `${label} · ${_usd(row.account_value)}`,
+      model: row.agent_id,
+      points,
+      times,
+      color: _mtmModelColor(row.agent_id, i),
+      label,
+      head: _ebModelHead(row.agent_id),
+      headTitle: `${label} · ${_usd(currentVal)}`,
     };
   }).filter(Boolean);
 
@@ -6841,10 +6889,13 @@ function _attachEquityHover(container) {
       if (!cLen) { dots[ci].style.display = 'none'; return null; }
       if (eq.hasTimes && c.times && c.times.length) {
         const t = eq.tMin + frac * eq.tSpan;
-        idx = 0; let best = Infinity;
+        idx = 0;
         for (let j = 0; j < c.times.length; j++) {
-          const dd = Math.abs(c.times[j] - t);
-          if (dd < best) { best = dd; idx = j; }
+          if (c.times[j] <= t) {
+            idx = j;
+          } else {
+            break;
+          }
         }
       } else {
         idx = Math.max(0, Math.min(cLen - 1, Math.round(frac * (cLen - 1))));
@@ -6852,7 +6903,7 @@ function _attachEquityHover(container) {
       const v = c.points[idx];
       if (v == null) { dots[ci].style.display = 'none'; return null; }
       const dotX = (eq.hasTimes && c.times && c.times.length)
-        ? eq.padL + eq.pointInsetX + ((c.times[idx] - eq.tMin) / eq.tSpan) * eq.innerW
+        ? plotX
         : eq.padL + eq.pointInsetX + (cLen > 1 ? (idx / (cLen - 1)) * eq.innerW : eq.innerW / 2);
       const y = eq.padT + eq.cH - ((v - eq.lo) / eq.range) * eq.cH;
       dots[ci].setAttribute('cx', dotX.toFixed(1)); dots[ci].setAttribute('cy', y.toFixed(1));

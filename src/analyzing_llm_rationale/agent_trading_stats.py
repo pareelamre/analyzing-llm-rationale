@@ -118,66 +118,95 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
     return rows
 
 
-def agent_equity_curve(conn: sqlite3.Connection, agent_id: str) -> Dict[str, Any]:
-    """Cash-only book-value curve for one agent, plus Sharpe/max-drawdown
+def agent_equity_curve(
+    conn: sqlite3.Connection,
+    agent_id: str,
+    *,
+    current_account_value: float | None = None,
+    current_ts: str | None = None,
+) -> Dict[str, Any]:
+    """Portfolio equity curve for one agent, plus Sharpe/max-drawdown
     computed over it.
 
-    This is an explicit approximation, not a true mark-to-market curve: each
-    point is running cash after one ``agent_actions`` row (starting from
-    ``starting_cash``), so it does *not* credit the current worth of open
-    positions -- opening a trade dips the curve by its full cost, and it only
-    recovers once that position settles and cash comes back in. True
-    historical bid-marks for every past cycle aren't stored, so this proxy
-    trades precision for being exactly reconstructable from data that is.
+    Tracks total portfolio book value (cash + open positions basis) across
+    `agent_actions` (trades convert cash to position basis with net impact
+    being only the transaction fee, settlements realize P&L and return cash,
+    and admin resets/corrections adjust the account).
 
-    Only ``trade``/``settlement``/``admin_correction``/``admin_reset`` rows
-    actually move cash. A rejected order never reaches the exchange, so its
-    row is included as a zero-height marker rather than trusted for
-    ``cash_delta`` -- defends against old rows written before a bug fix
-    stored the rejected order's hypothetical delta there instead of 0, which
-    cratered this curve for every future point.
-
-    ``admin_correction``/``admin_reset`` rows are manual account adjustments
-    (see scripts/reset_agent_trading_accounts.py) -- e.g. reversing profit a
-    pricing bug manufactured, or a full reset to starting_cash. Without
-    including them here, the curve would silently diverge from
-    agent_accounts.cash (which those adjustments do update directly) instead
-    of showing the correction as a visible point on the chart.
-
-    A full ``admin_reset`` deliberately starts the account over, so once one
-    has happened the curve (and the Sharpe/drawdown computed from it) only
-    covers the period since the *latest* one -- pre-reset history stays in
-    ``agent_actions`` for audit, it's just not what the chart or stats show.
+    If `current_account_value` is provided (e.g. from the live mark-to-market
+    snapshot in `compute_agent_leaderboard`), the latest point reflects the
+    mark-to-market portfolio value.
     """
-    CASH_MOVING_ACTION_TYPES = {"trade", "settlement", "admin_correction", "admin_reset"}
-
     acct_row = conn.execute(
-        "SELECT starting_cash FROM agent_accounts WHERE agent_id = ?", (agent_id,),
+        "SELECT starting_cash, cash, updated_at FROM agent_accounts WHERE agent_id = ?", (agent_id,),
     ).fetchone()
     starting_cash = float(acct_row["starting_cash"]) if acct_row else 0.0
 
     running_cash = starting_cash
+    open_positions_basis = 0.0
     points: List[Dict[str, Any]] = [{
         "ts": None,
-        "account_value": round(running_cash, 6),
+        "account_value": round(starting_cash, 6),
         "event_type": "starting_cash",
     }]
     for row in conn.execute(
-        "SELECT ts, action_type, cash_delta FROM agent_actions "
+        "SELECT ts, action_type, cash_delta, fee, notional, payout, realized_pnl FROM agent_actions "
         "WHERE agent_id = ? ORDER BY ts ASC",
         (agent_id,),
     ):
-        if row["action_type"] in CASH_MOVING_ACTION_TYPES:
-            running_cash += float(row["cash_delta"])
+        act = row["action_type"]
+        if act == "admin_reset":
+            running_cash = starting_cash
+            open_positions_basis = 0.0
+            account_val = running_cash
+        elif act == "trade":
+            notional = float(row["notional"] or 0)
+            cash_delta = float(row["cash_delta"] or 0)
+            if notional > 0:
+                running_cash += cash_delta
+                open_positions_basis += notional
+            else:
+                running_cash += cash_delta
+            account_val = running_cash + open_positions_basis
+        elif act == "settlement":
+            payout = float(row["payout"] or 0)
+            realized_pnl = float(row["realized_pnl"] or 0)
+            cost_basis_closed = max(0.0, payout - realized_pnl) if payout or realized_pnl else 0.0
+            cash_delta = float(row["cash_delta"] or payout)
+            running_cash += cash_delta
+            open_positions_basis = max(0.0, open_positions_basis - cost_basis_closed)
+            account_val = running_cash + open_positions_basis
+        elif act == "admin_correction":
+            running_cash += float(row["cash_delta"] or 0)
+            account_val = running_cash + open_positions_basis
+        else:
+            account_val = running_cash + open_positions_basis
+
         points.append({
             "ts": row["ts"],
-            "account_value": round(running_cash, 6),
+            "account_value": round(account_val, 6),
             "event_type": row["action_type"],
         })
 
     reset_indices = [i for i, p in enumerate(points) if p["event_type"] == "admin_reset"]
     if reset_indices:
         points = points[reset_indices[-1]:]
+
+    if current_account_value is not None:
+        c_val = round(float(current_account_value), 6)
+        ts_to_use = current_ts or (acct_row["updated_at"] if acct_row else None)
+        if points:
+            last_p = points[-1]
+            if last_p.get("ts") == ts_to_use:
+                last_p["account_value"] = c_val
+            elif ts_to_use and (not last_p.get("ts") or str(last_p["ts"]) < str(ts_to_use)):
+                points.append({
+                    "ts": ts_to_use,
+                    "account_value": c_val,
+                    "event_type": "mark_to_market",
+                })
+            else:
+                last_p["account_value"] = c_val
 
     risk = _sharpe_and_max_drawdown(points)
     return {

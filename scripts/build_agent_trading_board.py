@@ -90,10 +90,14 @@ def build_board() -> Dict[str, Any]:
         equity_curves: Dict[str, Any] = {}
         eligibility: Dict[str, Any] = {}
         activity: List[Dict[str, Any]] = []
+        now_iso = datetime.now(timezone.utc).isoformat()
         for model, conn in conns.items():
             rows = agent_trading_stats.compute_agent_leaderboard(conn, quotes)
             leaderboard.extend(rows)
-            equity = agent_trading_stats.agent_equity_curve(conn, model)
+            acct_val = rows[0]["account_value"] if rows else None
+            equity = agent_trading_stats.agent_equity_curve(
+                conn, model, current_account_value=acct_val, current_ts=now_iso
+            )
             equity_curves[model] = equity
             if rows:
                 eligibility[model] = agent_trading_stats.compute_promotion_eligibility(rows[0], equity)
