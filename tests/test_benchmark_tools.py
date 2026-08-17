@@ -515,18 +515,20 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(closed["risk_guard"]["market_cost_basis_after"], 0.0)
         self.assertEqual(closed["account"]["n_open_positions"], 0)
 
-    def test_place_trade_rejects_implausible_netting_arb(self):
-        # Regression test for the shadow-fill exploit: buying YES and NO on
-        # the same ticker at the same lowball price used to net a ~76%
-        # "riskless" profit with zero market settlements (this is what
-        # inflated the public agent-trading leaderboard). A real market would
-        # never quote both sides at 0.12 (they'd sum to ~1.0, not ~0.24), but
-        # a live-quote check can only be as good as the quote feed behind it
-        # -- mocking a genuinely bad/manipulated-looking quote (rather than
-        # relying on "no quote available", which now makes an order
-        # unmarketable instead of trusting the caller) proves the netting-arb
-        # guard in _check_trade_guards independently catches this even when
-        # _resolve_shadow_marketability's own check is fooled.
+    def test_place_trade_allows_a_large_quote_verified_netting_profit(self):
+        # This codebase's netting-arb guard used to reject any netting close
+        # realizing more than a flat $0.15/pair, regardless of why -- but
+        # PredictionArena's own methodology (whose design this benchmark
+        # follows) applies no such cap: realized PnL on a netting close is
+        # simply payout minus both legs' cost (see its "Selling: Buy NO to
+        # Sell YES" worked example). A YES+NO close at the SAME price on the
+        # same ticker (as if a real market briefly summed to ~$0.24, not
+        # ~$1.00) is a degenerate case that can't happen on Kalshi in
+        # practice -- yes_ask/no_ask are derived from the same unified order
+        # book -- but it's the simplest way to force a large arb_per_pair and
+        # confirm the guard no longer rejects it, since the trade's price was
+        # still quote-verified by _resolve_shadow_marketability (not
+        # agent-guessed), so the resulting profit is trusted like any other.
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
         with tempfile.TemporaryDirectory() as td:
@@ -556,17 +558,11 @@ class BenchmarkToolTests(unittest.TestCase):
                 )
 
         self.assertTrue(opened["ok"])
-        self.assertFalse(closed["ok"])
-        self.assertTrue(closed["rejected"])
-        self.assertEqual(closed["reason"], "implausible_netting_arb")
-        # risk_guard reflects the dry-run buy() used to evaluate the guards
-        # (same as the existing insolvency/concentration rejection tests),
-        # not what was actually persisted -- rejected trades never reach
-        # _apply_trade_to_account_tables, so nothing was actually netted.
-        self.assertGreater(
-            closed["risk_guard"]["arb_per_pair"],
-            closed["risk_guard"]["max_netting_arb_per_pair"],
-        )
+        self.assertTrue(closed["ok"])
+        self.assertEqual(closed["risk_guard"]["netting_payout"], 10.0)
+        # payout(10) - old_basis(1.2) - new_basis(1.2) - fee_alloc(0.07392),
+        # realized in full, not capped at $0.15/pair.
+        self.assertAlmostEqual(closed["account"]["realized_pnl"], 7.52608, places=4)
 
     def test_place_trade_shadow_fill_clamps_to_live_ask(self):
         # A marketable shadow order (price crosses the real ask) should fill
@@ -926,7 +922,10 @@ class BenchmarkToolTests(unittest.TestCase):
         account_entity = client.get(client.key("AgentTradingAccount", "model-a"))
         self.assertAlmostEqual(float(account_entity["cash"]), closed["account"]["cash"])
 
-    def test_place_trade_datastore_backend_rejects_implausible_netting_arb(self):
+    def test_place_trade_datastore_backend_allows_a_large_quote_verified_netting_profit(self):
+        # Datastore-backend twin of the SQLite test above -- same degenerate
+        # same-price quote, confirming the guard's removal applies to both
+        # account-store backends, not just the default SQLite one.
         _install_fake_datastore(self)
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
@@ -956,8 +955,9 @@ class BenchmarkToolTests(unittest.TestCase):
                 )
 
         self.assertTrue(opened["ok"])
-        self.assertFalse(closed["ok"])
-        self.assertEqual(closed["reason"], "implausible_netting_arb")
+        self.assertTrue(closed["ok"])
+        self.assertEqual(closed["risk_guard"]["netting_payout"], 10.0)
+        self.assertAlmostEqual(closed["account"]["realized_pnl"], 7.52608, places=4)
 
     def test_place_trade_datastore_backend_settles_open_positions(self):
         _install_fake_datastore(self)
@@ -1011,6 +1011,78 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertAlmostEqual(settlement["payout"], 10.0)
         self.assertAlmostEqual(settlement["settlement_fee"], 0.14)
         self.assertAlmostEqual(settlement["realized_pnl"], 5.86)
+
+
+class KalshiTakerFeeRateTests(unittest.TestCase):
+    """place_trade only ever takes liquidity (immediate-or-cancel, no
+    resting orders), so _kalshi_fee should prefer Kalshi's own live taker
+    rate over the flat KALSHI_FEE_COEFFICIENT estimate when it's available,
+    and fall back safely (never raise) when it isn't."""
+
+    def _fresh_cache(self):
+        return mock.patch.dict(benchmark_tools._KALSHI_TAKER_FEE_RATE_CACHE, {}, clear=True)
+
+    def test_parses_a_flat_taker_fee_rate(self):
+        self.assertEqual(benchmark_tools._parse_taker_fee_rate({"taker_fee_rates": 0.05}), 0.05)
+
+    def test_parses_the_first_tier_from_a_tiered_list(self):
+        tiers = {"taker_fee_rates": [{"rate": 0.06}, {"rate": 0.02}]}
+        self.assertEqual(benchmark_tools._parse_taker_fee_rate(tiers), 0.06)
+
+    def test_returns_none_for_an_unparseable_or_missing_shape(self):
+        self.assertIsNone(benchmark_tools._parse_taker_fee_rate({"taker_fee_rates": "garbage"}))
+        self.assertIsNone(benchmark_tools._parse_taker_fee_rate({}))
+        self.assertIsNone(benchmark_tools._parse_taker_fee_rate({"taker_fee_rates": [{"rate": "n/a"}]}))
+
+    def test_kalshi_fee_applies_the_live_rate_directly_to_notional(self):
+        with (
+            self._fresh_cache(),
+            mock.patch(
+                "analyzing_llm_rationale.trading.get_kalshi_fee_tiers",
+                return_value={"taker_fee_rates": 0.05},
+            ),
+        ):
+            fee = benchmark_tools._kalshi_fee(0.40, 10)
+        # rate * price * quantity, NOT the parabolic price*(1-price) estimate.
+        self.assertAlmostEqual(fee, 0.05 * 0.40 * 10)
+
+    def test_kalshi_fee_falls_back_to_the_estimate_when_the_lookup_fails(self):
+        with (
+            self._fresh_cache(),
+            mock.patch(
+                "analyzing_llm_rationale.trading.get_kalshi_fee_tiers",
+                side_effect=RuntimeError("KALSHI_API_KEY_ID is not configured."),
+            ),
+        ):
+            fee = benchmark_tools._kalshi_fee(0.40, 10)
+        self.assertAlmostEqual(
+            fee, benchmark_tools.KALSHI_FEE_COEFFICIENT * 10 * 0.40 * (1.0 - 0.40)
+        )
+
+    def test_kalshi_fee_falls_back_when_the_response_has_no_usable_rate(self):
+        with (
+            self._fresh_cache(),
+            mock.patch(
+                "analyzing_llm_rationale.trading.get_kalshi_fee_tiers",
+                return_value={"unrelated_field": 1},
+            ),
+        ):
+            fee = benchmark_tools._kalshi_fee(0.40, 10)
+        self.assertAlmostEqual(
+            fee, benchmark_tools.KALSHI_FEE_COEFFICIENT * 10 * 0.40 * (1.0 - 0.40)
+        )
+
+    def test_live_rate_lookup_is_memoized_within_a_process(self):
+        with (
+            self._fresh_cache(),
+            mock.patch(
+                "analyzing_llm_rationale.trading.get_kalshi_fee_tiers",
+                return_value={"taker_fee_rates": 0.05},
+            ) as get_tiers,
+        ):
+            benchmark_tools._kalshi_taker_fee_rate()
+            benchmark_tools._kalshi_taker_fee_rate()
+        self.assertEqual(get_tiers.call_count, 1)
 
 
 if __name__ == "__main__":

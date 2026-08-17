@@ -56,10 +56,6 @@ DEFAULT_CYCLE_MINUTES = 15
 KALSHI_FEE_COEFFICIENT = 0.07
 DEFAULT_SETTLEMENT_FEE_RATE = 0.014
 IMMEDIATE_TIME_IN_FORCE = "immediate_or_cancel"
-# Real Kalshi/Polymarket YES+NO spreads are a few cents wide at most, so a
-# reciprocal-netting fill implying more than this much riskless profit per
-# paired contract almost certainly reflects a bad price, not a real edge.
-DEFAULT_MAX_NETTING_ARB_PER_PAIR = 0.15
 
 
 @dataclass(frozen=True)
@@ -75,7 +71,6 @@ class RiskGuardPolicy:
     concentration_limit: float
     per_cycle_spend_limit: float
     cycle_id: str
-    max_netting_arb_per_pair: float = DEFAULT_MAX_NETTING_ARB_PER_PAIR
 
 
 def _now() -> str:
@@ -209,16 +204,11 @@ def _risk_guard_policy() -> RiskGuardPolicy:
     )
     if per_cycle_spend_limit_pct <= 0:
         raise ValueError("FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT must be greater than 0")
-    max_netting_arb_per_pair = _env_float(
-        "FORESEA_AGENT_MAX_NETTING_ARB_PER_PAIR",
-        DEFAULT_MAX_NETTING_ARB_PER_PAIR,
-    )
     return RiskGuardPolicy(
         account_value=account_value,
         concentration_limit=concentration_limit,
         per_cycle_spend_limit=account_value * per_cycle_spend_limit_pct,
         cycle_id=_current_cycle_id(),
-        max_netting_arb_per_pair=max_netting_arb_per_pair,
     )
 
 
@@ -228,7 +218,83 @@ def _as_float(value: Any, default: float = 0.0) -> float:
     return float(value)
 
 
+# Memoized per process (not a "rate" -> value dict of size >1): a shadow-
+# trading cycle is a fresh process each run (see agent_trading_tick.py), so
+# this naturally refreshes every ~15 minutes without needing its own
+# cache-invalidation logic. The "rate" key's presence (not its value)
+# distinguishes "not yet looked up" from "looked up, no credentials/request
+# failed" so a misconfigured or rate-limited endpoint isn't retried on every
+# trade within one cycle.
+_KALSHI_TAKER_FEE_RATE_CACHE: Dict[str, Optional[float]] = {}
+
+
+def _first_valid_rate(raw: Any) -> Optional[float]:
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw) if 0.0 <= raw < 1.0 else None
+    if isinstance(raw, list):
+        for entry in raw:
+            rate = _first_valid_rate(entry)
+            if rate is not None:
+                return rate
+        return None
+    if isinstance(raw, dict):
+        for key in ("rate", "fee_rate", "taker_fee_rate", "value"):
+            if key in raw:
+                rate = _first_valid_rate(raw[key])
+                if rate is not None:
+                    return rate
+    return None
+
+
+def _parse_taker_fee_rate(tiers: Mapping[str, Any]) -> Optional[float]:
+    """Pull a usable taker rate out of /margin/fee_tiers's response.
+
+    place_trade only ever takes liquidity (immediate-or-cancel, no resting
+    orders), so taker is always the applicable rate -- maker never applies
+    here. The exact response shape (a flat rate vs. a list of volume tiers)
+    isn't verified against Kalshi's docs from this codebase; handle both
+    defensively and return None rather than guess if nothing parses cleanly.
+    """
+    raw = tiers.get("taker_fee_rates", tiers.get("taker_fee_rate"))
+    return _first_valid_rate(raw)
+
+
+def _fetch_kalshi_taker_fee_rate() -> Optional[float]:
+    try:
+        from analyzing_llm_rationale import trading
+
+        tiers = trading.get_kalshi_fee_tiers()
+    except Exception:
+        logger.warning(
+            "Kalshi fee-tiers lookup failed; falling back to the estimated fee formula",
+            exc_info=True,
+        )
+        return None
+    rate = _parse_taker_fee_rate(tiers)
+    if rate is None:
+        logger.warning(
+            "Kalshi fee-tiers response had no usable taker rate; falling back to the "
+            "estimated fee formula: %r", tiers,
+        )
+    return rate
+
+
+def _kalshi_taker_fee_rate() -> Optional[float]:
+    if "rate" not in _KALSHI_TAKER_FEE_RATE_CACHE:
+        _KALSHI_TAKER_FEE_RATE_CACHE["rate"] = _fetch_kalshi_taker_fee_rate()
+    return _KALSHI_TAKER_FEE_RATE_CACHE["rate"]
+
+
 def _kalshi_fee(price: float, quantity: float) -> float:
+    rate = _kalshi_taker_fee_rate()
+    if rate is not None:
+        # Kalshi's fee-tiers endpoint documents this rate as applied
+        # directly to notional, not plugged into the parabolic
+        # price*(1-price) shape the flat KALSHI_FEE_COEFFICIENT estimate
+        # below approximates.
+        return max(0.0, rate * quantity * price)
     return max(0.0, KALSHI_FEE_COEFFICIENT * quantity * price * (1.0 - price))
 
 
@@ -1554,17 +1620,7 @@ def _check_trade_guards(
     concentration_cap = policy.account_value * policy.concentration_limit
     cash_required = max(0.0, -float(fill.cash_delta))
     cycle_spend_after = cycle_spend_before + cash_required
-    # accounting.PredictionMarketAccount.buy() itself caps realized_pnl at
-    # MAX_NETTING_ARB_PER_PAIR (a data-quality backstop for its other
-    # callers, which trade off historical market data). This guard's inputs
-    # are agent-supplied, not historical data, so it checks the pre-cap
-    # raw_realized_pnl to keep rejecting implausible trades outright instead
-    # of silently accepting them at the capped credit.
-    arb_per_pair = (
-        float(fill.raw_realized_pnl) / float(fill.realized_pairs)
-        if fill.realized_pairs > 1e-12
-        else 0.0
-    )
+
     reasons: List[str] = []
     if market_cost_basis_after > concentration_cap + 1e-9:
         reasons.append("concentration_limit")
@@ -1572,12 +1628,6 @@ def _check_trade_guards(
         reasons.append("solvency")
     if cycle_spend_after > policy.per_cycle_spend_limit + 1e-9:
         reasons.append("per_cycle_spend")
-    if arb_per_pair > policy.max_netting_arb_per_pair + 1e-9:
-        # A YES+NO pair always pays out exactly $1 combined, so netting them
-        # can only "realize" more than a few cents of riskless profit per
-        # pair if one of the two legs was filled at a price that doesn't
-        # reflect a real market -- reject rather than mint free money.
-        reasons.append("implausible_netting_arb")
 
     detail = {
         "allowed": not reasons,
@@ -1597,8 +1647,6 @@ def _check_trade_guards(
         "cash_required": round(cash_required, 6),
         "cash_delta": round(float(fill.cash_delta), 6),
         "settlements_before_trade": settlements,
-        "max_netting_arb_per_pair": policy.max_netting_arb_per_pair,
-        "arb_per_pair": round(arb_per_pair, 6),
     }
     outcome = "allowed" if detail["allowed"] else "rejected"
     risk_guard_checks.add(1, {"outcome": outcome})

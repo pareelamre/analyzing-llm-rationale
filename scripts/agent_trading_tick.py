@@ -133,6 +133,13 @@ def _fmt_money(value: Any) -> str:
         return "$0.00"
 
 
+def _excerpt(text: Optional[str], limit: int) -> str:
+    if not text:
+        return ""
+    text = text.strip()
+    return text if len(text) <= limit else text[:limit].rstrip() + "…"
+
+
 def _build_portfolio_block(conn, agent_id: str, last_thesis: Optional[str]) -> str:
     summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
     lines = [
@@ -150,22 +157,32 @@ def _build_portfolio_block(conn, agent_id: str, last_thesis: Optional[str]) -> s
     else:
         lines.append("Open positions: none.")
     if last_thesis:
-        excerpt = (
-            last_thesis if len(last_thesis) <= MAX_LAST_THESIS_CHARS
-            else last_thesis[:MAX_LAST_THESIS_CHARS].rstrip() + "…"
-        )
-        lines.append(f"Your own reasoning from the previous cycle: {excerpt}")
+        lines.append(f"Your own reasoning from the previous cycle: {_excerpt(last_thesis, MAX_LAST_THESIS_CHARS)}")
     return "\n".join(lines)
+
+
+def _fmt_px(value: Optional[float]) -> str:
+    return f"{value:.2f}" if value is not None else "n/a"
 
 
 def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     opens = quote.get("created_time") or "unknown"
     close = quote.get("close_time") or "unknown"
-    bid = quote.get("yes_bid")
-    ask = quote.get("yes_ask")
+    # NO isn't a separate field Kalshi returns -- it's derived from the YES
+    # book (no_ask = 1 - yes_bid, etc., see accounting.MarketQuote.ask/bid),
+    # the same derivation place_trade's own guards use to price a closing
+    # order. Showing both sides here (not just YES) means an agent can read
+    # the real price to close a position off this line instead of having to
+    # rederive it -- or guess, which is how a real live position ended up
+    # rejected for pricing its NO-side close near its YES entry price.
+    q = MarketQuote.from_mapping(quote)
+    yes_bid, yes_ask = q.bid("YES"), q.ask("YES")
+    no_bid, no_ask = q.bid("NO"), q.ask("NO")
     return (
         f"  - {quote.get('ident')}: \"{quote.get('question')}\" "
-        f"(yes bid/ask {bid}/{ask}, resolution window {opens} -> {close})"
+        f"(yes bid/ask {_fmt_px(yes_bid)}/{_fmt_px(yes_ask)}, "
+        f"no bid/ask {_fmt_px(no_bid)}/{_fmt_px(no_ask)}, "
+        f"resolution window {opens} -> {close})"
     )
 
 
@@ -259,14 +276,20 @@ _TRADING_INSTRUCTION = (
     "Decide what, if anything, to do this cycle. You may place_trade on any "
     "ticker listed above (buying the opposite side of a held position "
     "closes it), use web_search for research, and manage_notes to record "
-    "anything worth remembering next cycle. Before betting on news you find, "
-    "check that the event's date actually falls within THIS market's "
-    "resolution window (shown above for each ticker) -- many Kalshi tickers "
-    "are one of several in a recurring dated series (e.g. one ending "
-    "'-26APR' and another '-26MAY22-26SEP' for the same underlying "
-    "question), so real evidence of something that already happened before "
-    "this window opened does not resolve this specific contract. If you "
-    "don't want to act, just explain why in your final answer."
+    "anything worth remembering next cycle. Price every order off the live "
+    "yes/no bid/ask shown above for that ticker -- both sides are the real "
+    "current market, not an estimate. Never guess a price, and never reuse "
+    "the price you entered a position at when pricing the opposite side to "
+    "close it: yes and no move independently and are not the same number. "
+    "If you spot a real mispricing against your own view, that is exactly "
+    "when to trade it. Before betting on news you find, check that the "
+    "event's date actually falls within THIS market's resolution window "
+    "(shown above for each ticker) -- many Kalshi tickers are one of "
+    "several in a recurring dated series (e.g. one ending '-26APR' and "
+    "another '-26MAY22-26SEP' for the same underlying question), so real "
+    "evidence of something that already happened before this window opened "
+    "does not resolve this specific contract. If you don't want to act, "
+    "just explain why in your final answer."
 )
 
 

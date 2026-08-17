@@ -28,6 +28,12 @@ name: Agent trading tick (reusable)
 # to "shadow" below and is never a workflow input -- no caller can override it.
 # FORESEA_ENABLE_TRADING / FORESEA_ENABLE_BYO_TRADING (the real-money gates in
 # trading.py) are intentionally never defined anywhere in this file.
+#
+# KALSHI_ACCESS_KEY_ID / KALSHI_PRIVATE_KEY are optional: they're used only
+# for a read-only, authenticated fee-tiers lookup (benchmark_tools._kalshi_fee)
+# so shadow fills are costed against Kalshi's real taker rate instead of a
+# flat estimate -- no order is ever placed with them. If unset, the cycle
+# falls back to the estimate automatically; nothing here requires them.
 
 on:
   workflow_call:
@@ -93,6 +99,14 @@ jobs:
             tmp/agent-trading/notes.json \
             || echo '{}' > tmp/agent-trading/notes.json
 
+      - name: Write Kalshi credentials for the fee-tiers lookup (optional)
+        # Empty when the secrets aren't configured -- benchmark_tools falls
+        # back to its estimated fee formula if the resulting file/key is
+        # missing or unusable, so this never blocks the cycle either way.
+        env:
+          KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
+        run: printf '%s' "$KALSHI_PRIVATE_KEY" > tmp/agent-trading/kalshi_private_key.pem
+
       - name: Run one shadow-trading cycle
         env:
           AGENT_TRADING_MODEL: ${{ inputs.model }}
@@ -104,6 +118,8 @@ jobs:
           FORESEA_AGENT_ACCOUNT_VALUE: "10000"
           SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          KALSHI_ACCESS_KEY_ID: ${{ secrets.KALSHI_ACCESS_KEY_ID }}
+          KALSHI_PRIVATE_KEY_FILE: tmp/agent-trading/kalshi_private_key.pem
           MAX_TOOL_STEPS: "4"
           CANDIDATE_COUNT: "3"
         run: python scripts/agent_trading_tick.py
