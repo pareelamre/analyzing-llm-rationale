@@ -13438,10 +13438,6 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             "question and its market_probability, then base your answer on that result.")
     if req.benchmark_tools:
         active = set(tools.keys())
-        print(f"DEBUG_TOOLS req.benchmark_tools={req.benchmark_tools!r} req.tool_loop={req.tool_loop!r} "
-              f"tools.keys()={sorted(tools.keys())!r} specs_names={sorted(s['name'] for s in specs)!r} "
-              f"benchmark_tool_map_keys={sorted(benchmark_tool_map.keys())!r} "
-              f"id_tools={id(tools)} id_benchmark_tool_map={id(benchmark_tool_map)}", flush=True)
         if not active:
             # A specialist-pipeline stage that deliberately hands over zero
             # tools (e.g. a pure sizing/reasoning turn) -- run_tool_loop still
