@@ -308,6 +308,5 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
         res = await client.amarket_leaderboard(limit=5)
         self.assertIsInstance(res, list)
 
-
 if __name__ == "__main__":
     unittest.main()

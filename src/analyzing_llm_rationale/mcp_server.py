@@ -473,7 +473,6 @@ class ForeseaClient:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.market_leaderboard(limit))
 
-
 def _response_detail(response: Any) -> str:
     try:
         body = response.json()
@@ -770,7 +769,6 @@ def create_mcp_server(
         """Call this to fetch the top profitable prediction market trader leaderboard and rankings from Polymarket."""
 
         return await _call_tool_async(client.amarket_leaderboard, limit)
-
     @mcp.resource(
         "foresea://track-record",
         name="Foresea track record",
