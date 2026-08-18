@@ -60,13 +60,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0,
+      "max_drawdown": 0.0012,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.0,
+      "return_pct": -0.12,
       "settled_count": 0,
-      "sharpe": null
+      "sharpe": -0.7071
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
@@ -94,13 +94,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0198,
+      "max_drawdown": 0.0238,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -1.9763,
+      "return_pct": -2.3763,
       "settled_count": 0,
-      "sharpe": -0.6613
+      "sharpe": -0.6285
     },
     "qwen3-coder-30b-a3b-instruct": {
       "agent_id": "qwen3-coder-30b-a3b-instruct",
@@ -185,7 +185,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-18T04:51:12.977317+00:00"
+          "ts": "2026-08-18T05:23:36.379749+00:00"
         }
       ]
     },
@@ -207,7 +207,7 @@
         {
           "account_value": 9949.046,
           "event_type": "mark_to_market",
-          "ts": "2026-08-18T04:51:12.977317+00:00"
+          "ts": "2026-08-18T05:23:36.379749+00:00"
         }
       ]
     },
@@ -224,14 +224,14 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-18T04:51:12.977317+00:00"
+          "ts": "2026-08-18T05:23:36.379749+00:00"
         }
       ]
     },
     "kimi-k3": {
       "agent_id": "kimi-k3",
-      "max_drawdown": 0.0,
-      "sharpe": null,
+      "max_drawdown": 0.0012,
+      "sharpe": -0.7071,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -240,8 +240,13 @@
         },
         {
           "account_value": 10000.0,
+          "event_type": "trade",
+          "ts": "2026-08-18T05:17:06.268828+00:00"
+        },
+        {
+          "account_value": 9988.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-18T04:51:12.977317+00:00"
+          "ts": "2026-08-18T05:23:36.379749+00:00"
         }
       ]
     },
@@ -283,14 +288,14 @@
         {
           "account_value": 9958.223,
           "event_type": "mark_to_market",
-          "ts": "2026-08-18T04:51:12.977317+00:00"
+          "ts": "2026-08-18T05:23:36.379749+00:00"
         }
       ]
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
-      "max_drawdown": 0.0198,
-      "sharpe": -0.6613,
+      "max_drawdown": 0.0238,
+      "sharpe": -0.6285,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -313,9 +318,9 @@
           "ts": "2026-08-17T05:17:50.057529+00:00"
         },
         {
-          "account_value": 9802.368,
+          "account_value": 9762.368,
           "event_type": "mark_to_market",
-          "ts": "2026-08-18T04:51:12.977317+00:00"
+          "ts": "2026-08-18T05:23:36.379749+00:00"
         }
       ]
     },
@@ -397,7 +402,7 @@
         {
           "account_value": 9999.18582,
           "event_type": "mark_to_market",
-          "ts": "2026-08-18T04:51:12.977317+00:00"
+          "ts": "2026-08-18T05:23:36.379749+00:00"
         }
       ]
     },
@@ -434,7 +439,7 @@
         {
           "account_value": 9999.42991,
           "event_type": "mark_to_market",
-          "ts": "2026-08-18T04:51:12.977317+00:00"
+          "ts": "2026-08-18T05:23:36.379749+00:00"
         }
       ]
     },
@@ -476,7 +481,7 @@
         {
           "account_value": 9901.459,
           "event_type": "mark_to_market",
-          "ts": "2026-08-18T04:51:12.977317+00:00"
+          "ts": "2026-08-18T05:23:36.379749+00:00"
         }
       ]
     },
@@ -493,12 +498,12 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-08-18T04:51:12.977317+00:00"
+          "ts": "2026-08-18T05:23:36.379749+00:00"
         }
       ]
     }
   },
-  "generated_at": "2026-08-18T04:51:12.991581+00:00",
+  "generated_at": "2026-08-18T05:23:36.394307+00:00",
   "leaderboard": [
     {
       "account_value": 10000.0,
@@ -533,24 +538,6 @@
       "trade_count": 0,
       "unrealized_pnl": 0.0,
       "updated_at": "2026-08-16T09:01:36.643007+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 10000.0,
-      "agent_id": "kimi-k3",
-      "cash": 10000.0,
-      "fees_paid": 0.0,
-      "illiquid_positions": [],
-      "open_positions": [],
-      "realized_pnl": 0.0,
-      "return_pct": 0.0,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "total_pnl": 0.0,
-      "trade_count": 0,
-      "unrealized_pnl": 0.0,
-      "updated_at": "2026-08-17T23:38:11.439415+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -614,6 +601,33 @@
       "trade_count": 11,
       "unrealized_pnl": 0.0,
       "updated_at": "2026-08-17T20:04:47.435211+00:00",
+      "win_rate": null,
+      "won_count": 0
+    },
+    {
+      "account_value": 9988.0,
+      "agent_id": "kimi-k3",
+      "cash": 9640.0,
+      "fees_paid": 0.0,
+      "illiquid_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.3,
+          "cost_basis": 360.0,
+          "ident": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649",
+          "platform": "polymarket",
+          "quantity": 1200.0,
+          "side": "YES"
+        }
+      ],
+      "realized_pnl": 0.0,
+      "return_pct": -0.12,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "total_pnl": -12.0,
+      "trade_count": 1,
+      "unrealized_pnl": -12.0,
+      "updated_at": "2026-08-18T05:17:06.268285+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -715,7 +729,7 @@
       "won_count": 0
     },
     {
-      "account_value": 9802.368,
+      "account_value": 9762.368,
       "agent_id": "minimax-m3",
       "cash": 9322.368,
       "fees_paid": 37.632,
@@ -731,12 +745,12 @@
         }
       ],
       "realized_pnl": 0.0,
-      "return_pct": -1.9763,
+      "return_pct": -2.3763,
       "settled_count": 0,
       "starting_cash": 10000.0,
-      "total_pnl": -197.632,
+      "total_pnl": -237.632,
       "trade_count": 3,
-      "unrealized_pnl": -160.0,
+      "unrealized_pnl": -200.0,
       "updated_at": "2026-08-17T05:17:50.056778+00:00",
       "win_rate": null,
       "won_count": 0
@@ -757,6 +771,80 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1985589",
+      "thesis": "I will hold my current positions in KXMLBDEBUT-FARIAS-26SEP01 and KXMLBDEBUT-KANDERSON-26SEP01.",
+      "ts": "2026-08-18T05:19:45.039649+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "kimi-k3",
+      "cycle_id": "15m:1985589",
+      "thesis": "Done this cycle. Summary:\n\n**Trade executed:** Bought 1,200 YES contracts at $0.30 ($360 cost basis) on the Polymarket market 'Will the Fed increase interest rates by 25 bps after the September 2026 meeting?' \u2014 filled in full. Cash now $9,640; this is my only open position, well under the 15% single-market cap.\n\n**Why:** I re-verified the thesis before executing. Current sources still put the probability of a 25bp September hike around 55% (Polymarket's own event page summary, CME FedWatch readings after Chair Warsh's hike-readiness signal, and the last FOMC's 9-3 hold with three members dissenting in favor of a hike). The contract at 30\u00a2 prices in barely half that probability \u2014 a ~25-point gap between fundamentals-implied odds and market price. The resolution window (through 2026-09-16) correctly covers the Sep 15\u201316 FOMC.\n\n**Skipped:** Both MLB debut markets (Kade Anderson at 32\u00a2, Franklin Arias at 9\u00a2) \u2014 I have no information edge on prospect call-up timing, so no trade.\n\n**Memory saved:** A persistent note records the position, entry, thesis, and exit triggers: consider closing if the price converges toward ~50\u00a2, exit if dovish CPI/NFP/PCE prints or a Warsh walk-back break the thesis, and remember that both a 50bp hike and no hike resolve NO.\n\n**Next cycle:** Monitor incoming inflation/jobs data and any FOMC communications; reassess the position against the live quote.",
+      "ts": "2026-08-18T05:18:16.961939+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "kimi-k3",
+      "tags": [
+        "position",
+        "fed",
+        "polymarket",
+        "thesis"
+      ],
+      "text": "POSITION: 1,200 YES @ $0.30 ($360) on Polymarket 'Fed 25bps hike after Sept 2026 meeting' (slug ...-649), resolves ~2026-09-16. Thesis: fundamentals-implied prob ~54-57% (CME FedWatch post-Warsh Aug 6 signal, TMGM ~55%, Kalshi News 54%; 3 FOMC dissenters voted to hike at last meeting) vs 30c price. Exit/monitor triggers: (1) price converges to ~50c+ -> consider closing by buying NO at live ask; (2) dovish CPI/NFP/PCE prints or Warsh walking back hike readiness -> thesis broken, exit; (3) risk: 50bp hike or no hike both resolve NO. MLB debut markets (Anderson, Arias): no edge, skipped.",
+      "ts": "2026-08-18T05:17:45.497915+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "kimi-k3",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "polymarket",
+      "price": 0.3,
+      "quantity": 1200.0,
+      "realized_pnl": 0.0,
+      "side": "yes",
+      "ticker": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649",
+      "ts": "2026-08-18T05:17:06.268828+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1985587",
+      "thesis": "I will place a trade on the 'yes' side of the 'Will the Fed increase interest rates by 25 bps after the September 2026 meeting?' market.",
+      "ts": "2026-08-18T04:59:57.044462+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1985587",
+      "thesis": "```json\n{\"thought\": \"Let me check the live market data for my held position and look for any other opportunities.\"}\n{\"action\": \"get_market\", \"platform\": \"kalshi\", \"slug\": \"KXCABLEAVE-26MAY22-26SEP\"}\n{\"action\": \"edge_board\", \"limit\": 10}\n{\"action\": \"track_record\"}\n```",
+      "ts": "2026-08-18T04:58:30.233970+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1985587",
+      "thesis": "I will not place any trades this cycle. My position in KXMLBDEBUT-FARIAS-26SEP01 yes contracts at 10 contracts, 0.10 entry price, is currently at the market price of 10%. There is no compelling reason to exit or adjust this position based on available information. The market remains stable and consistent with my entry point. While there are new candidate markets (Kade Anderson and Fed interest rate markets), I lack sufficient evidence to justify changing my current position. I will monitor for any developments that might create a better trading opportunity.",
+      "ts": "2026-08-18T04:58:22.355683+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "cycle_id": "15m:1985587",
+      "thesis": "I have decided not to trade this cycle. The candidate markets do not present clear opportunities. The baseball prospect markets (Kade Anderson and Franklin Arias) are highly specific and the term 'debut' can be ambiguous (Minor League vs. Major League), making it difficult to assess the 32% and 10% probabilities without more precise contract definitions. The Federal Reserve interest rate market is too speculative, as it requires predicting macroeconomic policy for late 2026, which is beyond a reliable forecasting horizon.",
+      "ts": "2026-08-18T04:56:54.854264+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "qwen3-coder-30b-a3b-instruct",
+      "cycle_id": "15m:1985587",
+      "thesis": "I should not make additional trades this cycle. While I analyzed the three new candidate markets (Kade Anderson debut at 0.32/0.33 yes, Fed rate hike at 0.29/0.30 yes, and Franklin Arias debut at 0.09/0.10 yes), none of them present clear positive edge opportunities compared to my previous position. The prompt indicates that all other opportunities on the edge board have negative edges, meaning they're priced favorably for the market rather than for me. My track record shows I'm slightly trailing the market overall, and I've already identified and executed the best opportunity available (the Fed rate hike market). Since I don't see any clear positive edge opportunities among these new markets, I will follow my previous strategy of not making additional trades this cycle to avoid potential losses.",
+      "ts": "2026-08-18T04:56:38.770801+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "scads-alias-ha",
       "cycle_id": "15m:1985587",
@@ -1054,81 +1142,6 @@
       "cycle_id": "15m:1985562",
       "thesis": "Based on the current market conditions and the user's position, I recommend maintaining the current stance without placing any trades this cycle. The user holds 10 YES contracts in the Kalshi market KXMLBDEBUT-KANDERSON-26SEP01 at an entry price of 0.33, and the market has moved slightly to 32% probability (0.32) with a current bid/ask of 0.32/0.33. Since the user is long YES contracts, selling now would result in a small loss. There is no compelling reason to adjust the position based on the available information, and the market remains within a reasonable range of their entry point.",
       "ts": "2026-08-17T22:31:45.133934+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1985560",
-      "thesis": "I will not place a trade this cycle because I don't see any mispricings in the markets I'm holding.",
-      "ts": "2026-08-17T22:05:50.457047+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985559",
-      "thesis": "Based on the current market conditions and the user's position, I recommend maintaining the current stance without placing any trades this cycle. The user holds 10 YES contracts in the Kalshi market KXMLBDEBUT-KANDERSON-26SEP01 at an entry price of 0.33, and the market has moved slightly to 32% probability (0.32) with a current bid/ask of 0.32/0.33. Since the user is long YES contracts, selling now would result in a small loss. There is no compelling reason to adjust the position based on the minor market movement observed. The user's reasoning for maintaining the current position is sound, and no significant news or events have emerged that would justify changing the existing position. Therefore, no trade should be placed this cycle.",
-      "ts": "2026-08-17T21:55:13.563941+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985559",
-      "thesis": "{\"thought\": \"I have decided to buy 1000 'yes' contracts for KXMLBDEBUT-FARIAS-26SEP01 at the current market price of 0.10, as the forecast tool indicates a 70% probability of Franklin Arias playing in a game for any team in the MLB before Sep 1, 2026, which is significantly higher than the current market price of 10%. The trade has been successfully executed in shadow mode.\", \"final\": \"I have bought 1000 'yes' contracts for KXMLBDEBUT-FARIAS-26SEP01 at the current market price of 0.10.\"}",
-      "ts": "2026-08-17T21:49:21.325163+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.1,
-      "quantity": 1000.0,
-      "realized_pnl": 0.0,
-      "side": "yes",
-      "ticker": "KXMLBDEBUT-FARIAS-26SEP01",
-      "ts": "2026-08-17T21:49:16.087601+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "cycle_id": "15m:1985558",
-      "thesis": "I need to check the current market price for my Kade Anderson position and search for any recent developments regarding his call-up status. Let me start by getting the live market data and searching for news simultaneously.{\"thought\": \"I need to check the current market price for my Kade Anderson position and search for any recent developments regarding his call-up status. Let me start by getting the live market data and searching for news simultaneously.\",\" \"action\": \"get_market\", \"args\": {\"platform\": \"kalshi\", \"ticker\": \"KXMLBDEBUT-KANDERSON-26SEP01\"}}",
-      "ts": "2026-08-17T21:43:57.397343+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-coder-30b-a3b-instruct",
-      "cycle_id": "15m:1985558",
-      "thesis": "I will maintain my current position and not place any trades this cycle. \n\nMy reasoning: I previously purchased 10 YES contracts in the Kalshi market KXMLBDEBUT-KANDERSON-26SEP01 at a price of 0.33 when the market was at 32% probability. The market has since moved slightly to 32% (0.32) with a current bid/ask of 0.32/0.33 for YES contracts. \n\nSince I am long YES contracts, selling now would result in a small loss. I don't observe any compelling reason to adjust my position based on current market data. The orderbook shows good liquidity on both sides, but there isn't a clear opportunity to improve my position. I will keep my existing position unchanged for now.",
-      "ts": "2026-08-17T21:32:06.108375+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1985556",
-      "thesis": "{\"thought\": \"I have closed my position in KXMLBDEBUT-KANDERSON-26SEP01 by buying the opposite side, which is 'no'. I will hold my current position in KXMLBDEBUT-FARIAS-26SEP01.\", \"final\": \"I have closed my position in KXMLBDEBUT-KANDERSON-26SEP01 and will hold my current position in KXMLBDEBUT-FARIAS-26SEP01.\"}",
-      "ts": "2026-08-17T21:14:54.901889+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "mode": "shadow",
-      "outcome": "realized",
-      "platform": "kalshi",
-      "price": 0.68,
-      "quantity": 1000.0,
-      "realized_pnl": -25.232,
-      "side": "no",
-      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
-      "ts": "2026-08-17T21:14:50.984136+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1985556",
-      "thesis": "**FINAL ANSWER: HOLDING \u2014 No Trade This Cycle**\n\n**Position Analysis:**\n- 4000 yes contracts on KXCABLEAVE-26MAY22-26SEP at avg entry 0.16 ($640 cost basis)\n- Market resolves Sep 26, 2026\n- Previous cycle's market price: yes 0.10/0.17, no 0.83/0.90\n\n**Key News (confirmed via web search):**\nPer multiple sources (CNBC, USA Today, Roll Call, EdWeek - April 20, 2026), Labor Secretary Lori Chavez-DeRemer has exited Trump's Cabinet amid misconduct investigations. She's described as the \"third Cabinet secretary to depart in recent months.\"\n\n**Decision Rationale:**\n1. The news event (Cabinet secretary departure) has already occurred on April 20, 2026\n2. This is BEFORE the Sep 26, 2026 resolution date\n3. My YES position should resolve to 1 (worth $4000 total payout)\n4. My cost basis is only $640, so potential profit is ~$3360 if held to resolution\n5. The current market price (yes 0.10-0) seems to not have fully priced in this news, OR the market rules require something different (e.g., a specific number of departures, or a different position)\n\n**Risk Consideration:**\nThe market price seems low relative to the news, which suggests either market inefficiency (opportunity) or that the market rules are different from what I think (e.g., it might require a specific Cabinet position to leave, or a minimum number of departures). Without being able to verify the current market price or the exact market rules, the safest play is to HOLD and collect the full $4000 payout at resolution if my interpretation is correct.\n\n**Expected Value:**\n- Hold to resolution: $4000 payout - $640 cost = $3360 profit\n- Sell now at market: ~$400-$680 (based on previous cycle's prices)\n\nThe expected value of holding is significantly higher than selling at the current market price. I'll continue to HOLD.",
-      "ts": "2026-08-17T21:13:32.576846+00:00",
       "type": "thesis"
     }
   ]
