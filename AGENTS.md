@@ -70,6 +70,9 @@ src/analyzing_llm_rationale/
   pipeline.py       # Core batch inference loop
   providers.py      # LLM provider abstractions (OpenAICompatible, LocalQwen, HFRouter)
   server.py         # FastAPI — /health, /predict, /vertex-predict
+  mcp_server.py     # Model Context Protocol (FastMCP) server
+  market_data.py    # Polymarket & Kalshi market data, orderbooks, and stats
+  agent_capabilities.py # ReAct tool loop and action parsers
   news_pipeline.py  # LangChain news fetcher + summarizer + ranker
   db.py             # DuckDB schema, ingestion, helpers
   config.py         # YAML config loaders
@@ -107,6 +110,7 @@ https://foresea.ink
 ```
 - `GET /health` → `{"status": "ok"}`
 - `POST /predict` — PredictRequest → PredictResponse
+- `GET /mcp/` — Model Context Protocol Streamable-HTTP endpoint
 
 ## Foresea runtime notes
 
@@ -121,6 +125,13 @@ https://foresea.ink
   `.github/workflows/favorites-digest.yml` running `scripts/favorites_digest.py`.
 - Forecast sharing is explicit only: `POST /forecasts/share` creates a public
   `GET /forecast/{share_id}` page. Do not expose full private chat history.
+
+### Agent Tools & MCP Protocols
+Foresea provides a 17-tool ReAct execution loop for autonomous agents and mounts a public Model Context Protocol server at `/mcp` (`https://foresea.ink/mcp/`):
+- **Forecasting & Research**: `forecast`, `get_market`, `scan_markets`, `batch_quotes`, `search_evidence`, `web_search`, `track_record`, `edge_board`
+- **Exchange & Venue Data**: `exchange_status`, `orderbook`, `market_tags`, `price_history`, `live_data`, `polymarket_meta`
+- **Trading & Execution**: `place_trade` (IOC shadow paper execution), `manage_notes`, `fetch_api`
+- **Aliases**: `TOOL_ALIASES` in `agent_capabilities.py` automatically normalizes common LLM calling conventions (e.g. `http_get`, `candlesticks`, `comments`, `sports`, `series`, `game_stats`).
 
 ### CI/CD
 Push to `main` triggers GitHub Actions:

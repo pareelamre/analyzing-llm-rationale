@@ -277,6 +277,27 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 503)
         self.assertEqual(ctx.exception.detail, "temporarily unavailable")
 
+    async def test_async_exchange_status_returns_status_and_schedule(self):
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        res = await client.aexchange_status()
+        self.assertIn("status", res)
+        self.assertIn("schedule", res)
+
+    async def test_async_market_tags_returns_list(self):
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        res = await client.amarket_tags()
+        self.assertIsInstance(res, list)
+
+    async def test_async_live_data_returns_dict(self):
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        res = await client.alive_data()
+        self.assertIsInstance(res, dict)
+
+    async def test_async_polymarket_meta_returns_list(self):
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        res = await client.apolymarket_meta(target="series")
+        self.assertIsInstance(res, list)
+
 
 if __name__ == "__main__":
     unittest.main()

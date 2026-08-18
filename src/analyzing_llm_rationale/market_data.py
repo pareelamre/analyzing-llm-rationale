@@ -664,8 +664,11 @@ def fetch_kalshi_live_data(event_ticker: str = "", data_type: str = "") -> Dict[
     if event_ticker:
         params["event_ticker"] = event_ticker
     url = f"{KALSHI_LIVE_DATA_URL}/{data_type}" if data_type else KALSHI_LIVE_DATA_URL
-    data = _get_json(url, params=params or None)
-    return data if isinstance(data, dict) else {}
+    try:
+        data = _get_json(url, params=params or None)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
 def fetch_polymarket_sports() -> List[Dict[str, Any]]:
     """Fetch active sports leagues and market types from Polymarket Gamma API."""
     data = _get_json(POLYMARKET_SPORTS_URL)

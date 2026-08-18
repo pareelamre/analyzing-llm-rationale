@@ -505,11 +505,18 @@ https://foresea.ink/.well-known/mcp/server.json
 
 The remote MCP server is a thin tool layer over the public API. It exposes:
 
-- `foresea_forecast`: calls `POST /predict`.
-- `foresea_analyze_market`: calls `POST /agent/analyze`.
-- `foresea_scan_markets`: calls `GET /agent/scan`.
-- `foresea_track_record`: calls `GET /track-record`.
-- `foresea_edge_board`: calls `GET /edge-board` — live model-vs-market disagreements ranked, each tagged with the resolved track record of gaps that size (`by_edge` calibration + `lead_lag`).
+- `foresea_forecast`: calls `POST /predict` — produce calibrated probability forecasts with evidence.
+- `foresea_analyze_market`: calls `POST /agent/analyze` — evaluate a specific Polymarket/Kalshi market with edge & thesis.
+- `foresea_scan_markets`: calls `GET /agent/scan` — scan live markets ranked by model-vs-market disagreement.
+- `foresea_batch_quotes`: calls `GET /market/batch` — fetch multi-market quotes in one roundtrip.
+- `foresea_edge_board`: calls `GET /edge-board` — top open trading opportunities ranked by statistical edge.
+- `foresea_track_record`: calls `GET /track-record` — public accuracy, Brier score, ECE, and calibration metrics.
+- `foresea_exchange_status`: inspect Kalshi exchange status (trading active flag) and operating schedule.
+- `foresea_orderbook`: fetch live bids and asks orderbook depth for Kalshi tickers or Polymarket tokens.
+- `foresea_market_tags`: fetch active category taxonomy and tags from Polymarket.
+- `foresea_price_history`: fetch historical price points or OHLC candlesticks.
+- `foresea_live_data`: fetch real-time sports game statistics, play-by-play data, and live event feeds.
+- `foresea_polymarket_meta`: fetch event series listings, community discussion comments, or sports metadata.
 - `foresea_pr_agent`: calls `GET /pr-agent` — concise copy and install metadata for agents/catalogs that ask how to describe Foresea.
 - Resources: `foresea://track-record`, `foresea://pr-agent`, and `foresea://openapi.json`.
 
