@@ -284,6 +284,33 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("no bid/ask 0.55/0.60", line)
 
 
+class ModelBackstopCharsTests(unittest.TestCase):
+    def test_uses_the_model_s_verified_context_window_when_known(self):
+        # glm-5.2-fp8 is the only one of the ten agent-trading models whose
+        # deployed context length SCADS AI's own /v1/models listing actually
+        # publishes (524288 tokens, checked 2026-08-18). Half reserved for
+        # the rest of the real prompt (system prompt, ~17 tool specs, ReAct
+        # loop history), 4 chars/token.
+        self.assertEqual(
+            agent_trading_tick._model_backstop_chars("glm-5.2-fp8"),
+            int(524288 * 4 * 0.5),
+        )
+
+    def test_falls_back_to_a_conservative_default_for_unverified_models(self):
+        # Every other model, including all three scads-alias-* aliases
+        # (SCADS doesn't publish what they route to), gets one shared
+        # conservative default rather than a guessed per-model figure that
+        # could overestimate real capacity.
+        for model in ("llama-3.3-70b-instruct", "scads-alias-reasoning", "scads-alias-code", "scads-alias-ha"):
+            with self.subTest(model=model):
+                self.assertEqual(agent_trading_tick._model_backstop_chars(model), int(32000 * 4 * 0.5))
+
+    def test_falls_back_for_an_unrecognized_model_name(self):
+        # Must never raise -- an unknown model (e.g. a typo'd env var) still
+        # needs a usable backstop, not a crash before the cycle even starts.
+        self.assertEqual(agent_trading_tick._model_backstop_chars("not-a-real-model"), int(32000 * 4 * 0.5))
+
+
 class BuildQuestionTests(unittest.TestCase):
     def test_instructs_checking_the_resolution_window_before_trading_on_news(self):
         question = agent_trading_tick._build_question("PORTFOLIO", "CANDIDATES")

@@ -50,6 +50,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 from analyzing_llm_rationale.accounting import MarketQuote  # noqa: E402
+from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -65,12 +66,42 @@ AGENT_ANALYZE_RETRY_BACKOFF_S = float(os.environ.get("AGENT_TRADING_RETRY_BACKOF
 # fragment any time an agent held a position: candidates_offered were
 # routinely never actually visible to the model, even though
 # _discover_candidates was correctly surfacing them. That server-side cap is
-# gone -- these models' real context windows are tens of thousands of tokens,
-# not a couple hundred -- so MAX_QUESTION_CHARS below is a pure sanity
-# backstop against a genuine runaway bug (e.g. unbounded position-list
-# growth), not an operating constraint; it should never bind in practice.
+# gone -- MAX_QUESTION_CHARS below is now a pure sanity backstop against a
+# genuine runaway bug (e.g. unbounded position-list growth), not an
+# operating constraint; it should never bind in practice.
 MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS_CHARS", "2000")))
-MAX_QUESTION_CHARS = 100000
+
+
+def _model_backstop_chars(model: str) -> int:
+    """The backstop scales with THIS model's actual context window rather
+    than a single arbitrary constant. SCADS AI's own /v1/models listing
+    (queried 2026-08-18) only publishes context length for one of the ten
+    agent-trading models (glm-5.2-fp8, 524288 tokens) -- everything else,
+    including all three scads-alias-* models, returns nothing, so those
+    fall back to a conservative shared default rather than a guessed
+    per-model figure that could be wrong in the unsafe direction.
+
+    Reserves half the window for everything else in the real prompt this
+    field doesn't account for -- system prompt, the ~17 tool specs, and the
+    ReAct loop's own accumulated conversation history across MAX_TOOL_STEPS
+    -- and estimates 4 characters per token (a standard, slightly
+    conservative ratio for English text: undercounting usable chars is the
+    safe direction, since it can only make this backstop tighter, never
+    looser than the model can actually handle).
+    """
+    default_context_window_tokens = 32000
+    chars_per_token = 4
+    reserved_fraction = 0.5
+    try:
+        models = load_model_configs(ROOT / "configs" / "models.yaml")
+        context_window_tokens = models[model].context_window_tokens
+    except (KeyError, FileNotFoundError, ValueError):
+        context_window_tokens = None
+    context_window_tokens = context_window_tokens or default_context_window_tokens
+    return int(context_window_tokens * chars_per_token * (1 - reserved_fraction))
+
+
+MAX_QUESTION_CHARS = _model_backstop_chars(MODEL)
 # trading.py's FORESEA_MAX_ORDER_NOTIONAL is a flat-dollar cap shared by every
 # order path (human BYO trading included), so it can't be changed here without
 # affecting those too. Instead this driver overrides it per-cycle, scoped to
