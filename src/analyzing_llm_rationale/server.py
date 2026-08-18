@@ -3074,12 +3074,18 @@ async def edge_board():
     live = await asyncio.get_running_loop().run_in_executor(None, _read_edge_board_record)
     live = live or {}
     freshness = _track_record_freshness(live)
+    raw_board = live.get("edge_board", [])
+    try:
+        from analyzing_llm_rationale.edge_credibility import audit_edge_board
+        audited_board = audit_edge_board(raw_board)
+    except Exception:
+        audited_board = raw_board
     return JSONResponse(
         {
             "generated_at": live.get("generated_at"),
             "freshness": freshness,
             "model": live.get("model"),
-            "edge_board": live.get("edge_board", []),
+            "edge_board": audited_board,
             "by_edge": live.get("by_edge", []),
             "by_horizon": live.get("by_horizon", []),
             "lead_lag": live.get("lead_lag"),
@@ -4997,6 +5003,10 @@ class RadarMarket(BaseModel):
     category: Optional[str] = None
     horizon: Optional[str] = None
     reason: str = ""
+    credibility_score: Optional[float] = None
+    credibility_grade: Optional[str] = None
+    credibility_flags: List[str] = Field(default_factory=list)
+    is_credible: Optional[bool] = None
 
 
 class RadarResponse(BaseModel):
@@ -6696,6 +6706,10 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
             reason = f"Foresea is {abs(edge_pp)} pts {'above' if edge_pp > 0 else 'below'} the market."
         except Exception:
             reason = "Live market with a model-vs-market gap."
+
+        from analyzing_llm_rationale.edge_credibility import audit_edge_opportunity
+        audit = audit_edge_opportunity(row)
+
         markets.append(RadarMarket(
             id=ident,
             ident=row.get("ident"),
@@ -6713,6 +6727,10 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
             category=row.get("domain"),
             horizon=row.get("horizon") or row.get("lead_bucket"),
             reason=reason,
+            credibility_score=audit.get("credibility_score"),
+            credibility_grade=audit.get("credibility_grade"),
+            credibility_flags=audit.get("credibility_flags") or [],
+            is_credible=audit.get("is_credible"),
         ))
         if len(markets) >= limit:
             break

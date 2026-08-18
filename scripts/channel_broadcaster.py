@@ -92,11 +92,11 @@ class ChannelBroadcaster:
 
         return targets
 
-    def fetch_edge_opportunities(self, limit: int = 10, min_edge: float = 0.05) -> List[Dict[str, Any]]:
-        """Fetch top mispriced opportunities from Foresea GET /edge-board."""
+    def fetch_edge_opportunities(self, limit: int = 10, min_edge: float = 0.05, min_credibility: float = 0.60) -> List[Dict[str, Any]]:
+        """Fetch top mispriced opportunities from Foresea GET /edge-board and verify credibility."""
         url = f"{self.foresea_url}/edge-board"
         try:
-            resp = self.session.get(url, params={"limit": limit}, timeout=15)
+            resp = self.session.get(url, params={"limit": limit * 2}, timeout=15)
             if resp.status_code == 200:
                 data = resp.json()
                 raw_list = data.get("opportunities") or data.get("edge_board") if isinstance(data, dict) else (data if isinstance(data, list) else [])
@@ -105,8 +105,13 @@ class ChannelBroadcaster:
                     model_p = item.get("model_probability")
                     mkt_p = item.get("market_probability")
                     edge = item.get("edge") or (abs(model_p - mkt_p) if model_p is not None and mkt_p is not None else 0.0)
-                    if edge >= min_edge:
+                    cred_score = item.get("credibility_score")
+                    is_cred = item.get("is_credible", True) if cred_score is None else (cred_score >= min_credibility)
+
+                    if edge >= min_edge and is_cred:
                         filtered.append(item)
+                    if len(filtered) >= limit:
+                        break
                 return filtered
         except Exception as exc:
             logger.error("Failed to fetch edge board from %s: %s", url, exc)
@@ -119,7 +124,7 @@ class ChannelBroadcaster:
 
         msg = [
             "⚡ <b>FORESEA MARKET EDGE ALERT</b>",
-            "<i>Top prediction market mispricings detected by calibrated AI:</i>",
+            "<i>Top prediction market mispricings verified by calibrated AI:</i>",
             "",
         ]
         for idx, opp in enumerate(opportunities[:limit], 1):
@@ -130,6 +135,9 @@ class ChannelBroadcaster:
             edge = opp.get("edge") or (abs(model_p - mkt_p) if model_p is not None and mkt_p is not None else 0.0)
             rec = opp.get("recommendation") or ("BUY YES" if (model_p or 0) > (mkt_p or 0) else "BUY NO")
             link = opp.get("market_url") or self.foresea_url
+            grade = opp.get("credibility_grade") or "A"
+            score = opp.get("credibility_score")
+            score_str = f"{int(score*100)}%" if score is not None else "Verified"
 
             mkt_str = f"{mkt_p*100:.0f}%" if mkt_p is not None else "?"
             model_str = f"{model_p*100:.0f}%" if model_p is not None else "?"
@@ -137,7 +145,7 @@ class ChannelBroadcaster:
 
             msg.extend([
                 f"<b>{idx}. <a href=\"{link}\">{self._escape_html(title[:65])}</a></b>",
-                f"   Venue: <code>{platform}</code> | Action: <b>{rec}</b>",
+                f"   Venue: <code>{platform}</code> | Action: <b>{rec}</b> | Trust: <code>Grade {grade} ({score_str})</code>",
                 f"   Market: <code>{mkt_str}</code> → Foresea: <code>{model_str}</code> (<b>{edge_str} edge</b>)",
                 "",
             ])
@@ -149,11 +157,11 @@ class ChannelBroadcaster:
         """Format a rich Discord Embed for Discord webhooks."""
         embed: Dict[str, Any] = {
             "title": "⚡ Foresea Market Edge Alert",
-            "description": "Top prediction market mispricings detected by calibrated AI:",
+            "description": "Top prediction market mispricings verified by calibrated AI:",
             "color": 0x00D2FF,
             "url": f"{self.foresea_url}/#radar",
             "fields": [],
-            "footer": {"text": "Foresea Radar Desk • foresea.ink"},
+            "footer": {"text": "Foresea Radar Desk • Credibility Audited • foresea.ink"},
         }
 
         for idx, opp in enumerate(opportunities[:limit], 1):
@@ -163,13 +171,14 @@ class ChannelBroadcaster:
             model_p = opp.get("model_probability")
             edge = opp.get("edge") or (abs(model_p - mkt_p) if model_p is not None and mkt_p is not None else 0.0)
             rec = opp.get("recommendation") or ("BUY YES" if (model_p or 0) > (mkt_p or 0) else "BUY NO")
+            grade = opp.get("credibility_grade") or "A"
 
             mkt_str = f"{mkt_p*100:.0f}%" if mkt_p is not None else "?"
             model_str = f"{model_p*100:.0f}%" if model_p is not None else "?"
             edge_str = f"{edge*100:+.1f}%"
 
             embed["fields"].append({
-                "name": f"{idx}. [{platform}] {title[:60]}",
+                "name": f"{idx}. [{platform}] {title[:55]} [Grade {grade}]",
                 "value": f"**Action:** `{rec}` | **Market:** `{mkt_str}` → **Foresea:** `{model_str}` (**{edge_str} edge**)",
                 "inline": False,
             })
