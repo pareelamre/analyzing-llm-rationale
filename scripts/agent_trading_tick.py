@@ -50,6 +50,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 from analyzing_llm_rationale.accounting import MarketQuote  # noqa: E402
+from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -59,17 +60,51 @@ MIN_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MIN_CLOSE_DAYS", "1"))
 MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "30"))
 AGENT_ANALYZE_RETRIES = max(1, int(os.environ.get("AGENT_TRADING_RETRIES", "2")))
 AGENT_ANALYZE_RETRY_BACKOFF_S = float(os.environ.get("AGENT_TRADING_RETRY_BACKOFF_S", "10"))
-# AgentAnalyzeRequest.question has a generous but still-bounded server-side
-# limit (raised from a tight 2000 chars -- see server.py -- after that limit
-# was found silently destroying almost an entire candidates block, including
-# every Polymarket candidate, down to a mid-word fragment any time an agent
-# held a position: candidates_offered were routinely never actually visible
-# to the model, even though _discover_candidates was correctly surfacing
-# them. A single verbose thesis echoed back verbatim is still excerpted, not
-# replayed in full, so one runaway cycle can't eat the whole budget on its
-# own -- but with real headroom now, not the old razor's-edge margin.
+# AgentAnalyzeRequest.question used to have a tight 2000-char server-side
+# limit (see server.py) that was found silently destroying almost an entire
+# candidates block, including every Polymarket candidate, down to a mid-word
+# fragment any time an agent held a position: candidates_offered were
+# routinely never actually visible to the model, even though
+# _discover_candidates was correctly surfacing them. That server-side cap is
+# gone -- MAX_QUESTION_CHARS below is now a pure sanity backstop against a
+# genuine runaway bug (e.g. unbounded position-list growth), not an
+# operating constraint; it should never bind in practice.
 MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS_CHARS", "2000")))
-MAX_QUESTION_CHARS = 19000
+
+
+def _model_backstop_chars(model: str) -> int:
+    """The backstop scales with THIS model's actual context window rather
+    than a single arbitrary constant. SCADS AI's own /v1/models listing
+    (queried 2026-08-18) only publishes context length for one of the ten
+    agent-trading models (glm-5.2-fp8, 524288 tokens) -- everything else,
+    including all three scads-alias-* models, returns nothing, so those
+    fall back to a conservative shared default (128K tokens -- safe across
+    the other hosted models here: Llama 3.3, Qwen3-Coder, Kimi-K3,
+    GPT-OSS-120B, Gemma-4, MiniMax-M3 all support at least that much)
+    rather than a guessed per-model figure that could be wrong in the
+    unsafe direction.
+
+    Reserves half the window for everything else in the real prompt this
+    field doesn't account for -- system prompt, the ~17 tool specs, and the
+    ReAct loop's own accumulated conversation history across MAX_TOOL_STEPS
+    -- and estimates 4 characters per token (a standard, slightly
+    conservative ratio for English text: undercounting usable chars is the
+    safe direction, since it can only make this backstop tighter, never
+    looser than the model can actually handle).
+    """
+    default_context_window_tokens = 128000
+    chars_per_token = 4
+    reserved_fraction = 0.5
+    try:
+        models = load_model_configs(ROOT / "configs" / "models.yaml")
+        context_window_tokens = models[model].context_window_tokens
+    except (KeyError, FileNotFoundError, ValueError):
+        context_window_tokens = None
+    context_window_tokens = context_window_tokens or default_context_window_tokens
+    return int(context_window_tokens * chars_per_token * (1 - reserved_fraction))
+
+
+MAX_QUESTION_CHARS = _model_backstop_chars(MODEL)
 # trading.py's FORESEA_MAX_ORDER_NOTIONAL is a flat-dollar cap shared by every
 # order path (human BYO trading included), so it can't be changed here without
 # affecting those too. Instead this driver overrides it per-cycle, scoped to
@@ -352,10 +387,10 @@ def _build_question(portfolio_block: str, candidates_block: str) -> str:
     question = _assemble_question(portfolio_block, candidates_block)
     if len(question) <= MAX_QUESTION_CHARS:
         return question
-    # Over the server's hard limit (MAX_QUESTION_CHARS, well below it with
-    # margin -- see server.py's AgentAnalyzeRequest.question). This should be
-    # rare now that both are generous; when it does happen, trim in priority
-    # order, cheapest / least decision-relevant content first, and whenever a
+    # Over MAX_QUESTION_CHARS -- server.py no longer caps AgentAnalyzeRequest
+    # .question at all, so this is a pure sanity backstop, not a routine path.
+    # If it ever triggers, trim in priority order, cheapest / least
+    # decision-relevant content first, and whenever a
     # block of markets has to shrink, drop whole lines (see
     # _trim_block_to_lines) rather than cutting mid-line.
     # 1) Drop the optional previous-cycle reasoning excerpt first -- the

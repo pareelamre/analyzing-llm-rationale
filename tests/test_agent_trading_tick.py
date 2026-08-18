@@ -284,6 +284,33 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("no bid/ask 0.55/0.60", line)
 
 
+class ModelBackstopCharsTests(unittest.TestCase):
+    def test_uses_the_model_s_verified_context_window_when_known(self):
+        # glm-5.2-fp8 is the only one of the ten agent-trading models whose
+        # deployed context length SCADS AI's own /v1/models listing actually
+        # publishes (524288 tokens, checked 2026-08-18). Half reserved for
+        # the rest of the real prompt (system prompt, ~17 tool specs, ReAct
+        # loop history), 4 chars/token.
+        self.assertEqual(
+            agent_trading_tick._model_backstop_chars("glm-5.2-fp8"),
+            int(524288 * 4 * 0.5),
+        )
+
+    def test_falls_back_to_a_conservative_default_for_unverified_models(self):
+        # Every other model, including all three scads-alias-* aliases
+        # (SCADS doesn't publish what they route to), gets one shared
+        # conservative default rather than a guessed per-model figure that
+        # could overestimate real capacity.
+        for model in ("llama-3.3-70b-instruct", "scads-alias-reasoning", "scads-alias-code", "scads-alias-ha"):
+            with self.subTest(model=model):
+                self.assertEqual(agent_trading_tick._model_backstop_chars(model), int(128000 * 4 * 0.5))
+
+    def test_falls_back_for_an_unrecognized_model_name(self):
+        # Must never raise -- an unknown model (e.g. a typo'd env var) still
+        # needs a usable backstop, not a crash before the cycle even starts.
+        self.assertEqual(agent_trading_tick._model_backstop_chars("not-a-real-model"), int(128000 * 4 * 0.5))
+
+
 class BuildQuestionTests(unittest.TestCase):
     def test_instructs_checking_the_resolution_window_before_trading_on_news(self):
         question = agent_trading_tick._build_question("PORTFOLIO", "CANDIDATES")
@@ -295,8 +322,9 @@ class BuildQuestionTests(unittest.TestCase):
             [], [_quote(f"KX{i}") for i in range(3)],
         )
         question = agent_trading_tick._build_question("PORTFOLIO", candidates)
-        # Mirrors AgentAnalyzeRequest.question's max_length in server.py.
-        self.assertLessEqual(len(question), 20000)
+        # server.py no longer caps AgentAnalyzeRequest.question at all;
+        # MAX_QUESTION_CHARS is a pure sanity backstop, not a real limit.
+        self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
 
     def test_does_not_trim_a_realistic_candidates_block_at_all(self):
         # Regression: the old 1900-char budget (server-side hard limit was
@@ -331,7 +359,7 @@ class BuildQuestionTests(unittest.TestCase):
         # somewhere -- verify the overflow is handled by dropping whole
         # trailing lines (leaving every surviving candidate fully readable),
         # never by slicing raw characters mid-line.
-        new = [_quote(f"KX{i}", question=f"Candidate market number {i} with a fairly long question text") for i in range(200)]
+        new = [_quote(f"KX{i}", question=f"Candidate market number {i} with a fairly long question text") for i in range(1500)]
         candidates = agent_trading_tick._build_candidates_block([], new)
         question = agent_trading_tick._build_question("PORTFOLIO", candidates)
         self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
@@ -352,7 +380,7 @@ class BuildQuestionTests(unittest.TestCase):
         # error (observed live for 4 of 10 models on 2026-08-18).
         huge_portfolio = (
             "=== Your portfolio ===\n"
-            + "\n".join(f"  - KXTEST{i} yes: 10.0 contracts, avg entry 0.42" for i in range(400))
+            + "\n".join(f"  - KXTEST{i} yes: 10.0 contracts, avg entry 0.42" for i in range(6000))
             + "\nYour own reasoning from the previous cycle: " + ("z" * 2000)
         )
         question = agent_trading_tick._build_question(huge_portfolio, "")
@@ -364,8 +392,8 @@ class BuildQuestionTests(unittest.TestCase):
         # (no newlines) too large to keep even one of, so both blocks trim
         # away to nothing and the final hard clamp on the portfolio text
         # itself must still guarantee the limit is never exceeded.
-        huge_portfolio = "y" * 25000
-        huge_candidates = "x" * 25000
+        huge_portfolio = "y" * 150000
+        huge_candidates = "x" * 150000
         question = agent_trading_tick._build_question(huge_portfolio, huge_candidates)
         self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
         self.assertIn(agent_trading_tick._TRADING_INSTRUCTION, question)

@@ -25,6 +25,7 @@ class ModelConfig:
     api_key_env_var: str | None = None
     api_key_file: str | None = None
     max_tokens_cap: int | None = None
+    context_window_tokens: int | None = None
     request_timeout_cap_s: float | None = None
     forecasting_enabled: bool = True
     chat_interface_enabled: bool = False
@@ -79,6 +80,7 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
         api_key_env_var = payload.get("api_key_env_var")
         api_key_file = payload.get("api_key_file")
         max_tokens_cap = payload.get("max_tokens_cap")
+        context_window_tokens = payload.get("context_window_tokens")
         request_timeout_cap_s = payload.get("request_timeout_cap_s")
         forecasting_enabled = payload.get("forecasting_enabled", True)
         chat_interface_enabled = payload.get("chat_interface_enabled", False)
@@ -98,6 +100,10 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             raise ValueError(f"Model '{name}' max_tokens_cap must be an integer when provided")
         if isinstance(max_tokens_cap, int) and max_tokens_cap <= 0:
             raise ValueError(f"Model '{name}' max_tokens_cap must be positive when provided")
+        if context_window_tokens is not None and not isinstance(context_window_tokens, int):
+            raise ValueError(f"Model '{name}' context_window_tokens must be an integer when provided")
+        if isinstance(context_window_tokens, int) and context_window_tokens <= 0:
+            raise ValueError(f"Model '{name}' context_window_tokens must be positive when provided")
         if request_timeout_cap_s is not None and not isinstance(request_timeout_cap_s, (int, float)):
             raise ValueError(f"Model '{name}' request_timeout_cap_s must be numeric when provided")
         if isinstance(request_timeout_cap_s, (int, float)) and request_timeout_cap_s <= 0:
@@ -121,6 +127,7 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             api_key_env_var=api_key_env_var,
             api_key_file=api_key_file,
             max_tokens_cap=max_tokens_cap,
+            context_window_tokens=context_window_tokens,
             request_timeout_cap_s=(
                 float(request_timeout_cap_s) if request_timeout_cap_s is not None else None
             ),
