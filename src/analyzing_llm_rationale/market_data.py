@@ -25,11 +25,14 @@ POLYMARKET_HISTORY_URL = "https://clob.polymarket.com/prices-history"
 POLYMARKET_SPORTS_URL = "https://gamma-api.polymarket.com/sports"
 POLYMARKET_COMMENTS_URL = "https://gamma-api.polymarket.com/comments"
 POLYMARKET_SERIES_URL = "https://gamma-api.polymarket.com/series"
+POLYMARKET_CLOB_TRADES_URL = "https://clob.polymarket.com/trades"
+POLYMARKET_LEADERBOARD_URL = "https://data-api.polymarket.com/leaderboard"
 KALSHI_API_URL = "https://api.elections.kalshi.com/trade-api/v2/markets"
 KALSHI_EVENTS_URL = "https://api.elections.kalshi.com/trade-api/v2/events"
 KALSHI_EXCHANGE_STATUS_URL = "https://api.elections.kalshi.com/trade-api/v2/exchange/status"
 KALSHI_EXCHANGE_SCHEDULE_URL = "https://api.elections.kalshi.com/trade-api/v2/exchange/schedule"
 KALSHI_LIVE_DATA_URL = "https://api.elections.kalshi.com/trade-api/v2/live-data"
+KALSHI_SERIES_URL = "https://api.elections.kalshi.com/trade-api/v2/series"
 _TIMEOUT_S = 12
 _HEADERS = {"User-Agent": "foresea-market-bot/1.0"}
 
@@ -686,3 +689,48 @@ def fetch_polymarket_series() -> List[Dict[str, Any]]:
     """Fetch active event series listings from Polymarket Gamma API."""
     data = _get_json(POLYMARKET_SERIES_URL)
     return [s for s in data if isinstance(s, dict)] if isinstance(data, list) else []
+
+
+def fetch_recent_trades(platform: str = "kalshi", ticker_or_token: str = "", limit: int = 20) -> List[Dict[str, Any]]:
+    """Fetch recent executed trade prints / public tape for Kalshi or Polymarket."""
+    p = platform.lower()
+    ref = ticker_or_token.strip()
+    if p.startswith("poly") or ref.isdigit() or len(ref) > 20:
+        url = POLYMARKET_CLOB_TRADES_URL
+        params = {"limit": min(limit, 50)}
+        if ref:
+            params["asset_id"] = ref
+        try:
+            data = _get_json(url, params=params)
+            return [t for t in data if isinstance(t, dict)] if isinstance(data, list) else []
+        except Exception:
+            return []
+    # Kalshi
+    url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ref}/trades" if ref else "https://api.elections.kalshi.com/trade-api/v2/markets/trades"
+    params = {"limit": min(limit, 50)}
+    try:
+        data = _get_json(url, params=params)
+        if isinstance(data, dict) and "trades" in data:
+            return data["trades"]
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def fetch_trader_leaderboard(limit: int = 20) -> List[Dict[str, Any]]:
+    """Fetch top profitable prediction market trader leaderboard from Polymarket."""
+    try:
+        data = _get_json(POLYMARKET_LEADERBOARD_URL, params={"limit": min(limit, 50)})
+        return [r for r in data if isinstance(r, dict)] if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def fetch_kalshi_series(series_ticker: str = "") -> Any:
+    """Fetch Kalshi series catalog or specific series metadata."""
+    url = f"{KALSHI_SERIES_URL}/{series_ticker}" if series_ticker else KALSHI_SERIES_URL
+    try:
+        data = _get_json(url)
+        return data
+    except Exception:
+        return {} if series_ticker else []

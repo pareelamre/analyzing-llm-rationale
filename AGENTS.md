@@ -127,11 +127,11 @@ https://foresea.ink
   `GET /forecast/{share_id}` page. Do not expose full private chat history.
 
 ### Agent Tools & MCP Protocols
-Foresea provides a 17-tool ReAct execution loop for autonomous agents and mounts a public Model Context Protocol server at `/mcp` (`https://foresea.ink/mcp/`):
-- **Forecasting & Research**: `forecast`, `get_market`, `scan_markets`, `batch_quotes`, `search_evidence`, `web_search`, `track_record`, `edge_board`
-- **Exchange & Venue Data**: `exchange_status`, `orderbook`, `market_tags`, `price_history`, `live_data`, `polymarket_meta`
+Foresea provides a 19-tool ReAct execution loop for autonomous agents and mounts a public Model Context Protocol server at `/mcp` (`https://foresea.ink/mcp/`):
+- **Forecasting & Research**: `forecast`, `get_market`, `scan_markets`, `batch_quotes`, `search_evidence`, `web_search`, `track_record`, `edge_board`, `market_leaderboard`
+- **Exchange & Venue Data**: `exchange_status`, `orderbook`, `market_tags`, `price_history`, `live_data`, `polymarket_meta`, `recent_trades`
 - **Trading & Execution**: `place_trade` (IOC shadow paper execution), `manage_notes`, `fetch_api`
-- **Aliases**: `TOOL_ALIASES` in `agent_capabilities.py` automatically normalizes common LLM calling conventions (e.g. `http_get`, `candlesticks`, `comments`, `sports`, `series`, `game_stats`).
+- **Aliases**: `TOOL_ALIASES` in `agent_capabilities.py` automatically normalizes common LLM calling conventions (e.g. `http_get`, `candlesticks`, `comments`, `sports`, `series`, `game_stats`, `trades`, `leaderboard`).
 
 ### CI/CD
 Push to `main` triggers GitHub Actions:

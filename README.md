@@ -517,6 +517,8 @@ The remote MCP server is a thin tool layer over the public API. It exposes:
 - `foresea_price_history`: fetch historical price points or OHLC candlesticks.
 - `foresea_live_data`: fetch real-time sports game statistics, play-by-play data, and live event feeds.
 - `foresea_polymarket_meta`: fetch event series listings, community discussion comments, or sports metadata.
+- `foresea_recent_trades`: fetch recent executed trade tape / prints (prices, sizes, timestamps) on Kalshi or Polymarket.
+- `foresea_market_leaderboard`: fetch top profitable trader leaderboard and volume rankings from Polymarket.
 - `foresea_pr_agent`: calls `GET /pr-agent` — concise copy and install metadata for agents/catalogs that ask how to describe Foresea.
 - Resources: `foresea://track-record`, `foresea://pr-agent`, and `foresea://openapi.json`.
 

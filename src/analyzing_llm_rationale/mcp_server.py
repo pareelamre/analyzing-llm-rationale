@@ -61,6 +61,8 @@ _TOOL_NAMES = {
     "price_history": "foresea_price_history", "aprice_history": "foresea_price_history",
     "live_data": "foresea_live_data", "alive_data": "foresea_live_data",
     "polymarket_meta": "foresea_polymarket_meta", "apolymarket_meta": "foresea_polymarket_meta",
+    "recent_trades": "foresea_recent_trades", "arecent_trades": "foresea_recent_trades",
+    "market_leaderboard": "foresea_market_leaderboard", "amarket_leaderboard": "foresea_market_leaderboard",
 }
 
 DEFAULT_FORESEA_BASE_URL = "https://foresea.ink"
@@ -449,6 +451,28 @@ class ForeseaClient:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.polymarket_meta(target, market_id))
 
+    def recent_trades(self, platform: str = "kalshi", ticker_or_token: str = "", limit: int = 20) -> List[Dict[str, Any]]:
+        try:
+            from analyzing_llm_rationale import market_data
+            return market_data.fetch_recent_trades(platform, ticker_or_token, limit)
+        except Exception:
+            return []
+
+    async def arecent_trades(self, platform: str = "kalshi", ticker_or_token: str = "", limit: int = 20) -> List[Dict[str, Any]]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.recent_trades(platform, ticker_or_token, limit))
+
+    def market_leaderboard(self, limit: int = 20) -> List[Dict[str, Any]]:
+        try:
+            from analyzing_llm_rationale import market_data
+            return market_data.fetch_trader_leaderboard(limit)
+        except Exception:
+            return []
+
+    async def amarket_leaderboard(self, limit: int = 20) -> List[Dict[str, Any]]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.market_leaderboard(limit))
+
 
 def _response_detail(response: Any) -> str:
     try:
@@ -734,6 +758,18 @@ def create_mcp_server(
         discussion comments for a market, or sports league metadata (target: 'series', 'comments', 'sports')."""
 
         return await _call_tool_async(client.apolymarket_meta, target, market_id)
+
+    @mcp.tool()
+    async def foresea_recent_trades(platform: str = "kalshi", ticker_or_token: str = "", limit: int = 20) -> List[Dict[str, Any]]:
+        """Call this to fetch recent public executed trades / trade tape (prices, sizes, timestamps) on Kalshi or Polymarket."""
+
+        return await _call_tool_async(client.arecent_trades, platform, ticker_or_token, limit)
+
+    @mcp.tool()
+    async def foresea_market_leaderboard(limit: int = 20) -> List[Dict[str, Any]]:
+        """Call this to fetch the top profitable prediction market trader leaderboard and rankings from Polymarket."""
+
+        return await _call_tool_async(client.amarket_leaderboard, limit)
 
     @mcp.resource(
         "foresea://track-record",
