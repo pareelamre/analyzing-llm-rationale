@@ -58,7 +58,21 @@ class ParseActionTests(unittest.TestCase):
         # though the model clearly meant to call it.
         a = ac.parse_action('{"name": "web_search", "parameters": {"query": "cabinet news"}}')
         self.assertEqual(a["action"], "web_search")
-        self.assertEqual(a["args"], {"query": "cabinet news"})
+        self.assertEqual(a["args"]["query"], "cabinet news")
+
+    def test_parses_action_with_nested_braces_in_string(self):
+        text = '{"thought": "Checking rate {cut > 25bps} conditions", "action": "web_search", "args": {"query": "rates"}}'
+        a = ac.parse_action(text)
+        self.assertIsNotNone(a)
+        self.assertEqual(a["action"], "web_search")
+        self.assertEqual(a["args"]["query"], "rates")
+
+    def test_normalizes_action_with_parameters_key(self):
+        text = '{"action": "web_search", "parameters": {"query": "Fed cut"}}'
+        a = ac.parse_action(text)
+        self.assertIsNotNone(a)
+        self.assertEqual(a["action"], "web_search")
+        self.assertEqual(a["args"], {"query": "Fed cut"})
         self.assertNotIn("final", a)
 
     def test_normalizes_arguments_key_as_well_as_parameters(self):

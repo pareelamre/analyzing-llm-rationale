@@ -168,6 +168,16 @@ def _normalize_action(obj: Dict[str, Any]) -> Dict[str, Any]:
         act = obj.get("action")
         if isinstance(act, str) and act in TOOL_ALIASES:
             obj["action"] = TOOL_ALIASES[act]
+        if "args" not in obj or not isinstance(obj.get("args"), dict):
+            params = obj.get("parameters", obj.get("arguments", {}))
+            if isinstance(params, str):
+                try:
+                    parsed = json.loads(params)
+                    obj["args"] = parsed if isinstance(parsed, dict) else {}
+                except Exception:
+                    obj["args"] = {}
+            elif isinstance(params, dict):
+                obj["args"] = params
         return obj
     if "final" in obj:
         return obj
@@ -195,21 +205,30 @@ def parse_action(text: str) -> Optional[Dict[str, Any]]:
     cleaned = re.sub(r"```(?:json)?", "", text)
     depth = 0
     start = -1
+    in_string = False
+    escape = False
     for i, ch in enumerate(cleaned):
-        if ch == "{":
-            if depth == 0:
-                start = i
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0 and start >= 0:
-                blob = cleaned[start:i + 1]
-                try:
-                    obj = json.loads(blob)
-                    if isinstance(obj, dict):
-                        return _normalize_action(obj)
-                except ValueError:
-                    start = -1  # keep scanning for a valid object
+        if ch == '"' and not escape:
+            in_string = not in_string
+        elif ch == '\\' and in_string:
+            escape = not escape
+            continue
+        if not in_string:
+            if ch == "{":
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and start >= 0:
+                    blob = cleaned[start:i + 1]
+                    try:
+                        obj = json.loads(blob)
+                        if isinstance(obj, dict):
+                            return _normalize_action(obj)
+                    except ValueError:
+                        start = -1  # keep scanning for a valid object
+        escape = False
     return None
 
 
@@ -296,5 +315,9 @@ async def run_tool_loop(
     # Out of steps — force a final answer.
     final = await chat_fn(messages + [{"role": "user",
                                        "content": "Stop calling tools. Give your final answer now as plain text."}])
-    return {"answer": (final or "").strip(), "transcript": transcript,
+    final_text = (final or "").strip()
+    parsed_final = parse_action(final_text)
+    if isinstance(parsed_final, dict) and "final" in parsed_final:
+        final_text = str(parsed_final["final"]).strip()
+    return {"answer": final_text, "transcript": transcript,
             "steps": max_steps, "truncated": True}
