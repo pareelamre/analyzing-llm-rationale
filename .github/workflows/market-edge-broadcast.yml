@@ -1,0 +1,47 @@
+name: Market edge broadcast
+
+# Automated multi-channel broadcaster. Dispatches top prediction market edge
+# signals and alerts to configured Discord server webhooks and Telegram channels.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"  # every 6 hours
+  workflow_dispatch:
+    inputs:
+      min_edge:
+        description: "Minimum edge threshold (e.g. 0.06)"
+        required: false
+        default: "0.06"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-edge-broadcast
+  cancel-in-progress: false
+
+jobs:
+  broadcast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install --quiet requests
+
+      - name: Broadcast market edge signals
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          DISCORD_WEBHOOKS: ${{ secrets.DISCORD_WEBHOOKS }}
+          TELEGRAM_CHANNELS: ${{ secrets.TELEGRAM_CHANNELS }}
+        run: |
+          min_edge_val="${{ github.event.inputs.min_edge || '0.06' }}"
+          python scripts/channel_broadcaster.py \
+            --send \
+            --min-edge "$min_edge_val" \
+            --config data/broadcast_channels.json
