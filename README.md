@@ -522,6 +522,43 @@ The remote MCP server is a thin tool layer over the public API. It exposes:
 - `foresea_pr_agent`: calls `GET /pr-agent` — concise copy and install metadata for agents/catalogs that ask how to describe Foresea.
 - Resources: `foresea://track-record`, `foresea://pr-agent`, and `foresea://openapi.json`.
 
+### Custom Integrations & Ecosystem Tools
+
+Foresea provides ready-to-run client integrations across popular developer and trading surfaces:
+
+#### 1. Telegram & Discord Signal Bots
+- **Telegram Bot** (`scripts/foresea_telegram_bot.py`): Interactive bot supporting `/forecast <q>`, `/edge`, `/analyze <ticker>`, `/track`, and automated subscriber edge alerts.
+  ```bash
+  export TELEGRAM_BOT_TOKEN="123456:ABC..."
+  python scripts/foresea_telegram_bot.py
+  ```
+- **Discord Bot & Webhooks** (`scripts/foresea_discord_bot.py`): Posts rich Discord embeds to announcement channels on schedule.
+  ```bash
+  python scripts/foresea_discord_bot.py --webhook-url "https://discord.com/api/webhooks/..." --post-edge
+  ```
+
+#### 2. Drop-in Web Widget (`<foresea-card>`)
+Embed live interactive prediction market forecasts into any blog, news site, or Substack with a single script tag:
+```html
+<script src="https://foresea.ink/widget.js" async></script>
+
+<!-- Embed by Question -->
+<foresea-card data-question="Will SpaceX land Starship on Mars by 2028?" data-theme="dark"></foresea-card>
+
+<!-- Embed by Shared Forecast ID -->
+<foresea-card data-share-id="abc123xyz"></foresea-card>
+```
+
+#### 3. Real-Money Quant Execution Bridge
+An opt-in automated execution runner (`scripts/live_trader_bridge.py`) connecting Foresea's statistical edge signals to live prediction venues (Polymarket & Kalshi) with strict risk management guards:
+```bash
+# Dry-run simulation (safe default)
+python scripts/live_trader_bridge.py --dry-run --min-edge 0.08
+
+# Live execution on Kalshi with risk limits
+python scripts/live_trader_bridge.py --live --venue kalshi --min-edge 0.10 --max-position-usd 25
+```
+
 ### PR agent — agent-to-agent distribution
 
 `GET /pr-agent?audience=mcp` returns an opt-in outreach packet that other agents,
