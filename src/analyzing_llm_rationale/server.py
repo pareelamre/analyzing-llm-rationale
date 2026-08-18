@@ -8136,6 +8136,86 @@ async def radar(limit: int = Query(12, ge=1, le=30)) -> JSONResponse:
     )
 
 
+@app.get("/market/exchange-status", tags=["Markets"], summary="Operational status and schedule of exchanges")
+async def market_exchange_status() -> Dict[str, Any]:
+    """Get Kalshi and prediction exchange operational status and schedule."""
+    from analyzing_llm_rationale import market_data as _md
+
+    loop = asyncio.get_running_loop()
+    status = await loop.run_in_executor(None, _md.fetch_kalshi_exchange_status)
+    schedule = await loop.run_in_executor(None, _md.fetch_kalshi_exchange_schedule)
+    return {"status": status, "schedule": schedule}
+
+
+@app.get("/market/orderbook", tags=["Markets"], summary="Fetch real-time orderbook bids and asks")
+async def market_orderbook_route(
+    platform: str = Query("kalshi", description="Venue: 'kalshi' or 'polymarket'"),
+    ident: str = Query(..., description="Market ticker or token_id"),
+) -> Dict[str, Any]:
+    """Fetch live bids/asks orderbook depth."""
+    from analyzing_llm_rationale import market_data as _md
+
+    loop = asyncio.get_running_loop()
+    if "poly" in platform.lower():
+        ob = await loop.run_in_executor(None, lambda: _md.fetch_polymarket_orderbook(ident))
+    else:
+        ob = await loop.run_in_executor(None, lambda: _md.fetch_kalshi_orderbook(ident))
+    return ob or {"error": "Orderbook unavailable", "platform": platform, "ident": ident}
+
+
+@app.get("/market/trades", tags=["Markets"], summary="Recent executed trade tape")
+async def market_trades_route(
+    platform: str = Query("kalshi", description="Venue: 'kalshi' or 'polymarket'"),
+    ident: str = Query(..., description="Market ticker or token_id"),
+    limit: int = Query(20, ge=1, le=100, description="Max trades to return"),
+) -> Dict[str, Any]:
+    """Fetch executed prints/trade tape."""
+    from analyzing_llm_rationale import market_data as _md
+
+    loop = asyncio.get_running_loop()
+    trades = await loop.run_in_executor(None, lambda: _md.fetch_recent_trades(platform, ident, limit))
+    return trades or {"trades": [], "platform": platform, "ident": ident}
+
+
+@app.get("/market/leaderboard", tags=["Markets"], summary="Top trader rankings and volume leaders")
+async def market_leaderboard_route(
+    limit: int = Query(20, ge=1, le=100, description="Max leaders to return"),
+) -> Dict[str, Any]:
+    """Fetch trader rankings and volume leaders."""
+    from analyzing_llm_rationale import market_data as _md
+
+    loop = asyncio.get_running_loop()
+    lb = await loop.run_in_executor(None, lambda: _md.fetch_trader_leaderboard(limit))
+    return lb or {"leaderboard": []}
+
+
+@app.get("/market/tags", tags=["Markets"], summary="Categorization tags for a market")
+async def market_tags_route() -> Dict[str, Any]:
+    """Fetch market tags and categorization metadata."""
+    from analyzing_llm_rationale import market_data as _md
+
+    loop = asyncio.get_running_loop()
+    tags = await loop.run_in_executor(None, _md.fetch_polymarket_tags)
+    return tags or {"tags": []}
+
+
+@app.get("/market/price-history", tags=["Markets"], summary="Candlestick OHLCV price history")
+async def market_price_history_route(
+    platform: str = Query("kalshi", description="Venue: 'kalshi' or 'polymarket'"),
+    ident: str = Query(..., description="Market ticker or token_id"),
+    series_ticker: Optional[str] = Query(None, description="Series ticker for Kalshi"),
+) -> Dict[str, Any]:
+    """Fetch historical OHLCV candlestick bars."""
+    from analyzing_llm_rationale import market_data as _md
+
+    loop = asyncio.get_running_loop()
+    if "poly" in platform.lower():
+        candles = await loop.run_in_executor(None, lambda: _md.fetch_polymarket_price_history(ident))
+    else:
+        candles = await loop.run_in_executor(None, lambda: _md.fetch_kalshi_candlesticks(ident, series_ticker))
+    return candles or {"candlesticks": []}
+
+
 _TRADING_CONNECTION_KIND = "TradingConnection"
 _TRADING_ORDER_KIND = "TradingOrder"
 _TRADING_RUN_KIND = "TradingRun"
