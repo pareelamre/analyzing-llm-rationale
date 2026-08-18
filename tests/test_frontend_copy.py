@@ -325,6 +325,67 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
                 self.assertIn("row.trade_count", renderer)
                 self.assertIn("_equitySvg(curves", renderer)
 
+    def test_dialog_brand_links_close_the_dialog_not_force_landing(self):
+        # Regression: the "Foresea" brand link inside each overlay's header
+        # called showLanding() unconditionally, so clicking it while signed
+        # into the app (e.g. from the Edge board) yanked the user all the way
+        # out to the marketing landing page instead of just closing the
+        # dialog like the adjacent Close button does. Confirmed live before
+        # the fix: currentView flipped from 'app' to 'landing' on click.
+        overlays = [
+            ("trackOverlay", "closeTrackRecord()"),
+            ("edgeOverlay", "closeEdgeBoard()"),
+            ("watchOverlay", "closeWatchlistPage()"),
+            ("ledgerOverlay", "closePersonalLedger()"),
+        ]
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                for overlay_id, close_call in overlays:
+                    marker = f'id="{overlay_id}"'
+                    self.assertIn(marker, index)
+                    section = index.split(marker, 1)[1][:600]
+                    brand_button = section.split("brand-home", 1)[1][:120]
+                    self.assertIn(f'onclick="{close_call}"', brand_button)
+                    self.assertNotIn("showLanding()", brand_button)
+
+    def test_edge_board_load_failure_resets_the_loaded_flag_and_offers_retry(self):
+        # Regression: edgeLoaded was set true before the fetch even started
+        # and never reset on failure, so one transient /edge-board error
+        # permanently stuck the whole edge board (all three tabs, including
+        # Agentic) on "not available yet" for the rest of the page session --
+        # neither closing/reopening the dialog nor switching tabs retried it,
+        # only a hard page refresh recovered.
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                loader = index.split("async function loadEdgeBoard() {", 1)[1].split(
+                    "async function openWatchlistPage", 1
+                )[0]
+                catch_block = loader.split("} catch (e) {", 1)[1]
+                self.assertIn("edgeLoaded = false", catch_block)
+                self.assertIn("loadEdgeBoard();", catch_block)
+                self.assertIn(">Retry<", catch_block)
+
+    def test_track_record_load_failure_resets_the_loaded_flag_and_offers_retry(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                loader = index.split("async function loadTrackRecord() {", 1)[1].split(
+                    "let edgeLoaded", 1
+                )[0]
+                catch_block = loader.split("} catch (e) {", 1)[1]
+                self.assertIn("trackLoaded = false", catch_block)
+                self.assertIn("loadTrackRecord();", catch_block)
+                self.assertIn(">Retry<", catch_block)
+
+    def test_agentic_section_error_state_offers_retry(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                renderer = index.split("function renderAgentTradingBoard(d) {", 1)[1].split(
+                    "async function removePersonalLedgerEntry", 1
+                )[0]
+                error_branch = renderer.split("if (d && d.error) {", 1)[1][:400]
+                self.assertIn("loadAgentTradingSection();", error_branch)
+                self.assertIn(">Retry<", error_branch)
+
 
 if __name__ == "__main__":
     unittest.main()
