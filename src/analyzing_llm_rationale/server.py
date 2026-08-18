@@ -4413,7 +4413,7 @@ class AgentProfileCopyResponse(BaseModel):
 
 class AgentAnalyzeRequest(BaseModel):
     """Ask the analysis agent to work a live question end-to-end."""
-    question: Optional[str] = Field(None, max_length=20000, description="Market question. Optional if a market identifier is given.")
+    question: Optional[str] = Field(None, description="Market question. Optional if a market identifier is given.")
     platform: Optional[str] = Field(None, max_length=40, description="'polymarket' or 'kalshi' to fetch a live price.")
     market_platform: Optional[str] = Field(
         None,

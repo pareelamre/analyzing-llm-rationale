@@ -190,6 +190,10 @@ models:
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
+    # Verified against SCADS AI's own /v1/models listing (2026-08-18) --
+    # the only one of these hosted models whose deployed context length is
+    # actually published there; every other model's listing omits it.
+    context_window_tokens: 524288
     fallback_model_chain:
       - MiniMaxAI/MiniMax-M3-MXFP8
   deepseek-r1:

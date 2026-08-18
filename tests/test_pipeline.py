@@ -561,6 +561,12 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(models["llama-3.3-70b-instruct"].api_key_file, "SCADS_AI_API_KEY.txt")
         self.assertIsNone(models["llama-3.3-70b-instruct"].max_tokens_cap)
         self.assertEqual(models["llama-3.3-70b-instruct"].request_timeout_cap_s, 90.0)
+        # context_window_tokens is only populated where SCADS AI's own
+        # /v1/models listing actually publishes it (verified 2026-08-18) --
+        # left unset elsewhere rather than guessed, since agent_trading_tick
+        # .py's backstop must never overestimate a model's real capacity.
+        self.assertIsNone(models["llama-3.3-70b-instruct"].context_window_tokens)
+        self.assertEqual(models["glm-5.2-fp8"].context_window_tokens, 524288)
         self.assertIn("gpt-5", models)
         self.assertEqual(models["gpt-5"].provider, "openai-compatible")
         self.assertEqual(models["gpt-5"].router_model_name, "gpt-5")
