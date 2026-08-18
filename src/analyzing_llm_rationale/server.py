@@ -13509,6 +13509,24 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         except Exception as exc:
             return f"(Polymarket metadata fetch failed: {exc})"
 
+    async def _tool_recent_trades(args):
+        platform = str(args.get("platform") or "kalshi").strip()
+        ticker = str(args.get("ticker") or args.get("token_id") or args.get("market") or "").strip()
+        limit = int(args.get("limit") or 20)
+        try:
+            res = await loop.run_in_executor(None, lambda: market_data.fetch_recent_trades(platform, ticker, limit))
+            return f"Recent Trades ({platform}):\n{json.dumps(res[:limit], indent=2)[:3500]}"
+        except Exception as exc:
+            return f"(Recent trades fetch failed: {exc})"
+
+    async def _tool_market_leaderboard(args):
+        limit = int(args.get("limit") or 20)
+        try:
+            res = await loop.run_in_executor(None, lambda: market_data.fetch_trader_leaderboard(limit))
+            return f"Trader Leaderboard:\n{json.dumps(res[:limit], indent=2)[:3500]}"
+        except Exception as exc:
+            return f"(Leaderboard fetch failed: {exc})"
+
     benchmark_tool_map = {
         "place_trade": _tool_place_trade,
         "web_search": _tool_web_search,
@@ -13527,6 +13545,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "price_history": _tool_price_history,
         "live_data": _tool_live_data,
         "polymarket_meta": _tool_polymarket_meta,
+        "recent_trades": _tool_recent_trades,
+        "market_leaderboard": _tool_market_leaderboard,
     }
     benchmark_specs = [
         {"name": "place_trade", "args": "ticker, side, price, quantity, platform?", "description": "Buy YES or NO contracts on Kalshi or Polymarket using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. Pass platform='kalshi' or platform='polymarket' (defaults to kalshi if omitted) -- ticker is the Kalshi ticker or the Polymarket market slug, matching whichever venue a candidate line came from. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit -- a rejection means one of those guards tripped, not that trading itself is unavailable."},
@@ -13546,6 +13566,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         {"name": "price_history", "args": "ticker|market, series_ticker?", "description": "Fetch historical prices or OHLC candlesticks for a market."},
         {"name": "live_data", "args": "event_ticker?, type?", "description": "Fetch real-time sports game stats and live event feeds from Kalshi."},
         {"name": "polymarket_meta", "args": "target?, market_id?", "description": "Fetch Polymarket series listings, comments, or sports metadata (target: series|comments|sports)."},
+        {"name": "recent_trades", "args": "platform?, ticker?, limit?", "description": "Fetch recent public executed trades / trade tape for Kalshi or Polymarket."},
+        {"name": "market_leaderboard", "args": "limit?", "description": "Fetch top profitable prediction market trader leaderboard."},
     ]
     if req.benchmark_tools:
         allowed_names = req.benchmark_tool_names
@@ -13562,7 +13584,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                  "batch_quotes": _tool_batch_quotes, "fetch_api": _tool_fetch_api,
                  "exchange_status": _tool_exchange_status, "orderbook": _tool_orderbook,
                  "market_tags": _tool_market_tags, "price_history": _tool_price_history,
-                 "live_data": _tool_live_data, "polymarket_meta": _tool_polymarket_meta}
+                 "live_data": _tool_live_data, "polymarket_meta": _tool_polymarket_meta,
+                 "recent_trades": _tool_recent_trades, "market_leaderboard": _tool_market_leaderboard}
         specs = [
             {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
             {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
@@ -13578,6 +13601,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             {"name": "price_history", "args": "ticker|market, series_ticker?", "description": "Fetch historical prices or OHLC candlesticks for a market."},
             {"name": "live_data", "args": "event_ticker?, type?", "description": "Fetch real-time sports game stats and live event feeds from Kalshi."},
             {"name": "polymarket_meta", "args": "target?, market_id?", "description": "Fetch Polymarket series listings, comments, or sports metadata (target: series|comments|sports)."},
+            {"name": "recent_trades", "args": "platform?, ticker?, limit?", "description": "Fetch recent public executed trades / trade tape for Kalshi or Polymarket."},
+            {"name": "market_leaderboard", "args": "limit?", "description": "Fetch top profitable prediction market trader leaderboard."},
         ]
 
     # Optional: proxy the venues' own MCP tools (orderbook/depth/etc.) when

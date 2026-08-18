@@ -298,6 +298,15 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
         res = await client.apolymarket_meta(target="series")
         self.assertIsInstance(res, list)
 
+    async def test_async_recent_trades_returns_list(self):
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        res = await client.arecent_trades(platform="kalshi", ticker_or_token="KXFED-25JUN-H")
+        self.assertIsInstance(res, list)
+
+    async def test_async_market_leaderboard_returns_list(self):
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        res = await client.amarket_leaderboard(limit=5)
+        self.assertIsInstance(res, list)
 
 if __name__ == "__main__":
     unittest.main()

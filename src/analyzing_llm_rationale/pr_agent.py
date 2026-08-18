@@ -110,6 +110,8 @@ def build_pr_agent_packet(*, audience: str | None = None, canonical: str = "http
                 "foresea_price_history",
                 "foresea_live_data",
                 "foresea_polymarket_meta",
+                "foresea_recent_trades",
+                "foresea_market_leaderboard",
                 "foresea_pr_agent",
             ],
         },

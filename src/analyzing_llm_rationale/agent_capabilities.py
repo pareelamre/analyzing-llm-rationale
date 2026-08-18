@@ -149,6 +149,14 @@ TOOL_ALIASES: Dict[str, str] = {
     "polymarket_comments": "polymarket_meta",
     "sports": "polymarket_meta",
     "polymarket_sports": "polymarket_meta",
+    "trades": "recent_trades",
+    "get_trades": "recent_trades",
+    "trade_history": "recent_trades",
+    "tape": "recent_trades",
+    "prints": "recent_trades",
+    "leaderboard": "market_leaderboard",
+    "top_traders": "market_leaderboard",
+    "trader_rankings": "market_leaderboard",
 }
 
 
