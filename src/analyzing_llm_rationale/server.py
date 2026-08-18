@@ -6763,6 +6763,7 @@ def _store_shared_forecast(req: SharedForecastRequest, request: Request) -> "Sha
             "INSERT INTO shared_forecasts (share_id, user_id, payload_json) VALUES (?, ?, ?)",
             [share_id, payload.get("user_id"), json.dumps(payload, default=str, sort_keys=True)],
         )
+        conn.commit()
     finally:
         conn.close()
     return SharedForecastResponse(share_id=share_id, url=f"{_CANONICAL}/forecast/{share_id}")
@@ -9056,6 +9057,8 @@ async def _validate_live_trade_guardrails(
     if quote_age_seconds > int(policy["max_quote_age_seconds"]):
         raise TradingGuardrailError("stale_quote", "The live market quote became stale before the order could be submitted.")
     current_price = float(quote["outcome_probability"])
+    if current_price <= 0.0:
+        raise TradingGuardrailError("invalid_quote_price", "The live market quote has a non-positive probability and cannot be traded.")
     limit_price = float(normalized.get("price") or 0.0)
     action = str(normalized.get("action") or "buy")
     adverse_move = ((limit_price - current_price) / current_price) if action == "buy" else ((current_price - limit_price) / current_price)
