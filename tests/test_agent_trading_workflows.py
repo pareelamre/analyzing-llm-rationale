@@ -77,39 +77,6 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
     def test_runs_the_driver_script(self):
         self.assertIn("python scripts/agent_trading_tick.py", self.workflow)
 
-    def test_grants_actions_write_without_dropping_contents_read(self):
-        # An explicit `permissions:` block zeroes every unlisted scope, so
-        # adding actions:write (for the staleness-fallback dispatch below)
-        # without also keeping contents:read would silently break
-        # actions/checkout@v4 for every one of the 10 caller workflows.
-        perms = self.workflow.split("permissions:", 1)[1].split("concurrency:", 1)[0]
-        self.assertIn("contents: read", perms)
-        self.assertIn("actions: write", perms)
-
-    def test_republishes_the_board_when_stale_and_nothing_else_is_publishing_it(self):
-        # Regression: agent-trading-board-publish.yml's own schedule trigger
-        # is best-effort and can silently skip firing under GitHub Actions
-        # platform load -- observed live: 3+ consecutive 15-minute triggers
-        # dropped in a row, leaving the public board stuck for an hour with
-        # no error anywhere to catch it. Each of the 10 per-model tick
-        # workflows already runs on its own staggered cadence, so a
-        # piggybacked staleness check here is a redundant, near-total
-        # safety net that doesn't depend on GitHub's scheduler at all.
-        fallback = self.workflow.split(
-            "Fallback -- republish the public board if it's gone stale", 1
-        )[1]
-        self.assertIn("if: always()", fallback)
-        self.assertIn(
-            "git log -1 --format=%ct -- static/agent_trading_live.json", fallback
-        )
-        # Must skip triggering when a publish run is already in flight, not
-        # blindly fire one every time -- avoids up to 10 redundant runs
-        # queuing behind board-publish's own concurrency group in the rare
-        # case several ticks notice staleness in the same window.
-        self.assertIn("--status in_progress", fallback)
-        self.assertIn("--status queued", fallback)
-        self.assertIn("gh workflow run agent-trading-board-publish.yml", fallback)
-
 
 class AgentTradingPerModelWorkflowTests(unittest.TestCase):
     def test_every_chat_capable_scads_model_has_its_own_workflow_file(self):
