@@ -47,10 +47,6 @@ env:
   GCP_PROJECT_ID: brave-drive-471109-d9
   AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
 
-permissions:
-  contents: read
-  actions: write
-
 concurrency:
   group: agent-trading-tick-${{ inputs.model }}
   cancel-in-progress: false
@@ -141,35 +137,3 @@ jobs:
             "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite"
           gcloud storage cp tmp/agent-trading/notes.json \
             "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json"
-
-      - name: Fallback -- republish the public board if it's gone stale
-        # agent-trading-board-publish.yml's own `schedule:` trigger is
-        # best-effort like every GitHub Actions cron and can silently skip
-        # firing under platform load (github.com/orgs/community/discussions/156282)
-        # -- observed live: 3+ consecutive 15-minute triggers dropped in a
-        # row, leaving the public board stuck for an hour with nothing
-        # queued, in progress, or erroring anywhere to alert on. Each of the
-        # 10 per-model tick workflows already runs on its own staggered
-        # ~15-minute cadence, so a cheap staleness check piggybacked here
-        # gives near-total redundancy: GitHub would have to drop the
-        # board-publish trigger AND enough of these 10 simultaneously for
-        # this fallback to also miss it.
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          last_commit=$(git log -1 --format=%ct -- static/agent_trading_live.json)
-          age=$(( $(date +%s) - last_commit ))
-          echo "static/agent_trading_live.json was last published ${age}s ago"
-          if [ "$age" -lt 1200 ]; then
-            echo "Board is fresh enough -- nothing to do."
-            exit 0
-          fi
-          in_progress=$(gh run list --workflow=agent-trading-board-publish.yml --status in_progress --json databaseId -q 'length')
-          queued=$(gh run list --workflow=agent-trading-board-publish.yml --status queued --json databaseId -q 'length')
-          if [ "${in_progress:-0}" -gt 0 ] || [ "${queued:-0}" -gt 0 ]; then
-            echo "A board-publish run is already in flight -- not triggering another."
-            exit 0
-          fi
-          echo "Board is stale (${age}s) and nothing is publishing it -- triggering a republish."
-          gh workflow run agent-trading-board-publish.yml
