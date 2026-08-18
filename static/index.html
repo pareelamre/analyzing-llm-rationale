@@ -2056,8 +2056,7 @@
         document.documentElement.setAttribute('data-boot-view', view);
       } catch (e) {}
     })();
-  </script>
-
+  </script>
   <script type="module" crossorigin src="/static/assets/page-context-DqdA1_Ps.js"></script>
 </head>
 <body>
@@ -2749,7 +2748,7 @@
 <div id="trackOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="trackDialogTitle" aria-hidden="true" tabindex="-1">
   <div class="tr-head">
     <div class="flex items-center gap-2">
-      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
+      <button type="button" class="brand-home" onclick="closeTrackRecord()" aria-label="Close and return">
         <span class="logo-dot"></span>
         <span class="brand text-lg">Foresea</span>
       </button>
@@ -2763,7 +2762,7 @@
 <div id="edgeOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="edgeDialogTitle" aria-hidden="true" tabindex="-1">
   <div class="tr-head">
     <div class="flex items-center gap-2">
-      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
+      <button type="button" class="brand-home" onclick="closeEdgeBoard()" aria-label="Close and return">
         <span class="logo-dot"></span>
         <span class="brand text-lg">Foresea</span>
       </button>
@@ -2777,7 +2776,7 @@
 <div id="watchOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="watchDialogTitle" aria-hidden="true" tabindex="-1">
   <div class="tr-head">
     <div class="flex items-center gap-2">
-      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
+      <button type="button" class="brand-home" onclick="closeWatchlistPage()" aria-label="Close and return">
         <span class="logo-dot"></span>
         <span class="brand text-lg">Foresea</span>
       </button>
@@ -2791,7 +2790,7 @@
 <div id="ledgerOverlay" class="tr-overlay" role="dialog" aria-modal="true" aria-labelledby="ledgerDialogTitle" aria-hidden="true" tabindex="-1">
   <div class="tr-head">
     <div class="flex items-center gap-2">
-      <button type="button" class="brand-home" onclick="showLanding()" aria-label="Go to landing page">
+      <button type="button" class="brand-home" onclick="closePersonalLedger()" aria-label="Close and return">
         <span class="logo-dot"></span>
         <span class="brand text-lg">Foresea</span>
       </button>
@@ -5404,7 +5403,11 @@ async function loadTrackRecord() {
       }, { amount: 0.15 });
     }
   } catch (e) {
-    host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Track record is not available yet.</p></div>';
+    // See the matching comment in loadEdgeBoard()'s catch block -- same
+    // stuck-until-hard-refresh bug, same fix.
+    trackLoaded = false;
+    host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Track record is not available yet. '
+      + '<a href="#" onclick="event.preventDefault(); loadTrackRecord();" style="text-decoration:underline">Retry</a></p></div>';
   }
 }
 let edgeLoaded = false;
@@ -5878,7 +5881,17 @@ async function loadEdgeBoard() {
         { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
     }
   } catch (e) {
-    host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Edge board is not available yet.</p></div>';
+    // Regression: edgeLoaded was set true unconditionally before this fetch
+    // even started and never reset on failure, so a single transient error
+    // (cold start, network blip) permanently stuck the whole edge board on
+    // this message for the rest of the page session -- neither closing and
+    // reopening the dialog nor switching tabs retried it, only a hard page
+    // refresh (which resets edgeLoaded back to false) recovered. Resetting
+    // it here lets the next open retry, and the inline link retries in place
+    // without requiring any navigation at all.
+    edgeLoaded = false;
+    host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Edge board is not available yet. '
+      + '<a href="#" onclick="event.preventDefault(); loadEdgeBoard();" style="text-decoration:underline">Retry</a></p></div>';
   }
 }
 
@@ -6145,7 +6158,8 @@ function renderAgentTradingBoard(d) {
   const banner = `<p class="tr-method" style="margin-top:0">SCADS-hosted models given real tool-use trading agency — each decides for itself whether and how much to trade, with genuine cash/position accounting and risk guards, unlike the fixed Kelly-sizing ledgers on the MTM tab.${updatedStr}</p>
     <p class="text-sm" style="margin:0 0 16px;padding:8px 12px;border-radius:8px;background:#fef3c7;color:#92400e;font-weight:600">Shadow / paper trading only — no real money is ever at risk.</p>`;
   if (d && d.error) {
-    host.innerHTML = `${banner}<p class="text-sm text-gray-500">${escHtml(d.error)}</p>`;
+    host.innerHTML = `${banner}<p class="text-sm text-gray-500">${escHtml(d.error)} `
+      + `<a href="#" onclick="event.preventDefault(); loadAgentTradingSection();" style="text-decoration:underline">Retry</a></p>`;
     return;
   }
   const leaderboard = d.leaderboard || [];
