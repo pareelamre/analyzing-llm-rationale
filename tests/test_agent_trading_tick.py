@@ -303,12 +303,12 @@ class ModelBackstopCharsTests(unittest.TestCase):
         # could overestimate real capacity.
         for model in ("llama-3.3-70b-instruct", "scads-alias-reasoning", "scads-alias-code", "scads-alias-ha"):
             with self.subTest(model=model):
-                self.assertEqual(agent_trading_tick._model_backstop_chars(model), int(32000 * 4 * 0.5))
+                self.assertEqual(agent_trading_tick._model_backstop_chars(model), int(128000 * 4 * 0.5))
 
     def test_falls_back_for_an_unrecognized_model_name(self):
         # Must never raise -- an unknown model (e.g. a typo'd env var) still
         # needs a usable backstop, not a crash before the cycle even starts.
-        self.assertEqual(agent_trading_tick._model_backstop_chars("not-a-real-model"), int(32000 * 4 * 0.5))
+        self.assertEqual(agent_trading_tick._model_backstop_chars("not-a-real-model"), int(128000 * 4 * 0.5))
 
 
 class BuildQuestionTests(unittest.TestCase):
@@ -359,7 +359,7 @@ class BuildQuestionTests(unittest.TestCase):
         # somewhere -- verify the overflow is handled by dropping whole
         # trailing lines (leaving every surviving candidate fully readable),
         # never by slicing raw characters mid-line.
-        new = [_quote(f"KX{i}", question=f"Candidate market number {i} with a fairly long question text") for i in range(800)]
+        new = [_quote(f"KX{i}", question=f"Candidate market number {i} with a fairly long question text") for i in range(1500)]
         candidates = agent_trading_tick._build_candidates_block([], new)
         question = agent_trading_tick._build_question("PORTFOLIO", candidates)
         self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
@@ -380,7 +380,7 @@ class BuildQuestionTests(unittest.TestCase):
         # error (observed live for 4 of 10 models on 2026-08-18).
         huge_portfolio = (
             "=== Your portfolio ===\n"
-            + "\n".join(f"  - KXTEST{i} yes: 10.0 contracts, avg entry 0.42" for i in range(3000))
+            + "\n".join(f"  - KXTEST{i} yes: 10.0 contracts, avg entry 0.42" for i in range(6000))
             + "\nYour own reasoning from the previous cycle: " + ("z" * 2000)
         )
         question = agent_trading_tick._build_question(huge_portfolio, "")
@@ -392,8 +392,8 @@ class BuildQuestionTests(unittest.TestCase):
         # (no newlines) too large to keep even one of, so both blocks trim
         # away to nothing and the final hard clamp on the portfolio text
         # itself must still guarantee the limit is never exceeded.
-        huge_portfolio = "y" * 60000
-        huge_candidates = "x" * 60000
+        huge_portfolio = "y" * 150000
+        huge_candidates = "x" * 150000
         question = agent_trading_tick._build_question(huge_portfolio, huge_candidates)
         self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
         self.assertIn(agent_trading_tick._TRADING_INSTRUCTION, question)

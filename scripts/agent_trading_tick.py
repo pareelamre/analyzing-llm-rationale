@@ -78,8 +78,11 @@ def _model_backstop_chars(model: str) -> int:
     (queried 2026-08-18) only publishes context length for one of the ten
     agent-trading models (glm-5.2-fp8, 524288 tokens) -- everything else,
     including all three scads-alias-* models, returns nothing, so those
-    fall back to a conservative shared default rather than a guessed
-    per-model figure that could be wrong in the unsafe direction.
+    fall back to a conservative shared default (128K tokens -- safe across
+    the other hosted models here: Llama 3.3, Qwen3-Coder, Kimi-K3,
+    GPT-OSS-120B, Gemma-4, MiniMax-M3 all support at least that much)
+    rather than a guessed per-model figure that could be wrong in the
+    unsafe direction.
 
     Reserves half the window for everything else in the real prompt this
     field doesn't account for -- system prompt, the ~17 tool specs, and the
@@ -89,7 +92,7 @@ def _model_backstop_chars(model: str) -> int:
     safe direction, since it can only make this backstop tighter, never
     looser than the model can actually handle).
     """
-    default_context_window_tokens = 32000
+    default_context_window_tokens = 128000
     chars_per_token = 4
     reserved_fraction = 0.5
     try:
