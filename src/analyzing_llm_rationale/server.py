@@ -2620,6 +2620,67 @@ async def shared_forecast_page(share_id: str, request: Request) -> Response:
     )
 
 
+@app.get("/widget.js", include_in_schema=False)
+async def widget_js() -> Response:
+    """Serve Foresea embeddable drop-in widget javascript with global CORS."""
+    widget_file = _STATIC_DIR / "widget.js"
+    if widget_file.exists():
+        content = widget_file.read_text(encoding="utf-8")
+    else:
+        content = "// Foresea Widget"
+    return Response(
+        content,
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
+
+
+@app.get("/embed/forecast/{share_id}", include_in_schema=False)
+async def embed_forecast(share_id: str) -> Response:
+    """Serve lightweight iframe-friendly embed page for a shared forecast."""
+    if not re.fullmatch(r"[A-Za-z0-9]{6,32}", share_id):
+        raise HTTPException(status_code=404, detail="Forecast not found.")
+    payload = await asyncio.get_running_loop().run_in_executor(None, _read_shared_forecast, share_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Forecast not found.")
+    q = html.escape(str(payload.get("question") or "Foresea Forecast"))
+    prob = payload.get("probability")
+    p_val = float(prob) if isinstance(prob, (int, float)) else 0.5
+    ans = str(payload.get("predicted_answer") or ("YES" if p_val >= 0.5 else "NO")).upper()
+    pct = round(p_val * 100)
+    doc = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {{ margin: 0; padding: 12px; background: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #e2e8f0; }}
+    .card {{ background: #121824; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 14px 16px; box-sizing: border-box; }}
+    .header {{ display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; color: #00d2ff; text-transform: uppercase; margin-bottom: 8px; }}
+    .q {{ font-size: 14px; font-weight: 600; line-height: 1.3; margin-bottom: 12px; color: #fff; }}
+    .bar-bg {{ height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }}
+    .bar-fill {{ height: 100%; width: {pct}%; background: linear-gradient(90deg, #00d2ff, #00f5a0); border-radius: 4px; }}
+    .bar-labels {{ display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-bottom: 4px; }}
+    .footer {{ margin-top: 10px; font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between; }}
+    .footer a {{ color: inherit; text-decoration: none; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header"><span>🌊 Foresea Calibrated AI</span></div>
+    <div class="q">{q}</div>
+    <div class="bar-labels"><span>Probability: {pct}%</span><span style="color: {'#00f5a0' if pct >= 50 else '#ff5577'}">{ans}</span></div>
+    <div class="bar-bg"><div class="bar-fill"></div></div>
+    <div class="footer"><span>Transparent Track Record</span><a href="{_CANONICAL}/forecast/{share_id}" target="_blank">View Thesis →</a></div>
+  </div>
+</body>
+</html>"""
+    return Response(doc, media_type="text/html", headers={"Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*"})
+
+
 # ── AI-agent / crawler discoverability ────────────────────────────────────────
 
 
