@@ -59,14 +59,17 @@ MIN_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MIN_CLOSE_DAYS", "1"))
 MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "30"))
 AGENT_ANALYZE_RETRIES = max(1, int(os.environ.get("AGENT_TRADING_RETRIES", "2")))
 AGENT_ANALYZE_RETRY_BACKOFF_S = float(os.environ.get("AGENT_TRADING_RETRY_BACKOFF_S", "10"))
-# AgentAnalyzeRequest.question has a hard 2000-char server-side limit; a
-# single verbose thesis echoed back verbatim can exceed that on its own
-# (observed live: 2334 chars), so it's excerpted, not replayed in full.
-MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS_CHARS", "500")))
-# Same hard 2000-char limit -- kept below it with margin, since the candidate
-# block also scales with how many tickers an agent currently holds (each now
-# carries an extra resolution-window date pair) and isn't otherwise bounded.
-MAX_QUESTION_CHARS = 1900
+# AgentAnalyzeRequest.question has a generous but still-bounded server-side
+# limit (raised from a tight 2000 chars -- see server.py -- after that limit
+# was found silently destroying almost an entire candidates block, including
+# every Polymarket candidate, down to a mid-word fragment any time an agent
+# held a position: candidates_offered were routinely never actually visible
+# to the model, even though _discover_candidates was correctly surfacing
+# them. A single verbose thesis echoed back verbatim is still excerpted, not
+# replayed in full, so one runaway cycle can't eat the whole budget on its
+# own -- but with real headroom now, not the old razor's-edge margin.
+MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS_CHARS", "2000")))
+MAX_QUESTION_CHARS = 19000
 # trading.py's FORESEA_MAX_ORDER_NOTIONAL is a flat-dollar cap shared by every
 # order path (human BYO trading included), so it can't be changed here without
 # affecting those too. Instead this driver overrides it per-cycle, scoped to
@@ -296,24 +299,19 @@ async def _call_agent_analyze(question: str):
 
 
 _TRADING_INSTRUCTION = (
-    "Decide what, if anything, to do this cycle. You may place_trade on any "
-    "ticker listed above -- each is tagged [kalshi] or [polymarket]; pass "
-    "that same platform to place_trade (buying the opposite side of a held "
-    "position closes it), use web_search for research, and manage_notes to record "
-    "anything worth remembering next cycle. Price every order off the live "
-    "yes/no bid/ask shown above for that ticker -- both sides are the real "
-    "current market, not an estimate. Never guess a price, and never reuse "
-    "the price you entered a position at when pricing the opposite side to "
-    "close it: yes and no move independently and are not the same number. "
-    "If you spot a real mispricing against your own view, that is exactly "
-    "when to trade it. Before betting on news you find, check that the "
-    "event's date actually falls within THIS market's resolution window "
-    "(shown above for each ticker) -- many Kalshi tickers are one of "
-    "several in a recurring dated series (e.g. one ending '-26APR' and "
-    "another '-26MAY22-26SEP' for the same underlying question), so real "
-    "evidence of something that already happened before this window opened "
-    "does not resolve this specific contract. If you don't want to act, "
-    "just explain why in your final answer."
+    "Decide what, if anything, to do this cycle. place_trade on any ticker "
+    "above using its [kalshi]/[polymarket] tag as the platform arg (buying "
+    "the opposite side of a held position closes it); use web_search for "
+    "research and manage_notes for anything worth remembering next cycle. "
+    "Price orders off the live yes/no bid/ask shown above -- not an "
+    "estimate. Never guess a price or reuse your entry price for the "
+    "opposite side when closing: yes and no move independently. A real "
+    "mispricing against your own view is exactly when to trade it. Before "
+    "trading on news, confirm the event date falls within THIS ticker's "
+    "resolution window (shown above) -- Kalshi often has several tickers "
+    "for the same question on different date ranges (e.g. '-26APR' vs "
+    "'-26MAY22-26SEP'), so evidence from before this window opened doesn't "
+    "resolve this contract. If you don't want to act, just say why."
 )
 
 
@@ -321,34 +319,74 @@ def _assemble_question(portfolio_block: str, candidates_block: str) -> str:
     return "\n\n".join(filter(None, [portfolio_block, candidates_block, _TRADING_INSTRUCTION]))
 
 
+def _trim_block_to_lines(block: str, budget: int) -> str:
+    """Drop whole trailing lines from `block` until it fits `budget` chars.
+
+    Never cuts a line mid-way. A garbled, half-visible candidate or position
+    line is worse than one omitted cleanly -- and cutting mid-line is exactly
+    what silently destroyed almost an entire candidates block (every
+    Polymarket candidate included) down to a mid-word fragment of the first
+    held position, any time a portfolio had held positions and the combined
+    text ran over budget (observed live, 2026-08-18: agents effectively
+    never saw the new candidates they were supposedly being offered).
+    """
+    if budget <= 0:
+        return ""
+    if len(block) <= budget:
+        return block
+    lines = block.split("\n")
+    kept: List[str] = []
+    used = 0
+    for line in lines:
+        add = len(line) + (1 if kept else 0)
+        if used + add > budget:
+            break
+        kept.append(line)
+        used += add
+    if len(kept) < len(lines) and kept:
+        kept.append("  … (more omitted for space)")
+    return "\n".join(kept)
+
+
 def _build_question(portfolio_block: str, candidates_block: str) -> str:
     question = _assemble_question(portfolio_block, candidates_block)
     if len(question) <= MAX_QUESTION_CHARS:
         return question
-    # Over the server's hard 2000-char limit. Trim in priority order, keeping
-    # the instruction (which the model needs every cycle) intact until the
-    # very end:
-    # 1) the candidates block first -- it scales with how many tickers exist
-    #    and the model can still act on held positions alone this cycle.
-    overage = len(question) - MAX_QUESTION_CHARS
-    keep = max(0, len(candidates_block) - overage - 1)
-    trimmed_candidates = candidates_block[:keep].rstrip() + "…" if keep else ""
-    question = _assemble_question(portfolio_block, trimmed_candidates)
+    # Over the server's hard limit (MAX_QUESTION_CHARS, well below it with
+    # margin -- see server.py's AgentAnalyzeRequest.question). This should be
+    # rare now that both are generous; when it does happen, trim in priority
+    # order, cheapest / least decision-relevant content first, and whenever a
+    # block of markets has to shrink, drop whole lines (see
+    # _trim_block_to_lines) rather than cutting mid-line.
+    # 1) Drop the optional previous-cycle reasoning excerpt first -- the
+    # model doesn't strictly need to see its own past reasoning, and the
+    # portfolio state already reflects whatever it decided from it. This is
+    # tried BEFORE touching candidates_block, since the candidates being
+    # visible at all is the entire point of offering them.
+    trimmed_portfolio = portfolio_block.split("\nYour own reasoning from the previous cycle:")[0]
+    question = _assemble_question(trimmed_portfolio, candidates_block)
     if len(question) <= MAX_QUESTION_CHARS:
         return question
-    # 2) Candidates already emptied and it's still too long -- portfolio_block
-    # itself (open positions + the previous-cycle reasoning excerpt) is the
-    # overage. Drop that excerpt; the cash/position summary above it is what
-    # the model actually needs every cycle.
-    trimmed_portfolio = portfolio_block.split("\nYour own reasoning from the previous cycle:")[0]
+    # 2) Still too long -- trim the candidates block by whole lines. Held
+    # positions are listed before new candidates in candidates_block, so
+    # trimming from the end drops new candidates first (an agent can still
+    # act on what it already holds without seeing anything new this cycle).
+    overage = len(question) - MAX_QUESTION_CHARS
+    trimmed_candidates = _trim_block_to_lines(candidates_block, len(candidates_block) - overage)
+    question = _assemble_question(trimmed_portfolio, trimmed_candidates)
+    if len(question) <= MAX_QUESTION_CHARS:
+        return question
+    # 3) Candidates already emptied and it's still too long -- the
+    # portfolio's own position list (unbounded -- an agent can hold any
+    # number of tickers) is the overage. Trim it the same whole-line way.
+    overage = len(question) - MAX_QUESTION_CHARS
+    trimmed_portfolio = _trim_block_to_lines(trimmed_portfolio, len(trimmed_portfolio) - overage)
     question = _assemble_question(trimmed_portfolio, "")
     if len(question) <= MAX_QUESTION_CHARS:
         return question
-    # 3) Absolute last resort -- an open-position list has no upper bound on
-    # how many tickers it can list, so it can still overflow on its own.
-    # Keep the instruction intact and truncate the position list to whatever
-    # budget remains, rather than blindly right-truncating the whole string
-    # and risking cutting into the instruction itself.
+    # 4) Absolute last resort -- guarantee the limit is never exceeded no
+    # matter how large a single remaining line is. Keep the instruction
+    # intact (the model needs it every cycle) and hard-clamp the rest.
     budget = max(0, MAX_QUESTION_CHARS - len(_TRADING_INSTRUCTION) - 2)
     if len(trimmed_portfolio) > budget:
         trimmed_portfolio = trimmed_portfolio[: max(0, budget - 1)].rstrip() + "…"

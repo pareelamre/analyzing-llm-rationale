@@ -288,50 +288,84 @@ class BuildQuestionTests(unittest.TestCase):
     def test_instructs_checking_the_resolution_window_before_trading_on_news(self):
         question = agent_trading_tick._build_question("PORTFOLIO", "CANDIDATES")
         self.assertIn("resolution window", question)
-        self.assertIn("recurring dated series", question)
+        self.assertIn("different date ranges", question)
 
     def test_fits_under_the_hard_server_limit_in_the_normal_case(self):
         candidates = agent_trading_tick._build_candidates_block(
             [], [_quote(f"KX{i}") for i in range(3)],
         )
         question = agent_trading_tick._build_question("PORTFOLIO", candidates)
-        self.assertLessEqual(len(question), 2000)
+        # Mirrors AgentAnalyzeRequest.question's max_length in server.py.
+        self.assertLessEqual(len(question), 20000)
 
-    def test_trims_the_candidates_block_not_the_instruction_when_over_budget(self):
-        # Regression: AgentAnalyzeRequest.question has a hard 2000-char
-        # server-side limit. A verbose candidates block (many held tickers,
-        # each now carrying an extra resolution-window date pair) must not
-        # be allowed to silently break every subsequent cycle the way an
-        # overlong thesis once did -- trim the variable-length part instead.
-        huge_candidates = "x" * 3000
-        question = agent_trading_tick._build_question("PORTFOLIO", huge_candidates)
+    def test_does_not_trim_a_realistic_candidates_block_at_all(self):
+        # Regression: the old 1900-char budget (server-side hard limit was
+        # 2000) was so tight relative to the fixed instruction text that a
+        # single held position plus a handful of offered candidates
+        # routinely triggered trimming -- and since trimming cut raw
+        # characters rather than whole lines, it silently destroyed almost
+        # the entire candidates block, including every Polymarket candidate,
+        # down to a mid-word fragment of the first held position. Agents
+        # were never actually shown the candidates they were supposedly
+        # being offered. Confirmed live 2026-08-18. With real headroom, a
+        # normal cycle (1 held position, 3 new candidates) must survive
+        # completely intact.
+        held = [_quote("KXHELD", question="An existing held position")]
+        new = [_quote(f"KX{i}", question=f"A brand new candidate market number {i}") for i in range(3)]
+        candidates = agent_trading_tick._build_candidates_block(held, new)
+        portfolio = (
+            "=== Your portfolio (shadow account -- paper trading, no real money) ===\n"
+            "Cash: $9500.00 | Starting cash: $10000.00\n"
+            "Realized P&L: $0.00 | Fees paid so far: $2.00\n"
+            "Open positions:\n"
+            "  - KXHELD yes: 10.0 contracts, avg entry 0.42, cost basis $4.20\n"
+            "Your own reasoning from the previous cycle: No compelling edge, holding steady."
+        )
+        question = agent_trading_tick._build_question(portfolio, candidates)
+        for q in held + new:
+            self.assertIn(q["ident"], question)
+        self.assertNotIn("more omitted for space", question)
+
+    def test_trims_the_candidates_block_by_whole_lines_not_mid_line(self):
+        # A genuinely pathological number of candidates still has to fit
+        # somewhere -- verify the overflow is handled by dropping whole
+        # trailing lines (leaving every surviving candidate fully readable),
+        # never by slicing raw characters mid-line.
+        new = [_quote(f"KX{i}", question=f"Candidate market number {i} with a fairly long question text") for i in range(200)]
+        candidates = agent_trading_tick._build_candidates_block([], new)
+        question = agent_trading_tick._build_question("PORTFOLIO", candidates)
         self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
         self.assertIn(agent_trading_tick._TRADING_INSTRUCTION, question)
-        self.assertIn("…", question)
+        self.assertIn("(more omitted for space)", question)
+        # Every candidate line that DID survive must be a complete, intact
+        # line, not a fragment cut off mid-word.
+        for line in question.splitlines():
+            if line.strip().startswith("- [kalshi] KX"):
+                self.assertIn("resolution window", line, f"truncated mid-line: {line!r}")
 
     def test_never_exceeds_the_limit_when_portfolio_block_alone_is_huge(self):
         # Regression: a real portfolio_block (many open positions + a
         # near-max-length previous-cycle reasoning excerpt) can exceed the
-        # budget on its own, even with an empty candidates block -- the old
-        # code only ever trimmed candidates_block and returned an overlong
-        # question anyway, breaking every subsequent cycle for that agent
-        # with AgentAnalyzeRequest's hard 2000-char server-side validation
+        # budget on its own, even with an empty candidates block -- must not
+        # be allowed to silently return an overlong question, breaking every
+        # subsequent cycle with AgentAnalyzeRequest's server-side validation
         # error (observed live for 4 of 10 models on 2026-08-18).
         huge_portfolio = (
             "=== Your portfolio ===\n"
-            + "\n".join(f"  - KXTEST{i} yes: 10.0 contracts, avg entry 0.42" for i in range(30))
-            + "\nYour own reasoning from the previous cycle: " + ("z" * 600)
+            + "\n".join(f"  - KXTEST{i} yes: 10.0 contracts, avg entry 0.42" for i in range(400))
+            + "\nYour own reasoning from the previous cycle: " + ("z" * 2000)
         )
         question = agent_trading_tick._build_question(huge_portfolio, "")
         self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
         self.assertIn(agent_trading_tick._TRADING_INSTRUCTION, question)
 
     def test_never_exceeds_the_limit_with_huge_portfolio_and_huge_candidates(self):
-        # Forces the absolute-last-resort clamp: no "previous cycle" marker
-        # to strip, so the position list itself must be truncated without
-        # cutting into the trading instruction.
-        huge_portfolio = "y" * 2500
-        huge_candidates = "x" * 2500
+        # Forces the absolute-last-resort clamp: single unsplittable "lines"
+        # (no newlines) too large to keep even one of, so both blocks trim
+        # away to nothing and the final hard clamp on the portfolio text
+        # itself must still guarantee the limit is never exceeded.
+        huge_portfolio = "y" * 25000
+        huge_candidates = "x" * 25000
         question = agent_trading_tick._build_question(huge_portfolio, huge_candidates)
         self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
         self.assertIn(agent_trading_tick._TRADING_INSTRUCTION, question)
