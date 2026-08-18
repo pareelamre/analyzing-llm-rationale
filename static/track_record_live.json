@@ -1865,49 +1865,53 @@
     "raw_ece": 0.051,
     "raw_skill_vs_market": -0.0174
   },
-  "generated_at": "2026-08-18T17:38:50.960958+00:00",
+  "generated_at": "2026-08-18T18:54:10.495862+00:00",
   "knowledge_graph": {
     "domain_distribution": {
-      "crypto": 13,
+      "crypto": 15,
       "economics": 58,
-      "geopolitics": 149,
-      "other": 108,
-      "sports": 119,
+      "geopolitics": 157,
+      "other": 114,
+      "sports": 121,
       "technology": 22
     },
-    "n_tagged": 469,
+    "n_tagged": 487,
     "top_entities": [
       {
-        "count": 110,
+        "count": 112,
         "entity": "NFL"
       },
       {
-        "count": 72,
+        "count": 74,
         "entity": "Iran"
       },
       {
-        "count": 59,
+        "count": 61,
         "entity": "US"
+      },
+      {
+        "count": 58,
+        "entity": "Iranian"
       },
       {
         "count": 58,
         "entity": "Fed"
       },
       {
-        "count": 56,
-        "entity": "Iranian"
-      },
-      {
-        "count": 40,
+        "count": 42,
         "entity": "Hormuz"
       },
       {
-        "count": 39,
+        "count": 41,
         "entity": "Strait"
       },
       {
         "count": 25,
         "entity": "Matthew Stafford"
+      },
+      {
+        "count": 22,
+        "entity": "Mike Evans"
       },
       {
         "count": 22,
@@ -1918,19 +1922,15 @@
         "entity": "Davante Adams"
       },
       {
-        "count": 20,
-        "entity": "Mike Evans"
-      },
-      {
-        "count": 17,
+        "count": 19,
         "entity": "Clarity Act"
       },
       {
-        "count": 17,
+        "count": 19,
         "entity": "China"
       },
       {
-        "count": 17,
+        "count": 19,
         "entity": "Taiwan"
       },
       {
@@ -1954,6 +1954,10 @@
         "entity": "Mojtaba Khamenei"
       },
       {
+        "count": 15,
+        "entity": "Bitcoin"
+      },
+      {
         "count": 14,
         "entity": "Joe Flacco"
       },
@@ -1966,12 +1970,24 @@
         "entity": "Derrick Henry"
       },
       {
-        "count": 13,
-        "entity": "Bitcoin"
-      },
-      {
         "count": 7,
         "entity": "MLB"
+      },
+      {
+        "count": 6,
+        "entity": "President"
+      },
+      {
+        "count": 6,
+        "entity": "Putin"
+      },
+      {
+        "count": 6,
+        "entity": "Russia"
+      },
+      {
+        "count": 5,
+        "entity": "Oman Hormuz Agreement"
       },
       {
         "count": 5,
@@ -1979,23 +1995,7 @@
       },
       {
         "count": 4,
-        "entity": "President"
-      },
-      {
-        "count": 4,
-        "entity": "Putin"
-      },
-      {
-        "count": 4,
-        "entity": "Russia"
-      },
-      {
-        "count": 4,
         "entity": "UN"
-      },
-      {
-        "count": 3,
-        "entity": "Oman Hormuz Agreement"
       }
     ]
   },
@@ -2027,19 +2027,19 @@
         {
           "accuracy": 1.0,
           "horizon": "<1d",
-          "market_brier": 0.085,
-          "model_brier": 0.0769,
-          "n": 4,
-          "skill_ci_high": 0.0443,
-          "skill_ci_low": -0.0281,
+          "market_brier": 0.1113,
+          "model_brier": 0.1038,
+          "n": 5,
+          "skill_ci_high": 0.0355,
+          "skill_ci_low": -0.0206,
           "skill_significant": false,
-          "skill_vs_market": 0.0081
+          "skill_vs_market": 0.0074
         }
       ],
       "model": "gemma-4-26b-a4b-it",
-      "model_brier": 0.0594,
-      "n_markets_resolved": 2,
-      "n_snapshots_resolved": 8,
+      "model_brier": 0.0763,
+      "n_markets_resolved": 3,
+      "n_snapshots_resolved": 9,
       "paper_pnl": {
         "bets": [
           {
@@ -2083,125 +2083,207 @@
             "profit_edge": 0.012,
             "profit_flat": 0.4815,
             "question": "Will Elon Musk post 140-159 tweets from August 11 to August 18, 2026?",
-            "resolved_ts": "2026-08-18T17:38:37.884231+00:00",
+            "resolved_ts": "2026-08-18T18:53:54.291862+00:00",
             "side": "NO",
             "snapshot_ts": "2026-08-18T02:02:19.748521+00:00",
             "stake_edge": 0.025,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.54,
+            "domain": "other",
+            "edge": 0.005,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "elon-musk-of-tweets-august-11-august-18-160-179",
+            "in_validated": false,
+            "market_probability": 0.535,
+            "market_url": "https://polymarket.com/market/elon-musk-of-tweets-august-11-august-18-160-179",
+            "model": "gemma-4-26b-a4b-it",
+            "model_probability": 0.54,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0043,
+            "profit_flat": 0.8692,
+            "question": "Will Elon Musk post 160-179 tweets from August 11 to August 18, 2026?",
+            "resolved_ts": "2026-08-18T18:53:54.466926+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-08-18T09:29:27.482369+00:00",
+            "stake_edge": 0.005,
             "stake_flat": 1.0,
             "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
         "flat": {
-          "compound_bankroll": 14106.51097,
-          "compound_return": 0.4107,
+          "compound_bankroll": 16333.541312,
+          "compound_return": 0.6334,
           "equity_curve": [
             0.2739,
-            0.7554
+            0.7554,
+            1.6245
           ],
           "equity_curve_ts": [
             "2026-08-18T14:48:14.560487+00:00",
-            "2026-08-18T17:38:37.884231+00:00"
+            "2026-08-18T18:53:54.291862+00:00",
+            "2026-08-18T18:53:54.466926+00:00"
           ],
           "fees": 0.0,
           "growth_curve": [
-            11369.426752,
-            14106.51097
+            10912.951168,
+            12664.412466,
+            16333.541312
           ],
           "growth_curve_ts": [
             "2026-08-18T14:48:14.560487+00:00",
-            "2026-08-18T17:38:37.884231+00:00"
+            "2026-08-18T18:53:54.291862+00:00",
+            "2026-08-18T18:53:54.466926+00:00"
           ],
-          "n_bets": 2,
-          "pnl": 0.7554,
-          "roi": 0.3777,
-          "total_staked": 2.0,
+          "n_bets": 3,
+          "pnl": 1.6245,
+          "roi": 0.5415,
+          "total_staked": 3.0,
           "win_rate": 1.0
         },
         "growth_1pct": {
-          "compound_bankroll": 10075.668554,
-          "compound_return": 0.0076,
+          "compound_bankroll": 10163.242122,
+          "compound_return": 0.0163,
           "equity_curve": [
             27.3885,
-            75.6686
+            75.6686,
+            163.2421
           ],
           "equity_curve_ts": [
             "2026-08-18T14:48:14.560487+00:00",
-            "2026-08-18T17:38:37.884231+00:00"
+            "2026-08-18T18:53:54.291862+00:00",
+            "2026-08-18T18:53:54.466926+00:00"
           ],
           "fees": 0.0,
           "growth_curve": [
             10027.388535,
-            10075.668554
+            10075.668554,
+            10163.242122
           ],
           "growth_curve_ts": [
             "2026-08-18T14:48:14.560487+00:00",
-            "2026-08-18T17:38:37.884231+00:00"
+            "2026-08-18T18:53:54.291862+00:00",
+            "2026-08-18T18:53:54.466926+00:00"
           ],
-          "n_bets": 2,
-          "pnl": 75.6686,
-          "roi": 0.3778,
-          "total_staked": 200.2739,
+          "n_bets": 3,
+          "pnl": 163.2421,
+          "roi": 0.5423,
+          "total_staked": 301.0306,
           "win_rate": 1.0
         },
         "growth_2pct": {
-          "compound_bankroll": 10151.600849,
-          "compound_return": 0.0152,
+          "compound_bankroll": 10328.067929,
+          "compound_return": 0.0328,
           "equity_curve": [
             54.7771,
-            151.6008
+            151.6008,
+            328.0679
           ],
           "equity_curve_ts": [
             "2026-08-18T14:48:14.560487+00:00",
-            "2026-08-18T17:38:37.884231+00:00"
+            "2026-08-18T18:53:54.291862+00:00",
+            "2026-08-18T18:53:54.466926+00:00"
           ],
           "fees": 0.0,
           "growth_curve": [
             10054.77707,
-            10151.600849
+            10151.600849,
+            10328.067929
           ],
           "growth_curve_ts": [
             "2026-08-18T14:48:14.560487+00:00",
-            "2026-08-18T17:38:37.884231+00:00"
+            "2026-08-18T18:53:54.291862+00:00",
+            "2026-08-18T18:53:54.466926+00:00"
           ],
-          "n_bets": 2,
-          "pnl": 151.6008,
-          "roi": 0.378,
-          "total_staked": 401.0955,
+          "n_bets": 3,
+          "pnl": 328.0679,
+          "roi": 0.543,
+          "total_staked": 604.1276,
           "win_rate": 1.0
         },
-        "half_kelly": null,
+        "half_kelly": {
+          "compound_bankroll": 18691.588785,
+          "compound_return": 0.8692,
+          "equity_curve": [
+            46.729
+          ],
+          "equity_curve_ts": [
+            "2026-08-18T18:53:54.466926+00:00"
+          ],
+          "fees": 0.0,
+          "growth_curve": [
+            18691.588785
+          ],
+          "growth_curve_ts": [
+            "2026-08-18T18:53:54.466926+00:00"
+          ],
+          "n_bets": 1,
+          "pnl": 46.729,
+          "roi": 0.8692,
+          "total_staked": 53.7634,
+          "win_rate": 1.0
+        },
         "min_edge": 0.0,
-        "quarter_kelly": null,
+        "quarter_kelly": {
+          "compound_bankroll": 10011.682243,
+          "compound_return": 0.0012,
+          "equity_curve": [
+            11.6822
+          ],
+          "equity_curve_ts": [
+            "2026-08-18T18:53:54.466926+00:00"
+          ],
+          "fees": 0.0,
+          "growth_curve": [
+            10011.682243
+          ],
+          "growth_curve_ts": [
+            "2026-08-18T18:53:54.466926+00:00"
+          ],
+          "n_bets": 1,
+          "pnl": 11.6822,
+          "roi": 0.8692,
+          "total_staked": 13.4409,
+          "win_rate": 1.0
+        },
         "smart": {
-          "compound_bankroll": 10075.668554,
-          "compound_return": 0.0076,
+          "compound_bankroll": 10163.242122,
+          "compound_return": 0.0163,
           "equity_curve": [
             27.3885,
-            75.6686
+            75.6686,
+            163.2421
           ],
           "equity_curve_ts": [
             "2026-08-18T14:48:14.560487+00:00",
-            "2026-08-18T17:38:37.884231+00:00"
+            "2026-08-18T18:53:54.291862+00:00",
+            "2026-08-18T18:53:54.466926+00:00"
           ],
           "fees": 0.0,
           "growth_curve": [
             10027.388535,
-            10075.668554
+            10075.668554,
+            10163.242122
           ],
           "growth_curve_ts": [
             "2026-08-18T14:48:14.560487+00:00",
-            "2026-08-18T17:38:37.884231+00:00"
+            "2026-08-18T18:53:54.291862+00:00",
+            "2026-08-18T18:53:54.466926+00:00"
           ],
-          "n_bets": 2,
-          "pnl": 75.6686,
-          "roi": 0.3778,
-          "total_staked": 200.2739,
+          "n_bets": 3,
+          "pnl": 163.2421,
+          "roi": 0.5423,
+          "total_staked": 301.0306,
           "win_rate": 1.0
         }
       },
-      "paper_roi": 0.3777,
-      "paper_roi_smart": 0.3778,
+      "paper_roi": 0.5415,
+      "paper_roi_smart": 0.5423,
       "skill_vs_market": 0.0043
     },
     {
@@ -2221,19 +2303,19 @@
         {
           "accuracy": 1.0,
           "horizon": "<1d",
-          "market_brier": 0.1584,
-          "model_brier": 0.1635,
-          "n": 3,
-          "skill_ci_high": -0.003,
-          "skill_ci_low": -0.0071,
+          "market_brier": 0.1661,
+          "model_brier": 0.171,
+          "n": 4,
+          "skill_ci_high": -0.0034,
+          "skill_ci_low": -0.0064,
           "skill_significant": false,
-          "skill_vs_market": -0.005
+          "skill_vs_market": -0.0049
         }
       ],
       "model": "kimi-k3",
-      "model_brier": 0.137,
-      "n_markets_resolved": 2,
-      "n_snapshots_resolved": 4,
+      "model_brier": 0.1483,
+      "n_markets_resolved": 3,
+      "n_snapshots_resolved": 5,
       "paper_pnl": {
         "bets": [
           {
@@ -2277,126 +2359,166 @@
             "profit_edge": 0.0025,
             "profit_flat": 0.4588,
             "question": "Will Elon Musk post 140-159 tweets from August 11 to August 18, 2026?",
-            "resolved_ts": "2026-08-18T17:38:37.944303+00:00",
+            "resolved_ts": "2026-08-18T18:53:54.364353+00:00",
             "side": "NO",
             "snapshot_ts": "2026-08-18T05:05:55.017664+00:00",
             "stake_edge": 0.0055,
+            "stake_flat": 1.0,
+            "win": true
+          },
+          {
+            "calibrated_model_probability": 0.56,
+            "domain": "other",
+            "edge": 0.005,
+            "fee_edge": 0.0,
+            "fee_flat": 0.0,
+            "ident": "elon-musk-of-tweets-august-11-august-18-160-179",
+            "in_validated": false,
+            "market_probability": 0.565,
+            "market_url": "https://polymarket.com/market/elon-musk-of-tweets-august-11-august-18-160-179",
+            "model": "kimi-k3",
+            "model_probability": 0.56,
+            "outcome": 1,
+            "platform": "Polymarket",
+            "profit_edge": 0.0038,
+            "profit_flat": 0.7699,
+            "question": "Will Elon Musk post 160-179 tweets from August 11 to August 18, 2026?",
+            "resolved_ts": "2026-08-18T18:53:54.581019+00:00",
+            "side": "YES",
+            "snapshot_ts": "2026-08-18T12:01:15.756406+00:00",
+            "stake_edge": 0.005,
             "stake_flat": 1.0,
             "win": true
           }
         ],
         "disclaimer": "Hypothetical/paper, net of venue trading fees (Kalshi price-based; Polymarket fee-free). Excludes slippage/liquidity unless configured. Signal check, not live PnL.",
         "flat": {
-          "compound_bankroll": 14078.551093,
-          "compound_return": 0.4079,
+          "compound_bankroll": 15890.221983,
+          "compound_return": 0.589,
           "equity_curve": [
             0.2903,
-            0.7491
+            0.7491,
+            1.519
           ],
           "equity_curve_ts": [
             "2026-08-18T14:48:14.589763+00:00",
-            "2026-08-18T17:38:37.944303+00:00"
+            "2026-08-18T18:53:54.364353+00:00",
+            "2026-08-18T18:53:54.581019+00:00"
           ],
           "fees": 0.0,
           "growth_curve": [
-            11451.612903,
-            14078.551093
+            10967.741935,
+            12645.035803,
+            15890.221983
           ],
           "growth_curve_ts": [
             "2026-08-18T14:48:14.589763+00:00",
-            "2026-08-18T17:38:37.944303+00:00"
+            "2026-08-18T18:53:54.364353+00:00",
+            "2026-08-18T18:53:54.581019+00:00"
           ],
-          "n_bets": 2,
-          "pnl": 0.7491,
-          "roi": 0.3746,
-          "total_staked": 2.0,
+          "n_bets": 3,
+          "pnl": 1.519,
+          "roi": 0.5063,
+          "total_staked": 3.0,
           "win_rate": 1.0
         },
         "growth_1pct": {
-          "compound_bankroll": 10075.044375,
-          "compound_return": 0.0075,
+          "compound_bankroll": 10152.613301,
+          "compound_return": 0.0153,
           "equity_curve": [
             29.0323,
-            75.0444
+            75.0444,
+            152.6133
           ],
           "equity_curve_ts": [
             "2026-08-18T14:48:14.589763+00:00",
-            "2026-08-18T17:38:37.944303+00:00"
+            "2026-08-18T18:53:54.364353+00:00",
+            "2026-08-18T18:53:54.581019+00:00"
           ],
           "fees": 0.0,
           "growth_curve": [
             10029.032258,
-            10075.044375
+            10075.044375,
+            10152.613301
           ],
           "growth_curve_ts": [
             "2026-08-18T14:48:14.589763+00:00",
-            "2026-08-18T17:38:37.944303+00:00"
+            "2026-08-18T18:53:54.364353+00:00",
+            "2026-08-18T18:53:54.581019+00:00"
           ],
-          "n_bets": 2,
-          "pnl": 75.0444,
-          "roi": 0.3747,
-          "total_staked": 200.2903,
+          "n_bets": 3,
+          "pnl": 152.6133,
+          "roi": 0.507,
+          "total_staked": 301.0408,
           "win_rate": 1.0
         },
         "growth_2pct": {
-          "compound_bankroll": 10150.355145,
-          "compound_return": 0.015,
+          "compound_bankroll": 10306.652649,
+          "compound_return": 0.0307,
           "equity_curve": [
             58.0645,
-            150.3551
+            150.3551,
+            306.6526
           ],
           "equity_curve_ts": [
             "2026-08-18T14:48:14.589763+00:00",
-            "2026-08-18T17:38:37.944303+00:00"
+            "2026-08-18T18:53:54.364353+00:00",
+            "2026-08-18T18:53:54.581019+00:00"
           ],
           "fees": 0.0,
           "growth_curve": [
             10058.064516,
-            10150.355145
+            10150.355145,
+            10306.652649
           ],
           "growth_curve_ts": [
             "2026-08-18T14:48:14.589763+00:00",
-            "2026-08-18T17:38:37.944303+00:00"
+            "2026-08-18T18:53:54.364353+00:00",
+            "2026-08-18T18:53:54.581019+00:00"
           ],
-          "n_bets": 2,
-          "pnl": 150.3551,
-          "roi": 0.3748,
-          "total_staked": 401.1613,
+          "n_bets": 3,
+          "pnl": 306.6526,
+          "roi": 0.5076,
+          "total_staked": 604.1684,
           "win_rate": 1.0
         },
         "half_kelly": null,
         "min_edge": 0.0,
         "quarter_kelly": null,
         "smart": {
-          "compound_bankroll": 10075.044375,
-          "compound_return": 0.0075,
+          "compound_bankroll": 10152.613301,
+          "compound_return": 0.0153,
           "equity_curve": [
             29.0323,
-            75.0444
+            75.0444,
+            152.6133
           ],
           "equity_curve_ts": [
             "2026-08-18T14:48:14.589763+00:00",
-            "2026-08-18T17:38:37.944303+00:00"
+            "2026-08-18T18:53:54.364353+00:00",
+            "2026-08-18T18:53:54.581019+00:00"
           ],
           "fees": 0.0,
           "growth_curve": [
             10029.032258,
-            10075.044375
+            10075.044375,
+            10152.613301
           ],
           "growth_curve_ts": [
             "2026-08-18T14:48:14.589763+00:00",
-            "2026-08-18T17:38:37.944303+00:00"
+            "2026-08-18T18:53:54.364353+00:00",
+            "2026-08-18T18:53:54.581019+00:00"
           ],
-          "n_bets": 2,
-          "pnl": 75.0444,
-          "roi": 0.3747,
-          "total_staked": 200.2903,
+          "n_bets": 3,
+          "pnl": 152.6133,
+          "roi": 0.507,
+          "total_staked": 301.0408,
           "win_rate": 1.0
         }
       },
-      "paper_roi": 0.3746,
-      "paper_roi_smart": 0.3747,
-      "skill_vs_market": -0.0055
+      "paper_roi": 0.5063,
+      "paper_roi_smart": 0.507,
+      "skill_vs_market": -0.0053
     },
     {
       "accuracy": 0.8333,
@@ -16995,7 +17117,7 @@
             "profit_edge": 0.001,
             "profit_flat": 0.1268,
             "question": "Will Elon Musk post 140-159 tweets from August 11 to August 18, 2026?",
-            "resolved_ts": "2026-08-18T17:38:37.230815+00:00",
+            "resolved_ts": "2026-08-18T18:53:53.684207+00:00",
             "side": "NO",
             "snapshot_ts": "2026-08-16T20:35:51.420282+00:00",
             "stake_edge": 0.0075,
@@ -17441,7 +17563,7 @@
             "2026-08-18T05:40:21.745716+00:00",
             "2026-08-18T05:40:22.748336+00:00",
             "2026-08-18T14:48:14.607416+00:00",
-            "2026-08-18T17:38:37.230815+00:00"
+            "2026-08-18T18:53:53.684207+00:00"
           ],
           "fees": 0.0956,
           "growth_curve": [
@@ -17878,7 +18000,7 @@
             "2026-08-18T05:40:21.745716+00:00",
             "2026-08-18T05:40:22.748336+00:00",
             "2026-08-18T14:48:14.607416+00:00",
-            "2026-08-18T17:38:37.230815+00:00"
+            "2026-08-18T18:53:53.684207+00:00"
           ],
           "n_bets": 216,
           "pnl": 6.6712,
@@ -18323,7 +18445,7 @@
             "2026-08-18T05:40:21.745716+00:00",
             "2026-08-18T05:40:22.748336+00:00",
             "2026-08-18T14:48:14.607416+00:00",
-            "2026-08-18T17:38:37.230815+00:00"
+            "2026-08-18T18:53:53.684207+00:00"
           ],
           "fees": 9.4785,
           "growth_curve": [
@@ -18760,7 +18882,7 @@
             "2026-08-18T05:40:21.745716+00:00",
             "2026-08-18T05:40:22.748336+00:00",
             "2026-08-18T14:48:14.607416+00:00",
-            "2026-08-18T17:38:37.230815+00:00"
+            "2026-08-18T18:53:53.684207+00:00"
           ],
           "n_bets": 216,
           "pnl": 640.6075,
@@ -19205,7 +19327,7 @@
             "2026-08-18T05:40:21.745716+00:00",
             "2026-08-18T05:40:22.748336+00:00",
             "2026-08-18T14:48:14.607416+00:00",
-            "2026-08-18T17:38:37.230815+00:00"
+            "2026-08-18T18:53:53.684207+00:00"
           ],
           "fees": 18.7224,
           "growth_curve": [
@@ -19642,7 +19764,7 @@
             "2026-08-18T05:40:21.745716+00:00",
             "2026-08-18T05:40:22.748336+00:00",
             "2026-08-18T14:48:14.607416+00:00",
-            "2026-08-18T17:38:37.230815+00:00"
+            "2026-08-18T18:53:53.684207+00:00"
           ],
           "n_bets": 216,
           "pnl": 1218.9445,
@@ -20558,7 +20680,7 @@
             "2026-08-18T05:40:21.745716+00:00",
             "2026-08-18T05:40:22.748336+00:00",
             "2026-08-18T14:48:14.607416+00:00",
-            "2026-08-18T17:38:37.829886+00:00"
+            "2026-08-18T18:53:54.242990+00:00"
           ],
           "fees": 1.4383,
           "growth_curve": [
@@ -20797,7 +20919,7 @@
             "2026-08-18T05:40:21.745716+00:00",
             "2026-08-18T05:40:22.748336+00:00",
             "2026-08-18T14:48:14.607416+00:00",
-            "2026-08-18T17:38:37.829886+00:00"
+            "2026-08-18T18:53:54.242990+00:00"
           ],
           "n_bets": 117,
           "pnl": 758.3471,
@@ -70611,7 +70733,7 @@
         "profit_edge": 0.001,
         "profit_flat": 0.1268,
         "question": "Will Elon Musk post 140-159 tweets from August 11 to August 18, 2026?",
-        "resolved_ts": "2026-08-18T17:38:37.230815+00:00",
+        "resolved_ts": "2026-08-18T18:53:53.684207+00:00",
         "side": "NO",
         "snapshot_ts": "2026-08-16T20:35:51.420282+00:00",
         "stake_edge": 0.0075,
@@ -71057,7 +71179,7 @@
         "2026-08-18T05:40:21.745716+00:00",
         "2026-08-18T05:40:22.748336+00:00",
         "2026-08-18T14:48:14.607416+00:00",
-        "2026-08-18T17:38:37.230815+00:00"
+        "2026-08-18T18:53:53.684207+00:00"
       ],
       "fees": 0.0956,
       "growth_curve": [
@@ -71494,7 +71616,7 @@
         "2026-08-18T05:40:21.745716+00:00",
         "2026-08-18T05:40:22.748336+00:00",
         "2026-08-18T14:48:14.607416+00:00",
-        "2026-08-18T17:38:37.230815+00:00"
+        "2026-08-18T18:53:53.684207+00:00"
       ],
       "n_bets": 216,
       "pnl": 6.6712,
@@ -71939,7 +72061,7 @@
         "2026-08-18T05:40:21.745716+00:00",
         "2026-08-18T05:40:22.748336+00:00",
         "2026-08-18T14:48:14.607416+00:00",
-        "2026-08-18T17:38:37.230815+00:00"
+        "2026-08-18T18:53:53.684207+00:00"
       ],
       "fees": 9.4785,
       "growth_curve": [
@@ -72376,7 +72498,7 @@
         "2026-08-18T05:40:21.745716+00:00",
         "2026-08-18T05:40:22.748336+00:00",
         "2026-08-18T14:48:14.607416+00:00",
-        "2026-08-18T17:38:37.230815+00:00"
+        "2026-08-18T18:53:53.684207+00:00"
       ],
       "n_bets": 216,
       "pnl": 640.6075,
@@ -72821,7 +72943,7 @@
         "2026-08-18T05:40:21.745716+00:00",
         "2026-08-18T05:40:22.748336+00:00",
         "2026-08-18T14:48:14.607416+00:00",
-        "2026-08-18T17:38:37.230815+00:00"
+        "2026-08-18T18:53:53.684207+00:00"
       ],
       "fees": 18.7224,
       "growth_curve": [
@@ -73258,7 +73380,7 @@
         "2026-08-18T05:40:21.745716+00:00",
         "2026-08-18T05:40:22.748336+00:00",
         "2026-08-18T14:48:14.607416+00:00",
-        "2026-08-18T17:38:37.230815+00:00"
+        "2026-08-18T18:53:53.684207+00:00"
       ],
       "n_bets": 216,
       "pnl": 1218.9445,
@@ -74174,7 +74296,7 @@
         "2026-08-18T05:40:21.745716+00:00",
         "2026-08-18T05:40:22.748336+00:00",
         "2026-08-18T14:48:14.607416+00:00",
-        "2026-08-18T17:38:37.829886+00:00"
+        "2026-08-18T18:53:54.242990+00:00"
       ],
       "fees": 1.4383,
       "growth_curve": [
@@ -74413,7 +74535,7 @@
         "2026-08-18T05:40:21.745716+00:00",
         "2026-08-18T05:40:22.748336+00:00",
         "2026-08-18T14:48:14.607416+00:00",
-        "2026-08-18T17:38:37.829886+00:00"
+        "2026-08-18T18:53:54.242990+00:00"
       ],
       "n_bets": 117,
       "pnl": 758.3471,
