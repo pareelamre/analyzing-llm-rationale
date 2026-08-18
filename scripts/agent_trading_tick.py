@@ -317,18 +317,42 @@ _TRADING_INSTRUCTION = (
 )
 
 
+def _assemble_question(portfolio_block: str, candidates_block: str) -> str:
+    return "\n\n".join(filter(None, [portfolio_block, candidates_block, _TRADING_INSTRUCTION]))
+
+
 def _build_question(portfolio_block: str, candidates_block: str) -> str:
-    question = "\n\n".join([portfolio_block, candidates_block, _TRADING_INSTRUCTION])
+    question = _assemble_question(portfolio_block, candidates_block)
     if len(question) <= MAX_QUESTION_CHARS:
         return question
-    # Over the server's hard 2000-char limit -- trim the candidates block
-    # first, since it's the part that scales with how many tickers an agent
-    # currently holds; the portfolio summary and the instruction (which the
-    # model needs on every cycle) stay intact.
+    # Over the server's hard 2000-char limit. Trim in priority order, keeping
+    # the instruction (which the model needs every cycle) intact until the
+    # very end:
+    # 1) the candidates block first -- it scales with how many tickers exist
+    #    and the model can still act on held positions alone this cycle.
     overage = len(question) - MAX_QUESTION_CHARS
     keep = max(0, len(candidates_block) - overage - 1)
-    trimmed_candidates = candidates_block[:keep].rstrip() + "…"
-    return "\n\n".join([portfolio_block, trimmed_candidates, _TRADING_INSTRUCTION])
+    trimmed_candidates = candidates_block[:keep].rstrip() + "…" if keep else ""
+    question = _assemble_question(portfolio_block, trimmed_candidates)
+    if len(question) <= MAX_QUESTION_CHARS:
+        return question
+    # 2) Candidates already emptied and it's still too long -- portfolio_block
+    # itself (open positions + the previous-cycle reasoning excerpt) is the
+    # overage. Drop that excerpt; the cash/position summary above it is what
+    # the model actually needs every cycle.
+    trimmed_portfolio = portfolio_block.split("\nYour own reasoning from the previous cycle:")[0]
+    question = _assemble_question(trimmed_portfolio, "")
+    if len(question) <= MAX_QUESTION_CHARS:
+        return question
+    # 3) Absolute last resort -- an open-position list has no upper bound on
+    # how many tickers it can list, so it can still overflow on its own.
+    # Keep the instruction intact and truncate the position list to whatever
+    # budget remains, rather than blindly right-truncating the whole string
+    # and risking cutting into the instruction itself.
+    budget = max(0, MAX_QUESTION_CHARS - len(_TRADING_INSTRUCTION) - 2)
+    if len(trimmed_portfolio) > budget:
+        trimmed_portfolio = trimmed_portfolio[: max(0, budget - 1)].rstrip() + "…"
+    return _assemble_question(trimmed_portfolio, "")
 
 
 def _configure_max_order_notional() -> float:

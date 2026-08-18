@@ -309,6 +309,33 @@ class BuildQuestionTests(unittest.TestCase):
         self.assertIn(agent_trading_tick._TRADING_INSTRUCTION, question)
         self.assertIn("…", question)
 
+    def test_never_exceeds_the_limit_when_portfolio_block_alone_is_huge(self):
+        # Regression: a real portfolio_block (many open positions + a
+        # near-max-length previous-cycle reasoning excerpt) can exceed the
+        # budget on its own, even with an empty candidates block -- the old
+        # code only ever trimmed candidates_block and returned an overlong
+        # question anyway, breaking every subsequent cycle for that agent
+        # with AgentAnalyzeRequest's hard 2000-char server-side validation
+        # error (observed live for 4 of 10 models on 2026-08-18).
+        huge_portfolio = (
+            "=== Your portfolio ===\n"
+            + "\n".join(f"  - KXTEST{i} yes: 10.0 contracts, avg entry 0.42" for i in range(30))
+            + "\nYour own reasoning from the previous cycle: " + ("z" * 600)
+        )
+        question = agent_trading_tick._build_question(huge_portfolio, "")
+        self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
+        self.assertIn(agent_trading_tick._TRADING_INSTRUCTION, question)
+
+    def test_never_exceeds_the_limit_with_huge_portfolio_and_huge_candidates(self):
+        # Forces the absolute-last-resort clamp: no "previous cycle" marker
+        # to strip, so the position list itself must be truncated without
+        # cutting into the trading instruction.
+        huge_portfolio = "y" * 2500
+        huge_candidates = "x" * 2500
+        question = agent_trading_tick._build_question(huge_portfolio, huge_candidates)
+        self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
+        self.assertIn(agent_trading_tick._TRADING_INSTRUCTION, question)
+
 
 class PortfolioBlockTests(unittest.TestCase):
     def test_portfolio_block_reports_cash_and_positions(self):
