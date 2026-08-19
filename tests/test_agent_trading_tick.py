@@ -22,12 +22,15 @@ from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 
 
 def _quote(ident, question="Q?", bid=0.4, ask=0.45, close="2026-09-01T00:00:00Z",
-           opens="2026-05-01T00:00:00Z"):
-    return {
+           opens="2026-05-01T00:00:00Z", resolution_criteria=None):
+    quote = {
         "platform": "Kalshi", "ident": ident, "question": question,
         "probability": (bid + ask) / 2, "yes_bid": bid, "yes_ask": ask,
         "close_time": close, "created_time": opens,
     }
+    if resolution_criteria is not None:
+        quote["resolution_criteria"] = resolution_criteria
+    return quote
 
 
 class ShadowModeAssertionTests(unittest.TestCase):
@@ -282,6 +285,36 @@ class CandidateLineFormattingTests(unittest.TestCase):
         line = agent_trading_tick._fmt_candidate_line(_quote("KXFOO", bid=0.40, ask=0.45))
         self.assertIn("yes bid/ask 0.40/0.45", line)
         self.assertIn("no bid/ask 0.55/0.60", line)
+
+    def test_candidate_line_surfaces_the_venue_s_resolution_rules(self):
+        # Regression: resolution_criteria was already fetched fresh every
+        # cycle by market_data.py's fetch_kalshi/fetch_polymarket (it's
+        # right there on every quote), but never actually shown to the
+        # agent -- which had to infer what qualifies from the question text
+        # alone. Observed live: an agent reasoned a cabinet-departure market
+        # should resolve YES for a specific person's resignation, when that
+        # market's own rules explicitly excluded that person's case.
+        line = agent_trading_tick._fmt_candidate_line(
+            _quote("KXCABLEAVE", resolution_criteria="Excludes departures by Person X specifically.")
+        )
+        self.assertIn("Resolution rules:", line)
+        self.assertIn("Excludes departures by Person X specifically.", line)
+
+    def test_candidate_line_omits_the_rules_line_when_none_is_available(self):
+        # Not every quote has rules text (a venue outage, a market missing
+        # it) -- must degrade to the old line, not print an empty/None rules
+        # line that looks like a real "no restrictions" answer.
+        line = agent_trading_tick._fmt_candidate_line(_quote("KXFOO"))
+        self.assertNotIn("Resolution rules:", line)
+
+    def test_candidate_line_excerpts_an_overlong_resolution_rules_text(self):
+        overlong = "x" * (agent_trading_tick.MAX_RULES_CHARS + 500)
+        line = agent_trading_tick._fmt_candidate_line(
+            _quote("KXFOO", resolution_criteria=overlong)
+        )
+        rules_section = line.split("Resolution rules: ", 1)[1]
+        self.assertLessEqual(len(rules_section), agent_trading_tick.MAX_RULES_CHARS + 1)
+        self.assertIn("…", rules_section)
 
 
 class ModelBackstopCharsTests(unittest.TestCase):

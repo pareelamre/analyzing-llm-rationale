@@ -150,7 +150,7 @@ def agent_equity_curve(
         "event_type": "starting_cash",
     }]
     for row in conn.execute(
-        "SELECT ts, action_type, cash_delta, fee, notional, payout, realized_pnl FROM agent_actions "
+        "SELECT ts, action_type, cash_delta, fee, notional, payout, realized_pnl, outcome FROM agent_actions "
         "WHERE agent_id = ? ORDER BY ts ASC",
         (agent_id,),
     ):
@@ -162,11 +162,25 @@ def agent_equity_curve(
         elif act == "trade":
             notional = float(row["notional"] or 0)
             cash_delta = float(row["cash_delta"] or 0)
-            if notional > 0:
-                running_cash += cash_delta
+            running_cash += cash_delta
+            if row["outcome"] == "realized":
+                # A closing/netting trade (buying the opposite side of a
+                # held position -- the only way to exit here) is ALSO
+                # recorded as action_type='trade' with a positive notional
+                # (the closing order's own dollar size), not as a
+                # 'settlement'. Regression: that notional was being added to
+                # open_positions_basis exactly like an opening trade,
+                # double-counting every single close -- once from the
+                # original open, again from the close -- and inflating the
+                # reported account value by the closing order's full
+                # notional on every exit. Mirrors the settlement branch's
+                # cost-basis-closed formula below, using cash_delta in place
+                # of payout since a netting close has no payout column.
+                realized_pnl = float(row["realized_pnl"] or 0)
+                cost_basis_closed = max(0.0, cash_delta - realized_pnl)
+                open_positions_basis = max(0.0, open_positions_basis - cost_basis_closed)
+            elif notional > 0:
                 open_positions_basis += notional
-            else:
-                running_cash += cash_delta
             account_val = running_cash + open_positions_basis
         elif act == "settlement":
             payout = float(row["payout"] or 0)
