@@ -6197,6 +6197,7 @@ function _formatThesisHtml(rawThesis) {
   s = s.replace(/\n\n+/g, '</p><p style="margin-top:8px">').replace(/\n/g, '<br>');
   return `<div style="line-height:1.6;color:var(--text);font-size:13px"><p style="margin:0">${s}</p></div>`;
 }
+}
 
 function _toggleAgentPositions(agentId) {
   const el = document.getElementById('agent-pos-' + agentId);
