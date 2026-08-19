@@ -161,10 +161,10 @@ def _init_local_agent(model: str) -> None:
         device=os.environ.get("MODEL_DEVICE", "cpu"),
         request_timeout_s=float(os.environ.get("PROVIDER_TIMEOUT_S", "120")),
         model_label=None,
-        disable_evidence=True,
+        disable_evidence=False,
         newsapi_key_env_var="NEWSAPI_KEY",
         evidence_source=None,
-        disable_query_planner=True,
+        disable_query_planner=False,
     ))
     _agent_ready = True
     print(f"agent-trading-tick initialized model={model}")
