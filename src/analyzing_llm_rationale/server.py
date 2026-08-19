@@ -29,7 +29,17 @@ from urllib.parse import quote as url_quote
 from urllib.parse import urlparse
 
 import duckdb
-from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
@@ -5056,6 +5066,22 @@ class SharedForecastResponse(BaseModel):
     url: str
 
 
+class DebateRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=1000)
+    platform: str = Field("Market", max_length=80)
+    market_probability: Optional[float] = Field(None, ge=0.0, le=1.0)
+    evidence: Optional[List[Dict[str, Any]]] = None
+    resolution_criteria: Optional[str] = None
+
+
+class PortfolioOptimizeRequest(BaseModel):
+    bankroll_usd: float = Field(1000.0, ge=10.0)
+    kelly_fraction: float = Field(0.25, ge=0.05, le=1.0)
+    min_edge: float = Field(0.05, ge=0.01, le=0.99)
+    min_credibility: float = Field(0.60, ge=0.0, le=1.0)
+    opportunities: Optional[List[Dict[str, Any]]] = None
+
+
 class RagIngestRequest(BaseModel):
     """Add a document to the user's knowledge base."""
     text: Optional[str] = Field(None, max_length=200000, description="Raw text to ingest.")
@@ -8232,6 +8258,142 @@ async def market_price_history_route(
     else:
         candles = await loop.run_in_executor(None, lambda: _md.fetch_kalshi_candlesticks(ident, series_ticker))
     return candles or {"candlesticks": []}
+
+
+# ── Feature #1: Multi-Agent Bull vs. Bear Debate & Blind Spot Analyzer ────────
+
+
+@app.post("/agent/debate", tags=["Agent"], summary="Multi-Agent Bull vs. Bear Adversarial Debate & Blind Spot Analyzer")
+async def agent_debate(req: DebateRequest) -> Dict[str, Any]:
+    """Executes a 3-agent adversarial cross-examination (Bull, Bear, Judge) on a forecasting question."""
+    from analyzing_llm_rationale.debate_engine import conduct_market_debate
+
+    loop = asyncio.get_running_loop()
+    res = await loop.run_in_executor(
+        None,
+        lambda: conduct_market_debate(
+            question=req.question,
+            platform=req.platform,
+            market_prob=req.market_probability,
+            evidence=req.evidence,
+            resolution_criteria=req.resolution_criteria or "",
+        ),
+    )
+    return res
+
+
+# ── Feature #2: Quantitative Kelly Portfolio Optimizer & Position Sizer ───────
+
+
+@app.get(
+    "/portfolio/optimal-allocation",
+    tags=["Trading"],
+    summary="Calculate optimal Fractional Kelly allocation across live Grade A/B opportunities",
+)
+async def portfolio_optimal_allocation(
+    bankroll: float = Query(1000.0, ge=10.0, description="Total portfolio capital in USD"),
+    kelly_fraction: float = Query(0.25, ge=0.05, le=1.0, description="Kelly fraction (0.25 = Quarter-Kelly)"),
+    min_edge: float = Query(0.05, ge=0.01, description="Minimum edge threshold"),
+    min_credibility: float = Query(0.60, ge=0.0, le=1.0, description="Minimum credibility score threshold"),
+) -> Dict[str, Any]:
+    """Compute optimal Fractional Kelly position sizing across live audited Radar opportunities."""
+    from analyzing_llm_rationale.edge_credibility import audit_edge_board
+    from analyzing_llm_rationale.portfolio_optimizer import optimize_portfolio_allocation
+
+    loop = asyncio.get_running_loop()
+    live = await loop.run_in_executor(None, _read_edge_board_record) or {}
+    raw_opps = live.get("edge_board", [])
+    audited = audit_edge_board(raw_opps)
+
+    alloc = optimize_portfolio_allocation(
+        opportunities=audited,
+        bankroll_usd=bankroll,
+        kelly_fraction=kelly_fraction,
+        min_edge=min_edge,
+        min_credibility=min_credibility,
+    )
+    return alloc
+
+
+@app.post(
+    "/portfolio/optimize",
+    tags=["Trading"],
+    summary="Optimize arbitrary list of market opportunities using Fractional Kelly",
+)
+async def portfolio_optimize_post(req: PortfolioOptimizeRequest) -> Dict[str, Any]:
+    """Optimize position sizing on supplied or live opportunities."""
+    from analyzing_llm_rationale.edge_credibility import audit_edge_board
+    from analyzing_llm_rationale.portfolio_optimizer import optimize_portfolio_allocation
+
+    loop = asyncio.get_running_loop()
+    opps = req.opportunities
+    if opps is None:
+        live = await loop.run_in_executor(None, _read_edge_board_record) or {}
+        opps = live.get("edge_board", [])
+    audited = audit_edge_board(opps)
+
+    return optimize_portfolio_allocation(
+        opportunities=audited,
+        bankroll_usd=req.bankroll_usd,
+        kelly_fraction=req.kelly_fraction,
+        min_edge=req.min_edge,
+        min_credibility=req.min_credibility,
+    )
+
+
+# ── Feature #3: Real-Time SSE & WebSocket Alpha Streams ───────────────────────
+
+
+@app.get("/stream/radar", tags=["System"], summary="Live Server-Sent Events (SSE) feed for Market Radar Desk")
+async def stream_radar(request: Request) -> StreamingResponse:
+    """Stream live market radar updates, price movements, and edge detections via SSE."""
+    async def event_generator():
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                loop = asyncio.get_running_loop()
+                radar_data = await loop.run_in_executor(None, _radar_from_track_record, 10)
+                payload = json.dumps({
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "markets": [m.model_dump() for m in radar_data.markets],
+                })
+                yield f"event: radar_tick\ndata: {payload}\n\n"
+            except Exception:
+                yield f"event: heartbeat\ndata: {{\"status\": \"ok\", \"ts\": \"{datetime.now(timezone.utc).isoformat()}\"}}\n\n"
+            await asyncio.sleep(3)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
+
+
+@app.websocket("/ws/radar")
+async def websocket_radar(websocket: WebSocket) -> None:
+    """WebSocket streaming endpoint for real-time market radar ticks and prints."""
+    await websocket.accept()
+    try:
+        while True:
+            loop = asyncio.get_running_loop()
+            radar_data = await loop.run_in_executor(None, _radar_from_track_record, 10)
+            payload = {
+                "type": "radar_tick",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "markets": [m.model_dump() for m in radar_data.markets],
+            }
+            await websocket.send_json(payload)
+            await asyncio.sleep(3)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
 
 
 _TRADING_CONNECTION_KIND = "TradingConnection"
