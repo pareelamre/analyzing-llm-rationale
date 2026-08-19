@@ -157,27 +157,34 @@
     const question = element.getAttribute('data-question') || element.getAttribute('data-q') || '';
     const shareId = element.getAttribute('data-share-id') || '';
     const theme = element.getAttribute('data-theme') || 'dark';
+    const attrProb = element.getAttribute('data-prob') || element.getAttribute('data-probability');
+    const attrMarketProb = element.getAttribute('data-market-prob');
+    const attrGrade = element.getAttribute('data-credibility-grade') || 'A';
 
     const card = document.createElement('div');
     card.className = 'foresea-widget-card' + (theme === 'light' ? ' foresea-widget-light' : '');
-    card.innerHTML = '<div class="foresea-widget-loading">Loading Foresea forecast...</div>';
     element.appendChild(card);
 
-    if (shareId) {
+    if (attrProb && question) {
+      // Instant render from attributes
+      populateCard(card, question, parseFloat(attrProb), null, shareId, attrMarketProb ? parseFloat(attrMarketProb) : null, attrGrade);
+    } else if (shareId) {
+      card.innerHTML = '<div class="foresea-widget-loading">Loading Foresea forecast...</div>';
       fetch(`${FORESEA_API_BASE}/forecast/${shareId}`)
         .then(r => r.json())
-        .then(data => populateCard(card, data.question || question, data.probability, data.predicted_answer, shareId))
+        .then(data => populateCard(card, data.question || question, data.probability, data.predicted_answer, shareId, null, attrGrade))
         .catch(() => {
           card.innerHTML = '<div class="foresea-widget-loading">Unable to load forecast.</div>';
         });
     } else if (question) {
+      card.innerHTML = '<div class="foresea-widget-loading">Generating calibrated AI forecast...</div>';
       fetch(`${FORESEA_API_BASE}/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: question }),
       })
         .then(r => r.json())
-        .then(data => populateCard(card, question, data.predicted_probability, data.predicted_answer, ''))
+        .then(data => populateCard(card, question, data.predicted_probability || data.confidence, data.predicted_answer, '', null, attrGrade))
         .catch(() => {
           card.innerHTML = '<div class="foresea-widget-loading">Unable to generate forecast.</div>';
         });
@@ -186,18 +193,29 @@
     }
   }
 
-  function populateCard(card, question, prob, ans, shareId) {
+  function populateCard(card, question, prob, ans, shareId, mktProb, grade) {
     const p = typeof prob === 'number' ? prob : 0.5;
     const pct = Math.round(p * 100);
     const ansText = ans ? String(ans).toUpperCase() : (p >= 0.5 ? 'YES' : 'NO');
     const link = shareId ? `${FORESEA_API_BASE}/forecast/${shareId}` : `${FORESEA_API_BASE}/?q=${encodeURIComponent(question)}`;
+    const gradeBadge = grade ? `<span class="foresea-widget-badge" style="background: rgba(0, 245, 160, 0.12); color: #00f5a0; margin-left: 6px;">Grade ${escapeHtml(grade)}</span>` : '';
+
+    let edgeHtml = '';
+    if (typeof mktProb === 'number') {
+      const mktPct = Math.round(mktProb * 100);
+      const edgePct = pct - mktPct;
+      edgeHtml = `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Market: ${mktPct}% → Foresea: ${pct}% <strong style="color: ${edgePct >= 0 ? '#00f5a0' : '#ff5577'}">(${edgePct >= 0 ? '+' : ''}${edgePct}% edge)</strong></div>`;
+    }
 
     card.innerHTML = `
       <div class="foresea-widget-header">
         <a class="foresea-widget-brand" href="${FORESEA_API_BASE}" target="_blank" rel="noopener">
           <span>🌊 FORESEA</span>
         </a>
-        <span class="foresea-widget-badge">Calibrated AI</span>
+        <div>
+          <span class="foresea-widget-badge">Calibrated AI</span>
+          ${gradeBadge}
+        </div>
       </div>
       <div class="foresea-widget-question">${escapeHtml(question)}</div>
       <div class="foresea-widget-bar-container">
@@ -208,10 +226,11 @@
         <div class="foresea-widget-bar-bg">
           <div class="foresea-widget-bar-fill" style="width: ${pct}%"></div>
         </div>
+        ${edgeHtml}
       </div>
       <div class="foresea-widget-footer">
         <span>Verified Calibration Track Record</span>
-        <a href="${link}" target="_blank" rel="noopener">View Full Thesis →</a>
+        <a href="${link}" target="_blank" rel="noopener">Explore Thesis & Alpha →</a>
       </div>
     `;
   }

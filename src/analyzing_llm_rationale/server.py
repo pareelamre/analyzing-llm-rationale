@@ -8506,6 +8506,23 @@ async def system_health_route() -> Dict[str, Any]:
     }
 
 
+@app.get(
+    "/v1/market/whale-flow",
+    tags=["Markets"],
+    summary="Track large block trades and net smart-money flow across Polymarket and Kalshi",
+)
+async def market_whale_flow_route(
+    min_notional: float = Query(250.0, ge=10.0, description="Minimum trade value in USD to qualify as whale print"),
+    limit: int = Query(30, ge=1, le=100),
+) -> Dict[str, Any]:
+    """Inspect large institutional trade prints and sentiment positioning."""
+    from analyzing_llm_rationale.whale_flow import fetch_live_whale_flow
+
+    loop = asyncio.get_running_loop()
+    flow = await loop.run_in_executor(None, lambda: fetch_live_whale_flow(min_notional_usd=min_notional, limit=limit))
+    return flow
+
+
 _TRADING_CONNECTION_KIND = "TradingConnection"
 _TRADING_ORDER_KIND = "TradingOrder"
 _TRADING_RUN_KIND = "TradingRun"
