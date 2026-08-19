@@ -9,8 +9,9 @@ hand-built fixture without a server or network access.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
-from typing import Any, Dict, List, Mapping, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from analyzing_llm_rationale.accounting import Position, PredictionMarketAccount
 from analyzing_llm_rationale.track_record_live import _sharpe_and_max_drawdown
