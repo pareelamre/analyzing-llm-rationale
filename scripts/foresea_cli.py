@@ -75,13 +75,25 @@ def main():
     p_ob.add_argument("--platform", default="kalshi")
     p_ob.add_argument("--ident", required=True)
 
+    # whale-flow
+    p_wh = subparsers.add_parser("whale-flow", help="Track large block trades and institutional sentiment")
+    p_wh.add_argument("--min-usd", type=float, default=250.0)
+    p_wh.add_argument("--limit", type=int, default=20)
+
     # health
     subparsers.add_parser("health", help="Check system & venue latency health")
 
     args = parser.parse_args()
     client = Foresea(base_url=args.url, api_key=args.key)
 
-    if args.command == "forecast":
+    if args.command == "whale-flow":
+        res = client.whale_flow(min_notional_usd=args.min_usd, limit=args.limit)
+        print(f"\nWhale Sentiment: {res.get('whale_sentiment_label')} ({res.get('whale_sentiment_index_pct')}% Bullish)")
+        print(f"Total Block Volume: ${res.get('total_whale_volume_usd'):,.2f} (YES: ${res.get('whale_yes_volume_usd'):,.2f} | NO: ${res.get('whale_no_volume_usd'):,.2f})\n")
+        for p in res.get("top_prints", []):
+            print(f"- [{p.get('platform')}] {p.get('side')} ${p.get('notional_usd'):,.2f} ({p.get('size')} contracts @ ${p.get('price'):.2f}) -> {p.get('market_title')[:55]}")
+
+    elif args.command == "forecast":
         res = client.forecast(args.question, platform=args.platform, market_probability=args.prob)
         print(f"\n[FORECAST] Answer: {res.get('predicted_answer')} (Confidence: {res.get('confidence')})")
         print(f"Rationale:\n{res.get('rationale') or res.get('model_rationale')}\n")

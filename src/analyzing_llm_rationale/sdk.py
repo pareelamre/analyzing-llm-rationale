@@ -143,6 +143,14 @@ class Foresea:
         resp.raise_for_status()
         return resp.json().get("trades", [])
 
+    def whale_flow(self, min_notional_usd: float = 250.0, limit: int = 30) -> Dict[str, Any]:
+        """Track large block trades and net smart-money flow."""
+        url = f"{self.base_url}/v1/market/whale-flow"
+        params = {"min_notional": min_notional_usd, "limit": limit}
+        resp = self.session.get(url, params=params, timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()
+
     def system_health(self) -> Dict[str, Any]:
         """Fetch venue and system latency health metrics."""
         url = f"{self.base_url}/v1/system/health"
