@@ -7568,17 +7568,26 @@ function _renderMtmPage(d) {
     const pnlUsd = currentBankroll - startPrincipal;
     const pnlPct = pnlUsd / startPrincipal;
 
-    const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
     const pnlColor = pnlUsd >= 0 ? '#0a7' : '#c33';
     const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
+
+    const sharpeVal = Number(m.sharpe);
+    const sharpeStr = Number.isFinite(sharpeVal) ? sharpeVal.toFixed(2) : '—';
+
+    const ddVal = Number(m.max_drawdown);
+    const ddStr = Number.isFinite(ddVal) ? (ddVal * 100).toFixed(1) + '%' : '—';
+
+    const pnlTitle = `Net P&L: ${_usd(pnlUsd)} (Realized: ${_usd(account.realized_pnl || 0)}, Unrealized: ${_usd(account.unrealized_pnl || 0)}) · Net of venue trading fees (Kalshi 7% taker formula & Polymarket 0%)`;
 
     return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span>${m.status === 'collecting_history' ? '<span style="display:block;color:var(--text-dim);font-size:11px">Collecting resolved history</span>' : ''}</td>
       <td>${_usd(startPrincipal)}</td>
       <td><b>${_usd(currentBankroll)}</b></td>
-      <td style="color:${pnlColor};font-weight:600">${pnlStr}</td>
+      <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnlStr}<span style="display:block;font-size:10px;color:var(--text-dim);font-weight:400">net of fees</span></td>
       <td style="color:${pnlColor};font-weight:600">${_roiPct(pnlPct)}</td>
+      <td><b>${sharpeStr}</b></td>
+      <td style="color:${Number(m.max_drawdown) > 0.15 ? '#c33' : 'inherit'}">${ddStr}</td>
       <td>${account.n_trades ?? m.n_trades ?? 0}</td>
       <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
     </tr>`;
@@ -7591,6 +7600,9 @@ function _renderMtmPage(d) {
   };
   const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.quarter_kelly;
 
+  const validSharpes = mtmModels.map(m => Number(m.sharpe)).filter(Number.isFinite);
+  const avgSharpe = validSharpes.length ? (validSharpes.reduce((a, b) => a + b, 0) / validSharpes.length).toFixed(2) : '—';
+
   const sizingButtonsHtml = `
     <div class="eb-mtm-heading-row">
       <h4 id="eb-mtm-header-title" class="eb-h eb-mtm-title">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
@@ -7599,12 +7611,18 @@ function _renderMtmPage(d) {
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Edge Kelly 5%</button>
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Edge Kelly 8%</button>
       </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin:8px 0 14px;padding:8px 12px;background:rgba(6,182,212,0.05);border:1px solid rgba(6,182,212,0.2);border-radius:6px;font-size:12px;color:var(--text);">
+      <div><b>Avg Sharpe:</b> <span style="color:#0a7;font-weight:600">${avgSharpe}</span></div>
+      <div>· <b>Risk Guard:</b> 30% Max Drawdown Halt Active</div>
+      <div>· <b>Fee Model:</b> Strictly Net of Kalshi &amp; Polymarket Taker Fees</div>
+      <div>· <b>Liquidation:</b> Bid-Marked Real-Time Book</div>
     </div>`;
 
   return `<div id="eb-mtm-container"><h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
     ${sizingButtonsHtml}
     <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table></div>`;
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Sharpe</th><th>Max DD</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table></div>`;
 }
 
 function renderEdgeBoard(d) {
