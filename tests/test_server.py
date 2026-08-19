@@ -3260,6 +3260,51 @@ class ServerTests(unittest.TestCase):
         self.assertIn("web_search(", system_prompt)
         self.assertIn("manage_notes(", system_prompt)
         self.assertIn("forecast(", system_prompt)
+        self.assertIn("optimize_portfolio(", system_prompt)
+
+    def test_agent_analyze_optimize_portfolio_tool_returns_the_kelly_allocation(self):
+        # optimize_portfolio existed for weeks as a real, working REST
+        # endpoint (/portfolio/optimal-allocation) and a genuine Kelly
+        # Criterion implementation (portfolio_optimizer.py), but was never
+        # actually reachable from the agent tool loop -- benchmark_tool_map
+        # simply didn't have an entry for it. Drive it end-to-end here, not
+        # just assert its name appears in the prompt.
+        self.provider.response = {
+            "thought": "sizing",
+            "action": "optimize_portfolio",
+            "args": {"bankroll_usd": 5000, "kelly_fraction": 0.5},
+        }
+        fake_alloc = {"allocations": [{"ticker": "KXFAKE", "kelly_stake_usd": 123.45}], "total_allocated_usd": 123.45}
+        with (
+            mock.patch.object(server_module, "_read_edge_board_record", return_value={"edge_board": []}),
+            mock.patch(
+                "analyzing_llm_rationale.edge_credibility.audit_edge_board",
+                return_value=[{"ident": "KXFAKE", "model_probability": 0.7, "market_probability": 0.5, "credibility_score": 0.8}],
+            ),
+            mock.patch(
+                "analyzing_llm_rationale.portfolio_optimizer.optimize_portfolio_allocation",
+                return_value=fake_alloc,
+            ) as mock_optimize,
+        ):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "How should I size today's opportunities?",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                    "max_tool_steps": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        report = response.json()
+        self.assertEqual(report["tool_transcript"][0]["action"], "optimize_portfolio")
+        self.assertIn("123.45", report["tool_transcript"][0]["observation"])
+        # The agent's own requested sizing params must actually reach the
+        # optimizer, not silently fall back to its defaults.
+        _, call_kwargs = mock_optimize.call_args
+        self.assertEqual(call_kwargs["bankroll_usd"], 5000)
+        self.assertEqual(call_kwargs["kelly_fraction"], 0.5)
 
     def test_agent_analyze_benchmark_tool_names_restricts_to_a_subset(self):
         # A specialist-pipeline stage (e.g. research-only) passes an explicit
