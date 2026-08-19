@@ -273,12 +273,38 @@ async def run_tool_loop(
         {"role": "user", "content": f"Question: {question}"},
     ]
     transcript: List[Dict[str, Any]] = []
+    reformat_hint = (
+        "That reply could not be parsed. Respond with exactly one JSON object: either "
+        '{"thought": "...", "action": "<tool name>", "args": {...}} to call a tool, or '
+        '{"final": "<answer>"} to give your final answer. Do not use any other format.'
+    )
+    reformat_retries_used = 0
+    max_reformat_retries = 1
     for step in range(max_steps):
         out = await chat_fn(messages)
         action = parse_action(out)
-        if action is None or "final" in action or "action" not in action:
-            answer = (action or {}).get("final") if action else out
+        if action is not None and "final" in action:
+            answer = action.get("final")
             return {"answer": (answer or out or "").strip(), "transcript": transcript,
+                    "steps": step, "truncated": False}
+        if action is None:
+            # No JSON found at all -- could be an incomplete/foreign-format
+            # tool-call attempt (prose, or a different tool-call dialect)
+            # rather than a genuine final answer, so give the model one
+            # chance to correct its format before accepting the raw text.
+            if reformat_retries_used < max_reformat_retries and step < max_steps - 1:
+                reformat_retries_used += 1
+                messages.append({"role": "assistant", "content": out})
+                messages.append({"role": "user", "content": reformat_hint})
+                continue
+            return {"answer": (out or "").strip(), "transcript": transcript,
+                    "steps": step, "truncated": False}
+        if "action" not in action:
+            # Valid JSON, but not a tool-call envelope (e.g. a model that
+            # answers directly with structured fields instead of {"final":
+            # ...}) -- treat as a final answer as before; a caller-side
+            # deterministic backstop may still extract structure from it.
+            return {"answer": (out or "").strip(), "transcript": transcript,
                     "steps": step, "truncated": False}
         name = str(action.get("action", ""))
         args = action.get("args") or {}
