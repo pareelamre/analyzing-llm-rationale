@@ -473,6 +473,30 @@ class ForeseaClient:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.market_leaderboard(limit))
 
+    def debate_market(self, question: str, platform: str = "Market", market_probability: Optional[float] = None, resolution_criteria: str = "") -> Dict[str, Any]:
+        try:
+            from analyzing_llm_rationale.debate_engine import conduct_market_debate
+            return conduct_market_debate(question=question, platform=platform, market_prob=market_probability, resolution_criteria=resolution_criteria)
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    async def adebate_market(self, question: str, platform: str = "Market", market_probability: Optional[float] = None, resolution_criteria: str = "") -> Dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.debate_market(question, platform, market_probability, resolution_criteria))
+
+    def optimize_portfolio(self, bankroll_usd: float = 1000.0, kelly_fraction: float = 0.25, min_edge: float = 0.05) -> Dict[str, Any]:
+        try:
+            from analyzing_llm_rationale.edge_credibility import audit_edge_board
+            from analyzing_llm_rationale.portfolio_optimizer import optimize_portfolio_allocation
+            opps = audit_edge_board(self.edge_board())
+            return optimize_portfolio_allocation(opportunities=opps, bankroll_usd=bankroll_usd, kelly_fraction=kelly_fraction, min_edge=min_edge)
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    async def aoptimize_portfolio(self, bankroll_usd: float = 1000.0, kelly_fraction: float = 0.25, min_edge: float = 0.05) -> Dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.optimize_portfolio(bankroll_usd, kelly_fraction, min_edge))
+
 def _response_detail(response: Any) -> str:
     try:
         body = response.json()
@@ -769,6 +793,27 @@ def create_mcp_server(
         """Call this to fetch the top profitable prediction market trader leaderboard and rankings from Polymarket."""
 
         return await _call_tool_async(client.amarket_leaderboard, limit)
+
+    @mcp.tool()
+    async def foresea_debate_market(
+        question: str,
+        platform: str = "Market",
+        market_probability: Optional[float] = None,
+        resolution_criteria: str = "",
+    ) -> Dict[str, Any]:
+        """Conduct an adversarial multi-agent debate (Bull vs. Bear vs. Chief Risk Judge) to cross-examine evidence and isolate blind spots on a forecasting question."""
+
+        return await _call_tool_async(client.adebate_market, question, platform, market_probability, resolution_criteria)
+
+    @mcp.tool()
+    async def foresea_optimize_portfolio(
+        bankroll_usd: float = 1000.0,
+        kelly_fraction: float = 0.25,
+        min_edge: float = 0.05,
+    ) -> Dict[str, Any]:
+        """Calculate optimal mathematical Fractional Kelly capital allocations and position sizes across live Grade A/B prediction market opportunities."""
+
+        return await _call_tool_async(client.aoptimize_portfolio, bankroll_usd, kelly_fraction, min_edge)
     @mcp.resource(
         "foresea://track-record",
         name="Foresea track record",
