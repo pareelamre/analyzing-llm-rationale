@@ -185,6 +185,119 @@ class ChannelBroadcaster:
 
         return embed
 
+    def format_agent_trade_telegram(self, trade: Dict[str, Any]) -> str:
+        """Format an HTML alert for an autonomous agent shadow trade."""
+        model = trade.get("model") or trade.get("agent", "Autonomous Agent")
+        action = trade.get("action", "TRADE").upper()
+        ticker = trade.get("ticker") or trade.get("market_id", "Market")
+        platform = trade.get("platform", "Polymarket / Kalshi")
+        question = trade.get("question") or trade.get("title") or ticker
+        side = trade.get("side", "").upper()
+        shares = trade.get("shares") or trade.get("count")
+        price = trade.get("price") or trade.get("fill_price")
+        notional = trade.get("notional") or trade.get("cost")
+        thesis = trade.get("thesis") or trade.get("rationale") or trade.get("reasoning", "")
+        acc_val = trade.get("account_value")
+
+        side_tag = f"<b>{side}</b>" if side else ""
+        price_str = f"@{price*100:.1f}¢" if (price is not None and price <= 1.0) else (f"@${price:.2f}" if price is not None else "")
+        notional_str = f"${notional:.2f}" if notional is not None else ""
+        shares_str = f"{shares} shares" if shares is not None else ""
+
+        msg = [
+            "🤖 <b>FORESEA AGENT TRADE EXECUTED</b>",
+            f"<b>Model:</b> <code>{model}</code>",
+            f"<b>Market:</b> <a href=\"{trade.get('market_url', self.foresea_url)}\">{self._escape_html(question[:70])}</a>",
+            f"<b>Action:</b> <code>{action} {side_tag}</code> {shares_str} {price_str} ({notional_str}) | <b>Venue:</b> <code>{platform}</code>",
+        ]
+        if acc_val is not None:
+            msg.append(f"<b>Portfolio Value:</b> <code>${acc_val:,.2f}</code>")
+        if thesis:
+            short_thesis = thesis[:350] + ("..." if len(thesis) > 350 else "")
+            msg.extend([
+                "",
+                "<b>Agent Thesis & Rationale:</b>",
+                f"<i>{self._escape_html(short_thesis)}</i>",
+            ])
+        msg.extend([
+            "",
+            f'<a href="{self.foresea_url}/#track-record">View autonomous agent leaderboard on Foresea →</a>',
+        ])
+        return "\n".join(msg)
+
+    def format_agent_trade_discord_embed(self, trade: Dict[str, Any]) -> Dict[str, Any]:
+        """Format a rich Discord Embed for an autonomous agent shadow trade."""
+        model = trade.get("model") or trade.get("agent", "Autonomous Agent")
+        action = trade.get("action", "TRADE").upper()
+        ticker = trade.get("ticker") or trade.get("market_id", "Market")
+        platform = trade.get("platform", "Polymarket / Kalshi")
+        question = trade.get("question") or trade.get("title") or ticker
+        side = trade.get("side", "").upper()
+        shares = trade.get("shares") or trade.get("count")
+        price = trade.get("price") or trade.get("fill_price")
+        notional = trade.get("notional") or trade.get("cost")
+        thesis = trade.get("thesis") or trade.get("rationale") or trade.get("reasoning", "")
+        acc_val = trade.get("account_value")
+
+        color = 0x00FF88 if "BUY" in (side or action) else (0xFF4444 if "SELL" in (side or action) else 0x9B59B6)
+        price_str = f"@{price*100:.1f}¢" if (price is not None and price <= 1.0) else (f"@${price:.2f}" if price is not None else "")
+        notional_str = f"${notional:.2f}" if notional is not None else "N/A"
+        shares_str = f"{shares} shares" if shares is not None else ""
+
+        embed: Dict[str, Any] = {
+            "title": f"🤖 Agent Trade: [{model}] {action} {side}",
+            "description": f"**Market:** [{question[:80]}]({trade.get('market_url', self.foresea_url)})\n**Venue:** `{platform}`",
+            "color": color,
+            "url": f"{self.foresea_url}/#track-record",
+            "fields": [
+                {
+                    "name": "📊 Execution Details",
+                    "value": f"**Action:** `{action} {side}`\n**Size:** `{shares_str} {price_str}`\n**Notional:** `{notional_str}`",
+                    "inline": True,
+                },
+            ],
+            "footer": {"text": "Foresea Autonomous Agent Desk • foresea.ink"},
+        }
+        if acc_val is not None:
+            embed["fields"].append({
+                "name": "💼 Account Value",
+                "value": f"`${acc_val:,.2f}`",
+                "inline": True,
+            })
+        if thesis:
+            short_thesis = thesis[:500] + ("..." if len(thesis) > 500 else "")
+            embed["fields"].append({
+                "name": "📝 Thesis & Reasoning",
+                "value": f"*{short_thesis}*",
+                "inline": False,
+            })
+        return embed
+
+    def broadcast_agent_trade(self, trade: Dict[str, Any]) -> Dict[str, int]:
+        """Broadcast an individual agent trade to all enabled channels."""
+        targets = self.load_targets()
+        discord_targets = [h for h in targets.get("discord_webhooks", []) if h.get("notify_agent_trades", True)]
+        telegram_targets = [t for t in targets.get("telegram_channels", []) if t.get("notify_agent_trades", True)]
+
+        stats = {"sent": 0, "failed": 0}
+        if discord_targets:
+            discord_embed = self.format_agent_trade_discord_embed(trade)
+            for hook in discord_targets:
+                url = hook.get("url", "")
+                if url:
+                    ok = self.broadcast_to_discord(url, discord_embed, name=hook.get("name", "Discord"))
+                    stats["sent" if ok else "failed"] += 1
+
+        if telegram_targets:
+            tg_message = self.format_agent_trade_telegram(trade)
+            for tg in telegram_targets:
+                cid = tg.get("chat_id", "")
+                if cid:
+                    ok = self.broadcast_to_telegram(cid, tg_message)
+                    stats["sent" if ok else "failed"] += 1
+
+        return stats
+
     def broadcast_to_telegram(self, chat_id: str, message: str) -> bool:
         """Send message to a Telegram channel/chat."""
         if not self.telegram_token:
@@ -293,6 +406,7 @@ def main() -> None:
     parser.add_argument("--send", action="store_false", dest="dry_run", help="Actually send broadcast messages")
     parser.add_argument("--min-edge", type=float, default=0.06, help="Minimum edge threshold (default: 0.06 = 6%)")
     parser.add_argument("--limit", type=int, default=5, help="Number of opportunities to include")
+    parser.add_argument("--agent-trade-json", type=str, default="", help="JSON string of an agent trade to broadcast")
     args = parser.parse_args()
 
     broadcaster = ChannelBroadcaster(
@@ -301,8 +415,18 @@ def main() -> None:
         config_path=args.config,
         dry_run=args.dry_run,
     )
-    broadcaster.run_broadcast(min_edge=args.min_edge, limit=args.limit)
+
+    if args.agent_trade_json:
+        try:
+            trade_obj = json.loads(args.agent_trade_json)
+            stats = broadcaster.broadcast_agent_trade(trade_obj)
+            logger.info("Agent trade broadcast complete: %d sent, %d failed", stats.get("sent", 0), stats.get("failed", 0))
+        except Exception as exc:
+            logger.error("Failed to parse or broadcast agent trade JSON: %s", exc)
+    else:
+        broadcaster.run_broadcast(min_edge=args.min_edge, limit=args.limit)
 
 
 if __name__ == "__main__":
     main()
+

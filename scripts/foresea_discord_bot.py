@@ -176,6 +176,97 @@ class ForeseaDiscordClient:
             "footer": {"text": "Transparent Forecaster Calibration • foresea.ink"},
         }
 
+    def build_feed_embed(self, limit: int = 5) -> Dict[str, Any]:
+        """Query Foresea GET /feed/latest and format a combined Alpha & Agent Feed embed."""
+        url = f"{self.base_url}/feed/latest"
+        resp = self.session.get(url, params={"limit": limit}, timeout=15)
+        if resp.status_code != 200:
+            return {
+                "title": "❌ Feed Error",
+                "description": f"Foresea API returned status HTTP {resp.status_code}.",
+                "color": 0xFF0000,
+            }
+        data = resp.json()
+        edge_signals = data.get("market_edge_signals", [])
+        agent_trades = data.get("agent_trades", [])
+
+        embed: Dict[str, Any] = {
+            "title": "🌊 Foresea Alpha & Agent Live Feed",
+            "description": "Unified stream of model edge opportunities and autonomous agent trades:",
+            "color": 0x00D2FF,
+            "url": f"{self.base_url}/#radar",
+            "fields": [],
+            "footer": {"text": "Foresea Multi-Channel Intelligence • foresea.ink"},
+        }
+
+        if edge_signals:
+            edge_lines = []
+            for idx, opp in enumerate(edge_signals[:3], 1):
+                title = opp.get("question") or opp.get("title") or "Market"
+                platform = opp.get("platform", "Venue")
+                edge = opp.get("edge") or 0.0
+                rec = opp.get("recommendation") or "TRADE"
+                edge_lines.append(f"**{idx}. [{platform}]** `{rec}` | {title[:50]} (**{edge*100:+.1f}%**)")
+            embed["fields"].append({
+                "name": "⚡ Top Market Mispricings",
+                "value": "\n".join(edge_lines),
+                "inline": False,
+            })
+
+        if agent_trades:
+            trade_lines = []
+            for act in agent_trades[:3]:
+                model = act.get("model") or act.get("agent", "Model")
+                action = act.get("action") or act.get("type", "Trade")
+                ticker = act.get("ticker") or act.get("market_id", "")
+                shares = act.get("shares") or ""
+                trade_lines.append(f"• `[{model}]` **{action}** {ticker[:35]} {f'({shares} sh)' if shares else ''}")
+            embed["fields"].append({
+                "name": "🤖 Recent Agent Actions",
+                "value": "\n".join(trade_lines),
+                "inline": False,
+            })
+
+        return embed
+
+    def build_agent_board_embed(self, limit: int = 5) -> Dict[str, Any]:
+        """Query Foresea GET /agent-trading/board and format leaderboard."""
+        url = f"{self.base_url}/agent-trading/board"
+        resp = self.session.get(url, timeout=15)
+        if resp.status_code != 200:
+            return {
+                "title": "❌ Agent Board Error",
+                "description": f"Foresea API returned status HTTP {resp.status_code}.",
+                "color": 0xFF0000,
+            }
+        data = resp.json()
+        leaderboard = data.get("leaderboard", [])
+
+        embed: Dict[str, Any] = {
+            "title": "🏆 Foresea Autonomous Agent Trading Leaderboard",
+            "description": "Live shadow portfolio rankings across 10 LLM trading agents:",
+            "color": 0xFFD700,
+            "url": f"{self.base_url}/#track-record",
+            "fields": [],
+            "footer": {"text": "Foresea Shadow Trading Arena • foresea.ink"},
+        }
+
+        for idx, row in enumerate(leaderboard[:limit], 1):
+            model = row.get("model", "Agent")
+            val = row.get("account_value", 10000.0)
+            ret_pct = row.get("return_pct", 0.0)
+            trades = row.get("n_trades", 0)
+            win_rate = row.get("win_rate")
+            win_str = f"{win_rate*100:.1f}%" if win_rate is not None else "N/A"
+
+            embed["fields"].append({
+                "name": f"#{idx} {model}",
+                "value": f"**Value:** `${val:,.2f}` (`{ret_pct:+.2f}%`) | **Trades:** `{trades}` | **Win:** `{win_str}`",
+                "inline": False,
+            })
+
+        return embed
+
     def post_to_webhook(self, webhook_url: str, embed: Dict[str, Any], content: str = "") -> bool:
         """Post a formatted embed to a Discord Webhook URL."""
         payload: Dict[str, Any] = {"embeds": [embed]}
@@ -194,6 +285,8 @@ def main() -> None:
     parser.add_argument("--webhook-url", default=os.getenv("DISCORD_WEBHOOK_URL", ""), help="Discord Webhook URL")
     parser.add_argument("--base-url", default=os.getenv("FORESEA_BASE_URL", DEFAULT_FORESEA_URL), help="Foresea API URL")
     parser.add_argument("--post-edge", action="store_true", help="Post current top Edge Board opportunities to webhook")
+    parser.add_argument("--post-feed", action="store_true", help="Post unified Alpha & Agent Feed to webhook")
+    parser.add_argument("--post-agents", action="store_true", help="Post Agent Leaderboard to webhook")
     parser.add_argument("--post-track", action="store_true", help="Post current track record to webhook")
     parser.add_argument("--forecast", type=str, default="", help="Question to forecast and post to webhook")
     args = parser.parse_args()
@@ -201,7 +294,15 @@ def main() -> None:
     client = ForeseaDiscordClient(foresea_base_url=args.base_url)
 
     if args.webhook_url:
-        if args.post_edge:
+        if args.post_feed:
+            embed = client.build_feed_embed()
+            ok = client.post_to_webhook(args.webhook_url, embed)
+            logger.info("Posted Unified Feed to Discord Webhook: %s", "Success" if ok else "Failed")
+        elif args.post_agents:
+            embed = client.build_agent_board_embed()
+            ok = client.post_to_webhook(args.webhook_url, embed)
+            logger.info("Posted Agent Leaderboard to Discord Webhook: %s", "Success" if ok else "Failed")
+        elif args.post_edge:
             embed = client.build_edge_board_embed()
             ok = client.post_to_webhook(args.webhook_url, embed)
             logger.info("Posted Edge Board to Discord Webhook: %s", "Success" if ok else "Failed")
@@ -214,10 +315,11 @@ def main() -> None:
             ok = client.post_to_webhook(args.webhook_url, embed)
             logger.info("Posted Forecast to Discord Webhook: %s", "Success" if ok else "Failed")
         else:
-            logger.info("No action specified. Use --post-edge, --post-track, or --forecast <q>.")
+            logger.info("No action specified. Use --post-feed, --post-agents, --post-edge, --post-track, or --forecast <q>.")
     else:
         logger.info("Foresea Discord Client initialized. Pass --webhook-url to post.")
 
 
 if __name__ == "__main__":
     main()
+

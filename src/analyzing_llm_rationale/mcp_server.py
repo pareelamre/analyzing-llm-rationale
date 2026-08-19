@@ -61,9 +61,10 @@ _TOOL_NAMES = {
     "price_history": "foresea_price_history", "aprice_history": "foresea_price_history",
     "live_data": "foresea_live_data", "alive_data": "foresea_live_data",
     "polymarket_meta": "foresea_polymarket_meta", "apolymarket_meta": "foresea_polymarket_meta",
-    "recent_trades": "foresea_recent_trades", "arecent_trades": "foresea_recent_trades",
     "market_leaderboard": "foresea_market_leaderboard", "amarket_leaderboard": "foresea_market_leaderboard",
+    "feed_latest": "foresea_feed_latest", "afeed_latest": "foresea_feed_latest",
 }
+
 
 DEFAULT_FORESEA_BASE_URL = "https://foresea.ink"
 DEFAULT_TIMEOUT_S = 120.0
@@ -497,6 +498,28 @@ class ForeseaClient:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.optimize_portfolio(bankroll_usd, kelly_fraction, min_edge))
 
+    def feed_latest(self, limit: int = 10, min_edge: float = 0.05) -> Dict[str, Any]:
+        """Fetch unified alpha and agent feed from Foresea API."""
+        try:
+            resp = self._session.get(f"{self._base_url}/feed/latest", params={"limit": limit, "min_edge": min_edge}, timeout=15)
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception:
+            pass
+        return {
+            "channels": {
+                "discord": "https://discord.com/channels/1539674155228860527/1539674155799289991",
+                "telegram": "https://t.me/+QIVxIyqCc-w4NzQ9",
+            },
+            "market_edge_signals": self.edge_board()[:limit],
+            "agent_trades": [],
+        }
+
+    async def afeed_latest(self, limit: int = 10, min_edge: float = 0.05) -> Dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.feed_latest(limit, min_edge))
+
+
 def _response_detail(response: Any) -> str:
     try:
         body = response.json()
@@ -814,6 +837,13 @@ def create_mcp_server(
         """Calculate optimal mathematical Fractional Kelly capital allocations and position sizes across live Grade A/B prediction market opportunities."""
 
         return await _call_tool_async(client.aoptimize_portfolio, bankroll_usd, kelly_fraction, min_edge)
+
+    @mcp.tool()
+    async def foresea_feed_latest(limit: int = 10, min_edge: float = 0.05) -> Dict[str, Any]:
+        """Fetch the real-time unified Foresea Alpha & Agent Feed, combining live prediction market edge signals, autonomous agent trades & theses, and leaderboard standings."""
+
+        return await _call_tool_async(client.afeed_latest, limit, min_edge)
+
     @mcp.resource(
         "foresea://track-record",
         name="Foresea track record",

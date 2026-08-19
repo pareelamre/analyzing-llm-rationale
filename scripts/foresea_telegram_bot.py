@@ -214,13 +214,89 @@ class ForeseaTelegramBot:
             logger.error("Track record fetch failed: %s", exc)
             return f"<b>❌ Error fetching track record:</b> {self._escape_html(str(exc))}"
 
+    def handle_feed(self, limit: int = 5) -> str:
+        """Query Foresea GET /feed/latest and format combined Alpha & Agent Feed."""
+        url = f"{self.base_url}/feed/latest"
+        try:
+            resp = self.session.get(url, params={"limit": limit}, timeout=15)
+            if resp.status_code != 200:
+                return f"<b>❌ Error fetching feed:</b> HTTP {resp.status_code}"
+            data = resp.json()
+            edge_signals = data.get("market_edge_signals", [])
+            agent_trades = data.get("agent_trades", [])
+
+            msg = [
+                "<b>🌊 Foresea Alpha & Agent Live Feed</b>",
+                "<i>Real-time calibrated edge signals and autonomous agent actions:</i>",
+                "",
+            ]
+            if edge_signals:
+                msg.append("<b>⚡ Top Edge Signals:</b>")
+                for idx, opp in enumerate(edge_signals[:3], 1):
+                    title = opp.get("question") or opp.get("title") or "Market"
+                    platform = opp.get("platform", "Venue")
+                    edge = opp.get("edge") or 0.0
+                    rec = opp.get("recommendation") or "TRADE"
+                    msg.append(f"{idx}. <code>[{platform}]</code> <b>{rec}</b>: {self._escape_html(title[:55])} (<code>{edge*100:+.1f}%</code>)")
+                msg.append("")
+
+            if agent_trades:
+                msg.append("<b>🤖 Recent Autonomous Trades:</b>")
+                for act in agent_trades[:3]:
+                    model = act.get("model") or act.get("agent", "Model")
+                    action = act.get("action") or act.get("type", "Trade")
+                    ticker = act.get("ticker") or act.get("market_id", "")
+                    msg.append(f"• <code>[{model}]</code> <b>{action}</b> {self._escape_html(ticker[:40])}")
+                msg.append("")
+
+            msg.append(f'<a href="{self.base_url}">Explore live desk on Foresea →</a>')
+            return "\n".join(msg)
+        except Exception as exc:
+            logger.error("Feed fetch failed: %s", exc)
+            return f"<b>❌ Error fetching feed:</b> {self._escape_html(str(exc))}"
+
+    def handle_agents(self, limit: int = 5) -> str:
+        """Query Foresea GET /agent-trading/board and format leaderboard."""
+        url = f"{self.base_url}/agent-trading/board"
+        try:
+            resp = self.session.get(url, timeout=15)
+            if resp.status_code != 200:
+                return f"<b>❌ Error fetching agent board:</b> HTTP {resp.status_code}"
+            data = resp.json()
+            leaderboard = data.get("leaderboard", [])
+
+            msg = [
+                "<b>🏆 Foresea Agent Trading Leaderboard</b>",
+                "<i>Live shadow portfolio performance across 10 LLM trading models:</i>",
+                "",
+            ]
+            for idx, row in enumerate(leaderboard[:limit], 1):
+                model = row.get("model", "Agent")
+                val = row.get("account_value", 10000.0)
+                ret_pct = row.get("return_pct", 0.0)
+                trades = row.get("n_trades", 0)
+                win_rate = row.get("win_rate")
+                win_str = f"{win_rate*100:.1f}%" if win_rate is not None else "N/A"
+                msg.append(f"<b>#{idx} <code>{model}</code></b>: <code>${val:,.2f}</code> (<b>{ret_pct:+.2f}%</b>) | <b>Trades:</b> <code>{trades}</code> | <b>Win:</b> <code>{win_str}</code>")
+
+            msg.extend([
+                "",
+                f'<a href="{self.base_url}/#track-record">View full agent arena & equity curves →</a>',
+            ])
+            return "\n".join(msg)
+        except Exception as exc:
+            logger.error("Agent board fetch failed: %s", exc)
+            return f"<b>❌ Error fetching agent board:</b> {self._escape_html(str(exc))}"
+
     def handle_help(self) -> str:
         """Return the help menu text."""
         return (
             "<b>🌊 Foresea Forecasting & Prediction Market Bot</b>\n\n"
             "<b>Available Commands:</b>\n"
             "• <code>/forecast &lt;question&gt;</code> — Calibrated probability forecast with rationale & evidence\n"
+            "• <code>/feed</code> — Real-time combined Alpha & Agent trade stream\n"
             "• <code>/edge</code> — Top mispriced opportunities across Polymarket & Kalshi\n"
+            "• <code>/agents</code> — Autonomous AI agent trading leaderboard\n"
             "• <code>/track</code> — Live Brier score, calibration & accuracy metrics\n"
             "• <code>/subscribe</code> — Receive automated top-edge market alerts\n"
             "• <code>/unsubscribe</code> — Stop automated alerts\n"
@@ -246,6 +322,10 @@ class ForeseaTelegramBot:
             self.send_message(chat_id, self.handle_help())
         elif cmd == "/forecast":
             self.send_message(chat_id, self.handle_forecast(arg))
+        elif cmd in ("/feed", "/stream"):
+            self.send_message(chat_id, self.handle_feed())
+        elif cmd in ("/agents", "/leaderboard", "/models"):
+            self.send_message(chat_id, self.handle_agents())
         elif cmd in ("/edge", "/radar"):
             self.send_message(chat_id, self.handle_edge_board())
         elif cmd in ("/track", "/trackrecord", "/calibration"):
@@ -256,6 +336,7 @@ class ForeseaTelegramBot:
         elif cmd == "/unsubscribe":
             self.subscribed_chats.discard(chat_id)
             self.send_message(chat_id, "<b>✅ Unsubscribed.</b> You will no longer receive alerts.")
+
 
     def run_polling(self) -> None:
         """Run the main bot polling loop."""

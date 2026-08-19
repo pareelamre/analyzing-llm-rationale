@@ -1,19 +1,32 @@
 {
-  "description": "Configured Discord webhooks and Telegram channels for Foresea market edge broadcasts.",
+  "description": "Configured Discord webhooks and Telegram channels for Foresea market edge, forecast alpha, and agent trade broadcasts.",
   "discord_webhooks": [
     {
-      "name": "Foresea Community Alpha Desk",
+      "name": "Foresea Discord Feed (#general/alpha-feed: 1539674155799289991)",
+      "guild_id": "1539674155228860527",
+      "channel_id": "1539674155799289991",
+      "channel_url": "https://discord.com/channels/1539674155228860527/1539674155799289991",
       "url": "",
-      "enabled": false,
-      "min_edge": 0.08
+      "enabled": true,
+      "min_edge": 0.06,
+      "notify_agent_trades": true
     }
   ],
   "telegram_channels": [
     {
-      "name": "Foresea Alpha Broadcast",
-      "chat_id": "@ForeseaAlpha",
-      "enabled": false,
-      "min_edge": 0.08
+      "name": "Foresea Telegram Alpha & Agent Feed",
+      "invite_url": "https://t.me/+QIVxIyqCc-w4NzQ9",
+      "chat_id": "",
+      "enabled": true,
+      "min_edge": 0.06,
+      "notify_agent_trades": true
     }
-  ]
+  ],
+  "feed_settings": {
+    "cooldown_hours_per_market": 4,
+    "max_daily_alerts": 20,
+    "include_agent_trades": true,
+    "include_edge_board": true,
+    "include_daily_digest": true
+  }
 }

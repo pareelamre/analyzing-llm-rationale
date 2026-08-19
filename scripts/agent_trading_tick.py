@@ -522,10 +522,38 @@ def run_cycle(model: str) -> None:
             ),
         )
 
+    _broadcast_cycle_trades(model, report)
+
     print(
         f"agent-trading-tick done model={model} cycle={cycle_id} "
         f"steps={len(report.tool_transcript)} candidates={len(candidates_offered)}"
     )
+
+
+def _broadcast_cycle_trades(model: str, report: Any) -> None:
+    """Broadcast any executed trades in this cycle to Discord and Telegram feeds."""
+    try:
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from channel_broadcaster import ChannelBroadcaster
+        broadcaster = ChannelBroadcaster(dry_run=False)
+        for step in getattr(report, "tool_transcript", []):
+            tool_name = step.get("tool") or step.get("action")
+            if tool_name in ("place_trade", "place_order", "buy", "buy_order"):
+                args = step.get("args") or {}
+                trade_payload = {
+                    "model": model,
+                    "action": args.get("action", "TRADE"),
+                    "side": args.get("side", args.get("action", "TRADE")),
+                    "ticker": args.get("ticker") or args.get("market_id", ""),
+                    "platform": args.get("platform", "Polymarket / Kalshi"),
+                    "shares": args.get("count") or args.get("shares"),
+                    "price": args.get("price"),
+                    "thesis": getattr(report, "thesis", ""),
+                }
+                broadcaster.broadcast_agent_trade(trade_payload)
+    except Exception as exc:  # noqa: BLE001
+        print(f"agent-trading-tick broadcast hook warning: {exc}", file=sys.stderr)
+
 
 
 def main() -> int:
