@@ -284,6 +284,35 @@ def compute_promotion_eligibility(
     }
 
 
+def clean_thesis_display(raw_thesis: Optional[str]) -> str:
+    """Normalize and format an agent's thesis for display on the trading board.
+
+    Extracts substantive thought/rationale if the model produced a JSON envelope
+    (e.g. `{"thought": "...", "action": "..."}` or `{"final": "..."}`).
+    """
+    if not raw_thesis:
+        return ""
+    text = str(raw_thesis).strip()
+    if (text.startswith("{") and text.endswith("}")) or (text.startswith("```json") and text.endswith("```")):
+        clean_json = text
+        if text.startswith("```json"):
+            clean_json = text.strip("`").removeprefix("json").strip()
+        try:
+            parsed = json.loads(clean_json)
+            if isinstance(parsed, dict):
+                thought = parsed.get("thought") or parsed.get("reasoning") or parsed.get("analysis")
+                final = parsed.get("final") or parsed.get("answer") or parsed.get("thesis")
+                if final and thought:
+                    return f"{final}\n\n**Detailed Analysis:**\n{thought}".strip()
+                if final:
+                    return str(final).strip()
+                if thought:
+                    return str(thought).strip()
+        except Exception:
+            pass
+    return text
+
+
 def recent_activity(
     conn: sqlite3.Connection,
     notes_by_agent: Mapping[str, List[Mapping[str, Any]]],
@@ -331,7 +360,7 @@ def recent_activity(
             "agent_id": row["agent_id"],
             "type": "thesis",
             "cycle_id": row["cycle_id"],
-            "thesis": row["thesis"],
+            "thesis": clean_thesis_display(row["thesis"]),
         })
 
     for agent_id, notes in notes_by_agent.items():

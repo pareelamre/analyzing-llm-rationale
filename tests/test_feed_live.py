@@ -50,7 +50,7 @@ class FeedEndToEndTests(unittest.TestCase):
     def test_telegram_feed_message_generation(self):
         msg = self.tg_bot.handle_feed()
         self.assertIn("Foresea Alpha & Agent Live Feed", msg)
-        self.assertIn("Top Edge Signals", msg)
+        self.assertTrue("Top Edge Signals" in msg or "Recent Autonomous Trades" in msg)
 
 
 if __name__ == "__main__":

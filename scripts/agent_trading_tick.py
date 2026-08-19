@@ -73,13 +73,9 @@ MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS
 # Each venue's own resolution rules -- fetched fresh every cycle by
 # market_data.py's fetch_kalshi/fetch_polymarket (never cached from
 # position-open time), so a rule change the venue makes after entry is
-# always visible on the very next cycle. Never surfaced to the agent before
-# this, even though it was already there in every quote: a market's
-# question text alone can be actively misleading about what qualifies --
-# observed live, an agent reasoned a cabinet-departure market should
-# resolve YES for a specific person's resignation, when that market's own
-# rules explicitly carved that person's case out.
-MAX_RULES_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_RULES_CHARS", "2000")))
+# always visible on the very next cycle. All characters are supplied in full
+# without truncation so the agent has the complete legal criteria and carveouts.
+MAX_RULES_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_RULES_CHARS", "50000")))
 
 
 def _model_backstop_chars(model: str) -> int:
@@ -204,8 +200,8 @@ def _build_portfolio_block(conn, agent_id: str, last_thesis: Optional[str]) -> s
             )
     else:
         lines.append("Open positions: none.")
-    if last_thesis:
-        lines.append(f"Your own reasoning from the previous cycle: {_excerpt(last_thesis, MAX_LAST_THESIS_CHARS)}")
+    if last_thesis and last_thesis.strip():
+        lines.append(f"Your own reasoning from the previous cycle:\n{last_thesis.strip()}")
     return "\n".join(lines)
 
 
@@ -233,7 +229,7 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
         f"no bid/ask {_fmt_px(no_bid)}/{_fmt_px(no_ask)}, "
         f"resolution window {opens} -> {close})"
     )
-    rules = _excerpt(quote.get("resolution_criteria"), MAX_RULES_CHARS)
+    rules = str(quote.get("resolution_criteria") or "").strip()
     if rules:
         line += f"\n    Resolution rules: {rules}"
     return line
@@ -358,7 +354,7 @@ _TRADING_INSTRUCTION = (
     "Price orders off the live yes/no bid/ask shown above -- not an "
     "estimate. Never guess a price or reuse your entry price for the "
     "opposite side when closing: yes and no move independently. A real "
-    "mispricing against your own view is exactly when to trade it. "
+    "mispricing against your own view is exactly when to trade it.\n\n"
     "CRITICAL RULES COMPLIANCE: Read the 'Resolution rules' provided for every "
     "market carefully before taking any action. Market resolution is governed "
     "strictly by the venue's legal resolution rules, definitions, and specific "
@@ -370,7 +366,12 @@ _TRADING_INSTRUCTION = (
     "the event date falls within THIS ticker's resolution window (shown above) -- "
     "Kalshi often has several tickers for the same question on different date ranges "
     "(e.g. '-26APR' vs '-26MAY22-26SEP'), so evidence from before this window opened "
-    "doesn't resolve this contract. If you don't want to act, just say why."
+    "doesn't resolve this contract.\n\n"
+    "THESIS PROTOCOL: In your final answer, provide a structured, high-conviction investment thesis covering:\n"
+    "1. **Cycle Decision & Execution**: Clear action (BUY YES / BUY NO / CLOSE / HOLD / PASS), ticker, venue, and target price.\n"
+    "2. **Resolution Rules Verification**: Explicitly confirm the event/entity qualifies under the venue's stated rules with zero disqualifying exclusions.\n"
+    "3. **Model Edge vs Market**: Your assessed true probability vs current market price and why the mispricing exists.\n"
+    "4. **Catalysts & Invalidation**: Key upcoming dates/milestones and the exact condition that invalidates this thesis."
 )
 
 

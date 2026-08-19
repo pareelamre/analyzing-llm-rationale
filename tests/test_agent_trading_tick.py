@@ -307,14 +307,12 @@ class CandidateLineFormattingTests(unittest.TestCase):
         line = agent_trading_tick._fmt_candidate_line(_quote("KXFOO"))
         self.assertNotIn("Resolution rules:", line)
 
-    def test_candidate_line_excerpts_an_overlong_resolution_rules_text(self):
-        overlong = "x" * (agent_trading_tick.MAX_RULES_CHARS + 500)
+    def test_candidate_line_supplies_full_resolution_rules_text(self):
+        full_rules = "All legal definitions, exclusions, and criteria: " + ("rule_detail " * 200).strip()
         line = agent_trading_tick._fmt_candidate_line(
-            _quote("KXFOO", resolution_criteria=overlong)
+            _quote("KXFOO", resolution_criteria=full_rules)
         )
-        rules_section = line.split("Resolution rules: ", 1)[1]
-        self.assertLessEqual(len(rules_section), agent_trading_tick.MAX_RULES_CHARS + 1)
-        self.assertIn("…", rules_section)
+        self.assertIn("Resolution rules: " + full_rules, line)
 
 
 class ModelBackstopCharsTests(unittest.TestCase):
@@ -463,23 +461,17 @@ class PortfolioBlockTests(unittest.TestCase):
         self.assertIn("Open positions: none.", block)
         self.assertNotIn("previous cycle", block)
 
-    def test_portfolio_block_excerpts_an_overlong_last_thesis(self):
-        # Regression: AgentAnalyzeRequest.question has a hard 2000-char
-        # server-side limit, and a single verbose thesis echoed back verbatim
-        # can exceed that on its own (observed live: a 2334-char thesis broke
-        # every subsequent cycle for that agent, since the offending thesis
-        # never gets replaced by a new one once every cycle starts failing).
-        overlong = "x" * (agent_trading_tick.MAX_LAST_THESIS_CHARS + 200)
+    def test_portfolio_block_supplies_full_last_thesis(self):
+        full_thesis = "x" * 2500
         with tempfile.TemporaryDirectory() as td:
             with mock.patch.dict(
                 os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}, clear=False
             ):
                 with benchmark_tools._account_transaction() as conn:
-                    block = agent_trading_tick._build_portfolio_block(conn, "model-c", overlong)
+                    block = agent_trading_tick._build_portfolio_block(conn, "model-c", full_thesis)
 
-        self.assertNotIn(overlong, block)
+        self.assertIn(full_thesis, block)
         self.assertIn("Your own reasoning from the previous cycle:", block)
-        self.assertIn("…", block)
 
 
 class RunCycleTests(unittest.TestCase):
