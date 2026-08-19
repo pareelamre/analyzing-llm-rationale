@@ -75,9 +75,15 @@ ChatFn = Callable[[List[Dict[str, str]]], Awaitable[str]]
 
 
 def build_system_prompt(tool_specs: List[Dict[str, str]], max_steps: int, extra_rules: str = "") -> str:
+    """System prompt framing the ReAct loop and listing available tools."""
     lines = [
-        "You are a forecasting research agent. You gather information by calling "
+        "You are an autonomous research and forecasting agent. Plan, call "
         "tools, then give a final answer.",
+        "",
+        "REASONING & EVIDENCE STANDARDS:",
+        "- Causal Grounding: Anchor reasoning in concrete, verified facts (dates, official statements, filings) rather than speculation.",
+        "- Rule Verification: Actively verify facts against the contract's resolution criteria and explicit exclusions before drawing conclusions.",
+        "- Probabilistic Rigor: Distinguish between theoretical possibility and calibrated probabilities; explain any divergence from market odds.",
         "",
         "Respond with EXACTLY ONE JSON object per turn — nothing else — in one of two forms:",
         '  {"thought": "...", "action": "TOOL_NAME", "args": { ... }}   to call a tool',
