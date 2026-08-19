@@ -374,6 +374,113 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["answer"], "no tools needed")
         self.assertEqual(seen, [])
 
+    def test_retries_once_after_unparseable_turn_then_succeeds(self):
+        # Regression for minimax-m3: a turn with no parseable JSON at all used
+        # to be accepted as the final answer immediately, wasting the whole
+        # cycle. It should now get one corrective nudge before that happens.
+        seen_messages = []
+
+        async def get_market(args):
+            return "price 42%"
+
+        turns = iter([
+            "I'll research the current state of this market.",
+            '{"action":"get_market","args":{}}',
+            '{"final":"It trades around 42%."}',
+        ])
+
+        async def chat_fn(messages):
+            seen_messages.append(list(messages))
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "where does it trade?", {"get_market": get_market},
+            [{"name": "get_market", "description": "fetch price"}], chat_fn, max_steps=5))
+
+        self.assertEqual(res["answer"], "It trades around 42%.")
+        self.assertFalse(res["truncated"])
+        self.assertEqual(len(res["transcript"]), 1)
+        self.assertIn("could not be parsed", seen_messages[1][-1]["content"])
+
+    def test_retries_once_when_turn_is_a_foreign_tool_call_dialect(self):
+        # Regression for minimax-m3: it sometimes emits Claude-style
+        # <function_calls><invoke> XML instead of the prompted JSON schema.
+        # parse_action can't find any JSON in that at all.
+        async def get_market(args):
+            return "price 42%"
+
+        turns = iter([
+            '<function_calls><invoke name="get_market">',
+            '{"action":"get_market","args":{}}',
+            '{"final":"done"}',
+        ])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"get_market": get_market},
+            [{"name": "get_market", "description": "d"}], chat_fn, max_steps=5))
+        self.assertEqual(res["answer"], "done")
+        self.assertEqual(len(res["transcript"]), 1)
+
+    def test_gives_up_after_one_failed_retry_and_returns_raw_text(self):
+        turns = iter([
+            "I'll research the current state of this market.",
+            'I am still just thinking out loud, not calling anything.',
+        ])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=5))
+        self.assertEqual(res["answer"], "I am still just thinking out loud, not calling anything.")
+        self.assertEqual(res["steps"], 1)
+        self.assertEqual(res["transcript"], [])
+        self.assertFalse(res["truncated"])
+
+    def test_no_retry_when_no_step_budget_remains(self):
+        calls = []
+
+        async def chat_fn(messages):
+            calls.append(1)
+            return "I'll research the current state of this market."
+
+        res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=1))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(res["answer"], "I'll research the current state of this market.")
+        self.assertEqual(res["steps"], 0)
+
+    def test_no_retry_for_valid_json_missing_action_key(self):
+        # A model that answers directly with structured data (e.g. raw
+        # forecast fields) instead of a tool-call envelope is valid JSON,
+        # just not one of the two recognized shapes -- this must still be
+        # treated as an immediate final answer (a deterministic backstop may
+        # extract structure from it), not retried like genuinely unparseable
+        # output.
+        calls = []
+
+        async def chat_fn(messages):
+            calls.append(1)
+            return '{"probability": 0.7, "rationale": "because"}'
+
+        res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=5))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(res["steps"], 0)
+        self.assertIn("probability", res["answer"])
+
+    def test_retry_does_not_fire_for_a_well_formed_final_answer(self):
+        calls = []
+
+        async def chat_fn(messages):
+            calls.append(1)
+            return '{"final": "no tools needed"}'
+
+        res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=5))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(res["answer"], "no tools needed")
+        self.assertEqual(res["steps"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
