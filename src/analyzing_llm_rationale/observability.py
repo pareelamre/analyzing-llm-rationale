@@ -36,6 +36,8 @@ def init_observability(app: "FastAPI | None" = None) -> None:
     global _INITIALIZED
     if _INITIALIZED:
         return
+    if os.environ.get("ENABLE_OTEL", "1").strip().lower() in ("0", "false", "no", "off"):
+        return
     _INITIALIZED = True
 
     resource = Resource.create({

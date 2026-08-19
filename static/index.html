@@ -5765,10 +5765,13 @@ async function loadCrypto5mEquity() {
   }
 }
 
+let _agentTradingTimer = null;
+
 function _stopEdgeTimers() {
   clearInterval(_edgePriceTimer);   _edgePriceTimer = null;
   clearInterval(_ebForecastTimer);  _ebForecastTimer = null;
   clearInterval(_crypto5mTimer);    _crypto5mTimer = null;
+  clearInterval(_agentTradingTimer); _agentTradingTimer = null;
 }
 
 // Idempotent: always clears before setting, so calling this twice can never
@@ -5779,6 +5782,9 @@ function _startEdgeTimers() {
   _edgePriceTimer  = setInterval(refreshEdgePrices, 60000);
   _ebForecastTimer = setInterval(refreshEdgeForecasts, 5 * 60 * 1000);
   _crypto5mTimer   = setInterval(loadCrypto5mEquity, 30 * 1000);
+  _agentTradingTimer = setInterval(() => {
+    if (_ebView === 'agentic') loadAgentTradingSection();
+  }, 30 * 1000);
 }
 
 // Browsers throttle (and in some cases suspend) setInterval in hidden tabs, so
@@ -5791,6 +5797,7 @@ document.addEventListener('visibilitychange', () => {
   refreshEdgePrices();
   refreshEdgeForecasts();
   loadCrypto5mEquity();
+  if (_ebView === 'agentic') loadAgentTradingSection();
 });
 
 async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
@@ -6118,6 +6125,31 @@ async function loadAgentTradingSection() {
   }
 }
 
+function _formatThesisHtml(rawThesis) {
+  if (!rawThesis) return '';
+  let s = escHtml(String(rawThesis).trim());
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*([^\*]+?)\*/g, '<em>$1</em>');
+  s = s.replace(/`([^`]+?)`/g, '<code style="background:var(--paper);padding:1px 4px;border-radius:4px;font-size:12px;">$1</code>');
+  s = s.replace(/\n\n+/g, '</p><p style="margin-top:8px">').replace(/\n/g, '<br>');
+  return `<div style="line-height:1.5;color:var(--text);font-size:13px">${s}</div>`;
+}
+
+function _toggleAgentPositions(agentId) {
+  const el = document.getElementById('agent-pos-' + agentId);
+  if (!el) return;
+  el.classList.toggle('hidden-view');
+}
+
+window._agentActivityFilter = window._agentActivityFilter || 'all';
+
+function _filterAgentActivity(modelId) {
+  window._agentActivityFilter = modelId;
+  if (window._lastAgentBoardData) {
+    renderAgentTradingBoard(window._lastAgentBoardData);
+  }
+}
+
 function _agentTradingActivityLine(a) {
   const platformTag = a.platform ? `<span style="opacity:0.6">[${escHtml(String(a.platform))}]</span> ` : '';
   if (a.type === 'trade') {
@@ -6132,7 +6164,7 @@ function _agentTradingActivityLine(a) {
     return `${platformTag}Trade rejected: ${escHtml(a.ticker || '')}`;
   }
   if (a.type === 'thesis') {
-    return escHtml(a.thesis || '');
+    return _formatThesisHtml(a.thesis || '');
   }
   if (a.type === 'note') {
     return `Note: ${escHtml(a.text || '')}`;
@@ -6158,6 +6190,7 @@ function _eligibilityReasonText(elig) {
 function renderAgentTradingBoard(d) {
   const host = document.getElementById('eb-agentic-section');
   if (!host) return;
+  window._lastAgentBoardData = d;
   const genAt = d && d.generated_at ? new Date(d.generated_at) : null;
   const gen = genAt && !Number.isNaN(genAt.getTime()) ? genAt.toLocaleString() : '';
   const staleBadge = d && d.freshness && d.freshness.stale ? ' · <span style="color:#b45309;font-weight:600">Stale</span>' : '';
@@ -6254,34 +6287,91 @@ function renderAgentTradingBoard(d) {
     const pnlTitle = feesPaid > 0
       ? `Net P&L: ${_usd(pnl)} (Realized: ${_usd(row.realized_pnl || 0)}, Unrealized: ${_usd(row.unrealized_pnl || 0)}, Fees: ${_usd(feesPaid)})`
       : `Net P&L: ${_usd(pnl)}`;
-    return `<tr class="eb-row" data-model="${escAttr(row.agent_id || '')}">
+    
+    const openPos = row.open_positions || [];
+    let posDrawerRows = '<p class="text-xs text-gray-500 my-1">No open positions held. Cash: ' + _usd(row.cash) + '</p>';
+    if (openPos.length > 0) {
+      const posTableLines = openPos.map(p => {
+        const uPnl = Number(p.unrealized_pnl) || 0;
+        const uPnlColor = uPnl >= 0 ? '#0a7' : '#c33';
+        return `<tr>
+          <td style="padding:4px 8px;"><b>[${escHtml(p.platform || 'Venue')}]</b> ${escHtml(p.ticker || '')}</td>
+          <td style="padding:4px 8px;"><b>${escHtml(String(p.side || '').toUpperCase())}</b></td>
+          <td style="padding:4px 8px;">${p.quantity}</td>
+          <td style="padding:4px 8px;">${_usd(p.avg_entry_price)}</td>
+          <td style="padding:4px 8px;">${_usd(p.current_price)}</td>
+          <td style="padding:4px 8px;color:${uPnlColor};font-weight:600">${uPnl >= 0 ? '+' : ''}${_usd(uPnl)}</td>
+        </tr>`;
+      }).join('');
+      posDrawerRows = `<table class="eb-table text-xs" style="margin-top:4px;background:#fff;border:1px solid var(--border);border-radius:6px;">
+        <thead><tr><th>Market</th><th>Side</th><th>Contracts</th><th>Avg Entry</th><th>Mark Price</th><th>Unrealized P&L</th></tr></thead>
+        <tbody>${posTableLines}</tbody>
+      </table>`;
+    }
+
+    return `<tr class="eb-row" style="cursor:pointer" onclick="_toggleAgentPositions('${escAttr(agentId)}')">
       <td><b>${i + 1}</b></td>
-      <td><b>${escHtml(_ebModelHead(row.agent_id || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(row.agent_id || '')}</span></td>
+      <td><b>${escHtml(_ebModelHead(agentId))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(agentId)}</span></td>
       <td><b>${_usd(row.account_value)}</b></td>
       <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnl >= 0 ? '+' : ''}${_usd(pnl)}</td>
       <td style="color:${pnlColor};font-weight:600">${_roiPct((Number(row.return_pct) || 0) / 100)}</td>
       <td>${winRate}</td>
       <td>${row.trade_count ?? 0}</td>
-      <td>${(row.open_positions || []).length}</td>
+      <td><span class="eb-badge" style="cursor:pointer" title="Click to view open positions">${openPos.length} pos ▾</span></td>
       <td>${eligCell}</td>
+    </tr>
+    <tr id="agent-pos-${escAttr(agentId)}" class="hidden-view" style="background:#fcfcfd;">
+      <td colspan="9" style="padding:10px 14px;border-bottom:1px solid var(--border);border-top:1px dashed var(--border);">
+        <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">
+          Active Book · ${escHtml(_ebModelLabel(agentId))} (Cash: ${_usd(row.cash)})
+        </div>
+        ${posDrawerRows}
+      </td>
     </tr>`;
   }).join('');
 
-  const activityRows = activity.slice(0, 30).map(a => {
+  // Model filter pill bar
+  const activeFilter = window._agentActivityFilter || 'all';
+  const filterPills = [
+    `<button type="button" class="eb-view-tab ${activeFilter === 'all' ? 'active' : ''}" onclick="_filterAgentActivity('all')">All Models</button>`
+  ];
+  leaderboard.forEach(row => {
+    const aId = row.agent_id || '';
+    filterPills.push(
+      `<button type="button" class="eb-view-tab ${activeFilter === aId ? 'active' : ''}" onclick="_filterAgentActivity('${escAttr(aId)}')">${escHtml(_ebModelHead(aId))}</button>`
+    );
+  });
+
+  const filteredActivity = activeFilter === 'all'
+    ? activity
+    : activity.filter(a => a.agent_id === activeFilter);
+
+  const activityRows = filteredActivity.slice(0, 30).map(a => {
     const when = a.ts ? new Date(a.ts).toLocaleString() : '';
     const body = _agentTradingActivityLine(a);
     if (!body) return '';
-    return `<article class="msg-ai p-3" style="margin-bottom:8px">
-      <p class="text-sm text-gray-600"><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b> · ${escHtml(a.type || '')} · ${escHtml(when)}</p>
-      <p class="text-sm text-gray-800 mt-1">${body}</p>
+    const isThesis = a.type === 'thesis';
+    const cardBorder = isThesis ? 'border-left:3px solid var(--accent);' : '';
+    return `<article class="msg-ai p-3" style="margin-bottom:10px;${cardBorder}">
+      <p class="text-xs text-gray-500 font-medium" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b> · <span style="text-transform:uppercase;letter-spacing:0.04em;">${escHtml(a.type || '')}</span></span>
+        <span>${escHtml(when)}</span>
+      </p>
+      <div class="mt-1">${body}</div>
     </article>`;
   }).join('');
 
   host.innerHTML = `${banner}
     <div id="agentTradingSvg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}</tbody></table>
-    <h4 class="eb-h" style="margin-top:24px">Recent activity</h4>
-    ${activityRows || '<p class="text-sm text-gray-500">No activity yet.</p>'}`;
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:28px;margin-bottom:8px;">
+      <h4 class="eb-h" style="margin:0">Live Transparency &amp; Thesis Feed</h4>
+      <span class="text-xs text-gray-400">Filtered: ${escHtml(activeFilter === 'all' ? 'All Models' : activeFilter)}</span>
+    </div>
+    <div class="eb-view-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;padding:3px;background:#f9f9fb;border-radius:8px;border:1px solid var(--border);">
+      ${filterPills.join('')}
+    </div>
+    ${activityRows || '<p class="text-sm text-gray-500">No activity matching this filter.</p>'}`;
   const svgEl = document.getElementById('agentTradingSvg');
   if (svgEl) _attachEquityHover(svgEl);
 }
