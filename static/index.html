@@ -6128,16 +6128,18 @@ async function loadAgentTradingSection() {
 function _cleanThesisText(raw) {
   if (!raw) return '';
   let str = String(raw).trim();
-  // If the model output its whole response as a JSON dictionary (e.g. {"thought": "...", "action": ...})
+  
+  // 1. If the model output its whole response as a JSON dictionary (e.g. {"thought": "...", "action": ...})
   if (str.startsWith('{') && str.endsWith('}')) {
     try {
       const parsed = JSON.parse(str);
       if (parsed && typeof parsed === 'object') {
         if (parsed.thought) str = String(parsed.thought).trim();
         else if (parsed.thesis) str = String(parsed.thesis).trim();
+        else if (parsed.final) str = String(parsed.final).trim();
       }
     } catch (_) {
-      const m = str.match(/"thought"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      const m = str.match(/"(?:thought|thesis|final)"\s*:\s*"((?:[^"\\]|\\.)*)"/);
       if (m && m[1]) {
         try {
           str = JSON.parse('"' + m[1] + '"');
@@ -6148,14 +6150,22 @@ function _cleanThesisText(raw) {
     }
   }
 
-  // Strip trailing tool call tags and tool call blobs (e.g. ]<]minimax[>[<tool_call>... or Action: ...)
+  // 2. Strip trailing tool call tags and tool call blobs (e.g. ]<]minimax[>[<tool_call>... or Action: ...)
   str = str.replace(/\]<\][a-zA-Z0-9_\-\.]+\[>\[<tool_call>[\s\S]*$/g, '');
   str = str.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '');
   str = str.replace(/```(?:json)?\s*\{\s*"action"[\s\S]*$/g, '');
   str = str.replace(/\{"action"\s*:[\s\S]*$/g, '');
   
-  // Clean replacement character artifacts
+  // 3. Clean replacement character artifacts
   str = str.replace(/\uFFFD/g, '—');
+
+  // 4. Preprocess compressed single-line formatting into real multi-line markdown
+  // Normalize section headers (e.g. "### 1. Decision & Execution - **Action**:" -> "\n\n### 1. Decision & Execution\n")
+  str = str.replace(/(?:^|\s*-\s*|\s+)###\s*([0-9]+\.\s*[^#\n\-]+?)(?=\s*-\s*\*\*|\s*###|\s*$)/g, '\n\n### $1\n');
+  
+  // Normalize inline bullet items (e.g. " - **Action**:" or " - **Rules Verification**:" -> "\n- **Action**:")
+  str = str.replace(/(?:\s*-\s*|\n\s*|\s{2,})(\*\*[A-Za-z0-9\s/&—\-\.,]+?\*\*:\s*)/g, '\n- $1');
+
   return str.trim();
 }
 
@@ -6165,8 +6175,8 @@ function _formatThesisHtml(rawThesis) {
 
   let s = escHtml(clean);
 
-  // Parse markdown headers
-  s = s.replace(/###\s*([^\n<]+)/g, '<div style="font-weight:700;color:var(--text);font-size:12px;text-transform:uppercase;letter-spacing:0.04em;margin-top:12px;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid var(--border);">$1</div>');
+  // Parse section headers into styled section divider cards
+  s = s.replace(/###\s*([^\n<]+)/g, '<div style="font-weight:700;color:var(--text);font-size:12px;text-transform:uppercase;letter-spacing:0.04em;margin-top:14px;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid var(--border);">$1</div>');
   s = s.replace(/##\s*([^\n<]+)/g, '<div style="font-weight:700;color:var(--text);font-size:13px;margin-top:12px;margin-bottom:6px;">$1</div>');
 
   // Parse markdown bold and italics
@@ -6175,17 +6185,18 @@ function _formatThesisHtml(rawThesis) {
   s = s.replace(/`([^`]+?)`/g, '<code style="background:var(--card-bg, rgba(0,0,0,0.05));padding:2px 5px;border-radius:4px;font-size:12px;font-family:monospace;">$1</code>');
 
   // Format key trading actions with badges
-  s = s.replace(/<strong>Action<\/strong>:\s*(BUY\s+YES|YES)/gi, '<strong>Action</strong>: <span style="background:rgba(16,185,129,0.15);color:#059669;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
-  s = s.replace(/<strong>Action<\/strong>:\s*(BUY\s+NO|NO)/gi, '<strong>Action</strong>: <span style="background:rgba(239,68,68,0.15);color:#dc2626;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
-  s = s.replace(/<strong>Action<\/strong>:\s*(PASS)/gi, '<strong>Action</strong>: <span style="background:rgba(107,114,128,0.15);color:#4b5563;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
-  s = s.replace(/<strong>Action<\/strong>:\s*(HOLD)/gi, '<strong>Action</strong>: <span style="background:rgba(59,130,246,0.15);color:#2563eb;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
+  s = s.replace(/<strong>Action<\/strong>:\s*(BUY\s+YES[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(16,185,129,0.15);color:#059669;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
+  s = s.replace(/<strong>Action<\/strong>:\s*(BUY\s+NO[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(239,68,68,0.15);color:#dc2626;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
+  s = s.replace(/<strong>Action<\/strong>:\s*(PASS[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(107,114,128,0.15);color:#4b5563;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
+  s = s.replace(/<strong>Action<\/strong>:\s*(HOLD[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(59,130,246,0.15);color:#2563eb;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
 
   // Format bullet lists cleanly
-  s = s.replace(/(?:^|<br>|\n)-\s+([^\n<]+)/g, '<div style="display:flex;align-items:baseline;gap:6px;margin:2px 0;"><span style="color:var(--accent);font-size:10px;">▪</span><span>$1</span></div>');
+  s = s.replace(/(?:^|<br>|\n)-\s+([^\n<]+)/g, '<div style="display:flex;align-items:baseline;gap:6px;margin:3px 0 3px 6px;"><span style="color:var(--accent);font-size:10px;">▪</span><span>$1</span></div>');
 
   // Format paragraphs
   s = s.replace(/\n\n+/g, '</p><p style="margin-top:8px">').replace(/\n/g, '<br>');
-  return `<div style="line-height:1.55;color:var(--text);font-size:13px"><p style="margin:0">${s}</p></div>`;
+  return `<div style="line-height:1.6;color:var(--text);font-size:13px"><p style="margin:0">${s}</p></div>`;
+}
 }
 
 function _toggleAgentPositions(agentId) {
