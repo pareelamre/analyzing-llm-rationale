@@ -3168,9 +3168,75 @@ async def agent_trading_board():
     )
 
 
+@app.get(
+    "/feed/latest",
+    tags=["Feed"],
+    summary="Unified Foresea Alpha & Autonomous Agent Feed",
+)
+async def feed_latest_route(
+    limit: int = Query(10, ge=1, le=50, description="Maximum feed items to return"),
+    min_edge: float = Query(0.05, ge=0.0, le=1.0, description="Minimum model-vs-market edge threshold"),
+    min_credibility: float = Query(0.60, ge=0.0, le=1.0, description="Minimum credibility grade threshold"),
+) -> Dict[str, Any]:
+    """Retrieve the latest unified Foresea feed combining calibrated prediction market
+    edge alerts, autonomous agent trades & theses, and leaderboard standings."""
+    loop = asyncio.get_running_loop()
+    edge_live, agent_live = await asyncio.gather(
+        loop.run_in_executor(None, _read_edge_board_record),
+        loop.run_in_executor(None, _read_agent_trading_board),
+        return_exceptions=True,
+    )
+
+    edge_data = edge_live if isinstance(edge_live, dict) else {}
+    agent_data = agent_live if isinstance(agent_live, dict) else {}
+
+    raw_board = edge_data.get("edge_board", [])
+    try:
+        from analyzing_llm_rationale.edge_credibility import audit_edge_board
+        audited_board = audit_edge_board(raw_board)
+    except Exception:
+        audited_board = raw_board
+
+    filtered_opps = []
+    for item in audited_board:
+        model_p = item.get("model_probability")
+        mkt_p = item.get("market_probability")
+        edge = item.get("edge") or (abs(model_p - mkt_p) if model_p is not None and mkt_p is not None else 0.0)
+        cred_score = item.get("credibility_score")
+        is_cred = item.get("is_credible", True) if cred_score is None else (cred_score >= min_credibility)
+        if edge >= min_edge and is_cred:
+            filtered_opps.append(item)
+        if len(filtered_opps) >= limit:
+            break
+
+    recent_activity = agent_data.get("recent_activity", [])
+    recent_trades = [act for act in recent_activity if act.get("type") in ("trade", "order", "fill") or "trade" in act.get("action", "").lower()][:limit]
+    if not recent_trades and recent_activity:
+        recent_trades = recent_activity[:limit]
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "channels": {
+            "discord": {
+                "guild_id": "1539674155228860527",
+                "channel_id": "1539674155799289991",
+                "url": "https://discord.com/channels/1539674155228860527/1539674155799289991",
+            },
+            "telegram": {
+                "invite_url": "https://t.me/+QIVxIyqCc-w4NzQ9",
+            },
+            "mcp_endpoint": "https://foresea.ink/mcp/",
+        },
+        "market_edge_signals": filtered_opps,
+        "agent_trades": recent_trades,
+        "leaderboard_summary": agent_data.get("leaderboard", [])[:5],
+    }
+
+
 class ExplainShiftRequest(BaseModel):
     platform: str = Field(..., max_length=20, description="Polymarket or Kalshi")
     ident: str = Field(..., max_length=200, description="Market identifier")
+
 
 
 @app.get("/market/history", tags=["System"], summary="Get historical forecast snapshots for a market")

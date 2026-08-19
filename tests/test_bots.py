@@ -86,6 +86,52 @@ class TelegramBotTests(unittest.TestCase):
         self.assertIn("0.1420", msg)
         self.assertIn("81.0%", msg)
 
+    def test_handle_feed(self):
+        self.mock_session.get.return_value = MockResponse(
+            200,
+            {
+                "market_edge_signals": [
+                    {
+                        "question": "Will BTC reach $100k?",
+                        "platform": "Polymarket",
+                        "edge": 0.20,
+                        "recommendation": "BUY YES",
+                    }
+                ],
+                "agent_trades": [
+                    {
+                        "model": "gpt-oss-120b",
+                        "action": "BUY",
+                        "ticker": "BTC-100K",
+                    }
+                ],
+            },
+        )
+        msg = self.bot.handle_feed()
+        self.assertIn("Foresea Alpha & Agent Live Feed", msg)
+        self.assertIn("BUY YES", msg)
+        self.assertIn("gpt-oss-120b", msg)
+
+    def test_handle_agents(self):
+        self.mock_session.get.return_value = MockResponse(
+            200,
+            {
+                "leaderboard": [
+                    {
+                        "model": "qwen3-coder-30b",
+                        "account_value": 11200.0,
+                        "return_pct": 12.0,
+                        "n_trades": 15,
+                        "win_rate": 0.733,
+                    }
+                ]
+            },
+        )
+        msg = self.bot.handle_agents()
+        self.assertIn("Foresea Agent Trading Leaderboard", msg)
+        self.assertIn("qwen3-coder-30b", msg)
+        self.assertIn("$11,200.00", msg)
+
     def test_process_message_dispatch(self):
         self.mock_session.post.return_value = MockResponse(200, {"ok": True})
         self.bot.process_message({"chat": {"id": 999}, "text": "/subscribe"})
@@ -136,6 +182,55 @@ class DiscordBotTests(unittest.TestCase):
         self.assertEqual(len(embed["fields"]), 1)
         self.assertIn("Kalshi", embed["fields"][0]["name"])
 
+    def test_build_feed_embed(self):
+        self.mock_session.get.return_value = MockResponse(
+            200,
+            {
+                "market_edge_signals": [
+                    {
+                        "question": "Will CPI exceed 3%?",
+                        "platform": "Kalshi",
+                        "edge": 0.15,
+                        "recommendation": "BUY YES",
+                    }
+                ],
+                "agent_trades": [
+                    {
+                        "model": "kimi-k3",
+                        "action": "BUY",
+                        "ticker": "CPI-3PCT",
+                        "shares": 100,
+                    }
+                ],
+            },
+        )
+        embed = self.client.build_feed_embed()
+        self.assertEqual(embed["title"], "🌊 Foresea Alpha & Agent Live Feed")
+        self.assertEqual(len(embed["fields"]), 2)
+        self.assertIn("Top Market Mispricings", embed["fields"][0]["name"])
+        self.assertIn("Recent Agent Actions", embed["fields"][1]["name"])
+
+    def test_build_agent_board_embed(self):
+        self.mock_session.get.return_value = MockResponse(
+            200,
+            {
+                "leaderboard": [
+                    {
+                        "model": "gpt-oss-120b",
+                        "account_value": 10500.0,
+                        "return_pct": 5.0,
+                        "n_trades": 8,
+                        "win_rate": 0.625,
+                    }
+                ]
+            },
+        )
+        embed = self.client.build_agent_board_embed()
+        self.assertEqual(embed["title"], "🏆 Foresea Autonomous Agent Trading Leaderboard")
+        self.assertEqual(len(embed["fields"]), 1)
+        self.assertIn("gpt-oss-120b", embed["fields"][0]["name"])
+
 
 if __name__ == "__main__":
     unittest.main()
+

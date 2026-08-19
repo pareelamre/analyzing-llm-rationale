@@ -65,29 +65,63 @@ class ChannelBroadcasterTests(unittest.TestCase):
         self.assertEqual(len(embed["fields"]), 1)
         self.assertIn("Kalshi", embed["fields"][0]["name"])
 
-    def test_run_broadcast_dry_run_simulation(self):
-        self.mock_session.get.return_value = MockResponse(
-            200,
-            {
-                "opportunities": [
-                    {
-                        "question": "Test Market",
-                        "market_probability": 0.20,
-                        "model_probability": 0.35,
-                    }
-                ]
-            },
-        )
+    def test_format_agent_trade_telegram(self):
+        trade = {
+            "model": "gpt-oss-120b",
+            "action": "BUY",
+            "side": "YES",
+            "platform": "Polymarket",
+            "question": "Will Ethereum merge with Layer 2?",
+            "shares": 500,
+            "price": 0.35,
+            "notional": 175.0,
+            "account_value": 10250.0,
+            "thesis": "High conviction based on protocol upgrade schedule.",
+        }
+        msg = self.broadcaster.format_agent_trade_telegram(trade)
+        self.assertIn("FORESEA AGENT TRADE EXECUTED", msg)
+        self.assertIn("gpt-oss-120b", msg)
+        self.assertIn("BUY", msg)
+        self.assertIn("Polymarket", msg)
+        self.assertIn("$175.00", msg)
+        self.assertIn("High conviction", msg)
+
+    def test_format_agent_trade_discord_embed(self):
+        trade = {
+            "model": "qwen3-coder-30b",
+            "action": "BUY",
+            "side": "NO",
+            "platform": "Kalshi",
+            "question": "US GDP growth over 3% in Q3?",
+            "shares": 200,
+            "price": 0.40,
+            "notional": 80.0,
+            "account_value": 9950.0,
+            "thesis": "Leading economic indicators show slowdown.",
+        }
+        embed = self.broadcaster.format_agent_trade_discord_embed(trade)
+        self.assertIn("qwen3-coder-30b", embed["title"])
+        self.assertEqual(embed["fields"][0]["name"], "📊 Execution Details")
+        self.assertIn("Kalshi", embed["description"])
+
+    def test_broadcast_agent_trade_dry_run(self):
         self.broadcaster.load_targets = MagicMock(
             return_value={
-                "discord_webhooks": [{"url": "https://discord.test/hook", "name": "Test Hook"}],
-                "telegram_channels": [{"chat_id": "@TestChannel"}],
+                "discord_webhooks": [{"url": "https://discord.test/hook", "notify_agent_trades": True}],
+                "telegram_channels": [{"chat_id": "@TestChannel", "notify_agent_trades": True}],
             }
         )
-        stats = self.broadcaster.run_broadcast(min_edge=0.05)
+        trade = {
+            "model": "kimi-k3",
+            "action": "BUY",
+            "side": "YES",
+            "question": "Sample question",
+        }
+        stats = self.broadcaster.broadcast_agent_trade(trade)
         self.assertEqual(stats["sent"], 2)
         self.assertEqual(stats["failed"], 0)
 
 
 if __name__ == "__main__":
     unittest.main()
+

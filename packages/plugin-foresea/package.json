@@ -1,0 +1,30 @@
+{
+  "name": "@foresea/plugin-eliza",
+  "version": "1.0.0",
+  "description": "ElizaOS (ai16z) plugin for Foresea prediction market intelligence, calibrated forecasting, and Polymarket/Kalshi edge detection.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "elizaos",
+    "ai16z",
+    "foresea",
+    "prediction-markets",
+    "polymarket",
+    "kalshi",
+    "forecasting",
+    "mcp"
+  ],
+  "author": "Foresea",
+  "license": "MIT",
+  "peerDependencies": {
+    "@elizaos/core": ">=0.1.9"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  }
+}
