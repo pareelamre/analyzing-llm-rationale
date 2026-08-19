@@ -13888,7 +13888,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             qs = await loop.run_in_executor(None, lambda: fn(limit=5, query=args.get("query")))
         except Exception:
             return "(listing failed)"
-        return "\n".join(f"- [{q.get('platform')}] {(q.get('question') or '')[:70]} @ "
+        return "\n".join(f"- [{q.get('platform')}] {q.get('question') or ''} @ "
                          f"{round((q.get('probability') or 0) * 100)}%" for q in qs) or "No markets found."
 
     async def _tool_track_record(args):
@@ -13898,7 +13898,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     async def _tool_edge_board(args):
         live = await loop.run_in_executor(None, _read_edge_board_record)
         board = (live or {}).get("edge_board") or []
-        limit = min(max(1, int(args.get("limit", 5))), 20)
+        limit_arg = args.get("limit")
+        limit = max(1, int(limit_arg)) if limit_arg is not None else len(board)
         lines = []
         for item in board[:limit]:
             ident = item.get("ticker") or item.get("slug") or item.get("ident") or "?"
@@ -13909,7 +13910,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             m_pct = f"{round(m_prob * 100)}%" if m_prob is not None else "n/a"
             f_pct = f"{round(f_prob * 100)}%" if f_prob is not None else "n/a"
             edge_str = f"{edge:+.1%}" if edge is not None else "n/a"
-            lines.append(f"- [{item.get('platform', '?')}] {ident}: \"{q[:60]}\" (mkt: {m_pct}, model: {f_pct}, edge: {edge_str})")
+            lines.append(f"- [{item.get('platform', '?')}] {ident}: \"{q}\" (mkt: {m_pct}, model: {f_pct}, edge: {edge_str})")
         return "\n".join(lines) or "No edge board opportunities found."
 
     async def _tool_batch_quotes(args):
@@ -13919,7 +13920,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         if not isinstance(refs, list) or not refs:
             return "Pass a list of market tickers/slugs or comma-separated string in 'refs'."
         results = []
-        for ref in refs[:10]:
+        for ref in refs:
             ref_str = str(ref).strip()
             try:
                 if ref_str.startswith("KX") or "-" in ref_str:
@@ -13949,7 +13950,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                     resp = requests.post(url, json=payload if isinstance(payload, dict) else None, data=payload if isinstance(payload, str) else None, headers=headers, timeout=15)
                 else:
                     resp = requests.get(url, headers=headers, timeout=15)
-                return f"HTTP {resp.status_code}\n{resp.text[:3500]}"
+                return f"HTTP {resp.status_code}\n{resp.text}"
             return await loop.run_in_executor(None, _http_call)
         except Exception as exc:
             return f"(API request failed: {exc})"
@@ -13958,8 +13959,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             status = await loop.run_in_executor(None, market_data.fetch_kalshi_exchange_status)
             schedule = await loop.run_in_executor(None, market_data.fetch_kalshi_exchange_schedule)
             active = status.get("exchange_active", True) and status.get("trading_active", True)
-            res = f"Kalshi Exchange Status: {'ACTIVE' if active else 'PAUSED/INACTIVE'}\nRaw Status: {status}\nSchedule: {schedule}"
-            return res[:3500]
+            return f"Kalshi Exchange Status: {'ACTIVE' if active else 'PAUSED/INACTIVE'}\nRaw Status: {status}\nSchedule: {schedule}"
         except Exception as exc:
             return f"(Exchange status fetch failed: {exc})"
 
@@ -13971,16 +13971,16 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         try:
             if ticker:
                 ob = await loop.run_in_executor(None, lambda: market_data.fetch_kalshi_orderbook(ticker))
-                return f"Kalshi Orderbook for {ticker}:\n{json.dumps(ob, indent=2)[:3500]}"
+                return f"Kalshi Orderbook for {ticker}:\n{json.dumps(ob, indent=2)}"
             ob = await loop.run_in_executor(None, lambda: market_data.fetch_polymarket_orderbook(token_id))
-            return f"Polymarket Orderbook for token {token_id}:\n{json.dumps(ob, indent=2)[:3500]}"
+            return f"Polymarket Orderbook for token {token_id}:\n{json.dumps(ob, indent=2)}"
         except Exception as exc:
             return f"(Orderbook fetch failed: {exc})"
 
     async def _tool_market_tags(args):
         try:
             tags = await loop.run_in_executor(None, market_data.fetch_polymarket_tags)
-            names = [f"- {t.get('label') or t.get('name') or t.get('id', '?')}" for t in (tags or [])[:20]]
+            names = [f"- {t.get('label') or t.get('name') or t.get('id', '?')}" for t in (tags or [])]
             return f"Polymarket Market Categories/Tags ({len(tags)} total):\n" + "\n".join(names)
         except Exception as exc:
             return f"(Market tags fetch failed: {exc})"
@@ -13993,9 +13993,9 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         try:
             if ticker.startswith("KX") or "-" in ticker:
                 candles = await loop.run_in_executor(None, lambda: market_data.fetch_kalshi_candlesticks(ticker, series_ticker))
-                return f"Kalshi Candlesticks for {ticker}:\n{json.dumps(candles[:10], indent=2)[:3500]}"
+                return f"Kalshi Candlesticks for {ticker}:\n{json.dumps(candles, indent=2)}"
             hist = await loop.run_in_executor(None, lambda: market_data.fetch_polymarket_price_history(ticker))
-            return f"Polymarket Price History for {ticker}:\n{json.dumps(hist[:10], indent=2)[:3500]}"
+            return f"Polymarket Price History for {ticker}:\n{json.dumps(hist, indent=2)}"
         except Exception as exc:
             return f"(Price history fetch failed: {exc})"
 
@@ -14004,7 +14004,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         data_type = str(args.get("type") or "").strip()
         try:
             res = await loop.run_in_executor(None, lambda: market_data.fetch_kalshi_live_data(event_ticker, data_type))
-            return f"Kalshi Live Data:\n{json.dumps(res, indent=2)[:3500]}"
+            return f"Kalshi Live Data:\n{json.dumps(res, indent=2)}"
         except Exception as exc:
             return f"(Live data fetch failed: {exc})"
 
@@ -14014,30 +14014,32 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         try:
             if target == "comments":
                 res = await loop.run_in_executor(None, lambda: market_data.fetch_polymarket_comments(market_id))
-                return f"Polymarket Comments:\n{json.dumps(res[:10], indent=2)[:3500]}"
+                return f"Polymarket Comments:\n{json.dumps(res, indent=2)}"
             if target in ("sports", "teams"):
                 res = await loop.run_in_executor(None, market_data.fetch_polymarket_sports)
-                return f"Polymarket Sports Metadata:\n{json.dumps(res[:10], indent=2)[:3500]}"
+                return f"Polymarket Sports Metadata:\n{json.dumps(res, indent=2)}"
             res = await loop.run_in_executor(None, market_data.fetch_polymarket_series)
-            return f"Polymarket Event Series:\n{json.dumps(res[:10], indent=2)[:3500]}"
+            return f"Polymarket Event Series:\n{json.dumps(res, indent=2)}"
         except Exception as exc:
             return f"(Polymarket metadata fetch failed: {exc})"
 
     async def _tool_recent_trades(args):
         platform = str(args.get("platform") or "kalshi").strip()
         ticker = str(args.get("ticker") or args.get("token_id") or args.get("market") or "").strip()
-        limit = int(args.get("limit") or 20)
+        limit_arg = args.get("limit")
+        limit = max(1, int(limit_arg)) if limit_arg is not None else 50
         try:
             res = await loop.run_in_executor(None, lambda: market_data.fetch_recent_trades(platform, ticker, limit))
-            return f"Recent Trades ({platform}):\n{json.dumps(res[:limit], indent=2)[:3500]}"
+            return f"Recent Trades ({platform}):\n{json.dumps(res[:limit], indent=2)}"
         except Exception as exc:
             return f"(Recent trades fetch failed: {exc})"
 
     async def _tool_market_leaderboard(args):
-        limit = int(args.get("limit") or 20)
+        limit_arg = args.get("limit")
+        limit = max(1, int(limit_arg)) if limit_arg is not None else 50
         try:
             res = await loop.run_in_executor(None, lambda: market_data.fetch_trader_leaderboard(limit))
-            return f"Trader Leaderboard:\n{json.dumps(res[:limit], indent=2)[:3500]}"
+            return f"Trader Leaderboard:\n{json.dumps(res[:limit], indent=2)}"
         except Exception as exc:
             return f"(Leaderboard fetch failed: {exc})"
 
@@ -14056,7 +14058,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                 opportunities=audited, bankroll_usd=bankroll_usd, kelly_fraction=kelly_fraction,
                 min_edge=min_edge, min_credibility=min_credibility,
             )
-            return f"Kelly Portfolio Allocation (across today's live edge-board opportunities, not just your own candidates):\n{json.dumps(alloc, indent=2)[:3500]}"
+            return f"Kelly Portfolio Allocation (across today's live edge-board opportunities, not just your own candidates):\n{json.dumps(alloc, indent=2)}"
         except Exception as exc:
             return f"(Portfolio optimization failed: {exc})"
 
