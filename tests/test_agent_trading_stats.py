@@ -56,7 +56,7 @@ def _insert_position(conn, agent_id, *, platform="kalshi", ticker="KXFOO-26",
 def _insert_action(conn, agent_id, *, action_type="trade", ts="2026-08-11T00:00:00+00:00",
                     cash_delta=0.0, realized_pnl=0.0, mode="shadow", platform="kalshi",
                     ticker="KXFOO-26", side="yes", quantity=None, price=None, outcome=None,
-                    cycle_id="15m:1"):
+                    notional=0.0, payout=0.0, cycle_id="15m:1"):
     conn.execute(
         """
         INSERT INTO agent_actions
@@ -65,14 +65,14 @@ def _insert_action(conn, agent_id, *, action_type="trade", ts="2026-08-11T00:00:
          cash_delta, realized_pnl, realized_pairs, cycle_id, client_order_id, outcome,
          metadata_json)
         VALUES (lower(hex(randomblob(16))), :ts, :agent_id, :action_type, :mode, 0,
-                :platform, :ticker, :side, :price, :quantity, 0, 0, 0, 0, 0, 0,
+                :platform, :ticker, :side, :price, :quantity, :notional, 0, 0, :payout, 0, 0,
                 :cash_delta, :realized_pnl, 0, :cycle_id, NULL, :outcome, '{}')
         """,
         {
             "ts": ts, "agent_id": agent_id, "action_type": action_type, "mode": mode,
             "platform": platform, "ticker": ticker, "side": side, "price": price,
             "quantity": quantity, "cash_delta": cash_delta, "realized_pnl": realized_pnl,
-            "cycle_id": cycle_id, "outcome": outcome,
+            "notional": notional, "payout": payout, "cycle_id": cycle_id, "outcome": outcome,
         },
     )
 
@@ -336,6 +336,76 @@ class EquityCurveTests(unittest.TestCase):
         event_types = [p["event_type"] for p in curve["value_curve"]]
         self.assertEqual(event_types, ["admin_reset"])
         self.assertEqual(values, [10_000.0])
+
+    def test_closing_a_position_does_not_double_count_its_notional(self):
+        # Regression, found live on kimi-k3 2026-08-18: exiting a position
+        # (there is no sell tool -- closing means buying the opposite side,
+        # recorded as an ordinary action_type='trade' row with outcome=
+        # 'realized' and a positive notional, the closing order's own
+        # dollar size) was treated exactly like an OPENING trade: notional
+        # was added to open_positions_basis instead of removed. Every close
+        # inflated the reported account value by its own notional, on top
+        # of the basis already counted when the position was opened. Live
+        # impact: one agent's chart showed $14,600 against a real $9,774 --
+        # 5 closing trades in a row each adding ~$1000 of phantom equity.
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a", starting_cash=10_000.0)
+            # Open: buy 1200 YES @ 0.30 = $360 notional, cash -360.
+            _insert_action(
+                conn, "model-a", action_type="trade", outcome="open",
+                ts="2026-08-18T05:17:06+00:00", cash_delta=-360.0, notional=360.0,
+            )
+            # Close: sell (net) all 1200 @ 0.32, $384 in, +$24 realized gain
+            # (384 proceeds - 360 original cost basis). cash_delta is what
+            # the account actually nets from closing -- cost basis removed
+            # is cash_delta - realized_pnl = 384 - 24 = 360, exactly the
+            # original open's notional, since this fully closes it.
+            _insert_action(
+                conn, "model-a", action_type="trade", outcome="realized",
+                ts="2026-08-18T09:23:36+00:00", cash_delta=384.0, realized_pnl=24.0,
+                notional=384.0,
+            )
+            conn.commit()
+
+            curve = agent_trading_stats.agent_equity_curve(conn, "model-a")
+
+        values = [p["account_value"] for p in curve["value_curve"]]
+        event_types = [p["event_type"] for p in curve["value_curve"]]
+        self.assertEqual(event_types, ["starting_cash", "trade", "trade"])
+        # Open: cash 10000-360=9640, basis 0+360=360, account_val=10000.
+        # Close: cash 9640+384=10024, basis max(0, 360-(384-24))=0,
+        # account_val=10024 -- exactly starting cash + the 24 realized gain,
+        # never the old buggy 10024+384(=basis 360+384=744)=10408.
+        self.assertEqual(values, [10_000.0, 10_000.0, 10_024.0])
+
+    def test_repeated_partial_closes_never_inflate_the_curve(self):
+        # Same bug, exercised the way it actually happened live: several
+        # partial closes of the same position in a row, each with its own
+        # positive notional and outcome='realized'.
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a", starting_cash=10_000.0)
+            _insert_action(
+                conn, "model-a", action_type="trade", outcome="open",
+                ts="2026-08-18T05:17:06+00:00", cash_delta=-1000.0, notional=1000.0,
+            )
+            running_expected = 10_000.0
+            for i in range(4):
+                _insert_action(
+                    conn, "model-a", action_type="trade", outcome="realized",
+                    ts=f"2026-08-18T09:2{i}:00+00:00", cash_delta=260.0,
+                    realized_pnl=10.0, notional=270.0,
+                )
+                running_expected += 10.0  # each close only ever adds its realized gain
+            conn.commit()
+
+            curve = agent_trading_stats.agent_equity_curve(conn, "model-a")
+
+        values = [p["account_value"] for p in curve["value_curve"]]
+        # Never climbs by anywhere near a closing trade's own notional (270)
+        # on top of the realized gain -- the old bug would have landed at
+        # 10000 + 4*270 = 11080 by the last point instead of 10040.
+        self.assertAlmostEqual(values[-1], running_expected)
+        self.assertLess(max(values), 10_100.0)
 
 
 class PromotionEligibilityTests(unittest.TestCase):

@@ -70,6 +70,16 @@ AGENT_ANALYZE_RETRY_BACKOFF_S = float(os.environ.get("AGENT_TRADING_RETRY_BACKOF
 # genuine runaway bug (e.g. unbounded position-list growth), not an
 # operating constraint; it should never bind in practice.
 MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS_CHARS", "2000")))
+# Each venue's own resolution rules -- fetched fresh every cycle by
+# market_data.py's fetch_kalshi/fetch_polymarket (never cached from
+# position-open time), so a rule change the venue makes after entry is
+# always visible on the very next cycle. Never surfaced to the agent before
+# this, even though it was already there in every quote: a market's
+# question text alone can be actively misleading about what qualifies --
+# observed live, an agent reasoned a cabinet-departure market should
+# resolve YES for a specific person's resignation, when that market's own
+# rules explicitly carved that person's case out.
+MAX_RULES_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_RULES_CHARS", "2000")))
 
 
 def _model_backstop_chars(model: str) -> int:
@@ -217,12 +227,16 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     yes_bid, yes_ask = q.bid("YES"), q.ask("YES")
     no_bid, no_ask = q.bid("NO"), q.ask("NO")
     platform = str(quote.get("platform") or "Kalshi").strip().lower()
-    return (
+    line = (
         f"  - [{platform}] {quote.get('ident')}: \"{quote.get('question')}\" "
         f"(yes bid/ask {_fmt_px(yes_bid)}/{_fmt_px(yes_ask)}, "
         f"no bid/ask {_fmt_px(no_bid)}/{_fmt_px(no_ask)}, "
         f"resolution window {opens} -> {close})"
     )
+    rules = _excerpt(quote.get("resolution_criteria"), MAX_RULES_CHARS)
+    if rules:
+        line += f"\n    Resolution rules: {rules}"
+    return line
 
 
 def _build_candidates_block(held_quotes: List[Dict[str, Any]], new_quotes: List[Dict[str, Any]]) -> str:
