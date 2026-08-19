@@ -2057,6 +2057,7 @@
       } catch (e) {}
     })();
   </script>
+
   <script type="module" src="/src/page-context.ts"></script>
 </head>
 <body>
@@ -2127,6 +2128,8 @@
       <button type="button" class="topbar-link" onclick="openEdgeBoard()">Edge board</button>
       <button type="button" class="topbar-link" onclick="openWatchlist()">Watchlist</button>
       <a href="/agents" target="_blank" class="topbar-link nav-collapse">Agents</a>
+      <a href="https://t.me/+QIVxIyqCc-w4NzQ9" target="_blank" rel="noopener" class="topbar-link nav-collapse" style="color:#0088cc;font-weight:500;">Telegram</a>
+      <a href="https://discord.com/channels/1539674155228860527/1539674155799289991" target="_blank" rel="noopener" class="topbar-link nav-collapse" style="color:#5865F2;font-weight:500;">Discord</a>
       <a href="/docs" target="_blank" class="topbar-link nav-collapse">API docs</a>
       <a href="mailto:pareel.amre@gmail.com?subject=Foresea%20source%20code" class="topbar-link nav-collapse">Contact</a>
     </div>
@@ -2146,6 +2149,10 @@
     <div class="hero-grid">
       <!-- Left Column: Product proposition -->
       <div class="hero-copy">
+        <a href="https://t.me/+QIVxIyqCc-w4NzQ9" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:9999px;background:rgba(0,136,204,0.08);color:#0088cc;border:1px solid rgba(0,136,204,0.25);font-size:12px;font-weight:500;margin-bottom:12px;align-self:flex-start;">
+          <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#00D26A;box-shadow:0 0 6px #00D26A;"></span>
+          ⚡ Live Alpha Feed · Telegram & Discord Alerts &rarr;
+        </a>
         <p class="label mb-4" style="align-self: flex-start;">AI forecasts, scored in public</p>
         <h1 class="display hero-title" style="text-align: left; align-self: flex-start; max-width: 100%;">The intelligence layer for prediction markets</h1>
         <p class="hero-text" style="text-align: left; align-self: flex-start; max-width: 100%; margin-top: 14px;">
@@ -5758,10 +5765,13 @@ async function loadCrypto5mEquity() {
   }
 }
 
+let _agentTradingTimer = null;
+
 function _stopEdgeTimers() {
   clearInterval(_edgePriceTimer);   _edgePriceTimer = null;
   clearInterval(_ebForecastTimer);  _ebForecastTimer = null;
   clearInterval(_crypto5mTimer);    _crypto5mTimer = null;
+  clearInterval(_agentTradingTimer); _agentTradingTimer = null;
 }
 
 // Idempotent: always clears before setting, so calling this twice can never
@@ -5772,6 +5782,9 @@ function _startEdgeTimers() {
   _edgePriceTimer  = setInterval(refreshEdgePrices, 60000);
   _ebForecastTimer = setInterval(refreshEdgeForecasts, 5 * 60 * 1000);
   _crypto5mTimer   = setInterval(loadCrypto5mEquity, 30 * 1000);
+  _agentTradingTimer = setInterval(() => {
+    if (_ebView === 'agentic') loadAgentTradingSection();
+  }, 30 * 1000);
 }
 
 // Browsers throttle (and in some cases suspend) setInterval in hidden tabs, so
@@ -5784,6 +5797,7 @@ document.addEventListener('visibilitychange', () => {
   refreshEdgePrices();
   refreshEdgeForecasts();
   loadCrypto5mEquity();
+  if (_ebView === 'agentic') loadAgentTradingSection();
 });
 
 async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
@@ -6111,21 +6125,118 @@ async function loadAgentTradingSection() {
   }
 }
 
+function _cleanThesisText(raw) {
+  if (!raw) return '';
+  let str = String(raw).trim();
+  
+  // 1. If the model output its whole response as a JSON dictionary (e.g. {"thought": "...", "action": ...})
+  if (str.startsWith('{') && str.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.thought) str = String(parsed.thought).trim();
+        else if (parsed.thesis) str = String(parsed.thesis).trim();
+        else if (parsed.final) str = String(parsed.final).trim();
+      }
+    } catch (_) {
+      const m = str.match(/"(?:thought|thesis|final)"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (m && m[1]) {
+        try {
+          str = JSON.parse('"' + m[1] + '"');
+        } catch (_) {
+          str = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+        }
+      }
+    }
+  }
+
+  // 2. Strip trailing tool call tags and tool call blobs (e.g. ]<]minimax[>[<tool_call>... or Action: ...)
+  str = str.replace(/\]<\][a-zA-Z0-9_\-\.]+\[>\[<tool_call>[\s\S]*$/g, '');
+  str = str.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '');
+  str = str.replace(/```(?:json)?\s*\{\s*"action"[\s\S]*$/g, '');
+  str = str.replace(/\{"action"\s*:[\s\S]*$/g, '');
+  
+  // 3. Clean replacement character artifacts
+  str = str.replace(/\uFFFD/g, '—');
+
+  // 4. Preprocess compressed single-line formatting into real multi-line markdown
+  // Normalize section headers (e.g. "### 1. Decision & Execution - **Action**:" -> "\n\n### 1. Decision & Execution\n")
+  str = str.replace(/(?:^|\s*-\s*|\s+)###\s*([0-9]+\.\s*[^#\n\-]+?)(?=\s*-\s*\*\*|\s*###|\s*$)/g, '\n\n### $1\n');
+  
+  // Normalize inline bullet items (e.g. " - **Action**:" or " - **Rules Verification**:" -> "\n- **Action**:")
+  str = str.replace(/(?:\s*-\s*|\n\s*|\s{2,})(\*\*[A-Za-z0-9\s/&—\-\.,]+?\*\*:\s*)/g, '\n- $1');
+
+  return str.trim();
+}
+
+function _formatThesisHtml(rawThesis) {
+  const clean = _cleanThesisText(rawThesis);
+  if (!clean) return '';
+
+  let s = escHtml(clean);
+
+  // Parse section headers into styled section divider cards
+  s = s.replace(/###\s*([^\n<]+)/g, '<div style="font-weight:700;color:var(--text);font-size:12px;text-transform:uppercase;letter-spacing:0.04em;margin-top:14px;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid var(--border);">$1</div>');
+  s = s.replace(/##\s*([^\n<]+)/g, '<div style="font-weight:700;color:var(--text);font-size:13px;margin-top:12px;margin-bottom:6px;">$1</div>');
+
+  // Parse markdown bold and italics
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*([^\*]+?)\*/g, '<em>$1</em>');
+  s = s.replace(/`([^`]+?)`/g, '<code style="background:var(--card-bg, rgba(0,0,0,0.05));padding:2px 5px;border-radius:4px;font-size:12px;font-family:monospace;">$1</code>');
+
+  // Format key trading actions with badges
+  s = s.replace(/<strong>Action<\/strong>:\s*(BUY\s+YES[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(16,185,129,0.15);color:#059669;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
+  s = s.replace(/<strong>Action<\/strong>:\s*(BUY\s+NO[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(239,68,68,0.15);color:#dc2626;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
+  s = s.replace(/<strong>Action<\/strong>:\s*(PASS[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(107,114,128,0.15);color:#4b5563;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
+  s = s.replace(/<strong>Action<\/strong>:\s*(HOLD[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(59,130,246,0.15);color:#2563eb;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
+
+  // Format bullet lists cleanly
+  s = s.replace(/(?:^|<br>|\n)-\s+([^\n<]+)/g, '<div style="display:flex;align-items:baseline;gap:6px;margin:3px 0 3px 6px;"><span style="color:var(--accent);font-size:10px;">▪</span><span>$1</span></div>');
+
+  // Format paragraphs
+  s = s.replace(/\n\n+/g, '</p><p style="margin-top:8px">').replace(/\n/g, '<br>');
+  return `<div style="line-height:1.6;color:var(--text);font-size:13px"><p style="margin:0">${s}</p></div>`;
+}
+}
+
+function _toggleAgentPositions(agentId) {
+  const el = document.getElementById('agent-pos-' + agentId);
+  if (!el) return;
+  el.classList.toggle('hidden-view');
+}
+
+window._agentActivityFilter = window._agentActivityFilter || 'all';
+
+function _filterAgentActivity(modelId) {
+  window._agentActivityFilter = modelId;
+  if (window._lastAgentBoardData) {
+    renderAgentTradingBoard(window._lastAgentBoardData);
+  }
+}
+
 function _agentTradingActivityLine(a) {
-  const platformTag = a.platform ? `<span style="opacity:0.6">[${escHtml(String(a.platform))}]</span> ` : '';
+  const platform = a.platform ? escHtml(String(a.platform).toUpperCase()) : '';
+  const platformTag = platform ? `<span class="eb-badge" style="background:rgba(6,182,212,0.1);color:#0891b2;font-weight:600;font-size:10px;margin-right:4px;">${platform}</span>` : '';
+  
   if (a.type === 'trade') {
-    return `${platformTag}<b>${escHtml((a.side || '').toUpperCase())}</b> ${a.quantity ?? ''} ${escHtml(a.ticker || '')} @ ${a.price ?? ''}`;
+    const isYes = String(a.side || '').toUpperCase() === 'YES';
+    const sideBadge = `<span class="eb-badge" style="background:${isYes ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};color:${isYes ? '#059669' : '#dc2626'};font-weight:700;">${isYes ? 'BUY YES' : 'BUY NO'}</span>`;
+    const qty = a.quantity != null ? `${Number(a.quantity).toLocaleString()} contracts` : '';
+    const price = a.price != null ? `@ $${Number(a.price).toFixed(3)}` : '';
+    const notional = (a.quantity != null && a.price != null) ? `<span style="color:var(--text-dim);font-size:12px;">(Notional: $${(Number(a.quantity) * Number(a.price)).toFixed(2)})</span>` : '';
+    return `${platformTag}${sideBadge} <b>${qty}</b> on <code>${escHtml(a.ticker || '')}</code> ${price} ${notional}`;
   }
   if (a.type === 'settlement') {
     const pnl = Number(a.realized_pnl) || 0;
     const pnlColor = pnl >= 0 ? '#0a7' : '#c33';
-    return `${platformTag}Settled ${escHtml(a.ticker || '')} — <span style="color:${pnlColor};font-weight:600">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span>`;
+    const pnlBadge = `<span class="eb-badge" style="background:${pnl >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};color:${pnlColor};font-weight:700;">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</span>`;
+    return `${platformTag}<span style="font-weight:600">Settled</span> <code>${escHtml(a.ticker || '')}</code> — ${pnlBadge}`;
   }
   if (a.type === 'rejected_trade') {
-    return `${platformTag}Trade rejected: ${escHtml(a.ticker || '')}`;
+    return `${platformTag}<span class="eb-badge" style="background:rgba(245,158,11,0.15);color:#d97706;font-weight:600;">REJECTED</span> <code>${escHtml(a.ticker || '')}</code>`;
   }
   if (a.type === 'thesis') {
-    return escHtml(a.thesis || '');
+    return _formatThesisHtml(a.thesis || '');
   }
   if (a.type === 'note') {
     return `Note: ${escHtml(a.text || '')}`;
@@ -6151,12 +6262,13 @@ function _eligibilityReasonText(elig) {
 function renderAgentTradingBoard(d) {
   const host = document.getElementById('eb-agentic-section');
   if (!host) return;
+  window._lastAgentBoardData = d;
   const genAt = d && d.generated_at ? new Date(d.generated_at) : null;
   const gen = genAt && !Number.isNaN(genAt.getTime()) ? genAt.toLocaleString() : '';
   const staleBadge = d && d.freshness && d.freshness.stale ? ' · <span style="color:#b45309;font-weight:600">Stale</span>' : '';
   const updatedStr = gen ? ` Updated ${escHtml(gen)}${staleBadge}.` : '';
   const banner = `<p class="tr-method" style="margin-top:0">SCADS-hosted models given real tool-use trading agency — each decides for itself whether and how much to trade, with genuine cash/position accounting and risk guards, unlike the fixed Kelly-sizing ledgers on the MTM tab.${updatedStr}</p>
-    <p class="text-sm" style="margin:0 0 16px;padding:8px 12px;border-radius:8px;background:#fef3c7;color:#92400e;font-weight:600">Shadow / paper trading only — no real money is ever at risk.</p>`;
+    <p class="text-sm" style="margin:0 0 16px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--text);font-weight:600">Shadow / paper trading only — no real money is ever at risk.</p>`;
   if (d && d.error) {
     host.innerHTML = `${banner}<p class="text-sm text-gray-500">${escHtml(d.error)} `
       + `<a href="#" onclick="event.preventDefault(); loadAgentTradingSection();" style="text-decoration:underline">Retry</a></p>`;
@@ -6247,34 +6359,91 @@ function renderAgentTradingBoard(d) {
     const pnlTitle = feesPaid > 0
       ? `Net P&L: ${_usd(pnl)} (Realized: ${_usd(row.realized_pnl || 0)}, Unrealized: ${_usd(row.unrealized_pnl || 0)}, Fees: ${_usd(feesPaid)})`
       : `Net P&L: ${_usd(pnl)}`;
-    return `<tr class="eb-row" data-model="${escAttr(row.agent_id || '')}">
+    
+    const openPos = row.open_positions || [];
+    let posDrawerRows = '<p class="text-xs text-gray-500 my-1">No open positions held. Cash: ' + _usd(row.cash) + '</p>';
+    if (openPos.length > 0) {
+      const posTableLines = openPos.map(p => {
+        const uPnl = Number(p.unrealized_pnl) || 0;
+        const uPnlColor = uPnl >= 0 ? '#0a7' : '#c33';
+        const isYes = String(p.side || '').toUpperCase() === 'YES';
+        return `<tr>
+          <td style="padding:6px 10px;"><b>[${escHtml(p.platform || 'Venue')}]</b> <code>${escHtml(p.ticker || '')}</code></td>
+          <td style="padding:6px 10px;"><span class="eb-badge" style="background:${isYes ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};color:${isYes ? '#059669' : '#dc2626'};font-weight:700;">${escHtml(String(p.side || '').toUpperCase())}</span></td>
+          <td style="padding:6px 10px;">${Number(p.quantity).toLocaleString()}</td>
+          <td style="padding:6px 10px;">${_usd(p.avg_entry_price)}</td>
+          <td style="padding:6px 10px;">${_usd(p.current_price)}</td>
+          <td style="padding:6px 10px;color:${uPnlColor};font-weight:600">${uPnl >= 0 ? '+' : ''}${_usd(uPnl)}</td>
+        </tr>`;
+      }).join('');
+      posDrawerRows = `<table class="eb-table text-xs" style="margin-top:6px;background:var(--paper, #fff);border:1px solid var(--border);border-radius:6px;">
+        <thead><tr><th>Market</th><th>Side</th><th>Contracts</th><th>Avg Entry</th><th>Mark Price</th><th>Unrealized P&L</th></tr></thead>
+        <tbody>${posTableLines}</tbody>
+      </table>`;
+    }
+
+    return `<tr class="eb-row" style="cursor:pointer" onclick="_toggleAgentPositions('${escAttr(agentId)}')">
       <td><b>${i + 1}</b></td>
-      <td><b>${escHtml(_ebModelHead(row.agent_id || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(row.agent_id || '')}</span></td>
+      <td><b>${escHtml(_ebModelHead(agentId))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(agentId)}</span></td>
       <td><b>${_usd(row.account_value)}</b></td>
       <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnl >= 0 ? '+' : ''}${_usd(pnl)}</td>
       <td style="color:${pnlColor};font-weight:600">${_roiPct((Number(row.return_pct) || 0) / 100)}</td>
       <td>${winRate}</td>
       <td>${row.trade_count ?? 0}</td>
-      <td>${(row.open_positions || []).length}</td>
+      <td><span class="eb-badge" style="cursor:pointer" title="Click to view open positions">${openPos.length} pos ▾</span></td>
       <td>${eligCell}</td>
+    </tr>
+    <tr id="agent-pos-${escAttr(agentId)}" class="hidden-view" style="background:var(--hover-bg, rgba(0,0,0,0.02));">
+      <td colspan="9" style="padding:10px 14px;border-bottom:1px solid var(--border);border-top:1px dashed var(--border);">
+        <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">
+          Active Book · ${escHtml(_ebModelLabel(agentId))} (Cash: ${_usd(row.cash)})
+        </div>
+        ${posDrawerRows}
+      </td>
     </tr>`;
   }).join('');
 
-  const activityRows = activity.slice(0, 30).map(a => {
-    const when = a.ts ? new Date(a.ts).toLocaleString() : '';
+  // Model filter pill bar
+  const activeFilter = window._agentActivityFilter || 'all';
+  const filterPills = [
+    `<button type="button" class="eb-view-tab ${activeFilter === 'all' ? 'active' : ''}" onclick="_filterAgentActivity('all')">All Models</button>`
+  ];
+  leaderboard.forEach(row => {
+    const aId = row.agent_id || '';
+    filterPills.push(
+      `<button type="button" class="eb-view-tab ${activeFilter === aId ? 'active' : ''}" onclick="_filterAgentActivity('${escAttr(aId)}')">${escHtml(_ebModelHead(aId))}</button>`
+    );
+  });
+
+  const filteredActivity = activeFilter === 'all'
+    ? activity
+    : activity.filter(a => a.agent_id === activeFilter);
+
+  const activityRows = filteredActivity.slice(0, 30).map(a => {
+    const when = (a.ts || a.timestamp || a.created_at) ? new Date(a.ts || a.timestamp || a.created_at).toLocaleString() : '';
     const body = _agentTradingActivityLine(a);
     if (!body) return '';
-    return `<article class="msg-ai p-3" style="margin-bottom:8px">
-      <p class="text-sm text-gray-600"><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b> · ${escHtml(a.type || '')} · ${escHtml(when)}</p>
-      <p class="text-sm text-gray-800 mt-1">${body}</p>
+    const isThesis = a.type === 'thesis';
+    const cardBorder = isThesis ? 'border-left:3px solid var(--accent);' : '';
+    return `<article class="msg-ai p-3" style="margin-bottom:12px;background:var(--paper, #fff);border:1px solid var(--border);border-radius:8px;${cardBorder}">
+      <p class="text-xs font-medium" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;color:var(--text-dim);">
+        <span><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b> · <span style="text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escHtml(a.type || '')}</span></span>
+        <span>${escHtml(when)}</span>
+      </p>
+      <div class="mt-1">${body}</div>
     </article>`;
   }).join('');
 
   host.innerHTML = `${banner}
     <div id="agentTradingSvg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}</tbody></table>
-    <h4 class="eb-h" style="margin-top:24px">Recent activity</h4>
-    ${activityRows || '<p class="text-sm text-gray-500">No activity yet.</p>'}`;
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:28px;margin-bottom:8px;">
+      <h4 class="eb-h" style="margin:0">Live Transparency &amp; Thesis Feed</h4>
+      <span class="text-xs text-gray-400">Filtered: ${escHtml(activeFilter === 'all' ? 'All Models' : activeFilter)}</span>
+    </div>
+    <div class="eb-view-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;padding:3px;background:var(--paper, #f9f9fb);border-radius:8px;border:1px solid var(--border);">
+      ${filterPills.join('')}
+    </div>
   const svgEl = document.getElementById('agentTradingSvg');
   if (svgEl) _attachEquityHover(svgEl);
 }
@@ -7470,17 +7639,26 @@ function _renderMtmPage(d) {
     const pnlUsd = currentBankroll - startPrincipal;
     const pnlPct = pnlUsd / startPrincipal;
 
-    const illiquid = Number(account.n_illiquid_positions ?? m.n_illiquid_positions ?? 0);
     const pnlColor = pnlUsd >= 0 ? '#0a7' : '#c33';
     const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
+
+    const sharpeVal = Number(m.sharpe);
+    const sharpeStr = Number.isFinite(sharpeVal) ? sharpeVal.toFixed(2) : '—';
+
+    const ddVal = Number(m.max_drawdown);
+    const ddStr = Number.isFinite(ddVal) ? (ddVal * 100).toFixed(1) + '%' : '—';
+
+    const pnlTitle = `Net P&L: ${_usd(pnlUsd)} (Realized: ${_usd(account.realized_pnl || 0)}, Unrealized: ${_usd(account.unrealized_pnl || 0)}) · Net of venue trading fees (Kalshi 7% taker formula & Polymarket 0%)`;
 
     return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
       <td><b>${i + 1}</b></td>
       <td><b>${escHtml(_ebModelHead(m.model || ''))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(m.model || '')}</span>${m.status === 'collecting_history' ? '<span style="display:block;color:var(--text-dim);font-size:11px">Collecting resolved history</span>' : ''}</td>
       <td>${_usd(startPrincipal)}</td>
       <td><b>${_usd(currentBankroll)}</b></td>
-      <td style="color:${pnlColor};font-weight:600">${pnlStr}</td>
+      <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnlStr}<span style="display:block;font-size:10px;color:var(--text-dim);font-weight:400">net of fees</span></td>
       <td style="color:${pnlColor};font-weight:600">${_roiPct(pnlPct)}</td>
+      <td><b>${sharpeStr}</b></td>
+      <td style="color:${Number(m.max_drawdown) > 0.15 ? '#c33' : 'inherit'}">${ddStr}</td>
       <td>${account.n_trades ?? m.n_trades ?? 0}</td>
       <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
     </tr>`;
@@ -7493,6 +7671,9 @@ function _renderMtmPage(d) {
   };
   const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.quarter_kelly;
 
+  const validSharpes = mtmModels.map(m => Number(m.sharpe)).filter(Number.isFinite);
+  const avgSharpe = validSharpes.length ? (validSharpes.reduce((a, b) => a + b, 0) / validSharpes.length).toFixed(2) : '—';
+
   const sizingButtonsHtml = `
     <div class="eb-mtm-heading-row">
       <h4 id="eb-mtm-header-title" class="eb-h eb-mtm-title">Per-Model Shadow Mark-to-Market Accounts (${escHtml(activeSizingLabel)})</h4>
@@ -7501,12 +7682,18 @@ function _renderMtmPage(d) {
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_1pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_1pct">Edge Kelly 5%</button>
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Edge Kelly 8%</button>
       </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin:8px 0 14px;padding:8px 12px;background:rgba(6,182,212,0.05);border:1px solid rgba(6,182,212,0.2);border-radius:6px;font-size:12px;color:var(--text);">
+      <div><b>Avg Sharpe:</b> <span style="color:#0a7;font-weight:600">${avgSharpe}</span></div>
+      <div>· <b>Risk Guard:</b> 30% Max Drawdown Halt Active</div>
+      <div>· <b>Fee Model:</b> Strictly Net of Kalshi &amp; Polymarket Taker Fees</div>
+      <div>· <b>Liquidation:</b> Bid-Marked Real-Time Book</div>
     </div>`;
 
   return `<div id="eb-mtm-container"><h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
     ${sizingButtonsHtml}
     <div id="eb-mtm-svg">${modelCurves.length ? _equitySvg(modelCurves, 760, 300, {asPct: false, yPrefix: '$'}) : ''}</div>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table></div>`;
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Starting Principal</th><th>Current Bankroll</th><th>Net PnL ($)</th><th>Net Return %</th><th>Sharpe</th><th>Max DD</th><th>Trades</th><th>Open</th></tr></thead><tbody id="eb-mtm-table-body">${rows}</tbody></table></div>`;
 }
 
 function renderEdgeBoard(d) {
