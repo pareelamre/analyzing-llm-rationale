@@ -1507,6 +1507,37 @@ class ServerTests(unittest.TestCase):
             response = self.client.get("/agent-trading/board")
         self.assertEqual(response.json()["mode"], "shadow")
 
+    def test_agent_trading_board_endpoint_enforces_rendering_payload_budgets(self):
+        model_count = server_module._AGENT_TRADING_MAX_MODELS + 4
+        curve_length = server_module._AGENT_TRADING_CURVE_MAX_POINTS + 40
+        position_count = server_module._AGENT_TRADING_OPEN_POSITIONS_MAX_PER_MODEL + 5
+        models = [f"model-{i}" for i in range(model_count)]
+        live = {
+            "models": models,
+            "leaderboard": [
+                {"agent_id": model, "open_positions": [{"ticker": f"{model}-{j}"} for j in range(position_count)]}
+                for model in models
+            ],
+            "equity_curves": {
+                model: {"value_curve": [{"account_value": point} for point in range(curve_length)]}
+                for model in models
+            },
+            "recent_activity": [{"agent_id": "model-0", "type": "thesis", "thesis": str(i)} for i in range(70)],
+            "latest_theses": {model: {"agent_id": model, "type": "thesis", "thesis": "full reasoning"} for model in models},
+            "eligibility": {model: {"eligible": False} for model in models},
+        }
+        with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
+            payload = self.client.get("/agent-trading/board").json()
+
+        self.assertEqual(len(payload["models"]), server_module._AGENT_TRADING_MAX_MODELS)
+        self.assertEqual(len(payload["leaderboard"]), server_module._AGENT_TRADING_MAX_MODELS)
+        self.assertEqual(len(payload["recent_activity"]), server_module._AGENT_TRADING_ACTIVITY_MAX_ITEMS)
+        self.assertEqual(len(payload["equity_curves"]["model-0"]["value_curve"]), server_module._AGENT_TRADING_CURVE_MAX_POINTS)
+        self.assertEqual(payload["equity_curves"]["model-0"]["value_curve"][0]["account_value"], 0)
+        self.assertEqual(payload["equity_curves"]["model-0"]["value_curve"][-1]["account_value"], curve_length - 1)
+        self.assertEqual(len(payload["leaderboard"][0]["open_positions"]), server_module._AGENT_TRADING_OPEN_POSITIONS_MAX_PER_MODEL)
+        self.assertEqual(payload["latest_theses"]["model-0"]["thesis"], "full reasoning")
+
     def test_agent_trading_board_endpoint_defaults_to_empty_when_no_live_file(self):
         with mock.patch.object(server_module, "_read_agent_trading_board", return_value=None):
             response = self.client.get("/agent-trading/board")

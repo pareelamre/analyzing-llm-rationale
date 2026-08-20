@@ -1088,7 +1088,7 @@
     .agentic-filterbar { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; }
     .agentic-filterbar .eb-view-tab { border-radius: 7px; font-size: 11px; padding: 6px 10px; }
     .agentic-activity-list { display: grid; gap: 10px; }
-    .agentic-activity { background: #fff; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; padding: 15px 16px; position: relative; }
+    .agentic-activity { background: #fff; border: 1px solid var(--border); border-radius: 12px; content-visibility: auto; contain-intrinsic-size: auto 320px; overflow: hidden; padding: 15px 16px; position: relative; }
     .agentic-activity--thesis { border-color: #cbd5e1; box-shadow: 0 8px 26px rgba(15, 23, 42, .06); }
     .agentic-activity--thesis::before { background: linear-gradient(180deg, #0f766e, #14b8a6); content: ''; inset: 0 auto 0 0; position: absolute; width: 3px; }
     .agentic-activity-meta { align-items: center; color: var(--text-dim); display: flex; font-size: 10px; gap: 7px; justify-content: space-between; letter-spacing: .045em; margin-bottom: 10px; text-transform: uppercase; }
@@ -6204,9 +6204,23 @@ async function markPersonalLedgerVerdict(entryId, verdict, btn) {
 }
 
 const AGENT_TRADING_REFRESH_MS = 60_000;
+// Keep this in step with the API budget. The client-side cap is intentional:
+// cached or older deployments must not make the SVG expensive if an upstream
+// publisher ever emits an oversized curve.
+const AGENTIC_RENDER_MAX_CURVE_POINTS = 160;
+const AGENTIC_RENDER_MAX_ACTIVITY_ITEMS = 30;
 let _agentTradingRequest = null;
 let _agentTradingCachedBoard = null;
 let _agentTradingBoardSignature = '';
+
+function _sampleAgenticCurvePoints(points, maxPoints = AGENTIC_RENDER_MAX_CURVE_POINTS) {
+  if (!Array.isArray(points) || points.length <= maxPoints) return points || [];
+  if (maxPoints <= 1) return [points[0]];
+  return Array.from({ length: maxPoints }, (_, i) => {
+    const index = Math.round(i * (points.length - 1) / (maxPoints - 1));
+    return points[index];
+  });
+}
 
 function _agentTradingSignature(data) {
   // The generated timestamp changes whenever the publisher writes a new board.
@@ -6491,7 +6505,7 @@ function renderAgentTradingBoard(d) {
   // Find global time bounds across all equity curve timestamps
   let globalTMin = Infinity;
   leaderboard.forEach(row => {
-    const raw = (equityCurves[row.agent_id]?.value_curve || []);
+    const raw = _sampleAgenticCurvePoints(equityCurves[row.agent_id]?.value_curve || []);
     raw.forEach(p => {
       if (p && p.ts) {
         const t = new Date(p.ts).getTime();
@@ -6503,7 +6517,7 @@ function renderAgentTradingBoard(d) {
   if (globalTMin >= genTime) globalTMin = genTime - 3600000;
 
   const curves = leaderboard.map((row, i) => {
-    const rawCurve = (equityCurves[row.agent_id]?.value_curve || []);
+    const rawCurve = _sampleAgenticCurvePoints(equityCurves[row.agent_id]?.value_curve || []);
     const validPoints = rawCurve.filter(p => p && p.ts && Number.isFinite(Number(p.account_value)));
     const startCash = Number(row.starting_cash) || 10000;
     const currentAcctVal = Number(row.account_value);
@@ -6630,7 +6644,7 @@ function renderAgentTradingBoard(d) {
     filteredActivity = [latestThesis, ...filteredActivity];
   }
 
-  const activityRows = filteredActivity.slice(0, 30).map(a => {
+  const activityRows = filteredActivity.slice(0, AGENTIC_RENDER_MAX_ACTIVITY_ITEMS).map(a => {
     const when = (a.ts || a.timestamp || a.created_at) ? new Date(a.ts || a.timestamp || a.created_at).toLocaleString() : '';
     const body = _agentTradingActivityLine(a);
     if (!body) return '';

@@ -108,6 +108,16 @@ _TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "30"))
 _TRACK_RECORD_LIVE_TIMEOUT = int(os.environ.get("TRACK_RECORD_LIVE_TIMEOUT", "20"))
 _EDGE_BOARD_STALE_AFTER_S = int(os.environ.get("EDGE_BOARD_STALE_AFTER_S", "1800"))
 _EDGE_BOARD_CURVE_MAX_POINTS = int(os.environ.get("EDGE_BOARD_CURVE_MAX_POINTS", "160"))
+# The Agentic board is a live transparency surface, not an archive export. Keep
+# its public payload bounded so a growing action history cannot make opening
+# /edge/agentic progressively slower. The full audit history remains in the
+# published artifact; this endpoint exposes the recent, renderable slice.
+_AGENT_TRADING_CURVE_MAX_POINTS = int(os.environ.get("AGENT_TRADING_CURVE_MAX_POINTS", "160"))
+_AGENT_TRADING_ACTIVITY_MAX_ITEMS = int(os.environ.get("AGENT_TRADING_ACTIVITY_MAX_ITEMS", "50"))
+_AGENT_TRADING_MAX_MODELS = int(os.environ.get("AGENT_TRADING_MAX_MODELS", "24"))
+_AGENT_TRADING_OPEN_POSITIONS_MAX_PER_MODEL = int(
+    os.environ.get("AGENT_TRADING_OPEN_POSITIONS_MAX_PER_MODEL", "32")
+)
 _FORECAST_EVALUATION_URL = os.environ.get(
     "FORECAST_EVALUATION_URL",
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
@@ -1734,6 +1744,69 @@ def _compact_mark_to_market_by_model(rows: Any) -> List[Dict[str, Any]]:
     return compact_rows
 
 
+def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
+    """Return the bounded, UI-facing slice of an Agentic board artifact.
+
+    This is deliberately separate from the publisher's durable record: the
+    endpoint is polled while the tab is open, so all unbounded collections are
+    capped here as well as in the renderer. Thesis text is never truncated;
+    transparency must not come at the cost of cutting a model's reasoning.
+    """
+    source = live if isinstance(live, dict) else {}
+    raw_leaderboard = source.get("leaderboard")
+    leaderboard = [
+        dict(row) for row in (raw_leaderboard if isinstance(raw_leaderboard, list) else [])
+        if isinstance(row, dict)
+    ][:_AGENT_TRADING_MAX_MODELS]
+    for row in leaderboard:
+        positions = row.get("open_positions")
+        if isinstance(positions, list):
+            row["open_positions"] = positions[:_AGENT_TRADING_OPEN_POSITIONS_MAX_PER_MODEL]
+
+    models = source.get("models")
+    compact_models = list(models)[:_AGENT_TRADING_MAX_MODELS] if isinstance(models, list) else []
+    model_ids = {
+        str(model) for model in compact_models if model is not None
+    } | {
+        str(row.get("agent_id")) for row in leaderboard if row.get("agent_id") is not None
+    }
+
+    raw_curves = source.get("equity_curves")
+    compact_curves: Dict[str, Any] = {}
+    if isinstance(raw_curves, dict):
+        for agent_id, curve in raw_curves.items():
+            if str(agent_id) not in model_ids or not isinstance(curve, dict):
+                continue
+            compact_curve = dict(curve)
+            compact_curve["value_curve"] = _sample_list(
+                curve.get("value_curve"), max_points=_AGENT_TRADING_CURVE_MAX_POINTS
+            )
+            compact_curves[str(agent_id)] = compact_curve
+
+    raw_activity = source.get("recent_activity")
+    activity = list(raw_activity)[:_AGENT_TRADING_ACTIVITY_MAX_ITEMS] if isinstance(raw_activity, list) else []
+    raw_theses = source.get("latest_theses")
+    latest_theses = {
+        str(agent_id): thesis
+        for agent_id, thesis in (raw_theses.items() if isinstance(raw_theses, dict) else [])
+        if str(agent_id) in model_ids
+    }
+    raw_eligibility = source.get("eligibility")
+    eligibility = {
+        str(agent_id): value
+        for agent_id, value in (raw_eligibility.items() if isinstance(raw_eligibility, dict) else [])
+        if str(agent_id) in model_ids
+    }
+    return {
+        "models": compact_models,
+        "leaderboard": leaderboard,
+        "equity_curves": compact_curves,
+        "recent_activity": activity,
+        "latest_theses": latest_theses,
+        "eligibility": eligibility,
+    }
+
+
 _LIVE_TRACK_RECORD_READER = live_track_record_support.LiveTrackRecordReader(
     cache_key=_cache_key,
     cache_get=_cache_get,
@@ -3159,21 +3232,22 @@ async def agent_trading_board():
     live = await asyncio.get_running_loop().run_in_executor(None, _read_agent_trading_board)
     live = live or {}
     freshness = _agent_trading_board_freshness(live)
+    compact = _compact_agent_trading_board(live)
     return JSONResponse(
         {
             "generated_at": live.get("generated_at"),
             "freshness": freshness,
             "mode": "shadow",
             "note": live.get("note") or "Paper trading only -- no real money is ever at risk.",
-            "models": live.get("models", []),
-            "leaderboard": live.get("leaderboard", []),
-            "equity_curves": live.get("equity_curves", {}),
-            "recent_activity": live.get("recent_activity", []),
+            "models": compact["models"],
+            "leaderboard": compact["leaderboard"],
+            "equity_curves": compact["equity_curves"],
+            "recent_activity": compact["recent_activity"],
             # A selected model may not appear in the shared recent-activity
             # window. Keep its most recent thesis available so the Agentic
             # tab can render a useful per-model feed without another request.
-            "latest_theses": live.get("latest_theses", {}),
-            "eligibility": live.get("eligibility", {}),
+            "latest_theses": compact["latest_theses"],
+            "eligibility": compact["eligibility"],
         },
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
