@@ -61,6 +61,25 @@ def _load_model_notes(model: str) -> Dict[str, List[Dict[str, Any]]]:
     return benchmark_tools._load_notes(path if path.exists() else None)
 
 
+def _latest_thesis(conn: sqlite3.Connection, model: str) -> Dict[str, Any] | None:
+    """Return one model's most recent published thesis, independent of feed cap."""
+    row = conn.execute(
+        "SELECT agent_id, cycle_id, ts, thesis FROM agent_cycles "
+        "WHERE agent_id = ? AND thesis IS NOT NULL AND thesis != '' "
+        "ORDER BY ts DESC LIMIT 1",
+        (model,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "ts": row["ts"],
+        "agent_id": row["agent_id"],
+        "type": "thesis",
+        "cycle_id": row["cycle_id"],
+        "thesis": agent_trading_stats.clean_thesis_display(row["thesis"]),
+    }
+
+
 def _held_tickers(conn: sqlite3.Connection) -> Set[tuple]:
     return {
         (str(row["platform"] or "kalshi").lower(), str(row["ticker"]))
@@ -94,6 +113,7 @@ def build_board() -> Dict[str, Any]:
         leaderboard: List[Dict[str, Any]] = []
         equity_curves: Dict[str, Any] = {}
         eligibility: Dict[str, Any] = {}
+        latest_theses: Dict[str, Dict[str, Any] | None] = {}
         activity: List[Dict[str, Any]] = []
         now_iso = datetime.now(timezone.utc).isoformat()
         for model, conn in conns.items():
@@ -104,6 +124,7 @@ def build_board() -> Dict[str, Any]:
                 conn, model, current_account_value=acct_val, current_ts=now_iso
             )
             equity_curves[model] = equity
+            latest_theses[model] = _latest_thesis(conn, model)
             if rows:
                 eligibility[model] = agent_trading_stats.compute_promotion_eligibility(rows[0], equity)
             activity.extend(agent_trading_stats.recent_activity(
@@ -124,6 +145,7 @@ def build_board() -> Dict[str, Any]:
         "leaderboard": leaderboard,
         "equity_curves": equity_curves,
         "eligibility": eligibility,
+        "latest_theses": latest_theses,
         "recent_activity": activity[:RECENT_ACTIVITY_LIMIT],
     }
 

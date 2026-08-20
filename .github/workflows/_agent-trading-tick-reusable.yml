@@ -42,13 +42,20 @@ on:
         description: "configs/models.yaml key to trade as this cycle."
         required: true
         type: string
+      lane:
+        description: "Shared SCADS provider lane (0 or 1); caps global model fan-out."
+        required: true
+        type: string
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
   AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
 
 concurrency:
-  group: agent-trading-tick-${{ inputs.model }}
+  # Ten per-model schedules may be delayed and released together by GitHub.
+  # Two lanes retain independent stores while respecting the shared SCADS
+  # capacity limit; a lane queue is safer than repeatedly dropping a thesis.
+  group: agent-trading-scads-lane-${{ inputs.lane }}
   cancel-in-progress: false
 
 jobs:
@@ -122,6 +129,8 @@ jobs:
           KALSHI_PRIVATE_KEY_FILE: tmp/agent-trading/kalshi_private_key.pem
           MAX_TOOL_STEPS: "4"
           CANDIDATE_COUNT: "3"
+          AGENT_TRADING_RETRIES: "3"
+          AGENT_TRADING_RETRY_BACKOFF_S: "12"
         run: python scripts/agent_trading_tick.py
 
       - name: Upload this model's shadow account store

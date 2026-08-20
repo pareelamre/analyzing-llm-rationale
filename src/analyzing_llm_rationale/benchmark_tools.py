@@ -38,6 +38,7 @@ risk_guard_checks = meter.create_counter("benchmark_tools.risk_guard.checks", un
 risk_guard_rejections = meter.create_counter("benchmark_tools.risk_guard.rejections", unit="1")
 settlement_actions = meter.create_counter("benchmark_tools.settlements", unit="1")
 fill_actions = meter.create_counter("benchmark_tools.place_trade.fills", unit="1")
+sizing_actions = meter.create_counter("benchmark_tools.place_trade.sizing", unit="1")
 
 BLACKLISTED_WEB_DOMAINS = ("coinmarketcap.com",)
 MAX_NOTES_PER_AGENT = 50
@@ -71,6 +72,38 @@ class RiskGuardPolicy:
     concentration_limit: float
     per_cycle_spend_limit: float
     cycle_id: str
+
+
+@dataclass(frozen=True)
+class AgentSizingPolicy:
+    """Bounded, executable sizing choices exposed to autonomous agents."""
+
+    key: str
+    label: str
+    kelly_fraction: float
+    market_shrinkage: float
+    max_position_fraction: float
+    min_edge: float
+
+
+AGENT_SIZING_POLICIES: Dict[str, AgentSizingPolicy] = {
+    "quarter_kelly": AgentSizingPolicy(
+        key="quarter_kelly",
+        label="Quarter Kelly · 5% cap",
+        kelly_fraction=0.25,
+        market_shrinkage=0.50,
+        max_position_fraction=0.05,
+        min_edge=0.0,
+    ),
+    "edge_kelly": AgentSizingPolicy(
+        key="edge_kelly",
+        label="Edge Kelly · 8% cap",
+        kelly_fraction=0.50,
+        market_shrinkage=0.25,
+        max_position_fraction=0.08,
+        min_edge=0.10,
+    ),
+}
 
 
 def _now() -> str:
@@ -222,6 +255,77 @@ def _as_float(value: Any, default: float = 0.0) -> float:
     if value in (None, ""):
         return default
     return float(value)
+
+
+def _clean_probability(value: Any, *, name: str) -> float:
+    """Accept a probability in decimal or percentage form, never a guess."""
+    probability = _as_float(value)
+    if 1.0 < probability <= 100.0:
+        probability /= 100.0
+    if not 0.0 < probability < 1.0:
+        raise ValueError(f"{name} must be a probability strictly between 0 and 1")
+    return probability
+
+
+def _sizing_plan(
+    args: Mapping[str, Any], *, price: float, side: str, account_value: float,
+) -> Dict[str, Any]:
+    """Derive an executable stake from the agent's declared sizing choice.
+
+    ``manual`` deliberately preserves the existing tool contract for old
+    callers and closing orders. Autonomous agent ticks are instructed to use
+    one of the two named Kelly policies for every new position.
+    """
+    requested = str(args.get("sizing_mode") or "manual").strip().lower().replace("-", "_")
+    if requested in {"", "manual", "legacy"}:
+        return {"mode": "manual", "applied": False}
+    if requested == "close":
+        return {"mode": "close", "applied": False}
+    policy = AGENT_SIZING_POLICIES.get(requested)
+    if policy is None:
+        choices = ", ".join((*AGENT_SIZING_POLICIES.keys(), "close"))
+        raise ValueError(f"sizing_mode must be one of {choices}")
+    if not 0.0 < price < 1.0:
+        raise ValueError("Kelly sizing requires an executable price between 0 and 1")
+
+    model_yes_probability = _clean_probability(args.get("model_probability"), name="model_probability")
+    model_side_probability = model_yes_probability if side == "yes" else 1.0 - model_yes_probability
+    edge = model_side_probability - price
+    if edge < policy.min_edge:
+        return {
+            "mode": policy.key,
+            "label": policy.label,
+            "applied": True,
+            "eligible": False,
+            "edge": round(edge, 6),
+            "min_edge": policy.min_edge,
+            "max_position_fraction": policy.max_position_fraction,
+            "reason": "edge_below_threshold",
+        }
+
+    # Match the published Mark-to-Market definitions: Quarter Kelly shrinks
+    # halfway to market; Edge Kelly uses 25% shrinkage and half Kelly.
+    p_win = model_side_probability + policy.market_shrinkage * (price - model_side_probability)
+    odds = (1.0 - price) / price
+    raw_kelly = max(0.0, (p_win * odds - (1.0 - p_win)) / odds)
+    target_fraction = min(policy.kelly_fraction * raw_kelly, policy.max_position_fraction)
+    target_notional = account_value * target_fraction
+    return {
+        "mode": policy.key,
+        "label": policy.label,
+        "applied": True,
+        "eligible": target_notional > 1e-9,
+        "edge": round(edge, 6),
+        "min_edge": policy.min_edge,
+        "kelly_fraction": policy.kelly_fraction,
+        "market_shrinkage": policy.market_shrinkage,
+        "raw_kelly": round(raw_kelly, 6),
+        "target_fraction": round(target_fraction, 6),
+        "max_position_fraction": policy.max_position_fraction,
+        "target_notional": round(target_notional, 6),
+        "target_quantity": target_notional / price if price else 0.0,
+        "reason": "no_positive_kelly" if target_notional <= 1e-9 else None,
+    }
 
 
 # Memoized per process (not a "rate" -> value dict of size >1): a shadow-
@@ -1629,6 +1733,7 @@ def _check_trade_guards(
     ticker: str,
     side: str,
     platform: str = "kalshi",
+    sizing: Optional[Mapping[str, Any]] = None,
 ) -> tuple[bool, Dict[str, Any], RiskGuardPolicy]:
     policy = _risk_guard_policy()
     settlements = _settle_agent_open_positions(agent_id, policy)
@@ -1651,6 +1756,17 @@ def _check_trade_guards(
     cycle_spend_after = cycle_spend_before + cash_required
 
     reasons: List[str] = []
+    sizing_detail = dict(sizing or {"mode": "manual", "applied": False})
+    if sizing_detail.get("mode") == "close":
+        opposite_quantity = sum(
+            float(position.quantity)
+            for position in account.open_positions()
+            if str(position.platform).lower() == platform
+            and str(position.ident) == ticker
+            and str(position.side).lower() == _opposite_side(side)
+        )
+        if quantity > opposite_quantity + 1e-9:
+            reasons.append("close_exceeds_open_position")
     if market_cost_basis_after > concentration_cap + 1e-9:
         reasons.append("concentration_limit")
     if cash_required > cash_before + 1e-9:
@@ -1676,9 +1792,12 @@ def _check_trade_guards(
         "cash_required": round(cash_required, 6),
         "cash_delta": round(float(fill.cash_delta), 6),
         "settlements_before_trade": settlements,
+        "sizing": sizing_detail,
     }
     outcome = "allowed" if detail["allowed"] else "rejected"
     risk_guard_checks.add(1, {"outcome": outcome})
+    if sizing_detail.get("applied") and outcome == "rejected":
+        sizing_actions.add(1, {"mode": str(sizing_detail["mode"]), "outcome": outcome})
     if reasons:
         risk_guard_rejections.add(1, {"reason": reasons[0]})
     return detail["allowed"], detail, policy
@@ -1831,6 +1950,35 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     # for) instead of whatever price the caller guessed.
                     order["price"] = market_check["price"]
 
+            sizing = _sizing_plan(
+                args,
+                price=float(order["price"]),
+                side=side,
+                account_value=_risk_guard_policy().account_value,
+            )
+            if sizing.get("applied") and not sizing.get("eligible"):
+                sizing_actions.add(1, {"mode": str(sizing["mode"]), "outcome": "skipped"})
+                span.set_attributes({
+                    "outcome": "skipped",
+                    "trade.sizing_mode": str(sizing["mode"]),
+                    "trade.sizing_reason": str(sizing.get("reason") or "no_positive_kelly"),
+                })
+                _finish_tool(tool, start, "skipped")
+                return {
+                    "ok": False,
+                    "tool": tool,
+                    "skipped": True,
+                    "reason": sizing.get("reason") or "no_positive_kelly",
+                    "message": "No trade: the selected Kelly sizing policy found no eligible stake.",
+                    "mode": mode,
+                    "submitted": False,
+                    "sizing": sizing,
+                }
+            if sizing.get("applied"):
+                # The agent declares probability and policy; this tool, not
+                # model prose, derives the contract count and enforces the cap.
+                order["quantity"] = sizing["target_quantity"]
+
             preview = trading.preview_order(order)
             normalized = preview.get("normalized_order") or {}
             allowed, guard, policy = _check_trade_guards(
@@ -1840,6 +1988,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 ticker=ticker,
                 side=side,
                 platform=platform,
+                sizing=sizing,
             )
             if not allowed:
                 event = {
@@ -1864,6 +2013,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "cash_required": guard["cash_required"],
                     "cash_delta": guard["cash_delta"],
                     "risk_guard": guard,
+                    "sizing": sizing,
                 }
                 _record_ledger(event)
                 _record_rejected_account_action(
@@ -1893,6 +2043,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "submitted": False,
                     "normalized_order": normalized,
                     "risk_guard": guard,
+                    "sizing": sizing,
                     "execution": {
                         "immediate_only": True,
                         "time_in_force": IMMEDIATE_TIME_IN_FORCE,
@@ -1959,14 +2110,24 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "cash_required": account_update["cash_required"],
                 "cash_delta": account_update["cash_delta"],
                 "risk_guard": accounting_guard,
+                "sizing": sizing,
             }
             _record_ledger(event)
-            trade_actions.add(1, {"mode": mode, "submitted": str(submitted).lower()})
+            sizing_actions.add(1, {
+                "mode": str(sizing["mode"]),
+                "outcome": "success" if sizing.get("applied") else "manual",
+            })
+            trade_actions.add(1, {
+                "mode": mode,
+                "submitted": str(submitted).lower(),
+                "sizing_mode": str(sizing["mode"]),
+            })
             fill_actions.add(1, {"mode": mode, "outcome": fill_outcome})
             span.set_attributes({
                 "outcome": "success",
                 "risk_guard.allowed": True,
                 "trade.mode": mode,
+                "trade.sizing_mode": str(sizing["mode"]),
                 "trade.submitted": submitted,
                 "trade.fill_outcome": fill_outcome,
                 "trade.fill_status": fill_status,
@@ -1984,6 +2145,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 ),
                 "normalized_order": normalized,
                 "risk_guard": accounting_guard,
+                "sizing": sizing,
                 "execution": {
                     "immediate_only": True,
                     "time_in_force": IMMEDIATE_TIME_IN_FORCE,

@@ -1480,6 +1480,7 @@ class ServerTests(unittest.TestCase):
             "leaderboard": [{"agent_id": "gpt-oss-120b", "account_value": 9981.46}],
             "equity_curves": {"gpt-oss-120b": {"value_curve": [{"account_value": 10000.0}]}},
             "recent_activity": [{"agent_id": "gpt-oss-120b", "type": "trade"}],
+            "latest_theses": {"gpt-oss-120b": {"agent_id": "gpt-oss-120b", "type": "thesis", "thesis": "Research note"}},
             "eligibility": {"gpt-oss-120b": {"eligible": False, "checks": {"sufficient_sample": False}}},
         }
         with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
@@ -1491,6 +1492,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["leaderboard"][0]["agent_id"], "gpt-oss-120b")
         self.assertEqual(payload["equity_curves"]["gpt-oss-120b"]["value_curve"][0]["account_value"], 10000.0)
         self.assertEqual(payload["recent_activity"][0]["type"], "trade")
+        self.assertEqual(payload["latest_theses"]["gpt-oss-120b"]["type"], "thesis")
         self.assertFalse(payload["eligibility"]["gpt-oss-120b"]["eligible"])
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])
@@ -3261,6 +3263,9 @@ class ServerTests(unittest.TestCase):
         self.assertIn("manage_notes(", system_prompt)
         self.assertIn("forecast(", system_prompt)
         self.assertIn("optimize_portfolio(", system_prompt)
+        self.assertIn("sizing_mode", system_prompt)
+        self.assertIn("quarter_kelly", system_prompt)
+        self.assertIn("edge_kelly", system_prompt)
 
     def test_agent_analyze_optimize_portfolio_tool_returns_the_kelly_allocation(self):
         # optimize_portfolio existed for weeks as a real, working REST
@@ -3305,6 +3310,36 @@ class ServerTests(unittest.TestCase):
         _, call_kwargs = mock_optimize.call_args
         self.assertEqual(call_kwargs["bankroll_usd"], 5000)
         self.assertEqual(call_kwargs["kelly_fraction"], 0.5)
+
+    def test_agent_analyze_orderbook_arbitrage_uses_depth_not_midpoints(self):
+        self.provider.response = {
+            "thought": "check complementary depth",
+            "action": "orderbook_arbitrage",
+            "args": {"platform": "kalshi", "ticker": "KXFAKE", "fee_bps_per_leg": 10},
+        }
+        with mock.patch(
+            "analyzing_llm_rationale.market_data.fetch_kalshi_orderbook",
+            return_value={"yes": [[0.47, 4]], "no": [[0.58, 5]]},
+        ):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "Is there a paired-book opportunity?",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                    "max_tool_steps": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        report = response.json()
+        tool_step = report["tool_transcript"][0]
+        self.assertEqual(tool_step["action"], "orderbook_arbitrage")
+        self.assertIn('"executable_quantity": 4.0', tool_step["observation"])
+        self.assertIn("Read-only candidate only", tool_step["observation"])
+        system_prompt = self.provider.calls[0][0]["content"]
+        self.assertIn("orderbook_arbitrage(", system_prompt)
+        self.assertIn("identical resolution rules", system_prompt)
 
     def test_agent_analyze_benchmark_tool_names_restricts_to_a_subset(self):
         # A specialist-pipeline stage (e.g. research-only) passes an explicit
