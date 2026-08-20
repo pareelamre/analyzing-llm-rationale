@@ -545,7 +545,11 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
             # The market detail still contains the canonical contract rules.
             # Event-level article enrichment is best effort.
             pass
-    return _kalshi_quote(market)
+    quote = _kalshi_quote(market)
+    event = (market.get("events") or [{}])[0]
+    event_category = event.get("category") if isinstance(event, dict) else None
+    quote["category"] = _market_category(quote.get("question"), event_category)
+    return quote
 
 
 def list_kalshi(limit: int = 5, query: Optional[str] = None,
