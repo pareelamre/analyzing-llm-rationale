@@ -331,6 +331,22 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("_agentTradingCachedBoard", loader)
         self.assertIn("_agentTradingBoardSignature", loader)
 
+    def test_agentic_renderer_has_curve_feed_and_offscreen_rendering_budgets(self):
+        # The API has matching response budgets. Keep a source-level backstop
+        # here for stale/cached API payloads and make off-screen thesis cards
+        # cheap to lay out as the transparency feed grows.
+        index = self._both()["frontend"]
+        renderer = index.split("function renderAgentTradingBoard(d) {", 1)[1].split(
+            "async function removePersonalLedgerEntry", 1
+        )[0]
+        self.assertIn("const AGENTIC_RENDER_MAX_CURVE_POINTS = 160;", index)
+        self.assertIn("const AGENTIC_RENDER_MAX_ACTIVITY_ITEMS = 30;", index)
+        self.assertIn("function _sampleAgenticCurvePoints", index)
+        self.assertGreaterEqual(renderer.count("_sampleAgenticCurvePoints("), 2)
+        self.assertIn("filteredActivity.slice(0, AGENTIC_RENDER_MAX_ACTIVITY_ITEMS)", renderer)
+        self.assertIn("content-visibility: auto", index)
+        self.assertIn("contain-intrinsic-size: auto 320px", index)
+
     def test_agentic_thesis_cards_hide_legacy_na_placeholders(self):
         index = self._both()["frontend"]
         formatter = index.split("function _thesisBulletForDisplay(rawBullet) {", 1)[1].split(
