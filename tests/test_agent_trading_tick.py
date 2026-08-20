@@ -315,6 +315,42 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("Resolution rules: " + full_rules, line)
 
 
+class PaperCalibrationContextTests(unittest.TestCase):
+    def test_adds_political_compression_prior_without_mechanically_repricing(self):
+        quote = _quote("KXPRESIDENT", question="Will the next president win reelection?")
+        quote.update({"category": "Politics", "platform": "Kalshi", "close_time": "2026-10-01T00:00:00Z"})
+
+        context = agent_trading_tick._paper_calibration_context(
+            quote, now=agent_trading_tick.datetime(2026, 8, 20, tzinfo=agent_trading_tick.timezone.utc)
+        )
+
+        self.assertIn("Political prices were persistently compressed", context)
+        self.assertIn("do not mechanically extremise", context)
+        self.assertIn("large political prints", context)
+
+    def test_adds_short_horizon_weather_caution(self):
+        quote = _quote("KXWEATHER", question="Will New York temperature exceed 90F?")
+        quote.update({"category": "Weather", "close_time": "2026-08-21T00:00:00Z"})
+
+        context = agent_trading_tick._paper_calibration_context(
+            quote, now=agent_trading_tick.datetime(2026, 8, 20, tzinfo=agent_trading_tick.timezone.utc)
+        )
+
+        self.assertIn("Short-horizon weather prices", context)
+        self.assertIn("independent evidence", context)
+
+    def test_omits_an_unvalidated_domain_horizon_combination(self):
+        quote = _quote("KXOTHER", question="Will an unrelated custom event happen?")
+        quote.update({"category": "Other", "close_time": "2026-08-23T00:00:00Z"})
+
+        self.assertEqual(
+            agent_trading_tick._paper_calibration_context(
+                quote, now=agent_trading_tick.datetime(2026, 8, 20, tzinfo=agent_trading_tick.timezone.utc)
+            ),
+            "",
+        )
+
+
 class ModelBackstopCharsTests(unittest.TestCase):
     def test_uses_the_model_s_verified_context_window_when_known(self):
         # glm-5.2-fp8 is the only one of the ten agent-trading models whose
@@ -472,6 +508,78 @@ class PortfolioBlockTests(unittest.TestCase):
 
         self.assertIn(full_thesis, block)
         self.assertIn("Your own reasoning from the previous cycle:", block)
+
+
+class LearningContextTests(unittest.TestCase):
+    def test_refreshes_each_realized_action_once_and_builds_calibration_context(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            with mock.patch.dict(
+                os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path)}, clear=False
+            ):
+                with benchmark_tools._account_transaction() as conn:
+                    benchmark_tools._record_account_action(
+                        conn,
+                        agent_id="model-learning",
+                        action_type="settlement",
+                        cycle_id="settled-cycle",
+                        platform="kalshi",
+                        ticker="KXLEARN",
+                        side="yes",
+                        realized_pnl=-12.5,
+                        outcome="no",
+                    )
+                    self.assertEqual(agent_trading_tick._refresh_learning(conn, "model-learning"), 1)
+                    # A retry must not add a duplicate lesson for the same immutable action.
+                    self.assertEqual(agent_trading_tick._refresh_learning(conn, "model-learning"), 0)
+                    block = agent_trading_tick._build_learning_block(conn, "model-learning")
+                    learning_count = conn.execute(
+                        "SELECT COUNT(*) FROM agent_learning WHERE agent_id = ?", ("model-learning",)
+                    ).fetchone()[0]
+
+        self.assertEqual(learning_count, 1)
+        self.assertIn("1 loss-making", block)
+        self.assertIn("KXLEARN", block)
+        self.assertIn("resolution rules", block)
+        self.assertIn("Risk caps and eligibility rules are unchanged", block)
+
+    def test_learning_context_is_visible_to_the_next_agent_turn(self):
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json"),
+                "FORESEA_AGENT_CYCLE_ID": "learning-cycle",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                with benchmark_tools._account_transaction() as conn:
+                    benchmark_tools._record_account_action(
+                        conn,
+                        agent_id="model-learning-turn",
+                        action_type="trade",
+                        cycle_id="prior-cycle",
+                        platform="polymarket",
+                        ticker="learn-market",
+                        side="yes",
+                        realized_pairs=5,
+                        realized_pnl=4.25,
+                        outcome="realized",
+                    )
+                with (
+                    mock.patch.object(agent_trading_tick, "_init_local_agent"),
+                    mock.patch.object(benchmark_tools, "_settle_agent_open_positions", return_value=[]),
+                    mock.patch.object(market_data, "list_kalshi", return_value=[]),
+                    mock.patch.object(market_data, "list_polymarket", return_value=[]),
+                    mock.patch.object(
+                        agent_trading_tick, "_call_agent_analyze",
+                        return_value=SimpleNamespace(thesis="Passed.", tool_transcript=[]),
+                    ) as call_mock,
+                ):
+                    agent_trading_tick.run_cycle("model-learning-turn")
+
+        question = call_mock.call_args[0][0]
+        self.assertIn("Learning from your resolved shadow trades", question)
+        self.assertIn("learn-market", question)
+        self.assertIn("1 profitable", question)
 
 
 class RunCycleTests(unittest.TestCase):
