@@ -189,6 +189,18 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertNotIn("chart heartbeat", index)
         self.assertNotIn("SCADS + baseline", index)
 
+    def test_mtm_methodology_uses_quiet_agentic_style_not_a_callout_banner(self):
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        renderer = index.split("function _renderMtmPage(d) {", 1)[1].split(
+            "function renderEdgeBoard", 1
+        )[0]
+
+        self.assertIn('class="mtm-methodology"', renderer)
+        self.assertIn("mtm-methodology-label", renderer)
+        self.assertNotIn("background:rgba(6,182,212,0.05)", renderer)
+
     def test_server_compact_pnl_strategy_preserves_growth_curve_ts(self):
         from analyzing_llm_rationale.server import _compact_pnl_strategy
         strategy = {
@@ -202,6 +214,31 @@ class FrontendCopyTests(unittest.TestCase):
         compact = _compact_pnl_strategy(strategy)
         self.assertIn("growth_curve_ts", compact)
         self.assertEqual(len(compact["growth_curve"]), len(compact["growth_curve_ts"]))
+
+    def test_server_compact_mtm_rows_preserve_risk_stats(self):
+        from analyzing_llm_rationale.server import _compact_mark_to_market_by_model
+
+        compact = _compact_mark_to_market_by_model([{
+            "model": "test-model",
+            "sharpe": 1.25,
+            "max_drawdown": 0.12,
+            "account": {"account_value": 10_000.0, "value_curve": []},
+        }])
+
+        self.assertEqual(compact[0]["sharpe"], 1.25)
+        self.assertEqual(compact[0]["max_drawdown"], 0.12)
+
+    def test_mtm_renderer_keeps_risk_cells_aligned_after_sizing_switch(self):
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        updater = index.split("function _updateMtmViewInPlace() {", 1)[1].split(
+            "function _refreshActiveEdgeBoardHost", 1
+        )[0]
+
+        self.assertIn("const risk = _mtmRiskStats(m);", updater)
+        self.assertIn("<td><b>${sharpeStr}</b></td>", updater)
+        self.assertIn("<td>${account.n_trades ?? m.n_trades ?? 0}</td>", updater)
 
     def test_equity_hover_uses_per_curve_points_length_in_index_mode(self):
         index = (
@@ -251,9 +288,21 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
                     "async function removePersonalLedgerEntry", 1
                 )[0]
                 self.assertIn("Shadow / paper trading only", renderer)
-                self.assertIn("const banner = ", renderer)
-                # Present in the loading and error early-return branches too.
-                self.assertIn("host.innerHTML = `${banner}<p", renderer)
+
+    def test_agentic_feed_has_a_per_model_latest_thesis_fallback(self):
+        # The server's frontend build emits static/index.html at image-build
+        # time. This is a source-level renderer contract, so do not require a
+        # locally generated artifact to be committed alongside source.
+        index = self._both()["frontend"]
+        renderer = index.split("function renderAgentTradingBoard(d) {", 1)[1].split(
+            "async function removePersonalLedgerEntry", 1
+        )[0]
+        self.assertIn("const latestTheses = d.latest_theses || {};", renderer)
+        self.assertIn("latestTheses[activeFilter]", renderer)
+        self.assertIn("No published thesis for", renderer)
+        self.assertIn("const banner = ", renderer)
+        # Present in the loading and error early-return branches too.
+        self.assertIn("host.innerHTML = `${banner}<p", renderer)
 
     def test_equity_curve_head_bubbles_show_the_model_abbreviation_not_a_boolean(self):
         # Each curve's end-of-line bubble renders String(curve.head) as its
@@ -275,6 +324,21 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
                     "function _agentTradingActivityLine", 1
                 )[0]
                 self.assertIn("_liveJsonFetch('/agent-trading/board')", loader)
+        loader = self._both()["frontend"].split("async function loadAgentTradingSection() {", 1)[1].split(
+            "function _agentTradingActivityLine", 1
+        )[0]
+        self.assertIn("_agentTradingRequest", loader)
+        self.assertIn("_agentTradingCachedBoard", loader)
+        self.assertIn("_agentTradingBoardSignature", loader)
+
+    def test_agentic_thesis_cards_hide_legacy_na_placeholders(self):
+        index = self._both()["frontend"]
+        formatter = index.split("function _thesisBulletForDisplay(rawBullet) {", 1)[1].split(
+            "function _formatThesisHtml", 1
+        )[0]
+        self.assertIn("unavailableComparison", formatter)
+        self.assertIn("not assessed", formatter)
+        self.assertIn("visibleBlocks", index)
 
     def test_agentic_is_a_real_edge_board_tab(self):
         for name, index in self._both().items():

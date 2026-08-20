@@ -338,7 +338,7 @@ async def _call_agent_analyze(question: str):
             last_exc = exc
             print(f"  agent_analyze attempt {attempt + 1}/{AGENT_ANALYZE_RETRIES} failed: {exc}", file=sys.stderr)
             if attempt + 1 < AGENT_ANALYZE_RETRIES:
-                time.sleep(AGENT_ANALYZE_RETRY_BACKOFF_S)
+                time.sleep(AGENT_ANALYZE_RETRY_BACKOFF_S * (2 ** attempt))
     assert last_exc is not None
     raise last_exc
 
@@ -355,6 +355,14 @@ _TRADING_INSTRUCTION = (
     "estimate. Never guess a price or reuse your entry price for the "
     "opposite side when closing: yes and no move independently. A real "
     "mispricing against your own view is exactly when to trade it.\n\n"
+    "SIZING: For every NEW position, call place_trade with both your calibrated "
+    "P(YES) as model_probability and exactly one sizing_mode: quarter_kelly "
+    "(25% Kelly, 50% market shrinkage, 5% account cap) or edge_kelly "
+    "(50% Kelly, 10 percentage-point edge minimum, 25% market shrinkage, "
+    "8% account cap). The tool calculates the final quantity from the live "
+    "ask and current account value; never invent a quantity larger than its "
+    "result. For a pure exit, use sizing_mode='close' and do not increase the "
+    "position.\n\n"
     "CRITICAL RULES COMPLIANCE: Read the 'Resolution rules' provided for every "
     "market carefully before taking any action. Market resolution is governed "
     "strictly by the venue's legal resolution rules, definitions, and specific "
@@ -371,13 +379,13 @@ _TRADING_INSTRUCTION = (
     "In your final answer, ALL models MUST format their investment thesis using this exact 4-section markdown structure:\n\n"
     "### 1. Decision & Execution\n"
     "- **Action**: [BUY YES / BUY NO / CLOSE / HOLD / PASS]\n"
-    "- **Market & Venue**: [<ticker>] on [<Kalshi / Polymarket>]\n"
-    "- **Order Sizing**: [<quantity> contracts @ $<price>, notional: $<total>] (or [N/A] if HOLD/PASS)\n\n"
+    "- **Market & Venue**: [<ticker>] on [<Kalshi / Polymarket>] (write 'No new position' for HOLD/PASS; never use N/A)\n"
+    "- **Order Sizing**: [<Quarter Kelly 5% cap / Edge Kelly 8% cap / Close>, <quantity> contracts @ $<price>, notional: $<total>] (write 'No new order' for HOLD/PASS; never use N/A)\n\n"
     "### 2. Resolution Rules & Compliance Audit\n"
-    "- **Rules Verification**: [Explicit confirmation that the event/entity qualifies under venue criteria with zero exclusions]\n"
-    "- **Observation Window**: [Window start -> close check]\n\n"
+    "- **Rules Verification**: [Explicit confirmation that the event/entity qualifies under venue criteria with zero exclusions] (or 'No new contract assessed'; never use N/A)\n"
+    "- **Observation Window**: [Window start -> close check] (or 'No new contract assessed'; never use N/A)\n\n"
     "### 3. Model Edge & Valuation\n"
-    "- **Model Probability**: [XX%] vs **Market Price**: [XX%] (Edge: [+/-XX%])\n"
+    "- **Model Probability**: [XX%] vs **Market Price**: [XX%] (Edge: [+/-XX%]) (or 'No new market assessed'; never use N/A)\n"
     "- **Information Asymmetry / Rationale**: [Why the crowd is mispriced / what verified evidence drives this stance]\n\n"
     "### 4. Catalysts & Invalidation\n"
     "- **Key Catalysts / Dates**: [Upcoming milestones / deadlines]\n"

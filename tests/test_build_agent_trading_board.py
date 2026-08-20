@@ -40,6 +40,19 @@ def _seed_store(path: Path, agent_id: str, *, with_position: bool = False):
     conn.close()
 
 
+def _seed_thesis(path: Path, agent_id: str, *, ts: str, thesis: str):
+    conn = sqlite3.connect(str(path))
+    conn.row_factory = sqlite3.Row
+    benchmark_tools._ensure_account_schema(conn)
+    conn.execute(
+        "INSERT INTO agent_cycles (agent_id, cycle_id, ts, thesis, transcript_json, steps, truncated) "
+        "VALUES (?, ?, ?, ?, '[]', 0, 0)",
+        (agent_id, f"cycle-{ts}", ts, thesis),
+    )
+    conn.commit()
+    conn.close()
+
+
 class OpenStoreTests(unittest.TestCase):
     def test_missing_store_falls_back_to_an_empty_in_memory_db(self):
         with tempfile.TemporaryDirectory() as td:
@@ -159,8 +172,25 @@ class BuildBoardTests(unittest.TestCase):
         self.assertIn("model-a", board["eligibility"])
         self.assertIn("model-b", board["eligibility"])
         self.assertIn("eligible", board["eligibility"]["model-a"])
+        self.assertEqual(board["latest_theses"], {"model-a": None, "model-b": None})
         # Must be JSON-serializable end to end (no stray sqlite3.Row/etc leaking through).
         json.dumps(board)
+
+    def test_build_board_keeps_latest_thesis_outside_global_activity_window(self):
+        with tempfile.TemporaryDirectory() as td:
+            store_dir = Path(td) / "stores"
+            store_dir.mkdir()
+            (store_dir / "model-a").mkdir()
+            path = store_dir / "model-a" / "store.sqlite"
+            _seed_store(path, "model-a")
+            _seed_thesis(path, "model-a", ts="2026-08-01T00:00:00+00:00", thesis="Older thesis")
+            with (
+                mock.patch.object(board_script, "STORE_DIR", store_dir),
+                mock.patch.object(board_script, "_chat_capable_models", return_value=["model-a"]),
+            ):
+                board = board_script.build_board()
+
+        self.assertEqual(board["latest_theses"]["model-a"]["thesis"], "Older thesis")
 
     def test_main_writes_output_file(self):
         with tempfile.TemporaryDirectory() as td:
