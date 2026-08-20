@@ -10,6 +10,7 @@ hand-built fixture without a server or network access.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
@@ -304,6 +305,8 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
                 thought = parsed.get("thought") or parsed.get("reasoning") or parsed.get("analysis")
                 final = parsed.get("final") or parsed.get("answer") or parsed.get("thesis")
                 if final and thought:
+                    if _same_thesis_content(str(final), str(thought)):
+                        return str(final if len(str(final)) >= len(str(thought)) else thought).strip()
                     return f"{final}\n\n**Detailed Analysis:**\n{thought}".strip()
                 if final:
                     return str(final).strip()
@@ -312,6 +315,22 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
         except Exception:
             pass
     return text
+
+
+def _normalized_thesis_text(value: str) -> str:
+    """Compare theses independent of markdown and whitespace presentation."""
+    return re.sub(r"\s+", " ", re.sub(r"[*_`#]", "", value).lower()).strip()
+
+
+def _same_thesis_content(left: str, right: str) -> bool:
+    left_normalized = _normalized_thesis_text(left)
+    right_normalized = _normalized_thesis_text(right)
+    if not left_normalized or not right_normalized:
+        return False
+    if left_normalized == right_normalized:
+        return True
+    shorter, longer = sorted((left_normalized, right_normalized), key=len)
+    return len(shorter) >= 80 and shorter in longer
 
 
 def recent_activity(
@@ -335,7 +354,7 @@ def recent_activity(
         "WHERE action_type IN "
         "('trade', 'settlement', 'rejected_trade', 'admin_correction', 'admin_reset') "
         "ORDER BY ts DESC LIMIT ?",
-        (limit,),
+        (limit * 2,),
     ):
         items.append({
             "ts": row["ts"],
@@ -354,7 +373,7 @@ def recent_activity(
     for row in conn.execute(
         "SELECT agent_id, cycle_id, ts, thesis FROM agent_cycles "
         "WHERE thesis IS NOT NULL AND thesis != '' ORDER BY ts DESC LIMIT ?",
-        (limit,),
+        (limit * 2,),
     ):
         items.append({
             "ts": row["ts"],
@@ -375,4 +394,17 @@ def recent_activity(
             })
 
     items.sort(key=lambda item: str(item.get("ts") or ""), reverse=True)
-    return items[:limit]
+    visible: List[Dict[str, Any]] = []
+    last_thesis_by_agent: Dict[str, str] = {}
+    for item in items:
+        if item.get("type") == "thesis":
+            agent_id = str(item.get("agent_id") or "")
+            thesis = str(item.get("thesis") or "")
+            previous = last_thesis_by_agent.get(agent_id)
+            if previous and _same_thesis_content(previous, thesis):
+                continue
+            last_thesis_by_agent[agent_id] = thesis
+        visible.append(item)
+        if len(visible) >= limit:
+            break
+    return visible

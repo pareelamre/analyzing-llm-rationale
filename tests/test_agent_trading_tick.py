@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -546,17 +547,32 @@ class PortfolioBlockTests(unittest.TestCase):
         self.assertIn("Open positions: none.", block)
         self.assertNotIn("previous cycle", block)
 
-    def test_portfolio_block_supplies_full_last_thesis(self):
-        full_thesis = "x" * 2500
+    def test_portfolio_block_carries_compact_prior_state_and_research_sources(self):
+        full_thesis = (
+            "### 1. Decision & Execution\n- **Action**: HOLD\n"
+            "### 3. Model Edge & Valuation\n- **Model Probability**: 55%\n" + "x" * 2500
+        )
+        transcript = json.dumps({"tool_transcript": [{
+            "action": "web_search",
+            "observation": json.dumps({
+                "summary": "Official update confirms the event date has not changed.",
+                "sources": [{"title": "Official source", "url": "https://example.test/research"}],
+            }),
+        }]})
         with tempfile.TemporaryDirectory() as td:
             with mock.patch.dict(
                 os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}, clear=False
             ):
                 with benchmark_tools._account_transaction() as conn:
-                    block = agent_trading_tick._build_portfolio_block(conn, "model-c", full_thesis)
+                    block = agent_trading_tick._build_portfolio_block(
+                        conn, "model-c", full_thesis, last_transcript=transcript
+                    )
 
-        self.assertIn(full_thesis, block)
-        self.assertIn("Your own reasoning from the previous cycle:", block)
+        self.assertNotIn(full_thesis, block)
+        self.assertIn("Prior thesis state", block)
+        self.assertIn("Research carried forward", block)
+        self.assertIn("https://example.test/research", block)
+        self.assertLess(len(block), 2200)
 
 
 class LearningContextTests(unittest.TestCase):
