@@ -6254,18 +6254,56 @@ async function loadAgentTradingSection() {
   return _agentTradingRequest;
 }
 
+function _extractThesisJsonField(raw, fields = ['final', 'thesis', 'thought']) {
+  const text = String(raw || '').trim();
+  if (!text.startsWith('{')) return '';
+
+  for (const field of fields) {
+    const key = new RegExp(`"${field}"\\s*:\\s*"`, 'i');
+    const match = key.exec(text);
+    if (!match) continue;
+
+    const start = match.index + match[0].length;
+    let escaped = false;
+    let end = start;
+    for (; end < text.length; end += 1) {
+      const character = text[end];
+      if (escaped) {
+        escaped = false;
+      } else if (character === '\\') {
+        escaped = true;
+      } else if (character === '"') {
+        break;
+      }
+    }
+
+    const encoded = text.slice(start, end);
+    if (!encoded) continue;
+    try {
+      return JSON.parse(`"${encoded}"`).trim();
+    } catch (_) {
+      return encoded.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim();
+    }
+  }
+  return '';
+}
+
 function _cleanThesisText(raw) {
   if (!raw) return '';
   let str = String(raw).trim();
   
-  // 1. If the model output its whole response as a JSON dictionary (e.g. {"thought": "...", "action": ...})
-  if (str.startsWith('{') && str.endsWith('}')) {
+  // Some providers save a partial tool-call envelope. Pull its readable
+  // rationale out even when the trailing action/args JSON is incomplete.
+  const embeddedThesis = _extractThesisJsonField(str);
+  if (embeddedThesis) {
+    str = embeddedThesis;
+  } else if (str.startsWith('{') && str.endsWith('}')) {
     try {
       const parsed = JSON.parse(str);
       if (parsed && typeof parsed === 'object') {
-        if (parsed.thought) str = String(parsed.thought).trim();
+        if (parsed.final) str = String(parsed.final).trim();
         else if (parsed.thesis) str = String(parsed.thesis).trim();
-        else if (parsed.final) str = String(parsed.final).trim();
+        else if (parsed.thought) str = String(parsed.thought).trim();
       }
     } catch (_) {
       const m = str.match(/"(?:thought|thesis|final)"\s*:\s*"((?:[^"\\]|\\.)*)"/);
