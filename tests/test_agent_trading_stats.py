@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -456,6 +457,15 @@ class PromotionEligibilityTests(unittest.TestCase):
 
 
 class RecentActivityTests(unittest.TestCase):
+    def test_clean_thesis_display_does_not_repeat_matching_json_fields(self):
+        thesis = json.dumps({
+            "final": "### 1. Decision & Execution\n- **Action**: HOLD",
+            "thought": "### 1. Decision & Execution\n- **Action**: HOLD",
+        })
+        display = agent_trading_stats.clean_thesis_display(thesis)
+        self.assertEqual(display, "### 1. Decision & Execution\n- **Action**: HOLD")
+        self.assertNotIn("Detailed Analysis", display)
+
     def test_merges_trades_theses_and_notes_sorted_newest_first(self):
         with _fixture_conn() as conn:
             _insert_account(conn, "model-a")
@@ -496,6 +506,24 @@ class RecentActivityTests(unittest.TestCase):
             conn.commit()
             items = agent_trading_stats.recent_activity(conn, {}, limit=10)
         self.assertEqual(items, [])
+
+    def test_repeated_same_agent_theses_are_collapsed_to_the_latest(self):
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a")
+            _insert_cycle(conn, "model-a", cycle_id="15m:1", ts="2026-08-11T00:00:00+00:00",
+                          thesis="No material change. Hold the position.")
+            _insert_cycle(conn, "model-a", cycle_id="15m:2", ts="2026-08-11T00:05:00+00:00",
+                          thesis="No material change. Hold the position.")
+            _insert_cycle(conn, "model-b", cycle_id="15m:3", ts="2026-08-11T00:10:00+00:00",
+                          thesis="No material change. Hold the position.")
+            conn.commit()
+            items = agent_trading_stats.recent_activity(conn, {}, limit=10)
+
+        theses = [item for item in items if item["type"] == "thesis"]
+        self.assertEqual(len(theses), 2)
+        self.assertEqual(theses[0]["agent_id"], "model-b")
+        self.assertEqual(theses[1]["agent_id"], "model-a")
+        self.assertEqual(theses[1]["cycle_id"], "15m:2")
 
 
 if __name__ == "__main__":

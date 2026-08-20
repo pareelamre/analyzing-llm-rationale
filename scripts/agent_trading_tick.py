@@ -39,6 +39,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -74,6 +75,15 @@ calibration_contexts = meter.create_counter(
 )
 calibration_context_duration = meter.create_histogram(
     "agent_trading.calibration_context.duration", unit="s", description="Research calibration context duration"
+)
+research_contexts = meter.create_counter(
+    "agent_trading.research.contexts", unit="1", description="Prior-cycle research contexts prepared"
+)
+research_sources_carried = meter.create_counter(
+    "agent_trading.research.sources_carried", unit="1", description="Prior-cycle research sources carried forward"
+)
+research_context_duration = meter.create_histogram(
+    "agent_trading.research.context.duration", unit="s", description="Prior-cycle research context duration"
 )
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
@@ -210,8 +220,119 @@ def _excerpt(text: Optional[str], limit: int) -> str:
     return text if len(text) <= limit else text[:limit].rstrip() + "…"
 
 
+def _prior_thesis_state(last_thesis: Optional[str]) -> str:
+    """Retain a compact decision state without replaying a whole old thesis.
+
+    A prior thesis is useful as an audit anchor, but pasting it verbatim makes
+    the model paraphrase itself. Preserve the decision-relevant lines only;
+    fresh research and any outcome lessons remain separate contexts.
+    """
+    if not last_thesis:
+        return ""
+    text = str(last_thesis).strip()
+    if not text:
+        return ""
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            text = str(parsed.get("final") or parsed.get("thesis") or parsed.get("thought") or text).strip()
+    except (TypeError, ValueError):
+        pass
+
+    selected = []
+    for line in text.splitlines():
+        cleaned = line.strip()
+        if not cleaned:
+            continue
+        if cleaned.startswith("###") or re.match(
+            r"[-*]\s+\*\*(Action|Market & Venue|Model Probability|Key Catalysts|Invalidation Trigger)",
+            cleaned,
+            flags=re.IGNORECASE,
+        ):
+            selected.append(cleaned)
+    state = "\n".join(selected) or _excerpt(text, min(MAX_LAST_THESIS_CHARS, 900))
+    return _excerpt(state, MAX_LAST_THESIS_CHARS)
+
+
+def _research_context(last_transcript: Optional[str]) -> str:
+    """Carry forward bounded, deduplicated web sources from the prior turn.
+
+    The tool transcript is the auditable source of research used in a cycle.
+    We expose only source URLs and short search summaries to the next turn,
+    avoiding unbounded raw observations or copied thesis prose.
+    """
+    started = time.perf_counter()
+    with tracer.start_as_current_span("agent_trading.build_research_context") as span:
+        try:
+            if not last_transcript:
+                span.set_attribute("research.source_count", 0)
+                return ""
+            parsed = json.loads(last_transcript)
+            if isinstance(parsed, dict):
+                steps = parsed.get("tool_transcript") or []
+            elif isinstance(parsed, list):
+                steps = parsed
+            else:
+                steps = []
+
+            sources: List[tuple[str, str]] = []
+            summaries: List[str] = []
+            seen_urls = set()
+            for step in steps:
+                if not isinstance(step, dict) or str(step.get("action") or step.get("tool") or "") != "web_search":
+                    continue
+                observation = step.get("observation") or step.get("result")
+                if isinstance(observation, str):
+                    try:
+                        observation = json.loads(observation)
+                    except ValueError:
+                        observation = {}
+                if not isinstance(observation, dict):
+                    continue
+                summary = str(observation.get("summary") or "").strip()
+                if summary:
+                    summaries.append(_excerpt(summary, 280))
+                for source in observation.get("sources") or []:
+                    if not isinstance(source, dict):
+                        continue
+                    url = str(source.get("url") or "").strip()
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+                    sources.append((_excerpt(str(source.get("title") or url), 100), url))
+                    if len(sources) >= 3:
+                        break
+                if len(sources) >= 3:
+                    break
+
+            span.set_attribute("research.source_count", len(sources))
+            if not sources and not summaries:
+                return ""
+            lines = [
+                "=== Research carried forward from your prior cycle ===",
+                "Treat these as leads to verify, not as a reason to repeat the old thesis.",
+            ]
+            for index, (title, url) in enumerate(sources, start=1):
+                lines.append(f"- Source {index}: {title} — {url}")
+            if summaries:
+                lines.append(f"- Prior search signal: {summaries[0]}")
+            research_contexts.add(1)
+            if sources:
+                research_sources_carried.add(len(sources))
+            return "\n".join(lines)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            span.set_attribute("research.parse_error", True)
+            return ""
+        finally:
+            research_context_duration.record(time.perf_counter() - started)
+
+
 def _build_portfolio_block(
-    conn, agent_id: str, last_thesis: Optional[str], learning_block: Optional[str] = None
+    conn,
+    agent_id: str,
+    last_thesis: Optional[str],
+    learning_block: Optional[str] = None,
+    last_transcript: Optional[str] = None,
 ) -> str:
     summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
     lines = [
@@ -230,8 +351,12 @@ def _build_portfolio_block(
         lines.append("Open positions: none.")
     if learning_block:
         lines.append(learning_block)
-    if last_thesis and last_thesis.strip():
-        lines.append(f"Your own reasoning from the previous cycle:\n{last_thesis.strip()}")
+    research_context = _research_context(last_transcript)
+    if research_context:
+        lines.append(research_context)
+    prior_state = _prior_thesis_state(last_thesis)
+    if prior_state:
+        lines.append(f"=== Prior thesis state (do not paraphrase it) ===\n{prior_state}")
     return "\n".join(lines)
 
 
@@ -693,7 +818,11 @@ _TRADING_INSTRUCTION = (
     "(e.g. '-26APR' vs '-26MAY22-26SEP'), so evidence from before this window opened "
     "doesn't resolve this contract.\n\n"
     "MANDATORY UNIFIED THESIS TEMPLATE:\n"
-    "In your final answer, ALL models MUST format their investment thesis using this exact 4-section markdown structure:\n\n"
+    "In your final answer, ALL models MUST begin with this research delta, then use the exact 4-section markdown structure:\n\n"
+    "### 0. Research Delta\n"
+    "- **New evidence**: [new, dated sources checked this cycle, including URL/domain and why they change or do not change the view; write 'No material new evidence' when none]\n"
+    "- **Belief update**: [previous probability -> current probability, or 'No material change']\n"
+    "- Do not paraphrase unchanged prior sections. If evidence, probability, action, catalysts, and invalidation are unchanged, state that once and keep the remaining sections concise.\n\n"
     "### 1. Decision & Execution\n"
     "- **Action**: [BUY YES / BUY NO / CLOSE / HOLD / PASS]\n"
     "- **Market & Venue**: [<ticker>] on [<Kalshi / Polymarket>] (write 'No new position' for HOLD/PASS; never use N/A)\n"
@@ -753,12 +882,12 @@ def _build_question(portfolio_block: str, candidates_block: str) -> str:
     # decision-relevant content first, and whenever a
     # block of markets has to shrink, drop whole lines (see
     # _trim_block_to_lines) rather than cutting mid-line.
-    # 1) Drop the optional previous-cycle reasoning excerpt first -- the
-    # model doesn't strictly need to see its own past reasoning, and the
+    # 1) Drop the optional previous-cycle research and decision state first --
+    # the model doesn't strictly need it to assess current candidates, and the
     # portfolio state already reflects whatever it decided from it. This is
     # tried BEFORE touching candidates_block, since the candidates being
     # visible at all is the entire point of offering them.
-    trimmed_portfolio = portfolio_block.split("\nYour own reasoning from the previous cycle:")[0]
+    trimmed_portfolio = portfolio_block.split("\n=== Research carried forward from your prior cycle ===")[0]
     question = _assemble_question(trimmed_portfolio, candidates_block)
     if len(question) <= MAX_QUESTION_CHARS:
         return question
@@ -830,11 +959,14 @@ def run_cycle(model: str) -> None:
             )
         ]
         last_cycle = conn.execute(
-            "SELECT thesis FROM agent_cycles WHERE agent_id = ? ORDER BY ts DESC LIMIT 1",
+            "SELECT thesis, transcript_json FROM agent_cycles WHERE agent_id = ? ORDER BY ts DESC LIMIT 1",
             (agent_id,),
         ).fetchone()
         last_thesis = last_cycle["thesis"] if last_cycle else None
-        portfolio_block = _build_portfolio_block(conn, agent_id, last_thesis, learning_block)
+        last_transcript = last_cycle["transcript_json"] if last_cycle else None
+        portfolio_block = _build_portfolio_block(
+            conn, agent_id, last_thesis, learning_block, last_transcript
+        )
 
     held_quotes = _requote_held(held_positions)
     known = {q.get("ident") for q in held_quotes if q.get("ident")}
