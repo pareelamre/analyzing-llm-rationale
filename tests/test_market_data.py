@@ -140,6 +140,7 @@ class MarketDataTests(unittest.TestCase):
         quote = fetch_kalshi("kxtest")
 
         self.assertEqual(quote["platform"], "Kalshi")
+        self.assertEqual(quote["category"], "Other")
         self.assertAlmostEqual(quote["probability"], 0.42)
         self.assertEqual(quote["outcome"], "Yes")
         # Web URL is rooted on the (lowercase) series ticker, not the event ticker.

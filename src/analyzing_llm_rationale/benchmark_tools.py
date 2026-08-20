@@ -663,6 +663,21 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
             truncated INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (agent_id, cycle_id)
         );
+        CREATE TABLE IF NOT EXISTS agent_learning (
+            agent_id TEXT NOT NULL,
+            source_action_id TEXT NOT NULL,
+            source_ts TEXT NOT NULL,
+            action_type TEXT NOT NULL,
+            platform TEXT,
+            ticker TEXT,
+            outcome TEXT,
+            realized_pnl REAL NOT NULL,
+            lesson TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (agent_id, source_action_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_learning_recent
+            ON agent_learning(agent_id, source_ts DESC);
         """
     )
 

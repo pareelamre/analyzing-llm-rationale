@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
 import time
@@ -45,12 +46,35 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
+from opentelemetry import metrics, trace
+from opentelemetry.trace import Status, StatusCode
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
 from analyzing_llm_rationale.accounting import MarketQuote  # noqa: E402
 from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
+from analyzing_llm_rationale.observability import init_observability  # noqa: E402
+
+logger = logging.getLogger(__name__)
+tracer = trace.get_tracer("foresea.agent_trading_tick")
+meter = metrics.get_meter("foresea.agent_trading_tick")
+learning_refreshes = meter.create_counter(
+    "agent_trading.learning.refreshes", unit="1", description="Resolved-trade learning refreshes"
+)
+learning_lessons = meter.create_counter(
+    "agent_trading.learning.lessons", unit="1", description="New per-agent lessons recorded"
+)
+learning_refresh_duration = meter.create_histogram(
+    "agent_trading.learning.refresh.duration", unit="s", description="Resolved-trade learning refresh duration"
+)
+calibration_contexts = meter.create_counter(
+    "agent_trading.calibration_contexts", unit="1", description="Research calibration priors added to candidates"
+)
+calibration_context_duration = meter.create_histogram(
+    "agent_trading.calibration_context.duration", unit="s", description="Research calibration context duration"
+)
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -76,6 +100,8 @@ MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS
 # always visible on the very next cycle. All characters are supplied in full
 # without truncation so the agent has the complete legal criteria and carveouts.
 MAX_RULES_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_RULES_CHARS", "50000")))
+LEARNING_CONTEXT_LIMIT = max(1, min(10, int(os.environ.get("AGENT_TRADING_LEARNING_CONTEXT_LIMIT", "5"))))
+LEARNING_STATS_LIMIT = max(LEARNING_CONTEXT_LIMIT, min(50, int(os.environ.get("AGENT_TRADING_LEARNING_STATS_LIMIT", "20"))))
 
 
 def _model_backstop_chars(model: str) -> int:
@@ -184,7 +210,9 @@ def _excerpt(text: Optional[str], limit: int) -> str:
     return text if len(text) <= limit else text[:limit].rstrip() + "…"
 
 
-def _build_portfolio_block(conn, agent_id: str, last_thesis: Optional[str]) -> str:
+def _build_portfolio_block(
+    conn, agent_id: str, last_thesis: Optional[str], learning_block: Optional[str] = None
+) -> str:
     summary = benchmark_tools._account_summary(conn, agent_id, benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
     lines = [
         "=== Your portfolio (shadow account -- paper trading, no real money) ===",
@@ -200,13 +228,255 @@ def _build_portfolio_block(conn, agent_id: str, last_thesis: Optional[str]) -> s
             )
     else:
         lines.append("Open positions: none.")
+    if learning_block:
+        lines.append(learning_block)
     if last_thesis and last_thesis.strip():
         lines.append(f"Your own reasoning from the previous cycle:\n{last_thesis.strip()}")
     return "\n".join(lines)
 
 
+def _learning_lesson(action_type: str, realized_pnl: float) -> str:
+    """Return a bounded, deterministic postmortem for one realized trade.
+
+    This deliberately does not ask another model to self-critique, and never
+    changes a risk limit. It gives the next cycle a small calibration cue based
+    on an auditable realized outcome, not an instruction copied from a prior
+    thesis or an overfit strategy adjustment.
+    """
+    event = "settlement" if action_type == "settlement" else "position close"
+    if realized_pnl > 0.005:
+        return (
+            f"The {event} was profitable. Keep the evidence standard unchanged; "
+            "a win is not evidence that a similar market is mispriced."
+        )
+    if realized_pnl < -0.005:
+        return (
+            f"The {event} lost money. Recheck base rates, price discipline, and "
+            "resolution rules before taking a comparable exposure."
+        )
+    return (
+        f"The {event} was approximately flat. Do not treat it as validation; "
+        "require fresh independent evidence before re-entering a similar market."
+    )
+
+
+def _refresh_learning(conn, agent_id: str) -> int:
+    """Persist one lesson for each newly realized settlement or position close.
+
+    ``agent_actions`` remains the source of truth. ``agent_learning`` is a
+    deduplicated, presentation-ready audit trail keyed to the immutable source
+    action, so retries and later cycles cannot teach the same outcome twice.
+    """
+    started = time.perf_counter()
+    with tracer.start_as_current_span("agent_trading.refresh_learning") as span:
+        span.set_attribute("agent.id", agent_id)
+        try:
+            rows = conn.execute(
+                """
+                SELECT id, ts, action_type, platform, ticker, outcome, realized_pnl
+                FROM agent_actions
+                WHERE agent_id = ?
+                  AND (
+                    action_type = 'settlement'
+                    OR (action_type = 'trade' AND realized_pairs > 0)
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM agent_learning learning
+                    WHERE learning.agent_id = agent_actions.agent_id
+                      AND learning.source_action_id = agent_actions.id
+                  )
+                ORDER BY ts ASC
+                """,
+                (agent_id,),
+            ).fetchall()
+            now = datetime.now(timezone.utc).isoformat()
+            for row in rows:
+                pnl = float(row["realized_pnl"] or 0.0)
+                conn.execute(
+                    """
+                    INSERT INTO agent_learning
+                    (agent_id, source_action_id, source_ts, action_type, platform,
+                     ticker, outcome, realized_pnl, lesson, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        agent_id,
+                        str(row["id"]),
+                        str(row["ts"]),
+                        str(row["action_type"]),
+                        row["platform"],
+                        row["ticker"],
+                        row["outcome"],
+                        pnl,
+                        _learning_lesson(str(row["action_type"]), pnl),
+                        now,
+                    ),
+                )
+            count = len(rows)
+            learning_refreshes.add(1, {"outcome": "success"})
+            if count:
+                learning_lessons.add(count, {"outcome": "recorded"})
+            span.set_attributes({"learning.new_count": count, "outcome": "success"})
+            return count
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            learning_refreshes.add(1, {"outcome": "failure"})
+            logger.warning("agent learning refresh failed agent=%s", agent_id, exc_info=True)
+            raise
+        finally:
+            learning_refresh_duration.record(time.perf_counter() - started)
+
+
+def _build_learning_block(conn, agent_id: str) -> str:
+    """Build bounded, outcome-only learning context for the next decision."""
+    rows = conn.execute(
+        """
+        SELECT source_ts, action_type, platform, ticker, outcome, realized_pnl, lesson
+        FROM agent_learning
+        WHERE agent_id = ?
+        ORDER BY source_ts DESC
+        LIMIT ?
+        """,
+        (agent_id, LEARNING_STATS_LIMIT),
+    ).fetchall()
+    if not rows:
+        return ""
+
+    recent = rows[:LEARNING_CONTEXT_LIMIT]
+    wins = sum(1 for row in rows if float(row["realized_pnl"]) > 0.005)
+    losses = sum(1 for row in rows if float(row["realized_pnl"]) < -0.005)
+    total_pnl = sum(float(row["realized_pnl"]) for row in rows)
+    lines = [
+        "=== Learning from your resolved shadow trades ===",
+        "Use this only as a calibration check, never as market evidence. Risk caps and eligibility rules are unchanged.",
+        (
+            f"Recent realized outcomes ({len(rows)}): {wins} profitable, {losses} loss-making, "
+            f"aggregate realized P&L {_fmt_money(total_pnl)}."
+        ),
+        "Newest lessons:",
+    ]
+    for row in recent:
+        venue = str(row["platform"] or "unknown venue").title()
+        ticker = str(row["ticker"] or "unknown market")
+        outcome = str(row["outcome"] or "unresolved")
+        lines.append(
+            f"  - [{venue}] {ticker}: {row['action_type']} ({outcome}), "
+            f"realized P&L {_fmt_money(row['realized_pnl'])}. {row['lesson']}"
+        )
+    return "\n".join(lines)
+
+
 def _fmt_px(value: Optional[float]) -> str:
     return f"{value:.2f}" if value is not None else "n/a"
+
+
+def _paper_market_domain(quote: Dict[str, Any]) -> str:
+    """Map a venue category/question into the paper's comparable domains."""
+    text = " ".join(
+        str(quote.get(field) or "") for field in ("category", "question", "ident")
+    ).lower()
+    for domain, markers in {
+        "politics": ("politic", "election", "president", "congress", "senate", "governor", "government"),
+        "sports": ("sport", "nfl", "nba", "mlb", "nhl", "soccer", "football", "tennis", "game"),
+        "crypto": ("crypto", "bitcoin", "btc", "ethereum", "eth", "solana"),
+        "finance": ("finance", "fed", "inflation", "interest rate", "s&p", "nasdaq", "gdp"),
+        "weather": ("weather", "temperature", "rain", "snow", "hurricane", "precipitation"),
+        "entertainment": ("entertainment", "oscar", "grammy", "movie", "film", "album"),
+    }.items():
+        if any(marker in text for marker in markers):
+            return domain
+    return "other"
+
+
+def _paper_horizon_bucket(close_time: Any, *, now: Optional[datetime] = None) -> str:
+    if not close_time:
+        return "unknown"
+    try:
+        close = datetime.fromisoformat(str(close_time).strip().replace("Z", "+00:00"))
+    except ValueError:
+        return "unknown"
+    if close.tzinfo is None:
+        close = close.replace(tzinfo=timezone.utc)
+    reference = now or datetime.now(timezone.utc)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=timezone.utc)
+    hours = (close - reference).total_seconds() / 3600
+    if hours <= 48:
+        return "short"
+    if hours <= 24 * 7:
+        return "medium"
+    if hours <= 24 * 30:
+        return "long"
+    return "very_long"
+
+
+def _paper_calibration_context(quote: Dict[str, Any], *, now: Optional[datetime] = None) -> str:
+    """Return a bounded, non-mechanical calibration prior from Le (2026).
+
+    The paper reports population-level calibration patterns across resolved
+    contracts. This is intentionally advisory: agents must still derive their
+    own probability from evidence and may not mechanically transform the price
+    or relax a trading control because of this prior.
+    """
+    started = time.perf_counter()
+    with tracer.start_as_current_span("agent_trading.build_calibration_context") as span:
+        try:
+            domain = _paper_market_domain(quote)
+            horizon = _paper_horizon_bucket(quote.get("close_time"), now=now)
+            platform = str(quote.get("platform") or "kalshi").strip().lower()
+            span.set_attributes({
+                "market.domain": domain,
+                "market.horizon_bucket": horizon,
+                "market.venue": platform,
+            })
+
+            principle = ""
+            if domain == "politics":
+                principle = (
+                    "Political prices were persistently compressed toward 50% across both venues. "
+                    "An evidence-backed favourite may be underpriced, but do not mechanically extremise it."
+                )
+                if platform == "kalshi":
+                    principle += " Treat large political prints as possible venue microstructure, not proof of informed flow."
+            elif domain == "weather" and horizon == "short":
+                principle = (
+                    "Short-horizon weather prices were historically too extreme. Demand unusually strong, "
+                    "independent evidence before following a market move."
+                )
+            elif domain == "sports" and horizon in {"short", "medium"}:
+                principle = (
+                    "Sports prices were closest to calibrated at short-to-medium horizons. "
+                    "Require a conventional evidence-based edge after spread and fees."
+                )
+            elif domain == "sports" and horizon == "very_long":
+                principle = (
+                    "Long-horizon sports prices showed favourite-longshot compression. "
+                    "Check whether independent evidence supports a more decisive probability."
+                )
+            elif horizon == "very_long":
+                principle = (
+                    "Across domains, long-horizon prices tended to be compressed toward 50%. "
+                    "Use this as a hypothesis to investigate, not a substitute for evidence."
+                )
+
+            outcome = "applied" if principle else "not_applicable"
+            calibration_contexts.add(1, {"domain": domain, "horizon": horizon, "outcome": outcome})
+            span.set_attribute("outcome", outcome)
+            if not principle:
+                return ""
+            return (
+                "Research calibration prior (Le, 2026, arXiv:2602.19520): "
+                f"{principle}"
+            )
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            calibration_contexts.add(1, {"domain": "unknown", "horizon": "unknown", "outcome": "failure"})
+            logger.warning("paper calibration context failed", exc_info=True)
+            raise
+        finally:
+            calibration_context_duration.record(time.perf_counter() - started)
 
 
 def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
@@ -232,6 +502,9 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     rules = str(quote.get("resolution_criteria") or "").strip()
     if rules:
         line += f"\n    Resolution rules: {rules}"
+    calibration_context = _paper_calibration_context(quote)
+    if calibration_context:
+        line += f"\n    {calibration_context}"
     return line
 
 
@@ -495,7 +768,16 @@ def run_cycle(model: str) -> None:
     agent_id = model
     cycle_id = benchmark_tools._current_cycle_id()
 
+    # Settlement used to run only if a model tried to place another trade.
+    # Run it before every decision instead, so a resolved result is available
+    # to this model's next thesis even if it chooses to hold or pass.
+    settled = benchmark_tools._settle_agent_open_positions(
+        agent_id, benchmark_tools._risk_guard_policy()
+    )
+
     with benchmark_tools._account_transaction() as conn:
+        _refresh_learning(conn, agent_id)
+        learning_block = _build_learning_block(conn, agent_id)
         held_positions = [
             (str(row["platform"] or "kalshi").lower(), row["ticker"])
             for row in conn.execute(
@@ -508,7 +790,7 @@ def run_cycle(model: str) -> None:
             (agent_id,),
         ).fetchone()
         last_thesis = last_cycle["thesis"] if last_cycle else None
-        portfolio_block = _build_portfolio_block(conn, agent_id, last_thesis)
+        portfolio_block = _build_portfolio_block(conn, agent_id, last_thesis, learning_block)
 
     held_quotes = _requote_held(held_positions)
     known = {q.get("ident") for q in held_quotes if q.get("ident")}
@@ -547,12 +829,17 @@ def run_cycle(model: str) -> None:
                 1 if len(report.tool_transcript) >= MAX_TOOL_STEPS else 0,
             ),
         )
+        # A close placed during this cycle now becomes a durable learning
+        # record for the next cycle. New entries are keyed to source action
+        # IDs, so this is idempotent if a workflow retries.
+        _refresh_learning(conn, agent_id)
 
     _broadcast_cycle_trades(model, report)
 
     print(
         f"agent-trading-tick done model={model} cycle={cycle_id} "
-        f"steps={len(report.tool_transcript)} candidates={len(candidates_offered)}"
+        f"steps={len(report.tool_transcript)} candidates={len(candidates_offered)} "
+        f"settled={len(settled)}"
     )
 
 
@@ -587,6 +874,7 @@ def main() -> int:
         print("AGENT_TRADING_MODEL must be set", file=sys.stderr)
         return 1
     try:
+        init_observability()
         run_cycle(MODEL)
     except Exception as exc:  # noqa: BLE001
         print(f"agent-trading-tick FAILED model={MODEL}: {exc}", file=sys.stderr)
