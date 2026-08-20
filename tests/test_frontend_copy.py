@@ -340,6 +340,15 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("not assessed", formatter)
         self.assertIn("visibleBlocks", index)
 
+    def test_agentic_thesis_cards_extract_reasoning_from_partial_json(self):
+        index = self._both()["frontend"]
+        extractor = index.split("function _extractThesisJsonField(raw", 1)[1].split(
+            "function _cleanThesisText", 1
+        )[0]
+        self.assertIn("['final', 'thesis', 'thought']", extractor)
+        self.assertIn("text.startsWith('{')", extractor)
+        self.assertIn("JSON.parse", extractor)
+
     def test_agentic_is_a_real_edge_board_tab(self):
         for name, index in self._both().items():
             with self.subTest(file=name):
