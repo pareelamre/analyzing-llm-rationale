@@ -1723,6 +1723,8 @@ def _compact_mark_to_market_by_model(rows: Any) -> List[Dict[str, Any]]:
                 "n_illiquid_positions",
                 "n_settlements",
                 "n_trades",
+                "sharpe",
+                "max_drawdown",
                 "status",
             )
             if key in row
@@ -2050,6 +2052,11 @@ _council_requests = _meter.create_counter(
 )
 _agent_counter = _meter.create_counter(
     "agent.requests", unit="1", description="Agent analyze requests"
+)
+_agent_orderbook_arbitrage_analyses = _meter.create_counter(
+    "agent.orderbook_arbitrage.analyses",
+    unit="1",
+    description="Read-only agent orderbook-arbitrage analyses by venue and outcome",
 )
 _forecast_evaluation_reads = _meter.create_counter(
     "forecast_evaluation.reads",
@@ -3162,6 +3169,10 @@ async def agent_trading_board():
             "leaderboard": live.get("leaderboard", []),
             "equity_curves": live.get("equity_curves", {}),
             "recent_activity": live.get("recent_activity", []),
+            # A selected model may not appear in the shared recent-activity
+            # window. Keep its most recent thesis available so the Agentic
+            # tab can render a useful per-model feed without another request.
+            "latest_theses": live.get("latest_theses", {}),
             "eligibility": live.get("eligibility", {}),
         },
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
@@ -13977,6 +13988,84 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         except Exception as exc:
             return f"(Orderbook fetch failed: {exc})"
 
+    async def _tool_orderbook_arbitrage(args):
+        """Analyze complementary YES/NO depth without ever placing an order."""
+        from analyzing_llm_rationale.orderbook_arbitrage import (
+            kalshi_complement_ask_levels,
+            polymarket_ask_levels,
+            scan_complement_arbitrage,
+        )
+
+        platform = str(args.get("platform") or "").strip().lower()
+        with _tracer.start_as_current_span("agent.orderbook_arbitrage.analyze") as span:
+            span.set_attributes({
+                "market.venue": platform or "unknown",
+                "agent.orderbook_arbitrage.kind": "binary_complement",
+            })
+            try:
+                fee_bps = float(args.get("fee_bps_per_leg") or 0.0)
+                min_edge = float(args.get("min_net_edge") or 0.0)
+                if fee_bps < 0 or min_edge < 0:
+                    raise ValueError("negative fee or edge threshold")
+                if "kalshi" in platform:
+                    ticker = str(args.get("ticker") or args.get("symbol") or "").strip()
+                    if not ticker:
+                        span.set_attribute("outcome", "invalid_input")
+                        _agent_orderbook_arbitrage_analyses.add(1, {"market.venue": "kalshi", "outcome": "invalid_input"})
+                        return "Specify platform='kalshi' and a ticker."
+                    orderbook = await loop.run_in_executor(
+                        None, lambda: market_data.fetch_kalshi_orderbook(ticker)
+                    )
+                    yes_asks, no_asks = kalshi_complement_ask_levels(orderbook)
+                    reference = ticker
+                elif "poly" in platform:
+                    yes_token_id = str(args.get("yes_token_id") or "").strip()
+                    no_token_id = str(args.get("no_token_id") or "").strip()
+                    if not yes_token_id or not no_token_id:
+                        span.set_attribute("outcome", "invalid_input")
+                        _agent_orderbook_arbitrage_analyses.add(1, {"market.venue": "polymarket", "outcome": "invalid_input"})
+                        return (
+                            "Specify platform='polymarket' plus both yes_token_id and no_token_id; "
+                            "a single outcome book cannot prove a complement arbitrage."
+                        )
+                    yes_book, no_book = await asyncio.gather(
+                        loop.run_in_executor(None, lambda: market_data.fetch_polymarket_orderbook(yes_token_id)),
+                        loop.run_in_executor(None, lambda: market_data.fetch_polymarket_orderbook(no_token_id)),
+                    )
+                    yes_asks = polymarket_ask_levels(yes_book)
+                    no_asks = polymarket_ask_levels(no_book)
+                    reference = f"{yes_token_id}/{no_token_id}"
+                else:
+                    span.set_attribute("outcome", "invalid_input")
+                    _agent_orderbook_arbitrage_analyses.add(1, {"market.venue": platform or "unknown", "outcome": "invalid_input"})
+                    return "platform must be 'kalshi' or 'polymarket'."
+
+                result = scan_complement_arbitrage(
+                    yes_asks, no_asks, fee_bps_per_leg=fee_bps, min_net_edge=min_edge,
+                )
+                outcome = "candidate" if result["candidate"] else "none"
+                span.set_attributes({
+                    "market.venue": platform,
+                    "agent.orderbook_arbitrage.outcome": outcome,
+                    "agent.orderbook_arbitrage.executable_quantity": result["executable_quantity"],
+                })
+                _agent_orderbook_arbitrage_analyses.add(1, {"market.venue": platform, "outcome": outcome})
+                return (
+                    f"{platform.title()} complement-arbitrage analysis for {reference}:\n"
+                    f"{json.dumps(result, indent=2)}"
+                )
+            except (TypeError, ValueError):
+                span.set_attribute("outcome", "invalid_input")
+                _agent_orderbook_arbitrage_analyses.add(1, {"market.venue": platform or "unknown", "outcome": "invalid_input"})
+                return "fee_bps_per_leg and min_net_edge must be non-negative numbers."
+            except Exception as exc:
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                span.set_attribute("outcome", "error")
+                _agent_orderbook_arbitrage_analyses.add(1, {"market.venue": platform or "unknown", "outcome": "error"})
+                logger.warning("agent orderbook-arbitrage analysis failed", exc_info=True)
+                return f"(Orderbook arbitrage analysis failed: {exc})"
+
     async def _tool_market_tags(args):
         try:
             tags = await loop.run_in_executor(None, market_data.fetch_polymarket_tags)
@@ -14076,6 +14165,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "fetch_api": _tool_fetch_api,
         "exchange_status": _tool_exchange_status,
         "orderbook": _tool_orderbook,
+        "orderbook_arbitrage": _tool_orderbook_arbitrage,
         "market_tags": _tool_market_tags,
         "price_history": _tool_price_history,
         "live_data": _tool_live_data,
@@ -14085,7 +14175,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "optimize_portfolio": _tool_optimize_portfolio,
     }
     benchmark_specs = [
-        {"name": "place_trade", "args": "ticker, side, price, quantity, platform?", "description": "Buy YES or NO contracts on Kalshi or Polymarket using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. Pass platform='kalshi' or platform='polymarket' (defaults to kalshi if omitted) -- ticker is the Kalshi ticker or the Polymarket market slug, matching whichever venue a candidate line came from. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit -- a rejection means one of those guards tripped, not that trading itself is unavailable."},
+        {"name": "place_trade", "args": "ticker, side, price, quantity?, platform?, sizing_mode?, model_probability?", "description": "Buy YES or NO contracts on Kalshi or Polymarket using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. Pass platform='kalshi' or platform='polymarket' (defaults to kalshi if omitted) -- ticker is the Kalshi ticker or the Polymarket market slug, matching whichever venue a candidate line came from. For a new agent position, pass model_probability (your P(YES)) and choose sizing_mode='quarter_kelly' (25% Kelly, 50% market shrinkage, 5% cap) or sizing_mode='edge_kelly' (50% Kelly, 10pp edge gate, 25% market shrinkage, 8% cap); the tool derives quantity from the live ask and current account. Use sizing_mode='close' for a pure exit. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, a 15% single-market cost-basis cap, and a per-cycle spend limit -- a rejection means one of those guards tripped, not that trading itself is unavailable."},
         {"name": "web_search", "args": "query", "description": "Research market events with OpenAI web search. CoinMarketCap and other blacklisted domains are excluded from results."},
         {"name": "manage_notes", "args": "action, id?, text?, query?, tags?", "description": "Store, search, edit, list, or delete persistent notes. Max 50 notes per agent, 1200 characters each."},
         {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
@@ -14098,6 +14188,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         {"name": "fetch_api", "args": "url, method?, json?", "description": "Execute a GET or POST HTTP API request to an API endpoint URL."},
         {"name": "exchange_status", "args": "", "description": "Get Kalshi exchange operational status (trading_active) and schedule."},
         {"name": "orderbook", "args": "ticker|token_id", "description": "Fetch live orderbook bids/asks for Kalshi ticker or Polymarket token."},
+        {"name": "orderbook_arbitrage", "args": "platform, ticker? | yes_token_id,no_token_id?, fee_bps_per_leg?, min_net_edge?", "description": "Read-only, depth-aware complementary YES+NO cost analysis. Kalshi needs ticker; Polymarket needs both outcome token IDs. Includes fee assumptions and executable paired quantity; it never submits orders, and identical resolution rules must be verified first."},
         {"name": "market_tags", "args": "", "description": "Fetch active market categories and tags on Polymarket."},
         {"name": "price_history", "args": "ticker|market, series_ticker?", "description": "Fetch historical prices or OHLC candlesticks for a market."},
         {"name": "live_data", "args": "event_ticker?, type?", "description": "Fetch real-time sports game stats and live event feeds from Kalshi."},
@@ -14120,6 +14211,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                  "search_evidence": _tool_search_evidence, "scan_markets": _tool_scan,
                  "batch_quotes": _tool_batch_quotes, "fetch_api": _tool_fetch_api,
                  "exchange_status": _tool_exchange_status, "orderbook": _tool_orderbook,
+                 "orderbook_arbitrage": _tool_orderbook_arbitrage,
                  "market_tags": _tool_market_tags, "price_history": _tool_price_history,
                  "live_data": _tool_live_data, "polymarket_meta": _tool_polymarket_meta,
                  "recent_trades": _tool_recent_trades, "market_leaderboard": _tool_market_leaderboard,
@@ -14135,6 +14227,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             {"name": "fetch_api", "args": "url, method?, json?", "description": "Execute a GET or POST HTTP API request to an API endpoint URL."},
             {"name": "exchange_status", "args": "", "description": "Get Kalshi exchange operational status (trading_active) and schedule."},
             {"name": "orderbook", "args": "ticker|token_id", "description": "Fetch live orderbook bids/asks for Kalshi ticker or Polymarket token."},
+            {"name": "orderbook_arbitrage", "args": "platform, ticker? | yes_token_id,no_token_id?, fee_bps_per_leg?, min_net_edge?", "description": "Read-only, depth-aware complementary YES+NO cost analysis. Kalshi needs ticker; Polymarket needs both outcome token IDs. Includes fee assumptions and executable paired quantity; it never submits orders, and identical resolution rules must be verified first."},
             {"name": "market_tags", "args": "", "description": "Fetch active market categories and tags on Polymarket."},
             {"name": "price_history", "args": "ticker|market, series_ticker?", "description": "Fetch historical prices or OHLC candlesticks for a market."},
             {"name": "live_data", "args": "event_ticker?, type?", "description": "Fetch real-time sports game stats and live event feeds from Kalshi."},
@@ -14196,7 +14289,11 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                     "is never disabled, never a no-op, and never waiting on some other 'live "
                     "trading' switch. If you decide to trade this cycle, calling `place_trade` "
                     "is the only way to do it -- do not conclude no trade can happen because "
-                    "this is a shadow account. `place_trade` is guarded by account solvency "
+                    "this is a shadow account. For every new position, pass your P(YES) as "
+                    "model_probability and choose sizing_mode='quarter_kelly' (5% cap) or "
+                    "sizing_mode='edge_kelly' (8% cap); the tool derives the actual quantity "
+                    "and will skip an ineligible Edge Kelly trade. Use sizing_mode='close' for "
+                    "a pure exit. `place_trade` is guarded by account solvency "
                     "including fees/netting payouts, a 15% single-market cost-basis cap, and a "
                     "per-cycle spend limit; a rejection names which specific guard tripped, not "
                     "that trading is unavailable."
@@ -14205,6 +14302,12 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                 rule_parts.append("Use `web_search` for current evidence.")
             if "manage_notes" in active:
                 rule_parts.append("Use `manage_notes` for memory across cycles.")
+            if "orderbook_arbitrage" in active:
+                rule_parts.append(
+                    "Use `orderbook_arbitrage` only after confirming the two outcomes have identical "
+                    "resolution rules. Its result is read-only research, not a claim of risk-free profit; "
+                    "include realistic fees and account for non-atomic fills before any paper-trade decision."
+                )
             rule = " ".join(rule_parts)
     if grounding_note:
         # Background context for calibration only -- goes in the system rules,

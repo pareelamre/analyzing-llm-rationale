@@ -285,6 +285,52 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(result["execution"]["filled_quantity"], 2.0)
         self.assertTrue(result["risk_guard"]["allowed"])
 
+    def test_quarter_kelly_sizing_is_applied_and_capped_at_five_percent(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-quarter")
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "10000",
+                "FORESEA_AGENT_PLACE_TRADE_MODE": "shadow",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXQK": 0.50}),
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {
+                        "ticker": "KXQK", "side": "yes", "price": 0.50, "quantity": 1,
+                        "sizing_mode": "quarter_kelly", "model_probability": 0.90,
+                    },
+                    ctx,
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["sizing"]["mode"], "quarter_kelly")
+        self.assertLessEqual(result["sizing"]["target_notional"], 500.0)
+        self.assertAlmostEqual(result["normalized_order"]["quantity"] * 0.50, 500.0, places=4)
+
+    def test_edge_kelly_requires_ten_point_edge_and_caps_at_eight_percent(self):
+        no_edge = benchmark_tools._sizing_plan(
+            {"sizing_mode": "edge_kelly", "model_probability": 0.59},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+        capped = benchmark_tools._sizing_plan(
+            {"sizing_mode": "edge_kelly", "model_probability": 0.95},
+            price=0.50, side="yes", account_value=10_000.0,
+        )
+
+        self.assertFalse(no_edge["eligible"])
+        self.assertEqual(no_edge["reason"], "edge_below_threshold")
+        self.assertTrue(capped["eligible"])
+        self.assertLessEqual(capped["target_notional"], 800.0)
+        self.assertEqual(capped["max_position_fraction"], 0.08)
+
     def test_place_trade_forces_ioc_and_rejects_resting_order_options(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 

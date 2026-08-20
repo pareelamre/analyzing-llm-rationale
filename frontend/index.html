@@ -480,22 +480,22 @@
       justify-self: center;
     }
     .landing-shell {
-      max-width: 1140px;
+      max-width: 1180px;
       margin: 0 auto;
       width: 100%;
-      padding: 60px 18px 34px;
+      padding: 72px 24px 48px;
     }
     .hero-grid {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 40px;
+      gap: 52px;
       align-items: start;
       text-align: left;
     }
     @media (min-width: 1024px) {
       .hero-grid {
         grid-template-columns: 1.15fr 0.85fr;
-        gap: 48px;
+        gap: 64px;
       }
     }
     .hero-copy {
@@ -504,26 +504,28 @@
       justify-content: flex-start;
       align-items: flex-start;
       text-align: left;
-      padding-bottom: 28px;
+      padding: 18px 0 28px;
     }
+    .hero-eyebrow { color: #475569; font-size: 11px; font-weight: 750; letter-spacing: .13em; margin: 0 0 18px; text-transform: uppercase; }
     .hero-title {
-      font-size: clamp(34px, 5vw, 54px);
-      line-height: 1.08;
+      font-size: clamp(38px, 5.2vw, 60px);
+      letter-spacing: -.05em;
+      line-height: 1.02;
       color: var(--ink);
-      max-width: 760px;
+      max-width: 690px;
     }
     .hero-text {
       max-width: 580px;
-      font-size: 15px;
-      line-height: 1.6;
-      color: var(--text);
-      margin-top: 14px;
+      font-size: 16px;
+      line-height: 1.58;
+      color: var(--text-dim);
+      margin-top: 20px;
     }
-    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
     .hero-action {
       border: 1px solid var(--ink);
       border-radius: 999px;
-      padding: 10px 13px;
+      padding: 11px 15px;
       font-size: 13px;
       color: var(--ink);
       background: #fff;
@@ -546,7 +548,7 @@
     }
     .quiet-link:hover { color: var(--ink); }
     .market-sources {
-      margin-top: 14px;
+      margin-top: 22px;
       font-size: 12px;
       color: var(--text-dim);
     }
@@ -798,12 +800,41 @@
       padding: 12px;
       border-top: 1px solid var(--border);
     }
-    .product-panel {
+    .hero-sidebar { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+    .landing-demo, .landing-live-panel {
       background: #fff;
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      min-height: 0;
+      border: 1px solid #dbe2ea;
+      border-radius: 18px;
+      box-shadow: 0 18px 48px rgba(15, 23, 42, .08);
+      overflow: hidden;
     }
+    .landing-demo { padding: 20px; }
+    .landing-demo-head { align-items: center; border-bottom: 1px solid #e8edf2; display: flex; justify-content: space-between; padding-bottom: 13px; }
+    .landing-demo-label { align-items: center; color: #475569; display: flex; font-size: 10px; font-weight: 750; gap: 8px; letter-spacing: .12em; text-transform: uppercase; }
+    .landing-demo-label::before { background: #14b8a6; border-radius: 50%; box-shadow: 0 0 0 4px rgba(20, 184, 166, .11); content: ''; height: 6px; width: 6px; }
+    .landing-demo-stamp { color: #94a3b8; font-size: 10px; }
+    .landing-demo-flow { display: grid; gap: 17px; padding-top: 16px; }
+    .landing-step-label { color: #6366f1; display: block; font-size: 10px; font-weight: 750; letter-spacing: .07em; margin-bottom: 4px; text-transform: uppercase; }
+    .landing-question { color: var(--ink); font-size: 14px; font-weight: 650; line-height: 1.45; margin: 0; }
+    .landing-evidence { display: grid; gap: 7px; }
+    .landing-evidence-row { align-items: flex-start; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; color: #475569; display: flex; font-size: 11px; gap: 8px; line-height: 1.42; padding: 9px 10px; }
+    .landing-evidence-row b { color: #0f172a; flex-shrink: 0; font-weight: 700; }
+    .landing-evidence-row p { margin: 0; }
+    .landing-metrics { display: grid; gap: 9px; grid-template-columns: 1fr 1fr; }
+    .landing-metric { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 11px; }
+    .landing-metric-label { color: #64748b; display: block; font-size: 9px; font-weight: 750; letter-spacing: .07em; margin-bottom: 4px; text-transform: uppercase; }
+    .landing-metric-value { align-items: baseline; display: flex; gap: 6px; }
+    .landing-metric-value strong { color: #0f172a; font-size: 22px; letter-spacing: -.04em; }
+    .landing-outcome { border-radius: 999px; font-size: 10px; font-weight: 750; padding: 3px 7px; }
+    .landing-outcome.yes { background: #dcfce7; color: #15803d; }
+    .landing-venue { color: #64748b; font-size: 10px; }
+    .landing-edge { align-items: center; background: linear-gradient(135deg, #ecfdf5, #f0fdfa); border: 1px solid #a7f3d0; border-radius: 11px; display: flex; gap: 10px; justify-content: space-between; padding: 11px 12px; }
+    .landing-edge-label { color: #047857; display: block; font-size: 9px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+    .landing-edge-copy { color: #065f46; display: block; font-size: 11px; margin-top: 2px; }
+    .landing-edge-pill { background: #047857; border-radius: 999px; color: #fff; font-size: 10px; font-weight: 750; padding: 5px 8px; white-space: nowrap; }
+    .landing-live-panel .panel-bar { background: #f8fafc; border-bottom-color: #e8edf2; padding: 13px 16px; }
+    .landing-live-panel .market-table > div { border-color: #e8edf2; }
+    .product-panel { background: #fff; border: 1px solid var(--border); border-radius: 10px; min-height: 0; }
     .panel-bar {
       display: flex;
       justify-content: space-between;
@@ -853,8 +884,12 @@
       .landing-nav { padding: 0 14px; }
       .landing-links { gap: 10px; }
       .landing-data-links { gap: 12px; }
-      .landing-shell { padding-top: 28px; }
-      .hero-title { font-size: 36px; }
+       .landing-shell { padding: 38px 18px 34px; }
+       .hero-copy { padding-top: 0; }
+       .hero-title { font-size: 39px; }
+       .hero-text { font-size: 15px; margin-top: 16px; }
+       .landing-demo { padding: 16px; }
+       .landing-edge { align-items: flex-start; flex-direction: column; }
       .market-table { grid-template-columns: 1fr 1fr; }
       .market-table > div:nth-child(4n) { border-right: 1px solid var(--border); }
       .market-table > div:nth-child(2n) { border-right: 0; }
@@ -1004,9 +1039,20 @@
     .eb-mtm-title { margin: 0; min-height: 2.9em; display: flex; align-items: flex-end; }
     .eb-view-tabs.eb-sizing-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; max-width: 500px; margin: 0; }
     .eb-sizing-tabs .eb-view-tab { width: 100%; min-width: 0; padding-left: 8px; padding-right: 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* MTM methodology uses the Agentic feed's quiet metadata treatment, not a callout card. */
+    .mtm-methodology { align-items: center; color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 11px; gap: 8px 16px; margin: 8px 0 18px; }
+    .mtm-methodology-item { align-items: baseline; display: inline-flex; gap: 5px; }
+    .mtm-methodology-item + .mtm-methodology-item { border-left: 1px solid var(--border); padding-left: 16px; }
+    .mtm-methodology-label { color: #64748b; font-size: 9px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+    .mtm-methodology-value { color: #334155; font-weight: 600; }
+    .mtm-methodology-value--positive { color: #0f766e; }
     @media (min-width: 760px) {
       .eb-mtm-heading-row { grid-template-columns: minmax(0, 1fr) minmax(420px, 500px); align-items: center; }
       .eb-mtm-title { min-height: 1.45em; align-items: center; }
+    }
+    @media (max-width: 640px) {
+      .mtm-methodology { align-items: flex-start; display: grid; gap: 7px; }
+      .mtm-methodology-item + .mtm-methodology-item { border-left: 0; padding-left: 0; }
     }
     .eb-pagination { display: flex; align-items: center; gap: 10px; margin-top: 14px; justify-content: center; }
     .eb-page-btn { padding: 5px 16px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 12.5px; cursor: pointer; color: var(--text-dim); transition: background .15s; }
@@ -1017,6 +1063,59 @@
     .eb-q-btn:hover { text-decoration: underline; }
     .eb-ext-link { color: #888; font-size: 13px; margin-left: 6px; text-decoration: none; opacity: 1; vertical-align: middle; }
     .eb-ext-link:hover { color: #ccc; }
+    /* Agentic edge board — decision data comes first. */
+    #eb-agentic-section { display: grid; gap: 22px; }
+    .agentic-panel { background: #fff; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+    .agentic-panel-head { align-items: flex-start; display: flex; gap: 14px; justify-content: space-between; padding: 17px 18px 14px; }
+    .agentic-panel-title { color: var(--ink); font-size: 14px; font-weight: 650; letter-spacing: -.01em; margin: 0; }
+    .agentic-panel-copy { color: var(--text-dim); font-size: 11px; line-height: 1.45; margin: 4px 0 0; }
+    .agentic-chart { border-top: 1px solid var(--border); padding: 7px 10px 3px; }
+    #eb-agentic-section > .eb-table { background: #fff; border: 1px solid var(--border); border-radius: 14px; display: block; max-width: 100%; overflow-x: auto; }
+    #eb-agentic-section > .eb-table th { background: #fafafa; color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .06em; padding-bottom: 9px; padding-top: 9px; text-transform: uppercase; }
+    #eb-agentic-section > .eb-table td { border-bottom-color: #f0f1f3; padding-bottom: 10px; padding-top: 10px; }
+    .agentic-table-wrap { overflow-x: auto; }
+    .agentic-table { margin: 0; min-width: 720px; }
+    .agentic-table th { background: #fafafa; color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .06em; padding-bottom: 9px; padding-top: 9px; text-transform: uppercase; }
+    .agentic-table td { border-bottom-color: #f0f1f3; padding-bottom: 10px; padding-top: 10px; }
+    .agentic-table .agentic-model { color: var(--ink); font-size: 12px; font-weight: 650; }
+    .agentic-table .agentic-model-id { color: var(--text-dim); display: block; font-size: 10px; font-weight: 400; margin-top: 2px; }
+    .agentic-position-button { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; color: #475569; cursor: pointer; font-size: 10px; font-weight: 650; padding: 3px 8px; }
+    .agentic-position-button:hover { background: #f1f5f9; color: #0f172a; }
+    .agentic-position-row > td { background: #fbfdff; }
+    .agentic-feed-head { align-items: end; display: flex; gap: 16px; justify-content: space-between; }
+    .agentic-feed-head .eb-h { margin: 0; }
+    .agentic-filter-status { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+    .agentic-filterbar { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; }
+    .agentic-filterbar .eb-view-tab { border-radius: 7px; font-size: 11px; padding: 6px 10px; }
+    .agentic-activity-list { display: grid; gap: 10px; }
+    .agentic-activity { background: #fff; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; padding: 15px 16px; position: relative; }
+    .agentic-activity--thesis { border-color: #cbd5e1; box-shadow: 0 8px 26px rgba(15, 23, 42, .06); }
+    .agentic-activity--thesis::before { background: linear-gradient(180deg, #0f766e, #14b8a6); content: ''; inset: 0 auto 0 0; position: absolute; width: 3px; }
+    .agentic-activity-meta { align-items: center; color: var(--text-dim); display: flex; font-size: 10px; gap: 7px; justify-content: space-between; letter-spacing: .045em; margin-bottom: 10px; text-transform: uppercase; }
+    .agentic-activity-model { align-items: center; color: #334155; display: inline-flex; font-weight: 700; gap: 6px; }
+    .agentic-type { background: #eef2ff; border-radius: 999px; color: #4338ca; font-size: 9px; font-weight: 750; letter-spacing: .07em; padding: 3px 7px; }
+    .agentic-activity--thesis .agentic-type { background: #ccfbf1; color: #0f766e; }
+    .agentic-activity-time { color: #94a3b8; letter-spacing: 0; text-transform: none; }
+    .agentic-activity-body { color: var(--text); font-size: 13px; line-height: 1.55; }
+    .agentic-activity-body code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px; color: #334155; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 2px 5px; }
+    .agentic-thesis-copy { color: #334155; font-size: 13px; line-height: 1.65; }
+    .agentic-thesis-copy p { margin: 0 0 10px; }
+    .agentic-thesis-copy p:last-child { margin-bottom: 0; }
+    .agentic-thesis-copy h5 { border-bottom: 1px solid #e2e8f0; color: #0f172a; font-size: 10px; font-weight: 750; letter-spacing: .09em; margin: 15px 0 8px; padding-bottom: 6px; text-transform: uppercase; }
+    .agentic-thesis-copy h5:first-child { margin-top: 0; }
+    .agentic-thesis-copy ul { display: grid; gap: 5px; list-style: none; margin: 0 0 11px; padding: 0; }
+    .agentic-thesis-copy li { padding-left: 14px; position: relative; }
+    .agentic-thesis-copy li::before { background: #14b8a6; border-radius: 50%; content: ''; height: 5px; left: 1px; position: absolute; top: .57em; width: 5px; }
+    .agentic-action { border-radius: 5px; display: inline-block; font-size: 10px; font-weight: 750; letter-spacing: .03em; padding: 2px 6px; }
+    .agentic-action--yes { background: #dcfce7; color: #15803d; }
+    .agentic-action--no { background: #fee2e2; color: #b91c1c; }
+    .agentic-action--hold { background: #dbeafe; color: #1d4ed8; }
+    .agentic-action--pass { background: #e2e8f0; color: #475569; }
+    @media (max-width: 640px) {
+      .agentic-panel-head, .agentic-feed-head { align-items: flex-start; flex-direction: column; gap: 7px; }
+      .agentic-activity { padding: 14px; }
+      .agentic-activity-meta { align-items: flex-start; flex-direction: column; gap: 5px; }
+    }
     .tr-log { display: flex; flex-direction: column; }
     .tr-log-row {
       display: grid; grid-template-columns: 18px 1fr auto; gap: 13px;
@@ -2149,21 +2248,17 @@
     <div class="hero-grid">
       <!-- Left Column: Product proposition -->
       <div class="hero-copy">
-        <a href="https://t.me/+QIVxIyqCc-w4NzQ9" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:9999px;background:rgba(0,136,204,0.08);color:#0088cc;border:1px solid rgba(0,136,204,0.25);font-size:12px;font-weight:500;margin-bottom:12px;align-self:flex-start;">
-          <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#00D26A;box-shadow:0 0 6px #00D26A;"></span>
-          ⚡ Live Alpha Feed · Telegram & Discord Alerts &rarr;
-        </a>
-        <p class="label mb-4" style="align-self: flex-start;">AI forecasts, scored in public</p>
-        <h1 class="display hero-title" style="text-align: left; align-self: flex-start; max-width: 100%;">The intelligence layer for prediction markets</h1>
-        <p class="hero-text" style="text-align: left; align-self: flex-start; max-width: 100%; margin-top: 14px;">
-          Foresea turns fresh evidence and live market signals into calibrated forecasts you can examine, compare, and hold to account over time.
+        <p class="hero-eyebrow">AI forecasts, scored in public</p>
+        <h1 class="display hero-title">The intelligence layer for prediction markets.</h1>
+        <p class="hero-text">
+          Fresh evidence, live market pricing, and a transparent record—so every forecast can be examined before you act on it.
         </p>
-        <div class="hero-actions" style="align-self: flex-start;">
+        <div class="hero-actions">
           <button class="hero-action primary" type="button" onclick="launchApp()">Open the forecast desk</button>
           <button class="hero-action" type="button" onclick="openEdgeBoard()">Explore the edge board</button>
         </div>
 
-        <p class="market-sources" style="align-self: flex-start; text-align: left; margin-top: 20px;">
+        <p class="market-sources">
           Live contracts matched with
           <a href="https://polymarket.com" target="_blank" rel="noopener">Polymarket</a>
           <span aria-hidden="true">·</span>
@@ -2172,67 +2267,64 @@
       </div>
 
       <!-- Right Column: Concrete Example Widget & Live Markets -->
-      <div class="hero-sidebar" style="display: flex; flex-direction: column; gap: 24px; width: 100%;">
+      <aside class="hero-sidebar" aria-label="Forecast example and live market gaps">
         <!-- Concrete Example Card -->
-        <div class="demo-card border border-gray-250 rounded-2xl bg-white shadow-sm p-5" style="border: 1px solid var(--border-2); border-radius: 16px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 12px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="live-pulse rounded-full inline-block" style="width:7px;height:7px;background:var(--accent)"></span>
-              <span style="font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em;">Concrete Example</span>
-            </div>
-            <span style="font-size: 10px; color: var(--text-mute);">Real Forecast Run</span>
+        <section class="landing-demo">
+          <div class="landing-demo-head">
+            <span class="landing-demo-label">Concrete example</span>
+            <span class="landing-demo-stamp">Forecast run</span>
           </div>
 
-          <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="landing-demo-flow">
             <div>
-              <span style="font-size: 10px; font-weight: 700; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 2px;">1. The Market Question</span>
-              <p style="font-size: 13.5px; font-weight: 600; color: var(--ink); margin: 0; line-height: 1.4;">Will SpaceX complete a major Starship milestone before December 31, 2026?</p>
+              <span class="landing-step-label">1. The market question</span>
+              <p class="landing-question">Will SpaceX complete a major Starship milestone before December 31, 2026?</p>
             </div>
 
             <div>
-              <span style="font-size: 10px; font-weight: 700; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">2. Real-Time Evidence Fetched</span>
-              <div style="display: flex; flex-direction: column; gap: 6px;">
-                <div style="font-size: 11.5px; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px; display: flex; gap: 8px;">
-                  <span style="font-weight: 700; color: var(--ink); flex-shrink: 0;">Reuters</span>
-                  <p style="margin:0; line-height: 1.3;">FAA issues license for next test, signaling accelerated regulatory approvals.</p>
+              <span class="landing-step-label">2. Evidence checked</span>
+              <div class="landing-evidence">
+                <div class="landing-evidence-row">
+                  <b>Reuters</b>
+                  <p>FAA issues license for next test, signaling accelerated regulatory approvals.</p>
                 </div>
-                <div style="font-size: 11.5px; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px; display: flex; gap: 8px;">
-                  <span style="font-weight: 700; color: var(--ink); flex-shrink: 0;">NASASpaceflight</span>
-                  <p style="margin:0; line-height: 1.3;">Infrastructure checks complete at pad 39A; hot-staging ring integrated.</p>
-                </div>
-              </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px;">
-              <div style="border: 1px solid var(--border-2); border-radius: 12px; padding: 10px; background: #fff;">
-                <span style="font-size: 9px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 2px;">Foresea AI Odds</span>
-                <div style="display: flex; align-items: baseline; gap: 6px;">
-                  <span style="font-size: 20px; font-weight: 700; color: var(--ink);">72%</span>
-                  <span style="font-size: 10px; font-weight: 700; color: #16a34a; background: #f0fdf4; padding: 1px 6px; border-radius: 999px;">YES</span>
-                </div>
-              </div>
-              <div style="border: 1px solid var(--border-2); border-radius: 12px; padding: 10px; background: #fff;">
-                <span style="font-size: 9px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 2px;">Prediction Market</span>
-                <div style="display: flex; align-items: baseline; gap: 6px;">
-                  <span style="font-size: 20px; font-weight: 700; color: var(--ink);">58%</span>
-                  <span style="font-size: 10px; color: var(--text-mute);">Polymarket</span>
+                <div class="landing-evidence-row">
+                  <b>NASASpaceflight</b>
+                  <p>Infrastructure checks complete at pad 39A; hot-staging ring integrated.</p>
                 </div>
               </div>
             </div>
 
-            <div style="border: 1px solid #bbf7d0; background: #f0fdf4; border-radius: 12px; padding: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <div class="landing-metrics">
+              <div class="landing-metric">
+                <span class="landing-metric-label">Foresea AI odds</span>
+                <div class="landing-metric-value">
+                  <strong>72%</strong>
+                  <span class="landing-outcome yes">YES</span>
+                </div>
+              </div>
+              <div class="landing-metric">
+                <span class="landing-metric-label">Prediction market</span>
+                <div class="landing-metric-value">
+                  <strong>58%</strong>
+                  <span class="landing-venue">Polymarket</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="landing-edge">
               <div>
-                <span style="font-size: 9px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.05em; display: block;">Model-vs-Market Edge</span>
-                <span style="font-size: 11px; color: #166534;">Model predicts +14 pp higher than current market.</span>
+                <span class="landing-edge-label">Model-vs-market edge</span>
+                <span class="landing-edge-copy">Model predicts 14 pp higher than the market.</span>
               </div>
-              <span style="font-size: 11px; font-weight: 700; color: #fff; background: #16a34a; padding: 4px 8px; border-radius: 6px; white-space: nowrap;">Lean YES (+14)</span>
+              <span class="landing-edge-pill">Lean YES +14</span>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- Live Markets Board Snippet -->
-        <div class="product-panel" style="border: 1px solid var(--border-2); border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(15,15,16,0.04);">
-          <div class="panel-bar" style="background: var(--panel);">
+        <section class="landing-live-panel">
+          <div class="panel-bar">
             <span style="font-weight: 600; color: var(--ink);">Live Platform Gaps</span>
             <span class="demo-stamp">Updated Just Now</span>
           </div>
@@ -2244,8 +2336,8 @@
             <div class="market-question-cell" style="color:var(--text-dim)">Loading live pricing…</div>
             <div></div><div></div><div></div>
           </div>
-        </div>
-      </div>
+        </section>
+      </aside>
     </div>
 
     <!-- Pillar Features Section -->
@@ -5784,7 +5876,7 @@ function _startEdgeTimers() {
   _crypto5mTimer   = setInterval(loadCrypto5mEquity, 30 * 1000);
   _agentTradingTimer = setInterval(() => {
     if (_ebView === 'agentic') loadAgentTradingSection();
-  }, 30 * 1000);
+  }, AGENT_TRADING_REFRESH_MS);
 }
 
 // Browsers throttle (and in some cases suspend) setInterval in hidden tabs, so
@@ -6111,18 +6203,55 @@ async function markPersonalLedgerVerdict(entryId, verdict, btn) {
   }
 }
 
+const AGENT_TRADING_REFRESH_MS = 60_000;
+let _agentTradingRequest = null;
+let _agentTradingCachedBoard = null;
+let _agentTradingBoardSignature = '';
+
+function _agentTradingSignature(data) {
+  // The generated timestamp changes whenever the publisher writes a new board.
+  // It lets the 60-second poll stay current without rebuilding a large SVG,
+  // leaderboard, and thesis feed when the source data is identical.
+  if (data && data.generated_at) return String(data.generated_at);
+  return JSON.stringify([
+    data?.leaderboard?.length || 0,
+    data?.recent_activity?.[0]?.ts || data?.recent_activity?.[0]?.timestamp || '',
+  ]);
+}
+
 async function loadAgentTradingSection() {
   const host = document.getElementById('eb-agentic-section');
   if (!host) return;
+
+  // A return to the Agentic tab should be instant. Reuse the last successful
+  // payload while a background request checks whether the publisher has
+  // produced a newer board.
+  if (_agentTradingCachedBoard && host.dataset.agenticSignature !== _agentTradingBoardSignature) {
+    renderAgentTradingBoard(_agentTradingCachedBoard);
+  }
+  if (_agentTradingRequest) return _agentTradingRequest;
+
+  _agentTradingRequest = (async () => {
   try {
     const r = await _liveJsonFetch('/agent-trading/board');
     const d = await _readJson(r);
     if (!r.ok) throw new Error(d.detail || 'Could not load the agentic trading board.');
-    renderAgentTradingBoard(d);
+    const signature = _agentTradingSignature(d);
+    _agentTradingCachedBoard = d;
+    if (signature !== _agentTradingBoardSignature || host.dataset.agenticSignature !== signature) {
+      _agentTradingBoardSignature = signature;
+      renderAgentTradingBoard(d);
+    }
   } catch (err) {
     console.warn(err);
-    renderAgentTradingBoard({ error: err.message || 'Could not load the agentic trading board.' });
+    if (!_agentTradingCachedBoard) {
+      renderAgentTradingBoard({ error: err.message || 'Could not load the agentic trading board.' });
+    }
+  } finally {
+    _agentTradingRequest = null;
   }
+  })();
+  return _agentTradingRequest;
 }
 
 function _cleanThesisText(raw) {
@@ -6169,33 +6298,69 @@ function _cleanThesisText(raw) {
   return str.trim();
 }
 
+function _thesisBulletForDisplay(rawBullet) {
+  const value = String(rawBullet || '').trim();
+  const unavailable = '(?:\\[?\\s*N\\s*\\/\\s*A\\s*\\]?)';
+  const labeledUnavailable = new RegExp(`^\\*\\*[^*]+\\*\\*:\\s*${unavailable}\\s*$`, 'i');
+  const unavailableComparison = new RegExp(
+    `^\\*\\*Model Probability\\*\\*:\\s*${unavailable}\\s+vs\\s+\\*\\*Market Price\\*\\*:\\s*${unavailable}\\s*\\(Edge:\\s*${unavailable}\\)\\s*$`,
+    'i',
+  );
+  if (labeledUnavailable.test(value) || unavailableComparison.test(value)) return '';
+
+  // Older published cycles used "N/A" placeholders. Keep the explanatory
+  // part when there is one, but do not surface implementation-shaped labels
+  // in a reader-facing thesis card.
+  return value
+    .replace(/\[?\s*N\s*\/\s*A\s*\]?\s*\(([^)]+)\)/gi, '$1')
+    .replace(/\[?\s*N\s*\/\s*A\s*\]?/gi, 'not assessed');
+}
+
 function _formatThesisHtml(rawThesis) {
   const clean = _cleanThesisText(rawThesis);
   if (!clean) return '';
-
-  let s = escHtml(clean);
-
-  // Parse section headers into styled section divider cards
-  s = s.replace(/###\s*([^\n<]+)/g, '<div style="font-weight:700;color:var(--text);font-size:12px;text-transform:uppercase;letter-spacing:0.04em;margin-top:14px;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid var(--border);">$1</div>');
-  s = s.replace(/##\s*([^\n<]+)/g, '<div style="font-weight:700;color:var(--text);font-size:13px;margin-top:12px;margin-bottom:6px;">$1</div>');
-
-  // Parse markdown bold and italics
-  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/\*([^\*]+?)\*/g, '<em>$1</em>');
-  s = s.replace(/`([^`]+?)`/g, '<code style="background:var(--card-bg, rgba(0,0,0,0.05));padding:2px 5px;border-radius:4px;font-size:12px;font-family:monospace;">$1</code>');
-
-  // Format key trading actions with badges
-  s = s.replace(/<strong>Action<\/strong>:\s*(BUY\s+YES[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(16,185,129,0.15);color:#059669;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
-  s = s.replace(/<strong>Action<\/strong>:\s*(BUY\s+NO[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(239,68,68,0.15);color:#dc2626;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
-  s = s.replace(/<strong>Action<\/strong>:\s*(PASS[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(107,114,128,0.15);color:#4b5563;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
-  s = s.replace(/<strong>Action<\/strong>:\s*(HOLD[^\n<]*)/gi, '<strong>Action</strong>: <span style="background:rgba(59,130,246,0.15);color:#2563eb;font-weight:700;padding:2px 6px;border-radius:4px;font-size:11px;">$1</span>');
-
-  // Format bullet lists cleanly
-  s = s.replace(/(?:^|<br>|\n)-\s+([^\n<]+)/g, '<div style="display:flex;align-items:baseline;gap:6px;margin:3px 0 3px 6px;"><span style="color:var(--accent);font-size:10px;">▪</span><span>$1</span></div>');
-
-  // Format paragraphs
-  s = s.replace(/\n\n+/g, '</p><p style="margin-top:8px">').replace(/\n/g, '<br>');
-  return `<div style="line-height:1.6;color:var(--text);font-size:13px"><p style="margin:0">${s}</p></div>`;
+  const inline = value => {
+    let s = escHtml(value);
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/\*([^\*]+?)\*/g, '<em>$1</em>');
+    s = s.replace(/`([^`]+?)`/g, '<code>$1</code>');
+    const actionClasses = [
+      ['BUY YES', 'agentic-action--yes'], ['BUY NO', 'agentic-action--no'],
+      ['HOLD', 'agentic-action--hold'], ['PASS', 'agentic-action--pass'],
+    ];
+    actionClasses.forEach(([action, className]) => {
+      const re = new RegExp(`(<strong>Action<\\/strong>:\\s*)(${action}[^<]*)`, 'gi');
+      s = s.replace(re, `$1<span class="agentic-action ${className}">$2</span>`);
+    });
+    return s;
+  };
+  const blocks = [];
+  let paragraph = [];
+  let bullets = [];
+  const flushParagraph = () => {
+    if (paragraph.length) blocks.push(`<p>${paragraph.map(inline).join('<br>')}</p>`);
+    paragraph = [];
+  };
+  const flushBullets = () => {
+    const visibleBullets = bullets.map(_thesisBulletForDisplay).filter(Boolean);
+    if (visibleBullets.length) blocks.push(`<ul>${visibleBullets.map(item => `<li>${inline(item)}</li>`).join('')}</ul>`);
+    bullets = [];
+  };
+  clean.split(/\r?\n/).forEach(rawLine => {
+    const line = rawLine.trim();
+    if (!line) { flushParagraph(); flushBullets(); return; }
+    const heading = line.match(/^#{2,3}\s*(.+)$/);
+    if (heading) { flushParagraph(); flushBullets(); blocks.push(`<h5>${inline(heading[1])}</h5>`); return; }
+    const bullet = line.match(/^-\s+(.+)$/);
+    if (bullet) { flushParagraph(); bullets.push(bullet[1]); return; }
+    flushBullets();
+    paragraph.push(line);
+  });
+  flushParagraph();
+  flushBullets();
+  const visibleBlocks = blocks.filter((block, index) => !block.startsWith('<h5>') ||
+    (blocks[index + 1] && !blocks[index + 1].startsWith('<h5>')));
+  return `<div class="agentic-thesis-copy">${visibleBlocks.join('')}</div>`;
 }
 
 function _toggleAgentPositions(agentId) {
@@ -6261,6 +6426,7 @@ function _eligibilityReasonText(elig) {
 function renderAgentTradingBoard(d) {
   const host = document.getElementById('eb-agentic-section');
   if (!host) return;
+  host.dataset.agenticSignature = _agentTradingSignature(d);
   window._lastAgentBoardData = d;
   const genAt = d && d.generated_at ? new Date(d.generated_at) : null;
   const gen = genAt && !Number.isNaN(genAt.getTime()) ? genAt.toLocaleString() : '';
@@ -6277,7 +6443,7 @@ function renderAgentTradingBoard(d) {
   const equityCurves = d.equity_curves || {};
   const eligibility = d.eligibility || {};
   const activity = d.recent_activity || [];
-
+  const latestTheses = d.latest_theses || {};
   const _usd = v => Number.isFinite(Number(v))
     ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
     : '—';
@@ -6383,7 +6549,7 @@ function renderAgentTradingBoard(d) {
 
     return `<tr class="eb-row" style="cursor:pointer" onclick="_toggleAgentPositions('${escAttr(agentId)}')">
       <td><b>${i + 1}</b></td>
-      <td><b>${escHtml(_ebModelHead(agentId))}</b><span style="display:block;color:var(--text-dim);font-size:11px">${escHtml(agentId)}</span></td>
+      <td><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span></td>
       <td><b>${_usd(row.account_value)}</b></td>
       <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnl >= 0 ? '+' : ''}${_usd(pnl)}</td>
       <td style="color:${pnlColor};font-weight:600">${_roiPct((Number(row.return_pct) || 0) / 100)}</td>
@@ -6392,7 +6558,7 @@ function renderAgentTradingBoard(d) {
       <td><span class="eb-badge" style="cursor:pointer" title="Click to view open positions">${openPos.length} pos ▾</span></td>
       <td>${eligCell}</td>
     </tr>
-    <tr id="agent-pos-${escAttr(agentId)}" class="hidden-view" style="background:var(--hover-bg, rgba(0,0,0,0.02));">
+    <tr id="agent-pos-${escAttr(agentId)}" class="hidden-view agentic-position-row">
       <td colspan="9" style="padding:10px 14px;border-bottom:1px solid var(--border);border-top:1px dashed var(--border);">
         <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">
           Active Book · ${escHtml(_ebModelLabel(agentId))} (Cash: ${_usd(row.cash)})
@@ -6414,36 +6580,48 @@ function renderAgentTradingBoard(d) {
     );
   });
 
-  const filteredActivity = activeFilter === 'all'
+  let filteredActivity = activeFilter === 'all'
     ? activity
     : activity.filter(a => a.agent_id === activeFilter);
+  const hasVisibleThesis = filteredActivity.some(a => a.type === 'thesis');
+  const latestThesis = activeFilter === 'all' ? null : latestTheses[activeFilter];
+  // The board's global activity window may be filled by other models. Keep a
+  // selected model's own latest thesis visible even when it falls outside that
+  // window, rather than rendering an empty feed for a healthy model.
+  if (activeFilter !== 'all' && !hasVisibleThesis && latestThesis) {
+    filteredActivity = [latestThesis, ...filteredActivity];
+  }
 
   const activityRows = filteredActivity.slice(0, 30).map(a => {
     const when = (a.ts || a.timestamp || a.created_at) ? new Date(a.ts || a.timestamp || a.created_at).toLocaleString() : '';
     const body = _agentTradingActivityLine(a);
     if (!body) return '';
     const isThesis = a.type === 'thesis';
-    const cardBorder = isThesis ? 'border-left:3px solid var(--accent);' : '';
-    return `<article class="msg-ai p-3" style="margin-bottom:12px;background:var(--paper, #fff);border:1px solid var(--border);border-radius:8px;${cardBorder}">
-      <p class="text-xs font-medium" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;color:var(--text-dim);">
+    const typeLabel = String(a.type || 'activity').replace(/_/g, ' ');
+    return `<article class="agentic-activity ${isThesis ? 'agentic-activity--thesis' : ''}">
+      <div class="agentic-activity-meta">
         <span><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b> · <span style="text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escHtml(a.type || '')}</span></span>
         <span>${escHtml(when)}</span>
-      </p>
-      <div class="mt-1">${body}</div>
+      </div>
+      <div class="agentic-activity-body">${body}</div>
     </article>`;
   }).join('');
 
-  host.innerHTML = `${banner}
-    <div id="agentTradingSvg">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
+  host.innerHTML = `
+    <section class="agentic-panel">
+      <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Account value by model</h4><p class="agentic-panel-copy">Each line is an independently managed shadow account.</p></div></div>
+      <div id="agentTradingSvg" class="agentic-chart">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
+    </section>
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}</tbody></table>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:28px;margin-bottom:8px;">
-      <h4 class="eb-h" style="margin:0">Live Transparency &amp; Thesis Feed</h4>
-      <span class="text-xs text-gray-400">Filtered: ${escHtml(activeFilter === 'all' ? 'All Models' : activeFilter)}</span>
+    <div class="agentic-feed-head">
+      <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : activeFilter)}</span>
     </div>
-    <div class="eb-view-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;padding:3px;background:var(--paper, #f9f9fb);border-radius:8px;border:1px solid var(--border);">
+    <div class="agentic-filterbar">
       ${filterPills.join('')}
     </div>
-    ${activityRows || '<p class="text-sm text-gray-500">No activity matching this filter.</p>'}`;
+    <div class="agentic-activity-list">${activityRows || (activeFilter !== 'all'
+      ? `<p class="text-sm text-gray-500">No published thesis for ${escHtml(_ebModelLabel(activeFilter))} yet. Its next scheduled research run will retry automatically.</p>`
+      : '<p class="text-sm text-gray-500">No activity matching this filter.</p>')}</div>`;
   const svgEl = document.getElementById('agentTradingSvg');
   if (svgEl) _attachEquityHover(svgEl);
 }
@@ -7420,6 +7598,47 @@ function _mtmCurvePoints(account) {
   return firstEvent >= 0 ? points.slice(firstEvent) : [];
 }
 
+function _mtmRiskStats(model) {
+  const metric = value => {
+    if (value == null || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+  const sourceSharpe = metric(model?.sharpe);
+  const sourceDrawdown = metric(model?.max_drawdown);
+  if (sourceSharpe != null && sourceDrawdown != null) {
+    return { sharpe: sourceSharpe, maxDrawdown: sourceDrawdown };
+  }
+
+  // Older compact payloads did not include the server-computed risk fields.
+  // Match the server calculation from the plotted account-value curve until
+  // a fresh payload arrives, rather than shifting Trades/Open into these cells.
+  const values = (model?.account?.value_curve || [])
+    .map(point => metric(point?.account_value))
+    .filter(value => value != null);
+  if (values.length < 2) return { sharpe: sourceSharpe, maxDrawdown: sourceDrawdown };
+  const returns = [];
+  for (let index = 1; index < values.length; index += 1) {
+    if (values[index - 1] > 0) returns.push((values[index] - values[index - 1]) / values[index - 1]);
+  }
+  let sharpe = null;
+  if (returns.length >= 2) {
+    const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
+    const variance = returns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (returns.length - 1);
+    if (variance > 0) sharpe = mean / Math.sqrt(variance);
+  }
+  let peak = values[0];
+  let maxDrawdown = 0;
+  values.forEach(value => {
+    peak = Math.max(peak, value);
+    if (peak > 0) maxDrawdown = Math.max(maxDrawdown, (peak - value) / peak);
+  });
+  return {
+    sharpe: sourceSharpe ?? sharpe,
+    maxDrawdown: sourceDrawdown ?? maxDrawdown,
+  };
+}
+
 function _updateMtmViewInPlace() {
   if (!_ebLastData) return false;
   const d = _ebLastData;
@@ -7500,6 +7719,10 @@ function _updateMtmViewInPlace() {
       const pnlPct = pnlUsd / startPrincipal;
       const pnlColor = pnlUsd >= 0 ? '#0a7' : '#c33';
       const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
+      const risk = _mtmRiskStats(m);
+      const sharpeStr = risk.sharpe != null ? risk.sharpe.toFixed(2) : '—';
+      const ddVal = risk.maxDrawdown;
+      const ddStr = Number.isFinite(ddVal) ? (ddVal * 100).toFixed(1) + '%' : '—';
 
       return `<tr class="eb-row" data-model="${escHtml(m.model || '')}">
         <td><b>${i + 1}</b></td>
@@ -7508,6 +7731,8 @@ function _updateMtmViewInPlace() {
         <td><b>${_usd(currentBankroll)}</b></td>
         <td style="color:${pnlColor};font-weight:600">${pnlStr}</td>
         <td style="color:${pnlColor};font-weight:600">${_roiPct(pnlPct)}</td>
+        <td><b>${sharpeStr}</b></td>
+        <td style="color:${ddVal > 0.15 ? '#c33' : 'inherit'}">${ddStr}</td>
         <td>${account.n_trades ?? m.n_trades ?? 0}</td>
         <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
       </tr>`;
@@ -7642,10 +7867,9 @@ function _renderMtmPage(d) {
     const pnlColor = pnlUsd >= 0 ? '#0a7' : '#c33';
     const pnlStr = (pnlUsd >= 0 ? '+' : '') + _usd(pnlUsd);
 
-    const sharpeVal = Number(m.sharpe);
-    const sharpeStr = Number.isFinite(sharpeVal) ? sharpeVal.toFixed(2) : '—';
-
-    const ddVal = Number(m.max_drawdown);
+    const risk = _mtmRiskStats(m);
+    const sharpeStr = risk.sharpe != null ? risk.sharpe.toFixed(2) : '—';
+    const ddVal = risk.maxDrawdown;
     const ddStr = Number.isFinite(ddVal) ? (ddVal * 100).toFixed(1) + '%' : '—';
 
     const pnlTitle = `Net P&L: ${_usd(pnlUsd)} (Realized: ${_usd(account.realized_pnl || 0)}, Unrealized: ${_usd(account.unrealized_pnl || 0)}) · Net of venue trading fees (Kalshi 7% taker formula & Polymarket 0%)`;
@@ -7658,7 +7882,7 @@ function _renderMtmPage(d) {
       <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnlStr}<span style="display:block;font-size:10px;color:var(--text-dim);font-weight:400">net of fees</span></td>
       <td style="color:${pnlColor};font-weight:600">${_roiPct(pnlPct)}</td>
       <td><b>${sharpeStr}</b></td>
-      <td style="color:${Number(m.max_drawdown) > 0.15 ? '#c33' : 'inherit'}">${ddStr}</td>
+      <td style="color:${ddVal > 0.15 ? '#c33' : 'inherit'}">${ddStr}</td>
       <td>${account.n_trades ?? m.n_trades ?? 0}</td>
       <td>${account.n_open_positions ?? m.n_open_positions ?? 0}</td>
     </tr>`;
@@ -7671,7 +7895,7 @@ function _renderMtmPage(d) {
   };
   const activeSizingLabel = sizingLabels[sizingMode] || sizingLabels.quarter_kelly;
 
-  const validSharpes = mtmModels.map(m => Number(m.sharpe)).filter(Number.isFinite);
+  const validSharpes = mtmModels.map(m => _mtmRiskStats(m).sharpe).filter(Number.isFinite);
   const avgSharpe = validSharpes.length ? (validSharpes.reduce((a, b) => a + b, 0) / validSharpes.length).toFixed(2) : '—';
 
   const sizingButtonsHtml = `
@@ -7683,11 +7907,11 @@ function _renderMtmPage(d) {
         <button type="button" class="eb-view-tab ${sizingMode === 'growth_2pct' ? 'active' : ''}" data-mtm-sizing-mode="growth_2pct">Edge Kelly 8%</button>
       </div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:12px;margin:8px 0 14px;padding:8px 12px;background:rgba(6,182,212,0.05);border:1px solid rgba(6,182,212,0.2);border-radius:6px;font-size:12px;color:var(--text);">
-      <div><b>Avg Sharpe:</b> <span style="color:#0a7;font-weight:600">${avgSharpe}</span></div>
-      <div>· <b>Risk Guard:</b> 30% Max Drawdown Halt Active</div>
-      <div>· <b>Fee Model:</b> Strictly Net of Kalshi &amp; Polymarket Taker Fees</div>
-      <div>· <b>Liquidation:</b> Bid-Marked Real-Time Book</div>
+    <div class="mtm-methodology" aria-label="MTM methodology">
+      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Avg Sharpe</span><span class="mtm-methodology-value mtm-methodology-value--positive">${avgSharpe}</span></span>
+      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Risk guard</span><span class="mtm-methodology-value">30% drawdown halt</span></span>
+      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Fee model</span><span class="mtm-methodology-value">Net of taker fees</span></span>
+      <span class="mtm-methodology-item"><span class="mtm-methodology-label">Liquidation</span><span class="mtm-methodology-value">Bid-marked book</span></span>
     </div>`;
 
   return `<div id="eb-mtm-container"><h4 class="eb-h" style="margin-top:0">Shadow Mark-to-Market (MTM) Account &amp; Capital Growth</h4>
