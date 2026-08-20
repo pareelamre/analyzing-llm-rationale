@@ -290,17 +290,19 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
                 self.assertIn("Shadow / paper trading only", renderer)
 
     def test_agentic_feed_has_a_per_model_latest_thesis_fallback(self):
-        for name, index in self._both().items():
-            with self.subTest(file=name):
-                renderer = index.split("function renderAgentTradingBoard(d) {", 1)[1].split(
-                    "async function removePersonalLedgerEntry", 1
-                )[0]
-                self.assertIn("const latestTheses = d.latest_theses || {};", renderer)
-                self.assertIn("latestTheses[activeFilter]", renderer)
-                self.assertIn("No published thesis for", renderer)
-                self.assertIn("const banner = ", renderer)
-                # Present in the loading and error early-return branches too.
-                self.assertIn("host.innerHTML = `${banner}<p", renderer)
+        # The server's frontend build emits static/index.html at image-build
+        # time. This is a source-level renderer contract, so do not require a
+        # locally generated artifact to be committed alongside source.
+        index = self._both()["frontend"]
+        renderer = index.split("function renderAgentTradingBoard(d) {", 1)[1].split(
+            "async function removePersonalLedgerEntry", 1
+        )[0]
+        self.assertIn("const latestTheses = d.latest_theses || {};", renderer)
+        self.assertIn("latestTheses[activeFilter]", renderer)
+        self.assertIn("No published thesis for", renderer)
+        self.assertIn("const banner = ", renderer)
+        # Present in the loading and error early-return branches too.
+        self.assertIn("host.innerHTML = `${banner}<p", renderer)
 
     def test_equity_curve_head_bubbles_show_the_model_abbreviation_not_a_boolean(self):
         # Each curve's end-of-line bubble renders String(curve.head) as its
