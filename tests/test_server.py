@@ -4000,6 +4000,37 @@ class ServerTests(unittest.TestCase):
             "Forecast evaluation report failed integrity validation.",
         )
 
+    def test_internal_forecast_evaluation_rejects_stale_artifact(self):
+        import analyzing_llm_rationale.server as srv
+        from analyzing_llm_rationale.forecast_evaluation_report import (
+            build_evaluation_artifact,
+        )
+
+        report = build_evaluation_artifact(
+            model="council",
+            snapshot_mirror=[],
+            prospective_audit=[],
+        )
+        with (
+            mock.patch.object(srv, "_TRACK_RECORD_TOKEN", "tok"),
+            mock.patch.object(srv, "_read_forecast_evaluation", return_value=report),
+            mock.patch.object(
+                srv,
+                "_forecast_evaluation_freshness",
+                return_value={"stale": True, "age_seconds": 3601},
+            ),
+        ):
+            response = self.client.get(
+                "/internal/forecast-evaluation",
+                headers={"X-Track-Token": "tok"},
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.json()["detail"],
+            "Forecast evaluation report is stale; promotion decisions are unavailable.",
+        )
+
     def test_internal_forecast_evaluation_returns_404_before_generation(self):
         import analyzing_llm_rationale.server as srv
 

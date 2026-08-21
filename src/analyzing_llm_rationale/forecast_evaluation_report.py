@@ -35,6 +35,14 @@ evaluation_report_duration = meter.create_histogram(
 )
 
 
+def _finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _positive_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
 class EvaluationArtifactValidationError(ValueError):
     """Raised when a serialized evaluation artifact breaks harness invariants."""
 
@@ -55,23 +63,21 @@ class EvaluationPolicy:
     max_total_exposure: float = 0.25
 
     def __post_init__(self) -> None:
-        if self.min_resolved_markets < 1:
+        if not _positive_int(self.min_resolved_markets):
             raise ValueError("min_resolved_markets must be positive")
-        if self.min_paper_trades < 1:
+        if not _positive_int(self.min_paper_trades):
             raise ValueError("min_paper_trades must be positive")
-        if not isinstance(self.min_skill_lower_bound, (int, float)) or not math.isfinite(
-            self.min_skill_lower_bound
-        ):
+        if not _finite_number(self.min_skill_lower_bound):
             raise ValueError("min_skill_lower_bound must be finite")
-        if not 0.0 <= self.max_drawdown <= 1.0:
+        if not _finite_number(self.max_drawdown) or not 0.0 <= self.max_drawdown <= 1.0:
             raise ValueError("max_drawdown must be between 0 and 1")
-        if self.min_edge < 0.0:
+        if not _finite_number(self.min_edge) or self.min_edge < 0.0:
             raise ValueError("min_edge cannot be negative")
-        if not 0.0 < self.requested_fraction <= 1.0:
+        if not _finite_number(self.requested_fraction) or not 0.0 < self.requested_fraction <= 1.0:
             raise ValueError("requested_fraction must be in (0, 1]")
-        if self.fee_fraction < 0.0:
+        if not _finite_number(self.fee_fraction) or self.fee_fraction < 0.0:
             raise ValueError("fee_fraction cannot be negative")
-        if not 0.0 < self.max_total_exposure <= 1.0:
+        if not _finite_number(self.max_total_exposure) or not 0.0 < self.max_total_exposure <= 1.0:
             raise ValueError("max_total_exposure must be in (0, 1]")
 
 
@@ -204,6 +210,16 @@ def validate_evaluation_artifact(artifact: Mapping[str, Any]) -> None:
         )
     if not isinstance(artifact.get("model"), str) or not artifact["model"].strip():
         issues.append("model must be a non-empty string")
+    generated_at = artifact.get("generated_at")
+    if not isinstance(generated_at, str):
+        issues.append("generated_at must be an ISO-8601 timestamp string")
+    else:
+        try:
+            parsed_generated_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+            if parsed_generated_at.tzinfo is None:
+                issues.append("generated_at must include a timezone offset")
+        except ValueError:
+            issues.append("generated_at must be an ISO-8601 timestamp string")
 
     policy_data = artifact.get("policy")
     policy: EvaluationPolicy | None = None
@@ -242,16 +258,27 @@ def validate_evaluation_artifact(artifact: Mapping[str, Any]) -> None:
             interval = cohort.get("market_clustered_skill_interval")
             if not isinstance(interval, Mapping):
                 issues.append(f"cohorts.{name}.market_clustered_skill_interval must be an object")
-            elif (
-                interval.get("n_forecasts") != cohort.get("resolved_forecasts")
-                or interval.get("n_markets") != cohort.get("resolved_markets")
-            ):
-                issues.append(f"cohorts.{name} counts must match its skill interval")
+            else:
+                if (
+                    interval.get("n_forecasts") != cohort.get("resolved_forecasts")
+                    or interval.get("n_markets") != cohort.get("resolved_markets")
+                ):
+                    issues.append(f"cohorts.{name} counts must match its skill interval")
+                lower = interval.get("lower")
+                if "lower" not in interval or (lower is not None and not _finite_number(lower)):
+                    issues.append(f"cohorts.{name}.market_clustered_skill_interval.lower must be finite or null")
             portfolio = cohort.get("portfolio")
             if not isinstance(portfolio, Mapping) or not _non_negative_int(
                 portfolio.get("n_opened") if isinstance(portfolio, Mapping) else None
             ):
                 issues.append(f"cohorts.{name}.portfolio.n_opened must be a non-negative integer")
+            elif not _finite_number(portfolio.get("compound_return")):
+                issues.append(f"cohorts.{name}.portfolio.compound_return must be finite")
+            elif (
+                not _finite_number(portfolio.get("max_drawdown"))
+                or not 0.0 <= portfolio["max_drawdown"] <= 1.0
+            ):
+                issues.append(f"cohorts.{name}.portfolio.max_drawdown must be between 0 and 1")
             if (
                 _non_negative_int(cohort.get("resolved_markets"))
                 and _non_negative_int(cohort.get("resolved_forecasts"))

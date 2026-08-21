@@ -3665,7 +3665,22 @@ async def internal_forecast_evaluation(
                 )
             payload = dict(report)
             validate_evaluation_artifact(payload)
-            payload["freshness"] = _forecast_evaluation_freshness(payload)
+            freshness = _forecast_evaluation_freshness(payload)
+            if freshness["stale"]:
+                span.set_attributes(
+                    {
+                        "outcome": "stale",
+                        "report.model": str(payload.get("model") or "unknown"),
+                        "report.age_seconds": freshness["age_seconds"] or 0,
+                    }
+                )
+                _forecast_evaluation_reads.add(1, {"outcome": "stale"})
+                logger.warning("internal forecast evaluation artifact is stale: %s", freshness)
+                raise HTTPException(
+                    status_code=503,
+                    detail="Forecast evaluation report is stale; promotion decisions are unavailable.",
+                )
+            payload["freshness"] = freshness
             promotion = payload.get("promotion") or {}
             prospective = (payload.get("cohorts") or {}).get(
                 "prospective_audit"
