@@ -517,6 +517,10 @@ class BuildQuestionTests(unittest.TestCase):
 
 
 class PortfolioBlockTests(unittest.TestCase):
+    def test_trading_instruction_explains_close_netting_pnl(self):
+        self.assertIn("CLOSE ACCOUNTING", agent_trading_tick._TRADING_INSTRUCTION)
+        self.assertIn("$1.00 per matched pair", agent_trading_tick._TRADING_INSTRUCTION)
+
     def test_portfolio_block_reports_cash_and_positions(self):
         with tempfile.TemporaryDirectory() as td:
             with mock.patch.dict(

@@ -561,6 +561,47 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(closed["risk_guard"]["market_cost_basis_after"], 0.0)
         self.assertEqual(closed["account"]["n_open_positions"], 0)
 
+    def test_close_mode_allows_an_exact_fractional_opposite_position(self):
+        # Regression: the close guard used the balance *after* simulating the
+        # netting fill, when the opposite position was already zero. That
+        # rejected every valid sizing_mode='close' order, particularly the
+        # fractional quantities produced by account-level sizing.
+        ctx = benchmark_tools.ToolContext(agent_id="model-fractional-close")
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "10000",
+                "FORESEA_MAX_ORDER_NOTIONAL": "2000",
+                "FORESEA_AGENT_CYCLE_ID": "fractional-close",
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({
+                        "KXCLOSE": {"yes_ask": 0.95, "no_ask": 0.64},
+                    }),
+                ),
+            ):
+                opened = benchmark_tools.place_trade(
+                    {"ticker": "KXCLOSE", "side": "no", "price": 0.64, "quantity": 1186.9}, ctx,
+                )
+                closed = benchmark_tools.place_trade(
+                    {
+                        "ticker": "KXCLOSE", "side": "yes", "price": 0.95, "quantity": 1186.9,
+                        "sizing_mode": "close",
+                    },
+                    ctx,
+                )
+
+        self.assertTrue(opened["ok"])
+        self.assertTrue(closed["ok"])
+        self.assertTrue(closed["risk_guard"]["allowed"])
+        self.assertNotIn("close_exceeds_open_position", closed["risk_guard"]["reasons"])
+        self.assertAlmostEqual(closed["risk_guard"]["netting_payout"], 1186.9)
+        self.assertEqual(closed["account"]["n_open_positions"], 0)
+
     def test_place_trade_allows_a_large_quote_verified_netting_profit(self):
         # This codebase's netting-arb guard used to reject any netting close
         # realizing more than a flat $0.15/pair, regardless of why -- but
