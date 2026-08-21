@@ -804,6 +804,139 @@ class BenchmarkToolTests(unittest.TestCase):
             second["risk_guard"]["per_cycle_spend_limit"],
         )
 
+    def test_place_trade_rejects_new_risk_over_trailing_day_budget(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-daily-risk", require_kelly_sizing=True)
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "1.0",
+                "FORESEA_AGENT_DAILY_RISK_LIMIT_PCT": "0.06",
+                "FORESEA_AGENT_DUPLICATE_TRADE_COOLDOWN_SECONDS": "0",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXDAY1": 0.40, "KXDAY2": 0.30}),
+                ),
+            ):
+                first = benchmark_tools.place_trade(
+                    {"ticker": "KXDAY1", "side": "yes", "price": 0.40, "fee": 0,
+                     "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                    ctx,
+                )
+                second = benchmark_tools.place_trade(
+                    {"ticker": "KXDAY2", "side": "yes", "price": 0.30, "fee": 0,
+                     "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                    ctx,
+                )
+
+        self.assertTrue(first["ok"])
+        self.assertTrue(second["rejected"])
+        self.assertEqual(second["reason"], "daily_risk_limit")
+        self.assertGreater(second["risk_guard"]["daily_risk_after"], second["risk_guard"]["daily_risk_limit"])
+
+    def test_place_trade_rejects_duplicate_and_trade_rate_breaches(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-rate", require_kelly_sizing=True)
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "1.0",
+                "FORESEA_AGENT_DAILY_RISK_LIMIT_PCT": "1.0",
+                "FORESEA_AGENT_MAX_TRADES_PER_CYCLE": "1",
+                "FORESEA_AGENT_DUPLICATE_TRADE_COOLDOWN_SECONDS": "900",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXRATE": 0.10, "KXRATE2": 0.10}),
+                ),
+            ):
+                first = benchmark_tools.place_trade(
+                    {"ticker": "KXRATE", "side": "yes", "price": 0.10, "fee": 0,
+                     "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                    ctx,
+                )
+                duplicate = benchmark_tools.place_trade(
+                    {"ticker": "KXRATE", "side": "yes", "price": 0.10, "fee": 0,
+                     "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                    ctx,
+                )
+                rate_limited = benchmark_tools.place_trade(
+                    {"ticker": "KXRATE2", "side": "yes", "price": 0.10, "fee": 0,
+                     "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                    ctx,
+                )
+
+        self.assertTrue(first["ok"])
+        self.assertEqual(duplicate["reason"], "duplicate_cooldown")
+        self.assertTrue(duplicate["risk_guard"]["duplicate_active"])
+        self.assertEqual(rate_limited["reason"], "trade_rate_limit")
+
+    def test_place_trade_enforces_open_market_and_drawdown_circuit_breakers(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-circuit", require_kelly_sizing=True)
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "1.0",
+                "FORESEA_AGENT_DAILY_RISK_LIMIT_PCT": "1.0",
+                "FORESEA_AGENT_MAX_OPEN_MARKETS": "1",
+                "FORESEA_AGENT_MAX_TRADES_PER_CYCLE": "100",
+                "FORESEA_AGENT_DUPLICATE_TRADE_COOLDOWN_SECONDS": "0",
+                "FORESEA_AGENT_MAX_DRAWDOWN_LIMIT": "0.01",
+                "FORESEA_AGENT_CYCLE_ID": "cycle-1",
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({
+                        "KXDRAW": {"yes_ask": 0.95, "no_ask": 0.90},
+                        "KXSECOND": 0.10,
+                        "KXAFTER": 0.10,
+                    }),
+                ),
+            ):
+                opened = benchmark_tools.place_trade(
+                    {"ticker": "KXDRAW", "side": "no", "price": 0.90, "fee": 0,
+                     "sizing_mode": "quarter_kelly", "model_probability": 0.01},
+                    ctx,
+                )
+                market_capped = benchmark_tools.place_trade(
+                    {"ticker": "KXSECOND", "side": "yes", "price": 0.10, "fee": 0,
+                     "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                    ctx,
+                )
+                closed = benchmark_tools.place_trade(
+                    {"ticker": "KXDRAW", "side": "yes", "price": 0.95,
+                     "quantity": opened["normalized_order"]["quantity"], "fee": 0,
+                     "sizing_mode": "close"},
+                    ctx,
+                )
+                drawdown_halted = benchmark_tools.place_trade(
+                    {"ticker": "KXAFTER", "side": "yes", "price": 0.10, "fee": 0,
+                     "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                    ctx,
+                )
+
+        self.assertTrue(opened["ok"])
+        self.assertEqual(market_capped["reason"], "open_market_limit")
+        self.assertTrue(closed["ok"])
+        self.assertTrue(closed["risk_guard"]["risk_reducing"])
+        self.assertEqual(drawdown_halted["reason"], "drawdown_limit")
+
     def test_per_cycle_spend_limit_scales_with_account_value(self):
         # Regression: this used to be a flat dollar amount (DEFAULT was
         # $500/cycle regardless of account size) -- now it's a percentage, so

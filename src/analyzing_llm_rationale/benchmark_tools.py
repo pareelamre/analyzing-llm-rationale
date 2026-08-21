@@ -18,7 +18,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 from urllib.parse import urlparse
@@ -54,6 +54,11 @@ DEFAULT_CONCENTRATION_LIMIT = 0.15
 # once the order cap was raised past it.
 DEFAULT_PER_CYCLE_SPEND_LIMIT_PCT = 0.20
 DEFAULT_CYCLE_MINUTES = 15
+DEFAULT_MAX_DRAWDOWN_LIMIT = 0.20
+DEFAULT_DAILY_RISK_LIMIT_PCT = 0.30
+DEFAULT_MAX_OPEN_MARKETS = 10
+DEFAULT_MAX_TRADES_PER_CYCLE = 6
+DEFAULT_DUPLICATE_TRADE_COOLDOWN_SECONDS = 15 * 60
 KALSHI_FEE_COEFFICIENT = 0.07
 DEFAULT_SETTLEMENT_FEE_RATE = 0.014
 IMMEDIATE_TIME_IN_FORCE = "immediate_or_cancel"
@@ -73,6 +78,11 @@ class RiskGuardPolicy:
     concentration_limit: float
     per_cycle_spend_limit: float
     cycle_id: str
+    max_drawdown_limit: float
+    daily_risk_limit: float
+    max_open_markets: int
+    max_trades_per_cycle: int
+    duplicate_trade_cooldown_seconds: int
 
 
 @dataclass(frozen=True)
@@ -219,6 +229,19 @@ def _env_float(name: str, default: float) -> float:
     return value
 
 
+def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
+    raw = os.environ.get(name)
+    if raw in (None, ""):
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return value
+
+
 def _current_cycle_id() -> str:
     explicit = str(os.environ.get("FORESEA_AGENT_CYCLE_ID") or "").strip()
     if explicit:
@@ -244,11 +267,32 @@ def _risk_guard_policy() -> RiskGuardPolicy:
     )
     if per_cycle_spend_limit_pct <= 0:
         raise ValueError("FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT must be greater than 0")
+    max_drawdown_limit = _env_float(
+        "FORESEA_AGENT_MAX_DRAWDOWN_LIMIT", DEFAULT_MAX_DRAWDOWN_LIMIT,
+    )
+    if not 0 < max_drawdown_limit < 1:
+        raise ValueError("FORESEA_AGENT_MAX_DRAWDOWN_LIMIT must be between 0 and 1")
+    daily_risk_limit_pct = _env_float(
+        "FORESEA_AGENT_DAILY_RISK_LIMIT_PCT", DEFAULT_DAILY_RISK_LIMIT_PCT,
+    )
+    if not 0 < daily_risk_limit_pct <= 1:
+        raise ValueError("FORESEA_AGENT_DAILY_RISK_LIMIT_PCT must be between 0 and 1")
     return RiskGuardPolicy(
         account_value=account_value,
         concentration_limit=concentration_limit,
         per_cycle_spend_limit=account_value * per_cycle_spend_limit_pct,
         cycle_id=_current_cycle_id(),
+        max_drawdown_limit=max_drawdown_limit,
+        daily_risk_limit=account_value * daily_risk_limit_pct,
+        max_open_markets=_env_int("FORESEA_AGENT_MAX_OPEN_MARKETS", DEFAULT_MAX_OPEN_MARKETS, minimum=1),
+        max_trades_per_cycle=_env_int(
+            "FORESEA_AGENT_MAX_TRADES_PER_CYCLE", DEFAULT_MAX_TRADES_PER_CYCLE, minimum=1,
+        ),
+        duplicate_trade_cooldown_seconds=_env_int(
+            "FORESEA_AGENT_DUPLICATE_TRADE_COOLDOWN_SECONDS",
+            DEFAULT_DUPLICATE_TRADE_COOLDOWN_SECONDS,
+            minimum=0,
+        ),
     )
 
 
@@ -608,6 +652,7 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
             realized_pnl REAL NOT NULL DEFAULT 0,
             fees_paid REAL NOT NULL DEFAULT 0,
             settlement_fees_paid REAL NOT NULL DEFAULT 0,
+            high_watermark REAL NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS agent_positions (
@@ -682,6 +727,16 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
             ON agent_learning(agent_id, source_ts DESC);
         """
     )
+    # Existing local paper-account databases predate the watermark. SQLite's
+    # CREATE TABLE IF NOT EXISTS does not migrate them, so add it explicitly
+    # and seed from starting cash. The watermark only measures booked equity
+    # (cash plus cost basis), never an optimistic mark.
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(agent_accounts)")}
+    if "high_watermark" not in columns:
+        conn.execute("ALTER TABLE agent_accounts ADD COLUMN high_watermark REAL NOT NULL DEFAULT 0")
+    conn.execute(
+        "UPDATE agent_accounts SET high_watermark = starting_cash WHERE high_watermark <= 0"
+    )
 
 
 def _ensure_agent_account(conn: sqlite3.Connection, agent_id: str, starting_cash: float) -> None:
@@ -689,10 +744,10 @@ def _ensure_agent_account(conn: sqlite3.Connection, agent_id: str, starting_cash
     conn.execute(
         """
         INSERT OR IGNORE INTO agent_accounts
-            (agent_id, starting_cash, cash, realized_pnl, fees_paid, settlement_fees_paid, updated_at)
-        VALUES (?, ?, ?, 0, 0, 0, ?)
+            (agent_id, starting_cash, cash, realized_pnl, fees_paid, settlement_fees_paid, high_watermark, updated_at)
+        VALUES (?, ?, ?, 0, 0, 0, ?, ?)
         """,
-        (agent_id, starting_cash, starting_cash, now),
+        (agent_id, starting_cash, starting_cash, starting_cash, now),
     )
 
 
@@ -1249,6 +1304,7 @@ def _ds_new_account_entity(client: Any, agent_id: str, starting_cash: float) -> 
         "realized_pnl": 0.0,
         "fees_paid": 0.0,
         "settlement_fees_paid": 0.0,
+        "high_watermark": starting_cash,
         "updated_at": _now(),
     })
     return entity
@@ -1652,13 +1708,27 @@ def _ds_settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> L
         return []
 
 
-def _ds_load_guard_account(agent_id: str, policy: RiskGuardPolicy) -> tuple[Any, float]:
+def _ds_load_guard_account(
+    agent_id: str,
+    policy: RiskGuardPolicy,
+    *,
+    platform: str,
+    ticker: str,
+    side: str,
+) -> tuple[Any, Dict[str, Any]]:
     from analyzing_llm_rationale.accounting import PredictionMarketAccount
 
     client = _get_account_datastore()
     account = PredictionMarketAccount(starting_cash=policy.account_value)
     if client is None:
-        return account, 0.0
+        return account, {
+            "cycle_spend": 0.0,
+            "cycle_trade_count": 0,
+            "daily_risk": 0.0,
+            "duplicate_active": False,
+            "book_equity": policy.account_value,
+            "high_watermark": policy.account_value,
+        }
     row = _ds_ensure_account(client, agent_id, policy.account_value)
     account.cash = float(row["cash"])
     account.realized_pnl = float(row["realized_pnl"])
@@ -1668,12 +1738,20 @@ def _ds_load_guard_account(agent_id: str, policy: RiskGuardPolicy) -> tuple[Any,
         loaded.quantity = float(pos["quantity"])
         loaded.cost_basis = float(pos["cost_basis"])
     account_key = _ds_account_key(client, agent_id)
-    cycle_spend = sum(
-        float(a.get("cash_required") or 0.0)
-        for a in client.query(kind=_DS_ACTION_KIND, ancestor=account_key).fetch()
-        if a.get("cycle_id") == policy.cycle_id and a.get("action_type") == "trade"
+    actions = [
+        dict(action)
+        for action in client.query(kind=_DS_ACTION_KIND, ancestor=account_key).fetch()
+    ]
+    usage = _risk_usage(
+        actions, policy=policy, platform=platform, ticker=ticker, side=side,
     )
-    return account, cycle_spend
+    book_equity = _book_equity(account)
+    high_watermark = max(float(row.get("high_watermark") or policy.account_value), book_equity)
+    if high_watermark > float(row.get("high_watermark") or 0.0) + 1e-9:
+        row.update({"high_watermark": high_watermark, "updated_at": _now()})
+        client.put(row)
+    usage.update({"book_equity": book_equity, "high_watermark": high_watermark})
+    return account, usage
 
 
 def _iter_ledger_events() -> Iterable[Dict[str, Any]]:
@@ -1707,9 +1785,84 @@ def _market_cost_basis(account: Any, ticker: str, *, platform: str = "kalshi") -
     )
 
 
-def _load_guard_account(agent_id: str, policy: RiskGuardPolicy) -> tuple[Any, float]:
+def _book_equity(account: Any) -> float:
+    """Conservative account equity: cash plus the recorded cost of open risk.
+
+    The paper ledger does not fabricate marks for positions that cannot be
+    liquidated. Using cost basis means the drawdown breaker responds to fees
+    and realized losses, while the separate daily-risk budget limits open
+    risk before a market has resolved.
+    """
+    return float(account.cash) + sum(float(position.cost_basis) for position in account.open_positions())
+
+
+def _parse_risk_timestamp(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+
+def _risk_usage(
+    actions: Iterable[Mapping[str, Any]],
+    *,
+    policy: RiskGuardPolicy,
+    platform: str,
+    ticker: str,
+    side: str,
+) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    risk_window_start = now - timedelta(hours=24)
+    duplicate_after = now - timedelta(seconds=policy.duplicate_trade_cooldown_seconds)
+    cycle_spend = 0.0
+    cycle_trade_count = 0
+    daily_risk = 0.0
+    duplicate_active = False
+    for action in actions:
+        if str(action.get("action_type") or "") != "trade":
+            continue
+        ts = _parse_risk_timestamp(action.get("ts"))
+        cash_required = max(0.0, _as_float(action.get("cash_required")))
+        if str(action.get("cycle_id") or "") == policy.cycle_id:
+            cycle_spend += cash_required
+            cycle_trade_count += 1
+        if ts is not None and ts >= risk_window_start:
+            daily_risk += cash_required
+        if (
+            policy.duplicate_trade_cooldown_seconds > 0
+            and ts is not None
+            and ts >= duplicate_after
+            and str(action.get("platform") or "").lower() == platform
+            and str(action.get("ticker") or "") == ticker
+            and str(action.get("side") or "").lower() == side
+        ):
+            duplicate_active = True
+    return {
+        "cycle_spend": cycle_spend,
+        "cycle_trade_count": cycle_trade_count,
+        "daily_risk": daily_risk,
+        "duplicate_active": duplicate_active,
+    }
+
+
+def _load_guard_account(
+    agent_id: str,
+    policy: RiskGuardPolicy,
+    *,
+    platform: str,
+    ticker: str,
+    side: str,
+) -> tuple[Any, Dict[str, Any]]:
     if _use_datastore_account_store():
-        return _ds_load_guard_account(agent_id, policy)
+        return _ds_load_guard_account(
+            agent_id, policy, platform=platform, ticker=ticker, side=side,
+        )
     from analyzing_llm_rationale.accounting import PredictionMarketAccount
 
     account = PredictionMarketAccount(starting_cash=policy.account_value)
@@ -1729,17 +1882,32 @@ def _load_guard_account(agent_id: str, policy: RiskGuardPolicy) -> tuple[Any, fl
             loaded = account._position(str(pos["platform"]), str(pos["ticker"]), str(pos["side"]))
             loaded.quantity = float(pos["quantity"])
             loaded.cost_basis = float(pos["cost_basis"])
-        cycle_spend = float(
-            conn.execute(
+        action_rows = [
+            dict(event)
+            for event in conn.execute(
                 """
-                SELECT COALESCE(SUM(cash_required), 0)
+                SELECT action_type, cycle_id, ts, platform, ticker, side, cash_required
                 FROM agent_actions
-                WHERE agent_id = ? AND cycle_id = ? AND action_type = 'trade'
+                WHERE agent_id = ?
                 """,
-                (agent_id, policy.cycle_id),
-            ).fetchone()[0]
+                (agent_id,),
+            )
+        ]
+        usage = _risk_usage(
+            action_rows, policy=policy, platform=platform, ticker=ticker, side=side,
         )
-    return account, cycle_spend
+        book_equity = _book_equity(account)
+        high_watermark = max(float(row["high_watermark"]), book_equity)
+        if high_watermark > float(row["high_watermark"]) + 1e-9:
+            conn.execute(
+                "UPDATE agent_accounts SET high_watermark = ?, updated_at = ? WHERE agent_id = ?",
+                (high_watermark, _now(), agent_id),
+            )
+        usage.update({
+            "book_equity": book_equity,
+            "high_watermark": high_watermark,
+        })
+    return account, usage
 
 
 def _check_trade_guards(
@@ -1751,10 +1919,13 @@ def _check_trade_guards(
     side: str,
     platform: str = "kalshi",
     sizing: Optional[Mapping[str, Any]] = None,
+    strict_risk_management: bool = False,
 ) -> tuple[bool, Dict[str, Any], RiskGuardPolicy]:
     policy = _risk_guard_policy()
     settlements = _settle_agent_open_positions(agent_id, policy)
-    account, cycle_spend_before = _load_guard_account(agent_id, policy)
+    account, usage = _load_guard_account(
+        agent_id, policy, platform=platform, ticker=ticker, side=side,
+    )
     price = _as_float(normalized.get("price"))
     quantity = _as_float(normalized.get("quantity"))
     fee = _order_fee(args, normalized, platform=platform)
@@ -1781,7 +1952,21 @@ def _check_trade_guards(
     market_cost_basis_after = _market_cost_basis(account, ticker, platform=platform)
     concentration_cap = policy.account_value * policy.concentration_limit
     cash_required = max(0.0, -float(fill.cash_delta))
+    cycle_spend_before = float(usage["cycle_spend"])
     cycle_spend_after = cycle_spend_before + cash_required
+    daily_risk_before = float(usage["daily_risk"])
+    daily_risk_after = daily_risk_before + cash_required
+    cycle_trade_count_before = int(usage["cycle_trade_count"])
+    cycle_trade_count_after = cycle_trade_count_before + 1
+    open_markets_after = {
+        (str(position.platform).lower(), str(position.ident))
+        for position in account.open_positions()
+        if float(position.quantity) > 1e-12
+    }
+    book_equity_after = _book_equity(account)
+    high_watermark = max(float(usage["high_watermark"]), book_equity_after)
+    drawdown_after = max(0.0, 1.0 - (book_equity_after / high_watermark)) if high_watermark else 0.0
+    risk_reducing = sizing_detail.get("mode") == "close"
 
     reasons: List[str] = []
     if sizing_detail.get("mode") == "close":
@@ -1791,8 +1976,22 @@ def _check_trade_guards(
         reasons.append("concentration_limit")
     if cash_required > cash_before + 1e-9:
         reasons.append("solvency")
-    if cycle_spend_after > policy.per_cycle_spend_limit + 1e-9:
+    # A pure close removes risk; it must remain available while a circuit
+    # breaker is active. New exposure is held to portfolio-level limits in
+    # addition to the existing single-market and cash checks above.
+    if not risk_reducing and cycle_spend_after > policy.per_cycle_spend_limit + 1e-9:
         reasons.append("per_cycle_spend")
+    if strict_risk_management and not risk_reducing:
+        if daily_risk_after > policy.daily_risk_limit + 1e-9:
+            reasons.append("daily_risk_limit")
+        if usage["duplicate_active"]:
+            reasons.append("duplicate_cooldown")
+        if cycle_trade_count_after > policy.max_trades_per_cycle:
+            reasons.append("trade_rate_limit")
+        if len(open_markets_after) > policy.max_open_markets:
+            reasons.append("open_market_limit")
+        if drawdown_after > policy.max_drawdown_limit + 1e-9:
+            reasons.append("drawdown_limit")
 
     detail = {
         "allowed": not reasons,
@@ -1806,6 +2005,22 @@ def _check_trade_guards(
         "cycle_id": policy.cycle_id,
         "cycle_spend_before": round(cycle_spend_before, 6),
         "cycle_spend_after": round(cycle_spend_after, 6),
+        "daily_risk_limit": round(policy.daily_risk_limit, 6),
+        "daily_risk_before": round(daily_risk_before, 6),
+        "daily_risk_after": round(daily_risk_after, 6),
+        "max_trades_per_cycle": policy.max_trades_per_cycle,
+        "cycle_trade_count_before": cycle_trade_count_before,
+        "cycle_trade_count_after": cycle_trade_count_after,
+        "max_open_markets": policy.max_open_markets,
+        "open_markets_after": len(open_markets_after),
+        "duplicate_trade_cooldown_seconds": policy.duplicate_trade_cooldown_seconds,
+        "duplicate_active": bool(usage["duplicate_active"]),
+        "book_equity_before": round(float(usage["book_equity"]), 6),
+        "book_equity_after": round(book_equity_after, 6),
+        "high_watermark": round(high_watermark, 6),
+        "drawdown_after": round(drawdown_after, 6),
+        "max_drawdown_limit": policy.max_drawdown_limit,
+        "risk_reducing": risk_reducing,
         "notional": round(price * quantity, 6),
         "fee": round(fee, 6),
         "netting_payout": round(float(fill.realized_pairs), 6),
@@ -2036,6 +2251,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 side=side,
                 platform=platform,
                 sizing=sizing,
+                strict_risk_management=ctx.require_kelly_sizing,
             )
             if not allowed:
                 event = {
