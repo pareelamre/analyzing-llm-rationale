@@ -3946,21 +3946,15 @@ class ServerTests(unittest.TestCase):
 
     def test_internal_forecast_evaluation_is_token_gated(self):
         import analyzing_llm_rationale.server as srv
+        from analyzing_llm_rationale.forecast_evaluation_report import (
+            build_evaluation_artifact,
+        )
 
-        report = {
-            "schema_version": 1,
-            "generated_at": "2026-07-27T05:00:00+00:00",
-            "model": "council",
-            "cohorts": {
-                "prospective_audit": {
-                    "resolved_markets": 0,
-                }
-            },
-            "promotion": {
-                "status": "collecting",
-                "eligible": False,
-            },
-        }
+        report = build_evaluation_artifact(
+            model="council",
+            snapshot_mirror=[],
+            prospective_audit=[],
+        )
         with (
             mock.patch.object(srv, "_TRACK_RECORD_TOKEN", "tok"),
             mock.patch.object(
@@ -3982,6 +3976,28 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn(
             "/internal/forecast-evaluation",
             self.client.get("/openapi.json").json()["paths"],
+        )
+
+    def test_internal_forecast_evaluation_rejects_invalid_artifact(self):
+        import analyzing_llm_rationale.server as srv
+
+        with (
+            mock.patch.object(srv, "_TRACK_RECORD_TOKEN", "tok"),
+            mock.patch.object(
+                srv,
+                "_read_forecast_evaluation",
+                return_value={"schema_version": 1, "model": "council"},
+            ),
+        ):
+            response = self.client.get(
+                "/internal/forecast-evaluation",
+                headers={"X-Track-Token": "tok"},
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.json()["detail"],
+            "Forecast evaluation report failed integrity validation.",
         )
 
     def test_internal_forecast_evaluation_returns_404_before_generation(self):

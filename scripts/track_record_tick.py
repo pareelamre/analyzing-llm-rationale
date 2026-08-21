@@ -39,6 +39,7 @@ import logging
 import os
 import random
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -905,6 +906,29 @@ def _resolved_public_payload(aggregate: dict) -> dict:
     }
 
 
+def _write_json_atomically(path: Path, payload: object) -> None:
+    """Publish a complete JSON artifact without exposing a truncated file."""
+    rendered = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_name = handle.name
+            handle.write(rendered)
+        Path(temp_name).replace(path)
+    except Exception:
+        if temp_name is not None:
+            Path(temp_name).unlink(missing_ok=True)
+        raise
+
+
 def _model_progress(store: DuckDBStore, model: str) -> dict:
     row = store._con.execute(
         """
@@ -1117,25 +1141,16 @@ async def main() -> int:
     after_primary = _model_progress(store, primary_model)
 
     if write_public:
-        PUBLIC_PATH.parent.mkdir(parents=True, exist_ok=True)
         public_payload = (
             _resolved_public_payload(agg)
             if RESOLVED_ONLY
             else agg
         )
-        PUBLIC_PATH.write_text(
-            json.dumps(public_payload, indent=2, sort_keys=True) + "\n"
-        )
+        _write_json_atomically(PUBLIC_PATH, public_payload)
     if run_evaluation:
-        EVALUATION_PATH.parent.mkdir(parents=True, exist_ok=True)
-        EVALUATION_PATH.write_text(
-            json.dumps(ledger_evaluation, indent=2, sort_keys=True) + "\n"
-        )
+        _write_json_atomically(EVALUATION_PATH, ledger_evaluation)
     if write_mtm:
-        MARK_TO_MARKET_PATH.parent.mkdir(parents=True, exist_ok=True)
-        MARK_TO_MARKET_PATH.write_text(
-            json.dumps(_mark_to_market_payload(agg), indent=2, sort_keys=True) + "\n"
-        )
+        _write_json_atomically(MARK_TO_MARKET_PATH, _mark_to_market_payload(agg))
 
     summary = {
         "snapshots_recorded": recorded,
