@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
@@ -34,6 +35,14 @@ evaluation_report_duration = meter.create_histogram(
 )
 
 
+class EvaluationArtifactValidationError(ValueError):
+    """Raised when a serialized evaluation artifact breaks harness invariants."""
+
+    def __init__(self, issues: Sequence[str]):
+        self.issues = list(issues)
+        super().__init__("\n".join(self.issues))
+
+
 @dataclass(frozen=True)
 class EvaluationPolicy:
     min_resolved_markets: int = 100
@@ -50,6 +59,10 @@ class EvaluationPolicy:
             raise ValueError("min_resolved_markets must be positive")
         if self.min_paper_trades < 1:
             raise ValueError("min_paper_trades must be positive")
+        if not isinstance(self.min_skill_lower_bound, (int, float)) or not math.isfinite(
+            self.min_skill_lower_bound
+        ):
+            raise ValueError("min_skill_lower_bound must be finite")
         if not 0.0 <= self.max_drawdown <= 1.0:
             raise ValueError("max_drawdown must be between 0 and 1")
         if self.min_edge < 0.0:
@@ -173,6 +186,97 @@ def _promotion_result(
     }
 
 
+def _non_negative_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def validate_evaluation_artifact(artifact: Mapping[str, Any]) -> None:
+    """Reject an artifact whose published claims disagree with its source cohort.
+
+    The scheduled harness calls this before publishing. It prevents a partial
+    write, stale manual edit, or future report change from disconnecting the
+    promotion decision from prospective observations.
+    """
+    issues: list[str] = []
+    if artifact.get("schema_version") != SCHEMA_VERSION:
+        issues.append(
+            f"schema_version must be {SCHEMA_VERSION}, got {artifact.get('schema_version')!r}"
+        )
+    if not isinstance(artifact.get("model"), str) or not artifact["model"].strip():
+        issues.append("model must be a non-empty string")
+
+    policy_data = artifact.get("policy")
+    policy: EvaluationPolicy | None = None
+    if not isinstance(policy_data, Mapping):
+        issues.append("policy must be an object")
+    else:
+        try:
+            policy = EvaluationPolicy(**dict(policy_data))
+        except (TypeError, ValueError) as exc:
+            issues.append(f"policy is invalid: {exc}")
+
+    cohorts = artifact.get("cohorts")
+    validated_cohorts: dict[str, Mapping[str, Any]] = {}
+    if not isinstance(cohorts, Mapping):
+        issues.append("cohorts must be an object")
+    else:
+        for name, promotion_eligible in (
+            ("snapshot_mirror", False),
+            ("prospective_audit", True),
+        ):
+            cohort = cohorts.get(name)
+            if not isinstance(cohort, Mapping):
+                issues.append(f"cohorts.{name} must be an object")
+                continue
+            validated_cohorts[name] = cohort
+            if cohort.get("provenance") != name:
+                issues.append(f"cohorts.{name}.provenance must be {name!r}")
+            if cohort.get("promotion_eligible_source") is not promotion_eligible:
+                issues.append(
+                    f"cohorts.{name}.promotion_eligible_source must be "
+                    f"{promotion_eligible!r}"
+                )
+            for field in ("resolved_forecasts", "resolved_markets"):
+                if not _non_negative_int(cohort.get(field)):
+                    issues.append(f"cohorts.{name}.{field} must be a non-negative integer")
+            interval = cohort.get("market_clustered_skill_interval")
+            if not isinstance(interval, Mapping):
+                issues.append(f"cohorts.{name}.market_clustered_skill_interval must be an object")
+            elif (
+                interval.get("n_forecasts") != cohort.get("resolved_forecasts")
+                or interval.get("n_markets") != cohort.get("resolved_markets")
+            ):
+                issues.append(f"cohorts.{name} counts must match its skill interval")
+            portfolio = cohort.get("portfolio")
+            if not isinstance(portfolio, Mapping) or not _non_negative_int(
+                portfolio.get("n_opened") if isinstance(portfolio, Mapping) else None
+            ):
+                issues.append(f"cohorts.{name}.portfolio.n_opened must be a non-negative integer")
+            if (
+                _non_negative_int(cohort.get("resolved_markets"))
+                and _non_negative_int(cohort.get("resolved_forecasts"))
+                and cohort["resolved_markets"] > cohort["resolved_forecasts"]
+            ):
+                issues.append(f"cohorts.{name}.resolved_markets cannot exceed resolved_forecasts")
+
+    prospective = validated_cohorts.get("prospective_audit")
+
+    promotion = artifact.get("promotion")
+    if not isinstance(promotion, Mapping):
+        issues.append("promotion must be an object")
+    elif prospective is not None and policy is not None:
+        try:
+            expected_promotion = _promotion_result(dict(prospective), policy=policy)
+        except (KeyError, TypeError):
+            issues.append("prospective_audit cannot be used to recompute promotion")
+        else:
+            if dict(promotion) != expected_promotion:
+                issues.append("promotion must exactly match prospective_audit and policy")
+
+    if issues:
+        raise EvaluationArtifactValidationError(issues)
+
+
 def build_evaluation_artifact(
     *,
     model: str,
@@ -219,6 +323,7 @@ def build_evaluation_artifact(
                 },
                 "promotion": promotion,
             }
+            validate_evaluation_artifact(artifact)
             span.set_attributes(
                 {
                     "outcome": "success",

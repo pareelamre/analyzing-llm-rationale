@@ -75,6 +75,10 @@ from analyzing_llm_rationale.config import (
     scads_hosted_model_allowlist,
     scads_hosted_model_fallbacks,
 )
+from analyzing_llm_rationale.forecast_evaluation_report import (
+    EvaluationArtifactValidationError,
+    validate_evaluation_artifact,
+)
 from analyzing_llm_rationale.observability import init_observability
 from analyzing_llm_rationale.pipeline import (
     _parse_json_dict,
@@ -3660,6 +3664,7 @@ async def internal_forecast_evaluation(
                     detail="Forecast evaluation report has not been generated yet.",
                 )
             payload = dict(report)
+            validate_evaluation_artifact(payload)
             payload["freshness"] = _forecast_evaluation_freshness(payload)
             promotion = payload.get("promotion") or {}
             prospective = (payload.get("cohorts") or {}).get(
@@ -3688,9 +3693,17 @@ async def internal_forecast_evaluation(
             )
         except HTTPException:
             raise
+        except EvaluationArtifactValidationError as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "invalid")
+            _forecast_evaluation_reads.add(1, {"outcome": "invalid"})
+            logger.error("internal forecast evaluation artifact rejected: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail="Forecast evaluation report failed integrity validation.",
+            ) from exc
         except Exception as exc:
-            from opentelemetry.trace import Status, StatusCode
-
             span.record_exception(exc)
             span.set_status(Status(StatusCode.ERROR))
             span.set_attribute("outcome", "failure")

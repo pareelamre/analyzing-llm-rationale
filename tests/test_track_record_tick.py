@@ -21,6 +21,27 @@ _SPEC.loader.exec_module(track_record_tick)
 
 
 class TrackRecordTickTests(unittest.TestCase):
+    def test_atomic_json_write_replaces_an_existing_artifact(self):
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "forecast_evaluation.json"
+            target.write_text('{"status": "old"}\n', encoding="utf-8")
+
+            track_record_tick._write_json_atomically(target, {"status": "new"})
+
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"status": "new"})
+            self.assertEqual(list(Path(td).glob("*.tmp")), [])
+
+    def test_atomic_json_write_preserves_existing_artifact_on_serialization_error(self):
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "forecast_evaluation.json"
+            previous = '{"status": "old"}\n'
+            target.write_text(previous, encoding="utf-8")
+
+            with self.assertRaises(TypeError):
+                track_record_tick._write_json_atomically(target, {"invalid": object()})
+
+            self.assertEqual(target.read_text(encoding="utf-8"), previous)
+
     def test_forecast_workflow_runs_15_minute_cycles_and_uses_configured_scads_models(self):
         workflow = (
             Path(__file__).resolve().parents[1]
