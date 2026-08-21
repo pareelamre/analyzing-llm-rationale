@@ -1757,6 +1757,17 @@ def _check_trade_guards(
     quantity = _as_float(normalized.get("quantity"))
     fee = _order_fee(args, normalized, platform=platform)
     cash_before = float(account.cash)
+    sizing_detail = dict(sizing or {"mode": "manual", "applied": False})
+    # Capture the pre-trade balance. ``account.buy`` nets an opposite
+    # position as part of its simulation, so inspecting it afterwards makes
+    # a valid full close look like it exceeds a zero remaining balance.
+    closeable_opposite_quantity = sum(
+        float(position.quantity)
+        for position in account.open_positions()
+        if str(position.platform).lower() == platform
+        and str(position.ident) == ticker
+        and str(position.side).lower() == _opposite_side(side)
+    )
     fill = account.buy(
         platform=platform,
         ident=ticker,
@@ -1771,16 +1782,8 @@ def _check_trade_guards(
     cycle_spend_after = cycle_spend_before + cash_required
 
     reasons: List[str] = []
-    sizing_detail = dict(sizing or {"mode": "manual", "applied": False})
     if sizing_detail.get("mode") == "close":
-        opposite_quantity = sum(
-            float(position.quantity)
-            for position in account.open_positions()
-            if str(position.platform).lower() == platform
-            and str(position.ident) == ticker
-            and str(position.side).lower() == _opposite_side(side)
-        )
-        if quantity > opposite_quantity + 1e-9:
+        if quantity > closeable_opposite_quantity + 1e-9:
             reasons.append("close_exceeds_open_position")
     if market_cost_basis_after > concentration_cap + 1e-9:
         reasons.append("concentration_limit")
