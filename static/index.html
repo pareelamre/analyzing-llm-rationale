@@ -6552,7 +6552,20 @@ function renderAgentTradingBoard(d) {
       ? Number(row.total_pnl)
       : (Number(row.account_value) - startCash);
     const pnlColor = pnl >= 0 ? '#0a7' : '#c33';
-    const winRate = row.win_rate == null ? '—' : `${Math.round(row.win_rate * 100)}%`;
+    const realizedCount = Number(row.realized_count ?? row.settled_count ?? 0);
+    const wonCount = Number(row.won_count ?? 0);
+    const rawWinRate = row.win_rate == null ? null : Number(row.win_rate);
+    // A 0%/100% result from one to four outcomes is mathematically correct,
+    // but not a useful performance signal. Show the actual record until it
+    // has a minimally interpretable denominator instead of overstating it.
+    const winRateTitle = realizedCount
+      ? `Realized outcomes: ${wonCount} wins / ${realizedCount} closes or settlements${row.settled_count != null ? `; ${row.settled_count} reached final settlement` : ''}`
+      : 'No realized outcomes yet.';
+    const winRate = rawWinRate == null
+      ? '—'
+      : realizedCount < 5
+        ? `<span title="${escAttr(winRateTitle)}">— <small style="color:var(--text-dim)">${wonCount}/${realizedCount}</small></span>`
+        : `<span title="${escAttr(winRateTitle)}">${Math.round(rawWinRate * 100)}% <small style="color:var(--text-dim)">${wonCount}/${realizedCount}</small></span>`;
     const agentId = String(row.agent_id || '');
     const elig = eligibility[agentId];
     const eligCell = elig && elig.eligible

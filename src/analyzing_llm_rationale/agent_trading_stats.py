@@ -53,10 +53,17 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
     ``("kalshi", "KXFOO-26")``, matching how ``agent_positions.platform`` is
     stored, regardless of what casing a raw quote dict's own field carries).
 
-    Win rate is computed over *settled* markets only (``action_type =
-    'settlement'`` rows) -- rejected trades never reach the exchange and
-    open positions haven't resolved yet, so neither belongs in a win/loss
-    count.
+    Win rate is computed over every *realized* outcome: final market
+    settlements (``action_type = 'settlement'``) and voluntary netting exits
+    (``action_type = 'trade'`` with ``outcome = 'realized'``). The latter
+    are genuine closed P&L decisions; excluding them made the public board
+    show an empty or one-outcome win rate even after an agent had closed
+    several positions. Rejected trades and open positions remain excluded.
+
+    ``settled_count`` intentionally remains the count of final market
+    settlements only, so the promotion-sample guard still requires outcomes
+    that ran to the contract's stated resolution rather than allowing rapid
+    exit churn to satisfy that separate control.
 
     Like ``agent_equity_curve``, ``trade_count``/``settled_count``/
     ``won_count``/``win_rate`` only cover activity since the agent's latest
@@ -80,17 +87,24 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
         settlement_sql = (
             "SELECT realized_pnl FROM agent_actions WHERE agent_id = ? AND action_type = 'settlement'"
         )
+        realized_sql = (
+            "SELECT realized_pnl FROM agent_actions WHERE agent_id = ? AND "
+            "(action_type = 'settlement' OR (action_type = 'trade' AND outcome = 'realized'))"
+        )
         params: List[Any] = [agent_id]
         if since_ts is not None:
             trade_sql += " AND ts >= ?"
             settlement_sql += " AND ts >= ?"
+            realized_sql += " AND ts >= ?"
             params.append(since_ts)
 
         trade_count = conn.execute(trade_sql, params).fetchone()[0]
         settlement_pnls = [float(r[0]) for r in conn.execute(settlement_sql, params)]
+        realized_pnls = [float(r[0]) for r in conn.execute(realized_sql, params)]
         settled_count = len(settlement_pnls)
-        won_count = sum(1 for pnl in settlement_pnls if pnl > 0)
-        win_rate = (won_count / settled_count) if settled_count else None
+        realized_count = len(realized_pnls)
+        won_count = sum(1 for pnl in realized_pnls if pnl > 0)
+        win_rate = (won_count / realized_count) if realized_count else None
 
         starting_cash = float(acct_row["starting_cash"])
         total_pnl = snap["account_value"] - starting_cash
@@ -112,6 +126,7 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
             "illiquid_positions": snap["illiquid_positions"],
             "trade_count": trade_count,
             "settled_count": settled_count,
+            "realized_count": realized_count,
             "won_count": won_count,
             "win_rate": round(win_rate, 4) if win_rate is not None else None,
             "updated_at": acct_row["updated_at"],
