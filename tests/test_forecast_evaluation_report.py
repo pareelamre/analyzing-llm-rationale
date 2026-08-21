@@ -178,6 +178,36 @@ class ForecastEvaluationReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "min_skill_lower_bound must be finite"):
             EvaluationPolicy(min_skill_lower_bound=math.nan)
 
+    def test_policy_rejects_non_finite_or_non_integral_bounds(self):
+        invalid_policies = (
+            ({"min_resolved_markets": 1.5}, "min_resolved_markets must be positive"),
+            ({"max_drawdown": math.nan}, "max_drawdown must be between 0 and 1"),
+            ({"fee_fraction": math.inf}, "fee_fraction cannot be negative"),
+        )
+
+        for kwargs, message in invalid_policies:
+            with self.subTest(kwargs=kwargs), self.assertRaisesRegex(ValueError, message):
+                EvaluationPolicy(**kwargs)
+
+    def test_validator_rejects_invalid_timestamp_and_promotion_metrics(self):
+        artifact = build_evaluation_artifact(
+            model="council",
+            snapshot_mirror=[],
+            prospective_audit=[],
+            generated_at=BASE_TIME,
+        )
+        artifact["generated_at"] = "not-a-timestamp"
+        artifact["cohorts"]["prospective_audit"]["market_clustered_skill_interval"][
+            "lower"
+        ] = math.inf
+        artifact["cohorts"]["prospective_audit"]["portfolio"]["compound_return"] = math.nan
+
+        with self.assertRaisesRegex(
+            EvaluationArtifactValidationError,
+            "generated_at must be an ISO-8601 timestamp string",
+        ):
+            validate_evaluation_artifact(artifact)
+
 
 if __name__ == "__main__":
     unittest.main()
