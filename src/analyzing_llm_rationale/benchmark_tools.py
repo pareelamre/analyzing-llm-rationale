@@ -64,6 +64,7 @@ class ToolContext:
     agent_id: str
     user_id: Optional[str] = None
     model: Optional[str] = None
+    require_kelly_sizing: bool = False
 
 
 @dataclass(frozen=True)
@@ -272,9 +273,10 @@ def _sizing_plan(
 ) -> Dict[str, Any]:
     """Derive an executable stake from the agent's declared sizing choice.
 
-    ``manual`` deliberately preserves the existing tool contract for old
-    callers and closing orders. Autonomous agent ticks are instructed to use
-    one of the two named Kelly policies for every new position.
+    ``manual`` deliberately preserves the existing tool contract for callers
+    outside the autonomous agent loop. Autonomous agents set
+    ``ToolContext.require_kelly_sizing`` and must use one of the named Kelly
+    policies for every new position; closing orders use ``close``.
     """
     requested = str(args.get("sizing_mode") or "manual").strip().lower().replace("-", "_")
     if requested in {"", "manual", "legacy"}:
@@ -1996,6 +1998,33 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 # The agent declares probability and policy; this tool, not
                 # model prose, derives the contract count and enforces the cap.
                 order["quantity"] = sizing["target_quantity"]
+
+            if ctx.require_kelly_sizing and sizing.get("mode") == "manual":
+                # A prompt alone cannot prevent a model from inventing a tiny
+                # manual order. Do not let that bypass the published Kelly
+                # sizing policies in the autonomous trading loop. ``close``
+                # remains the explicit exception because it uses the exact
+                # existing position quantity rather than a new stake size.
+                sizing_actions.add(1, {"mode": "manual", "outcome": "rejected"})
+                span.set_attributes({
+                    "outcome": "rejected",
+                    "trade.sizing_mode": "manual",
+                    "trade.sizing_required": True,
+                })
+                _finish_tool(tool, start, "rejected")
+                return {
+                    "ok": False,
+                    "tool": tool,
+                    "rejected": True,
+                    "reason": "kelly_sizing_required",
+                    "message": (
+                        "Autonomous new positions require sizing_mode='quarter_kelly' or "
+                        "'edge_kelly' plus model_probability; manual quantities are not allowed."
+                    ),
+                    "mode": mode,
+                    "submitted": False,
+                    "sizing": sizing,
+                }
 
             preview = trading.preview_order(order)
             normalized = preview.get("normalized_order") or {}
