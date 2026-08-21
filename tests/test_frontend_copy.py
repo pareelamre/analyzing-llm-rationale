@@ -411,6 +411,8 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
                 self.assertIn("d.equity_curves", renderer)
                 self.assertIn("d.recent_activity", renderer)
                 self.assertIn("row.win_rate", renderer)
+                self.assertIn("row.realized_count", renderer)
+                self.assertIn("Realized outcomes", renderer)
                 self.assertIn("row.trade_count", renderer)
                 self.assertIn("_equitySvg(curves", renderer)
 

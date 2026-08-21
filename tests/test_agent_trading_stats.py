@@ -145,10 +145,11 @@ class LeaderboardTests(unittest.TestCase):
         self.assertEqual(rows[0]["illiquid_positions"], [])
         self.assertAlmostEqual(rows[0]["account_value"], 9_600.0 + 5.0)
 
-    def test_win_rate_counts_settlements_only_not_rejected_trades(self):
+    def test_win_rate_counts_realized_exits_and_settlements_not_rejected_trades(self):
         with _fixture_conn() as conn:
             _insert_account(conn, "model-a", cash=10_000.0)
             _insert_action(conn, "model-a", action_type="trade", cash_delta=-40.0)
+            _insert_action(conn, "model-a", action_type="trade", outcome="realized", realized_pnl=30.0)
             _insert_action(conn, "model-a", action_type="rejected_trade", cash_delta=0.0)
             _insert_action(conn, "model-a", action_type="settlement", realized_pnl=20.0)
             _insert_action(conn, "model-a", action_type="settlement", realized_pnl=-10.0)
@@ -157,10 +158,11 @@ class LeaderboardTests(unittest.TestCase):
             rows = agent_trading_stats.compute_agent_leaderboard(conn, {})
 
         row = rows[0]
-        self.assertEqual(row["trade_count"], 1)  # rejected_trade excluded
+        self.assertEqual(row["trade_count"], 2)  # rejected_trade excluded
         self.assertEqual(row["settled_count"], 2)
-        self.assertEqual(row["won_count"], 1)
-        self.assertAlmostEqual(row["win_rate"], 0.5)
+        self.assertEqual(row["realized_count"], 3)
+        self.assertEqual(row["won_count"], 2)
+        self.assertAlmostEqual(row["win_rate"], round(2 / 3, 4))
 
     def test_no_settlements_yields_none_win_rate_not_zero(self):
         with _fixture_conn() as conn:
