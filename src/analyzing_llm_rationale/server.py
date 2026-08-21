@@ -13896,6 +13896,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         agent_id=agent_id,
         user_id=_optional_user_id(request),
         model=agent_id,
+        require_kelly_sizing=bool(req.benchmark_tools),
     )
 
     async def _tool_place_trade(args):

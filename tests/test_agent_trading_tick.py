@@ -782,6 +782,20 @@ class AgentAnalyzeRetryTests(unittest.TestCase):
                     asyncio.run(agent_trading_tick._call_agent_analyze("question text"))
         self.assertEqual(len(calls), 2)
 
+    def test_agent_analyze_request_requires_kelly_sizing_for_benchmark_trades(self):
+        import asyncio
+
+        captured = {}
+
+        async def _capture(req, request=None):
+            captured["require_kelly_sizing"] = req.benchmark_tools
+            return SimpleNamespace(thesis="Passed.", tool_transcript=[])
+
+        with mock.patch("analyzing_llm_rationale.server.agent_analyze", side_effect=_capture):
+            asyncio.run(agent_trading_tick._call_agent_analyze("question text"))
+
+        self.assertTrue(captured["require_kelly_sizing"])
+
 
 if __name__ == "__main__":
     unittest.main()

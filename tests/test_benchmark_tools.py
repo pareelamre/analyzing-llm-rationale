@@ -286,7 +286,7 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertTrue(result["risk_guard"]["allowed"])
 
     def test_quarter_kelly_sizing_is_applied_and_capped_at_five_percent(self):
-        ctx = benchmark_tools.ToolContext(agent_id="model-quarter")
+        ctx = benchmark_tools.ToolContext(agent_id="model-quarter", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             env = {
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
@@ -314,6 +314,32 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(result["sizing"]["mode"], "quarter_kelly")
         self.assertLessEqual(result["sizing"]["target_notional"], 500.0)
         self.assertAlmostEqual(result["normalized_order"]["quantity"] * 0.50, 500.0, places=4)
+
+    def test_autonomous_agent_rejects_manual_new_position_sizing(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-sizing", require_kelly_sizing=True)
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "10000",
+                "FORESEA_AGENT_PLACE_TRADE_MODE": "shadow",
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXMANUAL": 0.05}),
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXMANUAL", "side": "no", "price": 0.05, "quantity": 1}, ctx,
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["rejected"])
+        self.assertEqual(result["reason"], "kelly_sizing_required")
+        self.assertFalse(db_path.exists())
 
     def test_edge_kelly_requires_ten_point_edge_and_caps_at_eight_percent(self):
         no_edge = benchmark_tools._sizing_plan(
@@ -566,7 +592,10 @@ class BenchmarkToolTests(unittest.TestCase):
         # netting fill, when the opposite position was already zero. That
         # rejected every valid sizing_mode='close' order, particularly the
         # fractional quantities produced by account-level sizing.
-        ctx = benchmark_tools.ToolContext(agent_id="model-fractional-close")
+        open_ctx = benchmark_tools.ToolContext(agent_id="model-fractional-close")
+        close_ctx = benchmark_tools.ToolContext(
+            agent_id="model-fractional-close", require_kelly_sizing=True
+        )
         with tempfile.TemporaryDirectory() as td:
             env = {
                 "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
@@ -585,14 +614,14 @@ class BenchmarkToolTests(unittest.TestCase):
                 ),
             ):
                 opened = benchmark_tools.place_trade(
-                    {"ticker": "KXCLOSE", "side": "no", "price": 0.64, "quantity": 1186.9}, ctx,
+                    {"ticker": "KXCLOSE", "side": "no", "price": 0.64, "quantity": 1186.9}, open_ctx,
                 )
                 closed = benchmark_tools.place_trade(
                     {
                         "ticker": "KXCLOSE", "side": "yes", "price": 0.95, "quantity": 1186.9,
                         "sizing_mode": "close",
                     },
-                    ctx,
+                    close_ctx,
                 )
 
         self.assertTrue(opened["ok"])
