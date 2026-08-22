@@ -782,6 +782,23 @@ class AgentAnalyzeRetryTests(unittest.TestCase):
                     asyncio.run(agent_trading_tick._call_agent_analyze("question text"))
         self.assertEqual(len(calls), 2)
 
+    def test_retries_use_exponential_async_backoff_before_a_recovery(self):
+        import asyncio
+
+        report = SimpleNamespace(thesis="Recovered.", tool_transcript=[])
+        with (
+            mock.patch.object(agent_trading_tick, "AGENT_ANALYZE_RETRIES", 4),
+            mock.patch.object(agent_trading_tick, "AGENT_ANALYZE_RETRY_BACKOFF_S", 20.0),
+            mock.patch("analyzing_llm_rationale.server.agent_analyze", side_effect=[
+                RuntimeError("temporary 503"), RuntimeError("temporary 503"), report,
+            ]),
+            mock.patch.object(agent_trading_tick.asyncio, "sleep", new_callable=mock.AsyncMock) as sleep,
+        ):
+            actual = asyncio.run(agent_trading_tick._call_agent_analyze("question text"))
+
+        self.assertIs(actual, report)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [20.0, 40.0])
+
     def test_agent_analyze_request_requires_kelly_sizing_for_benchmark_trades(self):
         import asyncio
 

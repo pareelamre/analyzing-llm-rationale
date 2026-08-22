@@ -1,10 +1,9 @@
 name: Agent trading tick (reusable)
 
-# Called by the 10 per-model agent-trading-tick-*.yml workflows (one model
-# each, on its own schedule trigger) -- not run directly. Each caller drives
-# exactly one model's shadow-trading cycle via scripts/agent_trading_tick.py,
-# which gives the model real tool access (place_trade/web_search/manage_notes)
-# instead of just scoring a probability.
+# Called by the scheduled two-lane dispatcher and by the manual per-model
+# workflows. Each caller drives one or more isolated shadow-trading cycles via
+# scripts/agent_trading_tick.py, which gives the model real tool access
+# (place_trade/web_search/manage_notes) instead of just scoring a probability.
 #
 # Each model gets its OWN GCS object (agent_trading_store__<model>.sqlite /
 # agent_trading_notes__<model>.json) rather than sharing one file across all
@@ -38,8 +37,8 @@ name: Agent trading tick (reusable)
 on:
   workflow_call:
     inputs:
-      model:
-        description: "configs/models.yaml key to trade as this cycle."
+      models:
+        description: "Space-separated configs/models.yaml keys to trade in this lane."
         required: true
         type: string
       lane:
@@ -52,15 +51,15 @@ env:
   AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
 
 concurrency:
-  # Ten per-model schedules may be delayed and released together by GitHub.
-  # Two lanes retain independent stores while respecting the shared SCADS
-  # capacity limit; a lane queue is safer than repeatedly dropping a thesis.
+  # The dispatcher invokes exactly two lanes. A lane serializes only its own
+  # model list, which keeps the shared SCADS request limit at two without
+  # wasting the provider slots on ten independent Python/GCS setup phases.
   group: agent-trading-scads-lane-${{ inputs.lane }}
   cancel-in-progress: false
 
 jobs:
   trade:
-    name: trade (${{ inputs.model }})
+    name: trade (${{ inputs.lane }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -94,17 +93,19 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Download this model's shadow account store (tolerant of first run)
+      - name: Download this lane's isolated shadow account stores
         env:
-          MODEL: ${{ inputs.model }}
+          MODELS: ${{ inputs.models }}
         run: |
-          mkdir -p tmp/agent-trading
-          gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite" \
-            tmp/agent-trading/store.sqlite \
-            || echo "No existing store for ${MODEL} yet -- starting fresh."
-          gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json" \
-            tmp/agent-trading/notes.json \
-            || echo '{}' > tmp/agent-trading/notes.json
+          for MODEL in $MODELS; do
+            mkdir -p "tmp/agent-trading/$MODEL"
+            gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite" \
+              "tmp/agent-trading/$MODEL/store.sqlite" \
+              || echo "No existing store for ${MODEL} yet -- starting fresh."
+            gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json" \
+              "tmp/agent-trading/$MODEL/notes.json" \
+              || echo '{}' > "tmp/agent-trading/$MODEL/notes.json"
+          done
 
       - name: Write Kalshi credentials for the fee-tiers lookup (optional)
         # Empty when the secrets aren't configured -- benchmark_tools falls
@@ -114,13 +115,10 @@ jobs:
           KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
         run: printf '%s' "$KALSHI_PRIVATE_KEY" > tmp/agent-trading/kalshi_private_key.pem
 
-      - name: Run one shadow-trading cycle
+      - name: Run every model in this lane and persist each result
         env:
-          AGENT_TRADING_MODEL: ${{ inputs.model }}
+          MODELS: ${{ inputs.models }}
           FORESEA_AGENT_PLACE_TRADE_MODE: shadow
-          FORESEA_AGENT_ACCOUNT_DB_PATH: tmp/agent-trading/store.sqlite
-          FORESEA_AGENT_NOTES_PATH: tmp/agent-trading/notes.json
-          FORESEA_AGENT_TOOL_LEDGER_PATH: tmp/agent-trading/tool_ledger.jsonl
           FORESEA_AGENT_CYCLE_MINUTES: "15"
           FORESEA_AGENT_ACCOUNT_VALUE: "10000"
           SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
@@ -129,20 +127,22 @@ jobs:
           KALSHI_PRIVATE_KEY_FILE: tmp/agent-trading/kalshi_private_key.pem
           MAX_TOOL_STEPS: "4"
           CANDIDATE_COUNT: "3"
-          AGENT_TRADING_RETRIES: "3"
-          AGENT_TRADING_RETRY_BACKOFF_S: "12"
-        run: python scripts/agent_trading_tick.py
-
-      - name: Upload this model's shadow account store
-        # Runs even if the tick step above failed partway through (e.g. a
-        # trade was placed before a later step errored) so no successfully
-        # recorded shadow trade is ever lost -- the job itself still reports
-        # failure via the tick script's exit code.
-        if: always()
-        env:
-          MODEL: ${{ inputs.model }}
+          AGENT_TRADING_RETRIES: "4"
+          AGENT_TRADING_RETRY_BACKOFF_S: "20"
         run: |
-          gcloud storage cp tmp/agent-trading/store.sqlite \
-            "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite"
-          gcloud storage cp tmp/agent-trading/notes.json \
-            "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json"
+          failures=0
+          for MODEL in $MODELS; do
+            export AGENT_TRADING_MODEL="$MODEL"
+            export FORESEA_AGENT_ACCOUNT_DB_PATH="tmp/agent-trading/$MODEL/store.sqlite"
+            export FORESEA_AGENT_NOTES_PATH="tmp/agent-trading/$MODEL/notes.json"
+            export FORESEA_AGENT_TOOL_LEDGER_PATH="tmp/agent-trading/$MODEL/tool_ledger.jsonl"
+            if ! python scripts/agent_trading_tick.py; then
+              echo "::error title=Agent trading tick failed::${MODEL} exhausted its retries; the next model will still run."
+              failures=$((failures + 1))
+            fi
+            gcloud storage cp "tmp/agent-trading/$MODEL/store.sqlite" \
+              "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite"
+            gcloud storage cp "tmp/agent-trading/$MODEL/notes.json" \
+              "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json"
+          done
+          exit "$failures"

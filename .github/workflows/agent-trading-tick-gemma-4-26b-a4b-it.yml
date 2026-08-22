@@ -1,14 +1,12 @@
 name: Agent trading tick (gemma-4-26b-a4b-it)
 
 on:
-  schedule:
-    - cron: "0,15,30,45 * * * *"
   workflow_dispatch: {}
 
 jobs:
   trade:
     uses: ./.github/workflows/_agent-trading-tick-reusable.yml
     with:
-      model: gemma-4-26b-a4b-it
+      models: gemma-4-26b-a4b-it
       lane: "0"
     secrets: inherit
