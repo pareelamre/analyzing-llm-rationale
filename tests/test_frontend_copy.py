@@ -298,6 +298,9 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
             "async function removePersonalLedgerEntry", 1
         )[0]
         self.assertIn("const latestTheses = d.latest_theses || {};", renderer)
+        self.assertIn("const modelHealth = d.model_health || {};", renderer)
+        self.assertIn("No trade", renderer)
+        self.assertIn("Last confirmed cycle", renderer)
         self.assertIn("latestTheses[activeFilter]", renderer)
         self.assertIn("No published thesis for", renderer)
         self.assertIn("const banner = ", renderer)

@@ -1801,6 +1801,12 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
         for agent_id, value in (raw_eligibility.items() if isinstance(raw_eligibility, dict) else [])
         if str(agent_id) in model_ids
     }
+    raw_health = source.get("model_health")
+    model_health = {
+        str(agent_id): dict(value)
+        for agent_id, value in (raw_health.items() if isinstance(raw_health, dict) else [])
+        if str(agent_id) in model_ids and isinstance(value, dict)
+    }
     return {
         "models": compact_models,
         "leaderboard": leaderboard,
@@ -1808,6 +1814,7 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
         "recent_activity": activity,
         "latest_theses": latest_theses,
         "eligibility": eligibility,
+        "model_health": model_health,
     }
 
 
@@ -2214,6 +2221,11 @@ _agent_run_actions = _meter.create_counter(
     "agent.run.actions",
     unit="1",
     description="Durable agent-run lifecycle actions by outcome",
+)
+_agent_trading_board_health = _meter.create_counter(
+    "agent_trading.board.model_health",
+    unit="1",
+    description="Per-model Agentic board health observations by current status",
 )
 _analytics_attribution_actions = _meter.create_counter(
     "analytics.attribution.records",
@@ -3232,11 +3244,21 @@ async def agent_trading_board():
       clears a conservative, adjustable bar (settled trades, Sharpe,
       drawdown -- see ``agent_trading_stats.compute_promotion_eligibility``).
       Purely observational: nothing reads this to grant any capability.
+    - ``model_health``: per model cycle heartbeat and account-ledger freshness.
+      This separates a completed no-trade turn from a delayed, stale, or
+      unverified model ledger.
     """
-    live = await asyncio.get_running_loop().run_in_executor(None, _read_agent_trading_board)
-    live = live or {}
-    freshness = _agent_trading_board_freshness(live)
-    compact = _compact_agent_trading_board(live)
+    with _tracer.start_as_current_span("agent_trading.board.read") as span:
+        live = await asyncio.get_running_loop().run_in_executor(None, _read_agent_trading_board)
+        live = live or {}
+        freshness = _agent_trading_board_freshness(live)
+        compact = _compact_agent_trading_board(live)
+        health = compact["model_health"]
+        span.set_attribute("agent_trading.board.models", len(compact["models"]))
+        span.set_attribute("agent_trading.board.health_models", len(health))
+        for item in health.values():
+            status = str(item.get("status") or "unverified")
+            _agent_trading_board_health.add(1, {"status": status})
     return JSONResponse(
         {
             "generated_at": live.get("generated_at"),
@@ -3252,6 +3274,7 @@ async def agent_trading_board():
             # tab can render a useful per-model feed without another request.
             "latest_theses": compact["latest_theses"],
             "eligibility": compact["eligibility"],
+            "model_health": compact["model_health"],
         },
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
