@@ -1,14 +1,12 @@
 name: Agent trading tick (scads-alias-reasoning)
 
 on:
-  schedule:
-    - cron: "9,24,39,54 * * * *"
   workflow_dispatch: {}
 
 jobs:
   trade:
     uses: ./.github/workflows/_agent-trading-tick-reusable.yml
     with:
-      model: scads-alias-reasoning
+      models: scads-alias-reasoning
       lane: "1"
     secrets: inherit

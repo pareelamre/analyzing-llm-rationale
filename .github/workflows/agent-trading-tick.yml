@@ -1,0 +1,27 @@
+name: Agent trading tick
+
+# A single dispatcher prevents GitHub's scheduler from releasing ten separate
+# cold starts into the provider lanes. Each lane prepares once and advances its
+# five independent model ledgers sequentially; the two lanes preserve the
+# verified SCADS concurrency cap of two requests.
+on:
+  schedule:
+    - cron: "0,15,30,45 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trade:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - lane: "0"
+            models: "gemma-4-26b-a4b-it gpt-oss-120b llama-3.3-70b-instruct qwen3-coder-30b-a3b-instruct scads-alias-ha"
+          - lane: "1"
+            models: "glm-5.2-fp8 kimi-k3 minimax-m3 scads-alias-code scads-alias-reasoning"
+    uses: ./.github/workflows/_agent-trading-tick-reusable.yml
+    with:
+      lane: ${{ matrix.lane }}
+      models: ${{ matrix.models }}
+    secrets: inherit

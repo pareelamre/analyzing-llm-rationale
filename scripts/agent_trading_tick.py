@@ -70,6 +70,12 @@ learning_lessons = meter.create_counter(
 learning_refresh_duration = meter.create_histogram(
     "agent_trading.learning.refresh.duration", unit="s", description="Resolved-trade learning refresh duration"
 )
+agent_analyze_attempts = meter.create_counter(
+    "agent_trading.analyze.attempts", unit="1", description="Agent analysis provider attempts"
+)
+agent_analyze_retry_delay = meter.create_histogram(
+    "agent_trading.analyze.retry_delay", unit="s", description="Agent analysis retry backoff"
+)
 calibration_contexts = meter.create_counter(
     "agent_trading.calibration_contexts", unit="1", description="Research calibration priors added to candidates"
 )
@@ -775,12 +781,21 @@ async def _call_agent_analyze(question: str):
     last_exc: Optional[Exception] = None
     for attempt in range(AGENT_ANALYZE_RETRIES):
         try:
-            return await agent_analyze(req, request=None)
+            report = await agent_analyze(req, request=None)
+            agent_analyze_attempts.add(1, {"outcome": "success"})
+            return report
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
+            agent_analyze_attempts.add(1, {"outcome": "retry" if attempt + 1 < AGENT_ANALYZE_RETRIES else "failure"})
             print(f"  agent_analyze attempt {attempt + 1}/{AGENT_ANALYZE_RETRIES} failed: {exc}", file=sys.stderr)
             if attempt + 1 < AGENT_ANALYZE_RETRIES:
-                time.sleep(AGENT_ANALYZE_RETRY_BACKOFF_S * (2 ** attempt))
+                delay_s = AGENT_ANALYZE_RETRY_BACKOFF_S * (2 ** attempt)
+                agent_analyze_retry_delay.record(delay_s, {"model": MODEL or "unknown"})
+                logger.warning(
+                    "agent analysis retry model=%s attempt=%s/%s delay_s=%s",
+                    MODEL or "unknown", attempt + 1, AGENT_ANALYZE_RETRIES, delay_s,
+                )
+                await asyncio.sleep(delay_s)
     assert last_exc is not None
     raise last_exc
 

@@ -15,7 +15,7 @@ from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
 _ROOT = Path(__file__).resolve().parents[1]
 _WORKFLOWS_DIR = _ROOT / ".github" / "workflows"
 _REUSABLE_PATH = _WORKFLOWS_DIR / "_agent-trading-tick-reusable.yml"
-_CRON_RE = re.compile(r'cron:\s*"(\d+),(\d+),(\d+),(\d+) \* \* \* \*"')
+_DISPATCHER_PATH = _WORKFLOWS_DIR / "agent-trading-tick.yml"
 
 
 def _chat_capable_models() -> list[str]:
@@ -29,7 +29,7 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
 
     def test_is_a_workflow_call_target(self):
         self.assertIn("workflow_call:", self.workflow)
-        self.assertIn("model:", self.workflow)
+        self.assertIn("models:", self.workflow)
         self.assertIn("required: true", self.workflow)
 
     def test_shadow_mode_is_hard_pinned_not_an_input(self):
@@ -60,9 +60,12 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
     def test_download_is_tolerant_of_a_missing_object(self):
         self.assertIn("|| echo", self.workflow)
 
-    def test_upload_runs_even_if_the_tick_step_failed(self):
-        upload_section = self.workflow.split("Upload this model's shadow account store", 1)[1]
-        self.assertIn("if: always()", upload_section)
+    def test_a_model_failure_does_not_skip_the_rest_of_its_lane(self):
+        run_section = self.workflow.split("Run every model in this lane", 1)[1]
+        self.assertIn("for MODEL in $MODELS", run_section)
+        self.assertIn("if ! python scripts/agent_trading_tick.py", run_section)
+        self.assertIn("next model will still run", run_section)
+        self.assertIn("agent_trading_store__${MODEL}.sqlite", run_section)
 
     def test_installs_the_serve_extra_and_authenticates_to_gcp(self):
         self.assertIn('pip install --quiet -e ".[serve,pipeline]"', self.workflow)
@@ -71,6 +74,8 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
 
     def test_runs_the_driver_script(self):
         self.assertIn("python scripts/agent_trading_tick.py", self.workflow)
+        self.assertIn('AGENT_TRADING_RETRIES: "4"', self.workflow)
+        self.assertIn('AGENT_TRADING_RETRY_BACKOFF_S: "20"', self.workflow)
 
 
 class AgentTradingPerModelWorkflowTests(unittest.TestCase):
@@ -89,40 +94,26 @@ class AgentTradingPerModelWorkflowTests(unittest.TestCase):
         }
         self.assertEqual(found, models)
 
-    def test_each_wrapper_calls_the_reusable_workflow_with_its_own_model(self):
+    def test_each_wrapper_is_manual_only_and_calls_its_own_model(self):
         for model in _chat_capable_models():
             path = _WORKFLOWS_DIR / f"agent-trading-tick-{model}.yml"
             text = path.read_text(encoding="utf-8")
             self.assertIn("uses: ./.github/workflows/_agent-trading-tick-reusable.yml", text)
-            self.assertIn(f"model: {model}", text)
+            self.assertIn(f"models: {model}", text)
             self.assertRegex(text, r'lane:\s*"[01]"')
             self.assertIn("secrets: inherit", text)
-            self.assertRegex(text, _CRON_RE, f"no recognizable cron stagger in {path}")
             self.assertIn("workflow_dispatch:", text)
+            self.assertNotIn("schedule:", text)
 
-    def test_cron_offsets_are_staggered_across_models_to_avoid_a_rate_limit_thundering_herd(self):
-        # Regression test: all 10 wrapper workflows originally shared the
-        # identical "*/15 * * * *" cron, so every 15-minute tick fired all 10
-        # SCADS calls at the same wall-clock minute -- observed live to cause
-        # 429 RateLimitErrors on roughly half the fleet during manual
-        # dispatch verification. Each model now gets its own minute offset
-        # within the 15-minute window, still ticking every 15 minutes.
-        offsets: dict[str, int] = {}
-        for model in _chat_capable_models():
-            path = _WORKFLOWS_DIR / f"agent-trading-tick-{model}.yml"
-            text = path.read_text(encoding="utf-8")
-            match = _CRON_RE.search(text)
-            self.assertIsNotNone(match, f"no recognizable cron stagger in {path}")
-            minutes = [int(g) for g in match.groups()]
-            self.assertEqual(
-                minutes, [minutes[0], minutes[0] + 15, minutes[0] + 30, minutes[0] + 45],
-                f"{model}'s cron minutes aren't a 15-minute-cadence stagger: {minutes}",
-            )
-            offsets[model] = minutes[0]
-        self.assertEqual(
-            len(set(offsets.values())), len(offsets),
-            f"two or more models share a cron offset, defeating the stagger: {offsets}",
-        )
+    def test_dispatcher_runs_every_model_once_in_two_provider_safe_lanes(self):
+        text = _DISPATCHER_PATH.read_text(encoding="utf-8")
+        self.assertIn('cron: "0,15,30,45 * * * *"', text)
+        self.assertIn("max-parallel: 2", text)
+        self.assertIn("fail-fast: false", text)
+        self.assertIn("uses: ./.github/workflows/_agent-trading-tick-reusable.yml", text)
+        configured = re.findall(r'models:\s*"([^"]+)"', text)
+        scheduled_models = [model for lane in configured for model in lane.split()]
+        self.assertCountEqual(scheduled_models, _chat_capable_models())
 
 
 if __name__ == "__main__":

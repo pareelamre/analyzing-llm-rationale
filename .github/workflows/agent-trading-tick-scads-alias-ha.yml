@@ -1,14 +1,12 @@
 name: Agent trading tick (scads-alias-ha)
 
 on:
-  schedule:
-    - cron: "8,23,38,53 * * * *"
   workflow_dispatch: {}
 
 jobs:
   trade:
     uses: ./.github/workflows/_agent-trading-tick-reusable.yml
     with:
-      model: scads-alias-ha
+      models: scads-alias-ha
       lane: "0"
     secrets: inherit
