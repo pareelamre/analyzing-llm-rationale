@@ -129,6 +129,25 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("_attachEdgeBoardChartHovers(host)", refresher)
         self.assertIn("refreshEdgePrices()", refresher)
 
+    def test_edge_board_mobile_pull_to_refresh_reloads_at_scroll_top(self):
+        root = Path(__file__).resolve().parents[1]
+        index = (root / "frontend" / "index.html").read_text(encoding="utf-8")
+        pull = index.split("function _installEdgeBoardPullToRefresh() {", 1)[1].split(
+            "function _fmtEquityDate", 1
+        )[0]
+        self.assertIn("EDGE_PULL_REFRESH_THRESHOLD = 72", index)
+        self.assertIn("host.scrollTop > 0", pull)
+        self.assertIn("touchstart", pull)
+        self.assertIn("touchmove", pull)
+        self.assertIn("touchend", pull)
+        self.assertIn("Release to refresh", pull)
+        self.assertIn("window.location.reload()", pull)
+        self.assertIn("{ passive: false }", pull)
+        opener = index.split("async function openEdgeBoard(", 1)[1].split(
+            "async function openForecastDrift", 1
+        )[0]
+        self.assertIn("_installEdgeBoardPullToRefresh()", opener)
+
     def test_mtm_sizing_controls_use_delegated_button_handlers(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"

@@ -995,6 +995,17 @@
       padding: 14px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;
     }
     .tr-body { overflow-y: auto; padding: 30px 22px 64px; }
+    .edge-pull-indicator {
+      align-items: center; background: var(--paper); border: 1px solid var(--border);
+      border-radius: 999px; box-shadow: 0 8px 22px rgba(15, 23, 42, .10);
+      color: var(--text-dim); display: none; font-size: 11px; font-weight: 650;
+      gap: 7px; left: 50%; padding: 7px 11px; pointer-events: none;
+      position: fixed; top: 76px; transform: translate(-50%, -12px); z-index: 62;
+    }
+    .edge-pull-indicator.visible { display: inline-flex; transform: translate(-50%, 0); }
+    .edge-pull-indicator.ready { color: var(--ink); }
+    .edge-pull-indicator::before { background: currentColor; border-radius: 50%; content: ''; height: 5px; width: 5px; }
+    @media (pointer: fine) { .edge-pull-indicator { display: none !important; } }
     .tr-inner { max-width: 880px; margin: 0 auto; width: 100%; }
     .tr-hero-title { font-size: clamp(28px, 4vw, 40px); color: var(--ink); margin-top: 6px; line-height: 1.02; }
     .tr-stats {
@@ -5677,6 +5688,80 @@ async function refreshEdgeForecasts() {
   } catch (_) {}
 }
 
+// The Edge Board is a fixed overlay whose own body scrolls, so the browser's
+// usual document-level pull-to-refresh never receives a top-of-page gesture on
+// mobile. Recreate that familiar interaction only when this scroller is at the
+// top; normal scrolling, horizontal tables, and desktop pointers are untouched.
+const EDGE_PULL_REFRESH_THRESHOLD = 72;
+let _edgePullRefreshInFlight = false;
+
+function _edgePullRefreshIndicator(message, { ready = false } = {}) {
+  const overlay = document.getElementById('edgeOverlay');
+  if (!overlay) return;
+  let indicator = document.getElementById('edgePullRefreshIndicator');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.id = 'edgePullRefreshIndicator';
+    indicator.className = 'edge-pull-indicator';
+    indicator.setAttribute('aria-live', 'polite');
+    overlay.appendChild(indicator);
+  }
+  if (!message) {
+    indicator.classList.remove('visible', 'ready');
+    return;
+  }
+  indicator.textContent = message;
+  indicator.classList.toggle('ready', ready);
+  indicator.classList.add('visible');
+}
+
+function _installEdgeBoardPullToRefresh() {
+  const host = document.getElementById('edgeBody');
+  if (!host || host.dataset.pullRefreshBound === 'true') return;
+  host.dataset.pullRefreshBound = 'true';
+
+  let startY = 0;
+  let distance = 0;
+  let tracking = false;
+  const enabled = () => window.matchMedia?.('(pointer: coarse)').matches;
+  const reset = () => {
+    startY = 0;
+    distance = 0;
+    tracking = false;
+    if (!_edgePullRefreshInFlight) _edgePullRefreshIndicator('');
+  };
+
+  host.addEventListener('touchstart', event => {
+    if (!enabled() || event.touches.length !== 1 || host.scrollTop > 0) return;
+    startY = event.touches[0].clientY;
+    distance = 0;
+    tracking = true;
+  }, { passive: true });
+
+  host.addEventListener('touchmove', event => {
+    if (!tracking || event.touches.length !== 1) return;
+    if (host.scrollTop > 0) { reset(); return; }
+    distance = Math.max(0, event.touches[0].clientY - startY);
+    if (distance === 0) return;
+    // Stop the overscroll bounce only for the deliberate downward pull.
+    event.preventDefault();
+    const ready = distance >= EDGE_PULL_REFRESH_THRESHOLD;
+    _edgePullRefreshIndicator(ready ? 'Release to refresh' : 'Pull to refresh', { ready });
+  }, { passive: false });
+
+  host.addEventListener('touchend', () => {
+    const reload = tracking && distance >= EDGE_PULL_REFRESH_THRESHOLD;
+    reset();
+    if (!reload || _edgePullRefreshInFlight) return;
+    _edgePullRefreshInFlight = true;
+    _edgePullRefreshIndicator('Refreshing…');
+    // Keep the deep-linked Edge sub-panel in the URL and reload it exactly as
+    // a normal mobile browser pull-to-refresh would.
+    window.setTimeout(() => window.location.reload(), 80);
+  }, { passive: true });
+  host.addEventListener('touchcancel', reset, { passive: true });
+}
+
 function _fmtEquityDate(ms, withTime) {
   const d = new Date(ms);
   if (isNaN(d)) return '';
@@ -5902,6 +5987,7 @@ document.addEventListener('visibilitychange', () => {
 
 async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
   const ov = document.getElementById('edgeOverlay');
+  _installEdgeBoardPullToRefresh();
   _edgeOpenSeq++;
   if (panel) _ebSetView(panel);
   if (ov.classList.contains('open')) {
