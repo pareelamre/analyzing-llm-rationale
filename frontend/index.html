@@ -1079,6 +1079,14 @@
     .agentic-table td { border-bottom-color: #f0f1f3; padding-bottom: 10px; padding-top: 10px; }
     .agentic-table .agentic-model { color: var(--ink); font-size: 12px; font-weight: 650; }
     .agentic-table .agentic-model-id { color: var(--text-dim); display: block; font-size: 10px; font-weight: 400; margin-top: 2px; }
+    .agentic-health { align-items: center; border-radius: 999px; display: inline-flex; font-size: 10px; font-weight: 650; gap: 5px; line-height: 1; padding: 4px 7px; white-space: nowrap; }
+    .agentic-health::before { background: currentColor; border-radius: 50%; content: ''; height: 5px; width: 5px; }
+    .agentic-health--active { background: #ecfdf5; color: #047857; }
+    .agentic-health--no-trade { background: #eff6ff; color: #1d4ed8; }
+    .agentic-health--delayed { background: #fffbeb; color: #a16207; }
+    .agentic-health--stale, .agentic-health--unverified { background: #fef2f2; color: #b91c1c; }
+    .agentic-health-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 6px; padding: 0 0 12px; }
+    .agentic-health-summary-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-right: 2px; text-transform: uppercase; }
     .agentic-position-button { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; color: #475569; cursor: pointer; font-size: 10px; font-weight: 650; padding: 3px 8px; }
     .agentic-position-button:hover { background: #f1f5f9; color: #0f172a; }
     .agentic-position-row > td { background: #fbfdff; }
@@ -6494,8 +6502,27 @@ function renderAgentTradingBoard(d) {
   const leaderboard = d.leaderboard || [];
   const equityCurves = d.equity_curves || {};
   const eligibility = d.eligibility || {};
+  const modelHealth = d.model_health || {};
   const activity = d.recent_activity || [];
   const latestTheses = d.latest_theses || {};
+  const _healthStatus = health => String(health?.status || 'unverified');
+  const _healthLabel = status => ({
+    active: 'Verified', no_trade: 'No trade', delayed: 'Delayed', stale: 'Stalled', unverified: 'Unverified'
+  })[status] || 'Unverified';
+  const _healthAge = health => {
+    const seconds = Number(health?.cycle_age_seconds);
+    if (!Number.isFinite(seconds)) return 'no cycle';
+    if (seconds < 60) return '<1m';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+    return `${Math.floor(seconds / 3600)}h`;
+  };
+  const _healthBadge = (health, { withModel = false } = {}) => {
+    const status = _healthStatus(health);
+    const label = _healthLabel(status);
+    const prefix = withModel ? `${_ebModelHead(health?.agent_id || '')} · ` : '';
+    const title = `${health?.detail || 'No per-model cycle health report.'}${health?.last_cycle_at ? ` Last confirmed cycle: ${health.last_cycle_at}.` : ''}`;
+    return `<span class="agentic-health agentic-health--${escAttr(status)}" title="${escAttr(title)}">${escHtml(prefix + label)} · ${escHtml(_healthAge(health))}</span>`;
+  };
   const _usd = v => Number.isFinite(Number(v))
     ? Number(v).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
     : '—';
@@ -6581,6 +6608,8 @@ function renderAgentTradingBoard(d) {
         ? `<span title="${escAttr(winRateTitle)}">— <small style="color:var(--text-dim)">${wonCount}/${realizedCount}</small></span>`
         : `<span title="${escAttr(winRateTitle)}">${Math.round(rawWinRate * 100)}% <small style="color:var(--text-dim)">${wonCount}/${realizedCount}</small></span>`;
     const agentId = String(row.agent_id || '');
+    const health = { ...(modelHealth[agentId] || {}), agent_id: agentId };
+    const healthCell = _healthBadge(health);
     const elig = eligibility[agentId];
     const eligCell = elig && elig.eligible
       ? `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:#0a7">${uiIcon('check')}</span>`
@@ -6615,6 +6644,7 @@ function renderAgentTradingBoard(d) {
     return `<tr class="eb-row" style="cursor:pointer" onclick="_toggleAgentPositions('${escAttr(agentId)}')">
       <td><b>${i + 1}</b></td>
       <td><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span></td>
+      <td>${healthCell}</td>
       <td><b>${_usd(row.account_value)}</b></td>
       <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnl >= 0 ? '+' : ''}${_usd(pnl)}</td>
       <td style="color:${pnlColor};font-weight:600">${_roiPct((Number(row.return_pct) || 0) / 100)}</td>
@@ -6624,7 +6654,7 @@ function renderAgentTradingBoard(d) {
       <td>${eligCell}</td>
     </tr>
     <tr id="agent-pos-${escAttr(agentId)}" class="hidden-view agentic-position-row">
-      <td colspan="9" style="padding:10px 14px;border-bottom:1px solid var(--border);border-top:1px dashed var(--border);">
+      <td colspan="10" style="padding:10px 14px;border-bottom:1px solid var(--border);border-top:1px dashed var(--border);">
         <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">
           Active Book · ${escHtml(_ebModelLabel(agentId))} (Cash: ${_usd(row.cash)})
         </div>
@@ -6632,6 +6662,9 @@ function renderAgentTradingBoard(d) {
       </td>
     </tr>`;
   }).join('');
+  const healthSummary = Object.entries(modelHealth).sort(([a], [b]) => a.localeCompare(b)).map(([agentId, health]) =>
+    _healthBadge({ ...(health || {}), agent_id: agentId }, { withModel: true })
+  ).join('');
 
   // Model filter pill bar
   const activeFilter = window._agentActivityFilter || 'all';
@@ -6677,7 +6710,8 @@ function renderAgentTradingBoard(d) {
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Account value by model</h4><p class="agentic-panel-copy">Each line is an independently managed shadow account.</p></div></div>
       <div id="agentTradingSvg" class="agentic-chart">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
     </section>
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}</tbody></table>
+    ${healthSummary ? `<div class="agentic-health-summary"><span class="agentic-health-summary-label">Cycle health</span>${healthSummary}</div>` : ''}
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}</tbody></table>
     <div class="agentic-feed-head">
       <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : activeFilter)}</span>
     </div>

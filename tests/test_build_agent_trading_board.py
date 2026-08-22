@@ -6,6 +6,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
@@ -48,6 +49,22 @@ def _seed_thesis(path: Path, agent_id: str, *, ts: str, thesis: str):
         "INSERT INTO agent_cycles (agent_id, cycle_id, ts, thesis, transcript_json, steps, truncated) "
         "VALUES (?, ?, ?, ?, '[]', 0, 0)",
         (agent_id, f"cycle-{ts}", ts, thesis),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _seed_action(path: Path, agent_id: str, *, cycle_id: str, ts: str):
+    conn = sqlite3.connect(str(path))
+    conn.row_factory = sqlite3.Row
+    benchmark_tools._ensure_account_schema(conn)
+    conn.execute(
+        "INSERT INTO agent_actions (id, ts, agent_id, action_type, mode, submitted, platform, ticker, side, "
+        "price, quantity, notional, fee, settlement_fee, payout, netting_payout, cash_required, cash_delta, "
+        "realized_pnl, realized_pairs, cycle_id, client_order_id, outcome, metadata_json) "
+        "VALUES ('action-1', ?, ?, 'trade', 'shadow', 0, 'kalshi', 'KXFOO', 'yes', 0.5, 1, 0.5, 0, 0, 0, 0, 0, "
+        "-0.5, 0, 0, ?, NULL, 'filled', '{}')",
+        (ts, agent_id, cycle_id),
     )
     conn.commit()
     conn.close()
@@ -140,6 +157,35 @@ class HeldTickersAndQuotesTests(unittest.TestCase):
 
 
 class BuildBoardTests(unittest.TestCase):
+    def test_model_health_distinguishes_no_trade_delayed_stale_and_unverified(self):
+        with tempfile.TemporaryDirectory() as td:
+            store_dir = Path(td) / "stores"
+            store_dir.mkdir()
+            for model in ("active", "no-trade", "delayed", "stale"):
+                (store_dir / model).mkdir()
+                _seed_store(store_dir / model / "store.sqlite", model)
+            _seed_thesis(store_dir / "active" / "store.sqlite", "active", ts="2026-08-11T11:55:00+00:00", thesis="Acted")
+            _seed_action(store_dir / "active" / "store.sqlite", "active", cycle_id="cycle-2026-08-11T11:55:00+00:00", ts="2026-08-11T11:54:00+00:00")
+            _seed_thesis(store_dir / "no-trade" / "store.sqlite", "no-trade", ts="2026-08-11T11:50:00+00:00", thesis="Held")
+            _seed_thesis(store_dir / "delayed" / "store.sqlite", "delayed", ts="2026-08-11T10:30:00+00:00", thesis="Late")
+            _seed_thesis(store_dir / "stale" / "store.sqlite", "stale", ts="2026-08-11T01:00:00+00:00", thesis="Old")
+            with (
+                mock.patch.object(board_script, "STORE_DIR", store_dir),
+                mock.patch.object(board_script, "_chat_capable_models", return_value=["active", "no-trade", "delayed", "stale", "unverified"]),
+                mock.patch.object(board_script, "_fetch_quotes", return_value={}),
+                mock.patch.object(board_script, "datetime") as mock_datetime,
+            ):
+                mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+                mock_datetime.now.return_value = board_script._parse_timestamp("2026-08-11T12:00:00+00:00")
+                board = board_script.build_board()
+
+        self.assertEqual(board["model_health"]["active"]["status"], "active")
+        self.assertEqual(board["model_health"]["no-trade"]["status"], "no_trade")
+        self.assertEqual(board["model_health"]["delayed"]["status"], "delayed")
+        self.assertEqual(board["model_health"]["stale"]["status"], "stale")
+        self.assertEqual(board["model_health"]["unverified"]["status"], "unverified")
+        self.assertFalse(board["model_health"]["unverified"]["store_present"])
+
     def test_build_board_aggregates_across_models_and_writes_valid_json(self):
         with tempfile.TemporaryDirectory() as td:
             store_dir = Path(td) / "stores"
