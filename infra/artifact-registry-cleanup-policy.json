@@ -3,14 +3,23 @@
     "name": "keep-recent-versions",
     "action": {"type": "Keep"},
     "mostRecentVersions": {
-      "keepCount": 3
+      "keepCount": 5
     }
   },
   {
-    "name": "delete-old-images",
+    "name": "delete-old-untagged",
     "action": {"type": "Delete"},
     "condition": {
-      "olderThan": "3d"
+      "tagState": "UNTAGGED",
+      "olderThan": "86400s"
+    }
+  },
+  {
+    "name": "delete-old-tagged-images",
+    "action": {"type": "Delete"},
+    "condition": {
+      "tagState": "TAGGED",
+      "olderThan": "2592000s"
     }
   }
 ]

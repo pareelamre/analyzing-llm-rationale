@@ -580,5 +580,138 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         self.assertIn("_streamLandingQuestion(question)", submit_landing_body)
         self.assertNotIn("_streamLandingQuestion(question)", start_example_body)
 
+    def test_chat_markdown_renders_fenced_code_blocks_and_preserves_currency(self) -> None:
+        script = r'''
+const fs = require('fs');
+const vm = require('vm');
+const html = fs.readFileSync('static/index.html', 'utf8');
+
+const sandbox = { window: {}, document: { getElementById: () => null, addEventListener: () => {} } };
+const start = html.indexOf('function escHtml(s) {');
+const end = html.indexOf('// ── Motion helpers', start);
+vm.runInNewContext(html.slice(start, end), sandbox);
+
+// 1. Code blocks
+const codeOutput = sandbox.renderMarkdown('```python\ndef test():\n    return 42\n```');
+if (!codeOutput.includes('<pre class="md-pre"><code class="md-codeblock language-python">def test():\n    return 42</code></pre>')) {
+  throw new Error(`Code block rendering failed: ${codeOutput}`);
+}
+
+// 2. Currency preservation
+const currencyOutput = sandbox.renderMarkdown('The price moved from $50 to $60, earning $10 per share.');
+if (!currencyOutput.includes('$50 to $60') || !currencyOutput.includes('$10')) {
+  throw new Error(`Currency formatting failed: ${currencyOutput}`);
+}
+
+// 3. URL date preservation
+const urlOutput = sandbox.renderMarkdown('Link: [data](https://example.com/2026-08-23/results)');
+if (!urlOutput.includes('https://example.com/2026-08-23/results')) {
+  throw new Error(`URL date preservation failed: ${urlOutput}`);
+}
+
+// 4. JSON prose extraction
+const jsonText = sandbox._chatText(JSON.stringify({
+  reasoning: 'Evidence indicates high probability.',
+  predicted_answer: 'YES',
+  confidence: 0.85
+}));
+if (!jsonText.includes('Evidence indicates high probability.') || !jsonText.includes('**YES**')) {
+  throw new Error(`JSON reasoning extraction failed: ${jsonText}`);
+}
+'''
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_edge_board_navigation_and_history_routing(self) -> None:
+        script = r'''
+const fs = require('fs');
+const vm = require('vm');
+const html = fs.readFileSync('static/index.html', 'utf8');
+
+const storageMock = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+const makeEl = (id = '') => ({ id, classList: { contains: () => false, add: () => {}, remove: () => {}, toggle: () => {} }, style: {}, attributes: {}, setAttribute: () => {}, getAttribute: () => null, focus: () => {}, querySelector: () => null, querySelectorAll: () => [] });
+const sandbox = {
+  window: { location: { pathname: '/', hash: '', search: '' }, addEventListener: () => {}, matchMedia: () => ({ matches: false }), scrollTo: () => {}, localStorage: storageMock, sessionStorage: storageMock },
+  document: { body: makeEl('body'), getElementById: (id) => makeEl(id), querySelector: () => null, querySelectorAll: () => [], addEventListener: () => {} },
+  navigator: { sendBeacon: () => true },
+  history: { pushState: () => {}, replaceState: () => {}, state: null },
+  localStorage: storageMock,
+  sessionStorage: storageMock,
+  Blob: globalThis.Blob,
+  URL: globalThis.URL,
+  URLSearchParams: globalThis.URLSearchParams,
+  setTimeout: () => 1,
+  clearTimeout: () => {},
+  setInterval: () => 1,
+  clearInterval: () => {},
+  console: { log: () => {}, warn: () => {}, error: () => {} },
+  fetch: globalThis.fetch || (() => Promise.resolve({ ok: false, json: async () => ({}) })),
+  trackEvent: () => {},
+  Motion: null,
+};
+
+const context = vm.createContext(sandbox);
+const scriptMatches = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+let fullJs = '';
+for (const match of scriptMatches) {
+  const attrs = match[1];
+  if (!attrs.includes('src=') && !attrs.includes('ld+json')) fullJs += match[2] + '\n';
+}
+vm.runInContext(fullJs, context);
+
+// 1. History URLs for Edge Board panels
+if (sandbox.historyUrlFor('edge-landing', null, 'markets') !== '/edge') {
+  throw new Error(`historyUrlFor markets failed: ${sandbox.historyUrlFor('edge-landing', null, 'markets')}`);
+}
+if (sandbox.historyUrlFor('edge-landing', null, 'mtm') !== '/edge/mtm') {
+  throw new Error(`historyUrlFor mtm failed: ${sandbox.historyUrlFor('edge-landing', null, 'mtm')}`);
+}
+if (sandbox.historyUrlFor('edge-landing', null, 'agentic') !== '/edge/agentic') {
+  throw new Error(`historyUrlFor agentic failed: ${sandbox.historyUrlFor('edge-landing', null, 'agentic')}`);
+}
+if (sandbox.historyUrlFor('edge-app', null, 'mtm') !== '/edge/mtm') {
+  throw new Error(`historyUrlFor edge-app mtm failed: ${sandbox.historyUrlFor('edge-app', null, 'mtm')}`);
+}
+
+// 2. Parse edge paths
+const pMarkets = sandbox.parseEdgePath('/edge');
+if (!pMarkets || pMarkets.panel !== 'markets') throw new Error('parseEdgePath /edge failed');
+const pMtm = sandbox.parseEdgePath('/edge/mtm');
+if (!pMtm || pMtm.panel !== 'mtm') throw new Error('parseEdgePath /edge/mtm failed');
+const pAgentic = sandbox.parseEdgePath('/edge/agentic');
+if (!pAgentic || pAgentic.panel !== 'agentic') throw new Error('parseEdgePath /edge/agentic failed');
+
+// 3. Legacy hash routes
+const hMtm = sandbox.legacyRouteFromHash('#edge/mtm');
+if (!hMtm || hMtm.panel !== 'mtm' || hMtm.view !== 'edge-landing') throw new Error('legacyRouteFromHash #edge/mtm failed');
+const hAgentic = sandbox.legacyRouteFromHash('#edge/agentic');
+if (!hAgentic || hAgentic.panel !== 'agentic' || hAgentic.view !== 'edge-landing') throw new Error('legacyRouteFromHash #edge/agentic failed');
+const hAppMtm = sandbox.legacyRouteFromHash('#edge-app/mtm');
+if (!hAppMtm || hAppMtm.panel !== 'mtm' || hAppMtm.view !== 'edge-app') throw new Error('legacyRouteFromHash #edge-app/mtm failed');
+
+// 4. View switching
+sandbox._ebSetView('mtm');
+if (vm.runInContext('_ebView', context) !== 'mtm') throw new Error('_ebSetView mtm failed');
+sandbox._ebSetView('agentic');
+if (vm.runInContext('_ebView', context) !== 'agentic') throw new Error('_ebSetView agentic failed');
+sandbox._ebSetView('markets');
+if (vm.runInContext('_ebView', context) !== 'markets') throw new Error('_ebSetView markets failed');
+'''
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
+
+

@@ -212,7 +212,8 @@ def compute_trade_returns(
 
         elif p.strategy == "calibration":
             # Use opening price as signal; bet based on category-specific bias
-            entry_price = hist.iloc[0]["price"]
+            entry_row = hist.iloc[0]
+            entry_price = entry_row["price"]
             days_left = total_days
             # Simply follow or fade the opening price
             if entry_price > p.yes_threshold:
@@ -236,7 +237,7 @@ def compute_trade_returns(
             "entry_price": round(entry_price, 4),
             "payout": payout,
             "return": round(ret, 4),
-            "hold_days": round(float(total_days - (entry_row.get("day", 0) if p.strategy != "calibration" else 0)), 1),
+            "hold_days": round(float(total_days - entry_row.get("day", 0.0)), 1),
             "volume": mkt["volume"],
         })
 
