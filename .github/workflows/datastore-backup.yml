@@ -28,6 +28,12 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      - name: Enforce backup bucket lifecycle
+        run: |
+          gcloud storage buckets update "${BACKUP_BUCKET}" \
+            --lifecycle-file=infra/datastore-backup-lifecycle.json \
+            --project "${GCP_PROJECT_ID}"
+
       - name: Export Datastore to GCS
         run: |
           STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)

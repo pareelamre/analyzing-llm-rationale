@@ -411,19 +411,39 @@ def _paper_horizon_bucket(close_time: Any, *, now: Optional[datetime] = None) ->
     return "very_long"
 
 
-def _paper_calibration_context(quote: Dict[str, Any], *, now: Optional[datetime] = None) -> str:
-    """Return a bounded, non-mechanical calibration prior from Le (2026).
+def _calibration_resolution_time(quote: Dict[str, Any]) -> Any:
+    """Use Kalshi's expected expiry as the event-time calibration anchor.
 
-    The paper reports population-level calibration patterns across resolved
-    contracts. This is intentionally advisory: agents must still derive their
-    own probability from evidence and may not mechanically transform the price
-    or relax a trading control because of this prior.
+    Kalshi Research measures calibration against the time the underlying event
+    resolves, rather than a potentially earlier administrative market close.
+    The public market payload exposes this as ``expected_expiration_time``.
+    """
+    platform = str(quote.get("platform") or "").strip().lower()
+    if platform == "kalshi" and quote.get("expected_expiration_time"):
+        return quote["expected_expiration_time"]
+    return quote.get("close_time")
+
+
+def _has_observed_volume(quote: Dict[str, Any]) -> bool:
+    try:
+        return float(quote.get("volume")) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _paper_calibration_context(quote: Dict[str, Any], *, now: Optional[datetime] = None) -> str:
+    """Return bounded, non-mechanical calibration priors for a candidate.
+
+    Every cited study is population-level and advisory. Agents must still
+    derive their own probability from evidence; no prior may mechanically
+    transform a price or relax a trading control.
     """
     started = time.perf_counter()
     with tracer.start_as_current_span("agent_trading.build_calibration_context") as span:
         try:
             domain = _paper_market_domain(quote)
-            horizon = _paper_horizon_bucket(quote.get("close_time"), now=now)
+            resolution_time = _calibration_resolution_time(quote)
+            horizon = _paper_horizon_bucket(resolution_time, now=now)
             platform = str(quote.get("platform") or "kalshi").strip().lower()
             span.set_attributes({
                 "market.domain": domain,
@@ -431,7 +451,21 @@ def _paper_calibration_context(quote: Dict[str, Any], *, now: Optional[datetime]
                 "market.venue": platform,
             })
 
-            principle = ""
+            principles: List[str] = []
+            sources: List[str] = []
+            if platform == "kalshi":
+                kalshi_principle = (
+                    "Kalshi prices were broadly well calibrated and became more reliable nearer the underlying event's "
+                    "true resolution time. Treat the price as a probability baseline, but derive P(YES) independently "
+                    "and trade only when the remaining divergence clears the live spread, fees, and selected Kelly threshold."
+                )
+                if quote.get("expected_expiration_time"):
+                    kalshi_principle += " Calibration timing uses this contract's expected expiration, not its administrative close."
+                if not _has_observed_volume(quote):
+                    kalshi_principle += " No positive reported volume is available, so do not assume the study's participation benefit applies."
+                principles.append(kalshi_principle)
+                sources.append("Kalshi Research, Calibration in Prediction Markets")
+
             if domain == "politics":
                 principle = (
                     "Political prices were persistently compressed toward 50% across both venues. "
@@ -439,36 +473,43 @@ def _paper_calibration_context(quote: Dict[str, Any], *, now: Optional[datetime]
                 )
                 if platform == "kalshi":
                     principle += " Treat large political prints as possible venue microstructure, not proof of informed flow."
+                principles.append(principle)
+                sources.append("Le, 2026, arXiv:2602.19520")
             elif domain == "weather" and horizon == "short":
                 principle = (
                     "Short-horizon weather prices were historically too extreme. Demand unusually strong, "
                     "independent evidence before following a market move."
                 )
+                principles.append(principle)
+                sources.append("Le, 2026, arXiv:2602.19520")
             elif domain == "sports" and horizon in {"short", "medium"}:
                 principle = (
                     "Sports prices were closest to calibrated at short-to-medium horizons. "
                     "Require a conventional evidence-based edge after spread and fees."
                 )
+                principles.append(principle)
+                sources.append("Le, 2026, arXiv:2602.19520")
             elif domain == "sports" and horizon == "very_long":
                 principle = (
                     "Long-horizon sports prices showed favourite-longshot compression. "
                     "Check whether independent evidence supports a more decisive probability."
                 )
+                principles.append(principle)
+                sources.append("Le, 2026, arXiv:2602.19520")
             elif horizon == "very_long":
                 principle = (
                     "Across domains, long-horizon prices tended to be compressed toward 50%. "
                     "Use this as a hypothesis to investigate, not a substitute for evidence."
                 )
+                principles.append(principle)
+                sources.append("Le, 2026, arXiv:2602.19520")
 
-            outcome = "applied" if principle else "not_applicable"
+            outcome = "applied" if principles else "not_applicable"
             calibration_contexts.add(1, {"domain": domain, "horizon": horizon, "outcome": outcome})
             span.set_attribute("outcome", outcome)
-            if not principle:
+            if not principles:
                 return ""
-            return (
-                "Research calibration prior (Le, 2026, arXiv:2602.19520): "
-                f"{principle}"
-            )
+            return f"Research calibration prior ({'; '.join(sources)}): {' '.join(principles)}"
         except Exception as exc:
             span.record_exception(exc)
             span.set_status(Status(StatusCode.ERROR))
@@ -482,6 +523,7 @@ def _paper_calibration_context(quote: Dict[str, Any], *, now: Optional[datetime]
 def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     opens = quote.get("created_time") or "unknown"
     close = quote.get("close_time") or "unknown"
+    expected_expiration = quote.get("expected_expiration_time")
     # NO isn't always a separate field the venue returns -- it's derived from
     # the YES book when absent (no_ask = 1 - yes_bid, etc., see accounting.MarketQuote.ask/bid),
     # the same derivation place_trade's own guards use to price a closing
@@ -499,6 +541,8 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
         f"no bid/ask {_fmt_px(no_bid)}/{_fmt_px(no_ask)}, "
         f"resolution window {opens} -> {close})"
     )
+    if expected_expiration:
+        line += f"\n    Expected underlying resolution: {expected_expiration}"
     rules = str(quote.get("resolution_criteria") or "").strip()
     if rules:
         line += f"\n    Resolution rules: {rules}"

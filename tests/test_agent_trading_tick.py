@@ -314,8 +314,57 @@ class CandidateLineFormattingTests(unittest.TestCase):
         )
         self.assertIn("Resolution rules: " + full_rules, line)
 
+    def test_candidate_line_shows_kalshi_expected_resolution_when_available(self):
+        quote = _quote("KXFOO")
+        quote["expected_expiration_time"] = "2026-08-21T00:00:00Z"
+
+        line = agent_trading_tick._fmt_candidate_line(quote)
+
+        self.assertIn("Expected underlying resolution: 2026-08-21T00:00:00Z", line)
+
 
 class PaperCalibrationContextTests(unittest.TestCase):
+    def test_uses_kalshi_calibration_evidence_as_a_net_of_cost_baseline(self):
+        quote = _quote("KXMARKET", question="Will the next CPI print exceed expectations?")
+        quote.update({"category": "Economics", "platform": "Kalshi", "close_time": "2026-08-21T00:00:00Z", "volume": 1000})
+
+        context = agent_trading_tick._paper_calibration_context(
+            quote, now=agent_trading_tick.datetime(2026, 8, 20, tzinfo=agent_trading_tick.timezone.utc)
+        )
+
+        self.assertIn("Kalshi Research, Calibration in Prediction Markets", context)
+        self.assertIn("true resolution time", context)
+        self.assertIn("derive P(YES) independently", context)
+        self.assertIn("spread, fees", context)
+
+    def test_uses_expected_expiration_not_administrative_close_for_kalshi_timing(self):
+        quote = _quote("KXMARKET", question="Will Team A win this game?")
+        quote.update({
+            "category": "Sports",
+            "platform": "Kalshi",
+            "close_time": "2026-08-20T01:00:00Z",
+            "expected_expiration_time": "2026-08-21T00:00:00Z",
+        })
+
+        self.assertEqual(
+            agent_trading_tick._calibration_resolution_time(quote),
+            "2026-08-21T00:00:00Z",
+        )
+        context = agent_trading_tick._paper_calibration_context(
+            quote, now=agent_trading_tick.datetime(2026, 8, 20, tzinfo=agent_trading_tick.timezone.utc)
+        )
+        self.assertIn("expected expiration", context)
+
+    def test_flags_kalshi_quotes_without_reported_volume(self):
+        quote = _quote("KXMARKET", question="Will Team A win this game?")
+        quote.update({"category": "Sports", "platform": "Kalshi", "close_time": "2026-08-21T00:00:00Z"})
+
+        context = agent_trading_tick._paper_calibration_context(
+            quote, now=agent_trading_tick.datetime(2026, 8, 20, tzinfo=agent_trading_tick.timezone.utc)
+        )
+
+        self.assertIn("No positive reported volume", context)
+
     def test_adds_political_compression_prior_without_mechanically_repricing(self):
         quote = _quote("KXPRESIDENT", question="Will the next president win reelection?")
         quote.update({"category": "Politics", "platform": "Kalshi", "close_time": "2026-10-01T00:00:00Z"})
@@ -339,9 +388,9 @@ class PaperCalibrationContextTests(unittest.TestCase):
         self.assertIn("Short-horizon weather prices", context)
         self.assertIn("independent evidence", context)
 
-    def test_omits_an_unvalidated_domain_horizon_combination(self):
+    def test_omits_an_unvalidated_non_kalshi_domain_horizon_combination(self):
         quote = _quote("KXOTHER", question="Will an unrelated custom event happen?")
-        quote.update({"category": "Other", "close_time": "2026-08-23T00:00:00Z"})
+        quote.update({"category": "Other", "platform": "Polymarket", "close_time": "2026-08-23T00:00:00Z"})
 
         self.assertEqual(
             agent_trading_tick._paper_calibration_context(
