@@ -4,18 +4,18 @@
       "agent_id": "gemma-4-26b-a4b-it",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": false,
+        "positive_return": true,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0126,
+      "max_drawdown": 0.0008,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -1.2641,
-      "settled_count": 0,
-      "sharpe": -0.2873
+      "return_pct": 4.6819,
+      "settled_count": 1,
+      "sharpe": 0.2541
     },
     "glm-5.2-fp8": {
       "agent_id": "glm-5.2-fp8",
@@ -43,30 +43,30 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0199,
+      "max_drawdown": 0.0194,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -1.9884,
-      "settled_count": 1,
-      "sharpe": -0.2508
+      "return_pct": -1.9384,
+      "settled_count": 2,
+      "sharpe": -0.245
     },
     "kimi-k3": {
       "agent_id": "kimi-k3",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": false,
+        "positive_return": true,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0386,
+      "max_drawdown": 0.0081,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -3.8607,
-      "settled_count": 0,
-      "sharpe": -0.3442
+      "return_pct": 6.0493,
+      "settled_count": 1,
+      "sharpe": 0.2117
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
@@ -77,13 +77,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.3593,
+      "max_drawdown": 0.2967,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -35.9331,
-      "settled_count": 3,
-      "sharpe": -0.319
+      "return_pct": -25.6731,
+      "settled_count": 4,
+      "sharpe": -0.1957
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
@@ -99,8 +99,8 @@
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
       "return_pct": -12.8386,
-      "settled_count": 0,
-      "sharpe": -0.3471
+      "settled_count": 1,
+      "sharpe": -0.4776
     },
     "qwen3-coder-30b-a3b-instruct": {
       "agent_id": "qwen3-coder-30b-a3b-instruct",
@@ -132,9 +132,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 31.8521,
+      "return_pct": 31.9784,
       "settled_count": 2,
-      "sharpe": 0.0864
+      "sharpe": 0.0859
     },
     "scads-alias-ha": {
       "agent_id": "scads-alias-ha",
@@ -145,13 +145,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0646,
+      "max_drawdown": 0.0844,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -6.4576,
-      "settled_count": 1,
-      "sharpe": -0.206
+      "return_pct": -6.1458,
+      "settled_count": 2,
+      "sharpe": -0.1284
     },
     "scads-alias-reasoning": {
       "agent_id": "scads-alias-reasoning",
@@ -174,8 +174,8 @@
   "equity_curves": {
     "gemma-4-26b-a4b-it": {
       "agent_id": "gemma-4-26b-a4b-it",
-      "max_drawdown": 0.0126,
-      "sharpe": -0.2873,
+      "max_drawdown": 0.0008,
+      "sharpe": 0.2541,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -248,9 +248,14 @@
           "ts": "2026-08-19T15:05:33.839652+00:00"
         },
         {
-          "account_value": 9873.5904,
+          "account_value": 10466.9904,
+          "event_type": "settlement",
+          "ts": "2026-08-23T21:46:48.351277+00:00"
+        },
+        {
+          "account_value": 10468.1904,
           "event_type": "mark_to_market",
-          "ts": "2026-08-23T21:45:13.576179+00:00"
+          "ts": "2026-08-23T22:16:00.187225+00:00"
         }
       ]
     },
@@ -277,14 +282,14 @@
         {
           "account_value": 11287.66,
           "event_type": "mark_to_market",
-          "ts": "2026-08-23T21:45:13.576179+00:00"
+          "ts": "2026-08-23T22:16:00.187225+00:00"
         }
       ]
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
-      "max_drawdown": 0.0199,
-      "sharpe": -0.2508,
+      "max_drawdown": 0.0194,
+      "sharpe": -0.245,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -362,16 +367,21 @@
           "ts": "2026-08-20T19:06:01.870296+00:00"
         },
         {
-          "account_value": 9801.156,
+          "account_value": 9816.556,
+          "event_type": "settlement",
+          "ts": "2026-08-23T21:49:32.499515+00:00"
+        },
+        {
+          "account_value": 9806.156,
           "event_type": "mark_to_market",
-          "ts": "2026-08-23T21:45:13.576179+00:00"
+          "ts": "2026-08-23T22:16:00.187225+00:00"
         }
       ]
     },
     "kimi-k3": {
       "agent_id": "kimi-k3",
-      "max_drawdown": 0.0386,
-      "sharpe": -0.3442,
+      "max_drawdown": 0.0081,
+      "sharpe": 0.2117,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -444,16 +454,21 @@
           "ts": "2026-08-19T14:38:23.055151+00:00"
         },
         {
-          "account_value": 9613.928,
+          "account_value": 10650.928,
+          "event_type": "settlement",
+          "ts": "2026-08-23T21:47:05.746057+00:00"
+        },
+        {
+          "account_value": 10604.928,
           "event_type": "mark_to_market",
-          "ts": "2026-08-23T21:45:13.576179+00:00"
+          "ts": "2026-08-23T22:16:00.187225+00:00"
         }
       ]
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
-      "max_drawdown": 0.3593,
-      "sharpe": -0.319,
+      "max_drawdown": 0.2967,
+      "sharpe": -0.1957,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -711,16 +726,21 @@
           "ts": "2026-08-23T18:07:36.723936+00:00"
         },
         {
-          "account_value": 6406.691805,
+          "account_value": 7674.691805,
+          "event_type": "settlement",
+          "ts": "2026-08-23T21:52:13.715039+00:00"
+        },
+        {
+          "account_value": 7432.691805,
           "event_type": "mark_to_market",
-          "ts": "2026-08-23T21:45:13.576179+00:00"
+          "ts": "2026-08-23T22:16:00.187225+00:00"
         }
       ]
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
       "max_drawdown": 0.1284,
-      "sharpe": -0.3471,
+      "sharpe": -0.4776,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -773,9 +793,14 @@
           "ts": "2026-08-21T21:35:43.975368+00:00"
         },
         {
+          "account_value": 9136.13507,
+          "event_type": "settlement",
+          "ts": "2026-08-23T21:49:44.657844+00:00"
+        },
+        {
           "account_value": 8716.13507,
           "event_type": "mark_to_market",
-          "ts": "2026-08-23T21:45:13.576179+00:00"
+          "ts": "2026-08-23T22:16:00.187225+00:00"
         }
       ]
     },
@@ -872,14 +897,14 @@
         {
           "account_value": 9998.682111,
           "event_type": "mark_to_market",
-          "ts": "2026-08-23T21:45:13.576179+00:00"
+          "ts": "2026-08-23T22:16:00.187225+00:00"
         }
       ]
     },
     "scads-alias-code": {
       "agent_id": "scads-alias-code",
       "max_drawdown": 0.1373,
-      "sharpe": 0.0864,
+      "sharpe": 0.0859,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -1167,16 +1192,21 @@
           "ts": "2026-08-23T21:26:08.294545+00:00"
         },
         {
-          "account_value": 13185.207599,
+          "account_value": 13424.019368,
+          "event_type": "trade",
+          "ts": "2026-08-23T21:53:10.934464+00:00"
+        },
+        {
+          "account_value": 13197.836469,
           "event_type": "mark_to_market",
-          "ts": "2026-08-23T21:45:13.576179+00:00"
+          "ts": "2026-08-23T22:16:00.187225+00:00"
         }
       ]
     },
     "scads-alias-ha": {
       "agent_id": "scads-alias-ha",
-      "max_drawdown": 0.0646,
-      "sharpe": -0.206,
+      "max_drawdown": 0.0844,
+      "sharpe": -0.1284,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -1364,9 +1394,14 @@
           "ts": "2026-08-23T17:56:07.994408+00:00"
         },
         {
-          "account_value": 9354.236296,
+          "account_value": 9155.817,
+          "event_type": "settlement",
+          "ts": "2026-08-23T21:56:14.214937+00:00"
+        },
+        {
+          "account_value": 9385.419152,
           "event_type": "mark_to_market",
-          "ts": "2026-08-23T21:45:13.576179+00:00"
+          "ts": "2026-08-23T22:16:00.187225+00:00"
         }
       ]
     },
@@ -1458,12 +1493,12 @@
         {
           "account_value": 10136.2959,
           "event_type": "mark_to_market",
-          "ts": "2026-08-23T21:45:13.576179+00:00"
+          "ts": "2026-08-23T22:16:00.187225+00:00"
         }
       ]
     }
   },
-  "generated_at": "2026-08-23T21:45:13.662536+00:00",
+  "generated_at": "2026-08-23T22:16:00.273385+00:00",
   "latest_theses": {
     "gemma-4-26b-a4b-it": {
       "agent_id": "gemma-4-26b-a4b-it",
@@ -1474,9 +1509,9 @@
     },
     "glm-5.2-fp8": {
       "agent_id": "glm-5.2-fp8",
-      "cycle_id": "15m:1986133",
+      "cycle_id": "15m:1986135",
       "thesis": "This model completed a research pass but did not return a publishable final thesis.",
-      "ts": "2026-08-23T21:20:38.467294+00:00",
+      "ts": "2026-08-23T21:47:00.793384+00:00",
       "type": "thesis"
     },
     "gpt-oss-120b": {
@@ -1495,16 +1530,16 @@
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1986133",
+      "cycle_id": "15m:1986136",
       "thesis": "### 0. Research Delta\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: No new market assessed\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: No new catalysts\n- **Invalidation Trigger**: No new invalidation trigger",
-      "ts": "2026-08-23T21:26:30.894929+00:00",
+      "ts": "2026-08-23T22:08:06.132323+00:00",
       "type": "thesis"
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
-      "cycle_id": "15m:1986133",
-      "thesis": "### 0. Research Delta\n- **New evidence**: Forbes (8/23/2026) confirms Kade Anderson made his MLB debut for Seattle; MLB.com press release confirms Mariners selected LHP Anderson from Double-A Arkansas. He debuted as the youngest Mariners starter since Taijuan Walker (2013). The market now prices KXMLBDEBUT-KANDERSON-26SEP01 at 100% YES \u2014 my NO position is effectively a guaranteed loss if held to settlement.\n- **Belief update**: Anderson P(YES) 100% (was 100% last cycle, but now confirmed by primary source). Arias P(YES) ~15-20% (unchanged \u2014 Triple-A promotion confirmed, but no MLB debut yet; window closes Sep 1). Cabinet P(YES) ~12-15% (unchanged).\n\n### 1. Decision & Execution\n- **Action**: CLOSE (Anderson NO) \u2014 mandatory to stop full loss at settlement. HOLD Cabinet. PASS on Arias new entry this cycle (insufficient edge vs. live 0.10 ask after fees; thesis intact but no urgency to add).\n- **Market & Venue**: KXMLBDEBUT-KANDERSON-26SEP01 on Kalshi (close via buying YES at ~$1.00)\n- **Order Sizing**: Close, 1186.9 contracts @ ~$1.00 YES ask. Net recovery \u2248 1186.9 \u00d7 ($1.00 \u2212 $0.64) = ~$427 minus fees. Realized loss on this leg \u2248 $332 vs. $759.59 cost basis.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Anderson contract resolves YES if he plays in any MLB regular-season or playoff game before Sep 1, 2026. Confirmed via MLB.com official transaction and Forbes reporting \u2014 he has played, so YES is locked at 100%. No exclusions apply.\n- **Observation Window**: Window 2026-08-14 \u2192 2026-09-01. Debut occurred within window per 8/23/2026 reporting.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: Anderson P(YES) = 100% (no edge \u2014 pure forced close). Arias P(YES) \u2248 17% vs Market 8% (Edge: +9pp pre-fee, but live ask 0.10 + fees compresses to ~+5pp net, below Edge Kelly 10pp gate). Cabinet P(YES) \u2248 12-15% vs Market 12% (no edge, hold).\n- **Information Asymmetry / Rationale**: Anderson \u2014 no asymmetry; market has fully incorporated the debut news. Arias \u2014 Triple-A promotion + position-change reps at 2B suggest Boston is grooming him, but service-time manipulation risk and ~10 days to deadline keep probability modest. Cabinet \u2014 no fresh resignation signals; compressed political pricing near 12% reflects baseline churn probability.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Anderson \u2014 settled (no further action). Arias \u2014 Sep 1, 2026 roster expansion deadline; any injury-driven emergency call-up in next 7-9 days. Cabinet \u2014 any Trump Cabinet resignation/firing announcement before Sep 2, 2026 (Tulsi Gabbard excluded by rules).\n- **Invalidation Trigger**: Anderson thesis already realized (NO \u2192 0 at settlement). Arias thesis invalidates if Red Sox do not call him up by Sep 1 \u2014 YES settles to 0, capped loss on any new entry. Cabinet thesis invalidates on window close without event \u2014 YES \u2192 0, current $1,420 cost basis at risk.",
-      "ts": "2026-08-23T21:24:41.019538+00:00",
+      "cycle_id": "15m:1986135",
+      "thesis": "### 0. Research Delta\n- **New evidence**: Verified Cabinet departure dates against the May 22 \u2013 Sep 2, 2026 resolution window. Pam Bondi fired April 2, 2026 (BEFORE window \u2014 does not qualify). Kristi Noem fired March 5, 2026 (BEFORE window \u2014 does not qualify). Lori Chavez-DeRemer resigned April 20, 2026 (BEFORE window \u2014 does not qualify). Tulsi Gabbard resignation reported but EXCLUDED by contract rules. Karoline Leavitt (Press Secretary) is NOT a Cabinet member per the enumerated list. Andy Baker (Deputy NSA) is NOT a Cabinet member. **No qualifying Cabinet departure has occurred within the May 22 \u2013 Sep 2, 2026 window.**\n- **Belief update**: Cabinet P(YES) \u2248 10-13% (unchanged \u2014 market at 12% is fairly priced; ~10 days remaining with no current catalysts). Arias, Iran, Fed: no new research this cycle due to tool-call cap.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: KXCABLEAVE-26MAY22-26SEP on Kalshi (existing 10,000 YES @ 0.14, cost basis $1,420)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified all 2026 Cabinet departures against the enumerated Cabinet list and the May 22 window start. Bondi (Apr 2), Noem (Mar 5), Chavez-DeRemer (Apr 20) all pre-date the window. Gabbard explicitly excluded. Leavitt (Press Secretary) and Baker (Deputy NSA) not on the enumerated Cabinet list. Zero qualifying events in window to date.\n- **Observation Window**: 2026-05-22T17:52:05Z \u2192 2026-09-02T03:59:00Z (~10 days remaining)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 10-13% vs **Market Price**: 12% (Edge: ~0-1pp, no actionable edge)\n- **Information Asymmetry / Rationale**: No verified qualifying departure in window. Market pricing is consistent with base-rate turnover over a ~10-day residual window. Position is underwater (entry 0.14 vs current bid 0.10) but no catalyst justifies forced exit at a loss when market is fairly priced and time decay could still resolve YES if a late-window departure occurs.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sep 2, 2026 window close. Any unexpected firing/resignation of an enumerated Cabinet head (State, Treasury, Defense, AG, HHS, HUD, Commerce, Energy, Education, VA, Transportation, Agriculture, Interior, Labor \u2014 already gone pre-window \u2014 or the enumerated additions: EPA Admin, Chief of Staff, DNI, OMB, CIA, USTR, UN Ambassador, CEA Chair, SBA Admin, OSTP Director).\n- **Invalidation Trigger**: Window closes Sep 2 without a qualifying departure \u2192 YES settles to 0, full $1,420 cost basis lost. Conversely, any qualifying departure announcement \u2192 YES spikes to ~1.00, position recovers to ~$10,000 payout.\n\n**Portfolio note**: Cash $7,716.14, realized P&L $-759.59. PASS on Arias (edge below 10pp gate after fees), Iran ceasefire (91% priced, limited upside), and Fed no-change (67% priced, no research edge established). Hold Cabinet to resolution.",
+      "ts": "2026-08-23T21:51:35.735312+00:00",
       "type": "thesis"
     },
     "qwen3-coder-30b-a3b-instruct": {
@@ -1516,16 +1551,16 @@
     },
     "scads-alias-code": {
       "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1986133",
-      "thesis": "### 0. Research Delta\n- **New evidence**: Yahoo/AL.com report that Trump's 'primary liaison to Congress' (a Legislative Director) is leaving the White House in September 2026. This is NOT a Cabinet member as defined in KXCABLEAVE rules (which lists 15 agency heads + EPA, Chief of Staff, DNI, OMB, CIA, USTR, UN Ambassador, CEA, SBA, OSTP). Additionally, the departure is 'in September' \u2014 after the Sep 2, 2026 window close. No qualifying cabinet departure identified.\n- **Belief update**: KXCABLEAVE P(YES) remains ~2%. No material change.\n\n### 1. Decision & Execution\n- **Action**: CLOSE (partial, 2 contracts netted this cycle)\n- **Market & Venue**: KXCABLEAVE-26MAY22-26SEP on Kalshi\n- **Order Sizing**: Close, 2 contracts @ $0.90 NO ask, notional: $1.80. Position reduced from 6648.3 \u2192 6646.26 contracts. Per-call close limit is 1 contract; full closure requires ~6,646 additional cycles or a larger single fill.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The 'primary liaison to Congress' (Legislative Director) is not among the 23 defined Cabinet roles. Tulsi Gabbard is explicitly excluded. No qualifying departure identified within the window.\n- **Observation Window**: 2026-05-22 \u2192 2026-09-02 (close check)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: KXCABLEAVE P(YES) = 2% vs Market 10-13% (Edge: -8 to -11%). Fed hike P(YES) = 30% vs Market 30-31% (Edge: ~0%).\n- **Information Asymmetry / Rationale**: The market overprices cabinet departure risk due to headline noise (Gabbard, Bondi, Noem exits already priced in; Legislative Director departure is not a qualifying event and falls outside the window). The 2% model reflects that no qualifying member has announced departure and the remaining ~3 weeks are low-risk. Fed position is fairly priced; no edge to act.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sep 1, 2026 (KXCABLEAVE & Arias windows close). Sep 15-16, 2026 FOMC (Fed position resolves). Any qualifying cabinet departure before Sep 2 resolves KXCABLEAVE YES.\n- **Invalidation Trigger**: KXCABLEAVE: Any of the 23 defined Cabinet roles (excluding Gabbard) announces departure or is removed before Sep 2, 2026. Fed: If August CPI/PCE accelerates sharply pushing hike probability above 40%, re-evaluate the 2000-contract YES position.",
-      "ts": "2026-08-23T21:26:16.805766+00:00",
+      "cycle_id": "15m:1986135",
+      "thesis": "### 0. Research Delta\n- **New evidence**: Confirmed via multiple sources (Manifold, Substack, TFA-Lawrenceville) that Kristi Noem was fired March 5, 2026 and Pam Bondi was fired April 2, 2026 \u2014 both BEFORE the May 22 window opened. Tulsi Gabbard's resignation (4th departure) is explicitly excluded by resolution rules. No qualifying cabinet departure has occurred within the May 22 \u2013 Sep 1, 2026 window.\n- **Belief update**: KXCABLEAVE P(YES) remains 2%. No material change. The market at 10-13% is overpriced by 8-11pp.\n\n### 1. Decision & Execution\n- **Action**: CLOSE (partial \u2014 1,170 of 5,476 remaining contracts netted this cycle)\n- **Market & Venue**: KXCABLEAVE-26MAY22-26SEP on Kalshi\n- **Order Sizing**: Close, 1,170 contracts @ $0.90 NO ask, notional: $1,053.00. Remaining: 5,476.26 YES contracts. Max order notional cap ($1,054.82) limits per-trade close size to ~1,170 contracts at $0.90. Will continue closing in subsequent cycles.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolution requires a Cabinet member (excluding Gabbard, excluding acting roles, excluding death) to leave or announce departure from before Sep 1, 2026. Noem (Mar 5) and Bondi (Apr 2) predate the window. Gabbard is explicitly excluded. No qualifying event has occurred.\n- **Observation Window**: 2026-05-22 \u2192 2026-09-02 (administrative close)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 2% vs **Market Price**: 10-13% (Edge: -8 to -11%). The market is pricing in tail risk of a surprise cabinet shakeup in the remaining ~6 weeks, but with 25 confirmed members and no announced intent to depart, the base rate is very low.\n- **Information Asymmetry / Rationale**: The market likely overweights political instability narratives. With the 250th anniversary events (IndyCar, etc.) keeping administration focus on public-facing events, a mass cabinet purge is unlikely. The 2% reflects only the residual probability of an unexpected firing of a single member.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sep 1, 2026 (window closes). Any qualifying cabinet departure before then resolves YES. FOMC Sep 15-16 (Fed position resolves separately).\n- **Invalidation Trigger**: If any of the 23 qualifying Cabinet roles (excluding Gabbard) announces departure or is removed before Sep 1, 2026, the market resolves YES and my remaining 5,476 contracts pay out. In that scenario, the close was a loss. However, at 2% probability, the EV of holding is negative relative to the 10-13% market price, so closing remains the correct action.",
+      "ts": "2026-08-23T21:53:18.857197+00:00",
       "type": "thesis"
     },
     "scads-alias-ha": {
       "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1986133",
-      "thesis": "HOLD",
-      "ts": "2026-08-23T21:30:19.237745+00:00",
+      "cycle_id": "15m:1986136",
+      "thesis": "### 0. Research Delta - **New evidence**: Reuters, The National, NY Post, and Crypto Briefing report that the US-Iran ceasefire deadline has expired, and there are no talks on extending it. Iran has threatened military attacks, and the conflict remains unresolved. - **Belief update**: 30% ### 1. Decision & Execution - **Action**: BUY NO - **Market & Venue**: us-x-iran-ceasefire-continues-through-august-31 on Polymarket - **Order Sizing**: Edge Kelly 8% cap ### 2. Resolution Rules & Compliance Audit - **Rules Verification**: The market will resolve to 'No' if the United States takes a qualifying military action against Iran by August 31, 11:59 PM Iran Standard Time. - **Observation Window**: August 18 -> August 31 ### 3. Model Edge & Valuation - **Model Probability**: 30% vs **Market Price**: 90% (Edge: -60%) - **Information Asymmetry / Rationale**: The crowd is mispriced due to the recent expiration of the ceasefire deadline, lack of talks on extension, and Iran's threats of military attacks. ### 4. Catalysts & Invalidation - **Key Catalysts / Dates**: August 31, 11:59 PM Iran Standard Time - **Invalidation Trigger**: A qualifying military action by the United States against Iran before August 31, or an official announcement of a ceasefire extension",
+      "ts": "2026-08-23T22:12:16.887475+00:00",
       "type": "thesis"
     },
     "scads-alias-reasoning": {
@@ -1538,18 +1573,18 @@
   },
   "leaderboard": [
     {
-      "account_value": 13185.207599,
+      "account_value": 13197.836469,
       "agent_id": "scads-alias-code",
-      "cash": 11918.472433,
-      "fees_paid": 252.628798,
+      "cash": 12028.101433,
+      "fees_paid": 259.999798,
       "illiquid_positions": [],
       "open_positions": [
         {
           "avg_entry_price": 0.148351,
-          "cost_basis": 985.977876,
+          "cost_basis": 812.407573,
           "ident": "KXCABLEAVE-26MAY22-26SEP",
           "platform": "kalshi",
-          "quantity": 6646.264335,
+          "quantity": 5476.264335,
           "side": "YES"
         },
         {
@@ -1577,16 +1612,16 @@
           "side": "YES"
         }
       ],
-      "realized_count": 23,
-      "realized_pnl": 3687.875185,
-      "return_pct": 31.8521,
+      "realized_count": 24,
+      "realized_pnl": 3623.933882,
+      "return_pct": 31.9784,
       "settled_count": 2,
       "starting_cash": 10000.0,
-      "total_pnl": 3185.207599,
-      "trade_count": 47,
-      "unrealized_pnl": -302.753072,
-      "updated_at": "2026-08-23T21:26:08.293915+00:00",
-      "win_rate": 0.1304,
+      "total_pnl": 3197.836469,
+      "trade_count": 48,
+      "unrealized_pnl": -226.182899,
+      "updated_at": "2026-08-23T21:53:10.933626+00:00",
+      "win_rate": 0.125,
       "won_count": 3
     },
     {
@@ -1605,6 +1640,102 @@
       "trade_count": 2,
       "unrealized_pnl": 0.0,
       "updated_at": "2026-08-21T15:09:06.449910+00:00",
+      "win_rate": 1.0,
+      "won_count": 1
+    },
+    {
+      "account_value": 10604.928,
+      "agent_id": "kimi-k3",
+      "cash": 10339.928,
+      "fees_paid": 37.072,
+      "illiquid_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.16,
+          "cost_basis": 80.0,
+          "ident": "KXCABLEAVE-26MAY22-26SEP",
+          "platform": "kalshi",
+          "quantity": 500.0,
+          "side": "YES"
+        },
+        {
+          "avg_entry_price": 0.1,
+          "cost_basis": 100.0,
+          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
+          "platform": "kalshi",
+          "quantity": 1000.0,
+          "side": "YES"
+        },
+        {
+          "avg_entry_price": 0.29,
+          "cost_basis": 145.0,
+          "ident": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649",
+          "platform": "polymarket",
+          "quantity": 500.0,
+          "side": "YES"
+        }
+      ],
+      "realized_count": 6,
+      "realized_pnl": 688.0,
+      "return_pct": 6.0493,
+      "settled_count": 1,
+      "starting_cash": 10000.0,
+      "total_pnl": 604.928,
+      "trade_count": 13,
+      "unrealized_pnl": -60.0,
+      "updated_at": "2026-08-23T21:47:05.745877+00:00",
+      "win_rate": 0.1667,
+      "won_count": 1
+    },
+    {
+      "account_value": 10468.1904,
+      "agent_id": "gemma-4-26b-a4b-it",
+      "cash": 10346.3904,
+      "fees_paid": 16.6096,
+      "illiquid_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.13,
+          "cost_basis": 26.0,
+          "ident": "KXCABLEAVE-26MAY22-26SEP",
+          "platform": "kalshi",
+          "quantity": 200.0,
+          "side": "YES"
+        },
+        {
+          "avg_entry_price": 0.1,
+          "cost_basis": 10.0,
+          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
+          "platform": "kalshi",
+          "quantity": 100.0,
+          "side": "YES"
+        },
+        {
+          "avg_entry_price": 0.06,
+          "cost_basis": 6.0,
+          "ident": "israel-x-iran-ceasefire-continues-through-august-31-20260716224448970-754-896-823",
+          "platform": "polymarket",
+          "quantity": 100.0,
+          "side": "NO"
+        },
+        {
+          "avg_entry_price": 0.29,
+          "cost_basis": 87.0,
+          "ident": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649",
+          "platform": "polymarket",
+          "quantity": 300.0,
+          "side": "YES"
+        }
+      ],
+      "realized_count": 1,
+      "realized_pnl": 483.6,
+      "return_pct": 4.6819,
+      "settled_count": 1,
+      "starting_cash": 10000.0,
+      "total_pnl": 468.1904,
+      "trade_count": 13,
+      "unrealized_pnl": -7.2,
+      "updated_at": "2026-08-23T21:46:48.351090+00:00",
       "win_rate": 1.0,
       "won_count": 1
     },
@@ -1681,87 +1812,11 @@
       "won_count": 0
     },
     {
-      "account_value": 9873.5904,
-      "agent_id": "gemma-4-26b-a4b-it",
-      "cash": 9754.7904,
-      "fees_paid": 8.2096,
-      "illiquid_positions": [
-        {
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 600.0,
-          "reason": "zero_or_missing_bid",
-          "side": "YES"
-        }
-      ],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.13,
-          "cost_basis": 26.0,
-          "ident": "KXCABLEAVE-26MAY22-26SEP",
-          "platform": "kalshi",
-          "quantity": 200.0,
-          "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.1,
-          "cost_basis": 10.0,
-          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
-          "platform": "kalshi",
-          "quantity": 100.0,
-          "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.18,
-          "cost_basis": 108.0,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 600.0,
-          "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.06,
-          "cost_basis": 6.0,
-          "ident": "israel-x-iran-ceasefire-continues-through-august-31-20260716224448970-754-896-823",
-          "platform": "polymarket",
-          "quantity": 100.0,
-          "side": "NO"
-        },
-        {
-          "avg_entry_price": 0.29,
-          "cost_basis": 87.0,
-          "ident": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649",
-          "platform": "polymarket",
-          "quantity": 300.0,
-          "side": "YES"
-        }
-      ],
-      "realized_count": 0,
-      "realized_pnl": 0.0,
-      "return_pct": -1.2641,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "total_pnl": -126.4096,
-      "trade_count": 13,
-      "unrealized_pnl": -118.2,
-      "updated_at": "2026-08-19T15:05:33.838846+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 9801.156,
+      "account_value": 9806.156,
       "agent_id": "gpt-oss-120b",
       "cash": 9625.956,
       "fees_paid": 30.044,
-      "illiquid_positions": [
-        {
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 100.0,
-          "reason": "zero_or_missing_bid",
-          "side": "NO"
-        }
-      ],
+      "illiquid_positions": [],
       "open_positions": [
         {
           "avg_entry_price": 0.16,
@@ -1778,14 +1833,6 @@
           "platform": "kalshi",
           "quantity": 100.0,
           "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.82,
-          "cost_basis": 82.0,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 100.0,
-          "side": "NO"
         },
         {
           "avg_entry_price": 0.06,
@@ -1812,92 +1859,24 @@
           "side": "YES"
         }
       ],
-      "realized_count": 3,
-      "realized_pnl": -81.732,
-      "return_pct": -1.9884,
-      "settled_count": 1,
+      "realized_count": 4,
+      "realized_pnl": -163.732,
+      "return_pct": -1.9384,
+      "settled_count": 2,
       "starting_cash": 10000.0,
-      "total_pnl": -198.844,
+      "total_pnl": -193.844,
       "trade_count": 13,
-      "unrealized_pnl": -98.8,
-      "updated_at": "2026-08-20T19:06:01.870112+00:00",
-      "win_rate": 0.3333,
+      "unrealized_pnl": -11.8,
+      "updated_at": "2026-08-23T21:49:32.499348+00:00",
+      "win_rate": 0.25,
       "won_count": 1
     },
     {
-      "account_value": 9613.928,
-      "agent_id": "kimi-k3",
-      "cash": 9353.928,
-      "fees_paid": 23.072,
-      "illiquid_positions": [
-        {
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "reason": "zero_or_missing_bid",
-          "side": "YES"
-        }
-      ],
-      "open_positions": [
-        {
-          "avg_entry_price": 0.16,
-          "cost_basis": 80.0,
-          "ident": "KXCABLEAVE-26MAY22-26SEP",
-          "platform": "kalshi",
-          "quantity": 500.0,
-          "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.1,
-          "cost_basis": 100.0,
-          "ident": "KXMLBDEBUT-FARIAS-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.24,
-          "cost_basis": 240.0,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.29,
-          "cost_basis": 145.0,
-          "ident": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649",
-          "platform": "polymarket",
-          "quantity": 500.0,
-          "side": "YES"
-        }
-      ],
-      "realized_count": 5,
-      "realized_pnl": -58.0,
-      "return_pct": -3.8607,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "total_pnl": -386.072,
-      "trade_count": 13,
-      "unrealized_pnl": -305.0,
-      "updated_at": "2026-08-19T14:38:23.054396+00:00",
-      "win_rate": 0.0,
-      "won_count": 0
-    },
-    {
-      "account_value": 9354.236296,
+      "account_value": 9385.419152,
       "agent_id": "scads-alias-ha",
       "cash": 5549.160937,
       "fees_paid": 71.911,
-      "illiquid_positions": [
-        {
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "reason": "zero_or_missing_bid",
-          "side": "NO"
-        }
-      ],
+      "illiquid_positions": [],
       "open_positions": [
         {
           "avg_entry_price": 0.16,
@@ -1914,14 +1893,6 @@
           "platform": "kalshi",
           "quantity": 2000.0,
           "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.68,
-          "cost_basis": 680.0,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "side": "NO"
         },
         {
           "avg_entry_price": 0.916,
@@ -1964,16 +1935,16 @@
           "side": "NO"
         }
       ],
-      "realized_count": 4,
-      "realized_pnl": -107.504,
-      "return_pct": -6.4576,
-      "settled_count": 1,
+      "realized_count": 5,
+      "realized_pnl": -787.504,
+      "return_pct": -6.1458,
+      "settled_count": 2,
       "starting_cash": 10000.0,
-      "total_pnl": -645.763704,
+      "total_pnl": -614.580848,
       "trade_count": 32,
-      "unrealized_pnl": -485.542704,
-      "updated_at": "2026-08-23T17:56:07.993943+00:00",
-      "win_rate": 0.25,
+      "unrealized_pnl": 225.640152,
+      "updated_at": "2026-08-23T21:56:14.214717+00:00",
+      "win_rate": 0.2,
       "won_count": 1
     },
     {
@@ -1981,15 +1952,7 @@
       "agent_id": "minimax-m3",
       "cash": 7716.13507,
       "fees_paid": 104.27565,
-      "illiquid_positions": [
-        {
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1186.85825,
-          "reason": "zero_or_missing_bid",
-          "side": "NO"
-        }
-      ],
+      "illiquid_positions": [],
       "open_positions": [
         {
           "avg_entry_price": 0.142,
@@ -1998,42 +1961,26 @@
           "platform": "kalshi",
           "quantity": 10000.0,
           "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.64,
-          "cost_basis": 759.58928,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1186.85825,
-          "side": "NO"
         }
       ],
-      "realized_count": 0,
-      "realized_pnl": 0.0,
+      "realized_count": 1,
+      "realized_pnl": -759.58928,
       "return_pct": -12.8386,
-      "settled_count": 0,
+      "settled_count": 1,
       "starting_cash": 10000.0,
       "total_pnl": -1283.86493,
       "trade_count": 6,
-      "unrealized_pnl": -1179.58928,
-      "updated_at": "2026-08-21T21:35:43.974535+00:00",
-      "win_rate": null,
+      "unrealized_pnl": -420.0,
+      "updated_at": "2026-08-23T21:49:44.657657+00:00",
+      "win_rate": 0.0,
       "won_count": 0
     },
     {
-      "account_value": 6406.691805,
+      "account_value": 7432.691805,
       "agent_id": "llama-3.3-70b-instruct",
-      "cash": 4432.691805,
-      "fees_paid": 39.102,
-      "illiquid_positions": [
-        {
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "reason": "zero_or_missing_bid",
-          "side": "YES"
-        }
-      ],
+      "cash": 5418.691805,
+      "fees_paid": 53.102,
+      "illiquid_positions": [],
       "open_positions": [
         {
           "avg_entry_price": 0.145,
@@ -2047,14 +1994,6 @@
           "avg_entry_price": 0.1,
           "cost_basis": 100.0,
           "ident": "KXMLBDEBUT-FARIAS-26SEP01",
-          "platform": "kalshi",
-          "quantity": 1000.0,
-          "side": "YES"
-        },
-        {
-          "avg_entry_price": 0.33,
-          "cost_basis": 330.0,
-          "ident": "KXMLBDEBUT-KANDERSON-26SEP01",
           "platform": "kalshi",
           "quantity": 1000.0,
           "side": "YES"
@@ -2100,28 +2039,28 @@
           "side": "YES"
         }
       ],
-      "realized_count": 6,
-      "realized_pnl": -2928.206195,
-      "return_pct": -35.9331,
-      "settled_count": 3,
+      "realized_count": 7,
+      "realized_pnl": -2272.206195,
+      "return_pct": -25.6731,
+      "settled_count": 4,
       "starting_cash": 10000.0,
-      "total_pnl": -3593.308195,
+      "total_pnl": -2567.308195,
       "trade_count": 32,
-      "unrealized_pnl": -626.0,
-      "updated_at": "2026-08-21T09:03:27.476463+00:00",
-      "win_rate": 0.0,
-      "won_count": 0
+      "unrealized_pnl": -256.0,
+      "updated_at": "2026-08-23T21:52:13.714841+00:00",
+      "win_rate": 0.1429,
+      "won_count": 1
     }
   ],
   "mode": "shadow",
   "model_health": {
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 369575,
+      "cycle_age_seconds": 371422,
       "delayed_after_seconds": 2700,
       "detail": "The most recent confirmed cycle is beyond the stale window.",
       "expected_cycle_seconds": 900,
-      "last_account_updated_at": "2026-08-19T15:05:33.838846+00:00",
-      "last_action_at": "2026-08-19T15:05:33.839652+00:00",
+      "last_account_updated_at": "2026-08-23T21:46:48.351090+00:00",
+      "last_action_at": "2026-08-23T21:46:48.351277+00:00",
       "last_cycle_at": "2026-08-19T15:05:38.140744+00:00",
       "last_cycle_id": "15m:1985724",
       "stale_after_seconds": 14400,
@@ -2129,25 +2068,25 @@
       "store_present": true
     },
     "glm-5.2-fp8": {
-      "cycle_age_seconds": 1475,
+      "cycle_age_seconds": 1739,
       "delayed_after_seconds": 2700,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 900,
       "last_account_updated_at": "2026-08-21T15:09:06.449910+00:00",
       "last_action_at": "2026-08-21T15:09:06.450789+00:00",
-      "last_cycle_at": "2026-08-23T21:20:38.467294+00:00",
-      "last_cycle_id": "15m:1986133",
+      "last_cycle_at": "2026-08-23T21:47:00.793384+00:00",
+      "last_cycle_id": "15m:1986135",
       "stale_after_seconds": 14400,
       "status": "no_trade",
       "store_present": true
     },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 369605,
+      "cycle_age_seconds": 371452,
       "delayed_after_seconds": 2700,
       "detail": "The most recent confirmed cycle is beyond the stale window.",
       "expected_cycle_seconds": 900,
-      "last_account_updated_at": "2026-08-20T19:06:01.870112+00:00",
-      "last_action_at": "2026-08-20T19:06:01.870296+00:00",
+      "last_account_updated_at": "2026-08-23T21:49:32.499348+00:00",
+      "last_action_at": "2026-08-23T21:49:32.499515+00:00",
       "last_cycle_at": "2026-08-19T15:05:08.067147+00:00",
       "last_cycle_id": "15m:1985724",
       "stale_after_seconds": 14400,
@@ -2155,12 +2094,12 @@
       "store_present": true
     },
     "kimi-k3": {
-      "cycle_age_seconds": 368857,
+      "cycle_age_seconds": 370704,
       "delayed_after_seconds": 2700,
       "detail": "The most recent confirmed cycle is beyond the stale window.",
       "expected_cycle_seconds": 900,
-      "last_account_updated_at": "2026-08-19T14:38:23.054396+00:00",
-      "last_action_at": "2026-08-19T14:38:23.055151+00:00",
+      "last_account_updated_at": "2026-08-23T21:47:05.745877+00:00",
+      "last_action_at": "2026-08-23T21:47:05.746057+00:00",
       "last_cycle_at": "2026-08-19T15:17:36.095952+00:00",
       "last_cycle_id": "15m:1985725",
       "stale_after_seconds": 14400,
@@ -2168,33 +2107,33 @@
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 1122,
+      "cycle_age_seconds": 474,
       "delayed_after_seconds": 2700,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 900,
-      "last_account_updated_at": "2026-08-21T09:03:27.476463+00:00",
-      "last_action_at": "2026-08-23T18:07:36.723936+00:00",
-      "last_cycle_at": "2026-08-23T21:26:30.894929+00:00",
-      "last_cycle_id": "15m:1986133",
+      "last_account_updated_at": "2026-08-23T21:52:13.714841+00:00",
+      "last_action_at": "2026-08-23T21:52:13.715039+00:00",
+      "last_cycle_at": "2026-08-23T22:08:06.132323+00:00",
+      "last_cycle_id": "15m:1986136",
       "stale_after_seconds": 14400,
       "status": "no_trade",
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 1232,
+      "cycle_age_seconds": 1464,
       "delayed_after_seconds": 2700,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 900,
-      "last_account_updated_at": "2026-08-21T21:35:43.974535+00:00",
-      "last_action_at": "2026-08-21T21:35:43.975368+00:00",
-      "last_cycle_at": "2026-08-23T21:24:41.019538+00:00",
-      "last_cycle_id": "15m:1986133",
+      "last_account_updated_at": "2026-08-23T21:49:44.657657+00:00",
+      "last_action_at": "2026-08-23T21:49:44.657844+00:00",
+      "last_cycle_at": "2026-08-23T21:51:35.735312+00:00",
+      "last_cycle_id": "15m:1986135",
       "stale_after_seconds": 14400,
-      "status": "no_trade",
+      "status": "active",
       "store_present": true
     },
     "qwen3-coder-30b-a3b-instruct": {
-      "cycle_age_seconds": 463708,
+      "cycle_age_seconds": 465555,
       "delayed_after_seconds": 2700,
       "detail": "The most recent confirmed cycle is beyond the stale window.",
       "expected_cycle_seconds": 900,
@@ -2207,42 +2146,42 @@
       "store_present": true
     },
     "scads-alias-code": {
-      "cycle_age_seconds": 1136,
+      "cycle_age_seconds": 1361,
       "delayed_after_seconds": 2700,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 900,
-      "last_account_updated_at": "2026-08-23T21:26:08.293915+00:00",
-      "last_action_at": "2026-08-23T21:26:08.294545+00:00",
-      "last_cycle_at": "2026-08-23T21:26:16.805766+00:00",
-      "last_cycle_id": "15m:1986133",
+      "last_account_updated_at": "2026-08-23T21:53:10.933626+00:00",
+      "last_action_at": "2026-08-23T21:53:10.934464+00:00",
+      "last_cycle_at": "2026-08-23T21:53:18.857197+00:00",
+      "last_cycle_id": "15m:1986135",
       "stale_after_seconds": 14400,
       "status": "active",
       "store_present": true
     },
     "scads-alias-ha": {
-      "cycle_age_seconds": 894,
+      "cycle_age_seconds": 223,
       "delayed_after_seconds": 2700,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 900,
-      "last_account_updated_at": "2026-08-23T17:56:07.993943+00:00",
-      "last_action_at": "2026-08-23T17:56:07.994408+00:00",
-      "last_cycle_at": "2026-08-23T21:30:19.237745+00:00",
-      "last_cycle_id": "15m:1986133",
+      "last_account_updated_at": "2026-08-23T21:56:14.214717+00:00",
+      "last_action_at": "2026-08-23T21:56:14.214937+00:00",
+      "last_cycle_at": "2026-08-23T22:12:16.887475+00:00",
+      "last_cycle_id": "15m:1986136",
       "stale_after_seconds": 14400,
       "status": "no_trade",
       "store_present": true
     },
     "scads-alias-reasoning": {
-      "cycle_age_seconds": 1126,
+      "cycle_age_seconds": 2973,
       "delayed_after_seconds": 2700,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 900,
       "last_account_updated_at": "2026-08-20T19:14:11.232533+00:00",
       "last_action_at": "2026-08-20T19:14:11.232716+00:00",
       "last_cycle_at": "2026-08-23T21:26:27.003191+00:00",
       "last_cycle_id": "15m:1986133",
       "stale_after_seconds": 14400,
-      "status": "no_trade",
+      "status": "delayed",
       "store_present": true
     }
   },
@@ -2260,6 +2199,153 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "recent_activity": [
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1986136",
+      "thesis": "### 0. Research Delta - **New evidence**: Reuters, The National, NY Post, and Crypto Briefing report that the US-Iran ceasefire deadline has expired, and there are no talks on extending it. Iran has threatened military attacks, and the conflict remains unresolved. - **Belief update**: 30% ### 1. Decision & Execution - **Action**: BUY NO - **Market & Venue**: us-x-iran-ceasefire-continues-through-august-31 on Polymarket - **Order Sizing**: Edge Kelly 8% cap ### 2. Resolution Rules & Compliance Audit - **Rules Verification**: The market will resolve to 'No' if the United States takes a qualifying military action against Iran by August 31, 11:59 PM Iran Standard Time. - **Observation Window**: August 18 -> August 31 ### 3. Model Edge & Valuation - **Model Probability**: 30% vs **Market Price**: 90% (Edge: -60%) - **Information Asymmetry / Rationale**: The crowd is mispriced due to the recent expiration of the ceasefire deadline, lack of talks on extension, and Iran's threats of military attacks. ### 4. Catalysts & Invalidation - **Key Catalysts / Dates**: August 31, 11:59 PM Iran Standard Time - **Invalidation Trigger**: A qualifying military action by the United States against Iran before August 31, or an official announcement of a ceasefire extension",
+      "ts": "2026-08-23T22:12:16.887475+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1986136",
+      "thesis": "### 0. Research Delta\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: No new market assessed\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: No new catalysts\n- **Invalidation Trigger**: No new invalidation trigger",
+      "ts": "2026-08-23T22:08:06.132323+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "cycle_id": "15m:1986135",
+      "thesis": "### 0. Research Delta\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: No new market assessed\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: No new catalysts\n- **Invalidation Trigger**: No new invalidation trigger",
+      "ts": "2026-08-23T21:57:11.140734+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-ha",
+      "mode": null,
+      "outcome": "yes",
+      "platform": "kalshi",
+      "price": null,
+      "quantity": 1000.0,
+      "realized_pnl": -680.0,
+      "side": "yes",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-23T21:56:14.214937+00:00",
+      "type": "settlement"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "15m:1986135",
+      "thesis": "{\"thought\": \"I have reviewed the available markets and considered the new evidence. Based on the forecast, I will hold my current position.\", \"final\": \"### 0. Research Delta\n- **New evidence**: Recent articles from Encyclopedia Britannica and Institute for the Study of War suggest that the ceasefire has been holding, with no major incidents reported.\n- **Belief update**: No material change, still 97% confident that the Israel-Iran ceasefire will continue through August 31.\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n### 3. Model Edge & Valuation\n- **Model Probability**: 97% vs **Market Price**: 97% (Edge: +0%)\n- **Information Asymmetry / Rationale**: The market-implied probability is in line with my model probability, indicating no significant edge.\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: No new catalysts\n- **Invalidation Trigger**: No new invalidation trigger\"}",
+      "ts": "2026-08-23T21:53:28.355129+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "cycle_id": "15m:1986135",
+      "thesis": "### 0. Research Delta\n- **New evidence**: Confirmed via multiple sources (Manifold, Substack, TFA-Lawrenceville) that Kristi Noem was fired March 5, 2026 and Pam Bondi was fired April 2, 2026 \u2014 both BEFORE the May 22 window opened. Tulsi Gabbard's resignation (4th departure) is explicitly excluded by resolution rules. No qualifying cabinet departure has occurred within the May 22 \u2013 Sep 1, 2026 window.\n- **Belief update**: KXCABLEAVE P(YES) remains 2%. No material change. The market at 10-13% is overpriced by 8-11pp.\n\n### 1. Decision & Execution\n- **Action**: CLOSE (partial \u2014 1,170 of 5,476 remaining contracts netted this cycle)\n- **Market & Venue**: KXCABLEAVE-26MAY22-26SEP on Kalshi\n- **Order Sizing**: Close, 1,170 contracts @ $0.90 NO ask, notional: $1,053.00. Remaining: 5,476.26 YES contracts. Max order notional cap ($1,054.82) limits per-trade close size to ~1,170 contracts at $0.90. Will continue closing in subsequent cycles.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolution requires a Cabinet member (excluding Gabbard, excluding acting roles, excluding death) to leave or announce departure from before Sep 1, 2026. Noem (Mar 5) and Bondi (Apr 2) predate the window. Gabbard is explicitly excluded. No qualifying event has occurred.\n- **Observation Window**: 2026-05-22 \u2192 2026-09-02 (administrative close)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 2% vs **Market Price**: 10-13% (Edge: -8 to -11%). The market is pricing in tail risk of a surprise cabinet shakeup in the remaining ~6 weeks, but with 25 confirmed members and no announced intent to depart, the base rate is very low.\n- **Information Asymmetry / Rationale**: The market likely overweights political instability narratives. With the 250th anniversary events (IndyCar, etc.) keeping administration focus on public-facing events, a mass cabinet purge is unlikely. The 2% reflects only the residual probability of an unexpected firing of a single member.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sep 1, 2026 (window closes). Any qualifying cabinet departure before then resolves YES. FOMC Sep 15-16 (Fed position resolves separately).\n- **Invalidation Trigger**: If any of the 23 qualifying Cabinet roles (excluding Gabbard) announces departure or is removed before Sep 1, 2026, the market resolves YES and my remaining 5,476 contracts pay out. In that scenario, the close was a loss. However, at 2% probability, the EV of holding is negative relative to the 10-13% market price, so closing remains the correct action.",
+      "ts": "2026-08-23T21:53:18.857197+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "scads-alias-code",
+      "mode": "shadow",
+      "outcome": "realized",
+      "platform": "kalshi",
+      "price": 0.9,
+      "quantity": 1170.0,
+      "realized_pnl": -63.94130314142367,
+      "side": "no",
+      "ticker": "KXCABLEAVE-26MAY22-26SEP",
+      "ts": "2026-08-23T21:53:10.934464+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "tags": [],
+      "text": "Fragile ceasefire, recent strikes, but talks between Washington and Tehran",
+      "ts": "2026-08-23T21:52:57.334122+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "mode": null,
+      "outcome": "yes",
+      "platform": "kalshi",
+      "price": null,
+      "quantity": 1000.0,
+      "realized_pnl": 656.0,
+      "side": "yes",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-23T21:52:13.715039+00:00",
+      "type": "settlement"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "15m:1986135",
+      "thesis": "### 0. Research Delta\n- **New evidence**: Verified Cabinet departure dates against the May 22 \u2013 Sep 2, 2026 resolution window. Pam Bondi fired April 2, 2026 (BEFORE window \u2014 does not qualify). Kristi Noem fired March 5, 2026 (BEFORE window \u2014 does not qualify). Lori Chavez-DeRemer resigned April 20, 2026 (BEFORE window \u2014 does not qualify). Tulsi Gabbard resignation reported but EXCLUDED by contract rules. Karoline Leavitt (Press Secretary) is NOT a Cabinet member per the enumerated list. Andy Baker (Deputy NSA) is NOT a Cabinet member. **No qualifying Cabinet departure has occurred within the May 22 \u2013 Sep 2, 2026 window.**\n- **Belief update**: Cabinet P(YES) \u2248 10-13% (unchanged \u2014 market at 12% is fairly priced; ~10 days remaining with no current catalysts). Arias, Iran, Fed: no new research this cycle due to tool-call cap.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: KXCABLEAVE-26MAY22-26SEP on Kalshi (existing 10,000 YES @ 0.14, cost basis $1,420)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified all 2026 Cabinet departures against the enumerated Cabinet list and the May 22 window start. Bondi (Apr 2), Noem (Mar 5), Chavez-DeRemer (Apr 20) all pre-date the window. Gabbard explicitly excluded. Leavitt (Press Secretary) and Baker (Deputy NSA) not on the enumerated Cabinet list. Zero qualifying events in window to date.\n- **Observation Window**: 2026-05-22T17:52:05Z \u2192 2026-09-02T03:59:00Z (~10 days remaining)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 10-13% vs **Market Price**: 12% (Edge: ~0-1pp, no actionable edge)\n- **Information Asymmetry / Rationale**: No verified qualifying departure in window. Market pricing is consistent with base-rate turnover over a ~10-day residual window. Position is underwater (entry 0.14 vs current bid 0.10) but no catalyst justifies forced exit at a loss when market is fairly priced and time decay could still resolve YES if a late-window departure occurs.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sep 2, 2026 window close. Any unexpected firing/resignation of an enumerated Cabinet head (State, Treasury, Defense, AG, HHS, HUD, Commerce, Energy, Education, VA, Transportation, Agriculture, Interior, Labor \u2014 already gone pre-window \u2014 or the enumerated additions: EPA Admin, Chief of Staff, DNI, OMB, CIA, USTR, UN Ambassador, CEA Chair, SBA Admin, OSTP Director).\n- **Invalidation Trigger**: Window closes Sep 2 without a qualifying departure \u2192 YES settles to 0, full $1,420 cost basis lost. Conversely, any qualifying departure announcement \u2192 YES spikes to ~1.00, position recovers to ~$10,000 payout.\n\n**Portfolio note**: Cash $7,716.14, realized P&L $-759.59. PASS on Arias (edge below 10pp gate after fees), Iran ceasefire (91% priced, limited upside), and Fed no-change (67% priced, no research edge established). Hold Cabinet to resolution.",
+      "ts": "2026-08-23T21:51:35.735312+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "mode": null,
+      "outcome": "yes",
+      "platform": "kalshi",
+      "price": null,
+      "quantity": 1186.85825,
+      "realized_pnl": -759.58928,
+      "side": "yes",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-23T21:49:44.657844+00:00",
+      "type": "settlement"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "mode": null,
+      "outcome": "yes",
+      "platform": "kalshi",
+      "price": null,
+      "quantity": 100.0,
+      "realized_pnl": -82.0,
+      "side": "yes",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-23T21:49:32.499515+00:00",
+      "type": "settlement"
+    },
+    {
+      "agent_id": "kimi-k3",
+      "mode": null,
+      "outcome": "yes",
+      "platform": "kalshi",
+      "price": null,
+      "quantity": 1000.0,
+      "realized_pnl": 746.0,
+      "side": "yes",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-23T21:47:05.746057+00:00",
+      "type": "settlement"
+    },
+    {
+      "agent_id": "glm-5.2-fp8",
+      "cycle_id": "15m:1986135",
+      "thesis": "This model completed a research pass but did not return a publishable final thesis.",
+      "ts": "2026-08-23T21:47:00.793384+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "mode": null,
+      "outcome": "yes",
+      "platform": "kalshi",
+      "price": null,
+      "quantity": 600.0,
+      "realized_pnl": 483.6,
+      "side": "yes",
+      "ticker": "KXMLBDEBUT-KANDERSON-26SEP01",
+      "ts": "2026-08-23T21:46:48.351277+00:00",
+      "type": "settlement"
+    },
     {
       "agent_id": "scads-alias-ha",
       "cycle_id": "15m:1986133",
@@ -2319,13 +2405,6 @@
       "cycle_id": "15m:1986133",
       "thesis": "### 0. Research Delta\n- **New evidence**: Forbes (8/23/2026) confirms Kade Anderson made his MLB debut for Seattle; MLB.com press release confirms Mariners selected LHP Anderson from Double-A Arkansas. He debuted as the youngest Mariners starter since Taijuan Walker (2013). The market now prices KXMLBDEBUT-KANDERSON-26SEP01 at 100% YES \u2014 my NO position is effectively a guaranteed loss if held to settlement.\n- **Belief update**: Anderson P(YES) 100% (was 100% last cycle, but now confirmed by primary source). Arias P(YES) ~15-20% (unchanged \u2014 Triple-A promotion confirmed, but no MLB debut yet; window closes Sep 1). Cabinet P(YES) ~12-15% (unchanged).\n\n### 1. Decision & Execution\n- **Action**: CLOSE (Anderson NO) \u2014 mandatory to stop full loss at settlement. HOLD Cabinet. PASS on Arias new entry this cycle (insufficient edge vs. live 0.10 ask after fees; thesis intact but no urgency to add).\n- **Market & Venue**: KXMLBDEBUT-KANDERSON-26SEP01 on Kalshi (close via buying YES at ~$1.00)\n- **Order Sizing**: Close, 1186.9 contracts @ ~$1.00 YES ask. Net recovery \u2248 1186.9 \u00d7 ($1.00 \u2212 $0.64) = ~$427 minus fees. Realized loss on this leg \u2248 $332 vs. $759.59 cost basis.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Anderson contract resolves YES if he plays in any MLB regular-season or playoff game before Sep 1, 2026. Confirmed via MLB.com official transaction and Forbes reporting \u2014 he has played, so YES is locked at 100%. No exclusions apply.\n- **Observation Window**: Window 2026-08-14 \u2192 2026-09-01. Debut occurred within window per 8/23/2026 reporting.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: Anderson P(YES) = 100% (no edge \u2014 pure forced close). Arias P(YES) \u2248 17% vs Market 8% (Edge: +9pp pre-fee, but live ask 0.10 + fees compresses to ~+5pp net, below Edge Kelly 10pp gate). Cabinet P(YES) \u2248 12-15% vs Market 12% (no edge, hold).\n- **Information Asymmetry / Rationale**: Anderson \u2014 no asymmetry; market has fully incorporated the debut news. Arias \u2014 Triple-A promotion + position-change reps at 2B suggest Boston is grooming him, but service-time manipulation risk and ~10 days to deadline keep probability modest. Cabinet \u2014 no fresh resignation signals; compressed political pricing near 12% reflects baseline churn probability.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Anderson \u2014 settled (no further action). Arias \u2014 Sep 1, 2026 roster expansion deadline; any injury-driven emergency call-up in next 7-9 days. Cabinet \u2014 any Trump Cabinet resignation/firing announcement before Sep 2, 2026 (Tulsi Gabbard excluded by rules).\n- **Invalidation Trigger**: Anderson thesis already realized (NO \u2192 0 at settlement). Arias thesis invalidates if Red Sox do not call him up by Sep 1 \u2014 YES settles to 0, capped loss on any new entry. Cabinet thesis invalidates on window close without event \u2014 YES \u2192 0, current $1,420 cost basis at risk.",
       "ts": "2026-08-23T21:24:41.019538+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "cycle_id": "15m:1986133",
-      "thesis": "This model completed a research pass but did not return a publishable final thesis.",
-      "ts": "2026-08-23T21:20:38.467294+00:00",
       "type": "thesis"
     },
     {
@@ -2557,112 +2636,6 @@
       "cycle_id": "15m:1986119",
       "thesis": "{\"final\": \"### 0. Research Delta\\n- **New evidence**: (1) CNBC (Aug 19, 2026): Fed July minutes show officials saw need for a rate hike if inflation doesn't cool. (2) Fool.com/Yahoo Finance (Aug 9, 2026): Fed's August inflation forecast puts FOMC on a \\\"collision course\\\" for September. (3) NJ.com/SILive (Aug 20",
       "ts": "2026-08-23T18:01:21.005018+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1986119",
-      "thesis": "### 0. Research Delta\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: us-announces-end-of-iranian-blockade-by-august-31-2026-20260713152715084-642-513-584-641-939-632-729 on Polymarket\n- **Order Sizing**: Quarter Kelly 5% cap, 480.52 contracts @ $0.96, notional: $461.30\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The market will resolve to 'Yes' if the United States government publicly and officially announces the end of the Iranian blockade by August 31, 2026.\n- **Observation Window**: The resolution window is from the market creation to August 31, 2026, 11:59 PM ET.\n### 3. Model Edge & Valuation\n- **Model Probability**: 1% vs **Market Price**: 4% (Edge: -3%)\n- **Information Asymmetry / Rationale**: The model believes the probability of the US announcing an end to the Iranian blockade by August 31, 2026, is lower than the market price.\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Ongoing US-Iran relations, potential announcements from the US government\n- **Invalidation Trigger**: A public and official announcement from the US government ending the blockade",
-      "ts": "2026-08-23T17:56:22.300667+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "polymarket",
-      "price": 0.96,
-      "quantity": 0.0,
-      "realized_pnl": 0.0,
-      "side": "no",
-      "ticker": "us-announces-end-of-iranian-blockade-by-august-31-2026-20260713152715084-642-513-584-641-939-632-729",
-      "ts": "2026-08-23T17:56:07.994408+00:00",
-      "type": "trade"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1986119",
-      "thesis": "### 0. Research Delta\n- **New evidence**: (1) Tulsi Gabbard resigned as DNI \u2014 EXCLUDED from KXCABLEAVE contract per resolution rules. (2) Karoline Leavitt leaving as White House Press Secretary at end of August \u2014 Press Secretary is NOT in the enumerated Cabinet list (15 agency heads + EPA Admin, CoS, DNI, OMB, CIA, USTR, UN Amb, CEA Chair, SBA Admin, OSTP Director). (3) Chavez-DeRemer departure was April 20, 2026 \u2014 BEFORE the KXCABLEAVE-26MAY22 window opened (May 22), so it does NOT qualify. (4) BTC at $77,240 (Aug 23, 2026), needs ~3.6% move to $80K in ~8 remaining days. (5) Fed funds rate at 3.50-3.75%, held 5 straight meetings; market pricing suggests possible 25bp cut at Sept or Oct FOMC. (6) Franklin Arias (Red Sox #1 prospect) getting reps at 2B, possible late-season call-up but no confirmed debut date.\n- **Belief update**: KXCABLEAVE P(YES) ~10% (unchanged \u2014 no qualifying departures in window). KANDERSON P(YES) ~100% (unchanged \u2014 locked). New candidates: FARIAS P(YES) ~8% vs market 8% (no edge). Fed no-change P(YES) ~60% vs market 68% (slight NO edge but thin). BTC $80K P(YES) ~55% vs market 61% (slight NO edge but thin and high variance).\n\n### 1. Decision & Execution\n- **Action**: HOLD (KXCABLEAVE YES) + HOLD (KANDERSON NO to expiration) + PASS on all new candidates\n- **Market & Venue**: KXCABLEAVE-26MAY22-26SEP on Kalshi (hold); KXMLBDEBUT-KANDERSON-26SEP01 on Kalshi (hold to expiration); FARIAS, Fed rates, BTC \u2014 no new positions\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: KXCABLEAVE \u2014 confirmed no qualifying Cabinet departure in the May 22 \u2013 Sep 1, 2026 window. Gabbard excluded by contract. Leavitt (Press Secretary) not enumerated. Chavez-DeRemer predates window. KANDERSON \u2014 outcome locked, awaiting settlement. New candidates not traded, no compliance audit required.\n- **Observation Window**: KXCABLEAVE window 2026-05-22T17:52Z \u2192 2026-09-02T03:59Z (10 days remaining). KANDERSON window closes 2026-09-01T03:59Z.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: KXCABLEAVE P(YES) ~10% vs Market ~12% (Edge: -2%, no trade). KANDERSON P(YES) ~100% vs Market ~100% (no tradeable edge; closing by buying YES at 1.00 incurs fees for zero economic benefit vs. letting NO expire at 1.00). New candidates all show edge below 10pp threshold or insufficient conviction.\n- **Information Asymmetry / Rationale**: No new qualifying Cabinet departure evidence. KANDERSON outcome is effectively settled. New candidate edges are thin and within typical Kalshi/Polymarket spread + fee friction.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: KXCABLEAVE resolution Sep 1, 2026 (~10 days). Any surprise Cabinet secretary resignation/firing announcement in that window would invalidate the hold. KANDERSON \u2014 N/A (outcome locked, awaiting settlement).\n- **Invalidation Trigger**: KXCABLEAVE \u2014 a confirmed Cabinet secretary resignation/firing announcement between now and Sep 1, 2026 (excluding Gabbard, acting roles, Press Secretary, and non-enumerated positions). KANDERSON \u2014 N/A.",
-      "ts": "2026-08-23T17:53:45.266570+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1986119",
-      "thesis": "HOLD",
-      "ts": "2026-08-23T17:52:37.998843+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1986117",
-      "thesis": "### 0. Research Delta\n- **New evidence**: No material new evidence\n- **Belief update**: No material change (previous probability: 1% -> current probability: 1% (implied by the forecast confidence of 0.96))\n\n### 1. Decision & Execution\n- **Action**: CLOSE\n- **Market & Venue**: us-announces-end-of-iranian-blockade-by-august-31-2026-20260713152715084-642-513-584-641-939-632-729 on Polymarket\n- **Order Sizing**: Close, 500.0 contracts @ $0.04, notional: $20.00\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The event/entity qualifies under venue criteria with zero exclusions\n- **Observation Window**: 2026-07-13T18:04:26.363Z -> 2026-09-01T03:59:00Z\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 1% vs **Market Price**: 4% (Edge: -3%)\n- **Information Asymmetry / Rationale**: The crowd is overestimating the likelihood of the US announcing the end of the Iranian blockade by August 31, 2026, given the current geopolitical situation and the US's actions.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Ongoing US-Iran relations, potential announcements from the US government\n- **Invalidation Trigger**: A public and official announcement from the US government ending the blockade",
-      "ts": "2026-08-23T17:29:05.808181+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1986117",
-      "thesis": "### 0. Research Delta\n- **New evidence**: (1) Chavez-DeRemer resigned April 20, 2026 (NPR, AP, CNBC, Deadline all dated 4/20/2026) \u2014 this is BEFORE the KXCABLEAVE-26MAY22-26SEP window opens (May 22, 2026), so it does NOT trigger this contract. (2) Kade Anderson made his MLB debut on August 22, 2026 for the Seattle Mariners vs. the Cubs (The Athletic, Forbes, BVM Sports all confirm) \u2014 this is BEFORE the Sep 1, 2026 resolution date, so the YES outcome is now certain. Market confirms at 100% YES.\n- **Belief update**: KXCABLEAVE P(YES) ~10% (unchanged \u2014 Chavez-DeRemer predates window, no other in-window departures found). KANDERSON P(YES) revised from ~99% to ~100% (confirmed debut).\n\n### 1. Decision & Execution\n- **Action**: HOLD (KXCABLEAVE YES) + HOLD (KANDERSON NO to expiration) + PASS on new candidates\n- **Market & Venue**: KXCABLEAVE-26MAY22-26SEP on Kalshi (hold); KXMLBDEBUT-KANDERSON-26SEP01 on Kalshi (hold to expiration)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: KXCABLEAVE \u2014 Chavez-DeRemer's 4/20/2026 resignation falls outside the 5/22/2026\u20139/1/2026 window, so it does not qualify. No other qualifying in-window departures identified. KANDERSON \u2014 debut on 8/22/2026 satisfies the 'plays for any MLB team in a regular season or playoff game before Sep 1, 2026' criterion; YES outcome is locked in.\n- **Observation Window**: KXCABLEAVE 2026-05-22T17:52Z \u2192 2026-09-02T03:59Z (Chavez-DeRemer predates open). KANDERSON 2026-08-14T15:25Z \u2192 2026-09-01T03:59Z (debut 8/22/2026 falls inside).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: KXCABLEAVE P(YES) ~10% vs Market ~12% (Edge: ~-2%, no trade). KANDERSON P(YES) ~100% vs Market ~100% (no tradeable edge; closing now by buying YES at 1.00 would incur fees for zero economic benefit vs. letting NO expire at 0).\n- **Information Asymmetry / Rationale**: KANDERSON NO is a realized loss \u2014 cost basis $759.59 will not be recovered. Closing via YES@1.00 costs $1,186.90 in new notional plus fees to recover $1,186.90 at settlement, netting the same -$759.59 plus incremental fees. Letting it expire is strictly better. KXCABLEAVE thesis intact: no qualifying in-window departure yet, ~10 days remaining, market at 12% slightly overstates risk.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: KXCABLEAVE resolution Sep 1, 2026 (~10 days). Any surprise Cabinet secretary resignation/firing announcement in that window would invalidate the hold. KANDERSON \u2014 N/A (outcome locked, awaiting settlement).\n- **Invalidation Trigger**: KXCABLEAVE \u2014 a confirmed Cabinet secretary resignation/firing announcement between now and Sep 1, 2026 (excluding Gabbard, acting roles, Press Secretary, and non-enumerated positions). KANDERSON \u2014 N/A.",
-      "ts": "2026-08-23T17:28:09.811799+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "tags": [],
-      "text": "Israel x Iran ceasefire market at 97% for Yes, consider potential impact on portfolio",
-      "ts": "2026-08-23T17:25:04.446421+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "scads-alias-code",
-      "cycle_id": "15m:1986116",
-      "thesis": "{\"thought\": \"The search confirms: Bondi and Noem were removed before May 22 (before this ticker's window), Gabbard resigned around May 22 but is EXPLICITLY EXCLUDED from this market. No other cabinet departure is confirmed in the May",
-      "ts": "2026-08-23T17:03:25.036359+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1986116",
-      "thesis": "### 0. Research Delta\n- **New evidence**: Ongoing tension between the US and Iran, with recent military operations and trade talks collapse.\n- **Belief update**: 2% -> 1%\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: us-announces-end-of-iranian-blockade-by-august-31-2026-20260713152715084-642-513-584-641-939-632-729 on Polymarket\n- **Order Sizing**: Quarter Kelly 5% cap, 500 contracts @ $0.96, notional: $480\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The market will resolve to 'Yes' if the United States government publicly and officially announces the end of the blockade, and to 'No' otherwise.\n- **Observation Window**: 2026-07-13T18:04:26.363Z -> 2026-09-01T03:59:00Z\n### 3. Model Edge & Valuation\n- **Model Probability**: 1% vs **Market Price**: 4% (Edge: -3%)\n- **Information Asymmetry / Rationale**: The ongoing tension between the US and Iran, and the low probability of the US announcing an end to the blockade, suggest that the market price is too high.\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Ongoing US-Iran relations, potential announcements from the US government\n- **Invalidation Trigger**: A public and official announcement from the US government ending the blockade",
-      "ts": "2026-08-23T17:02:58.662197+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "tags": [
-        "us-iran-relations"
-      ],
-      "text": "Ongoing tension between the US and Iran, low probability of US announcing an end to the blockade",
-      "ts": "2026-08-23T17:02:43.182963+00:00",
-      "type": "note"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "15m:1986115",
-      "thesis": "### 0. Research Delta\n- **New evidence**: (1) Lori Chavez-DeRemer (Labor Secretary) resigned April 20, 2026 \u2014 BEFORE the May 22 window start, so does NOT qualify. (2) Press Secretary Karoline Leavitt announced departure end of August 2026 \u2014 but Press Secretary is NOT in the contract's enumerated Cabinet list, so does NOT qualify. (3) Joe Kent (counterterrorism) resigned March 2026 \u2014 not a Cabinet position. No confirmed Cabinet-level departure within the May 22 \u2013 Sep 1, 2026 window found. (4) Kade Anderson: market at 99% YES strongly implies he has debuted or debut is imminent; my NO position at avg 0.64 is at severe risk. (5) Franklin Arias: no debut evidence found; market at 6-10% YES consistent with no imminent callup.\n- **Belief update**: KXCABLEAVE P(YES) ~10-12% (unchanged, market 87-90% NO is well-calibrated). KANDERSON P(YES) ~99% \u2014 my NO thesis is broken; market is correct. FARIAS P(YES) ~5-8% (no evidence of imminent debut).\n\n### 1. Decision & Execution\n- **Action**: CLOSE (KANDERSON NO) + HOLD (KXCABLEAVE YES) + PASS on new candidates\n- **Market & Venue**: KXMLBDEBUT-KANDERSON-26SEP01 on Kalshi (close); KXCABLEAVE-26MAY22-26SEP on Kalshi (hold)\n- **Order Sizing**: Close, 1186.9 contracts @ $1.00 (YES ask), notional: $1,186.90; KXCABLEAVE: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: KXCABLEAVE \u2014 Chavez-DeRemer (Apr 20) predates window; Leavitt (Press Sec) excluded by enumerated Cabinet list; no qualifying Cabinet departure in window. KANDERSON \u2014 market at 99% YES indicates resolution is effectively certain; closing to cap loss.\n- **Observation Window**: KXCABLEAVE 2026-05-22 \u2192 2026-09-02; KANDERSON 2026-08-14 \u2192 2026-09-01\n\n### 3. Model Edge & Valuation\n- **Model Probability**: KXCABLEAVE P(YES) ~10% vs Market ~11% (Edge: ~-1%, no trade). KANDERSON P(YES) ~99% vs Market ~99.5% (Edge: ~-0.5%, close to limit loss).\n- **Information Asymmetry / Rationale**: KANDERSON \u2014 market consensus at 99% YES with only ~17 days to resolution leaves no room for my NO thesis; closing crystallizes the loss rather than risking total loss at resolution. KXCABLEAVE \u2014 no qualifying departure identified in window; market's 87-90% NO is well-supported.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: KXCABLEAVE resolution Sep 1, 2026 (~10 days). Any surprise Cabinet secretary resignation announcement in next 10 days would invalidate hold thesis.\n- **Invalidation Trigger**: KXCABLEAVE \u2014 a confirmed Cabinet secretary resignation/firing announcement between now and Sep 1, 2026 (excluding Gabbard, acting roles, Press Secretary, and non-enumerated positions). KANDERSON \u2014 N/A (closing).",
-      "ts": "2026-08-23T17:00:41.575646+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "15m:1986115",
-      "thesis": "### 0. Research Delta\n- **New evidence**: US-Iran Ceasefire Agreement and Its Impact on Bitcoin and Geopolitics, Bitcoin Tumbles Below $73,000 as U.S.-Iran Clashes Trigger $1 Billion Liquidation Cascade\n- **Belief update**: 50% -> 70%\n### 1. Decision & Execution\n- **Action**: BUY YES\n- **Market & Venue**: will-bitcoin-reach-80k-in-august-2026 on Polymarket\n- **Order Sizing**: Quarter Kelly 5% cap, quantity TBD\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The market will resolve to Yes if any Binance 1 minute candle for BTC/USDT during the month specified in the title has a final High price equal to or greater than $80,000\n- **Observation Window**: August 1, 2026 - August 31, 2026\n### 3. Model Edge & Valuation\n- **Model Probability**: 70% vs **Market Price**: 63% (Edge: +7%)\n- **Information Asymmetry / Rationale**: The US-Iran ceasefire agreement is expected to have a positive impact on Bitcoin, driven by improved investor sentiment and reduced geopolitical risk\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: August 2026\n- **Invalidation Trigger**: Bitcoin price fails to reach $80,000 in August 2026",
-      "ts": "2026-08-23T16:59:15.824734+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-ha",
-      "cycle_id": "15m:1986114",
-      "thesis": "{\"thought\": \"I have added a note to my records indicating that no new opportunities were found in the available markets. Now, I will provide my final answer.\", \"final\": \"\n### 0. Research Delta\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: No new market assessed\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: No new catalysts\n- **Invalidation Trigger**: No new invalidation trigger\"}",
-      "ts": "2026-08-23T16:31:26.054517+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "scads-alias-reasoning",
-      "cycle_id": "15m:1986114",
-      "thesis": "I need to evaluate my current positions and potential new trades. \n\n1. **KXCABLEAVE-26MAY22-26SEP (Kalshi)**: 'Will any member of Trump's Cabinet leave before Sep 2026?' I hold YES. I need to check for any recent news about Trump cabinet members leaving or announcing departures to see if my thesis is still valid or if I should close.\n2. **KXMLBDEBUT-FARIAS-26SEP01 (Kalshi)**: 'Will Franklin Arias play in a game for any team in the MLB before Sep 1, 2026?' I hold YES. Prior research showed he was promoted to Triple-A on July 24, 2026. I should check for any recent updates on his status or injury news.\n3. **israel-x-iran-ceasefire-continues-through-august-31-2026 (Polymarket)**: 'Israel x Iran ceasefire continues through August 31?' I hold NO. I need to check the current situation in the Middle East to see if there has been any 'qualifying military action' (air strike/miss\u2026\n\nI will start by researching the status of the current positions and checking for new opportunities.\n\nFirst, I'll check for news on Trump's cabinet departures and Franklin Arias's MLB status.\nSecond, I'll check the Middle East situation regarding Israel and Iran.\nThird, I'll look at the new candidate markets: Fed interest rates, Bitcoin, and US/Iran ceasefire.\n\nLet's start with research.",
-      "ts": "2026-08-23T16:31:24.687958+00:00",
       "type": "thesis"
     }
   ]
