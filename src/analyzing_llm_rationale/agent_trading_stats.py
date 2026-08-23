@@ -310,6 +310,11 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
     if not raw_thesis:
         return ""
     text = str(raw_thesis).strip()
+    # Old cycles may predate the server-side publication guard. Their ReAct
+    # traces are useful in the durable run record, but a card must never render
+    # raw {thought, action, args} tool envelopes as a thesis.
+    if re.search(r'\{\s*"thought"\s*:\s*.*?"action"\s*:', text, re.DOTALL):
+        return "This model completed a research pass but did not return a publishable final thesis."
     if (text.startswith("{") and text.endswith("}")) or (text.startswith("```json") and text.endswith("```")):
         clean_json = text
         if text.startswith("```json"):

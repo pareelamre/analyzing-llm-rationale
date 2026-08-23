@@ -183,6 +183,27 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["steps"], 3)
         self.assertEqual(len(res["transcript"]), 3)
 
+    def test_does_not_publish_a_tool_call_when_forced_to_finalize(self):
+        async def tool(_args):
+            return "observation"
+
+        turns = iter([
+            '{"action":"t","args":{}}',
+            '{"action":"t","args":{}}',
+            # A provider that ignores the finalization instruction must not
+            # leak its raw action object into a public thesis.
+            '{"thought":"I should search again","action":"t","args":{}}',
+        ])
+
+        async def chat_fn(_messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"t": tool}, [{"name": "t", "description": "d"}], chat_fn, max_steps=2))
+        self.assertEqual(res["answer"], "")
+        self.assertTrue(res["finalization_failed"])
+        self.assertTrue(res["truncated"])
+
     def test_on_step_called_once_per_tool_call_with_index_thought_action_error(self):
         seen = []
 

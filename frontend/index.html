@@ -6399,6 +6399,11 @@ function _extractThesisJsonField(raw, fields = ['final', 'thesis', 'thought']) {
 function _cleanThesisText(raw) {
   if (!raw) return '';
   let str = String(raw).trim();
+  // Defense for a cached/legacy board artifact: ReAct action envelopes belong
+  // in the private tool-step view, never in the public thesis card.
+  if (/\{\s*"thought"\s*:\s*[\s\S]*?"action"\s*:/i.test(str)) {
+    return 'This model completed a research pass but did not return a publishable final thesis.';
+  }
   
   // Some providers save a partial tool-call envelope. Pull its readable
   // rationale out even when the trailing action/args JSON is incomplete.
