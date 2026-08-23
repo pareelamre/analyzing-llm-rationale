@@ -266,6 +266,23 @@ _SELF_CALIBRATION_ECHO_RE = re.compile(
     re.DOTALL,
 )
 
+_UNPUBLISHABLE_TOOL_THESIS = (
+    "This model completed a research pass but did not return a publishable final thesis."
+)
+
+
+def _public_tool_loop_thesis(
+    raw_answer: str,
+    *,
+    finalization_failed: bool,
+    forecast_thesis: Optional[str],
+) -> str:
+    """Return reader-facing thesis prose, never a raw ReAct tool trace."""
+    if not finalization_failed and raw_answer:
+        return raw_answer
+    fallback = str(forecast_thesis or "").strip()
+    return fallback or _UNPUBLISHABLE_TOOL_THESIS
+
 _TRADING_INTENT_RE = re.compile(
     r"\b(bet|order|trade|place|buy|sell|position|recommend|suggest|should i|what to|portfolio|stake|wager)\b",
     re.IGNORECASE,
@@ -14511,7 +14528,11 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         # When we had to backstop the forecast, the model's prose can cite a
         # different number than the structured forecast that drives the
         # recommendation — so use the forecast's own rationale to stay consistent.
-        thesis=(last.get("thesis") if use_backstop_thesis else raw_answer),
+        thesis=_public_tool_loop_thesis(
+            "" if use_backstop_thesis else raw_answer,
+            finalization_failed=bool(res.get("finalization_failed")),
+            forecast_thesis=last.get("thesis") if use_backstop_thesis else None,
+        ),
         evidence_sources=last.get("evidence_sources", []),
         evidence_error=last.get("evidence_error"),
         grounding=grounding_note, tool_transcript=tool_transcript,

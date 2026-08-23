@@ -355,12 +355,25 @@ async def run_tool_loop(
                 pass
         messages.append({"role": "assistant", "content": out})
         messages.append({"role": "user", "content": f"Observation: {obs}"})
-    # Out of steps — force a final answer.
-    final = await chat_fn(messages + [{"role": "user",
-                                       "content": "Stop calling tools. Give your final answer now as plain text."}])
+    # Out of steps — force one terminal JSON answer. Asking for plain text
+    # contradicted the system contract and let some providers emit a pasted
+    # sequence of prior tool-call envelopes instead of a final thesis.
+    final = await chat_fn(messages + [{"role": "user", "content": (
+        "Stop calling tools. Return exactly one JSON object with a `final` field now: "
+        '{"final":"your concise publishable thesis"}. Do not include an action, args, '
+        "tool call, scratch work, or any other JSON object."
+    )}])
     final_text = (final or "").strip()
     parsed_final = parse_action(final_text)
     if isinstance(parsed_final, dict) and "final" in parsed_final:
         final_text = str(parsed_final["final"]).strip()
+        return {"answer": final_text, "transcript": transcript,
+                "steps": max_steps, "truncated": True, "finalization_failed": False}
+    # Never promote a tool-call envelope (or a repetition of several of them)
+    # to the public thesis. The durable transcript preserves that detail for
+    # operators; callers can publish a truthful fallback instead.
+    if isinstance(parsed_final, dict) and "action" in parsed_final:
+        return {"answer": "", "transcript": transcript,
+                "steps": max_steps, "truncated": True, "finalization_failed": True}
     return {"answer": final_text, "transcript": transcript,
-            "steps": max_steps, "truncated": True}
+            "steps": max_steps, "truncated": True, "finalization_failed": False}

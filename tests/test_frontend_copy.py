@@ -387,6 +387,14 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("text.startsWith('{')", extractor)
         self.assertIn("JSON.parse", extractor)
 
+    def test_agentic_thesis_cards_never_render_raw_react_envelopes(self):
+        index = self._both()["frontend"]
+        cleaner = index.split("function _cleanThesisText(raw) {", 1)[1].split(
+            "function _thesisBulletForDisplay", 1
+        )[0]
+        self.assertIn("publishable final thesis", cleaner)
+        self.assertIn('"action"', cleaner)
+
     def test_agentic_is_a_real_edge_board_tab(self):
         for name, index in self._both().items():
             with self.subTest(file=name):

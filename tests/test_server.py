@@ -3291,6 +3291,10 @@ class ServerTests(unittest.TestCase):
         report = response.json()
         self.assertEqual(report["pipeline"], ["tool_loop", "benchmark_tools"])
         self.assertEqual(report["tool_transcript"][0]["action"], "manage_notes")
+        self.assertEqual(
+            report["thesis"],
+            "This model completed a research pass but did not return a publishable final thesis.",
+        )
         system_prompt = self.provider.calls[0][0]["content"]
         self.assertIn("place_trade(", system_prompt)
         self.assertIn("web_search(", system_prompt)

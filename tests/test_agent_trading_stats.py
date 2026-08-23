@@ -459,6 +459,19 @@ class PromotionEligibilityTests(unittest.TestCase):
 
 
 class RecentActivityTests(unittest.TestCase):
+    def test_clean_thesis_display_hides_raw_react_tool_transcript(self):
+        thesis = (
+            'Planning research. {"thought":"Check the market",'
+            '"action":"web_search","args":{"query":"market news"}}'
+            '{"thought":"Check the market again",'
+            '"action":"web_search","args":{"query":"market news"}}'
+        )
+        display = agent_trading_stats.clean_thesis_display(thesis)
+        self.assertEqual(
+            display,
+            "This model completed a research pass but did not return a publishable final thesis.",
+        )
+
     def test_clean_thesis_display_does_not_repeat_matching_json_fields(self):
         thesis = json.dumps({
             "final": "### 1. Decision & Execution\n- **Action**: HOLD",
