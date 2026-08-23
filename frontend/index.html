@@ -4903,6 +4903,15 @@ function escAttr(s) {
 // Input is HTML-escaped first, so the model output can never inject markup;
 // only a known subset of inline/block markdown is turned back into safe tags.
 function _mdInline(s) {
+  if (!s) return '';
+  s = s.replace(/___CODEBLOCK_(\d+)___/g, (match, idx) => {
+    if (typeof codeBlocks !== 'undefined' && codeBlocks[Number(idx)]) {
+      const cb = codeBlocks[Number(idx)];
+      const langAttr = cb.lang ? ` class="md-codeblock language-${escHtml(cb.lang)}"` : ' class="md-codeblock"';
+      return `<pre class="md-pre"><code${langAttr}>${escHtml(cb.code.trim())}</code></pre>`;
+    }
+    return match;
+  });
   return s
     .replace(/`([^`]+)`/g, '<code class="md-code">$1</code>')
     // Bold: non-greedy across any chars so the span can contain a nested italic
@@ -4930,7 +4939,7 @@ function _chatText(s) {
     if (t.endsWith('}')) {
       try {
         const o = JSON.parse(t);
-        const prose = o.rationale || o.model_rationale || o.answer || o.response || o.text || '';
+        const prose = o.rationale || o.model_rationale || o.answer || o.response || o.text || o.reasoning || o.analysis || o.thought || o.summary || o.content || o.forecast || '';
         if (prose) {
           let prefix = '';
           if (o.predicted_answer) {
@@ -4952,7 +4961,7 @@ function _chatText(s) {
       const confStr = confM ? ` · ${Math.round(parseFloat(confM[1]) * 100)}% confidence` : '';
       prefix = `**${ansM[1]}**${confStr}\n\n`;
     }
-    const m = t.match(/"rationale"\s*:\s*"((?:[^"\\]|\\.)*)/);
+    const m = t.match(/"(?:rationale|model_rationale|answer|response|text|reasoning|analysis|thought|summary|content|forecast)"\s*:\s*"((?:[^"\\]|\\.)*)/);
     if (m) {
       const rationale = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
       return prefix + rationale;
@@ -5000,9 +5009,11 @@ function _texToText(x) {
 const _MD_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 function _prettyDates(s) {
-  return String(s ?? '').replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (m, y, mo, d) => {
-    const mi = parseInt(mo, 10) - 1, day = parseInt(d, 10);
-    if (mi < 0 || mi > 11 || day < 1 || day > 31) return m;
+  return String(s ?? '').replace(/(https?:\/\/[^\s)]+)|(`[^`]+`)|(\b\d{4}-\d{2}-\d{2}\b)/g, (match, url, code, date) => {
+    if (url || code) return match;
+    const parts = date.split('-');
+    const y = parseInt(parts[0], 10), mi = parseInt(parts[1], 10) - 1, day = parseInt(parts[2], 10);
+    if (mi < 0 || mi > 11 || day < 1 || day > 31) return match;
     return `${day} ${_MD_MONTHS[mi]} ${y}`;
   });
 }
@@ -5013,11 +5024,22 @@ function _normalizeMath(s) {
     .replace(/\\\[([\s\S]*?)\\\]/g, (_, x) => _texToText(x))
     .replace(/\\\(([\s\S]*?)\\\)/g, (_, x) => _texToText(x))
     .replace(/\$\$([\s\S]*?)\$\$/g, (_, x) => _texToText(x))
-    .replace(/\$([^$\n]+?)\$/g, (_, x) => _texToText(x));
+    .replace(/(^|[^\\])\$([^$\n]+?)\$/g, (match, prefix, x) => {
+      if (!/\\[a-zA-Z]|\^|_|\{|\}/.test(x)) return match;
+      return `${prefix}${_texToText(x)}`;
+    });
 }
 
 function renderMarkdown(text) {
-  const lines = escHtml(_prettyDates(_normalizeMath(text))).split(/\r?\n/);
+  if (!text) return '';
+  let str = String(text);
+  const codeBlocks = [];
+  str = str.replace(/```([a-zA-Z0-9_+-]*)[\r\n]([\s\S]*?)```/g, (m, lang, code) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push({ lang: (lang || '').trim(), code });
+    return `___CODEBLOCK_${idx}___`;
+  });
+  const lines = escHtml(_prettyDates(_normalizeMath(str))).split(/\r?\n/);
   let html = '';
   let list = null;            // 'ul' | 'ol'
   let para = [];
@@ -5033,6 +5055,17 @@ function renderMarkdown(text) {
     const line = lines[i].trim();
     let m;
     if (!line) { flushAll(); continue; }
+
+    const cbMatch = line.match(/^___CODEBLOCK_(\d+)___$/);
+    if (cbMatch) {
+      flushAll();
+      const cb = codeBlocks[Number(cbMatch[1])];
+      if (cb) {
+        const langAttr = cb.lang ? ` class="md-codeblock language-${escHtml(cb.lang)}"` : ' class="md-codeblock"';
+        html += `<pre class="md-pre"><code${langAttr}>${escHtml(cb.code.trim())}</code></pre>`;
+      }
+      continue;
+    }
 
     // GFM table: a row of cells immediately followed by a separator line.
     if (line.includes('|') && _isTableSep(lines[i + 1] || '')) {
@@ -5085,7 +5118,7 @@ function renderMarkdown(text) {
 // ── Motion helpers ─────────────────────────────────────────────────────────
 const EASE = [0.22, 1, 0.36, 1];
 function prefersReduced() {
-  return window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)')?.matches);
 }
 function animateIn(node, delay = 0) {
   if (!node || !window.Motion || prefersReduced()) return;
@@ -5166,8 +5199,11 @@ function handleLandingKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitLandingQuestion(e); }
 }
 function updateVariantDesc() {
-  const v = document.getElementById('variantSelect').value;
-  document.getElementById('variantDesc').textContent = VARIANT_DESCS[v] || '';
+  const select = document.getElementById('variantSelect');
+  if (!select) return;
+  const v = select.value;
+  const desc = document.getElementById('variantDesc');
+  if (desc) desc.textContent = VARIANT_DESCS[v] || '';
 }
 const _VIEW_URL = {
   'landing':       '/',
@@ -5218,6 +5254,10 @@ function historyUrlFor(view, convId = null, panel = null) {
 function legacyRouteFromHash(hash = window.location.hash) {
   const convId = conversationIdFromLegacyHash(hash);
   if (convId) return { view: 'chat', convId };
+  if (hash === '#edge/mtm') return { view: 'edge-landing', panel: 'mtm', convId: null };
+  if (hash === '#edge/agentic') return { view: 'edge-landing', panel: 'agentic', convId: null };
+  if (hash === '#edge-app/mtm') return { view: 'edge-app', panel: 'mtm', convId: null };
+  if (hash === '#edge-app/agentic') return { view: 'edge-app', panel: 'agentic', convId: null };
   const view = _LEGACY_HASH_VIEW[hash];
   return view ? { view, convId: null } : null;
 }
@@ -5989,7 +6029,7 @@ async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
   const ov = document.getElementById('edgeOverlay');
   _installEdgeBoardPullToRefresh();
   _edgeOpenSeq++;
-  if (panel) _ebSetView(panel);
+  _ebSetView(panel || 'markets');
   if (ov.classList.contains('open')) {
     // Either genuinely already open, or mid fade-out from a close() that ran
     // moments ago (applyHistoryState closes every overlay before re-opening the
@@ -7206,7 +7246,14 @@ function _ebGoPage(n) {
 function _ebSetView(view) {
   _ebView = ['mtm', 'agentic'].includes(view) ? view : 'markets';
   const host = document.getElementById('edgeBody');
-  if (!host || !_ebLastData) return;
+  if (!host) return;
+  if (!_ebLastData) {
+    if (!edgeLoaded) {
+      edgeLoaded = true;
+      loadEdgeBoard();
+    }
+    return;
+  }
   host.innerHTML = renderEdgeBoard(_ebLastData);
   _attachEdgeBoardChartHovers(host);
   refreshEdgePrices();
@@ -8280,6 +8327,7 @@ function trapFocus(event, root) {
 }
 function syncSidebarA11y() {
   const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return;
   const isMobile = window.matchMedia('(max-width: 768px)').matches;
   sidebar.setAttribute('aria-hidden', isMobile && !sidebar.classList.contains('open') ? 'true' : 'false');
 }
@@ -8295,7 +8343,7 @@ function applyHistoryState(state) {
     || (edgePath ? 'edge-landing' : null)
     || _PATH_VIEW[normaliseAppPath()]
     || 'landing';
-  const edgePanel = state?.panel || (edgePath ? edgePath.panel : null);
+  const edgePanel = state?.panel || legacyRoute?.panel || (edgePath ? edgePath.panel : null);
 
   // Close all overlays first — avoids every case having to enumerate which to close
   closeTrackRecord({ updateHistory: false });
@@ -9901,7 +9949,7 @@ function openWatchlist() {
 
 // Standalone window served at /watchlist — render only the watchlist, full-screen.
 function _maybeStandaloneWatchlist() {
-  if (location.pathname.replace(/\/+$/, '') !== '/watchlist') return false;
+  if (window.location.pathname.replace(/\/+$/, '') !== '/watchlist') return false;
   document.body.classList.add('standalone-watch');
   document.getElementById('landingPage')?.classList.add('hidden-view');
   document.getElementById('appShell')?.classList.add('hidden-view');
@@ -10892,7 +10940,7 @@ let _googleIdentityLoadStarted = false;
 let currentUser = null;
 
 // ── GitHub OAuth (authorization-code flow) ────────────────────────────────────
-function _githubRedirectUri() { return location.origin + location.pathname; }
+function _githubRedirectUri() { return window.location.origin + window.location.pathname; }
 
 function _authProviderUnavailable(provider) {
   _showAuthError(provider + ' sign-in is not configured on this server.');
@@ -10921,14 +10969,14 @@ function startGitHubLogin() {
 }
 
 async function _maybeCompleteGitHubLogin() {
-  const params = new URLSearchParams(location.search);
+  const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   const state = params.get('state');
   if (!code || !state) return;
   let expected = null;
   try { expected = localStorage.getItem('gh_oauth_state'); } catch {}
   // Clean the URL regardless so the code isn't reused or left visible.
-  const cleanUrl = location.origin + location.pathname;
+  const cleanUrl = window.location.origin + window.location.pathname;
   history.replaceState(null, '', cleanUrl);
   try { localStorage.removeItem('gh_oauth_state'); } catch {}
   if (!expected || state !== expected) return;
@@ -11255,7 +11303,7 @@ async function submitFeedback() {
         message: msg,
         rating: _feedbackRating || null,
         email: email || null,
-        page: location.pathname,
+        page: window.location.pathname,
       }),
     });
     if (r.ok) {
