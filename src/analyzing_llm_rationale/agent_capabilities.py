@@ -61,7 +61,10 @@ def build_grounding_note(aggregate: Optional[Dict[str, Any]]) -> str:
     if cal.get("applied"):
         parts.append(f"- Calibration: raw ECE {cal.get('raw_ece')}, model is miscalibrated; "
                      "adjust extreme probabilities toward the calibrated mapping.")
-    # Surface the longshot-bias pattern when by-horizon/overall accuracy suggests it.
+    parts.append("- Discrepancy Discipline: In empirical tracking, model-vs-market disagreements >20pp "
+                 "have a 73.4% error rate. When you perceive an extreme edge, heavily challenge your thesis and anchor toward market odds unless you possess verified primary-source proof.")
+    parts.append("- Calibration Bias: Historical predictions in the 80-90% range resolve YES only ~68% of the time. "
+                 "Account for 11th-hour cancellations, appeals, and procedural delays by damping extreme high-confidence calls.")
     parts.append("- Known tendency: this model has overpriced low-probability/longshot "
                  "outcomes. Treat that as a prior and shade tail YES estimates down, not a hard rule.")
     return "\n".join(parts)
@@ -83,7 +86,8 @@ def build_system_prompt(tool_specs: List[Dict[str, str]], max_steps: int, extra_
         "REASONING & EVIDENCE STANDARDS:",
         "- Causal Grounding: Anchor reasoning in concrete, verified facts (dates, official statements, filings) rather than speculation.",
         "- Rule Verification: Actively verify facts against the contract's resolution criteria and explicit exclusions before drawing conclusions.",
-        "- Probabilistic Rigor: Distinguish between theoretical possibility and calibrated probabilities; explain any divergence from market odds.",
+        "- Probabilistic Rigor & Discrepancy Discipline: Distinguish theoretical possibility from calibrated probability. If diverging >15pp from market odds, explain why the crowd is mispriced and verify that you are not missing unindexed news.",
+        "- Tail Risk & Variance: Avoid assigning >80% certainty to pending human/political decisions with execution risk, and model variance for binned numeric ranges.",
         "",
         "Respond with EXACTLY ONE JSON object per turn — nothing else — in one of two forms:",
         '  {"thought": "...", "action": "TOOL_NAME", "args": { ... }}   to call a tool',
