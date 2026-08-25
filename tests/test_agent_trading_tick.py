@@ -324,6 +324,38 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("Expected underlying resolution: 2026-08-21T00:00:00Z", line)
 
 
+class DecisionQualityInstructionTests(unittest.TestCase):
+    def test_requires_fresh_evidence_for_new_risk_and_rule_window_checks(self):
+        instruction = agent_trading_tick._TRADING_INSTRUCTION
+
+        self.assertIn("RESEARCH QUALITY GATE", instruction)
+        self.assertIn("dated, material evidence update", instruction)
+        self.assertIn("A new position without visible resolution rules", instruction)
+        self.assertIn("PASS -- not a guess", instruction)
+
+    def test_offers_a_bounded_strategy_menu_with_safe_orderbook_arb_handling(self):
+        instruction = agent_trading_tick._TRADING_INSTRUCTION
+
+        self.assertIn("EVIDENCE_EDGE", instruction)
+        self.assertIn("CATALYST_EDGE", instruction)
+        self.assertIn("ORDERBOOK_ARBITRAGE_RESEARCH", instruction)
+        self.assertIn("POSITION_RISK_REDUCTION", instruction)
+        self.assertIn("never submit a single leg as 'arbitrage'", instruction)
+
+
+class StrategySelectionTests(unittest.TestCase):
+    def test_extracts_only_known_strategy_labels(self):
+        self.assertEqual(
+            agent_trading_tick._selected_strategy("- **Strategy**: [CATALYST_EDGE]"),
+            "catalyst_edge",
+        )
+        self.assertEqual(
+            agent_trading_tick._selected_strategy("- **Strategy**: definitely profitable"),
+            "unreported",
+        )
+        self.assertEqual(agent_trading_tick._selected_strategy("No strategy field"), "unreported")
+
+
 class PaperCalibrationContextTests(unittest.TestCase):
     def test_uses_kalshi_calibration_evidence_as_a_net_of_cost_baseline(self):
         quote = _quote("KXMARKET", question="Will the next CPI print exceed expectations?")

@@ -51,10 +51,11 @@ env:
   AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
 
 concurrency:
-  # The dispatcher invokes exactly two lanes. A lane serializes only its own
-  # model list, which keeps the shared SCADS request limit at two without
-  # wasting the provider slots on ten independent Python/GCS setup phases.
-  group: agent-trading-scads-lane-${{ inputs.lane }}
+  # This name is intentionally shared with track-record-forecast.yml. SCADS
+  # limits this API key to two concurrent requests across *all* workflows, not
+  # merely within this dispatcher. The two lanes therefore form a global
+  # semaphore: one agent cycle and/or forecast job per lane at a time.
+  group: scads-provider-lane-${{ inputs.lane }}
   cancel-in-progress: false
 
 jobs:
@@ -127,8 +128,10 @@ jobs:
           KALSHI_PRIVATE_KEY_FILE: tmp/agent-trading/kalshi_private_key.pem
           MAX_TOOL_STEPS: "4"
           CANDIDATE_COUNT: "3"
-          AGENT_TRADING_RETRIES: "4"
-          AGENT_TRADING_RETRY_BACKOFF_S: "20"
+          # agent_analyze owns bounded per-provider retries. Re-running the
+          # complete tool loop after it exhausts them replays work and turns a
+          # provider outage into a request storm.
+          AGENT_TRADING_RETRIES: "1"
         run: |
           failures=0
           for MODEL in $MODELS; do

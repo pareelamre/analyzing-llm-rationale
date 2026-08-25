@@ -47,14 +47,12 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
         self.assertIn("agent_trading_store__${MODEL}.sqlite", self.workflow)
         self.assertIn("agent_trading_notes__${MODEL}.json", self.workflow)
 
-    def test_concurrency_uses_the_explicit_scads_lane(self):
-        # Two provider lanes cap concurrent SCADS requests while retaining
-        # independent account objects. A model's wrapper always supplies the
-        # same lane, so a second run for that model is also serialized rather
-        # than racing its own GCS upload.
+    def test_concurrency_uses_a_global_scads_provider_lane(self):
+        # This group is shared with the forecast workflow, so its two lanes
+        # cap the API key across both producers rather than only agent jobs.
         self.assertIn("concurrency:", self.workflow)
         self.assertIn("lane:", self.workflow)
-        self.assertIn("group: agent-trading-scads-lane-${{ inputs.lane }}", self.workflow)
+        self.assertIn("group: scads-provider-lane-${{ inputs.lane }}", self.workflow)
         self.assertIn("cancel-in-progress: false", self.workflow)
 
     def test_download_is_tolerant_of_a_missing_object(self):
@@ -74,8 +72,8 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
 
     def test_runs_the_driver_script(self):
         self.assertIn("python scripts/agent_trading_tick.py", self.workflow)
-        self.assertIn('AGENT_TRADING_RETRIES: "4"', self.workflow)
-        self.assertIn('AGENT_TRADING_RETRY_BACKOFF_S: "20"', self.workflow)
+        self.assertIn('AGENT_TRADING_RETRIES: "1"', self.workflow)
+        self.assertNotIn("AGENT_TRADING_RETRY_BACKOFF_S:", self.workflow)
 
 
 class AgentTradingPerModelWorkflowTests(unittest.TestCase):
@@ -114,6 +112,14 @@ class AgentTradingPerModelWorkflowTests(unittest.TestCase):
         configured = re.findall(r'models:\s*"([^"]+)"', text)
         scheduled_models = [model for lane in configured for model in lane.split()]
         self.assertCountEqual(scheduled_models, _chat_capable_models())
+
+
+class TrackRecordForecastWorkflowTests(unittest.TestCase):
+    def test_forecast_jobs_share_the_global_two_lane_provider_limit(self):
+        text = (_WORKFLOWS_DIR / "track-record-forecast.yml").read_text(encoding="utf-8")
+        self.assertIn("group: scads-provider-lane-${{ matrix.lane }}", text)
+        self.assertIn("cancel-in-progress: false", text)
+        self.assertEqual(len(re.findall(r"^\s+lane: \"[01]\"$", text, re.MULTILINE)), 14)
 
 
 if __name__ == "__main__":

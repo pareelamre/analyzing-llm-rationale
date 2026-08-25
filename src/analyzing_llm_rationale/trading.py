@@ -452,7 +452,14 @@ def _kalshi_side(action: str, outcome: str) -> tuple[str, str]:
     return "ask", "no"
 
 
-def _preview_kalshi(req: Mapping[str, Any], action: str, outcome: str, order_type: str) -> Dict[str, Any]:
+def _preview_kalshi(
+    req: Mapping[str, Any],
+    action: str,
+    outcome: str,
+    order_type: str,
+    *,
+    allow_order_notional_override: bool = False,
+) -> Dict[str, Any]:
     ticker = str(req.get("ticker") or "").strip().upper()
     if not ticker:
         raise TradingValidationError("ticker is required for Kalshi orders.")
@@ -460,7 +467,7 @@ def _preview_kalshi(req: Mapping[str, Any], action: str, outcome: str, order_typ
     quantity = _normalize_quantity(req.get("quantity"))
     guard_notional = _guard_notional(action, price, quantity)
     max_notional = _max_order_notional()
-    if guard_notional > max_notional:
+    if guard_notional > max_notional and not allow_order_notional_override:
         raise TradingValidationError(
             f"Order notional ${_money(guard_notional):.2f} exceeds FORESEA_MAX_ORDER_NOTIONAL "
             f"${_money(max_notional):.2f}."
@@ -509,7 +516,12 @@ def _preview_kalshi(req: Mapping[str, Any], action: str, outcome: str, order_typ
 
 
 def _preview_polymarket(
-    req: Mapping[str, Any], action: str, outcome: str, order_type: str
+    req: Mapping[str, Any],
+    action: str,
+    outcome: str,
+    order_type: str,
+    *,
+    allow_order_notional_override: bool = False,
 ) -> Dict[str, Any]:
     token_id = str(req.get("token_id") or "").strip()
     slug = str(req.get("slug") or "").strip() or None
@@ -524,7 +536,7 @@ def _preview_polymarket(
     quantity = _normalize_quantity(req.get("quantity"))
     guard_notional = _guard_notional(action, price, quantity)
     max_notional = _max_order_notional()
-    if guard_notional > max_notional:
+    if guard_notional > max_notional and not allow_order_notional_override:
         raise TradingValidationError(
             f"Order notional ${_money(guard_notional):.2f} exceeds FORESEA_MAX_ORDER_NOTIONAL "
             f"${_money(max_notional):.2f}."
@@ -570,17 +582,34 @@ def _preview_polymarket(
     }
 
 
-def preview_order(req: Mapping[str, Any], creds: Creds = None) -> Dict[str, Any]:
-    """Validate and normalize an order without submitting it."""
+def preview_order(
+    req: Mapping[str, Any],
+    creds: Creds = None,
+    *,
+    allow_order_notional_override: bool = False,
+) -> Dict[str, Any]:
+    """Validate and normalize an order without submitting it.
+
+    ``allow_order_notional_override`` is an internal-only escape hatch for a
+    separately verified reduce-only close.  API and live-execution callers use
+    the default, so the generic notional ceiling remains a hard limit for all
+    new exposure and human orders.
+    """
     byo = _is_byo(creds)
     platform = _clean_platform(req.get("platform"))
     action = _clean_action(req.get("action"))
     outcome = _clean_outcome(req.get("outcome"))
     order_type = _clean_order_type(req.get("order_type"))
     normalized = (
-        _preview_kalshi(req, action, outcome, order_type)
+        _preview_kalshi(
+            req, action, outcome, order_type,
+            allow_order_notional_override=allow_order_notional_override,
+        )
         if platform == "kalshi"
-        else _preview_polymarket(req, action, outcome, order_type)
+        else _preview_polymarket(
+            req, action, outcome, order_type,
+            allow_order_notional_override=allow_order_notional_override,
+        )
     )
     gate_var = "FORESEA_ENABLE_BYO_TRADING" if byo else "FORESEA_ENABLE_TRADING"
     trading_enabled = _env_bool(gate_var, False)

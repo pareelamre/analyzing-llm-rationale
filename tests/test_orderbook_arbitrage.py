@@ -41,3 +41,19 @@ class OrderbookArbitrageTests(unittest.TestCase):
 
         self.assertFalse(result["candidate"])
         self.assertEqual(result["executable_quantity"], 0)
+
+    def test_live_simulation_requires_full_requested_pair_after_latency(self):
+        result = scan_complement_arbitrage(
+            [(0.46, 2)],
+            [(0.49, 2)],
+            fee_bps_per_leg=10,
+            latency_bps_per_leg=25,
+            min_net_edge=0.04,
+            requested_quantity=3,
+        )
+
+        self.assertFalse(result["candidate"])
+        self.assertEqual(result["fill_policy"], "fill_or_kill_pair")
+        self.assertFalse(result["fully_fillable"])
+        self.assertEqual(result["unfilled_quantity"], 1.0)
+        self.assertGreater(result["levels"][0]["latency_cost_per_pair"], 0.0)

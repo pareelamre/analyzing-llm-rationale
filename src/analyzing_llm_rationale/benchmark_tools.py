@@ -39,6 +39,11 @@ risk_guard_rejections = meter.create_counter("benchmark_tools.risk_guard.rejecti
 settlement_actions = meter.create_counter("benchmark_tools.settlements", unit="1")
 fill_actions = meter.create_counter("benchmark_tools.place_trade.fills", unit="1")
 sizing_actions = meter.create_counter("benchmark_tools.place_trade.sizing", unit="1")
+reduce_only_notional_overrides = meter.create_counter(
+    "benchmark_tools.place_trade.reduce_only_notional_overrides",
+    unit="1",
+    description="Large shadow closes admitted past the gross new-order cap after position verification",
+)
 
 BLACKLISTED_WEB_DOMAINS = ("coinmarketcap.com",)
 MAX_NOTES_PER_AGENT = 50
@@ -2038,6 +2043,43 @@ def _check_trade_guards(
     return detail["allowed"], detail, policy
 
 
+def _verified_reduce_only_close(
+    *,
+    agent_id: str,
+    ticker: str,
+    side: str,
+    platform: str,
+    quantity: Any,
+) -> bool:
+    """Return true only when a requested close cannot open new exposure.
+
+    Trading preview normally caps gross order notional before the account risk
+    guard runs.  That is correct for a new bet, but wrong for a fully matched
+    binary close: buying the opposite contract can have a high gross ticket
+    cost while immediately eliminating a larger held position.  This small
+    preflight only authorizes preview to pass such an order to the full guard;
+    the full guard repeats the exact-quantity check before any fill is saved.
+    """
+    try:
+        requested_quantity = _as_float(quantity)
+    except (TypeError, ValueError):
+        return False
+    if requested_quantity <= 0:
+        return False
+    policy = _risk_guard_policy()
+    account, _ = _load_guard_account(
+        agent_id, policy, platform=platform, ticker=ticker, side=side,
+    )
+    closeable = sum(
+        float(position.quantity)
+        for position in account.open_positions()
+        if str(position.platform).lower() == platform
+        and str(position.ident) == ticker
+        and str(position.side).lower() == _opposite_side(side)
+    )
+    return requested_quantity <= closeable + 1e-9
+
+
 def _resolve_shadow_marketability(
     ticker: str, side: str, requested_price: float, *, platform: str = "kalshi"
 ) -> Dict[str, Any]:
@@ -2241,7 +2283,31 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "sizing": sizing,
                 }
 
-            preview = trading.preview_order(order)
+            # A quote-verified close can exceed the generic gross-ticket cap
+            # while still returning capital and eliminating risk.  Let it
+            # reach the account-level guard only after verifying it cannot
+            # exceed the exact opposing position.  New positions, partial
+            # over-closes, and every human/API order retain the normal cap.
+            verified_reduce_only_close = (
+                sizing.get("mode") == "close"
+                and _verified_reduce_only_close(
+                    agent_id=agent_id,
+                    ticker=ticker,
+                    side=side,
+                    platform=platform,
+                    quantity=order["quantity"],
+                )
+            )
+            if sizing.get("mode") == "close":
+                override_outcome = "allowed" if verified_reduce_only_close else "not_eligible"
+                reduce_only_notional_overrides.add(1, {"outcome": override_outcome})
+                span.set_attribute("trade.reduce_only_notional_override", verified_reduce_only_close)
+            if verified_reduce_only_close:
+                order["reduce_only"] = True
+            preview = trading.preview_order(
+                order,
+                allow_order_notional_override=verified_reduce_only_close,
+            )
             normalized = preview.get("normalized_order") or {}
             allowed, guard, policy = _check_trade_guards(
                 args=args,
@@ -2253,6 +2319,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 sizing=sizing,
                 strict_risk_management=ctx.require_kelly_sizing,
             )
+            guard["gross_notional_override"] = verified_reduce_only_close
             if not allowed:
                 event = {
                     "ts": _now(),

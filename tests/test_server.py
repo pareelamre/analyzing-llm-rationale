@@ -3374,7 +3374,7 @@ class ServerTests(unittest.TestCase):
         tool_step = report["tool_transcript"][0]
         self.assertEqual(tool_step["action"], "orderbook_arbitrage")
         self.assertIn('"executable_quantity": 4.0', tool_step["observation"])
-        self.assertIn("Read-only candidate only", tool_step["observation"])
+        self.assertIn("Live-market simulation only", tool_step["observation"])
         system_prompt = self.provider.calls[0][0]["content"]
         self.assertIn("orderbook_arbitrage(", system_prompt)
         self.assertIn("identical resolution rules", system_prompt)
