@@ -631,6 +631,50 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertAlmostEqual(closed["risk_guard"]["netting_payout"], 1186.9)
         self.assertEqual(closed["account"]["n_open_positions"], 0)
 
+    def test_verified_large_close_can_pass_gross_order_cap_without_opening_risk(self):
+        # A close at the live opposite ask can have a gross ticket larger than
+        # the autonomous new-order cap.  It must reach the account guard when
+        # (and only when) the exact opposing position already exists.
+        open_ctx = benchmark_tools.ToolContext(agent_id="model-large-close")
+        close_ctx = benchmark_tools.ToolContext(
+            agent_id="model-large-close", require_kelly_sizing=True
+        )
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "10000",
+                # The NO entry is $759.62, but the YES close is $1,127.56.
+                "FORESEA_MAX_ORDER_NOTIONAL": "800",
+                "FORESEA_AGENT_CYCLE_ID": "large-close",
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({
+                        "KXLARGECLOSE": {"yes_ask": 0.95, "no_ask": 0.64},
+                    }),
+                ),
+            ):
+                opened = benchmark_tools.place_trade(
+                    {"ticker": "KXLARGECLOSE", "side": "no", "price": 0.64, "quantity": 1186.9},
+                    open_ctx,
+                )
+                closed = benchmark_tools.place_trade(
+                    {
+                        "ticker": "KXLARGECLOSE", "side": "yes", "price": 0.95,
+                        "quantity": 1186.9, "sizing_mode": "close",
+                    },
+                    close_ctx,
+                )
+
+        self.assertTrue(opened["ok"])
+        self.assertTrue(closed["ok"])
+        self.assertTrue(closed["normalized_order"]["exchange_order"]["reduce_only"])
+        self.assertGreater(closed["risk_guard"]["notional"], 800.0)
+        self.assertEqual(closed["account"]["n_open_positions"], 0)
+
     def test_place_trade_allows_a_large_quote_verified_netting_profit(self):
         # This codebase's netting-arb guard used to reject any netting close
         # realizing more than a flat $0.15/pair, regardless of why -- but

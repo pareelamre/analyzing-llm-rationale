@@ -91,6 +91,11 @@ research_sources_carried = meter.create_counter(
 research_context_duration = meter.create_histogram(
     "agent_trading.research.context.duration", unit="s", description="Prior-cycle research context duration"
 )
+strategy_selections = meter.create_counter(
+    "agent_trading.strategy.selections",
+    unit="1",
+    description="Agent-declared decision strategy by completed shadow-trading cycle",
+)
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -98,7 +103,12 @@ CANDIDATE_COUNT = max(1, int(os.environ.get("CANDIDATE_COUNT", "3")))
 MAX_TOOL_STEPS = max(1, min(8, int(os.environ.get("MAX_TOOL_STEPS", "4"))))
 MIN_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MIN_CLOSE_DAYS", "1"))
 MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "30"))
-AGENT_ANALYZE_RETRIES = max(1, int(os.environ.get("AGENT_TRADING_RETRIES", "2")))
+# ``agent_analyze`` already retries individual provider calls. Retrying the
+# complete ReAct cycle here can replay research/tool work after a transient
+# provider failure and, more importantly, multiply requests during an upstream
+# rate-limit incident. Leave whole-cycle retry opt-in for manual recovery; the
+# scheduled workflow uses the safe default of one attempt.
+AGENT_ANALYZE_RETRIES = max(1, int(os.environ.get("AGENT_TRADING_RETRIES", "1")))
 AGENT_ANALYZE_RETRY_BACKOFF_S = float(os.environ.get("AGENT_TRADING_RETRY_BACKOFF_S", "10"))
 # AgentAnalyzeRequest.question used to have a tight 2000-char server-side
 # limit (see server.py) that was found silently destroying almost an entire
@@ -316,7 +326,8 @@ def _research_context(last_transcript: Optional[str]) -> str:
                 return ""
             lines = [
                 "=== Research carried forward from your prior cycle ===",
-                "Treat these as leads to verify, not as a reason to repeat the old thesis.",
+                "Treat these as leads to verify, not as a reason to repeat the old thesis. "
+                "A non-risk-reducing trade needs a dated evidence delta, not a recycled URL or summary.",
             ]
             for index, (title, url) in enumerate(sources, start=1):
                 lines.append(f"- Source {index}: {title} — {url}")
@@ -812,6 +823,11 @@ _TRADING_INSTRUCTION = (
     "estimate. Never guess a price or reuse your entry price for the "
     "opposite side when closing: yes and no move independently. A real "
     "mispricing against your own view is exactly when to trade it.\n\n"
+    "RESEARCH QUALITY GATE: A new position requires at least one dated, material "
+    "evidence update from this cycle and an explicit comparison with the prior view. "
+    "Do not re-open or add risk solely because a previous thesis, search result, or "
+    "market candidate is still visible. If there is no material evidence delta, HOLD "
+    "or PASS; a fresh quote alone is not research.\n\n"
     "SIZING: For every NEW position, call place_trade with both your calibrated "
     "P(YES) as model_probability and exactly one sizing_mode: quarter_kelly "
     "(25% Kelly, 50% market shrinkage, 5% account cap) or edge_kelly "
@@ -836,13 +852,26 @@ _TRADING_INSTRUCTION = (
     "the event date falls within THIS ticker's resolution window (shown above) -- "
     "Kalshi often has several tickers for the same question on different date ranges "
     "(e.g. '-26APR' vs '-26MAY22-26SEP'), so evidence from before this window opened "
-    "doesn't resolve this contract.\n\n"
+    "doesn't resolve this contract. A new position without visible resolution rules, "
+    "or without a dated fact inside the observation window, is a PASS -- not a guess.\n\n"
+    "STRATEGY MENU: Select exactly one strategy for this cycle and report it in "
+    "the thesis. (1) EVIDENCE_EDGE: a fresh, independently sourced probability "
+    "versus executable price; use Kelly sizing only after the research-quality and "
+    "rules gates pass. (2) CATALYST_EDGE: a dated upcoming event inside the exact "
+    "resolution window with a concrete causal path; do not extrapolate stale news. "
+    "(3) ORDERBOOK_ARBITRAGE_RESEARCH: call orderbook_arbitrage with realistic fees, "
+    "a latency_bps_per_leg allowance, and requested_quantity to simulate a live "
+    "fill-or-kill pair. Verify identical resolution rules and real-world non-atomic "
+    "leg risk; never submit a single leg as 'arbitrage'. (4) POSITION_RISK_REDUCTION: reassess an existing "
+    "holding and use sizing_mode='close' only to reduce it. If no strategy clears its "
+    "gate, choose PASS. A broader menu is not permission to manufacture an edge.\n\n"
     "MANDATORY UNIFIED THESIS TEMPLATE:\n"
     "DISCREPANCY DISCIPLINE: Empirical backtesting on 2,700+ contracts shows perceived edges >20pp "
     "against liquid markets fail 73.4% of the time due to adverse selection. When assessing an edge >15pp, "
     "actively challenge your thesis, verify you are not missing unindexed breaking events, and damp overconfident probabilities (80-95% range).\n\n"
     "In your final answer, ALL models MUST begin with this research delta, then use the exact 4-section markdown structure:\n\n"
     "### 0. Research Delta\n"
+    "- **Strategy**: [EVIDENCE_EDGE / CATALYST_EDGE / ORDERBOOK_ARBITRAGE_RESEARCH / POSITION_RISK_REDUCTION] (never use N/A)\n"
     "- **New evidence**: [new, dated sources checked this cycle, including URL/domain and why they change or do not change the view; write 'No material new evidence' when none]\n"
     "- **Belief update**: [previous probability -> current probability, or 'No material change']\n"
     "- Do not paraphrase unchanged prior sections. If evidence, probability, action, catalysts, and invalidation are unchanged, state that once and keep the remaining sections concise.\n\n"
@@ -940,6 +969,28 @@ def _build_question(portfolio_block: str, candidates_block: str) -> str:
     return _assemble_question(trimmed_portfolio, "")
 
 
+_STRATEGY_ALIASES = {
+    "EVIDENCE_EDGE": "evidence_edge",
+    "CATALYST_EDGE": "catalyst_edge",
+    "ORDERBOOK_ARBITRAGE_RESEARCH": "orderbook_arbitrage_research",
+    "POSITION_RISK_REDUCTION": "position_risk_reduction",
+}
+
+
+def _selected_strategy(thesis: str) -> str:
+    """Return a bounded, auditable strategy label from the final thesis.
+
+    The choice is recorded only after a final answer is published, not from a
+    speculative tool call. This keeps later strategy attribution tied to an
+    actual decision rather than a research path that never traded.
+    """
+    match = re.search(r"\*\*Strategy\*\*\s*:\s*\[?\s*([A-Za-z_ -]+)", thesis or "", re.IGNORECASE)
+    if not match:
+        return "unreported"
+    normalized = re.sub(r"[ -]+", "_", match.group(1).strip().upper())
+    return _STRATEGY_ALIASES.get(normalized, "unreported")
+
+
 def _configure_max_order_notional() -> float:
     """Override trading.py's flat-dollar FORESEA_MAX_ORDER_NOTIONAL for this
     process only, as MAX_ORDER_NOTIONAL_PCT of the agent's account value
@@ -1006,6 +1057,15 @@ def run_cycle(model: str) -> None:
     question = _build_question(portfolio_block, _build_candidates_block(held_quotes, new_quotes))
 
     report = asyncio.run(_call_agent_analyze(question))
+    selected_strategy = _selected_strategy(report.thesis)
+    with tracer.start_as_current_span("agent_trading.record_strategy_selection") as span:
+        outcome = "reported" if selected_strategy != "unreported" else "unreported"
+        span.set_attributes({
+            "agent.model": model,
+            "strategy.name": selected_strategy,
+            "outcome": outcome,
+        })
+        strategy_selections.add(1, {"strategy": selected_strategy, "outcome": outcome})
 
     candidates_offered = [q.get("ident") for q in (*held_quotes, *new_quotes)]
     with benchmark_tools._account_transaction() as conn:
@@ -1022,6 +1082,7 @@ def run_cycle(model: str) -> None:
                 report.thesis,
                 json.dumps({
                     "candidates_offered": candidates_offered,
+                    "selected_strategy": selected_strategy,
                     "tool_transcript": report.tool_transcript,
                 }),
                 len(report.tool_transcript),

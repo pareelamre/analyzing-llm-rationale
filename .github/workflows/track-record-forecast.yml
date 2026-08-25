@@ -46,6 +46,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     continue-on-error: true
+    # Share the same two provider lanes as the autonomous agent scheduler.
+    # A per-workflow max-parallel value cannot protect a key that both
+    # workflows use concurrently.
+    concurrency:
+      group: scads-provider-lane-${{ matrix.lane }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       # SCADS currently caps this API key at 2 simultaneous requests. Each
@@ -56,32 +62,46 @@ jobs:
         include:
           - model: crowd-follow
             artifact: crowd-follow
+            lane: "0"
           - model: council
             artifact: council
+            lane: "1"
           - model: scads-alias-code
             artifact: scads-alias-code
+            lane: "0"
           - model: scads-alias-ha
             artifact: scads-alias-ha
+            lane: "1"
           - model: scads-alias-reasoning
             artifact: scads-alias-reasoning
+            lane: "0"
           - model: scads-alias-huge
             artifact: scads-alias-huge
+            lane: "1"
           - model: scads-alias-huge-no-thinking
             artifact: scads-alias-huge-no-thinking
+            lane: "0"
           - model: llama-3.3-70b-instruct
             artifact: llama-3.3-70b-instruct
+            lane: "1"
           - model: gpt-oss-120b
             artifact: gpt-oss-120b
+            lane: "0"
           - model: gemma-4-26b-a4b-it
             artifact: gemma-4-26b-a4b-it
+            lane: "1"
           - model: minimax-m3
             artifact: minimax-m3
+            lane: "0"
           - model: kimi-k3
             artifact: kimi-k3
+            lane: "1"
           - model: qwen3-coder-30b-a3b-instruct
             artifact: qwen3-coder-30b-a3b-instruct
+            lane: "0"
           - model: glm-5.2-fp8
             artifact: glm-5.2-fp8
+            lane: "1"
     steps:
       - uses: actions/checkout@v4
 

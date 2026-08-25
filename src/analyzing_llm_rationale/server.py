@@ -14153,8 +14153,12 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             try:
                 fee_bps = float(args.get("fee_bps_per_leg") or 0.0)
                 min_edge = float(args.get("min_net_edge") or 0.0)
-                if fee_bps < 0 or min_edge < 0:
-                    raise ValueError("negative fee or edge threshold")
+                latency_bps = float(args.get("latency_bps_per_leg") or 0.0)
+                requested_quantity = args.get("requested_quantity")
+                if fee_bps < 0 or min_edge < 0 or latency_bps < 0:
+                    raise ValueError("negative fee, edge, or latency allowance")
+                if requested_quantity is not None and float(requested_quantity) <= 0:
+                    raise ValueError("non-positive requested quantity")
                 if "kalshi" in platform:
                     ticker = str(args.get("ticker") or args.get("symbol") or "").strip()
                     if not ticker:
@@ -14189,7 +14193,12 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                     return "platform must be 'kalshi' or 'polymarket'."
 
                 result = scan_complement_arbitrage(
-                    yes_asks, no_asks, fee_bps_per_leg=fee_bps, min_net_edge=min_edge,
+                    yes_asks,
+                    no_asks,
+                    fee_bps_per_leg=fee_bps,
+                    min_net_edge=min_edge,
+                    latency_bps_per_leg=latency_bps,
+                    requested_quantity=requested_quantity,
                 )
                 outcome = "candidate" if result["candidate"] else "none"
                 span.set_attributes({
@@ -14205,7 +14214,10 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             except (TypeError, ValueError):
                 span.set_attribute("outcome", "invalid_input")
                 _agent_orderbook_arbitrage_analyses.add(1, {"market.venue": platform or "unknown", "outcome": "invalid_input"})
-                return "fee_bps_per_leg and min_net_edge must be non-negative numbers."
+                return (
+                    "fee_bps_per_leg, min_net_edge, latency_bps_per_leg, and "
+                    "requested_quantity must be positive when supplied."
+                )
             except Exception as exc:
                 span.record_exception(exc)
                 span.set_status(Status(StatusCode.ERROR))
@@ -14336,7 +14348,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         {"name": "fetch_api", "args": "url, method?, json?", "description": "Execute a GET or POST HTTP API request to an API endpoint URL."},
         {"name": "exchange_status", "args": "", "description": "Get Kalshi exchange operational status (trading_active) and schedule."},
         {"name": "orderbook", "args": "ticker|token_id", "description": "Fetch live orderbook bids/asks for Kalshi ticker or Polymarket token."},
-        {"name": "orderbook_arbitrage", "args": "platform, ticker? | yes_token_id,no_token_id?, fee_bps_per_leg?, min_net_edge?", "description": "Read-only, depth-aware complementary YES+NO cost analysis. Kalshi needs ticker; Polymarket needs both outcome token IDs. Includes fee assumptions and executable paired quantity; it never submits orders, and identical resolution rules must be verified first."},
+        {"name": "orderbook_arbitrage", "args": "platform, ticker? | yes_token_id,no_token_id?, fee_bps_per_leg?, min_net_edge?, latency_bps_per_leg?, requested_quantity?", "description": "Read-only live-market simulation of complementary YES+NO depth. It uses fees, a per-leg latency allowance, and optional fill-or-kill paired quantity. Kalshi needs ticker; Polymarket needs both outcome token IDs. It never submits orders, and identical resolution rules plus real-world leg risk must be verified."},
         {"name": "market_tags", "args": "", "description": "Fetch active market categories and tags on Polymarket."},
         {"name": "price_history", "args": "ticker|market, series_ticker?", "description": "Fetch historical prices or OHLC candlesticks for a market."},
         {"name": "live_data", "args": "event_ticker?, type?", "description": "Fetch real-time sports game stats and live event feeds from Kalshi."},
@@ -14375,7 +14387,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             {"name": "fetch_api", "args": "url, method?, json?", "description": "Execute a GET or POST HTTP API request to an API endpoint URL."},
             {"name": "exchange_status", "args": "", "description": "Get Kalshi exchange operational status (trading_active) and schedule."},
             {"name": "orderbook", "args": "ticker|token_id", "description": "Fetch live orderbook bids/asks for Kalshi ticker or Polymarket token."},
-            {"name": "orderbook_arbitrage", "args": "platform, ticker? | yes_token_id,no_token_id?, fee_bps_per_leg?, min_net_edge?", "description": "Read-only, depth-aware complementary YES+NO cost analysis. Kalshi needs ticker; Polymarket needs both outcome token IDs. Includes fee assumptions and executable paired quantity; it never submits orders, and identical resolution rules must be verified first."},
+            {"name": "orderbook_arbitrage", "args": "platform, ticker? | yes_token_id,no_token_id?, fee_bps_per_leg?, min_net_edge?, latency_bps_per_leg?, requested_quantity?", "description": "Read-only live-market simulation of complementary YES+NO depth. It uses fees, a per-leg latency allowance, and optional fill-or-kill paired quantity. Kalshi needs ticker; Polymarket needs both outcome token IDs. It never submits orders, and identical resolution rules plus real-world leg risk must be verified."},
             {"name": "market_tags", "args": "", "description": "Fetch active market categories and tags on Polymarket."},
             {"name": "price_history", "args": "ticker|market, series_ticker?", "description": "Fetch historical prices or OHLC candlesticks for a market."},
             {"name": "live_data", "args": "event_ticker?, type?", "description": "Fetch real-time sports game stats and live event feeds from Kalshi."},
