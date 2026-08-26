@@ -579,14 +579,16 @@ class PipelineTests(unittest.TestCase):
         track_model_labels = scads_track_model_labels(repo_root / "configs" / "models.yaml")
         self.assertIn("kimi-k3", track_model_labels)
         self.assertIn("gemma-4-26b-a4b-it", track_model_labels)
-        self.assertIn("deepseek-v3", scads_models)
-        self.assertTrue(all(cfg.forecasting_enabled for cfg in models.values()))
-        # deepseek-v3 stays /predict-able and chat-eligible (forecasting_enabled
-        # is untouched) but is excluded from the live track-record/MTM
-        # comparison board -- it's not in the active CI tracking matrix and
-        # would otherwise sit frozen at the starting balance forever.
+        # deepseek-v3 (and others) are excluded from the allowlist because
+        # SCADS revoked team access (500 "team not allowed to access model").
+        self.assertNotIn("deepseek-v3", scads_models)
+        self.assertFalse(models["deepseek-v3"].forecasting_enabled)
         self.assertFalse(models["deepseek-v3"].track_record_enabled)
         self.assertNotIn("deepseek-v3", track_model_labels)
+        # Models with revoked SCADS access are explicitly disabled.
+        for label in ("deepseek-v3", "gemma-4-31b-it", "kimi-k2.5", "kimi-k2.6",
+                      "kimi-k2.7-code", "llama-3.1-8b-instruct"):
+            self.assertFalse(models[label].forecasting_enabled, label)
         self.assertTrue(models["kimi-k3"].track_record_enabled)
         self.assertNotIn("gpt-5", scads_models)
         self.assertEqual(

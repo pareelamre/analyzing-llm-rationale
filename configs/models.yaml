@@ -46,6 +46,7 @@ models:
     # access model") -- every forecast attempt fails, so its MTM/edge-Kelly
     # accounts sat frozen at the starting balance forever. Re-enable once
     # SCADS access is restored.
+    forecasting_enabled: false
     track_record_enabled: false
   llama-4-scout-17b-16e-instruct:
     result_label: Llama-4-Scout-17B-16E-Instruct
@@ -179,6 +180,10 @@ models:
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: false
+    # SCADS team access to this model was revoked (500 "team not allowed to
+    # access model. This team can only access models=['public-models']").
+    # Re-enable once SCADS access is restored.
+    forecasting_enabled: false
     track_record_enabled: false
   glm-5.2-fp8:
     result_label: GLM-5.2-FP8
@@ -214,8 +219,10 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    # Not in the active track-record-forecast.yml CI matrix -- never gets a
-    # snapshot, so it sat frozen at the starting balance on the MTM board.
+    # SCADS team access to this model was revoked (500 "team not allowed to
+    # access model. This team can only access models=['public-models']").
+    # Re-enable once SCADS access is restored.
+    forecasting_enabled: false
     track_record_enabled: false
   gpt-5:
     result_label: GPT-5
@@ -262,6 +269,10 @@ models:
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: false
+    # SCADS team access to this model was revoked (500 "team not allowed to
+    # access model. This team can only access models=['public-models']").
+    # Re-enable once SCADS access is restored.
+    forecasting_enabled: false
     track_record_enabled: false
   kimi-k2.5:
     result_label: Kimi-K2.5
@@ -272,8 +283,10 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    # Not in the active track-record-forecast.yml CI matrix -- never gets a
-    # snapshot, so it sat frozen at the starting balance on the MTM board.
+    # SCADS team access to this model was revoked (500 "team not allowed to
+    # access model. This team can only access models=['public-models']").
+    # Re-enable once SCADS access is restored.
+    forecasting_enabled: false
     track_record_enabled: false
   kimi-k2.6:
     result_label: Kimi-K2.6
@@ -284,3 +297,8 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    # SCADS team access to this model was revoked (500 "team not allowed to
+    # access model. This team can only access models=['public-models']").
+    # Re-enable once SCADS access is restored.
+    forecasting_enabled: false
+    track_record_enabled: false
