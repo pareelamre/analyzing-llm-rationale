@@ -683,6 +683,98 @@ class LearningContextTests(unittest.TestCase):
         self.assertIn("1 profitable", question)
 
 
+class ThesisForecastLearningTests(unittest.TestCase):
+    def test_persists_explicit_thesis_probability_and_scores_only_final_settlement(self):
+        thesis = (
+            "### 0. Research Delta\n"
+            "- **Strategy**: [EVIDENCE_EDGE]\n"
+            "- **New evidence**: Official update https://example.test confirms the qualifying event.\n"
+            "### 1. Decision & Execution\n"
+            "- **Action**: BUY YES\n"
+            "- **Market & Venue**: [KXLEARN-26] on [Kalshi]\n"
+            "### 3. Model Edge & Valuation\n"
+            "- **Model Probability**: [70%] vs **Market Price**: [60%] (Edge: [+10%])"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            with mock.patch.dict(
+                os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path)}, clear=False
+            ):
+                with benchmark_tools._account_transaction() as conn:
+                    recorded = agent_trading_tick._persist_thesis_forecasts(
+                        conn, "model-learning", "cycle-forecast", thesis, [],
+                        [_quote("KXLEARN-26", bid=0.59, ask=0.61)], "evidence_edge",
+                        forecast_ts="2026-08-20T00:00:00+00:00",
+                    )
+                    self.assertEqual(recorded, 1)
+                    # A voluntary close is deliberately not a truth label.
+                    benchmark_tools._record_account_action(
+                        conn, agent_id="model-learning", action_type="trade",
+                        cycle_id="cycle-close", platform="kalshi", ticker="KXLEARN-26",
+                        outcome="realized", realized_pairs=1, realized_pnl=1.0,
+                    )
+                    self.assertEqual(agent_trading_tick._refresh_thesis_forecast_outcomes(conn, "model-learning"), 0)
+                    benchmark_tools._record_account_action(
+                        conn, agent_id="model-learning", action_type="settlement",
+                        cycle_id="cycle-settlement", platform="kalshi", ticker="KXLEARN-26",
+                        outcome="yes",
+                    )
+                    self.assertEqual(agent_trading_tick._refresh_thesis_forecast_outcomes(conn, "model-learning"), 1)
+                    row = conn.execute(
+                        "SELECT model_probability, market_probability, resolved_outcome, brier_score, market_brier_score "
+                        "FROM agent_thesis_forecasts"
+                    ).fetchone()
+
+        self.assertAlmostEqual(row["model_probability"], 0.70)
+        self.assertAlmostEqual(row["market_probability"], 0.60)
+        self.assertEqual(row["resolved_outcome"], 1)
+        self.assertAlmostEqual(row["brier_score"], 0.09)
+        self.assertAlmostEqual(row["market_brier_score"], 0.16)
+
+    def test_trade_tool_probability_is_a_fallback_when_the_final_thesis_omits_the_field(self):
+        records = agent_trading_tick._thesis_forecast_records(
+            "### 1. Decision & Execution\n- **Action**: BUY YES",
+            [{"action": "place_trade", "args": {
+                "platform": "polymarket", "ticker": "learn-market", "model_probability": 0.63,
+                "side": "yes",
+            }}],
+            [{"platform": "polymarket", "ident": "learn-market", "probability": 0.55}],
+            "evidence_edge",
+        )
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["ticker"], "learn-market")
+        self.assertAlmostEqual(records[0]["model_probability"], 0.63)
+        self.assertAlmostEqual(records[0]["market_probability"], 0.55)
+
+    def test_scores_a_pass_forecast_from_a_bounded_venue_resolution_lookup(self):
+        thesis = (
+            "- **Market & Venue**: [KXPASS-26] on [Kalshi]\n"
+            "- **Model Probability**: [25%] vs **Market Price**: [40%] (Edge: [-15%])"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "accounts.sqlite"
+            with mock.patch.dict(
+                os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(db_path)}, clear=False
+            ):
+                with benchmark_tools._account_transaction() as conn:
+                    agent_trading_tick._persist_thesis_forecasts(
+                        conn, "model-pass", "cycle-pass", thesis, [], [], "evidence_edge",
+                        forecast_ts="2026-08-20T00:00:00+00:00",
+                    )
+                    self.assertEqual(
+                        agent_trading_tick._refresh_thesis_forecast_outcomes(
+                            conn, "model-pass", {("kalshi", "KXPASS-26"): (0, "2026-08-21T00:00:00+00:00")}
+                        ),
+                        1,
+                    )
+                    row = conn.execute(
+                        "SELECT resolved_outcome, brier_score FROM agent_thesis_forecasts"
+                    ).fetchone()
+
+        self.assertEqual(row["resolved_outcome"], 0)
+        self.assertAlmostEqual(row["brier_score"], 0.0625)
+
+
 class RunCycleTests(unittest.TestCase):
     def _fake_report(self, thesis="Passed this cycle.", transcript=None):
         return SimpleNamespace(thesis=thesis, tool_transcript=transcript or [])

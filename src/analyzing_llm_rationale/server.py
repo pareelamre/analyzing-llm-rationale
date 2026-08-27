@@ -4746,14 +4746,16 @@ class AgentAnalyzeRequest(BaseModel):
     builtin_skills: bool = Field(False, description="Also run the built-in forecasting toolkit (base rate, scenario decomposition, red team, key drivers).")
     ground_in_record: bool = Field(False, description="Condition the forecast on the model's own live track-record calibration.")
     tool_loop: bool = Field(False, description="Use a ReAct tool-using loop (model plans + calls tools) instead of the fixed pipeline.")
-    benchmark_tools: bool = Field(False, description="When tool_loop=true, expose only benchmark tools: place_trade, web_search, manage_notes.")
+    benchmark_tools: bool = Field(
+        False,
+        description="When tool_loop=true, expose Foresea's shadow-trading and market-research toolkit.",
+    )
     benchmark_tool_names: Optional[List[str]] = Field(
         None,
         max_length=3,
         description=(
-            "When benchmark_tools=true, restrict the exposed tool set to this subset "
-            "of place_trade/web_search/manage_notes -- e.g. a research-only call passes "
-            "['web_search', 'manage_notes'], a pure-reasoning call passes [] (no tools, "
+            "When benchmark_tools=true, restrict the exposed tool set to named Foresea tools -- e.g. "
+            "a research-only call passes ['web_search', 'orderbook'], a pure-reasoning call passes [] (no tools, "
             "so the model must answer on its first turn). Unset exposes all three."
         ),
     )

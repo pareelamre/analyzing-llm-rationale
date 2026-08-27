@@ -1098,6 +1098,13 @@
     .agentic-health--stale, .agentic-health--unverified { background: #fef2f2; color: #b91c1c; }
     .agentic-health-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 6px; padding: 0 0 12px; }
     .agentic-health-summary-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-right: 2px; text-transform: uppercase; }
+    .agentic-learning-summary { background: linear-gradient(115deg, #f0fdfa, #f8fafc 62%); border: 1px solid #cbd5e1; border-radius: 12px; display: grid; gap: 10px 16px; grid-template-columns: minmax(150px, 1.4fr) repeat(3, minmax(0, 1fr)); margin: 14px 0; padding: 13px 15px; }
+    .agentic-learning-kicker { color: #0f766e; display: block; font-size: 9px; font-weight: 750; letter-spacing: .08em; margin-bottom: 4px; text-transform: uppercase; }
+    .agentic-learning-title { color: var(--ink); font-size: 13px; font-weight: 700; margin: 0; }
+    .agentic-learning-copy { color: var(--text-dim); font-size: 11px; line-height: 1.4; margin: 3px 0 0; }
+    .agentic-learning-stat { border-left: 1px solid #cbd5e1; padding-left: 14px; }
+    .agentic-learning-stat-label { color: var(--text-dim); display: block; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .agentic-learning-stat-value { color: #0f172a; display: block; font-size: 14px; font-weight: 700; margin-top: 3px; }
     .agentic-position-button { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; color: #475569; cursor: pointer; font-size: 10px; font-weight: 650; padding: 3px 8px; }
     .agentic-position-button:hover { background: #f1f5f9; color: #0f172a; }
     .agentic-position-row > td { background: #fbfdff; }
@@ -1132,6 +1139,8 @@
     .agentic-action--pass { background: #e2e8f0; color: #475569; }
     @media (max-width: 640px) {
       .agentic-panel-head, .agentic-feed-head { align-items: flex-start; flex-direction: column; gap: 7px; }
+      .agentic-learning-summary { grid-template-columns: 1fr 1fr; }
+      .agentic-learning-summary > :first-child { grid-column: 1 / -1; }
       .agentic-activity { padding: 14px; }
       .agentic-activity-meta { align-items: flex-start; flex-direction: column; gap: 5px; }
     }
@@ -6614,6 +6623,37 @@ function _eligibilityReasonText(elig) {
   return reasons.length ? `Not yet eligible: ${reasons.join('; ')}.` : 'Not yet eligible.';
 }
 
+function _agentForecastLearningSummary(learning, agentId) {
+  const label = _ebModelLabel(agentId || 'selected model');
+  const recorded = Number(learning?.recorded_forecasts || 0);
+  const resolved = Number(learning?.resolved_forecasts || 0);
+  const brier = Number(learning?.brier_score);
+  const marketBrier = Number(learning?.market_brier_score);
+  const bias = Number(learning?.probability_bias);
+  const score = Number.isFinite(brier) ? brier.toFixed(3) : '—';
+  const versusMarket = Number.isFinite(brier) && Number.isFinite(marketBrier)
+    ? `${brier < marketBrier ? 'ahead' : brier > marketBrier ? 'behind' : 'level'} vs market`
+    : 'market baseline pending';
+  const biasText = !Number.isFinite(bias)
+    ? 'pending final outcomes'
+    : Math.abs(bias) < 0.05
+      ? 'well centred'
+      : bias > 0 ? 'high YES bias' : 'low YES bias';
+  const statusCopy = !recorded
+    ? 'A score appears once this model publishes a thesis with a concrete market and probability.'
+    : !resolved
+      ? `${recorded} forecast${recorded === 1 ? '' : 's'} recorded; waiting for final market resolution.`
+      : resolved < 5
+        ? `${resolved} final outcome${resolved === 1 ? '' : 's'} — early signal only, not a performance claim.`
+        : `${resolved} final outcomes scored from the model’s recorded thesis probabilities.`;
+  return `<aside class="agentic-learning-summary" aria-label="Forecast learning for ${escAttr(label)}">
+    <div><span class="agentic-learning-kicker">Forecast learning</span><p class="agentic-learning-title">${escHtml(label)}</p><p class="agentic-learning-copy">${escHtml(statusCopy)}</p></div>
+    <div class="agentic-learning-stat"><span class="agentic-learning-stat-label">Brier score</span><span class="agentic-learning-stat-value">${escHtml(score)}</span></div>
+    <div class="agentic-learning-stat"><span class="agentic-learning-stat-label">Against market</span><span class="agentic-learning-stat-value">${escHtml(versusMarket)}</span></div>
+    <div class="agentic-learning-stat"><span class="agentic-learning-stat-label">Probability bias</span><span class="agentic-learning-stat-value">${escHtml(biasText)}</span></div>
+  </aside>`;
+}
+
 function renderAgentTradingBoard(d) {
   const host = document.getElementById('eb-agentic-section');
   if (!host) return;
@@ -6634,6 +6674,7 @@ function renderAgentTradingBoard(d) {
   const equityCurves = d.equity_curves || {};
   const eligibility = d.eligibility || {};
   const modelHealth = d.model_health || {};
+  const forecastLearning = d.forecast_learning || {};
   const activity = d.recent_activity || [];
   const latestTheses = d.latest_theses || {};
   const _healthStatus = health => String(health?.status || 'unverified');
@@ -6814,6 +6855,9 @@ function renderAgentTradingBoard(d) {
     : activity.filter(a => a.agent_id === activeFilter);
   const hasVisibleThesis = filteredActivity.some(a => a.type === 'thesis');
   const latestThesis = activeFilter === 'all' ? null : latestTheses[activeFilter];
+  const learningSummary = activeFilter === 'all'
+    ? ''
+    : _agentForecastLearningSummary(forecastLearning[activeFilter], activeFilter);
   // The board's global activity window may be filled by other models. Keep a
   // selected model's own latest thesis visible even when it falls outside that
   // window, rather than rendering an empty feed for a healthy model.
@@ -6849,6 +6893,7 @@ function renderAgentTradingBoard(d) {
     <div class="agentic-filterbar">
       ${filterPills.join('')}
     </div>
+    ${learningSummary}
     <div class="agentic-activity-list">${activityRows || (activeFilter !== 'all'
       ? `<p class="text-sm text-gray-500">No published thesis for ${escHtml(_ebModelLabel(activeFilter))} yet. Its next scheduled research run will retry automatically.</p>`
       : '<p class="text-sm text-gray-500">No activity matching this filter.</p>')}</div>`;

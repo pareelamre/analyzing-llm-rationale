@@ -730,6 +730,26 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_agent_learning_recent
             ON agent_learning(agent_id, source_ts DESC);
+        CREATE TABLE IF NOT EXISTS agent_thesis_forecasts (
+            agent_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            forecast_ts TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            ticker TEXT NOT NULL,
+            model_probability REAL NOT NULL,
+            market_probability REAL,
+            edge REAL,
+            action TEXT,
+            strategy TEXT,
+            evidence_delta TEXT,
+            resolved_outcome INTEGER,
+            resolved_at TEXT,
+            brier_score REAL,
+            market_brier_score REAL,
+            PRIMARY KEY (agent_id, cycle_id, platform, ticker)
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_thesis_forecasts_unresolved
+            ON agent_thesis_forecasts(agent_id, resolved_outcome, platform, ticker);
         """
     )
     # Existing local paper-account databases predate the watermark. SQLite's

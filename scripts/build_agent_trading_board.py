@@ -208,6 +208,7 @@ def build_board() -> Dict[str, Any]:
         leaderboard: List[Dict[str, Any]] = []
         equity_curves: Dict[str, Any] = {}
         eligibility: Dict[str, Any] = {}
+        forecast_learning: Dict[str, Any] = {}
         latest_theses: Dict[str, Dict[str, Any] | None] = {}
         model_health: Dict[str, Dict[str, Any]] = {}
         activity: List[Dict[str, Any]] = []
@@ -221,6 +222,7 @@ def build_board() -> Dict[str, Any]:
                 conn, model, current_account_value=acct_val, current_ts=now_iso
             )
             equity_curves[model] = equity
+            forecast_learning[model] = agent_trading_stats.compute_forecast_learning(conn, model)
             latest_theses[model] = _latest_thesis(conn, model)
             model_health[model] = _model_health(
                 conn, model, store_present=store_presence[model], now=now,
@@ -245,6 +247,7 @@ def build_board() -> Dict[str, Any]:
         "leaderboard": leaderboard,
         "equity_curves": equity_curves,
         "eligibility": eligibility,
+        "forecast_learning": forecast_learning,
         "model_health": model_health,
         "latest_theses": latest_theses,
         "recent_activity": activity[:RECENT_ACTIVITY_LIMIT],

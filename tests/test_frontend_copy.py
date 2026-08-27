@@ -326,6 +326,17 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         # Present in the loading and error early-return branches too.
         self.assertIn("host.innerHTML = `${banner}<p", renderer)
 
+    def test_agentic_selected_model_surfaces_outcome_scored_forecast_learning(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                renderer = index.split("function renderAgentTradingBoard(d) {", 1)[1].split(
+                    "async function removePersonalLedgerEntry", 1
+                )[0]
+                self.assertIn("const forecastLearning = d.forecast_learning || {};", renderer)
+                self.assertIn("_agentForecastLearningSummary", index)
+                self.assertIn("Brier score", index)
+                self.assertIn("waiting for final market resolution", index)
+
     def test_equity_curve_head_bubbles_show_the_model_abbreviation_not_a_boolean(self):
         # Each curve's end-of-line bubble renders String(curve.head) as its
         # label (see _equitySvg) -- a literal `head: true` on the curve object

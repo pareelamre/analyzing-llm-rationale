@@ -458,6 +458,30 @@ class PromotionEligibilityTests(unittest.TestCase):
         self.assertFalse(result["checks"]["drawdown_within_cap"])
 
 
+class ForecastLearningTests(unittest.TestCase):
+    def test_keeps_forecast_scoring_separate_from_pnl_and_compares_the_market(self):
+        with _fixture_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO agent_thesis_forecasts
+                (agent_id, cycle_id, forecast_ts, platform, ticker, model_probability,
+                 market_probability, resolved_outcome, resolved_at, brier_score, market_brier_score)
+                VALUES ('model-a', 'cycle-1', '2026-08-11T00:00:00+00:00', 'kalshi', 'KXFORECAST',
+                        0.70, 0.60, 1, '2026-08-12T00:00:00+00:00', 0.09, 0.16)
+                """
+            )
+            conn.commit()
+            learning = agent_trading_stats.compute_forecast_learning(conn, "model-a")
+
+        self.assertEqual(learning["recorded_forecasts"], 1)
+        self.assertEqual(learning["resolved_forecasts"], 1)
+        self.assertEqual(learning["status"], "small_sample")
+        self.assertAlmostEqual(learning["brier_score"], 0.09)
+        self.assertAlmostEqual(learning["market_brier_score"], 0.16)
+        self.assertAlmostEqual(learning["probability_bias"], -0.30)
+        self.assertEqual(learning["recent_reviews"][0]["ticker"], "KXFORECAST")
+
+
 class RecentActivityTests(unittest.TestCase):
     def test_clean_thesis_display_hides_raw_react_tool_transcript(self):
         thesis = (

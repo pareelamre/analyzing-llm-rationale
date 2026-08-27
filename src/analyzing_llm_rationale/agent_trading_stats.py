@@ -301,6 +301,84 @@ def compute_promotion_eligibility(
     }
 
 
+def compute_forecast_learning(
+    conn: sqlite3.Connection, agent_id: str, *, review_limit: int = 3
+) -> Dict[str, Any]:
+    """Summarize only final-outcome-scored thesis forecasts for one agent.
+
+    This is deliberately independent of P&L: a forecast is informative when
+    the contract's final outcome is known, not when a position happens to be
+    marked up or voluntarily closed.  ``market_brier_score`` can be absent on
+    older/fallback records, so the comparison is optional rather than guessed.
+    """
+    total_row = conn.execute(
+        """
+        SELECT COUNT(*) AS recorded_forecasts,
+               SUM(CASE WHEN resolved_outcome IS NOT NULL THEN 1 ELSE 0 END) AS resolved_forecasts,
+               AVG(CASE WHEN resolved_outcome IS NOT NULL THEN brier_score END) AS brier_score,
+               AVG(CASE WHEN resolved_outcome IS NOT NULL THEN market_brier_score END) AS market_brier_score,
+               AVG(CASE WHEN resolved_outcome IS NOT NULL
+                        THEN model_probability - resolved_outcome END) AS probability_bias
+        FROM agent_thesis_forecasts
+        WHERE agent_id = ?
+        """,
+        (agent_id,),
+    ).fetchone()
+    recorded = int(total_row["recorded_forecasts"] or 0)
+    resolved = int(total_row["resolved_forecasts"] or 0)
+    brier = total_row["brier_score"]
+    market_brier = total_row["market_brier_score"]
+    bias = total_row["probability_bias"]
+    reviews = [
+        {
+            "ticker": row["ticker"],
+            "platform": row["platform"],
+            "forecast_ts": row["forecast_ts"],
+            "resolved_at": row["resolved_at"],
+            "model_probability": round(float(row["model_probability"]), 4),
+            "market_probability": (
+                round(float(row["market_probability"]), 4)
+                if row["market_probability"] is not None else None
+            ),
+            "resolved_outcome": int(row["resolved_outcome"]),
+            "brier_score": round(float(row["brier_score"]), 6),
+            "market_brier_score": (
+                round(float(row["market_brier_score"]), 6)
+                if row["market_brier_score"] is not None else None
+            ),
+        }
+        for row in conn.execute(
+            """
+            SELECT platform, ticker, forecast_ts, resolved_at, model_probability,
+                   market_probability, resolved_outcome, brier_score, market_brier_score
+            FROM agent_thesis_forecasts
+            WHERE agent_id = ? AND resolved_outcome IS NOT NULL
+            ORDER BY resolved_at DESC
+            LIMIT ?
+            """,
+            (agent_id, max(1, min(int(review_limit), 10))),
+        )
+    ]
+    if not recorded:
+        status = "not_recording"
+    elif not resolved:
+        status = "collecting_outcomes"
+    elif resolved < 5:
+        status = "small_sample"
+    else:
+        status = "learning"
+    return {
+        "agent_id": agent_id,
+        "status": status,
+        "recorded_forecasts": recorded,
+        "resolved_forecasts": resolved,
+        "brier_score": round(float(brier), 6) if brier is not None else None,
+        "market_brier_score": round(float(market_brier), 6) if market_brier is not None else None,
+        "probability_bias": round(float(bias), 6) if bias is not None else None,
+        "recent_reviews": reviews,
+    }
+
+
 def clean_thesis_display(raw_thesis: Optional[str]) -> str:
     """Normalize and format an agent's thesis for display on the trading board.
 
