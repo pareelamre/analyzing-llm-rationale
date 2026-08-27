@@ -208,12 +208,15 @@ class OpenAICompatibleProvider(ChatProvider):
         reasoning_effort: Optional[str] = None,
     ) -> str:
         payload = self._payload(messages, temperature, max_tokens, reasoning_effort=reasoning_effort)
-        response = self._session.post(
-            self.base_url,
-            headers=self._headers(),
-            json=payload,
-            timeout=self.request_timeout_s,
-        )
+        try:
+            response = self._session.post(
+                self.base_url,
+                headers=self._headers(),
+                json=payload,
+                timeout=self.request_timeout_s,
+            )
+        except (self._requests.exceptions.Timeout, self._requests.exceptions.ConnectionError) as exc:
+            raise RetryableProviderError(f"Network error: {type(exc).__name__}") from exc
         response_text = response.text[:500]
         if response.status_code == 400 and "maximum context length" in response.text.lower():
             raise ContextLimitError(response_text)
@@ -246,13 +249,16 @@ class OpenAICompatibleProvider(ChatProvider):
         reasoning_effort: Optional[str] = None,
     ) -> Iterator[str]:
         self.last_response_model = None
-        response = self._session.post(
-            self.base_url,
-            headers=self._headers(),
-            json=self._payload(messages, temperature, max_tokens, stream=True, reasoning_effort=reasoning_effort),
-            timeout=self.request_timeout_s,
-            stream=True,
-        )
+        try:
+            response = self._session.post(
+                self.base_url,
+                headers=self._headers(),
+                json=self._payload(messages, temperature, max_tokens, stream=True, reasoning_effort=reasoning_effort),
+                timeout=self.request_timeout_s,
+                stream=True,
+            )
+        except (self._requests.exceptions.Timeout, self._requests.exceptions.ConnectionError) as exc:
+            raise RetryableProviderError(f"Network error: {type(exc).__name__}") from exc
         response_text = response.text[:500] if response.status_code != 200 else ""
         if response.status_code == 400 and "maximum context length" in response_text.lower():
             raise ContextLimitError(response_text)
@@ -261,30 +267,33 @@ class OpenAICompatibleProvider(ChatProvider):
         if response.status_code != 200:
             raise ProviderResponseError(f"status={response.status_code} body={response_text}")
 
-        for raw in response.iter_lines(decode_unicode=True):
-            if not raw:
-                continue
-            line = raw.strip()
-            if not line.startswith("data:"):
-                continue
-            data = line[5:].strip()
-            if data == "[DONE]":
-                break
-            try:
-                obj = json.loads(data)
-                response_model = obj.get("model")
-                if isinstance(response_model, str):
-                    self.last_response_model = response_model
-                choice = (obj.get("choices") or [{}])[0]
-                delta = choice.get("delta") or {}
-                text = delta.get("content")
-                if text is None:
-                    message = choice.get("message") or {}
-                    text = message.get("content")
-            except (AttributeError, IndexError, TypeError, ValueError) as exc:
-                raise ProviderResponseError(f"Malformed provider stream: {exc}") from exc
-            if text:
-                yield text
+        try:
+            for raw in response.iter_lines(decode_unicode=True):
+                if not raw:
+                    continue
+                line = raw.strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                    response_model = obj.get("model")
+                    if isinstance(response_model, str):
+                        self.last_response_model = response_model
+                    choice = (obj.get("choices") or [{}])[0]
+                    delta = choice.get("delta") or {}
+                    text = delta.get("content")
+                    if text is None:
+                        message = choice.get("message") or {}
+                        text = message.get("content")
+                except (AttributeError, IndexError, TypeError, ValueError) as exc:
+                    raise ProviderResponseError(f"Malformed provider stream: {exc}") from exc
+                if text:
+                    yield text
+        except (self._requests.exceptions.Timeout, self._requests.exceptions.ConnectionError) as exc:
+            raise RetryableProviderError(f"Network error during streaming: {type(exc).__name__}") from exc
 
 
 @dataclass
@@ -338,12 +347,15 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         reasoning_effort: Optional[str] = None,
     ) -> str:
         payload = self._payload(messages, temperature, max_tokens, reasoning_effort=reasoning_effort)
-        response = self._session.post(
-            self.base_url,
-            headers=self._headers(),
-            json=payload,
-            timeout=self.request_timeout_s,
-        )
+        try:
+            response = self._session.post(
+                self.base_url,
+                headers=self._headers(),
+                json=payload,
+                timeout=self.request_timeout_s,
+            )
+        except (self._requests.exceptions.Timeout, self._requests.exceptions.ConnectionError) as exc:
+            raise RetryableProviderError(f"Network error: {type(exc).__name__}") from exc
         response_text = response.text[:500]
         if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
             raise RetryableProviderError(f"status={response.status_code} body={response_text}")
@@ -427,12 +439,15 @@ class AnthropicProvider(ChatProvider):
     ) -> str:
         del reasoning_effort
         payload = self._payload(messages, temperature, max_tokens)
-        response = self._session.post(
-            self.base_url,
-            headers=self._headers(),
-            json=payload,
-            timeout=self.request_timeout_s,
-        )
+        try:
+            response = self._session.post(
+                self.base_url,
+                headers=self._headers(),
+                json=payload,
+                timeout=self.request_timeout_s,
+            )
+        except (self._requests.exceptions.Timeout, self._requests.exceptions.ConnectionError) as exc:
+            raise RetryableProviderError(f"Network error: {type(exc).__name__}") from exc
         response_text = response.text[:500]
         if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
             raise RetryableProviderError(f"status={response.status_code} body={response_text}")
@@ -460,43 +475,49 @@ class AnthropicProvider(ChatProvider):
     ) -> Iterator[str]:
         del reasoning_effort
         self.last_response_model = None
-        response = self._session.post(
-            self.base_url,
-            headers=self._headers(),
-            json=self._payload(messages, temperature, max_tokens, stream=True),
-            timeout=self.request_timeout_s,
-            stream=True,
-        )
+        try:
+            response = self._session.post(
+                self.base_url,
+                headers=self._headers(),
+                json=self._payload(messages, temperature, max_tokens, stream=True),
+                timeout=self.request_timeout_s,
+                stream=True,
+            )
+        except (self._requests.exceptions.Timeout, self._requests.exceptions.ConnectionError) as exc:
+            raise RetryableProviderError(f"Network error: {type(exc).__name__}") from exc
         response_text = response.text[:500] if response.status_code != 200 else ""
         if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
             raise RetryableProviderError(f"status={response.status_code} body={response_text}")
         if response.status_code != 200:
             raise ProviderResponseError(f"status={response.status_code} body={response_text}")
 
-        for raw in response.iter_lines(decode_unicode=True):
-            if not raw:
-                continue
-            line = raw.strip()
-            if not line.startswith("data:"):
-                continue
-            data = line[5:].strip()
-            if data == "[DONE]":
-                break
-            try:
-                obj = json.loads(data)
-                evt_type = obj.get("type")
-                if evt_type == "message_start":
-                    msg = obj.get("message") or {}
-                    if isinstance(msg.get("model"), str):
-                        self.last_response_model = msg["model"]
-                elif evt_type == "content_block_delta":
-                    delta = obj.get("delta") or {}
-                    if delta.get("type") == "text_delta":
-                        text = delta.get("text")
-                        if text:
-                            yield text
-            except (AttributeError, IndexError, TypeError, ValueError):
-                continue
+        try:
+            for raw in response.iter_lines(decode_unicode=True):
+                if not raw:
+                    continue
+                line = raw.strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                    evt_type = obj.get("type")
+                    if evt_type == "message_start":
+                        msg = obj.get("message") or {}
+                        if isinstance(msg.get("model"), str):
+                            self.last_response_model = msg["model"]
+                    elif evt_type == "content_block_delta":
+                        delta = obj.get("delta") or {}
+                        if delta.get("type") == "text_delta":
+                            text = delta.get("text")
+                            if text:
+                                yield text
+                except (AttributeError, IndexError, TypeError, ValueError):
+                    continue
+        except (self._requests.exceptions.Timeout, self._requests.exceptions.ConnectionError) as exc:
+            raise RetryableProviderError(f"Network error during streaming: {type(exc).__name__}") from exc
 
 
 @dataclass

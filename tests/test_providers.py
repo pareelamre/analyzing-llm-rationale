@@ -1,12 +1,15 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale.providers import (
+    AnthropicProvider,
     OpenAICompatibleProvider,
     OpenRouterProvider,
+    RetryableProviderError,
     clean_http_header_value,
 )
 
@@ -56,6 +59,77 @@ class ReasoningEffortPayloadTests(unittest.TestCase):
                     [{"role": "user", "content": "hi"}], 0.0, 64, reasoning_effort="high"
                 )
                 self.assertEqual(payload["reasoning"], {"effort": "high"})
+
+
+class NetworkErrorMappingTests(unittest.TestCase):
+    """ReadTimeout and ConnectionError must be wrapped as RetryableProviderError."""
+
+    def _make_openai_provider(self):
+        return OpenAICompatibleProvider(
+            model_name="glm-5.2-fp8",
+            api_key="sk-test",
+            base_url="https://llm.scads.ai/v1",
+        )
+
+    def test_read_timeout_maps_to_retryable(self):
+        import requests
+
+        provider = self._make_openai_provider()
+        with mock.patch.object(
+            provider._session,
+            "post",
+            side_effect=requests.exceptions.ReadTimeout("Read timed out."),
+        ):
+            with self.assertRaises(RetryableProviderError):
+                provider.chat_completion([{"role": "user", "content": "hi"}], 0.0, 64)
+
+    def test_connection_error_maps_to_retryable(self):
+        import requests
+
+        provider = self._make_openai_provider()
+        with mock.patch.object(
+            provider._session,
+            "post",
+            side_effect=requests.exceptions.ConnectionError("Connection refused"),
+        ):
+            with self.assertRaises(RetryableProviderError):
+                provider.chat_completion([{"role": "user", "content": "hi"}], 0.0, 64)
+
+    def test_openrouter_read_timeout_maps_to_retryable(self):
+        import requests
+
+        provider = OpenRouterProvider(model_name="model", api_key="sk-test")
+        with mock.patch.object(
+            provider._session,
+            "post",
+            side_effect=requests.exceptions.ReadTimeout("Read timed out."),
+        ):
+            with self.assertRaises(RetryableProviderError):
+                provider.chat_completion([{"role": "user", "content": "hi"}], 0.0, 64)
+
+    def test_anthropic_read_timeout_maps_to_retryable(self):
+        import requests
+
+        provider = AnthropicProvider(model_name="claude-3-7-sonnet-20250219", api_key="sk-test")
+        with mock.patch.object(
+            provider._session,
+            "post",
+            side_effect=requests.exceptions.ReadTimeout("Read timed out."),
+        ):
+            with self.assertRaises(RetryableProviderError):
+                provider.chat_completion([{"role": "user", "content": "hi"}], 0.0, 64)
+
+    def test_stream_read_timeout_maps_to_retryable(self):
+        import requests
+
+        provider = self._make_openai_provider()
+        with mock.patch.object(
+            provider._session,
+            "post",
+            side_effect=requests.exceptions.ReadTimeout("Read timed out."),
+        ):
+            with self.assertRaises(RetryableProviderError):
+                list(provider.stream_chat_completion([{"role": "user", "content": "hi"}], 0.0, 64))
 
 
 if __name__ == "__main__":
