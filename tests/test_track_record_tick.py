@@ -42,12 +42,12 @@ class TrackRecordTickTests(unittest.TestCase):
 
             self.assertEqual(target.read_text(encoding="utf-8"), previous)
 
-    def test_forecast_workflow_runs_15_minute_cycles_and_uses_configured_scads_models(self):
+    def test_forecast_workflow_uses_bounded_rotating_cycles_and_configured_scads_models(self):
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "track-record-forecast.yml"
         ).read_text()
-        self.assertIn('cron: "*/5 * * * *"', workflow)
+        self.assertIn('cron: "12,42 * * * *"', workflow)
         self.assertIn('CYCLE_INTERVAL_MINUTES: "5"', workflow)
         self.assertIn('SNAPSHOT_SLOT_MINUTES: "5"', workflow)
         self.assertIn('TRACK_RECORD_PREDICT_MODE: "local"', workflow)
@@ -56,7 +56,9 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("fail-fast: false", workflow)
         self.assertIn("group: track-record-forecast", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
-        self.assertIn("max-parallel: 2", workflow)
+        self.assertIn("max-parallel: 1", workflow)
+        self.assertIn("group: track-record-forecast-provider-slot", workflow)
+        self.assertIn("REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}", workflow)
         self.assertIn("forecast (${{ matrix.model }})", workflow)
         self.assertIn("target_shard_count", workflow)
         self.assertIn("target_shard_index", workflow)
