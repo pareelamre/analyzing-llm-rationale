@@ -1,12 +1,13 @@
 name: Agent trading tick
 
-# A single dispatcher prevents GitHub's scheduler from releasing ten separate
-# cold starts. Agent trading owns one of the two SCADS provider slots; forecast
-# snapshots own the other. This reservation prevents a long forecast batch from
-# evicting an entire agent cycle from GitHub's one-pending-run queue.
+# The reliable board-publisher heartbeat calls this workflow twice hourly. It
+# remains manually runnable, but does not depend on its own GitHub cron: a
+# missed scheduler event must not silently stall all agent cycles.
+#
+# A single dispatcher prevents ten separate cold starts. Agent trading owns one
+# of the two SCADS provider slots; forecast snapshots own the other.
 on:
-  schedule:
-    - cron: "7,37 * * * *"
+  workflow_call: {}
   workflow_dispatch: {}
 
 jobs:

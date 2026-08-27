@@ -16,6 +16,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 _WORKFLOWS_DIR = _ROOT / ".github" / "workflows"
 _REUSABLE_PATH = _WORKFLOWS_DIR / "_agent-trading-tick-reusable.yml"
 _DISPATCHER_PATH = _WORKFLOWS_DIR / "agent-trading-tick.yml"
+_BOARD_PUBLISH_PATH = _WORKFLOWS_DIR / "agent-trading-board-publish.yml"
 
 
 def _chat_capable_models() -> list[str]:
@@ -104,15 +105,33 @@ class AgentTradingPerModelWorkflowTests(unittest.TestCase):
             self.assertIn("workflow_dispatch:", text)
             self.assertNotIn("schedule:", text)
 
-    def test_dispatcher_runs_every_model_once_in_the_reserved_agent_slot(self):
+    def test_dispatcher_is_callable_and_runs_every_model_once_in_the_reserved_agent_slot(self):
         text = _DISPATCHER_PATH.read_text(encoding="utf-8")
-        self.assertIn('cron: "7,37 * * * *"', text)
+        self.assertIn("workflow_call:", text)
+        self.assertIn("workflow_dispatch:", text)
+        self.assertNotIn("schedule:", text)
         self.assertIn("max-parallel: 1", text)
         self.assertIn("fail-fast: false", text)
         self.assertIn("uses: ./.github/workflows/_agent-trading-tick-reusable.yml", text)
         configured = re.findall(r'models:\s*"([^"]+)"', text)
         scheduled_models = [model for lane in configured for model in lane.split()]
         self.assertCountEqual(scheduled_models, _chat_capable_models())
+
+    def test_board_publisher_owns_the_agent_schedule_and_waits_before_publish(self):
+        text = _BOARD_PUBLISH_PATH.read_text(encoding="utf-8")
+        self.assertIn('cron: "12,42 * * * *"', text)
+        self.assertIn('cron: "27,57 * * * *"', text)
+        self.assertIn("github.event.schedule == '12,42 * * * *'", text)
+        self.assertIn("uses: ./.github/workflows/agent-trading-tick.yml", text)
+        self.assertIn("needs: [agent-tick]", text)
+        self.assertIn("if: ${{ always() }}", text)
+        self.assertIn("run_agent_tick:", text)
+
+    def test_non_core_legacy_workflows_are_manual_only(self):
+        for name in ("pr-agent-outreach.yml", "trading-reconcile.yml"):
+            text = (_WORKFLOWS_DIR / name).read_text(encoding="utf-8")
+            self.assertIn("workflow_dispatch:", text)
+            self.assertNotIn("schedule:", text)
 
 
 class TrackRecordForecastWorkflowTests(unittest.TestCase):

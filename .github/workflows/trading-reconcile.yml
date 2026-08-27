@@ -1,10 +1,9 @@
 name: Trading reconciliation
 
-# Read-only reconciliation for submitted live orders. The Cloud Run endpoint is
-# disabled unless the same scoped token is configured in both environments.
+# Manual-only reconciliation for submitted live orders. Foresea's agent board
+# is shadow-only, so this legacy live-order poller must not consume a recurring
+# GitHub Actions slot.
 on:
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 permissions:
