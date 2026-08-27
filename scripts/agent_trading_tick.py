@@ -70,6 +70,26 @@ learning_lessons = meter.create_counter(
 learning_refresh_duration = meter.create_histogram(
     "agent_trading.learning.refresh.duration", unit="s", description="Resolved-trade learning refresh duration"
 )
+thesis_forecasts_recorded = meter.create_counter(
+    "agent_trading.thesis_forecasts.recorded",
+    unit="1",
+    description="Structured thesis forecasts persisted for later scoring",
+)
+thesis_forecast_outcomes = meter.create_counter(
+    "agent_trading.thesis_forecasts.outcomes",
+    unit="1",
+    description="Structured thesis forecasts scored after a market resolves",
+)
+thesis_forecast_resolution_checks = meter.create_counter(
+    "agent_trading.thesis_forecasts.resolution_checks",
+    unit="1",
+    description="Bounded venue-resolution checks for unresolved thesis forecasts",
+)
+thesis_forecast_refresh_duration = meter.create_histogram(
+    "agent_trading.thesis_forecasts.refresh.duration",
+    unit="s",
+    description="Duration of resolving and scoring structured thesis forecasts",
+)
 agent_analyze_attempts = meter.create_counter(
     "agent_trading.analyze.attempts", unit="1", description="Agent analysis provider attempts"
 )
@@ -128,6 +148,9 @@ MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS
 MAX_RULES_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_RULES_CHARS", "50000")))
 LEARNING_CONTEXT_LIMIT = max(1, min(10, int(os.environ.get("AGENT_TRADING_LEARNING_CONTEXT_LIMIT", "5"))))
 LEARNING_STATS_LIMIT = max(LEARNING_CONTEXT_LIMIT, min(50, int(os.environ.get("AGENT_TRADING_LEARNING_STATS_LIMIT", "20"))))
+THESIS_FORECAST_RESOLUTION_CHECK_LIMIT = max(
+    1, min(20, int(os.environ.get("AGENT_TRADING_THESIS_FORECAST_RESOLUTION_CHECK_LIMIT", "5")))
+)
 
 
 def _model_backstop_chars(model: str) -> int:
@@ -482,7 +505,19 @@ def _build_learning_block(conn, agent_id: str) -> str:
         """,
         (agent_id, LEARNING_STATS_LIMIT),
     ).fetchall()
-    if not rows:
+    forecast_summary = conn.execute(
+        """
+        SELECT COUNT(*) AS resolved_count,
+               AVG(brier_score) AS brier_score,
+               AVG(market_brier_score) AS market_brier_score,
+               AVG(model_probability - resolved_outcome) AS probability_bias
+        FROM agent_thesis_forecasts
+        WHERE agent_id = ? AND resolved_outcome IS NOT NULL
+        """,
+        (agent_id,),
+    ).fetchone()
+    resolved_forecasts = int(forecast_summary["resolved_count"] or 0)
+    if not rows and not resolved_forecasts:
         return ""
 
     recent = rows[:LEARNING_CONTEXT_LIMIT]
@@ -492,19 +527,41 @@ def _build_learning_block(conn, agent_id: str) -> str:
     lines = [
         "=== Learning from your resolved shadow trades ===",
         "Use this only as a calibration check, never as market evidence. Risk caps and eligibility rules are unchanged.",
-        (
-            f"Recent realized outcomes ({len(rows)}): {wins} profitable, {losses} loss-making, "
-            f"aggregate realized P&L {_fmt_money(total_pnl)}."
-        ),
-        "Newest lessons:",
     ]
-    for row in recent:
-        venue = str(row["platform"] or "unknown venue").title()
-        ticker = str(row["ticker"] or "unknown market")
-        outcome = str(row["outcome"] or "unresolved")
+    if rows:
+        lines.extend([
+            (
+                f"Recent realized outcomes ({len(rows)}): {wins} profitable, {losses} loss-making, "
+                f"aggregate realized P&L {_fmt_money(total_pnl)}."
+            ),
+            "Newest lessons:",
+        ])
+        for row in recent:
+            venue = str(row["platform"] or "unknown venue").title()
+            ticker = str(row["ticker"] or "unknown market")
+            outcome = str(row["outcome"] or "unresolved")
+            lines.append(
+                f"  - [{venue}] {ticker}: {row['action_type']} ({outcome}), "
+                f"realized P&L {_fmt_money(row['realized_pnl'])}. {row['lesson']}"
+            )
+    if resolved_forecasts:
+        brier = float(forecast_summary["brier_score"])
+        market_brier = forecast_summary["market_brier_score"]
+        bias = float(forecast_summary["probability_bias"])
+        bias_note = (
+            "your P(YES) has averaged above the outcome rate; damp YES confidence"
+            if bias > 0.05 else
+            "your P(YES) has averaged below the outcome rate; do not automatically chase favourites"
+            if bias < -0.05 else
+            "your average P(YES) is close to the observed YES rate"
+        )
+        market_note = (
+            f" versus market Brier {float(market_brier):.3f}"
+            if market_brier is not None else ""
+        )
         lines.append(
-            f"  - [{venue}] {ticker}: {row['action_type']} ({outcome}), "
-            f"realized P&L {_fmt_money(row['realized_pnl'])}. {row['lesson']}"
+            f"Forecast calibration ({resolved_forecasts} final outcomes): Brier {brier:.3f}{market_note}; "
+            f"{bias_note}. This is descriptive, not a sizing override."
         )
     return "\n".join(lines)
 
@@ -976,6 +1033,278 @@ _STRATEGY_ALIASES = {
     "POSITION_RISK_REDUCTION": "position_risk_reduction",
 }
 
+_THESIS_MARKET_RE = re.compile(
+    r"\*\*Market\s*&\s*Venue\*\*\s*:\s*\[?\s*([^\]\n]+?)\s*\]?\s+on\s+\[?\s*"
+    r"(Kalshi|Polymarket)\b",
+    re.IGNORECASE,
+)
+_THESIS_PROBABILITY_RE = re.compile(
+    r"\*\*Model\s+Probability\*\*\s*:\s*\[?\s*(\d+(?:\.\d+)?)\s*%\s*\]?\s+"
+    r"vs\s+\*\*Market\s+Price\*\*\s*:\s*\[?\s*(\d+(?:\.\d+)?)\s*%\s*\]?",
+    re.IGNORECASE,
+)
+_THESIS_ACTION_RE = re.compile(r"\*\*Action\*\*\s*:\s*\[?\s*([^\]\n]+?)\s*\]?", re.IGNORECASE)
+_THESIS_EVIDENCE_RE = re.compile(r"\*\*New\s+evidence\*\*\s*:\s*([^\n]+)", re.IGNORECASE)
+
+
+def _as_probability(value: Any) -> Optional[float]:
+    """Coerce a thesis/tool probability to [0, 1] without guessing units."""
+    try:
+        probability = float(value)
+    except (TypeError, ValueError):
+        return None
+    if probability > 1.0:
+        probability /= 100.0
+    return round(probability, 6) if 0.0 <= probability <= 1.0 else None
+
+
+def _normalise_forecast_ticker(value: Any) -> str:
+    return str(value or "").strip().strip("`[] ").replace(" ", "")
+
+
+def _candidate_probability(
+    candidates: List[Dict[str, Any]], platform: str, ticker: str
+) -> Optional[float]:
+    for candidate in candidates:
+        same_platform = str(candidate.get("platform") or "").strip().lower() == platform
+        same_ticker = str(candidate.get("ident") or "").strip() == ticker
+        if same_platform and same_ticker:
+            return _as_probability(candidate.get("probability"))
+    return None
+
+
+def _thesis_forecast_records(
+    thesis: str,
+    transcript: List[Dict[str, Any]],
+    candidates: List[Dict[str, Any]],
+    strategy: str,
+) -> List[Dict[str, Any]]:
+    """Extract only explicit, scoreable probabilities from a final thesis.
+
+    A thesis is still publishable when it says PASS or has no probability, but
+    it is not silently converted into a synthetic forecast.  The fallback for
+    an actual ``place_trade`` call preserves the probability supplied to the
+    guarded execution tool when a provider omitted the markdown field.
+    """
+    records: List[Dict[str, Any]] = []
+    market = _THESIS_MARKET_RE.search(thesis or "")
+    probabilities = _THESIS_PROBABILITY_RE.search(thesis or "")
+    action = _THESIS_ACTION_RE.search(thesis or "")
+    evidence = _THESIS_EVIDENCE_RE.search(thesis or "")
+    if market and probabilities:
+        ticker = _normalise_forecast_ticker(market.group(1))
+        platform = market.group(2).lower()
+        model_probability = _as_probability(probabilities.group(1))
+        market_probability = _as_probability(probabilities.group(2))
+        if ticker and model_probability is not None:
+            records.append({
+                "platform": platform,
+                "ticker": ticker,
+                "model_probability": model_probability,
+                "market_probability": market_probability,
+                "action": action.group(1).strip() if action else None,
+                "strategy": strategy,
+                "evidence_delta": _excerpt(evidence.group(1), 600) if evidence else None,
+            })
+
+    # A trade cannot reach the ledger without model_probability in benchmark
+    # mode. Preserve that durable input if a provider failed to echo it in the
+    # final markdown, but never overwrite a complete thesis record.
+    existing = {(r["platform"], r["ticker"]) for r in records}
+    for step in transcript or []:
+        if not isinstance(step, dict):
+            continue
+        tool = str(step.get("action") or step.get("tool") or "").strip().lower()
+        if tool not in {"place_trade", "place_order", "buy", "buy_order"}:
+            continue
+        args = step.get("args") or {}
+        if not isinstance(args, dict):
+            continue
+        platform = str(args.get("platform") or "kalshi").strip().lower()
+        ticker = _normalise_forecast_ticker(args.get("ticker") or args.get("market_id"))
+        model_probability = _as_probability(args.get("model_probability"))
+        if not ticker or model_probability is None or (platform, ticker) in existing:
+            continue
+        market_probability = _candidate_probability(candidates, platform, ticker)
+        records.append({
+            "platform": platform,
+            "ticker": ticker,
+            "model_probability": model_probability,
+            "market_probability": market_probability,
+            "action": str(args.get("action") or args.get("side") or "TRADE").upper(),
+            "strategy": strategy,
+            "evidence_delta": None,
+        })
+        existing.add((platform, ticker))
+    return records
+
+
+def _persist_thesis_forecasts(
+    conn: Any,
+    agent_id: str,
+    cycle_id: str,
+    thesis: str,
+    transcript: List[Dict[str, Any]],
+    candidates: List[Dict[str, Any]],
+    strategy: str,
+    *,
+    forecast_ts: Optional[str] = None,
+) -> int:
+    """Persist a thesis's explicit forecast exactly once for later scoring."""
+    records = _thesis_forecast_records(thesis, transcript, candidates, strategy)
+    if not records:
+        return 0
+    created_at = forecast_ts or datetime.now(timezone.utc).isoformat()
+    for record in records:
+        market_probability = record.get("market_probability")
+        edge = (
+            round(float(record["model_probability"]) - float(market_probability), 6)
+            if market_probability is not None else None
+        )
+        conn.execute(
+            """
+            INSERT INTO agent_thesis_forecasts
+            (agent_id, cycle_id, forecast_ts, platform, ticker, model_probability,
+             market_probability, edge, action, strategy, evidence_delta)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(agent_id, cycle_id, platform, ticker) DO NOTHING
+            """,
+            (
+                agent_id, cycle_id, created_at, record["platform"], record["ticker"],
+                record["model_probability"], market_probability, edge, record.get("action"),
+                record.get("strategy"), record.get("evidence_delta"),
+            ),
+        )
+    thesis_forecasts_recorded.add(len(records), {"outcome": "recorded"})
+    return len(records)
+
+
+def _pending_thesis_forecast_markets(conn: Any, agent_id: str) -> List[tuple[str, str]]:
+    """Return a bounded, deduplicated oldest-first resolution queue."""
+    rows = conn.execute(
+        """
+        SELECT platform, ticker
+        FROM agent_thesis_forecasts
+        WHERE agent_id = ? AND resolved_outcome IS NULL
+        GROUP BY platform, ticker
+        ORDER BY MIN(forecast_ts) ASC
+        LIMIT ?
+        """,
+        (agent_id, THESIS_FORECAST_RESOLUTION_CHECK_LIMIT),
+    ).fetchall()
+    return [(str(row["platform"]).lower(), str(row["ticker"])) for row in rows]
+
+
+def _resolve_thesis_forecast_markets(
+    markets: List[tuple[str, str]]
+) -> Dict[tuple[str, str], tuple[int, str]]:
+    """Resolve a small queue of thesis markets without holding the ledger lock."""
+    resolved: Dict[tuple[str, str], tuple[int, str]] = {}
+    for platform, ticker in markets:
+        try:
+            outcome = (
+                market_data.resolve_polymarket(ticker)
+                if platform == "polymarket"
+                else market_data.resolve_kalshi(ticker)
+            )
+        except Exception:
+            logger.debug("thesis forecast resolution lookup failed platform=%s ticker=%s", platform, ticker)
+            thesis_forecast_resolution_checks.add(1, {"platform": platform or "unknown", "outcome": "failure"})
+            continue
+        if outcome is None:
+            thesis_forecast_resolution_checks.add(1, {"platform": platform or "unknown", "outcome": "open"})
+            continue
+        try:
+            actual = int(outcome)
+        except (TypeError, ValueError):
+            thesis_forecast_resolution_checks.add(1, {"platform": platform or "unknown", "outcome": "invalid"})
+            continue
+        if actual not in {0, 1}:
+            thesis_forecast_resolution_checks.add(1, {"platform": platform or "unknown", "outcome": "invalid"})
+            continue
+        resolved[(platform, ticker)] = (actual, datetime.now(timezone.utc).isoformat())
+        thesis_forecast_resolution_checks.add(1, {"platform": platform or "unknown", "outcome": "resolved"})
+    return resolved
+
+
+def _refresh_thesis_forecast_outcomes(
+    conn: Any,
+    agent_id: str,
+    resolved_markets: Optional[Dict[tuple[str, str], tuple[int, str]]] = None,
+) -> int:
+    """Score prior thesis forecasts only after the held contract resolves.
+
+    The settlement action is the immutable outcome source.  This intentionally
+    avoids learning from mark-to-market P&L, voluntary exits, or a later model
+    thesis; a probability becomes a training observation only on final market
+    resolution.
+    """
+    started = time.perf_counter()
+    with tracer.start_as_current_span("agent_trading.refresh_thesis_forecast_outcomes") as span:
+        span.set_attribute("agent.id", agent_id)
+        try:
+            rows = conn.execute(
+                """
+                SELECT rowid, platform, ticker, forecast_ts, model_probability, market_probability
+                FROM agent_thesis_forecasts AS forecast
+                WHERE forecast.agent_id = ?
+                  AND forecast.resolved_outcome IS NULL
+                """,
+                (agent_id,),
+            ).fetchall()
+            settlements = {}
+            for settlement in conn.execute(
+                """
+                SELECT platform, ticker, outcome, ts
+                FROM agent_actions
+                WHERE agent_id = ? AND action_type = 'settlement'
+                ORDER BY ts DESC
+                """,
+                (agent_id,),
+            ):
+                key = (str(settlement["platform"] or "").lower(), str(settlement["ticker"] or ""))
+                settlements.setdefault(key, (settlement["outcome"], settlement["ts"]))
+            scored = 0
+            for row in rows:
+                key = (str(row["platform"] or "").lower(), str(row["ticker"] or ""))
+                known = settlements.get(key)
+                actual: Optional[int] = None
+                resolved_at: Optional[str] = None
+                if known and str(known[1]) >= str(row["forecast_ts"]):
+                    outcome = str(known[0] or "").strip().lower()
+                    actual = 1 if outcome == "yes" else 0 if outcome == "no" else None
+                    resolved_at = str(known[1])
+                elif resolved_markets and key in resolved_markets:
+                    actual, resolved_at = resolved_markets[key]
+                if actual not in {0, 1} or not resolved_at:
+                    continue
+                model_probability = float(row["model_probability"])
+                market_probability = row["market_probability"]
+                market_brier = (
+                    round((float(market_probability) - actual) ** 2, 8)
+                    if market_probability is not None else None
+                )
+                conn.execute(
+                    """
+                    UPDATE agent_thesis_forecasts
+                    SET resolved_outcome = ?, resolved_at = ?, brier_score = ?, market_brier_score = ?
+                    WHERE rowid = ?
+                    """,
+                    (actual, resolved_at, round((model_probability - actual) ** 2, 8), market_brier, row["rowid"]),
+                )
+                scored += 1
+            thesis_forecast_outcomes.add(scored, {"outcome": "scored"})
+            span.set_attributes({"forecast.scored_count": scored, "outcome": "success"})
+            return scored
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            thesis_forecast_outcomes.add(1, {"outcome": "failure"})
+            logger.warning("agent thesis forecast outcome refresh failed agent=%s", agent_id, exc_info=True)
+            raise
+        finally:
+            thesis_forecast_refresh_duration.record(time.perf_counter() - started)
+
 
 def _selected_strategy(thesis: str) -> str:
     """Return a bounded, auditable strategy label from the final thesis.
@@ -1021,9 +1350,17 @@ def run_cycle(model: str) -> None:
     settled = benchmark_tools._settle_agent_open_positions(
         agent_id, benchmark_tools._risk_guard_policy()
     )
+    # A thesis remains a forecast even if the agent chose HOLD/PASS and never
+    # held the contract. Check only a bounded oldest-first queue, outside the
+    # SQLite transaction, so outcome learning does not create API storms or
+    # hold an account write lock across network I/O.
+    with benchmark_tools._account_transaction() as conn:
+        unresolved_markets = _pending_thesis_forecast_markets(conn, agent_id)
+    resolved_forecast_markets = _resolve_thesis_forecast_markets(unresolved_markets)
 
     with benchmark_tools._account_transaction() as conn:
         _refresh_learning(conn, agent_id)
+        _refresh_thesis_forecast_outcomes(conn, agent_id, resolved_forecast_markets)
         learning_block = _build_learning_block(conn, agent_id)
         held_positions = [
             (str(row["platform"] or "kalshi").lower(), row["ticker"])
@@ -1069,6 +1406,7 @@ def run_cycle(model: str) -> None:
 
     candidates_offered = [q.get("ident") for q in (*held_quotes, *new_quotes)]
     with benchmark_tools._account_transaction() as conn:
+        cycle_ts = datetime.now(timezone.utc).isoformat()
         conn.execute(
             """
             INSERT OR REPLACE INTO agent_cycles
@@ -1078,7 +1416,7 @@ def run_cycle(model: str) -> None:
             (
                 agent_id,
                 cycle_id,
-                datetime.now(timezone.utc).isoformat(),
+                cycle_ts,
                 report.thesis,
                 json.dumps({
                     "candidates_offered": candidates_offered,
@@ -1088,6 +1426,16 @@ def run_cycle(model: str) -> None:
                 len(report.tool_transcript),
                 1 if len(report.tool_transcript) >= MAX_TOOL_STEPS else 0,
             ),
+        )
+        _persist_thesis_forecasts(
+            conn,
+            agent_id,
+            cycle_id,
+            report.thesis,
+            report.tool_transcript,
+            [*held_quotes, *new_quotes],
+            selected_strategy,
+            forecast_ts=cycle_ts,
         )
         # A close placed during this cycle now becomes a durable learning
         # record for the next cycle. New entries are keyed to source action
