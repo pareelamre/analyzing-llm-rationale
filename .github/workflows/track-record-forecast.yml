@@ -7,7 +7,9 @@ name: Track record forecast snapshots
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # A rotating shard pass is bounded below; starting a new full matrix every
+    # five minutes only created a cancelled backlog.
+    - cron: "12,42 * * * *"
   workflow_dispatch:
     inputs:
       reforecast_each_tick:
@@ -46,18 +48,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     continue-on-error: true
-    # Share the same two provider lanes as the autonomous agent scheduler.
-    # A per-workflow max-parallel value cannot protect a key that both
-    # workflows use concurrently.
+    # Forecasting owns the second SCADS provider slot. Agent trading owns the
+    # first, so both products make progress without exceeding the two-request
+    # provider limit.
     concurrency:
-      group: scads-provider-lane-${{ matrix.lane }}
+      group: track-record-forecast-provider-slot
       cancel-in-progress: false
     strategy:
       fail-fast: false
-      # SCADS currently caps this API key at 2 simultaneous requests. Each
-      # matrix job below is limited to one in-flight /predict call, so two
-      # jobs is the safe global fan-out.
-      max-parallel: 2
+      # One forecast call plus one reserved agent call is the safe global
+      # fan-out for SCADS' two-request account limit.
+      max-parallel: 1
       matrix:
         include:
           - model: crowd-follow
@@ -158,7 +159,9 @@ jobs:
           TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '15' }}
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
-          REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '1' }}
+          # Scheduled runs rotate target shards. Full reforecasting remains an
+          # explicit manual option rather than a recurring full batch.
+          REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}
           CYCLE_INTERVAL_MINUTES: "5"
           SNAPSHOT_SLOT_MINUTES: "5"
           TRACK_RECORD_EVIDENCE_DETAIL: "summary"

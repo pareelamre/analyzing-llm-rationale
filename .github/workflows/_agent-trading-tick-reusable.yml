@@ -1,6 +1,6 @@
 name: Agent trading tick (reusable)
 
-# Called by the scheduled two-lane dispatcher and by the manual per-model
+# Called by the scheduled reserved-capacity dispatcher and by the manual per-model
 # workflows. Each caller drives one or more isolated shadow-trading cycles via
 # scripts/agent_trading_tick.py, which gives the model real tool access
 # (place_trade/web_search/manage_notes) instead of just scoring a probability.
@@ -14,14 +14,10 @@ name: Agent trading tick (reusable)
 # every model's read-modify-write cycle is independent of every OTHER
 # model's -- no cross-model lock, no queue.
 #
-# That does NOT cover two runs of the SAME model overlapping (a slow run
-# still in flight when the next 15-minute trigger fires, or a manual
-# workflow_dispatch layered on top of a scheduled run) -- each would
-# download the same starting store, decide independently, and upload back
-# to the same GCS object, so whichever finishes last silently overwrites
-# the other's trades. The per-model concurrency group below (matching the
-# pattern every other GCS-synced workflow in this repo already uses, e.g.
-# track-record-tick.yml) queues same-model runs instead of letting them race.
+# The single reserved agent slot covers same-model overlap too: a slow scheduled
+# cycle or a manual workflow_dispatch cannot race another update to a model's
+# GCS-synced ledger. This is separate from forecast capacity, so forecast work
+# cannot consume the only pending slot and silently evict agent work.
 #
 # Shadow (paper) trading only. FORESEA_AGENT_PLACE_TRADE_MODE is hard-pinned
 # to "shadow" below and is never a workflow input -- no caller can override it.
@@ -42,7 +38,7 @@ on:
         required: true
         type: string
       lane:
-        description: "Shared SCADS provider lane (0 or 1); caps global model fan-out."
+        description: "Compatibility label for the caller. All agent callers share one reserved provider slot."
         required: true
         type: string
 
@@ -51,18 +47,17 @@ env:
   AGENT_TRADING_STORE_BUCKET: gs://brave-drive-471109-d9-track-record-store
 
 concurrency:
-  # This name is intentionally shared with track-record-forecast.yml. SCADS
-  # limits this API key to two concurrent requests across *all* workflows, not
-  # merely within this dispatcher. The two lanes therefore form a global
-  # semaphore: one agent cycle and/or forecast job per lane at a time.
-  group: scads-provider-lane-${{ inputs.lane }}
+  # Agent work permanently owns one of the two provider slots. Do not share
+  # this group with forecast jobs: GitHub retains only one pending member of a
+  # concurrency group, which previously replaced queued agent cycles.
+  group: agent-trading-provider-slot
   cancel-in-progress: false
 
 jobs:
   trade:
     name: trade (${{ inputs.lane }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -120,7 +115,7 @@ jobs:
         env:
           MODELS: ${{ inputs.models }}
           FORESEA_AGENT_PLACE_TRADE_MODE: shadow
-          FORESEA_AGENT_CYCLE_MINUTES: "15"
+          FORESEA_AGENT_CYCLE_MINUTES: "30"
           FORESEA_AGENT_ACCOUNT_VALUE: "10000"
           SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

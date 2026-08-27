@@ -47,12 +47,13 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
         self.assertIn("agent_trading_store__${MODEL}.sqlite", self.workflow)
         self.assertIn("agent_trading_notes__${MODEL}.json", self.workflow)
 
-    def test_concurrency_uses_a_global_scads_provider_lane(self):
-        # This group is shared with the forecast workflow, so its two lanes
-        # cap the API key across both producers rather than only agent jobs.
+    def test_concurrency_reserves_a_provider_slot_for_agents(self):
+        # A dedicated agent slot prevents recurring forecast jobs from
+        # replacing queued agent work in GitHub Actions' concurrency queue.
         self.assertIn("concurrency:", self.workflow)
         self.assertIn("lane:", self.workflow)
-        self.assertIn("group: scads-provider-lane-${{ inputs.lane }}", self.workflow)
+        self.assertIn("group: agent-trading-provider-slot", self.workflow)
+        self.assertNotIn("group: scads-provider-lane-", self.workflow)
         self.assertIn("cancel-in-progress: false", self.workflow)
 
     def test_download_is_tolerant_of_a_missing_object(self):
@@ -103,10 +104,10 @@ class AgentTradingPerModelWorkflowTests(unittest.TestCase):
             self.assertIn("workflow_dispatch:", text)
             self.assertNotIn("schedule:", text)
 
-    def test_dispatcher_runs_every_model_once_in_two_provider_safe_lanes(self):
+    def test_dispatcher_runs_every_model_once_in_the_reserved_agent_slot(self):
         text = _DISPATCHER_PATH.read_text(encoding="utf-8")
-        self.assertIn('cron: "0,15,30,45 * * * *"', text)
-        self.assertIn("max-parallel: 2", text)
+        self.assertIn('cron: "7,37 * * * *"', text)
+        self.assertIn("max-parallel: 1", text)
         self.assertIn("fail-fast: false", text)
         self.assertIn("uses: ./.github/workflows/_agent-trading-tick-reusable.yml", text)
         configured = re.findall(r'models:\s*"([^"]+)"', text)
@@ -115,9 +116,11 @@ class AgentTradingPerModelWorkflowTests(unittest.TestCase):
 
 
 class TrackRecordForecastWorkflowTests(unittest.TestCase):
-    def test_forecast_jobs_share_the_global_two_lane_provider_limit(self):
+    def test_forecast_jobs_use_the_second_reserved_provider_slot(self):
         text = (_WORKFLOWS_DIR / "track-record-forecast.yml").read_text(encoding="utf-8")
-        self.assertIn("group: scads-provider-lane-${{ matrix.lane }}", text)
+        self.assertIn("group: track-record-forecast-provider-slot", text)
+        self.assertIn("max-parallel: 1", text)
+        self.assertIn("REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}", text)
         self.assertIn("cancel-in-progress: false", text)
         self.assertEqual(len(re.findall(r"^\s+lane: \"[01]\"$", text, re.MULTILINE)), 14)
 
