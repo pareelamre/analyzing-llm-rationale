@@ -1,12 +1,14 @@
 """Unit tests for Foresea Widget and Embed endpoints."""
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
 
 from starlette.testclient import TestClient
 
+os.environ["ENABLE_OTEL"] = "0"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale.server import _STATIC_DIR, app  # noqa: E402

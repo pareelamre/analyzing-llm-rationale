@@ -1,6 +1,7 @@
 """Unit tests for Foresea Market REST endpoints."""
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -8,6 +9,7 @@ from unittest.mock import patch
 
 from starlette.testclient import TestClient
 
+os.environ["ENABLE_OTEL"] = "0"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale.server import app  # noqa: E402

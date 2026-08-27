@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 os.environ["ANALYTICS_DB"] = str(Path(tempfile.gettempdir()) / "foresea_test_ds_analytics.duckdb")
+os.environ["ENABLE_OTEL"] = "0"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fastapi.testclient import TestClient  # noqa: E402

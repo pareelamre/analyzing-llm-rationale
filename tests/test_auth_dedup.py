@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 import sys
 import types
 from pathlib import Path
 
+os.environ["ENABLE_OTEL"] = "0"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale import server  # noqa: E402

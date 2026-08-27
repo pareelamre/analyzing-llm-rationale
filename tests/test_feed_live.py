@@ -1,6 +1,7 @@
 """End-to-end test verifying the Foresea Alpha & Agent Feed."""
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+os.environ["ENABLE_OTEL"] = "0"
 sys.path.insert(0, str(ROOT_DIR / "src"))
 sys.path.insert(0, str(ROOT_DIR / "scripts"))
 
