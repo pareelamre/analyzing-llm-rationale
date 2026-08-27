@@ -11,8 +11,17 @@ name: Agent trading board publish
 
 on:
   schedule:
-    - cron: "12,27,42,57 * * * *"
-  workflow_dispatch: {}
+    # Agent cycle, followed by board publication.
+    - cron: "12,42 * * * *"
+    # Aggregation-only refresh between agent cycles.
+    - cron: "27,57 * * * *"
+  workflow_dispatch:
+    inputs:
+      run_agent_tick:
+        description: "Run a shadow-agent cycle before publishing the board"
+        required: false
+        type: boolean
+        default: false
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
@@ -27,7 +36,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  agent-tick:
+    # Use this workflow's proven heartbeat as the agent dispatcher. The other
+    # two quarterly-hour publishes stay aggregation-only, keeping the board
+    # fresh without starting an extra trading pass.
+    if: >-
+      ${{ (github.event_name == 'schedule' && github.event.schedule == '12,42 * * * *') ||
+          (github.event_name == 'workflow_dispatch' && inputs.run_agent_tick == true) }}
+    uses: ./.github/workflows/agent-trading-tick.yml
+    secrets: inherit
+
   publish:
+    needs: [agent-tick]
+    # Publishing must still occur after a skipped, cancelled, or failed agent
+    # cycle so the UI can surface its true stale/degraded health state.
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

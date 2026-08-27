@@ -1,12 +1,9 @@
 name: PR agent outreach
 
-# Always-on Foresea outreach watcher. This sends only to explicit targets in
-# data/pr_outreach_targets.json and records send-once state in
-# data/pr_outreach_state.json so scheduled runs do not re-contact the same agent.
+# Legacy outreach utility. It remains manually available for an explicit
+# outreach campaign, but no longer consumes a recurring GitHub Actions slot.
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"  # every 5 minutes; sends only newly allowlisted targets
   workflow_dispatch:
     inputs:
       resend:
