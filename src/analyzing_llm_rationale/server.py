@@ -11804,6 +11804,13 @@ _MARKETD_URL = (os.environ.get("MARKETD_URL") or "").rstrip("/")
 
 def _marketd_token(audience: str) -> Optional[str]:
     """Mint a Cloud Run identity token for the authenticated call to marketd."""
+    if not os.environ.get("K_SERVICE"):
+        # fetch_id_token probes http://169.254.169.254/ to detect the cloud
+        # environment.  On non-Cloud-Run hosts this always fails (WinError 10051
+        # on Windows, 3-second timeout on Linux) and generates spurious error
+        # spans.  Cloud Run always sets K_SERVICE, so skip the probe entirely
+        # outside that environment.
+        return None
     try:
         import google.auth.transport.requests as _greq
         import google.oauth2.id_token as _idt
