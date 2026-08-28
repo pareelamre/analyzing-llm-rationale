@@ -511,6 +511,10 @@ def _kalshi_quote(
         "last_trade_price": last if last is not None else None,
         "price_change_7d": None,  # not in Kalshi API
         "resolution_source": "; ".join(source_labels) or "Kalshi",
+        # Keep the venue's structured source objects as well as the readable
+        # summary above.  Weather-contract provenance must be derived from
+        # the actual contract payload, never guessed from a city or ticker.
+        "settlement_sources": settlement_sources,
         "resolution_criteria": " ".join(filter(None, [
             (market.get("rules_primary") or "").strip(),
             (market.get("rules_secondary") or "").strip(),

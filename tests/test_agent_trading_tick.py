@@ -421,6 +421,18 @@ class PaperCalibrationContextTests(unittest.TestCase):
         self.assertIn("Short-horizon weather prices", context)
         self.assertIn("independent evidence", context)
 
+    def test_candidate_includes_settlement_aware_weather_context(self):
+        quote = _quote("KXWEATHER", question="What will the highest temperature in Chicago be today?")
+        quote.update({
+            "category": "Weather",
+            "resolution_criteria": "Resolves by the NWS Daily Climate Report for Chicago O'Hare.",
+        })
+
+        line = agent_trading_tick._fmt_candidate_line(quote)
+
+        self.assertIn("Weather contract type: daily temperature", line)
+        self.assertIn("Official settlement source: NWS Daily Climate Report", line)
+
     def test_omits_an_unvalidated_non_kalshi_domain_horizon_combination(self):
         quote = _quote("KXOTHER", question="Will an unrelated custom event happen?")
         quote.update({"category": "Other", "platform": "Polymarket", "close_time": "2026-08-23T00:00:00Z"})

@@ -848,6 +848,57 @@ class BenchmarkToolTests(unittest.TestCase):
             second["risk_guard"]["per_cycle_spend_limit"],
         )
 
+    def test_place_trade_blocks_weather_entry_without_verified_settlement_source(self):
+        ctx = benchmark_tools.ToolContext(agent_id="weather-research-agent")
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "1.0",
+                "FORESEA_AGENT_CYCLE_ID": "weather-cycle",
+            }
+            quote = {
+                "question": "Will it rain in Chicago tomorrow?",
+                "category": "Weather",
+                "yes_ask": 0.40,
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXWEATHER": quote}),
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXWEATHER", "side": "yes", "price": 0.40, "quantity": 1},
+                    ctx,
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["skipped"])
+        self.assertEqual(result["reason"], "missing_contract_settlement_source")
+        self.assertEqual(result["weather_market"]["settlement_source"], "unknown")
+
+    def test_weather_market_brief_is_read_only_and_reports_provenance(self):
+        quote = {
+            "question": "Will Chicago temperature at 5 PM EDT exceed 80F?",
+            "category": "Weather",
+            "resolution_criteria": "The Weather Company reports station KORD.",
+            "yes_ask": 0.40,
+        }
+        with mock.patch(
+            "analyzing_llm_rationale.market_data.fetch_kalshi",
+            side_effect=_fetch_kalshi_quotes({"KXWEATHER": quote}),
+        ):
+            result = benchmark_tools.weather_market_brief({"ticker": "KXWEATHER"})
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["weather_market"]["settlement_source"], "weather_company")
+        self.assertEqual(result["weather_market"]["station"], "KORD")
+        self.assertTrue(result["weather_market"]["trade_permitted"])
+
     def test_place_trade_rejects_new_risk_over_trailing_day_budget(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-daily-risk", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:

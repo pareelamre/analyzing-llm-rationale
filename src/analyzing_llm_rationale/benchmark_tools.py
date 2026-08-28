@@ -39,6 +39,11 @@ risk_guard_rejections = meter.create_counter("benchmark_tools.risk_guard.rejecti
 settlement_actions = meter.create_counter("benchmark_tools.settlements", unit="1")
 fill_actions = meter.create_counter("benchmark_tools.place_trade.fills", unit="1")
 sizing_actions = meter.create_counter("benchmark_tools.place_trade.sizing", unit="1")
+weather_settlement_guards = meter.create_counter(
+    "benchmark_tools.place_trade.weather_settlement_guards",
+    unit="1",
+    description="Weather paper-order source-provenance gates by outcome",
+)
 reduce_only_notional_overrides = meter.create_counter(
     "benchmark_tools.place_trade.reduce_only_notional_overrides",
     unit="1",
@@ -2152,15 +2157,18 @@ def _resolve_shadow_marketability(
     during a transient outage is a lost opportunity; a corrupted ledger entry
     is worse and harder to notice.
     """
+    weather_brief: Optional[Dict[str, Any]] = None
     try:
         from analyzing_llm_rationale import market_data
         from analyzing_llm_rationale.accounting import MarketQuote
+        from analyzing_llm_rationale.weather_markets import classify_weather_market
 
         raw_quote = (
             market_data.fetch_polymarket(slug=ticker)
             if platform != "kalshi"
             else market_data.fetch_kalshi(ticker)
         )
+        weather_brief = classify_weather_market(raw_quote).as_dict()
         quote = MarketQuote.from_mapping(raw_quote)
         real_ask = quote.ask(side)
     except Exception:
@@ -2172,6 +2180,7 @@ def _resolve_shadow_marketability(
             "price": requested_price,
             "real_ask": None,
             "status": "shadow_quote_unavailable",
+            "weather_brief": weather_brief,
         }
 
     marketable = requested_price + 1e-9 >= real_ask
@@ -2180,6 +2189,7 @@ def _resolve_shadow_marketability(
         "price": round(real_ask, 4) if marketable else requested_price,
         "real_ask": round(real_ask, 4),
         "status": "shadow_filled_at_market" if marketable else "shadow_unfilled_below_market",
+        "weather_brief": weather_brief,
     }
 
 
@@ -2258,6 +2268,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
 
             shadow_marketable = True
             shadow_unfilled_status = "shadow_unfilled_below_market"
+            weather_brief: Optional[Dict[str, Any]] = None
             try:
                 requested_price = float(order.get("price"))
             except (TypeError, ValueError):
@@ -2265,6 +2276,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             if requested_price is not None and requested_price > 0:
                 market_check = _resolve_shadow_marketability(ticker, side, requested_price, platform=platform)
                 shadow_marketable = market_check["marketable"]
+                weather_brief = market_check.get("weather_brief")
                 if not shadow_marketable:
                     shadow_unfilled_status = market_check["status"]
                 if market_check["real_ask"] is not None:
@@ -2300,6 +2312,41 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 # The agent declares probability and policy; this tool, not
                 # model prose, derives the contract count and enforces the cap.
                 order["quantity"] = sizing["target_quantity"]
+
+            # Weather forecasts from third parties are useful inputs, but a
+            # paper result is only meaningful if its contract-specific source
+            # is known.  This gate applies to *new* risk only; a verified
+            # reduce-only close remains available through the normal guards.
+            if (
+                isinstance(weather_brief, dict)
+                and weather_brief.get("is_weather")
+                and not weather_brief.get("trade_permitted")
+                and sizing.get("mode") != "close"
+            ):
+                blocker = str(weather_brief.get("blocker") or "weather_settlement_unverified")
+                weather_settlement_guards.add(1, {"outcome": "blocked", "reason": blocker})
+                span.set_attributes({
+                    "outcome": "skipped",
+                    "weather.settlement_source": str(weather_brief.get("settlement_source") or "unknown"),
+                    "weather.guard_reason": blocker,
+                })
+                _finish_tool(tool, start, "skipped")
+                return {
+                    "ok": False,
+                    "tool": tool,
+                    "skipped": True,
+                    "reason": blocker,
+                    "message": "No new weather position: the venue contract lacks verified settlement provenance.",
+                    "mode": mode,
+                    "submitted": False,
+                    "weather_market": weather_brief,
+                    "sizing": sizing,
+                }
+            if isinstance(weather_brief, dict) and weather_brief.get("is_weather"):
+                weather_settlement_guards.add(1, {
+                    "outcome": "permitted" if weather_brief.get("trade_permitted") else "reduce_only",
+                    "reason": str(weather_brief.get("settlement_source") or "unknown"),
+                })
 
             if ctx.require_kelly_sizing and sizing.get("mode") == "manual":
                 # A prompt alone cannot prevent a model from inventing a tiny
@@ -2536,6 +2583,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "account": account_update["account"],
                 "action_id": account_update["action_id"],
                 "warnings": execution_warnings + result.get("warnings", []),
+                "weather_market": weather_brief,
             }
         except Exception as exc:
             span.record_exception(exc)
@@ -2543,6 +2591,59 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             span.set_attribute("outcome", "failure")
             _finish_tool(tool, start, "failure")
             logger.warning("benchmark place_trade failed", exc_info=True)
+            return {"ok": False, "tool": tool, "error": str(exc)}
+
+
+def weather_market_brief(args: Mapping[str, Any]) -> Dict[str, Any]:
+    """Inspect a weather contract's settlement provenance for research.
+
+    This is deliberately read-only.  It fetches the same live contract data
+    used by paper execution, identifies the official settlement source, and
+    reports whether a *new* paper position would clear the source-provenance
+    gate.  It never forecasts an outcome and never sends an order.
+    """
+    start = time.perf_counter()
+    tool = "weather_market_brief"
+    with tracer.start_as_current_span("benchmark_tools.weather_market_brief") as span:
+        span.set_attributes({"tool.name": tool, "market.venue": str(args.get("platform") or "kalshi").lower()})
+        try:
+            from analyzing_llm_rationale import market_data, trading
+            from analyzing_llm_rationale.weather_markets import classify_weather_market
+
+            platform = trading._clean_platform(args.get("platform") or "kalshi")
+            ticker = _clean_ticker(args.get("ticker") or args.get("ident"), platform=platform)
+            quote = (
+                market_data.fetch_polymarket(slug=ticker)
+                if platform == "polymarket"
+                else market_data.fetch_kalshi(ticker)
+            )
+            brief = classify_weather_market(quote).as_dict()
+            outcome = "permitted" if brief["trade_permitted"] else "research_only"
+            span.set_attributes({
+                "market.venue": platform,
+                "weather.is_weather": bool(brief["is_weather"]),
+                "weather.market_type": str(brief["market_type"]),
+                "weather.settlement_source": str(brief["settlement_source"]),
+                "outcome": outcome,
+            })
+            _finish_tool(tool, start, outcome)
+            return {
+                "ok": True,
+                "tool": tool,
+                "platform": platform,
+                "ticker": ticker,
+                "weather_market": brief,
+                "guidance": (
+                    "Forecasts and observations are research inputs only; the named contract source determines settlement."
+                    if brief["is_weather"] else "This contract is not classified as weather."
+                ),
+            }
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "failure")
+            _finish_tool(tool, start, "failure")
+            logger.warning("weather market brief failed", exc_info=True)
             return {"ok": False, "tool": tool, "error": str(exc)}
 
 

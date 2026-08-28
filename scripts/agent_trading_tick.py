@@ -54,7 +54,7 @@ from opentelemetry.trace import Status, StatusCode
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
+from analyzing_llm_rationale import benchmark_tools, market_data, weather_markets  # noqa: E402
 from analyzing_llm_rationale.accounting import MarketQuote  # noqa: E402
 from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
 from analyzing_llm_rationale.observability import init_observability  # noqa: E402
@@ -778,6 +778,9 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     calibration_context = _paper_calibration_context(quote)
     if calibration_context:
         line += f"\n    {calibration_context}"
+    weather_context = weather_markets.format_weather_market_brief(quote)
+    if weather_context:
+        line += f"\n    {weather_context}"
     return line
 
 
