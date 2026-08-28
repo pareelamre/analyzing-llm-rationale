@@ -6664,7 +6664,14 @@ function renderAgentTradingBoard(d) {
   const gen = genAt && !Number.isNaN(genAt.getTime()) ? genAt.toLocaleString() : '';
   const staleBadge = d && d.freshness && d.freshness.stale ? ' · <span style="color:#b45309;font-weight:600">Stale</span>' : '';
   const updatedStr = gen ? ` Updated ${escHtml(gen)}${staleBadge}.` : '';
+  const operationalHealth = d?.operational_health || {};
+  const availabilityNotice = operationalHealth.status === 'provider_degraded'
+    ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);color:var(--text)"><strong>Provider availability:</strong> ${escHtml(operationalHealth.detail || 'Some model providers are temporarily unavailable.')} Completed paper cycles and balances remain valid.</p>`
+    : operationalHealth.status === 'attention'
+      ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--text)"><strong>Agent maintenance attention:</strong> ${escHtml(operationalHealth.detail || 'One or more model ledgers need review.')}</p>`
+      : '';
   const banner = `<p class="tr-method" style="margin-top:0">SCADS-hosted models given real tool-use trading agency — each decides for itself whether and how much to trade, with genuine cash/position accounting and risk guards, unlike the fixed Kelly-sizing ledgers on the MTM tab.${updatedStr}</p>
+    ${availabilityNotice}
     <p class="text-sm" style="margin:0 0 16px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--text);font-weight:600">Shadow / paper trading only — no real money is ever at risk.</p>`;
   if (d && d.error) {
     host.innerHTML = `${banner}<p class="text-sm text-gray-500">${escHtml(d.error)} `
@@ -6884,6 +6891,7 @@ function renderAgentTradingBoard(d) {
   }).join('');
 
   host.innerHTML = `
+    ${availabilityNotice}
     <section class="agentic-panel">
       <div class="agentic-panel-head"><div><h4 class="agentic-panel-title">Account value by model</h4><p class="agentic-panel-copy">Each line is an independently managed shadow account.</p></div></div>
       <div id="agentTradingSvg" class="agentic-chart">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>

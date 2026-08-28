@@ -1829,6 +1829,32 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
         for agent_id, value in (raw_health.items() if isinstance(raw_health, dict) else [])
         if str(agent_id) in model_ids and isinstance(value, dict)
     }
+    raw_operational_health = source.get("operational_health")
+    operational_source = raw_operational_health if isinstance(raw_operational_health, dict) else {}
+
+    def _compact_operational_models(value: Any) -> List[Dict[str, str]]:
+        return [
+            {"agent_id": str(item["agent_id"]), "status": str(item["status"])}
+            for item in (value if isinstance(value, list) else [])[:_AGENT_TRADING_MAX_MODELS]
+            if isinstance(item, dict)
+            and str(item.get("agent_id")) in model_ids
+            and item.get("status") is not None
+        ]
+
+    operational_status = str(operational_source.get("status") or "healthy")
+    if operational_status not in {"healthy", "provider_degraded", "attention"}:
+        operational_status = "attention"
+    operational_health = {
+        "status": operational_status,
+        "detail": str(operational_source.get("detail") or "")[:320],
+        "models_total": len(model_ids),
+        "models_verified": sum(
+            str(value.get("status") or "") in {"active", "no_trade"}
+            for value in model_health.values()
+        ),
+        "provider_degraded": _compact_operational_models(operational_source.get("provider_degraded")),
+        "attention_required": _compact_operational_models(operational_source.get("attention_required")),
+    }
     return {
         "models": compact_models,
         "leaderboard": leaderboard,
@@ -1837,6 +1863,7 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
         "latest_theses": latest_theses,
         "eligibility": eligibility,
         "model_health": model_health,
+        "operational_health": operational_health,
     }
 
 
@@ -3269,6 +3296,8 @@ async def agent_trading_board():
     - ``model_health``: per model cycle heartbeat and account-ledger freshness.
       This separates a completed no-trade turn from a delayed, stale, or
       unverified model ledger.
+    - ``operational_health``: bounded roll-up of provider degradation versus
+      ledger-maintenance attention, without obscuring individual model status.
     """
     with _tracer.start_as_current_span("agent_trading.board.read") as span:
         live = await asyncio.get_running_loop().run_in_executor(None, _read_agent_trading_board)
@@ -3297,6 +3326,7 @@ async def agent_trading_board():
             "latest_theses": compact["latest_theses"],
             "eligibility": compact["eligibility"],
             "model_health": compact["model_health"],
+            "operational_health": compact["operational_health"],
         },
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
