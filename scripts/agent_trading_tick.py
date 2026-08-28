@@ -117,6 +117,11 @@ strategy_selections = meter.create_counter(
     unit="1",
     description="Agent-declared decision strategy by completed shadow-trading cycle",
 )
+thesis_execution_reconciliations = meter.create_counter(
+    "agent_trading.thesis_execution.reconciliations",
+    unit="1",
+    description="Declared thesis actions reconciled into guarded shadow orders",
+)
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -909,6 +914,11 @@ _TRADING_INSTRUCTION = (
     "existing average entry - live opposite ask) minus fees. Do not call the "
     "close order's gross cash outlay an additional loss or compare it directly "
     "with the original cost basis.\n\n"
+    "EXECUTION CONTRACT: A final BUY YES, BUY NO, SELL YES, SELL NO, or CLOSE is "
+    "a commitment to act in this shadow account. Call place_trade BEFORE writing "
+    "that final action. If the tool rejects or cannot fill the order, say so plainly "
+    "in the final thesis and do not present the recommendation as an executed trade. "
+    "A final HOLD or PASS means no paper order.\n\n"
     "CRITICAL RULES COMPLIANCE: Read the 'Resolution rules' provided for every "
     "market carefully before taking any action. Market resolution is governed "
     "strictly by the venue's legal resolution rules, definitions, and specific "
@@ -1054,8 +1064,22 @@ _THESIS_PROBABILITY_RE = re.compile(
     r"vs\s+\*\*Market\s+Price\*\*\s*:\s*\[?\s*(\d+(?:\.\d+)?)\s*%\s*\]?",
     re.IGNORECASE,
 )
-_THESIS_ACTION_RE = re.compile(r"\*\*Action\*\*\s*:\s*\[?\s*([^\]\n]+?)\s*\]?", re.IGNORECASE)
+_THESIS_ACTION_RE = re.compile(
+    r"\*\*Action\*\*\s*:\s*\[?\s*([^\]\n]+?)\s*(?=\]|\n|$)", re.IGNORECASE
+)
 _THESIS_EVIDENCE_RE = re.compile(r"\*\*New\s+evidence\*\*\s*:\s*([^\n]+)", re.IGNORECASE)
+_THESIS_SIZING_RE = re.compile(
+    r"\*\*Order\s+Sizing\*\*\s*:\s*([^\n]+)", re.IGNORECASE
+)
+_LOOSE_ACTION_MARKET_RE = re.compile(
+    r"\b(BUY\s+(?:YES|NO)|SELL\s+(?:YES|NO)|CLOSE)\b\s+(?:on\s+)?[\"'`]?"
+    r"([A-Za-z0-9][A-Za-z0-9_.-]{2,119})[\"'`]?\s+on\s+(Kalshi|Polymarket)\b",
+    re.IGNORECASE,
+)
+_LOOSE_MODEL_PROBABILITY_RE = re.compile(
+    r"(?:model\s+probability(?:\s+of)?|p\(yes\)\s*(?:is|=)?)\s*(\d+(?:\.\d+)?)\s*%",
+    re.IGNORECASE,
+)
 
 
 def _as_probability(value: Any) -> Optional[float]:
@@ -1071,6 +1095,238 @@ def _as_probability(value: Any) -> Optional[float]:
 
 def _normalise_forecast_ticker(value: Any) -> str:
     return str(value or "").strip().strip("`[] ").replace(" ", "")
+
+
+def _declared_thesis_execution(thesis: str) -> Optional[Dict[str, Any]]:
+    """Return a bounded executable intent from a final thesis, if it has one.
+
+    A paper agent's final recommendation is an operational commitment, not
+    decorative prose.  This deliberately accepts only BUY/SELL/CLOSE actions
+    tied to a named venue and ticker.  It never guesses a market, direction,
+    price, or Kelly mode from free text.
+    """
+    text = str(thesis or "")
+    action_match = _THESIS_ACTION_RE.search(text)
+    market_match = _THESIS_MARKET_RE.search(text)
+    action = action_match.group(1).strip().upper() if action_match else ""
+    ticker = _normalise_forecast_ticker(market_match.group(1)) if market_match else ""
+    platform = market_match.group(2).lower() if market_match else ""
+
+    if not (action and ticker and platform):
+        loose = _LOOSE_ACTION_MARKET_RE.search(text)
+        if not loose:
+            return None
+        action = loose.group(1).strip().upper()
+        ticker = _normalise_forecast_ticker(loose.group(2))
+        platform = loose.group(3).lower()
+
+    if action not in {"BUY YES", "BUY NO", "SELL YES", "SELL NO", "CLOSE"}:
+        return None
+
+    probabilities = _THESIS_PROBABILITY_RE.search(text)
+    probability = _as_probability(probabilities.group(1)) if probabilities else None
+    if probability is None:
+        loose_probability = _LOOSE_MODEL_PROBABILITY_RE.search(text)
+        probability = _as_probability(loose_probability.group(1)) if loose_probability else None
+
+    sizing_text = _THESIS_SIZING_RE.search(text)
+    sizing_value = sizing_text.group(1).lower() if sizing_text else text.lower()
+    sizing_mode = (
+        "edge_kelly" if "edge kelly" in sizing_value
+        else "quarter_kelly" if "quarter kelly" in sizing_value
+        else None
+    )
+    return {
+        "action": action,
+        "ticker": ticker,
+        "platform": platform,
+        "model_probability": probability,
+        "sizing_mode": sizing_mode,
+    }
+
+
+def _candidate_for_execution(
+    candidates: List[Dict[str, Any]], platform: str, ticker: str
+) -> Optional[Dict[str, Any]]:
+    """Find the exact live market the agent saw during this cycle."""
+    target = _normalise_forecast_ticker(ticker)
+    for candidate in candidates:
+        candidate_platform = str(candidate.get("platform") or "").strip().lower()
+        candidate_ticker = _normalise_forecast_ticker(candidate.get("ident"))
+        if candidate_platform == platform and candidate_ticker == target:
+            return candidate
+    return None
+
+
+def _has_trade_attempt(transcript: List[Dict[str, Any]]) -> bool:
+    return any(
+        str(step.get("action") or step.get("tool") or "").strip().lower()
+        in {"place_trade", "place_order", "buy", "buy_order"}
+        for step in transcript or []
+        if isinstance(step, dict)
+    )
+
+
+def _append_paper_execution(thesis: str, status: str, detail: str) -> str:
+    """Make the public thesis honest about whether paper cash actually moved."""
+    normalized = str(thesis or "").rstrip()
+    if "**Paper execution**" in normalized:
+        return normalized
+    return f"{normalized}\n\n**Paper execution**: {status} — {_excerpt(detail, 500)}"
+
+
+def _close_order_args(
+    conn: Any, agent_id: str, platform: str, ticker: str, expected_held_side: Optional[str] = None
+) -> tuple[Optional[str], Optional[float], Optional[str]]:
+    """Derive a reduce-only binary close; ambiguity is a safe non-execution."""
+    rows = conn.execute(
+        """
+        SELECT side, quantity
+        FROM agent_positions
+        WHERE agent_id = ? AND platform = ? AND ticker = ? AND quantity > 0
+        """,
+        (agent_id, platform, ticker),
+    ).fetchall()
+    if len(rows) != 1:
+        return None, None, "close_requires_exactly_one_open_position"
+    held_side = str(rows[0]["side"] or "").lower()
+    if held_side not in {"yes", "no"}:
+        return None, None, "close_position_side_invalid"
+    if expected_held_side is not None and held_side != expected_held_side:
+        return None, None, "close_side_does_not_match_declared_sell"
+    quantity = float(rows[0]["quantity"] or 0)
+    if quantity <= 0:
+        return None, None, "close_position_quantity_invalid"
+    return ("no" if held_side == "yes" else "yes"), quantity, None
+
+
+def _reconcile_thesis_execution(
+    *,
+    agent_id: str,
+    thesis: str,
+    transcript: List[Dict[str, Any]],
+    candidates: List[Dict[str, Any]],
+) -> tuple[str, Optional[Dict[str, Any]]]:
+    """Turn an unambiguous published trade decision into one guarded paper order.
+
+    The ReAct loop remains the preferred execution path.  This deterministic
+    backstop exists for providers that publish a final BUY/SELL/CLOSE thesis
+    before calling the execution tool.  It never invents an opportunity: the
+    declared venue/ticker must exactly match a current offered quote, and the
+    normal ``place_trade`` guardrail chain remains authoritative.
+    """
+    decision = _declared_thesis_execution(thesis)
+    if decision is None:
+        return thesis, None
+
+    action = str(decision["action"])
+    if _has_trade_attempt(transcript):
+        thesis_execution_reconciliations.add(1, {"outcome": "already_attempted"})
+        return _append_paper_execution(
+            thesis, "TOOL ATTEMPT RECORDED", "The agent called the guarded paper-trade tool; inspect its trade or rejection card for the fill result."
+        ), {"outcome": "already_attempted", "action": action}
+
+    with tracer.start_as_current_span("agent_trading.reconcile_thesis_execution") as span:
+        span.set_attributes({
+            "agent.model": agent_id,
+            "thesis.action": action,
+            "market.venue": str(decision["platform"]),
+        })
+        candidate = _candidate_for_execution(candidates, str(decision["platform"]), str(decision["ticker"]))
+        if candidate is None:
+            outcome = "not_offered"
+            detail = "The declared ticker was not an exact live candidate in this cycle, so no paper order was guessed."
+            span.set_attributes({"outcome": outcome, "trade.executed": False})
+            thesis_execution_reconciliations.add(1, {"outcome": outcome})
+            logger.info("agent thesis execution not reconciled model=%s reason=%s", agent_id, outcome)
+            return _append_paper_execution(thesis, "NOT EXECUTED", detail), {"outcome": outcome, "action": action}
+
+        if action.startswith("BUY "):
+            side = action.rsplit(" ", 1)[1].lower()
+            quantity = None
+            sizing_mode = decision.get("sizing_mode")
+            probability = decision.get("model_probability")
+            if sizing_mode is None or probability is None:
+                outcome = "missing_sizing_or_probability"
+                detail = "A new paper position requires an explicit Kelly mode and calibrated P(YES); neither was inferred."
+                span.set_attributes({"outcome": outcome, "trade.executed": False})
+                thesis_execution_reconciliations.add(1, {"outcome": outcome})
+                return _append_paper_execution(thesis, "NOT EXECUTED", detail), {"outcome": outcome, "action": action}
+        else:
+            expected_held_side = action.rsplit(" ", 1)[1].lower() if action.startswith("SELL ") else None
+            with benchmark_tools._account_transaction() as conn:
+                side, quantity, close_error = _close_order_args(
+                    conn,
+                    agent_id,
+                    str(decision["platform"]),
+                    str(decision["ticker"]),
+                    expected_held_side,
+                )
+            if close_error:
+                outcome = "close_not_executable"
+                span.set_attributes({"outcome": outcome, "trade.executed": False})
+                thesis_execution_reconciliations.add(1, {"outcome": outcome})
+                return _append_paper_execution(thesis, "NOT EXECUTED", close_error), {"outcome": outcome, "action": action}
+            sizing_mode = "close"
+            probability = None
+
+        try:
+            price = MarketQuote.from_mapping(candidate).ask(str(side).upper())
+        except (TypeError, ValueError) as exc:
+            price = None
+            quote_error = str(exc)
+        else:
+            quote_error = ""
+        if price is None or price <= 0:
+            outcome = "missing_live_ask"
+            detail = quote_error or "No executable live ask was available for the declared paper-trade side."
+            span.set_attributes({"outcome": outcome, "trade.executed": False})
+            thesis_execution_reconciliations.add(1, {"outcome": outcome})
+            return _append_paper_execution(thesis, "NOT EXECUTED", detail), {"outcome": outcome, "action": action}
+
+        args: Dict[str, Any] = {
+            "platform": decision["platform"],
+            "ticker": decision["ticker"],
+            "side": side,
+            "price": price,
+            "sizing_mode": sizing_mode,
+        }
+        if quantity is not None:
+            args["quantity"] = quantity
+        if probability is not None:
+            args["model_probability"] = probability
+
+        result = benchmark_tools.place_trade(
+            args,
+            benchmark_tools.ToolContext(agent_id=agent_id, model=agent_id, require_kelly_sizing=True),
+        )
+        transcript.append({
+            "action": "place_trade",
+            "args": args,
+            "observation": benchmark_tools.observation(result),
+            "source": "thesis_execution_reconciliation",
+        })
+        execution = result.get("execution") if isinstance(result, dict) else {}
+        filled_quantity = float((execution or {}).get("filled_quantity") or 0)
+        if bool(result.get("ok")) and filled_quantity > 0:
+            outcome = "filled"
+            detail = (
+                f"Filled {filled_quantity:g} {str(side).upper()} contracts on {decision['ticker']} "
+                f"at ${float(result.get('normalized_order', {}).get('price') or price):.3f}."
+            )
+            status = "PAPER ORDER FILLED"
+        elif bool(result.get("rejected")):
+            outcome = "rejected"
+            detail = str(result.get("reason") or "risk_guard")
+            status = "PAPER ORDER REJECTED"
+        else:
+            outcome = "unfilled"
+            detail = str(result.get("reason") or (execution or {}).get("fill_status") or "no_fill")
+            status = "PAPER ORDER UNFILLED"
+        span.set_attributes({"outcome": outcome, "trade.executed": outcome == "filled"})
+        thesis_execution_reconciliations.add(1, {"outcome": outcome})
+        logger.info("agent thesis execution reconciled model=%s outcome=%s", agent_id, outcome)
+        return _append_paper_execution(thesis, status, detail), {"outcome": outcome, "action": action}
 
 
 def _candidate_probability(
@@ -1477,6 +1733,13 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     question = _build_question(portfolio_block, _build_candidates_block(held_quotes, new_quotes))
 
     report = asyncio.run(_call_agent_analyze(question))
+    all_candidates = [*held_quotes, *new_quotes]
+    report.thesis, thesis_execution = _reconcile_thesis_execution(
+        agent_id=agent_id,
+        thesis=report.thesis,
+        transcript=report.tool_transcript,
+        candidates=all_candidates,
+    )
     selected_strategy = _selected_strategy(report.thesis)
     with tracer.start_as_current_span("agent_trading.record_strategy_selection") as span:
         outcome = "reported" if selected_strategy != "unreported" else "unreported"
@@ -1516,7 +1779,7 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
             cycle_id,
             report.thesis,
             report.tool_transcript,
-            [*held_quotes, *new_quotes],
+            all_candidates,
             selected_strategy,
             forecast_ts=cycle_ts,
         )
@@ -1538,6 +1801,7 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         "settled_count": len(settled),
         "thesis_published": bool(str(report.thesis or "").strip()),
         "forecast_records": forecast_records,
+        "paper_execution_outcome": (thesis_execution or {}).get("outcome"),
     }
 
 
