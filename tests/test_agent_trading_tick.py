@@ -938,5 +938,61 @@ class AgentAnalyzeRetryTests(unittest.TestCase):
         self.assertTrue(captured["require_kelly_sizing"])
 
 
+class CycleTelemetryTests(unittest.TestCase):
+    def test_main_persists_a_successful_structured_cycle_telemetry_record(self):
+        with tempfile.TemporaryDirectory() as td:
+            env = {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}
+            summary = {
+                "candidate_count": 3,
+                "tool_steps": 2,
+                "settled_count": 1,
+                "thesis_published": True,
+                "forecast_records": 1,
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch.object(agent_trading_tick, "MODEL", "model-telemetry"),
+                mock.patch.object(benchmark_tools, "_current_cycle_id", return_value="cycle-telemetry"),
+                mock.patch.object(agent_trading_tick, "init_observability"),
+                mock.patch.object(agent_trading_tick, "run_cycle", return_value=summary) as run,
+            ):
+                self.assertEqual(agent_trading_tick.main(), 0)
+                run.assert_called_once_with("model-telemetry", cycle_id="cycle-telemetry")
+                with benchmark_tools._account_transaction() as conn:
+                    row = conn.execute("SELECT * FROM agent_cycle_telemetry").fetchone()
+
+        self.assertEqual(row["outcome"], "success")
+        self.assertEqual(row["candidate_count"], 3)
+        self.assertEqual(row["tool_steps"], 2)
+        self.assertEqual(row["settled_count"], 1)
+        self.assertEqual(row["thesis_published"], 1)
+        self.assertEqual(row["forecast_records"], 1)
+        self.assertIsNotNone(row["finished_at"])
+        self.assertIsNotNone(row["duration_ms"])
+
+    def test_main_persists_a_provider_failure_with_a_safe_category(self):
+        with tempfile.TemporaryDirectory() as td:
+            env = {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch.object(agent_trading_tick, "MODEL", "model-telemetry"),
+                mock.patch.object(benchmark_tools, "_current_cycle_id", return_value="cycle-provider-503"),
+                mock.patch.object(agent_trading_tick, "init_observability"),
+                mock.patch.object(
+                    agent_trading_tick,
+                    "run_cycle",
+                    side_effect=RuntimeError("503: The forecasting model is temporarily unavailable."),
+                ),
+            ):
+                self.assertEqual(agent_trading_tick.main(), 1)
+                with benchmark_tools._account_transaction() as conn:
+                    row = conn.execute("SELECT * FROM agent_cycle_telemetry").fetchone()
+
+        self.assertEqual(row["outcome"], "failure")
+        self.assertEqual(row["failure_kind"], "provider_unavailable")
+        self.assertIn("temporarily unavailable", row["failure_detail"])
+        self.assertIsNotNone(row["finished_at"])
+
+
 if __name__ == "__main__":
     unittest.main()
