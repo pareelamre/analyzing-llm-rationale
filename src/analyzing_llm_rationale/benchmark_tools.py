@@ -2247,6 +2247,11 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     # for) instead of whatever price the caller guessed.
                     order["price"] = market_check["price"]
 
+            if order.get("price") is None:
+                raise ValueError(
+                    "price is required; specify a limit price between 0 and 1 "
+                    "(e.g. price=0.65 for a 65-cent contract)."
+                )
             sizing = _sizing_plan(
                 args,
                 price=float(order["price"]),

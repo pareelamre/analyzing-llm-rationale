@@ -425,6 +425,27 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("must be 'shadow'", result["error"])
 
+    def test_place_trade_returns_error_when_price_is_missing(self):
+        # Regression: calling place_trade without a price used to raise an
+        # unhelpful TypeError ("float() argument must be a string or a real
+        # number, not 'NoneType'") at the _sizing_plan call.  It should now
+        # return ok=False with a descriptive error message.
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXTEST", "side": "yes", "quantity": 2},
+                    ctx,
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertIn("price is required", result["error"])
+
     def test_place_trade_rejects_single_market_concentration_over_15_percent(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
