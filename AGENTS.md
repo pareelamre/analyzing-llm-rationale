@@ -140,6 +140,20 @@ Push to `main` triggers GitHub Actions:
 
 Required GitHub secrets: `GCP_SA_KEY`.
 
+### Codex MCP & Agent Harness Integration
+OpenAI Codex and coding agents can launch Foresea MCP locally or connect over streamable-HTTP/SSE:
+```bash
+# Standalone CLI entrypoint (stdio transport for Codex / Claude Code / Antigravity)
+foresea-mcp --transport stdio
+
+# Or via uvx (zero-install)
+uvx --from git+https://github.com/pareelamre/analyzing-llm-rationale.git foresea-mcp
+```
+Exposes:
+- Tools: `foresea_forecast`, `foresea_analyze_market`, `foresea_scan_markets`, `foresea_edge_board`, `foresea_orderbook`, `foresea_debate_market`, `foresea_optimize_portfolio`, `foresea_feed_latest`
+- Resources: `foresea://edge-board`, `foresea://markets/trending`, `foresea://track-record`, `foresea://openapi.json`
+- Prompts: `foresea_forecast_prompt`, `foresea_market_risk_prompt`, `foresea_calibrate_hypothesis`, `foresea_system_prompt`
+
 ### Codex GitHub helper skill
 Use the GitHub publish skill for commit/push/PR flows when available:
 ```
