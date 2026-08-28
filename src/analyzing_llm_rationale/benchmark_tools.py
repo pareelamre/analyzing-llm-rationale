@@ -750,6 +750,25 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_agent_thesis_forecasts_unresolved
             ON agent_thesis_forecasts(agent_id, resolved_outcome, platform, ticker);
+        CREATE TABLE IF NOT EXISTS agent_cycle_telemetry (
+            run_id TEXT PRIMARY KEY,
+            agent_id TEXT NOT NULL,
+            cycle_id TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            outcome TEXT NOT NULL,
+            failure_kind TEXT,
+            failure_detail TEXT,
+            candidate_count INTEGER,
+            tool_steps INTEGER,
+            settled_count INTEGER,
+            thesis_published INTEGER NOT NULL DEFAULT 0,
+            forecast_records INTEGER NOT NULL DEFAULT 0,
+            duration_ms INTEGER,
+            source TEXT NOT NULL DEFAULT 'worker'
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_cycle_telemetry_latest
+            ON agent_cycle_telemetry(agent_id, started_at DESC);
         """
     )
     # Existing local paper-account databases predate the watermark. SQLite's

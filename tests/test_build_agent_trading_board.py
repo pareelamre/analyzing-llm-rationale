@@ -70,6 +70,28 @@ def _seed_action(path: Path, agent_id: str, *, cycle_id: str, ts: str):
     conn.close()
 
 
+def _seed_telemetry(path: Path, agent_id: str, *, outcome: str, started_at: str,
+                    failure_kind: str | None = None, failure_detail: str | None = None):
+    conn = sqlite3.connect(str(path))
+    conn.row_factory = sqlite3.Row
+    benchmark_tools._ensure_account_schema(conn)
+    conn.execute(
+        """
+        INSERT INTO agent_cycle_telemetry
+        (run_id, agent_id, cycle_id, started_at, finished_at, outcome, failure_kind,
+         failure_detail, candidate_count, tool_steps, settled_count, thesis_published,
+         forecast_records, duration_ms)
+        VALUES (?, ?, 'cycle-telemetry', ?, ?, ?, ?, ?, 3, 2, 0, 1, 1, 4200)
+        """,
+        (
+            f"run-{agent_id}", agent_id, started_at, started_at, outcome,
+            failure_kind, failure_detail,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
 class OpenStoreTests(unittest.TestCase):
     def test_missing_store_falls_back_to_an_empty_in_memory_db(self):
         with tempfile.TemporaryDirectory() as td:
@@ -157,6 +179,38 @@ class HeldTickersAndQuotesTests(unittest.TestCase):
 
 
 class BuildBoardTests(unittest.TestCase):
+    def test_model_health_exposes_latest_provider_failure_and_operational_trail(self):
+        with tempfile.TemporaryDirectory() as td:
+            store_dir = Path(td) / "stores"
+            store_dir.mkdir()
+            (store_dir / "provider-down").mkdir()
+            path = store_dir / "provider-down" / "store.sqlite"
+            _seed_store(path, "provider-down")
+            _seed_telemetry(
+                path,
+                "provider-down",
+                outcome="failure",
+                started_at="2026-08-11T11:58:00+00:00",
+                failure_kind="provider_unavailable",
+                failure_detail="503: The forecasting model is temporarily unavailable.",
+            )
+            with (
+                mock.patch.object(board_script, "STORE_DIR", store_dir),
+                mock.patch.object(board_script, "_chat_capable_models", return_value=["provider-down"]),
+                mock.patch.object(board_script, "_fetch_quotes", return_value={}),
+                mock.patch.object(board_script, "datetime") as mock_datetime,
+            ):
+                mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+                mock_datetime.now.return_value = board_script._parse_timestamp("2026-08-11T12:00:00+00:00")
+                board = board_script.build_board()
+
+        health = board["model_health"]["provider-down"]
+        self.assertEqual(health["status"], "provider_unavailable")
+        self.assertEqual(health["last_failure_kind"], "provider_unavailable")
+        self.assertIn("503", health["last_failure_detail"])
+        self.assertEqual(board["recent_cycle_telemetry"][0]["agent_id"], "provider-down")
+        self.assertEqual(board["recent_cycle_telemetry"][0]["outcome"], "failure")
+
     def test_model_health_distinguishes_no_trade_delayed_stale_and_unverified(self):
         with tempfile.TemporaryDirectory() as td:
             store_dir = Path(td) / "stores"

@@ -46,6 +46,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
@@ -150,6 +151,16 @@ LEARNING_CONTEXT_LIMIT = max(1, min(10, int(os.environ.get("AGENT_TRADING_LEARNI
 LEARNING_STATS_LIMIT = max(LEARNING_CONTEXT_LIMIT, min(50, int(os.environ.get("AGENT_TRADING_LEARNING_STATS_LIMIT", "20"))))
 THESIS_FORECAST_RESOLUTION_CHECK_LIMIT = max(
     1, min(20, int(os.environ.get("AGENT_TRADING_THESIS_FORECAST_RESOLUTION_CHECK_LIMIT", "5")))
+)
+cycle_runs = meter.create_counter(
+    "agent_trading.cycles",
+    unit="1",
+    description="Completed autonomous agent cycles by terminal outcome",
+)
+cycle_duration = meter.create_histogram(
+    "agent_trading.cycle.duration",
+    unit="s",
+    description="End-to-end autonomous agent cycle duration",
 )
 
 
@@ -1337,12 +1348,84 @@ def _configure_max_order_notional() -> float:
     return max_notional
 
 
-def run_cycle(model: str) -> None:
+def _safe_failure_detail(exc: BaseException) -> str:
+    """Keep a bounded diagnostic without persisting credentials from an error."""
+    detail = re.sub(r"\s+", " ", str(exc)).strip()
+    detail = re.sub(
+        r"(?i)(api[_ -]?key|authorization|token|secret|private[_ -]?key)\s*[:=]\s*\S+",
+        r"\1=[redacted]",
+        detail,
+    )
+    return detail[:320] or exc.__class__.__name__
+
+
+def _failure_kind(exc: BaseException) -> str:
+    """Map volatile provider text into a stable maintenance-facing category."""
+    detail = str(exc).lower()
+    if "429" in detail or "rate limit" in detail or "max_parallel_requests" in detail:
+        return "provider_rate_limited"
+    if "503" in detail or "temporarily unavailable" in detail or "service unavailable" in detail:
+        return "provider_unavailable"
+    if "timeout" in detail or "timed out" in detail:
+        return "provider_timeout"
+    if "context" in detail and "limit" in detail:
+        return "provider_context_limit"
+    return "cycle_error"
+
+
+def _start_cycle_telemetry(run_id: str, agent_id: str, cycle_id: str, started_at: str) -> None:
+    with benchmark_tools._account_transaction() as conn:
+        conn.execute(
+            """
+            INSERT INTO agent_cycle_telemetry
+            (run_id, agent_id, cycle_id, started_at, outcome, source)
+            VALUES (?, ?, ?, ?, 'running', 'worker')
+            """,
+            (run_id, agent_id, cycle_id, started_at),
+        )
+
+
+def _finish_cycle_telemetry(
+    run_id: str,
+    *,
+    outcome: str,
+    duration_ms: int,
+    summary: Optional[Dict[str, Any]] = None,
+    failure_kind: Optional[str] = None,
+    failure_detail: Optional[str] = None,
+) -> None:
+    summary = summary or {}
+    with benchmark_tools._account_transaction() as conn:
+        conn.execute(
+            """
+            UPDATE agent_cycle_telemetry
+            SET finished_at = ?, outcome = ?, failure_kind = ?, failure_detail = ?,
+                candidate_count = ?, tool_steps = ?, settled_count = ?,
+                thesis_published = ?, forecast_records = ?, duration_ms = ?
+            WHERE run_id = ?
+            """,
+            (
+                datetime.now(timezone.utc).isoformat(),
+                outcome,
+                failure_kind,
+                failure_detail,
+                summary.get("candidate_count"),
+                summary.get("tool_steps"),
+                summary.get("settled_count"),
+                1 if summary.get("thesis_published") else 0,
+                int(summary.get("forecast_records") or 0),
+                duration_ms,
+                run_id,
+            ),
+        )
+
+
+def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     _assert_shadow_mode()
     _init_local_agent(model)
 
     agent_id = model
-    cycle_id = benchmark_tools._current_cycle_id()
+    cycle_id = cycle_id or benchmark_tools._current_cycle_id()
 
     # Settlement used to run only if a model tried to place another trade.
     # Run it before every decision instead, so a resolved result is available
@@ -1427,7 +1510,7 @@ def run_cycle(model: str) -> None:
                 1 if len(report.tool_transcript) >= MAX_TOOL_STEPS else 0,
             ),
         )
-        _persist_thesis_forecasts(
+        forecast_records = _persist_thesis_forecasts(
             conn,
             agent_id,
             cycle_id,
@@ -1449,6 +1532,13 @@ def run_cycle(model: str) -> None:
         f"steps={len(report.tool_transcript)} candidates={len(candidates_offered)} "
         f"settled={len(settled)}"
     )
+    return {
+        "candidate_count": len(candidates_offered),
+        "tool_steps": len(report.tool_transcript),
+        "settled_count": len(settled),
+        "thesis_published": bool(str(report.thesis or "").strip()),
+        "forecast_records": forecast_records,
+    }
 
 
 def _broadcast_cycle_trades(model: str, report: Any) -> None:
@@ -1481,9 +1571,60 @@ def main() -> int:
     if not MODEL:
         print("AGENT_TRADING_MODEL must be set", file=sys.stderr)
         return 1
+    cycle_id = benchmark_tools._current_cycle_id()
+    run_id = uuid4().hex
+    started_at = datetime.now(timezone.utc).isoformat()
+    started = time.perf_counter()
     try:
         init_observability()
-        run_cycle(MODEL)
+        _start_cycle_telemetry(run_id, MODEL, cycle_id, started_at)
+        with tracer.start_as_current_span("agent_trading.cycle") as span:
+            span.set_attributes({
+                "agent.model": MODEL,
+                "agent.cycle_id": cycle_id,
+                "agent.run_id": run_id,
+            })
+            try:
+                summary = run_cycle(MODEL, cycle_id=cycle_id)
+            except Exception as exc:  # noqa: BLE001
+                failure_kind = _failure_kind(exc)
+                duration_seconds = time.perf_counter() - started
+                _finish_cycle_telemetry(
+                    run_id,
+                    outcome="failure",
+                    duration_ms=round(duration_seconds * 1000),
+                    failure_kind=failure_kind,
+                    failure_detail=_safe_failure_detail(exc),
+                )
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR))
+                span.set_attributes({"outcome": "failure", "failure.kind": failure_kind})
+                cycle_runs.add(1, {"model": MODEL, "outcome": "failure", "failure_kind": failure_kind})
+                cycle_duration.record(duration_seconds, {"model": MODEL, "outcome": "failure"})
+                logger.warning(
+                    "agent trading cycle failed model=%s cycle=%s failure_kind=%s detail=%s",
+                    MODEL, cycle_id, failure_kind, _safe_failure_detail(exc),
+                )
+                raise
+            duration_seconds = time.perf_counter() - started
+            _finish_cycle_telemetry(
+                run_id,
+                outcome="success",
+                duration_ms=round(duration_seconds * 1000),
+                summary=summary,
+            )
+            span.set_attributes({
+                "outcome": "success",
+                "candidates.count": int(summary["candidate_count"]),
+                "tool.steps": int(summary["tool_steps"]),
+                "thesis.published": bool(summary["thesis_published"]),
+            })
+            cycle_runs.add(1, {"model": MODEL, "outcome": "success"})
+            cycle_duration.record(duration_seconds, {"model": MODEL, "outcome": "success"})
+            logger.info(
+                "agent trading cycle completed model=%s cycle=%s candidates=%s steps=%s forecasts=%s",
+                MODEL, cycle_id, summary["candidate_count"], summary["tool_steps"], summary["forecast_records"],
+            )
     except Exception as exc:  # noqa: BLE001
         print(f"agent-trading-tick FAILED model={MODEL}: {exc}", file=sys.stderr)
         return 1

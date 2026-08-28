@@ -113,7 +113,7 @@ def _model_health(
     store_present: bool,
     now: datetime,
 ) -> Dict[str, Any]:
-    """Describe one model's latest confirmed trading cycle and ledger state.
+    """Describe one model's latest confirmed trading cycle and worker state.
 
     A fresh board artifact only proves that the publisher ran.  ``agent_cycles``
     is instead a per-model success heartbeat written after each completed agent
@@ -131,14 +131,36 @@ def _model_health(
         "SELECT cycle_id, ts FROM agent_actions WHERE agent_id = ? ORDER BY ts DESC LIMIT 1",
         (model,),
     ).fetchone()
+    telemetry = conn.execute(
+        """
+        SELECT cycle_id, started_at, finished_at, outcome, failure_kind, failure_detail,
+               candidate_count, tool_steps, thesis_published, forecast_records, duration_ms
+        FROM agent_cycle_telemetry
+        WHERE agent_id = ?
+        ORDER BY started_at DESC
+        LIMIT 1
+        """,
+        (model,),
+    ).fetchone()
 
     cycle_ts = cycle["ts"] if cycle else None
     cycle_at = _parse_timestamp(cycle_ts)
     age_seconds = max(0, int((now - cycle_at).total_seconds())) if cycle_at else None
     latest_action_cycle_id = action["cycle_id"] if action else None
     action_this_cycle = bool(cycle and latest_action_cycle_id == cycle["cycle_id"])
+    telemetry_at = _parse_timestamp(telemetry["started_at"]) if telemetry else None
+    latest_attempt_failed = bool(
+        telemetry
+        and telemetry["outcome"] == "failure"
+        and (cycle_at is None or (telemetry_at is not None and telemetry_at >= cycle_at))
+    )
 
-    if cycle_at is None:
+    if latest_attempt_failed:
+        status = str(telemetry["failure_kind"] or "cycle_error")
+        detail = "Latest worker attempt failed"
+        if telemetry["failure_detail"]:
+            detail += f": {telemetry['failure_detail']}"
+    elif cycle_at is None:
         status = "unverified"
         detail = (
             "No confirmed agent cycle has been persisted yet."
@@ -166,12 +188,55 @@ def _model_health(
         "last_cycle_id": cycle["cycle_id"] if cycle else None,
         "last_action_at": action["ts"] if action else None,
         "last_account_updated_at": account["updated_at"] if account else None,
+        "last_attempt_at": telemetry["started_at"] if telemetry else None,
+        "last_attempt_outcome": telemetry["outcome"] if telemetry else None,
+        "last_failure_kind": telemetry["failure_kind"] if telemetry else None,
+        "last_failure_detail": telemetry["failure_detail"] if telemetry else None,
+        "last_duration_ms": telemetry["duration_ms"] if telemetry else None,
+        "last_candidate_count": telemetry["candidate_count"] if telemetry else None,
+        "last_tool_steps": telemetry["tool_steps"] if telemetry else None,
+        "last_thesis_published": bool(telemetry["thesis_published"]) if telemetry else None,
+        "last_forecast_records": telemetry["forecast_records"] if telemetry else None,
         "cycle_age_seconds": age_seconds,
         "expected_cycle_seconds": MODEL_HEALTH_EXPECTED_CYCLE_SECONDS,
         "delayed_after_seconds": MODEL_HEALTH_DELAYED_AFTER_SECONDS,
         "stale_after_seconds": MODEL_HEALTH_STALE_AFTER_SECONDS,
         "store_present": store_present,
     }
+
+
+def _recent_cycle_telemetry(conn: sqlite3.Connection, model: str, *, limit: int = 5) -> List[Dict[str, Any]]:
+    """Return a small structured operational trail for maintenance tooling."""
+    return [
+        {
+            "agent_id": model,
+            "run_id": row["run_id"],
+            "cycle_id": row["cycle_id"],
+            "started_at": row["started_at"],
+            "finished_at": row["finished_at"],
+            "outcome": row["outcome"],
+            "failure_kind": row["failure_kind"],
+            "failure_detail": row["failure_detail"],
+            "candidate_count": row["candidate_count"],
+            "tool_steps": row["tool_steps"],
+            "settled_count": row["settled_count"],
+            "thesis_published": bool(row["thesis_published"]),
+            "forecast_records": row["forecast_records"],
+            "duration_ms": row["duration_ms"],
+        }
+        for row in conn.execute(
+            """
+            SELECT run_id, cycle_id, started_at, finished_at, outcome, failure_kind,
+                   failure_detail, candidate_count, tool_steps, settled_count,
+                   thesis_published, forecast_records, duration_ms
+            FROM agent_cycle_telemetry
+            WHERE agent_id = ?
+            ORDER BY started_at DESC
+            LIMIT ?
+            """,
+            (model, max(1, min(limit, 20))),
+        )
+    ]
 
 
 def _held_tickers(conn: sqlite3.Connection) -> Set[tuple]:
@@ -211,6 +276,7 @@ def build_board() -> Dict[str, Any]:
         forecast_learning: Dict[str, Any] = {}
         latest_theses: Dict[str, Dict[str, Any] | None] = {}
         model_health: Dict[str, Dict[str, Any]] = {}
+        cycle_telemetry: List[Dict[str, Any]] = []
         activity: List[Dict[str, Any]] = []
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
@@ -227,6 +293,7 @@ def build_board() -> Dict[str, Any]:
             model_health[model] = _model_health(
                 conn, model, store_present=store_presence[model], now=now,
             )
+            cycle_telemetry.extend(_recent_cycle_telemetry(conn, model))
             if rows:
                 eligibility[model] = agent_trading_stats.compute_promotion_eligibility(rows[0], equity)
             activity.extend(agent_trading_stats.recent_activity(
@@ -238,6 +305,7 @@ def build_board() -> Dict[str, Any]:
 
     leaderboard.sort(key=lambda r: r["account_value"], reverse=True)
     activity.sort(key=lambda item: str(item.get("ts") or ""), reverse=True)
+    cycle_telemetry.sort(key=lambda item: str(item.get("started_at") or ""), reverse=True)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -249,6 +317,7 @@ def build_board() -> Dict[str, Any]:
         "eligibility": eligibility,
         "forecast_learning": forecast_learning,
         "model_health": model_health,
+        "recent_cycle_telemetry": cycle_telemetry[:RECENT_ACTIVITY_LIMIT],
         "latest_theses": latest_theses,
         "recent_activity": activity[:RECENT_ACTIVITY_LIMIT],
     }
