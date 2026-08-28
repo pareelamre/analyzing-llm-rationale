@@ -895,6 +895,28 @@ class RunCycleTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "not_offered")
         self.assertIn("**Paper execution**: NOT EXECUTED", rendered)
 
+    def test_declared_thesis_reports_the_recorded_direct_paper_fill(self):
+        thesis = """### 1. Decision & Execution
+- **Action**: BUY YES
+- **Market & Venue**: KXDIRECT on Kalshi
+- **Order Sizing**: Quarter Kelly 5% cap
+
+### 3. Model Edge & Valuation
+- **Model Probability**: 70% vs **Market Price**: 40% (Edge: +30%)"""
+        transcript = [{
+            "action": "place_trade",
+            "args": {"ticker": "KXDIRECT"},
+            "observation": json.dumps({"ok": True, "execution": {"filled_quantity": 5}}),
+        }]
+        with mock.patch.object(benchmark_tools, "place_trade") as place_trade:
+            rendered, result = agent_trading_tick._reconcile_thesis_execution(
+                agent_id="model-direct-fill", thesis=thesis, transcript=transcript, candidates=[]
+            )
+
+        place_trade.assert_not_called()
+        self.assertEqual(result["outcome"], "filled")
+        self.assertIn("**Paper execution**: PAPER ORDER FILLED", rendered)
+
     def test_run_cycle_configures_order_notional_from_current_account_value_before_the_tool_loop(self):
         # Regression: _configure_max_order_notional() used to run before
         # held_quotes existed, reading the static starting-cash baseline --
@@ -1029,6 +1051,7 @@ class CycleTelemetryTests(unittest.TestCase):
                 "settled_count": 1,
                 "thesis_published": True,
                 "forecast_records": 1,
+                "paper_execution_outcome": "filled",
             }
             with (
                 mock.patch.dict(os.environ, env, clear=False),
@@ -1048,6 +1071,7 @@ class CycleTelemetryTests(unittest.TestCase):
         self.assertEqual(row["settled_count"], 1)
         self.assertEqual(row["thesis_published"], 1)
         self.assertEqual(row["forecast_records"], 1)
+        self.assertEqual(row["paper_execution_outcome"], "filled")
         self.assertIsNotNone(row["finished_at"])
         self.assertIsNotNone(row["duration_ms"])
 
@@ -1065,7 +1089,7 @@ class CycleTelemetryTests(unittest.TestCase):
                     side_effect=RuntimeError("503: The forecasting model is temporarily unavailable."),
                 ),
             ):
-                self.assertEqual(agent_trading_tick.main(), 1)
+                self.assertEqual(agent_trading_tick.main(), agent_trading_tick.PROVIDER_DEGRADATION_EXIT_CODE)
                 with benchmark_tools._account_transaction() as conn:
                     row = conn.execute("SELECT * FROM agent_cycle_telemetry").fetchone()
 

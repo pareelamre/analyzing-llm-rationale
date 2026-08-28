@@ -128,19 +128,32 @@ jobs:
           # provider outage into a request storm.
           AGENT_TRADING_RETRIES: "1"
         run: |
-          failures=0
+          hard_failures=0
+          provider_degradations=0
           for MODEL in $MODELS; do
             export AGENT_TRADING_MODEL="$MODEL"
             export FORESEA_AGENT_ACCOUNT_DB_PATH="tmp/agent-trading/$MODEL/store.sqlite"
             export FORESEA_AGENT_NOTES_PATH="tmp/agent-trading/$MODEL/notes.json"
             export FORESEA_AGENT_TOOL_LEDGER_PATH="tmp/agent-trading/$MODEL/tool_ledger.jsonl"
-            if ! python scripts/agent_trading_tick.py; then
-              echo "::error title=Agent trading tick failed::${MODEL} exhausted its retries; the next model will still run."
-              failures=$((failures + 1))
+            if python scripts/agent_trading_tick.py; then
+              :
+            else
+              status=$?
+              if [ "$status" -eq 75 ]; then
+                echo "::warning title=Agent provider degraded::${MODEL} could not complete because its upstream provider is unavailable; the ledger was persisted and the next model will still run."
+                provider_degradations=$((provider_degradations + 1))
+              else
+                echo "::error title=Agent trading tick failed::${MODEL} failed outside the expected provider-degradation path; the next model will still run."
+                hard_failures=$((hard_failures + 1))
+              fi
             fi
             gcloud storage cp "tmp/agent-trading/$MODEL/store.sqlite" \
               "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${MODEL}.sqlite"
             gcloud storage cp "tmp/agent-trading/$MODEL/notes.json" \
               "$AGENT_TRADING_STORE_BUCKET/agent_trading_notes__${MODEL}.json"
           done
-          exit "$failures"
+          if [ "$provider_degradations" -gt 0 ]; then
+            echo "### Agent provider degradation" >> "$GITHUB_STEP_SUMMARY"
+            echo "${provider_degradations} model cycle(s) were skipped because their upstream provider was unavailable. Individual model health and telemetry remain published on the Agentic board." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$hard_failures"

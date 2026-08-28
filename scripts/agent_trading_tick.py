@@ -122,6 +122,11 @@ thesis_execution_reconciliations = meter.create_counter(
     unit="1",
     description="Declared thesis actions reconciled into guarded shadow orders",
 )
+provider_degradations = meter.create_counter(
+    "agent_trading.provider.degradations",
+    unit="1",
+    description="Completed agent cycles unavailable because the upstream provider degraded",
+)
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -136,6 +141,15 @@ MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "30"))
 # scheduled workflow uses the safe default of one attempt.
 AGENT_ANALYZE_RETRIES = max(1, int(os.environ.get("AGENT_TRADING_RETRIES", "1")))
 AGENT_ANALYZE_RETRY_BACKOFF_S = float(os.environ.get("AGENT_TRADING_RETRY_BACKOFF_S", "10"))
+# A provider outage is a completed, safely-persisted agent attempt—not a
+# broken paper ledger.  Workflows use this distinct code to report a degraded
+# provider lane while still failing on local/data-integrity errors.
+PROVIDER_DEGRADATION_EXIT_CODE = 75
+PROVIDER_DEGRADATION_FAILURE_KINDS = {
+    "provider_unavailable",
+    "provider_rate_limited",
+    "provider_timeout",
+}
 # AgentAnalyzeRequest.question used to have a tight 2000-char server-side
 # limit (see server.py) that was found silently destroying almost an entire
 # candidates block, including every Polymarket candidate, down to a mid-word
@@ -1167,6 +1181,38 @@ def _has_trade_attempt(transcript: List[Dict[str, Any]]) -> bool:
     )
 
 
+def _recorded_trade_attempt_outcome(transcript: List[Dict[str, Any]]) -> str:
+    """Derive one bounded paper outcome from a model's recorded tool result."""
+    for step in reversed(transcript or []):
+        if not isinstance(step, dict):
+            continue
+        if str(step.get("action") or step.get("tool") or "").strip().lower() not in {
+            "place_trade", "place_order", "buy", "buy_order"
+        }:
+            continue
+        observation = step.get("observation")
+        if isinstance(observation, str):
+            try:
+                observation = json.loads(observation)
+            except (TypeError, ValueError):
+                return "attempted_unknown"
+        if not isinstance(observation, dict):
+            return "attempted_unknown"
+        execution = observation.get("execution")
+        if not isinstance(execution, dict):
+            execution = {}
+        try:
+            filled_quantity = float(execution.get("filled_quantity") or 0)
+        except (TypeError, ValueError):
+            filled_quantity = 0.0
+        if bool(observation.get("ok")) and filled_quantity > 0:
+            return "filled"
+        if bool(observation.get("ok")):
+            return "unfilled"
+        return "rejected"
+    return "attempted_unknown"
+
+
 def _append_paper_execution(thesis: str, status: str, detail: str) -> str:
     """Make the public thesis honest about whether paper cash actually moved."""
     normalized = str(thesis or "").rstrip()
@@ -1221,10 +1267,23 @@ def _reconcile_thesis_execution(
 
     action = str(decision["action"])
     if _has_trade_attempt(transcript):
-        thesis_execution_reconciliations.add(1, {"outcome": "already_attempted"})
+        outcome = _recorded_trade_attempt_outcome(transcript)
+        status = {
+            "filled": "PAPER ORDER FILLED",
+            "rejected": "PAPER ORDER REJECTED",
+            "unfilled": "PAPER ORDER UNFILLED",
+            "attempted_unknown": "PAPER ORDER ATTEMPT RECORDED",
+        }[outcome]
+        detail = {
+            "filled": "The agent called the guarded paper-trade tool and its recorded order filled.",
+            "rejected": "The agent called the guarded paper-trade tool, but its recorded order was rejected by a guardrail.",
+            "unfilled": "The agent called the guarded paper-trade tool, but no executable paper fill was recorded.",
+            "attempted_unknown": "The agent called the guarded paper-trade tool; inspect its tool transcript for the exact result.",
+        }[outcome]
+        thesis_execution_reconciliations.add(1, {"outcome": f"already_attempted_{outcome}"})
         return _append_paper_execution(
-            thesis, "TOOL ATTEMPT RECORDED", "The agent called the guarded paper-trade tool; inspect its trade or rejection card for the fill result."
-        ), {"outcome": "already_attempted", "action": action}
+            thesis, status, detail
+        ), {"outcome": outcome, "action": action}
 
     with tracer.start_as_current_span("agent_trading.reconcile_thesis_execution") as span:
         span.set_attributes({
@@ -1657,7 +1716,7 @@ def _finish_cycle_telemetry(
             UPDATE agent_cycle_telemetry
             SET finished_at = ?, outcome = ?, failure_kind = ?, failure_detail = ?,
                 candidate_count = ?, tool_steps = ?, settled_count = ?,
-                thesis_published = ?, forecast_records = ?, duration_ms = ?
+                thesis_published = ?, forecast_records = ?, paper_execution_outcome = ?, duration_ms = ?
             WHERE run_id = ?
             """,
             (
@@ -1670,6 +1729,7 @@ def _finish_cycle_telemetry(
                 summary.get("settled_count"),
                 1 if summary.get("thesis_published") else 0,
                 int(summary.get("forecast_records") or 0),
+                summary.get("paper_execution_outcome"),
                 duration_ms,
                 run_id,
             ),
@@ -1865,6 +1925,9 @@ def main() -> int:
                 span.set_attributes({"outcome": "failure", "failure.kind": failure_kind})
                 cycle_runs.add(1, {"model": MODEL, "outcome": "failure", "failure_kind": failure_kind})
                 cycle_duration.record(duration_seconds, {"model": MODEL, "outcome": "failure"})
+                if failure_kind in PROVIDER_DEGRADATION_FAILURE_KINDS:
+                    span.set_attribute("provider.degraded", True)
+                    provider_degradations.add(1, {"failure_kind": failure_kind})
                 logger.warning(
                     "agent trading cycle failed model=%s cycle=%s failure_kind=%s detail=%s",
                     MODEL, cycle_id, failure_kind, _safe_failure_detail(exc),
@@ -1891,7 +1954,11 @@ def main() -> int:
             )
     except Exception as exc:  # noqa: BLE001
         print(f"agent-trading-tick FAILED model={MODEL}: {exc}", file=sys.stderr)
-        return 1
+        return (
+            PROVIDER_DEGRADATION_EXIT_CODE
+            if _failure_kind(exc) in PROVIDER_DEGRADATION_FAILURE_KINDS
+            else 1
+        )
     return 0
 
 

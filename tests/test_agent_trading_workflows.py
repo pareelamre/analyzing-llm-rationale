@@ -63,7 +63,10 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
     def test_a_model_failure_does_not_skip_the_rest_of_its_lane(self):
         run_section = self.workflow.split("Run every model in this lane", 1)[1]
         self.assertIn("for MODEL in $MODELS", run_section)
-        self.assertIn("if ! python scripts/agent_trading_tick.py", run_section)
+        self.assertIn("if python scripts/agent_trading_tick.py", run_section)
+        self.assertIn('if [ "$status" -eq 75 ]; then', run_section)
+        self.assertIn("provider_degradations", run_section)
+        self.assertIn('exit "$hard_failures"', run_section)
         self.assertIn("next model will still run", run_section)
         self.assertIn("agent_trading_store__${MODEL}.sqlite", run_section)
 

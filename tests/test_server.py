@@ -1483,6 +1483,11 @@ class ServerTests(unittest.TestCase):
             "latest_theses": {"gpt-oss-120b": {"agent_id": "gpt-oss-120b", "type": "thesis", "thesis": "Research note"}},
             "eligibility": {"gpt-oss-120b": {"eligible": False, "checks": {"sufficient_sample": False}}},
             "model_health": {"gpt-oss-120b": {"status": "no_trade", "cycle_age_seconds": 120}},
+            "operational_health": {
+                "status": "provider_degraded",
+                "detail": "One provider is temporarily unavailable.",
+                "provider_degraded": [{"agent_id": "gpt-oss-120b", "status": "provider_unavailable"}],
+            },
         }
         with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
             response = self.client.get("/agent-trading/board")
@@ -1496,6 +1501,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["latest_theses"]["gpt-oss-120b"]["type"], "thesis")
         self.assertFalse(payload["eligibility"]["gpt-oss-120b"]["eligible"])
         self.assertEqual(payload["model_health"]["gpt-oss-120b"]["status"], "no_trade")
+        self.assertEqual(payload["operational_health"]["status"], "provider_degraded")
+        self.assertEqual(payload["operational_health"]["models_total"], 1)
+        self.assertEqual(payload["operational_health"]["provider_degraded"][0]["agent_id"], "gpt-oss-120b")
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])
 
@@ -1550,6 +1558,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["recent_activity"], [])
         self.assertEqual(payload["eligibility"], {})
         self.assertEqual(payload["model_health"], {})
+        self.assertEqual(payload["operational_health"]["status"], "healthy")
         self.assertEqual(payload["mode"], "shadow")
 
     def test_edge_board_endpoint_compacts_large_chart_payloads(self):

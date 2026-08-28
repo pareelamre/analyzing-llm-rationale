@@ -764,6 +764,7 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
             settled_count INTEGER,
             thesis_published INTEGER NOT NULL DEFAULT 0,
             forecast_records INTEGER NOT NULL DEFAULT 0,
+            paper_execution_outcome TEXT,
             duration_ms INTEGER,
             source TEXT NOT NULL DEFAULT 'worker'
         );
@@ -778,6 +779,11 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
     columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(agent_accounts)")}
     if "high_watermark" not in columns:
         conn.execute("ALTER TABLE agent_accounts ADD COLUMN high_watermark REAL NOT NULL DEFAULT 0")
+    telemetry_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(agent_cycle_telemetry)")
+    }
+    if "paper_execution_outcome" not in telemetry_columns:
+        conn.execute("ALTER TABLE agent_cycle_telemetry ADD COLUMN paper_execution_outcome TEXT")
     conn.execute(
         "UPDATE agent_accounts SET high_watermark = starting_cash WHERE high_watermark <= 0"
     )

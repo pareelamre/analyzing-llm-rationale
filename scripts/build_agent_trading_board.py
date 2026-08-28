@@ -134,7 +134,8 @@ def _model_health(
     telemetry = conn.execute(
         """
         SELECT cycle_id, started_at, finished_at, outcome, failure_kind, failure_detail,
-               candidate_count, tool_steps, thesis_published, forecast_records, duration_ms
+               candidate_count, tool_steps, thesis_published, forecast_records,
+               paper_execution_outcome, duration_ms
         FROM agent_cycle_telemetry
         WHERE agent_id = ?
         ORDER BY started_at DESC
@@ -197,6 +198,7 @@ def _model_health(
         "last_tool_steps": telemetry["tool_steps"] if telemetry else None,
         "last_thesis_published": bool(telemetry["thesis_published"]) if telemetry else None,
         "last_forecast_records": telemetry["forecast_records"] if telemetry else None,
+        "last_paper_execution_outcome": telemetry["paper_execution_outcome"] if telemetry else None,
         "cycle_age_seconds": age_seconds,
         "expected_cycle_seconds": MODEL_HEALTH_EXPECTED_CYCLE_SECONDS,
         "delayed_after_seconds": MODEL_HEALTH_DELAYED_AFTER_SECONDS,
@@ -222,13 +224,14 @@ def _recent_cycle_telemetry(conn: sqlite3.Connection, model: str, *, limit: int 
             "settled_count": row["settled_count"],
             "thesis_published": bool(row["thesis_published"]),
             "forecast_records": row["forecast_records"],
+            "paper_execution_outcome": row["paper_execution_outcome"],
             "duration_ms": row["duration_ms"],
         }
         for row in conn.execute(
             """
             SELECT run_id, cycle_id, started_at, finished_at, outcome, failure_kind,
                    failure_detail, candidate_count, tool_steps, settled_count,
-                   thesis_published, forecast_records, duration_ms
+                   thesis_published, forecast_records, paper_execution_outcome, duration_ms
             FROM agent_cycle_telemetry
             WHERE agent_id = ?
             ORDER BY started_at DESC
@@ -237,6 +240,45 @@ def _recent_cycle_telemetry(conn: sqlite3.Connection, model: str, *, limit: int 
             (model, max(1, min(limit, 20))),
         )
     ]
+
+
+def _operational_health(model_health: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Summarise model availability without hiding per-model failure detail."""
+    provider_statuses = {"provider_unavailable", "provider_rate_limited", "provider_timeout"}
+    provider_degraded = [
+        {"agent_id": model, "status": health["status"]}
+        for model, health in sorted(model_health.items())
+        if health.get("status") in provider_statuses
+    ]
+    cycle_failed = [
+        {"agent_id": model, "status": health["status"]}
+        for model, health in sorted(model_health.items())
+        if health.get("status") in {"cycle_error", "unverified", "stale"}
+    ]
+    verified = sum(
+        health.get("status") in {"active", "no_trade"}
+        for health in model_health.values()
+    )
+    if cycle_failed:
+        status = "attention"
+        detail = f"{len(cycle_failed)} model ledger(s) need maintenance attention."
+    elif provider_degraded:
+        status = "provider_degraded"
+        detail = (
+            f"{len(provider_degraded)} model provider(s) are temporarily unavailable; "
+            "completed paper cycles remain valid."
+        )
+    else:
+        status = "healthy"
+        detail = "All latest model attempts completed without an upstream provider degradation."
+    return {
+        "status": status,
+        "detail": detail,
+        "models_total": len(model_health),
+        "models_verified": verified,
+        "provider_degraded": provider_degraded,
+        "attention_required": cycle_failed,
+    }
 
 
 def _held_tickers(conn: sqlite3.Connection) -> Set[tuple]:
@@ -317,6 +359,7 @@ def build_board() -> Dict[str, Any]:
         "eligibility": eligibility,
         "forecast_learning": forecast_learning,
         "model_health": model_health,
+        "operational_health": _operational_health(model_health),
         "recent_cycle_telemetry": cycle_telemetry[:RECENT_ACTIVITY_LIMIT],
         "latest_theses": latest_theses,
         "recent_activity": activity[:RECENT_ACTIVITY_LIMIT],

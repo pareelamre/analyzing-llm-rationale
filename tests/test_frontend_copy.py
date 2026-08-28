@@ -321,6 +321,8 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("No trade", renderer)
         self.assertIn("Last confirmed cycle", renderer)
         self.assertIn("Provider unavailable", renderer)
+        self.assertIn("const operationalHealth = d?.operational_health || {};", renderer)
+        self.assertIn("Provider availability:", renderer)
         self.assertIn("Last worker attempt", renderer)
         self.assertIn("latestTheses[activeFilter]", renderer)
         self.assertIn("No published thesis for", renderer)
