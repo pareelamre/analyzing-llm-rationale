@@ -1106,6 +1106,7 @@
     .agentic-learning-stat { border-left: 1px solid #cbd5e1; padding-left: 14px; }
     .agentic-learning-stat-label { color: var(--text-dim); display: block; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
     .agentic-learning-stat-value { color: #0f172a; display: block; font-size: 14px; font-weight: 700; margin-top: 3px; }
+    .agentic-learning-weather { border-top: 1px solid #dbe4eb; color: var(--text-dim); font-size: 10px; grid-column: 1 / -1; line-height: 1.45; margin: 0; padding-top: 9px; }
     .agentic-position-button { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; color: #475569; cursor: pointer; font-size: 10px; font-weight: 650; padding: 3px 8px; }
     .agentic-position-button:hover { background: #f1f5f9; color: #0f172a; }
     .agentic-position-row > td { background: #fbfdff; }
@@ -6647,11 +6648,23 @@ function _agentForecastLearningSummary(learning, agentId) {
       : resolved < 5
         ? `${resolved} final outcome${resolved === 1 ? '' : 's'} — early signal only, not a performance claim.`
         : `${resolved} final outcomes scored from the model’s recorded thesis probabilities.`;
+  const weatherCohorts = Array.isArray(learning?.weather_calibration)
+    ? learning.weather_calibration.filter(row => row && row.market_type && row.settlement_source).slice(0, 4)
+    : [];
+  const weatherCopy = weatherCohorts.map(row => {
+    const cohortBrier = Number(row.brier_score);
+    const cohortMarket = Number(row.market_brier_score);
+    const outcomes = Number(row.resolved_forecasts) || 0;
+    const scoreText = Number.isFinite(cohortBrier) ? `Brier ${cohortBrier.toFixed(3)}` : 'Brier pending';
+    const marketText = Number.isFinite(cohortMarket) ? ` vs market ${cohortMarket.toFixed(3)}` : '';
+    return `${row.market_type} / ${row.settlement_source}: ${outcomes} outcome${outcomes === 1 ? '' : 's'}, ${scoreText}${marketText}`;
+  }).join(' · ');
   return `<aside class="agentic-learning-summary" aria-label="Forecast learning for ${escAttr(label)}">
     <div><span class="agentic-learning-kicker">Forecast learning</span><p class="agentic-learning-title">${escHtml(label)}</p><p class="agentic-learning-copy">${escHtml(statusCopy)}</p></div>
     <div class="agentic-learning-stat"><span class="agentic-learning-stat-label">Brier score</span><span class="agentic-learning-stat-value">${escHtml(score)}</span></div>
     <div class="agentic-learning-stat"><span class="agentic-learning-stat-label">Against market</span><span class="agentic-learning-stat-value">${escHtml(versusMarket)}</span></div>
     <div class="agentic-learning-stat"><span class="agentic-learning-stat-label">Probability bias</span><span class="agentic-learning-stat-value">${escHtml(biasText)}</span></div>
+    ${weatherCopy ? `<p class="agentic-learning-weather"><strong>Weather calibration</strong> · ${escHtml(weatherCopy)}. Final settlement source is shown explicitly; small cohorts are descriptive only.</p>` : ''}
   </aside>`;
 }
 

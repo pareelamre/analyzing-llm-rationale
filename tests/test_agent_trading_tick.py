@@ -433,6 +433,42 @@ class PaperCalibrationContextTests(unittest.TestCase):
         self.assertIn("Weather contract type: daily temperature", line)
         self.assertIn("Official settlement source: NWS Daily Climate Report", line)
 
+    def test_weather_thesis_forecast_persists_type_and_settlement_source(self):
+        thesis = (
+            "- **Action**: PASS\n"
+            "- **Market & Venue**: [KXWEATHER] on [Kalshi]\n"
+            "- **Model Probability**: [70%] vs **Market Price**: [60%]"
+        )
+        quote = _quote("KXWEATHER", question="What will the highest temperature in Chicago be today?")
+        quote.update({
+            "category": "Weather",
+            "resolution_criteria": "NWS Daily Climate Report for station KORD.",
+        })
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.dict(
+                os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}, clear=False
+            ):
+                with benchmark_tools._account_transaction() as conn:
+                    agent_trading_tick._persist_thesis_forecasts(
+                        conn, "weather-agent", "weather-cycle", thesis, [], [quote], "evidence_edge",
+                        forecast_ts="2026-08-20T00:00:00+00:00",
+                    )
+                    row = conn.execute(
+                        "SELECT weather_market_type, weather_settlement_source FROM agent_thesis_forecasts"
+                    ).fetchone()
+                    conn.execute(
+                        """
+                        UPDATE agent_thesis_forecasts
+                        SET resolved_outcome = 1, brier_score = 0.09, market_brier_score = 0.16
+                        """
+                    )
+                    learning = agent_trading_tick._build_learning_block(conn, "weather-agent")
+
+        self.assertEqual(row["weather_market_type"], "daily_temperature")
+        self.assertEqual(row["weather_settlement_source"], "nws_daily_climate_report")
+        self.assertIn("Weather calibration by contract type/source", learning)
+        self.assertIn("daily_temperature / nws_daily_climate_report", learning)
+
     def test_omits_an_unvalidated_non_kalshi_domain_horizon_combination(self):
         quote = _quote("KXOTHER", question="Will an unrelated custom event happen?")
         quote.update({"category": "Other", "platform": "Polymarket", "close_time": "2026-08-23T00:00:00Z"})

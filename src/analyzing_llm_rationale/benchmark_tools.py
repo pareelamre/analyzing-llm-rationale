@@ -747,6 +747,8 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
             action TEXT,
             strategy TEXT,
             evidence_delta TEXT,
+            weather_market_type TEXT,
+            weather_settlement_source TEXT,
             resolved_outcome INTEGER,
             resolved_at TEXT,
             brier_score REAL,
@@ -789,6 +791,19 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
     }
     if "paper_execution_outcome" not in telemetry_columns:
         conn.execute("ALTER TABLE agent_cycle_telemetry ADD COLUMN paper_execution_outcome TEXT")
+    thesis_columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(agent_thesis_forecasts)")
+    }
+    if "weather_market_type" not in thesis_columns:
+        conn.execute("ALTER TABLE agent_thesis_forecasts ADD COLUMN weather_market_type TEXT")
+    if "weather_settlement_source" not in thesis_columns:
+        conn.execute("ALTER TABLE agent_thesis_forecasts ADD COLUMN weather_settlement_source TEXT")
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_agent_thesis_forecasts_weather_calibration
+        ON agent_thesis_forecasts(weather_market_type, weather_settlement_source, resolved_outcome)
+        """
+    )
     conn.execute(
         "UPDATE agent_accounts SET high_watermark = starting_cash WHERE high_watermark <= 0"
     )
@@ -2644,6 +2659,43 @@ def weather_market_brief(args: Mapping[str, Any]) -> Dict[str, Any]:
             span.set_attribute("outcome", "failure")
             _finish_tool(tool, start, "failure")
             logger.warning("weather market brief failed", exc_info=True)
+            return {"ok": False, "tool": tool, "error": str(exc)}
+
+
+def weather_market_research(args: Mapping[str, Any]) -> Dict[str, Any]:
+    """Fetch bounded, source-aware weather evidence without forecasting or trading."""
+    start = time.perf_counter()
+    tool = "weather_market_research"
+    with tracer.start_as_current_span("benchmark_tools.weather_market_research") as span:
+        span.set_attribute("tool.name", tool)
+        try:
+            from analyzing_llm_rationale import market_data, trading
+            from analyzing_llm_rationale.weather_research import research_weather_market
+
+            platform = trading._clean_platform(args.get("platform") or "kalshi")
+            ticker = _clean_ticker(args.get("ticker") or args.get("ident"), platform=platform)
+            quote = (
+                market_data.fetch_polymarket(slug=ticker)
+                if platform == "polymarket"
+                else market_data.fetch_kalshi(ticker)
+            )
+            research = research_weather_market(quote)
+            status = str(research.get("source_status") or "unknown")
+            span.set_attributes({"market.venue": platform, "weather.source_status": status, "outcome": "success"})
+            _finish_tool(tool, start, "success")
+            return {
+                "ok": True,
+                "tool": tool,
+                "platform": platform,
+                "ticker": ticker,
+                "research": research,
+            }
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "failure")
+            _finish_tool(tool, start, "failure")
+            logger.warning("weather market research tool failed", exc_info=True)
             return {"ok": False, "tool": tool, "error": str(exc)}
 
 

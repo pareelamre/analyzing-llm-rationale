@@ -359,6 +359,43 @@ def compute_forecast_learning(
             (agent_id, max(1, min(int(review_limit), 10))),
         )
     ]
+    # Weather contracts settle against an explicit source, so do not merge them
+    # into a single generic score.  A small, source-labelled cohort gives the
+    # agent feedback that is useful for calibration without pretending a few
+    # outcomes establish a strategy edge.
+    weather_calibration = [
+        {
+            "market_type": str(row["weather_market_type"]),
+            "settlement_source": str(row["weather_settlement_source"] or "unspecified"),
+            "resolved_forecasts": int(row["resolved_forecasts"] or 0),
+            "brier_score": round(float(row["brier_score"]), 6),
+            "market_brier_score": (
+                round(float(row["market_brier_score"]), 6)
+                if row["market_brier_score"] is not None else None
+            ),
+            "probability_bias": (
+                round(float(row["probability_bias"]), 6)
+                if row["probability_bias"] is not None else None
+            ),
+        }
+        for row in conn.execute(
+            """
+            SELECT weather_market_type, weather_settlement_source,
+                   COUNT(*) AS resolved_forecasts,
+                   AVG(brier_score) AS brier_score,
+                   AVG(market_brier_score) AS market_brier_score,
+                   AVG(model_probability - resolved_outcome) AS probability_bias
+            FROM agent_thesis_forecasts
+            WHERE agent_id = ?
+              AND resolved_outcome IS NOT NULL
+              AND weather_market_type IS NOT NULL
+            GROUP BY weather_market_type, weather_settlement_source
+            ORDER BY resolved_forecasts DESC, weather_market_type, weather_settlement_source
+            LIMIT 4
+            """,
+            (agent_id,),
+        )
+    ]
     if not recorded:
         status = "not_recording"
     elif not resolved:
@@ -376,6 +413,7 @@ def compute_forecast_learning(
         "market_brier_score": round(float(market_brier), 6) if market_brier is not None else None,
         "probability_bias": round(float(bias), 6) if bias is not None else None,
         "recent_reviews": reviews,
+        "weather_calibration": weather_calibration,
     }
 
 

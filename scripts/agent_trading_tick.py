@@ -593,6 +593,27 @@ def _build_learning_block(conn, agent_id: str) -> str:
             f"Forecast calibration ({resolved_forecasts} final outcomes): Brier {brier:.3f}{market_note}; "
             f"{bias_note}. This is descriptive, not a sizing override."
         )
+    weather_rows = conn.execute(
+        """
+        SELECT weather_market_type, weather_settlement_source, COUNT(*) AS resolved_count,
+               AVG(brier_score) AS brier_score, AVG(market_brier_score) AS market_brier_score
+        FROM agent_thesis_forecasts
+        WHERE agent_id = ? AND resolved_outcome IS NOT NULL AND weather_market_type IS NOT NULL
+        GROUP BY weather_market_type, weather_settlement_source
+        ORDER BY resolved_count DESC, weather_market_type, weather_settlement_source
+        LIMIT 4
+        """,
+        (agent_id,),
+    ).fetchall()
+    if weather_rows:
+        lines.append("Weather calibration by contract type/source (descriptive only):")
+        for row in weather_rows:
+            market_brier = row["market_brier_score"]
+            market_note = f", market Brier {float(market_brier):.3f}" if market_brier is not None else ""
+            lines.append(
+                f"  - {row['weather_market_type']} / {row['weather_settlement_source']}: "
+                f"{int(row['resolved_count'])} resolved, Brier {float(row['brier_score']):.3f}{market_note}."
+            )
     return "\n".join(lines)
 
 
@@ -1402,6 +1423,24 @@ def _candidate_probability(
     return None
 
 
+def _weather_forecast_metadata(
+    candidates: List[Dict[str, Any]], platform: str, ticker: str
+) -> tuple[Optional[str], Optional[str]]:
+    """Attach weather provenance only when the thesis names an offered quote.
+
+    This keeps retrospective calibration keyed to the contract metadata visible
+    to the agent at forecast time rather than an inferred category or later
+    market payload.
+    """
+    candidate = _candidate_for_execution(candidates, platform, ticker)
+    if candidate is None:
+        return None, None
+    brief = weather_markets.classify_weather_market(candidate)
+    if not brief.is_weather:
+        return None, None
+    return brief.market_type, brief.settlement_source
+
+
 def _thesis_forecast_records(
     thesis: str,
     transcript: List[Dict[str, Any]],
@@ -1490,18 +1529,23 @@ def _persist_thesis_forecasts(
             round(float(record["model_probability"]) - float(market_probability), 6)
             if market_probability is not None else None
         )
+        weather_market_type, weather_settlement_source = _weather_forecast_metadata(
+            candidates, str(record["platform"]), str(record["ticker"])
+        )
         conn.execute(
             """
             INSERT INTO agent_thesis_forecasts
             (agent_id, cycle_id, forecast_ts, platform, ticker, model_probability,
-             market_probability, edge, action, strategy, evidence_delta)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             market_probability, edge, action, strategy, evidence_delta,
+             weather_market_type, weather_settlement_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(agent_id, cycle_id, platform, ticker) DO NOTHING
             """,
             (
                 agent_id, cycle_id, created_at, record["platform"], record["ticker"],
                 record["model_probability"], market_probability, edge, record.get("action"),
                 record.get("strategy"), record.get("evidence_delta"),
+                weather_market_type, weather_settlement_source,
             ),
         )
     thesis_forecasts_recorded.add(len(records), {"outcome": "recorded"})
