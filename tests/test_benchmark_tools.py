@@ -357,6 +357,19 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertLessEqual(capped["target_notional"], 800.0)
         self.assertEqual(capped["max_position_fraction"], 0.08)
 
+    def test_kelly_sizing_missing_model_probability_raises_required_error(self):
+        # When an agent calls with Kelly sizing but omits model_probability the
+        # error message must say "is required" (not just "between 0 and 1") so
+        # the LLM agent can self-correct without guessing what went wrong.
+        for missing in (None, ""):
+            with self.subTest(value=missing):
+                args = {"sizing_mode": "quarter_kelly", "model_probability": missing}
+                with self.assertRaises(ValueError) as cm:
+                    benchmark_tools._sizing_plan(
+                        args, price=0.50, side="yes", account_value=10_000.0,
+                    )
+                self.assertIn("is required", str(cm.exception))
+
     def test_place_trade_forces_ioc_and_rejects_resting_order_options(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-a")
 
