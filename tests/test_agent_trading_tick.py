@@ -814,6 +814,87 @@ class RunCycleTests(unittest.TestCase):
         self.assertIn("KXNEW", question_arg)
         self.assertIn("Your portfolio", question_arg)
 
+    def test_run_cycle_executes_a_declared_buy_thesis_when_the_tool_was_not_called(self):
+        """A final BUY is a paper-trade commitment, not merely display copy."""
+        thesis = """### 0. Research Delta
+- **Strategy**: EVIDENCE_EDGE
+- **New evidence**: A dated, material source changed the forecast.
+- **Belief update**: 55% -> 75%
+
+### 1. Decision & Execution
+- **Action**: BUY YES
+- **Market & Venue**: KXDECLARED on Kalshi
+- **Order Sizing**: Quarter Kelly 5% cap
+
+### 2. Resolution Rules & Compliance Audit
+- **Rules Verification**: Verified
+- **Observation Window**: Verified
+
+### 3. Model Edge & Valuation
+- **Model Probability**: 75% vs **Market Price**: 45% (Edge: +30%)
+
+### 4. Catalysts & Invalidation
+- **Key Catalysts / Dates**: Tomorrow
+- **Invalidation Trigger**: Contradictory primary source"""
+        quote = _quote("KXDECLARED", bid=0.44, ask=0.45)
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_NOTES_PATH": str(Path(td) / "notes.json"),
+                "FORESEA_AGENT_CYCLE_ID": "declared-buy-cycle",
+                "FORESEA_AGENT_PLACE_TRADE_MODE": "shadow",
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch.object(agent_trading_tick, "_init_local_agent"),
+                mock.patch.object(market_data, "list_kalshi", return_value=[quote]),
+                mock.patch.object(market_data, "list_polymarket", return_value=[]),
+                mock.patch.object(market_data, "fetch_kalshi", return_value=quote),
+                mock.patch.object(
+                    agent_trading_tick, "_call_agent_analyze",
+                    return_value=self._fake_report(thesis=thesis),
+                ),
+            ):
+                summary = agent_trading_tick.run_cycle("model-declared-buy")
+                with benchmark_tools._account_transaction() as conn:
+                    position = conn.execute(
+                        "SELECT side, quantity FROM agent_positions WHERE agent_id = ? AND ticker = ?",
+                        ("model-declared-buy", "KXDECLARED"),
+                    ).fetchone()
+                    cycle = conn.execute(
+                        "SELECT thesis, transcript_json FROM agent_cycles WHERE agent_id = ? AND cycle_id = ?",
+                        ("model-declared-buy", "declared-buy-cycle"),
+                    ).fetchone()
+
+        self.assertEqual(summary["paper_execution_outcome"], "filled")
+        self.assertIsNotNone(position)
+        self.assertEqual(position["side"], "yes")
+        self.assertGreater(float(position["quantity"]), 0)
+        self.assertIn("PAPER ORDER FILLED", cycle["thesis"])
+        transcript = json.loads(cycle["transcript_json"])["tool_transcript"]
+        self.assertEqual(transcript[-1]["source"], "thesis_execution_reconciliation")
+        self.assertEqual(transcript[-1]["args"]["sizing_mode"], "quarter_kelly")
+
+    def test_declared_buy_without_an_exact_current_candidate_is_not_guessed(self):
+        thesis = """### 1. Decision & Execution
+- **Action**: BUY YES
+- **Market & Venue**: KXNOTOFFERED on Kalshi
+- **Order Sizing**: Quarter Kelly 5% cap
+
+### 3. Model Edge & Valuation
+- **Model Probability**: 70% vs **Market Price**: 40% (Edge: +30%)"""
+        with mock.patch.object(benchmark_tools, "place_trade") as place_trade:
+            rendered, result = agent_trading_tick._reconcile_thesis_execution(
+                agent_id="model-unmatched",
+                thesis=thesis,
+                transcript=[],
+                candidates=[_quote("KXOTHER")],
+            )
+
+        place_trade.assert_not_called()
+        self.assertEqual(result["outcome"], "not_offered")
+        self.assertIn("**Paper execution**: NOT EXECUTED", rendered)
+
     def test_run_cycle_configures_order_notional_from_current_account_value_before_the_tool_loop(self):
         # Regression: _configure_max_order_notional() used to run before
         # held_quotes existed, reading the static starting-cash baseline --
