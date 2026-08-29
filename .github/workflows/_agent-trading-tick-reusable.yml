@@ -119,6 +119,9 @@ jobs:
           FORESEA_AGENT_ACCOUNT_VALUE: "10000"
           SCADS_AI_API_KEY: ${{ secrets.SCADS_AI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Optional read-only Hugging Face access improves dependency/model
+          # downloads without exposing the token in commands or logs.
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           KALSHI_ACCESS_KEY_ID: ${{ secrets.KALSHI_ACCESS_KEY_ID }}
           KALSHI_PRIVATE_KEY_FILE: tmp/agent-trading/kalshi_private_key.pem
           MAX_TOOL_STEPS: "4"
