@@ -481,6 +481,36 @@ class ForecastLearningTests(unittest.TestCase):
         self.assertAlmostEqual(learning["probability_bias"], -0.30)
         self.assertEqual(learning["recent_reviews"][0]["ticker"], "KXFORECAST")
 
+    def test_keeps_weather_calibration_separate_by_contract_type_and_source(self):
+        with _fixture_conn() as conn:
+            conn.executemany(
+                """
+                INSERT INTO agent_thesis_forecasts
+                (agent_id, cycle_id, forecast_ts, platform, ticker, model_probability,
+                 resolved_outcome, resolved_at, brier_score, market_brier_score,
+                 weather_market_type, weather_settlement_source)
+                VALUES (?, ?, '2026-08-11T00:00:00+00:00', 'kalshi', ?, ?, ?,
+                        '2026-08-12T00:00:00+00:00', ?, ?, ?, ?)
+                """,
+                [
+                    ("model-a", "cycle-high-1", "KXHIGH1", 0.8, 1, 0.04, 0.09,
+                     "daily_high_temperature", "nws_daily_climate_report"),
+                    ("model-a", "cycle-high-2", "KXHIGH2", 0.6, 0, 0.36, 0.49,
+                     "daily_high_temperature", "nws_daily_climate_report"),
+                    ("model-a", "cycle-rain", "KXRAIN", 0.3, 1, 0.49, 0.36,
+                     "precipitation", "weather_company"),
+                ],
+            )
+            conn.commit()
+            learning = agent_trading_stats.compute_forecast_learning(conn, "model-a")
+
+        self.assertEqual(len(learning["weather_calibration"]), 2)
+        high = learning["weather_calibration"][0]
+        self.assertEqual(high["market_type"], "daily_high_temperature")
+        self.assertEqual(high["settlement_source"], "nws_daily_climate_report")
+        self.assertEqual(high["resolved_forecasts"], 2)
+        self.assertAlmostEqual(high["brier_score"], 0.2)
+
 
 class RecentActivityTests(unittest.TestCase):
     def test_clean_thesis_display_hides_raw_react_tool_transcript(self):

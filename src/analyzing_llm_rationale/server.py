@@ -122,6 +122,9 @@ _AGENT_TRADING_MAX_MODELS = int(os.environ.get("AGENT_TRADING_MAX_MODELS", "24")
 _AGENT_TRADING_OPEN_POSITIONS_MAX_PER_MODEL = int(
     os.environ.get("AGENT_TRADING_OPEN_POSITIONS_MAX_PER_MODEL", "32")
 )
+_AGENT_TRADING_WEATHER_CALIBRATION_MAX_SEGMENTS = int(
+    os.environ.get("AGENT_TRADING_WEATHER_CALIBRATION_MAX_SEGMENTS", "4")
+)
 _FORECAST_EVALUATION_URL = os.environ.get(
     "FORECAST_EVALUATION_URL",
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
@@ -1823,6 +1826,60 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
         for agent_id, value in (raw_eligibility.items() if isinstance(raw_eligibility, dict) else [])
         if str(agent_id) in model_ids
     }
+    raw_forecast_learning = source.get("forecast_learning")
+    forecast_learning: Dict[str, Dict[str, Any]] = {}
+    if isinstance(raw_forecast_learning, dict):
+        for agent_id, value in raw_forecast_learning.items():
+            if str(agent_id) not in model_ids or not isinstance(value, dict):
+                continue
+            compact_learning = {
+                key: value.get(key)
+                for key in (
+                    "agent_id",
+                    "status",
+                    "recorded_forecasts",
+                    "resolved_forecasts",
+                    "brier_score",
+                    "market_brier_score",
+                    "probability_bias",
+                )
+            }
+            cohorts = value.get("weather_calibration")
+            compact_learning["weather_calibration"] = [
+                {
+                    key: row.get(key)
+                    for key in (
+                        "market_type",
+                        "settlement_source",
+                        "resolved_forecasts",
+                        "brier_score",
+                        "market_brier_score",
+                        "probability_bias",
+                    )
+                }
+                for row in (
+                    cohorts if isinstance(cohorts, list) else []
+                )[:_AGENT_TRADING_WEATHER_CALIBRATION_MAX_SEGMENTS]
+                if isinstance(row, dict)
+            ]
+            forecast_learning[str(agent_id)] = compact_learning
+    raw_weather_operations = source.get("weather_operations")
+    weather_source = raw_weather_operations if isinstance(raw_weather_operations, dict) else {}
+
+    def _bounded_nonnegative_int(value: Any, *, maximum: int) -> int:
+        try:
+            return max(0, min(maximum, int(value)))
+        except (TypeError, ValueError):
+            return 0
+
+    weather_operations = {
+        "window_hours": _bounded_nonnegative_int(weather_source.get("window_hours"), maximum=168) or 24,
+        "candidates_offered": _bounded_nonnegative_int(weather_source.get("candidates_offered"), maximum=10_000),
+        "researched": _bounded_nonnegative_int(weather_source.get("researched"), maximum=10_000),
+        "forecasted": _bounded_nonnegative_int(weather_source.get("forecasted"), maximum=10_000),
+        "traded": _bounded_nonnegative_int(weather_source.get("traded"), maximum=10_000),
+        "resolved": _bounded_nonnegative_int(weather_source.get("resolved"), maximum=10_000),
+    }
     raw_health = source.get("model_health")
     model_health = {
         str(agent_id): dict(value)
@@ -1862,6 +1919,8 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
         "recent_activity": activity,
         "latest_theses": latest_theses,
         "eligibility": eligibility,
+        "forecast_learning": forecast_learning,
+        "weather_operations": weather_operations,
         "model_health": model_health,
         "operational_health": operational_health,
     }
@@ -3293,6 +3352,12 @@ async def agent_trading_board():
       clears a conservative, adjustable bar (settled trades, Sharpe,
       drawdown -- see ``agent_trading_stats.compute_promotion_eligibility``).
       Purely observational: nothing reads this to grant any capability.
+    - ``forecast_learning``: final-outcome Brier diagnostics, including up to
+      four source-labelled weather cohorts per model. These are descriptive
+      calibration signals, never sizing overrides.
+    - ``weather_operations``: bounded recent counts from source-verified
+      weather candidates through research, forecast, paper trade, and final
+      resolution. It is operational coverage, not a performance claim.
     - ``model_health``: per model cycle heartbeat and account-ledger freshness.
       This separates a completed no-trade turn from a delayed, stale, or
       unverified model ledger.
@@ -3325,6 +3390,8 @@ async def agent_trading_board():
             # tab can render a useful per-model feed without another request.
             "latest_theses": compact["latest_theses"],
             "eligibility": compact["eligibility"],
+            "forecast_learning": compact["forecast_learning"],
+            "weather_operations": compact["weather_operations"],
             "model_health": compact["model_health"],
             "operational_health": compact["operational_health"],
         },
@@ -14025,6 +14092,16 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             )
         )
 
+    async def _tool_weather_market_brief(args):
+        return benchmark_tools.observation(
+            await loop.run_in_executor(None, lambda: benchmark_tools.weather_market_brief(args))
+        )
+
+    async def _tool_weather_market_research(args):
+        return benchmark_tools.observation(
+            await loop.run_in_executor(None, lambda: benchmark_tools.weather_market_research(args))
+        )
+
     async def _tool_forecast(args):
         q = str(args.get("question") or question)
         mp = args.get("market_probability")
@@ -14347,6 +14424,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "place_trade": _tool_place_trade,
         "web_search": _tool_web_search,
         "manage_notes": _tool_manage_notes,
+        "weather_market_brief": _tool_weather_market_brief,
+        "weather_market_research": _tool_weather_market_research,
         "get_market": _tool_get_market,
         "scan_markets": _tool_scan,
         "forecast": _tool_forecast,
@@ -14370,6 +14449,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         {"name": "place_trade", "args": "ticker, side, price, quantity?, platform?, sizing_mode?, model_probability?", "description": "Buy YES or NO contracts on Kalshi or Polymarket using immediate-or-cancel execution only; unfilled quantity is cancelled and no order rests. Pass platform='kalshi' or platform='polymarket' (defaults to kalshi if omitted) -- ticker is the Kalshi ticker or the Polymarket market slug, matching whichever venue a candidate line came from. For a new agent position, pass model_probability (your P(YES)) and choose sizing_mode='quarter_kelly' (25% Kelly, 50% market shrinkage, 5% cap) or sizing_mode='edge_kelly' (50% Kelly, 10pp edge gate, 25% market shrinkage, 8% cap); the tool derives quantity from the live ask and current account. Use sizing_mode='close' for a pure exit. There is no sell tool; exiting is represented by buying the opposite side. This tool runs in shadow (paper) mode: no real order ever reaches an exchange and no real money is ever at risk, but every call that passes the guards below DOES execute and permanently update your persistent positions/actions tables with weighted-average entry, netting PnL, settlements, cash, and realized PnL -- it is never a no-op, a preview, or a dry run, and there is no separate 'confirm' step. If you've decided to trade, calling this tool is the only way to actually do it. Trades are guarded by account solvency, Kelly sizing, a 15% single-market cost-basis cap, per-cycle and trailing-day risk budgets, drawdown, duplicate/cooldown, trade-rate, and open-market circuit breakers. A pure close remains available so the agent can reduce risk during a halt."},
         {"name": "web_search", "args": "query", "description": "Research market events with OpenAI web search. CoinMarketCap and other blacklisted domains are excluded from results."},
         {"name": "manage_notes", "args": "action, id?, text?, query?, tags?", "description": "Store, search, edit, list, or delete persistent notes. Max 50 notes per agent, 1200 characters each."},
+        {"name": "weather_market_brief", "args": "ticker, platform?", "description": "Read a weather contract's venue-provided rules and settlement source. Returns its weather type, official source, named station when available, and whether a new paper position is source-verified. Read-only: it never forecasts or trades."},
+        {"name": "weather_market_research", "args": "ticker, platform?", "description": "Fetch read-only, source-aware weather evidence. For NWS-settled contracts with a named station, returns current NWS observations and an NWS hourly forecast; Weather Company contracts explicitly report that the official source is not integrated. Never forecasts or trades."},
         {"name": "get_market", "args": "platform, slug|ticker", "description": "Fetch a live Polymarket/Kalshi price."},
         {"name": "scan_markets", "args": "platform, query?", "description": "List live markets on a venue (optionally filtered by keyword)."},
         {"name": "forecast", "args": "question, market_probability?", "description": "Produce a probability forecast (with evidence) for a question; pass market_probability to get the edge."},
@@ -14496,6 +14577,17 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                 rule_parts.append("Use `web_search` for current evidence.")
             if "manage_notes" in active:
                 rule_parts.append("Use `manage_notes` for memory across cycles.")
+            if "weather_market_brief" in active:
+                rule_parts.append(
+                    "For a weather contract, call `weather_market_brief` before a new position; "
+                    "forecast feeds are inputs, while the named contract source is authoritative for settlement."
+                )
+            if "weather_market_research" in active:
+                rule_parts.append(
+                    "For a source-verified NWS weather contract with a named station, call "
+                    "`weather_market_research` before opening a new position. It is read-only source-matched "
+                    "evidence; never describe a proxy forecast as the contract's settlement source."
+                )
             if "orderbook_arbitrage" in active:
                 rule_parts.append(
                     "Use `orderbook_arbitrage` only after confirming the two outcomes have identical "

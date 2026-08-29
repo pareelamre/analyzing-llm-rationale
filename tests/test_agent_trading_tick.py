@@ -224,6 +224,36 @@ class CandidateSelectionTests(unittest.TestCase):
             found = agent_trading_tick._discover_candidates(set())
         self.assertEqual([q["ident"] for q in found], ["KXA"])
 
+    def test_discover_candidates_reserves_one_source_verified_weather_market(self):
+        weather = _quote(
+            "KXWEATHER",
+            question="What will the highest temperature in Chicago be today?",
+            resolution_criteria="NWS Daily Climate Report for station KORD.",
+        )
+        weather["category"] = "Weather"
+        general = _quote("KXGENERAL")
+
+        def list_kalshi(**kwargs):
+            return [weather] if kwargs.get("category") == "Weather" else [general]
+
+        with (
+            mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+            mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 2),
+            mock.patch.object(agent_trading_tick, "WEATHER_CANDIDATE_QUOTA", 1),
+        ):
+            found = agent_trading_tick._discover_candidates(set())
+
+        self.assertEqual([quote["ident"] for quote in found], ["KXWEATHER", "KXGENERAL"])
+
+    def test_weather_research_count_reads_only_declared_tool_calls(self):
+        transcript = [
+            {"tool": "weather_market_research"},
+            {"tool": "get_market"},
+            {"action": "weather_market_research"},
+        ]
+        self.assertEqual(agent_trading_tick._weather_research_call_count(transcript), 2)
+
     def test_requote_held_skips_failed_lookups(self):
         def fake_fetch(ticker):
             if ticker == "KXBAD":
@@ -420,6 +450,54 @@ class PaperCalibrationContextTests(unittest.TestCase):
 
         self.assertIn("Short-horizon weather prices", context)
         self.assertIn("independent evidence", context)
+
+    def test_candidate_includes_settlement_aware_weather_context(self):
+        quote = _quote("KXWEATHER", question="What will the highest temperature in Chicago be today?")
+        quote.update({
+            "category": "Weather",
+            "resolution_criteria": "Resolves by the NWS Daily Climate Report for Chicago O'Hare.",
+        })
+
+        line = agent_trading_tick._fmt_candidate_line(quote)
+
+        self.assertIn("Weather contract type: daily temperature", line)
+        self.assertIn("Official settlement source: NWS Daily Climate Report", line)
+
+    def test_weather_thesis_forecast_persists_type_and_settlement_source(self):
+        thesis = (
+            "- **Action**: PASS\n"
+            "- **Market & Venue**: [KXWEATHER] on [Kalshi]\n"
+            "- **Model Probability**: [70%] vs **Market Price**: [60%]"
+        )
+        quote = _quote("KXWEATHER", question="What will the highest temperature in Chicago be today?")
+        quote.update({
+            "category": "Weather",
+            "resolution_criteria": "NWS Daily Climate Report for station KORD.",
+        })
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.dict(
+                os.environ, {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}, clear=False
+            ):
+                with benchmark_tools._account_transaction() as conn:
+                    agent_trading_tick._persist_thesis_forecasts(
+                        conn, "weather-agent", "weather-cycle", thesis, [], [quote], "evidence_edge",
+                        forecast_ts="2026-08-20T00:00:00+00:00",
+                    )
+                    row = conn.execute(
+                        "SELECT weather_market_type, weather_settlement_source FROM agent_thesis_forecasts"
+                    ).fetchone()
+                    conn.execute(
+                        """
+                        UPDATE agent_thesis_forecasts
+                        SET resolved_outcome = 1, brier_score = 0.09, market_brier_score = 0.16
+                        """
+                    )
+                    learning = agent_trading_tick._build_learning_block(conn, "weather-agent")
+
+        self.assertEqual(row["weather_market_type"], "daily_temperature")
+        self.assertEqual(row["weather_settlement_source"], "nws_daily_climate_report")
+        self.assertIn("Weather calibration by contract type/source", learning)
+        self.assertIn("daily_temperature / nws_daily_climate_report", learning)
 
     def test_omits_an_unvalidated_non_kalshi_domain_horizon_combination(self):
         quote = _quote("KXOTHER", question="Will an unrelated custom event happen?")

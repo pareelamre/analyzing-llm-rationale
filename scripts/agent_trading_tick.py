@@ -24,6 +24,8 @@ Env:
   MAX_TOOL_STEPS                   tool-loop step cap per cycle (default 4)
   AGENT_TRADING_MIN_CLOSE_DAYS     candidate discovery window, days (default 1)
   AGENT_TRADING_MAX_CLOSE_DAYS     candidate discovery window, days (default 30)
+  AGENT_TRADING_WEATHER_CANDIDATE_QUOTA  source-verified NWS weather candidates
+                                          reserved per cycle (default 1)
   FORESEA_AGENT_MAX_ORDER_NOTIONAL_PCT   per-order cap, fraction of current
                                           account value (default 0.08)
   FORESEA_AGENT_CONCENTRATION_LIMIT      per-ticker cap, fraction of current
@@ -54,7 +56,7 @@ from opentelemetry.trace import Status, StatusCode
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from analyzing_llm_rationale import benchmark_tools, market_data  # noqa: E402
+from analyzing_llm_rationale import benchmark_tools, market_data, weather_markets  # noqa: E402
 from analyzing_llm_rationale.accounting import MarketQuote  # noqa: E402
 from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
 from analyzing_llm_rationale.observability import init_observability  # noqa: E402
@@ -127,6 +129,16 @@ provider_degradations = meter.create_counter(
     unit="1",
     description="Completed agent cycles unavailable because the upstream provider degraded",
 )
+weather_candidate_discoveries = meter.create_counter(
+    "agent_trading.weather_candidates.discovery",
+    unit="1",
+    description="Source-verified weather candidates offered to a shadow-trading cycle",
+)
+weather_candidate_discovery_duration = meter.create_histogram(
+    "agent_trading.weather_candidates.discovery.duration",
+    unit="s",
+    description="Duration of bounded weather candidate discovery",
+)
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
@@ -134,6 +146,9 @@ CANDIDATE_COUNT = max(1, int(os.environ.get("CANDIDATE_COUNT", "3")))
 MAX_TOOL_STEPS = max(1, min(8, int(os.environ.get("MAX_TOOL_STEPS", "4"))))
 MIN_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MIN_CLOSE_DAYS", "1"))
 MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "30"))
+WEATHER_CANDIDATE_QUOTA = max(
+    0, min(CANDIDATE_COUNT, int(os.environ.get("AGENT_TRADING_WEATHER_CANDIDATE_QUOTA", "1")))
+)
 # ``agent_analyze`` already retries individual provider calls. Retrying the
 # complete ReAct cycle here can replay research/tool work after a transient
 # provider failure and, more importantly, multiply requests during an upstream
@@ -593,6 +608,27 @@ def _build_learning_block(conn, agent_id: str) -> str:
             f"Forecast calibration ({resolved_forecasts} final outcomes): Brier {brier:.3f}{market_note}; "
             f"{bias_note}. This is descriptive, not a sizing override."
         )
+    weather_rows = conn.execute(
+        """
+        SELECT weather_market_type, weather_settlement_source, COUNT(*) AS resolved_count,
+               AVG(brier_score) AS brier_score, AVG(market_brier_score) AS market_brier_score
+        FROM agent_thesis_forecasts
+        WHERE agent_id = ? AND resolved_outcome IS NOT NULL AND weather_market_type IS NOT NULL
+        GROUP BY weather_market_type, weather_settlement_source
+        ORDER BY resolved_count DESC, weather_market_type, weather_settlement_source
+        LIMIT 4
+        """,
+        (agent_id,),
+    ).fetchall()
+    if weather_rows:
+        lines.append("Weather calibration by contract type/source (descriptive only):")
+        for row in weather_rows:
+            market_brier = row["market_brier_score"]
+            market_note = f", market Brier {float(market_brier):.3f}" if market_brier is not None else ""
+            lines.append(
+                f"  - {row['weather_market_type']} / {row['weather_settlement_source']}: "
+                f"{int(row['resolved_count'])} resolved, Brier {float(row['brier_score']):.3f}{market_note}."
+            )
     return "\n".join(lines)
 
 
@@ -778,6 +814,9 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     calibration_context = _paper_calibration_context(quote)
     if calibration_context:
         line += f"\n    {calibration_context}"
+    weather_context = weather_markets.format_weather_market_brief(quote)
+    if weather_context:
+        line += f"\n    {weather_context}"
     return line
 
 
@@ -794,22 +833,96 @@ def _build_candidates_block(held_quotes: List[Dict[str, Any]], new_quotes: List[
     return "\n".join(lines)
 
 
-def _list_venue(platform: str, limit: int) -> List[Dict[str, Any]]:
+def _list_venue(platform: str, limit: int, *, category: Optional[str] = None) -> List[Dict[str, Any]]:
     try:
         if platform == "polymarket":
             return market_data.list_polymarket(
                 limit=limit, min_close_days=MIN_CLOSE_DAYS, max_close_days=MAX_CLOSE_DAYS,
+                category=category,
             )
         return market_data.list_kalshi(
             limit=limit, min_close_days=MIN_CLOSE_DAYS, max_close_days=MAX_CLOSE_DAYS, paginate=True,
+            category=category,
         )
     except market_data.MarketDataError as exc:
         print(f"  candidate discovery failed ({platform}): {exc}", file=sys.stderr)
         return []
 
 
+def _is_researchable_weather_candidate(quote: Dict[str, Any]) -> bool:
+    """Allow only NWS daily contracts that can receive source-matched research.
+
+    Other weather contracts can still be held/reduced under the normal paper
+    guards. This discovery lane is intentionally narrower: it reserves room
+    only for markets where the agent can inspect a named official source
+    before deciding whether to open exposure.
+    """
+    brief = weather_markets.classify_weather_market(quote)
+    return bool(
+        brief.is_weather
+        and brief.trade_permitted
+        and brief.market_type == "daily_temperature"
+        and brief.settlement_source == "nws_daily_climate_report"
+        and brief.station
+    )
+
+
+def _discover_weather_candidates(known_tickers: set, *, limit: int) -> List[Dict[str, Any]]:
+    """Reserve a small, source-verified NWS lane without blocking ordinary discovery."""
+    if limit <= 0:
+        return []
+    started = time.perf_counter()
+    with tracer.start_as_current_span("agent_trading.weather_candidates.discover") as span:
+        selected: List[Dict[str, Any]] = []
+        scanned = 0
+        per_venue_limit = max(6, limit * 6)
+        try:
+            iterators = [
+                iter(_list_venue(platform, per_venue_limit, category="Weather"))
+                for platform in ("kalshi", "polymarket")
+            ]
+            active = list(iterators)
+            while active and len(selected) < limit:
+                for iterator in list(active):
+                    try:
+                        quote = next(iterator)
+                    except StopIteration:
+                        active.remove(iterator)
+                        continue
+                    scanned += 1
+                    ident = quote.get("ident")
+                    if (
+                        not ident
+                        or ident in known_tickers
+                        or quote.get("probability") is None
+                        or not _is_researchable_weather_candidate(quote)
+                    ):
+                        continue
+                    selected.append(quote)
+                    known_tickers.add(ident)
+                    if len(selected) >= limit:
+                        break
+            outcome = "offered" if selected else "none_eligible"
+            span.set_attributes({
+                "weather.candidates.scanned": scanned,
+                "weather.candidates.offered": len(selected),
+                "outcome": outcome,
+            })
+            weather_candidate_discoveries.add(len(selected) or 1, {"outcome": outcome})
+            return selected
+        except Exception as exc:
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR))
+            span.set_attribute("outcome", "failure")
+            weather_candidate_discoveries.add(1, {"outcome": "failure"})
+            logger.warning("weather candidate discovery failed", exc_info=True)
+            return []
+        finally:
+            weather_candidate_discovery_duration.record(time.perf_counter() - started)
+
+
 def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
-    new_quotes: List[Dict[str, Any]] = []
+    new_quotes = _discover_weather_candidates(known_tickers, limit=WEATHER_CANDIDATE_QUOTA)
     # Round-robin one candidate at a time across venues (rather than filling
     # Kalshi's share first) so a shortfall in one venue's listing doesn't
     # starve the other's, and consecutive candidates aren't all one venue.
@@ -831,6 +944,18 @@ def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
             if len(new_quotes) >= CANDIDATE_COUNT:
                 break
     return new_quotes
+
+
+def _weather_candidate_count(quotes: List[Dict[str, Any]]) -> int:
+    return sum(1 for quote in quotes if _is_researchable_weather_candidate(quote))
+
+
+def _weather_research_call_count(transcript: List[Dict[str, Any]]) -> int:
+    return sum(
+        1
+        for step in transcript
+        if str(step.get("tool") or step.get("action") or "") == "weather_market_research"
+    )
 
 
 def _requote_held(positions: List[tuple]) -> List[Dict[str, Any]]:
@@ -1399,6 +1524,24 @@ def _candidate_probability(
     return None
 
 
+def _weather_forecast_metadata(
+    candidates: List[Dict[str, Any]], platform: str, ticker: str
+) -> tuple[Optional[str], Optional[str]]:
+    """Attach weather provenance only when the thesis names an offered quote.
+
+    This keeps retrospective calibration keyed to the contract metadata visible
+    to the agent at forecast time rather than an inferred category or later
+    market payload.
+    """
+    candidate = _candidate_for_execution(candidates, platform, ticker)
+    if candidate is None:
+        return None, None
+    brief = weather_markets.classify_weather_market(candidate)
+    if not brief.is_weather:
+        return None, None
+    return brief.market_type, brief.settlement_source
+
+
 def _thesis_forecast_records(
     thesis: str,
     transcript: List[Dict[str, Any]],
@@ -1487,18 +1630,23 @@ def _persist_thesis_forecasts(
             round(float(record["model_probability"]) - float(market_probability), 6)
             if market_probability is not None else None
         )
+        weather_market_type, weather_settlement_source = _weather_forecast_metadata(
+            candidates, str(record["platform"]), str(record["ticker"])
+        )
         conn.execute(
             """
             INSERT INTO agent_thesis_forecasts
             (agent_id, cycle_id, forecast_ts, platform, ticker, model_probability,
-             market_probability, edge, action, strategy, evidence_delta)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             market_probability, edge, action, strategy, evidence_delta,
+             weather_market_type, weather_settlement_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(agent_id, cycle_id, platform, ticker) DO NOTHING
             """,
             (
                 agent_id, cycle_id, created_at, record["platform"], record["ticker"],
                 record["model_probability"], market_probability, edge, record.get("action"),
                 record.get("strategy"), record.get("evidence_delta"),
+                weather_market_type, weather_settlement_source,
             ),
         )
     thesis_forecasts_recorded.add(len(records), {"outcome": "recorded"})
@@ -1716,7 +1864,8 @@ def _finish_cycle_telemetry(
             UPDATE agent_cycle_telemetry
             SET finished_at = ?, outcome = ?, failure_kind = ?, failure_detail = ?,
                 candidate_count = ?, tool_steps = ?, settled_count = ?,
-                thesis_published = ?, forecast_records = ?, paper_execution_outcome = ?, duration_ms = ?
+                thesis_published = ?, forecast_records = ?, paper_execution_outcome = ?, duration_ms = ?,
+                weather_candidates_offered = ?, weather_candidates_researched = ?
             WHERE run_id = ?
             """,
             (
@@ -1731,6 +1880,8 @@ def _finish_cycle_telemetry(
                 int(summary.get("forecast_records") or 0),
                 summary.get("paper_execution_outcome"),
                 duration_ms,
+                int(summary.get("weather_candidates_offered") or 0),
+                int(summary.get("weather_candidates_researched") or 0),
                 run_id,
             ),
         )
@@ -1781,6 +1932,7 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     held_quotes = _requote_held(held_positions)
     known = {q.get("ident") for q in held_quotes if q.get("ident")}
     new_quotes = _discover_candidates(known)
+    weather_candidates_offered = _weather_candidate_count(new_quotes)
 
     # Every agent-trading risk guard scales off FORESEA_AGENT_ACCOUNT_VALUE,
     # so it must reflect the account's real, current mark-to-market value
@@ -1801,6 +1953,7 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         candidates=all_candidates,
     )
     selected_strategy = _selected_strategy(report.thesis)
+    weather_candidates_researched = _weather_research_call_count(report.tool_transcript)
     with tracer.start_as_current_span("agent_trading.record_strategy_selection") as span:
         outcome = "reported" if selected_strategy != "unreported" else "unreported"
         span.set_attributes({
@@ -1853,6 +2006,7 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     print(
         f"agent-trading-tick done model={model} cycle={cycle_id} "
         f"steps={len(report.tool_transcript)} candidates={len(candidates_offered)} "
+        f"weather_candidates={weather_candidates_offered} weather_researched={weather_candidates_researched} "
         f"settled={len(settled)}"
     )
     return {
@@ -1862,6 +2016,8 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         "thesis_published": bool(str(report.thesis or "").strip()),
         "forecast_records": forecast_records,
         "paper_execution_outcome": (thesis_execution or {}).get("outcome"),
+        "weather_candidates_offered": weather_candidates_offered,
+        "weather_candidates_researched": weather_candidates_researched,
     }
 
 
