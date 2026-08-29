@@ -1492,6 +1492,14 @@ class ServerTests(unittest.TestCase):
                     "brier_score": 0.09,
                 }],
             }},
+            "weather_operations": {
+                "window_hours": 24,
+                "candidates_offered": 5,
+                "researched": 3,
+                "forecasted": 2,
+                "traded": 1,
+                "resolved": 0,
+            },
             "model_health": {"gpt-oss-120b": {"status": "no_trade", "cycle_age_seconds": 120}},
             "operational_health": {
                 "status": "provider_degraded",
@@ -1515,6 +1523,8 @@ class ServerTests(unittest.TestCase):
             payload["forecast_learning"]["gpt-oss-120b"]["weather_calibration"][0]["settlement_source"],
             "nws_daily_climate_report",
         )
+        self.assertEqual(payload["weather_operations"]["candidates_offered"], 5)
+        self.assertEqual(payload["weather_operations"]["traded"], 1)
         self.assertEqual(payload["model_health"]["gpt-oss-120b"]["status"], "no_trade")
         self.assertEqual(payload["operational_health"]["status"], "provider_degraded")
         self.assertEqual(payload["operational_health"]["models_total"], 1)
@@ -1555,6 +1565,7 @@ class ServerTests(unittest.TestCase):
                                                    for i in range(10)]}
                 for model in models
             },
+            "weather_operations": {"window_hours": 999, "candidates_offered": 100_001},
         }
         with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
             payload = self.client.get("/agent-trading/board").json()
@@ -1571,6 +1582,8 @@ class ServerTests(unittest.TestCase):
             len(payload["forecast_learning"]["model-0"]["weather_calibration"]),
             server_module._AGENT_TRADING_WEATHER_CALIBRATION_MAX_SEGMENTS,
         )
+        self.assertEqual(payload["weather_operations"]["window_hours"], 168)
+        self.assertEqual(payload["weather_operations"]["candidates_offered"], 10_000)
 
     def test_agent_trading_board_endpoint_defaults_to_empty_when_no_live_file(self):
         with mock.patch.object(server_module, "_read_agent_trading_board", return_value=None):

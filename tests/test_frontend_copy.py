@@ -341,6 +341,7 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
                 self.assertIn("Brier score", index)
                 self.assertIn("waiting for final market resolution", index)
                 self.assertIn("Weather calibration", index)
+                self.assertIn("Weather lane", index)
 
     def test_equity_curve_head_bubbles_show_the_model_abbreviation_not_a_boolean(self):
         # Each curve's end-of-line bubble renders String(curve.head) as its

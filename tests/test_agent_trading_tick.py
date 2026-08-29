@@ -224,6 +224,36 @@ class CandidateSelectionTests(unittest.TestCase):
             found = agent_trading_tick._discover_candidates(set())
         self.assertEqual([q["ident"] for q in found], ["KXA"])
 
+    def test_discover_candidates_reserves_one_source_verified_weather_market(self):
+        weather = _quote(
+            "KXWEATHER",
+            question="What will the highest temperature in Chicago be today?",
+            resolution_criteria="NWS Daily Climate Report for station KORD.",
+        )
+        weather["category"] = "Weather"
+        general = _quote("KXGENERAL")
+
+        def list_kalshi(**kwargs):
+            return [weather] if kwargs.get("category") == "Weather" else [general]
+
+        with (
+            mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+            mock.patch.object(agent_trading_tick, "CANDIDATE_COUNT", 2),
+            mock.patch.object(agent_trading_tick, "WEATHER_CANDIDATE_QUOTA", 1),
+        ):
+            found = agent_trading_tick._discover_candidates(set())
+
+        self.assertEqual([quote["ident"] for quote in found], ["KXWEATHER", "KXGENERAL"])
+
+    def test_weather_research_count_reads_only_declared_tool_calls(self):
+        transcript = [
+            {"tool": "weather_market_research"},
+            {"tool": "get_market"},
+            {"action": "weather_market_research"},
+        ]
+        self.assertEqual(agent_trading_tick._weather_research_call_count(transcript), 2)
+
     def test_requote_held_skips_failed_lookups(self):
         def fake_fetch(ticker):
             if ticker == "KXBAD":

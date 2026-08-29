@@ -179,6 +179,43 @@ class HeldTickersAndQuotesTests(unittest.TestCase):
 
 
 class BuildBoardTests(unittest.TestCase):
+    def test_weather_operations_reports_a_bounded_recent_shadow_funnel(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "store.sqlite"
+            _seed_store(path, "model-a")
+            _seed_telemetry(
+                path, "model-a", outcome="success", started_at="2026-08-11T11:50:00+00:00",
+            )
+            conn = sqlite3.connect(str(path))
+            conn.row_factory = sqlite3.Row
+            conn.execute(
+                "UPDATE agent_cycle_telemetry SET weather_candidates_offered = 2, weather_candidates_researched = 1"
+            )
+            conn.execute(
+                """
+                INSERT INTO agent_thesis_forecasts
+                (agent_id, cycle_id, forecast_ts, platform, ticker, model_probability,
+                 weather_market_type, weather_settlement_source, resolved_outcome, resolved_at)
+                VALUES ('model-a', 'cycle-weather', '2026-08-11T11:55:00+00:00', 'kalshi', 'KXFOO', 0.7,
+                        'daily_temperature', 'nws_daily_climate_report', 1, '2026-08-11T11:58:00+00:00')
+                """
+            )
+            conn.commit()
+            conn.close()
+            _seed_action(path, "model-a", cycle_id="cycle-weather", ts="2026-08-11T11:57:00+00:00")
+            conn = sqlite3.connect(str(path))
+            conn.row_factory = sqlite3.Row
+            operations = board_script._weather_operations(
+                {"model-a": conn}, board_script._parse_timestamp("2026-08-11T12:00:00+00:00"),
+            )
+            conn.close()
+
+        self.assertEqual(operations["candidates_offered"], 2)
+        self.assertEqual(operations["researched"], 1)
+        self.assertEqual(operations["forecasted"], 1)
+        self.assertEqual(operations["traded"], 1)
+        self.assertEqual(operations["resolved"], 1)
+
     def test_model_health_exposes_latest_provider_failure_and_operational_trail(self):
         with tempfile.TemporaryDirectory() as td:
             store_dir = Path(td) / "stores"

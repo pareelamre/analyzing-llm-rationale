@@ -17,6 +17,16 @@ class _Response:
 
 
 class WeatherResearchTests(unittest.TestCase):
+    def setUp(self):
+        from analyzing_llm_rationale import weather_research
+
+        weather_research._reset_runtime_state_for_test()
+
+    def tearDown(self):
+        from analyzing_llm_rationale import weather_research
+
+        weather_research._reset_runtime_state_for_test()
+
     def test_nws_contract_returns_observation_and_hourly_forecast(self):
         quote = {
             "question": "What will the highest temperature in Chicago be today?",
@@ -79,6 +89,53 @@ class WeatherResearchTests(unittest.TestCase):
 
         self.assertEqual(result["source_status"], "missing_station")
         self.assertEqual(result["observations"], [])
+
+    def test_nws_result_is_cached_without_representing_it_as_final_settlement(self):
+        quote = {
+            "question": "What will the highest temperature in Chicago be today?",
+            "category": "Weather",
+            "resolution_criteria": "NWS Daily Climate Report, station KORD.",
+        }
+        calls = []
+
+        def get(url, **_kwargs):
+            calls.append(url)
+            if url.endswith("/observations/latest"):
+                return _Response({
+                    "properties": {"temperature": {"value": 20.0}},
+                    "geometry": {"coordinates": [-87.9, 41.9]},
+                })
+            if "/points/" in url:
+                return _Response({"properties": {"forecastHourly": "https://example.test/hourly"}})
+            return _Response({"properties": {"periods": []}})
+
+        first = research_weather_market(quote, http_get=get)
+        second = research_weather_market(quote, http_get=get)
+
+        self.assertEqual(first["source_status"], "nws_observation_available")
+        self.assertFalse(first["research_cached"])
+        self.assertTrue(second["research_cached"])
+        self.assertEqual(len(calls), 3)
+        self.assertIn("final NWS Daily Climate Report", second["notice"])
+
+    def test_repeated_nws_failures_open_a_circuit_without_proxy_data(self):
+        quote = {
+            "question": "What will the highest temperature in Chicago be today?",
+            "category": "Weather",
+            "resolution_criteria": "NWS Daily Climate Report, station KORD.",
+        }
+        calls = []
+
+        def failing_get(url, **_kwargs):
+            calls.append(url)
+            raise RuntimeError("NWS unavailable")
+
+        results = [research_weather_market(quote, http_get=failing_get) for _ in range(4)]
+
+        self.assertEqual(results[0]["source_status"], "nws_temporarily_unavailable")
+        self.assertEqual(results[2]["source_status"], "nws_temporarily_unavailable")
+        self.assertEqual(results[3]["source_status"], "nws_circuit_open")
+        self.assertEqual(len(calls), 3)
 
 
 if __name__ == "__main__":

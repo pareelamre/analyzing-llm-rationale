@@ -1099,6 +1099,9 @@
     .agentic-health--provider-rate-limited { background: #fffbeb; color: #a16207; }
     .agentic-health-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 6px; padding: 0 0 12px; }
     .agentic-health-summary-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-right: 2px; text-transform: uppercase; }
+    .agentic-weather-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 7px; padding: 0 0 12px; }
+    .agentic-weather-summary-label { color: #0f766e; font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-right: 2px; text-transform: uppercase; }
+    .agentic-weather-summary-count { color: var(--text); font-weight: 650; }
     .agentic-learning-summary { background: linear-gradient(115deg, #f0fdfa, #f8fafc 62%); border: 1px solid #cbd5e1; border-radius: 12px; display: grid; gap: 10px 16px; grid-template-columns: minmax(150px, 1.4fr) repeat(3, minmax(0, 1fr)); margin: 14px 0; padding: 13px 15px; }
     .agentic-learning-kicker { color: #0f766e; display: block; font-size: 9px; font-weight: 750; letter-spacing: .08em; margin-bottom: 4px; text-transform: uppercase; }
     .agentic-learning-title { color: var(--ink); font-size: 13px; font-weight: 700; margin: 0; }
@@ -6696,6 +6699,7 @@ function renderAgentTradingBoard(d) {
   const eligibility = d.eligibility || {};
   const modelHealth = d.model_health || {};
   const forecastLearning = d.forecast_learning || {};
+  const weatherOperations = d.weather_operations || {};
   const activity = d.recent_activity || [];
   const latestTheses = d.latest_theses || {};
   const _healthStatus = health => String(health?.status || 'unverified');
@@ -6860,6 +6864,13 @@ function renderAgentTradingBoard(d) {
   const healthSummary = Object.entries(modelHealth).sort(([a], [b]) => a.localeCompare(b)).map(([agentId, health]) =>
     _healthBadge({ ...(health || {}), agent_id: agentId }, { withModel: true })
   ).join('');
+  const weatherStages = [
+    ['candidates_offered', 'Eligible'], ['researched', 'Researched'], ['forecasted', 'Forecasted'],
+    ['traded', 'Paper trades'], ['resolved', 'Resolved'],
+  ];
+  const weatherOperationalSummary = weatherStages.some(([key]) => Number(weatherOperations[key]) > 0)
+    ? `<div class="agentic-weather-summary" title="Source-verified NWS weather-candidate coverage. These counts describe activity, not profitability."><span class="agentic-weather-summary-label">Weather lane · ${Math.max(1, Number(weatherOperations.window_hours) || 24)}h</span>${weatherStages.map(([key, label]) => `<span><span class="agentic-weather-summary-count">${Math.max(0, Number(weatherOperations[key]) || 0)}</span> ${label}</span>`).join('<span aria-hidden="true">·</span>')}</div>`
+    : '';
 
   // Model filter pill bar
   const activeFilter = window._agentActivityFilter || 'all';
@@ -6910,6 +6921,7 @@ function renderAgentTradingBoard(d) {
       <div id="agentTradingSvg" class="agentic-chart">${curves.length ? _equitySvg(curves, 760, 300, {asPct: false, yPrefix: '$'}) : '<p class="text-sm text-gray-500">No account activity yet.</p>'}</div>
     </section>
     ${healthSummary ? `<div class="agentic-health-summary"><span class="agentic-health-summary-label">Cycle health</span>${healthSummary}</div>` : ''}
+    ${weatherOperationalSummary}
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}</tbody></table>
     <div class="agentic-feed-head">
       <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : activeFilter)}</span>

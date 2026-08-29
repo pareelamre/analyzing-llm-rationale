@@ -25,7 +25,7 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
@@ -38,6 +38,9 @@ from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
 STORE_DIR = Path(os.environ.get("AGENT_TRADING_BOARD_STORE_DIR", "tmp/agent-trading-board"))
 OUTPUT_PATH = Path(os.environ.get("AGENT_TRADING_BOARD_OUTPUT", "static/agent_trading_live.json"))
 RECENT_ACTIVITY_LIMIT = int(os.environ.get("AGENT_TRADING_BOARD_ACTIVITY_LIMIT", "50"))
+WEATHER_OPERATIONS_WINDOW_HOURS = max(
+    1, min(168, int(os.environ.get("AGENT_TRADING_WEATHER_OPERATIONS_WINDOW_HOURS", "24")))
+)
 # Agent ticks are scheduled every 15 minutes.  Let a queued GitHub Actions lane
 # run for three expected intervals before calling it delayed, and retain a wider
 # window before calling the model stalled.  The board's own artifact freshness
@@ -135,6 +138,7 @@ def _model_health(
         """
         SELECT cycle_id, started_at, finished_at, outcome, failure_kind, failure_detail,
                candidate_count, tool_steps, thesis_published, forecast_records,
+               weather_candidates_offered, weather_candidates_researched,
                paper_execution_outcome, duration_ms
         FROM agent_cycle_telemetry
         WHERE agent_id = ?
@@ -198,6 +202,8 @@ def _model_health(
         "last_tool_steps": telemetry["tool_steps"] if telemetry else None,
         "last_thesis_published": bool(telemetry["thesis_published"]) if telemetry else None,
         "last_forecast_records": telemetry["forecast_records"] if telemetry else None,
+        "last_weather_candidates_offered": telemetry["weather_candidates_offered"] if telemetry else 0,
+        "last_weather_candidates_researched": telemetry["weather_candidates_researched"] if telemetry else 0,
         "last_paper_execution_outcome": telemetry["paper_execution_outcome"] if telemetry else None,
         "cycle_age_seconds": age_seconds,
         "expected_cycle_seconds": MODEL_HEALTH_EXPECTED_CYCLE_SECONDS,
@@ -224,6 +230,8 @@ def _recent_cycle_telemetry(conn: sqlite3.Connection, model: str, *, limit: int 
             "settled_count": row["settled_count"],
             "thesis_published": bool(row["thesis_published"]),
             "forecast_records": row["forecast_records"],
+            "weather_candidates_offered": row["weather_candidates_offered"],
+            "weather_candidates_researched": row["weather_candidates_researched"],
             "paper_execution_outcome": row["paper_execution_outcome"],
             "duration_ms": row["duration_ms"],
         }
@@ -231,7 +239,8 @@ def _recent_cycle_telemetry(conn: sqlite3.Connection, model: str, *, limit: int 
             """
             SELECT run_id, cycle_id, started_at, finished_at, outcome, failure_kind,
                    failure_detail, candidate_count, tool_steps, settled_count,
-                   thesis_published, forecast_records, paper_execution_outcome, duration_ms
+                   thesis_published, forecast_records, weather_candidates_offered,
+                   weather_candidates_researched, paper_execution_outcome, duration_ms
             FROM agent_cycle_telemetry
             WHERE agent_id = ?
             ORDER BY started_at DESC
@@ -302,6 +311,51 @@ def _fetch_quotes(positions: Set[tuple]) -> Dict[Any, Dict[str, Any]]:
     return quotes
 
 
+def _weather_operations(conns: Dict[str, sqlite3.Connection], now: datetime) -> Dict[str, int]:
+    """Aggregate a compact, audit-friendly weather funnel across model ledgers."""
+    window_start = (now - timedelta(hours=WEATHER_OPERATIONS_WINDOW_HOURS)).isoformat()
+    counts = {key: 0 for key in ("candidates_offered", "researched", "forecasted", "traded", "resolved")}
+    for conn in conns.values():
+        telemetry = conn.execute(
+            """
+            SELECT COALESCE(SUM(weather_candidates_offered), 0) AS candidates_offered,
+                   COALESCE(SUM(weather_candidates_researched), 0) AS researched
+            FROM agent_cycle_telemetry
+            WHERE started_at >= ?
+            """,
+            (window_start,),
+        ).fetchone()
+        counts["candidates_offered"] += int(telemetry["candidates_offered"] or 0)
+        counts["researched"] += int(telemetry["researched"] or 0)
+        forecasts = conn.execute(
+            """
+            SELECT COUNT(*) AS forecasted,
+                   SUM(CASE WHEN resolved_outcome IS NOT NULL AND resolved_at >= ? THEN 1 ELSE 0 END) AS resolved
+            FROM agent_thesis_forecasts
+            WHERE weather_market_type IS NOT NULL AND forecast_ts >= ?
+            """,
+            (window_start, window_start),
+        ).fetchone()
+        counts["forecasted"] += int(forecasts["forecasted"] or 0)
+        counts["resolved"] += int(forecasts["resolved"] or 0)
+        trades = conn.execute(
+            """
+            SELECT COUNT(DISTINCT action.id) AS traded
+            FROM agent_actions AS action
+            JOIN agent_thesis_forecasts AS forecast
+              ON forecast.agent_id = action.agent_id
+             AND forecast.platform = action.platform
+             AND forecast.ticker = action.ticker
+            WHERE action.action_type = 'trade'
+              AND action.ts >= ?
+              AND forecast.weather_market_type IS NOT NULL
+            """,
+            (window_start,),
+        ).fetchone()
+        counts["traded"] += int(trades["traded"] or 0)
+    return {"window_hours": WEATHER_OPERATIONS_WINDOW_HOURS, **counts}
+
+
 def build_board() -> Dict[str, Any]:
     models = _chat_capable_models()
     store_presence = {model: (STORE_DIR / model / "store.sqlite").exists() for model in models}
@@ -322,6 +376,7 @@ def build_board() -> Dict[str, Any]:
         activity: List[Dict[str, Any]] = []
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
+        weather_operations = _weather_operations(conns, now)
         for model, conn in conns.items():
             rows = agent_trading_stats.compute_agent_leaderboard(conn, quotes)
             leaderboard.extend(rows)
@@ -358,6 +413,7 @@ def build_board() -> Dict[str, Any]:
         "equity_curves": equity_curves,
         "eligibility": eligibility,
         "forecast_learning": forecast_learning,
+        "weather_operations": weather_operations,
         "model_health": model_health,
         "operational_health": _operational_health(model_health),
         "recent_cycle_telemetry": cycle_telemetry[:RECENT_ACTIVITY_LIMIT],

@@ -1863,6 +1863,23 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
                 if isinstance(row, dict)
             ]
             forecast_learning[str(agent_id)] = compact_learning
+    raw_weather_operations = source.get("weather_operations")
+    weather_source = raw_weather_operations if isinstance(raw_weather_operations, dict) else {}
+
+    def _bounded_nonnegative_int(value: Any, *, maximum: int) -> int:
+        try:
+            return max(0, min(maximum, int(value)))
+        except (TypeError, ValueError):
+            return 0
+
+    weather_operations = {
+        "window_hours": _bounded_nonnegative_int(weather_source.get("window_hours"), maximum=168) or 24,
+        "candidates_offered": _bounded_nonnegative_int(weather_source.get("candidates_offered"), maximum=10_000),
+        "researched": _bounded_nonnegative_int(weather_source.get("researched"), maximum=10_000),
+        "forecasted": _bounded_nonnegative_int(weather_source.get("forecasted"), maximum=10_000),
+        "traded": _bounded_nonnegative_int(weather_source.get("traded"), maximum=10_000),
+        "resolved": _bounded_nonnegative_int(weather_source.get("resolved"), maximum=10_000),
+    }
     raw_health = source.get("model_health")
     model_health = {
         str(agent_id): dict(value)
@@ -1903,6 +1920,7 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
         "latest_theses": latest_theses,
         "eligibility": eligibility,
         "forecast_learning": forecast_learning,
+        "weather_operations": weather_operations,
         "model_health": model_health,
         "operational_health": operational_health,
     }
@@ -3337,6 +3355,9 @@ async def agent_trading_board():
     - ``forecast_learning``: final-outcome Brier diagnostics, including up to
       four source-labelled weather cohorts per model. These are descriptive
       calibration signals, never sizing overrides.
+    - ``weather_operations``: bounded recent counts from source-verified
+      weather candidates through research, forecast, paper trade, and final
+      resolution. It is operational coverage, not a performance claim.
     - ``model_health``: per model cycle heartbeat and account-ledger freshness.
       This separates a completed no-trade turn from a delayed, stale, or
       unverified model ledger.
@@ -3370,6 +3391,7 @@ async def agent_trading_board():
             "latest_theses": compact["latest_theses"],
             "eligibility": compact["eligibility"],
             "forecast_learning": compact["forecast_learning"],
+            "weather_operations": compact["weather_operations"],
             "model_health": compact["model_health"],
             "operational_health": compact["operational_health"],
         },
@@ -14562,8 +14584,9 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                 )
             if "weather_market_research" in active:
                 rule_parts.append(
-                    "Use `weather_market_research` for read-only source-matched evidence; never describe a proxy "
-                    "forecast as the contract's settlement source."
+                    "For a source-verified NWS weather contract with a named station, call "
+                    "`weather_market_research` before opening a new position. It is read-only source-matched "
+                    "evidence; never describe a proxy forecast as the contract's settlement source."
                 )
             if "orderbook_arbitrage" in active:
                 rule_parts.append(
