@@ -39,6 +39,24 @@ class PredictionMarketAccountTests(unittest.TestCase):
         self.assertEqual(snap["liquidation_value"], 4.8)
         self.assertEqual(snap["account_value"], 98.8)
         self.assertEqual(snap["unrealized_pnl"], -1.2)
+        self.assertEqual(snap["open_positions"][0]["current_price"], 0.48)
+        self.assertEqual(snap["open_positions"][0]["unrealized_pnl"], -1.2)
+        self.assertEqual(snap["open_positions"][0]["valuation_status"], "bid_liquidation")
+
+    def test_unpriced_position_is_not_reported_as_zero_unrealized_pnl(self):
+        account = PredictionMarketAccount(starting_cash=100.0)
+        account.buy(platform="Kalshi", ident="KXNOQUOTE", side=YES, quantity=10, price=0.60)
+
+        snap = account.snapshot({})
+
+        # Aggregate liquidation remains conservative for account risk, but a
+        # missing executable bid is not a valid per-position mark or P&L.
+        self.assertEqual(snap["liquidation_value"], 0.0)
+        self.assertEqual(snap["unrealized_pnl"], -6.0)
+        position = snap["open_positions"][0]
+        self.assertIsNone(position["current_price"])
+        self.assertIsNone(position["unrealized_pnl"])
+        self.assertEqual(position["valuation_status"], "unpriced_no_executable_bid")
 
     def test_buying_opposite_side_realizes_kalshi_pair_netting(self):
         account = PredictionMarketAccount(starting_cash=100.0)

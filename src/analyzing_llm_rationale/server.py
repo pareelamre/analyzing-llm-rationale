@@ -173,6 +173,38 @@ _AGENT_TRADING_BOARD_STALE_AFTER_S = int(
     # correspondingly looser so a normal publish gap isn't flagged as stale.
     os.environ.get("AGENT_TRADING_BOARD_STALE_AFTER_S", "3600")
 )
+# A separate, bounded artifact for on-demand paper-trade auditing. Keeping it
+# out of ``/agent-trading/board`` preserves the Agentic tab's fast initial
+# render as historical action records grow.
+_AGENT_TRADING_AUDIT_URL = os.environ.get(
+    "AGENT_TRADING_AUDIT_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/agent_trading_audit_live.json",
+)
+_AGENT_TRADING_AUDIT_ARCHIVE_MANIFEST_URL = os.environ.get(
+    "AGENT_TRADING_AUDIT_ARCHIVE_MANIFEST_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
+    "main/static/agent_trading_audit_archive_manifest.json",
+)
+_AGENT_TRADING_AUDIT_ARCHIVE_BASE_URL = os.environ.get(
+    "AGENT_TRADING_AUDIT_ARCHIVE_BASE_URL",
+    "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/",
+)
+_AGENT_TRADING_AUDIT_TTL = int(
+    os.environ.get("AGENT_TRADING_AUDIT_TTL", str(_TRACK_RECORD_LIVE_TTL))
+)
+_AGENT_TRADING_AUDIT_TIMEOUT = int(
+    os.environ.get("AGENT_TRADING_AUDIT_TIMEOUT", str(_TRACK_RECORD_LIVE_TIMEOUT))
+)
+_AGENT_TRADING_AUDIT_STALE_AFTER_S = int(
+    os.environ.get("AGENT_TRADING_AUDIT_STALE_AFTER_S", "3600")
+)
+_AGENT_TRADING_AUDIT_MAX_ITEMS = int(
+    os.environ.get("AGENT_TRADING_AUDIT_MAX_ITEMS", "100")
+)
+_AGENT_TRADING_AUDIT_ARCHIVE_MAX_PERIODS = max(
+    1, min(120, int(os.environ.get("AGENT_TRADING_AUDIT_ARCHIVE_MAX_PERIODS", "60")))
+)
 # Shared secret gating the evolution-loop bridge endpoints (pending-markets /
 # mark-enrolled), called by the track-record GitHub Action. Unset = disabled.
 _TRACK_RECORD_TOKEN: Optional[str] = os.environ.get("TRACK_RECORD_TOKEN")
@@ -1997,6 +2029,43 @@ _AGENT_TRADING_BOARD_READER = live_track_record_support.LiveTrackRecordReader(
 )
 _read_agent_trading_board = _AGENT_TRADING_BOARD_READER.read
 _agent_trading_board_freshness = _AGENT_TRADING_BOARD_READER.freshness
+_AGENT_TRADING_AUDIT_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_AGENT_TRADING_AUDIT_URL,
+        ttl_seconds=_AGENT_TRADING_AUDIT_TTL,
+        stale_after_seconds=_AGENT_TRADING_AUDIT_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "agent_trading_audit_live.json",
+        request_timeout_seconds=_AGENT_TRADING_AUDIT_TIMEOUT,
+        cache_namespace="agent_trading_audit_live",
+        cache_version="v1",
+        resource_label="agent trading audit index",
+        user_agent="Foresea/agent-trading-audit",
+    ),
+    logger=logger,
+)
+_read_agent_trading_audit = _AGENT_TRADING_AUDIT_READER.read
+_agent_trading_audit_freshness = _AGENT_TRADING_AUDIT_READER.freshness
+_AGENT_TRADING_AUDIT_ARCHIVE_READER = live_track_record_support.LiveTrackRecordReader(
+    cache_key=_cache_key,
+    cache_get=_cache_get,
+    cache_set=_cache_set,
+    config=live_track_record_support.LiveTrackRecordConfig(
+        live_url=_AGENT_TRADING_AUDIT_ARCHIVE_MANIFEST_URL,
+        ttl_seconds=_AGENT_TRADING_AUDIT_TTL,
+        stale_after_seconds=_AGENT_TRADING_AUDIT_STALE_AFTER_S,
+        bundled_path=_STATIC_DIR / "agent_trading_audit_archive_manifest.json",
+        request_timeout_seconds=_AGENT_TRADING_AUDIT_TIMEOUT,
+        cache_namespace="agent_trading_audit_archive_manifest",
+        cache_version="v1",
+        resource_label="agent trading audit archive manifest",
+        user_agent="Foresea/agent-trading-audit",
+    ),
+    logger=logger,
+)
+_read_agent_trading_audit_archive_manifest = _AGENT_TRADING_AUDIT_ARCHIVE_READER.read
 
 _MARK_TO_MARKET_MERGE_KEYS = (
     "edge_board",
@@ -2334,6 +2403,11 @@ _agent_trading_board_health = _meter.create_counter(
     "agent_trading.board.model_health",
     unit="1",
     description="Per-model Agentic board health observations by current status",
+)
+_agent_trading_audit_reads = _meter.create_counter(
+    "agent_trading.audit.reads",
+    unit="1",
+    description="On-demand paper-trade audit reads by result",
 )
 _analytics_attribution_actions = _meter.create_counter(
     "analytics.attribution.records",
@@ -3394,6 +3468,165 @@ async def agent_trading_board():
             "weather_operations": compact["weather_operations"],
             "model_health": compact["model_health"],
             "operational_health": compact["operational_health"],
+        },
+        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
+    )
+
+
+_AGENT_TRADING_AUDIT_ARCHIVE_PATH_RE = re.compile(
+    r"^static/agent_trading_audits/[A-Za-z0-9_.-]+/(?:[0-9]{4}-[0-9]{2}|unknown)\.json$"
+)
+
+
+def _read_agent_trading_audit_archive_records(
+    manifest: Dict[str, Any],
+    *,
+    agent_id: str,
+    action_id: str,
+    limit: int,
+) -> tuple[List[Dict[str, Any]], int]:
+    """Retrieve an archived immutable action from GitHub only when requested.
+
+    The board and normal audit reads stay on the compact current index.  This
+    intentionally narrow fallback avoids loading years of history into Cloud
+    Run memory, while preserving a long-term inspect-on-demand path.
+    """
+    archives = manifest.get("archives") if isinstance(manifest, dict) else None
+    periods = archives.get(agent_id) if isinstance(archives, dict) else None
+    if not isinstance(periods, list):
+        return [], 0
+
+    import requests
+
+    records: List[Dict[str, Any]] = []
+    scanned = 0
+    for period in periods[:_AGENT_TRADING_AUDIT_ARCHIVE_MAX_PERIODS]:
+        path = period.get("path") if isinstance(period, dict) else None
+        if not isinstance(path, str) or not _AGENT_TRADING_AUDIT_ARCHIVE_PATH_RE.fullmatch(path):
+            continue
+        scanned += 1
+        cache_key = _cache_key("agent_trading_audit_archive", "v1", path)
+        payload = _cache_get(cache_key)
+        if payload is None:
+            try:
+                response = requests.get(
+                    _AGENT_TRADING_AUDIT_ARCHIVE_BASE_URL + url_quote(path),
+                    timeout=_AGENT_TRADING_AUDIT_TIMEOUT,
+                    headers={"Cache-Control": "no-cache", "User-Agent": "Foresea/agent-trading-audit"},
+                )
+                payload = response.json() if response.status_code == 200 else {}
+            except Exception:
+                logger.warning("agent trading audit archive fetch failed path=%s", path, exc_info=True)
+                payload = {}
+            if isinstance(payload, dict):
+                _cache_set(cache_key, payload, _AGENT_TRADING_AUDIT_TTL)
+        items = payload.get("items") if isinstance(payload, dict) else None
+        for item in items if isinstance(items, list) else []:
+            if not isinstance(item, dict) or str(item.get("action_id") or "") != action_id:
+                continue
+            records.append(dict(item))
+            if len(records) >= limit:
+                return records, scanned
+    return records, scanned
+
+
+@app.get(
+    "/agent-trading/audits",
+    tags=["System"],
+    summary="On-demand audit records for Agentic paper trades",
+)
+async def agent_trading_audits(
+    agent_id: Optional[str] = Query(
+        None,
+        min_length=1,
+        max_length=120,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+        description="Optional Agentic model identifier",
+    ),
+    action_id: Optional[str] = Query(
+        None,
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Fa-f0-9-]+$",
+        description="Optional immutable paper-ledger action identifier",
+    ),
+    limit: int = Query(25, ge=1, le=_AGENT_TRADING_AUDIT_MAX_ITEMS),
+) -> JSONResponse:
+    """Read the GitHub-backed audit trail without loading it into the board.
+
+    Recent records come from a compact GitHub index.  If a retained record is
+    no longer there, callers can supply its model ID to look it up in the
+    model's monthly GitHub archive.  Records never represent exchange orders
+    or real-money execution.
+    """
+    with _tracer.start_as_current_span("agent_trading.audit.read") as span:
+        span.set_attributes({
+            "audit.filtered_agent": bool(agent_id),
+            "audit.lookup_action": bool(action_id),
+            "audit.limit": limit,
+        })
+        loop = asyncio.get_running_loop()
+        live, archive_manifest = await asyncio.gather(
+            loop.run_in_executor(None, _read_agent_trading_audit),
+            loop.run_in_executor(None, _read_agent_trading_audit_archive_manifest),
+        )
+        live = live if isinstance(live, dict) else {}
+        archive_manifest = archive_manifest if isinstance(archive_manifest, dict) else {}
+        raw_audits = live.get("audits")
+        audit_map = raw_audits if isinstance(raw_audits, dict) else {}
+        archive_models = archive_manifest.get("archives")
+        archive_models = archive_models if isinstance(archive_models, dict) else {}
+        if agent_id is not None and agent_id not in audit_map and agent_id not in archive_models:
+            _agent_trading_audit_reads.add(1, {"outcome": "unknown_agent"})
+            raise HTTPException(status_code=404, detail="Agent audit records were not found.")
+
+        selected_agents = [agent_id] if agent_id is not None else sorted(audit_map)
+        records: List[Dict[str, Any]] = []
+        for model in selected_agents:
+            for item in audit_map.get(model, []):
+                if not isinstance(item, dict):
+                    continue
+                if action_id is not None and str(item.get("action_id") or "") != action_id:
+                    continue
+                records.append(dict(item))
+        records.sort(key=lambda item: (str(item.get("recorded_at") or ""), str(item.get("action_id") or "")), reverse=True)
+        storage = "github_recent_index"
+        archive_periods_scanned = 0
+        if action_id is not None and not records:
+            if agent_id is None:
+                _agent_trading_audit_reads.add(1, {"outcome": "agent_required_for_archive"})
+                raise HTTPException(
+                    status_code=404,
+                    detail="Paper-trade audit action was not found in the recent index; pass agent_id to search its archive.",
+                )
+            records, archive_periods_scanned = await loop.run_in_executor(
+                None,
+                lambda: _read_agent_trading_audit_archive_records(
+                    archive_manifest, agent_id=agent_id, action_id=action_id, limit=limit
+                ),
+            )
+            storage = "github_monthly_archive"
+        if action_id is not None and not records:
+            _agent_trading_audit_reads.add(1, {"outcome": "not_found"})
+            raise HTTPException(status_code=404, detail="Paper-trade audit action was not found in GitHub audit storage.")
+        records = records[:limit]
+        freshness = _agent_trading_audit_freshness(live)
+        _agent_trading_audit_reads.add(1, {"outcome": "success"})
+        span.set_attributes({
+            "outcome": "success",
+            "audit.records": len(records),
+            "audit.storage": storage,
+            "audit.archive_periods_scanned": archive_periods_scanned,
+        })
+    return JSONResponse(
+        {
+            "generated_at": live.get("generated_at"),
+            "freshness": freshness,
+            "mode": "shadow",
+            "storage": storage,
+            "retained_per_model": live.get("retained_per_model"),
+            "archive_periods_scanned": archive_periods_scanned,
+            "items": records,
         },
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )

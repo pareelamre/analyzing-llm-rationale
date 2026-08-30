@@ -1542,6 +1542,83 @@ class ServerTests(unittest.TestCase):
             response = self.client.get("/agent-trading/board")
         self.assertEqual(response.json()["mode"], "shadow")
 
+    def test_agent_trading_audits_are_filtered_on_demand_outside_board_payload(self):
+        live = {
+            "generated_at": "2026-08-30T18:00:00+00:00",
+            "retained_per_model": 500,
+            "audits": {
+                "gpt-oss-120b": [{
+                    "action_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "recorded_at": "2026-08-30T17:00:00+00:00",
+                    "agent_id": "gpt-oss-120b",
+                    "event_type": "trade",
+                    "audit": {"status": "recorded"},
+                }],
+                "kimi-k3": [{
+                    "action_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                    "recorded_at": "2026-08-30T17:30:00+00:00",
+                    "agent_id": "kimi-k3",
+                    "event_type": "rejected_trade",
+                    "audit": {"status": "recorded"},
+                }],
+            },
+        }
+        with (
+            mock.patch.object(server_module, "_read_agent_trading_audit", return_value=live),
+            mock.patch.object(server_module, "_read_agent_trading_audit_archive_manifest", return_value={}),
+        ):
+            response = self.client.get(
+                "/agent-trading/audits",
+                params={"agent_id": "gpt-oss-120b", "action_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["mode"], "shadow")
+        self.assertEqual(payload["retained_per_model"], 500)
+        self.assertEqual(len(payload["items"]), 1)
+        self.assertEqual(payload["items"][0]["agent_id"], "gpt-oss-120b")
+        self.assertIn("no-cache", response.headers["cache-control"])
+
+    def test_agent_trading_audits_returns_not_found_for_unknown_action(self):
+        live = {"audits": {"gpt-oss-120b": []}}
+        with (
+            mock.patch.object(server_module, "_read_agent_trading_audit", return_value=live),
+            mock.patch.object(server_module, "_read_agent_trading_audit_archive_manifest", return_value={}),
+        ):
+            response = self.client.get(
+                "/agent-trading/audits",
+                params={"action_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},
+            )
+        self.assertEqual(response.status_code, 404)
+
+    def test_agent_trading_audits_look_up_historical_action_from_github_archive(self):
+        action_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        archived = {
+            "action_id": action_id,
+            "recorded_at": "2026-06-01T10:00:00+00:00",
+            "agent_id": "gpt-oss-120b",
+            "event_type": "trade",
+            "audit": {"status": "legacy_record"},
+        }
+        manifest = {
+            "archives": {"gpt-oss-120b": [{"month": "2026-06", "path": "static/agent_trading_audits/gpt-oss-120b/2026-06.json"}]},
+        }
+        with (
+            mock.patch.object(server_module, "_read_agent_trading_audit", return_value={"audits": {"gpt-oss-120b": []}}),
+            mock.patch.object(server_module, "_read_agent_trading_audit_archive_manifest", return_value=manifest),
+            mock.patch.object(server_module, "_read_agent_trading_audit_archive_records", return_value=([archived], 1)),
+        ):
+            response = self.client.get(
+                "/agent-trading/audits",
+                params={"agent_id": "gpt-oss-120b", "action_id": action_id},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["storage"], "github_monthly_archive")
+        self.assertEqual(payload["archive_periods_scanned"], 1)
+        self.assertEqual(payload["items"], [archived])
+
     def test_agent_trading_board_endpoint_enforces_rendering_payload_budgets(self):
         model_count = server_module._AGENT_TRADING_MAX_MODELS + 4
         curve_length = server_module._AGENT_TRADING_CURVE_MAX_POINTS + 40
