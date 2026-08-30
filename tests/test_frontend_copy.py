@@ -395,6 +395,15 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("not assessed", formatter)
         self.assertIn("visibleBlocks", index)
 
+    def test_agentic_open_positions_do_not_display_missing_marks_as_zero_pnl(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                positions = index.split("const posTableLines = openPos.map(p => {", 1)[1].split("</tr>`;", 1)[0]
+                self.assertIn("hasExecutableMark", positions)
+                self.assertIn("hasUnrealizedPnl", positions)
+                self.assertIn("No executable bid is currently available", positions)
+                self.assertNotIn("Number(p.unrealized_pnl) || 0", positions)
+
     def test_agentic_thesis_cards_extract_reasoning_from_partial_json(self):
         index = self._both()["frontend"]
         extractor = index.split("function _extractThesisJsonField(raw", 1)[1].split(

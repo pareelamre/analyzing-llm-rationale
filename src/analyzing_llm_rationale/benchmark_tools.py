@@ -39,6 +39,11 @@ risk_guard_rejections = meter.create_counter("benchmark_tools.risk_guard.rejecti
 settlement_actions = meter.create_counter("benchmark_tools.settlements", unit="1")
 fill_actions = meter.create_counter("benchmark_tools.place_trade.fills", unit="1")
 sizing_actions = meter.create_counter("benchmark_tools.place_trade.sizing", unit="1")
+trade_audit_records = meter.create_counter(
+    "benchmark_tools.place_trade.audit_records",
+    unit="1",
+    description="Durable paper-trade audit records written to the agent ledger",
+)
 weather_settlement_guards = meter.create_counter(
     "benchmark_tools.place_trade.weather_settlement_guards",
     unit="1",
@@ -988,17 +993,18 @@ def _record_rejected_account_action(
     side: str,
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
+    audit: Optional[Mapping[str, Any]] = None,
     platform: str = "kalshi",
-) -> None:
+) -> Optional[str]:
     if _use_datastore_account_store():
         _ds_record_rejected_account_action(
             agent_id=agent_id, mode=mode, ticker=ticker, side=side,
             normalized=normalized, guard=guard, platform=platform,
         )
-        return
+        return None
     with _account_transaction() as conn:
         _ensure_agent_account(conn, agent_id, _as_float(guard.get("account_value"), DEFAULT_AGENT_ACCOUNT_VALUE))
-        _record_account_action(
+        action_id = _record_account_action(
             conn,
             agent_id=agent_id,
             action_type="rejected_trade",
@@ -1022,8 +1028,10 @@ def _record_rejected_account_action(
             cycle_id=str(guard.get("cycle_id") or ""),
             client_order_id=normalized.get("exchange_order", {}).get("client_order_id"),
             outcome="rejected",
-            metadata={"risk_guard": dict(guard)},
+            metadata={"audit": dict(audit or {}), "risk_guard": dict(guard)},
         )
+    trade_audit_records.add(1, {"event_type": "rejected_trade", "outcome": "rejected"})
+    return action_id
 
 
 def _apply_trade_to_account_tables(
@@ -1036,6 +1044,7 @@ def _apply_trade_to_account_tables(
     side: str,
     normalized: Mapping[str, Any],
     guard: Mapping[str, Any],
+    audit: Optional[Mapping[str, Any]] = None,
     platform: str = "kalshi",
 ) -> Dict[str, Any]:
     if _use_datastore_account_store():
@@ -1143,9 +1152,13 @@ def _apply_trade_to_account_tables(
             cycle_id=policy.cycle_id,
             client_order_id=normalized.get("exchange_order", {}).get("client_order_id"),
             outcome="realized" if realized_pairs > 0 else "open",
-            metadata={"risk_guard": dict(guard)},
+            metadata={"audit": dict(audit or {}), "risk_guard": dict(guard)},
         )
         summary = _account_summary(conn, agent_id, policy.account_value)
+    trade_audit_records.add(1, {
+        "event_type": "trade",
+        "outcome": "realized" if realized_pairs > 0 else "open",
+    })
     return {
         "action_id": action_id,
         "notional": round(notional, 6),
@@ -2218,6 +2231,62 @@ def _resolve_shadow_marketability(
     }
 
 
+def _trade_audit_context(
+    *,
+    requested_price: Optional[float],
+    requested_quantity: Any,
+    market_check: Mapping[str, Any],
+    sizing: Mapping[str, Any],
+    guard: Mapping[str, Any],
+    fill_status: Optional[str] = None,
+    filled_quantity: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Return a compact, non-sensitive execution record for later audits.
+
+    The surrounding ``agent_actions`` row remains the immutable source of
+    truth. This context captures only the decision-time values that cannot be
+    reconstructed from that row alone: the requested order, observed live ask,
+    selected sizing policy, guard result, and (when applicable) fill result.
+    It intentionally excludes prompts, full tool transcripts, credentials, and
+    unbounded provider responses so every model can retain it cheaply.
+    """
+    sizing_keys = (
+        "mode", "applied", "eligible", "reason", "model_probability",
+        "market_probability", "edge", "target_quantity", "target_notional",
+        "max_position_fraction", "kelly_fraction", "market_shrinkage",
+    )
+    guard_keys = (
+        "allowed", "reasons", "cycle_id", "cash_before", "cash_required",
+        "notional", "fee", "concentration_cap", "market_cost_basis_after",
+        "per_cycle_spend_limit", "cycle_spend_before", "cycle_spend_after",
+        "daily_risk_limit", "daily_risk_before", "daily_risk_after",
+        "max_trades_per_cycle", "cycle_trade_count_before", "cycle_trade_count_after",
+        "max_open_markets", "open_markets_after", "drawdown_after",
+        "max_drawdown_limit", "risk_reducing", "gross_notional_override",
+    )
+    context: Dict[str, Any] = {
+        "version": 1,
+        "requested_order": {
+            "price": requested_price,
+            "quantity": requested_quantity,
+        },
+        "quote": {
+            "source": "live_venue_quote",
+            "marketable": bool(market_check.get("marketable")),
+            "status": str(market_check.get("status") or "not_checked"),
+            "observed_ask": market_check.get("real_ask"),
+        },
+        "sizing": {key: sizing.get(key) for key in sizing_keys if key in sizing},
+        "risk": {key: guard.get(key) for key in guard_keys if key in guard},
+    }
+    if fill_status is not None:
+        context["execution"] = {
+            "fill_status": fill_status,
+            "filled_quantity": filled_quantity,
+        }
+    return context
+
+
 def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     """Place a Kalshi or Polymarket trade through the benchmark tool surface.
 
@@ -2294,6 +2363,11 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             shadow_marketable = True
             shadow_unfilled_status = "shadow_unfilled_below_market"
             weather_brief: Optional[Dict[str, Any]] = None
+            market_check: Dict[str, Any] = {
+                "marketable": False,
+                "status": "not_checked",
+                "real_ask": None,
+            }
             try:
                 requested_price = float(order.get("price"))
             except (TypeError, ValueError):
@@ -2438,6 +2512,15 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             )
             guard["gross_notional_override"] = verified_reduce_only_close
             if not allowed:
+                audit = _trade_audit_context(
+                    requested_price=requested_price,
+                    requested_quantity=args.get("quantity", 1),
+                    market_check=market_check,
+                    sizing=sizing,
+                    guard=guard,
+                    fill_status="rejected_before_execution",
+                    filled_quantity=0.0,
+                )
                 event = {
                     "ts": _now(),
                     "agent_id": agent_id,
@@ -2463,15 +2546,17 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "sizing": sizing,
                 }
                 _record_ledger(event)
-                _record_rejected_account_action(
+                action_id = _record_rejected_account_action(
                     agent_id=agent_id,
                     mode=mode,
                     ticker=ticker,
                     side=side,
                     normalized=normalized,
                     guard=guard,
+                    audit=audit,
                     platform=platform,
                 )
+                event["action_id"] = action_id
                 span.set_attributes({
                     "outcome": "rejected",
                     "risk_guard.allowed": False,
@@ -2521,6 +2606,15 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 else "full" if abs(filled_quantity - _as_float(normalized.get("quantity"))) <= 1e-12
                 else "partial"
             )
+            audit = _trade_audit_context(
+                requested_price=requested_price,
+                requested_quantity=args.get("quantity", 1),
+                market_check=market_check,
+                sizing=sizing,
+                guard=accounting_guard,
+                fill_status=fill_status,
+                filled_quantity=filled_quantity,
+            )
 
             account_update = _apply_trade_to_account_tables(
                 agent_id=agent_id,
@@ -2531,6 +2625,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 side=side,
                 normalized=accounting_normalized,
                 guard=accounting_guard,
+                audit=audit,
                 platform=platform,
             )
             event = {
@@ -2556,6 +2651,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "netting_payout": account_update["netting_payout"],
                 "cash_required": account_update["cash_required"],
                 "cash_delta": account_update["cash_delta"],
+                "action_id": account_update["action_id"],
                 "risk_guard": accounting_guard,
                 "sizing": sizing,
             }

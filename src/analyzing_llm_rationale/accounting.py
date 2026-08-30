@@ -344,6 +344,31 @@ class PredictionMarketAccount:
     ) -> Dict[str, Any]:
         liquidation_value, illiquid = self.liquidation_value(quotes or {})
         account_value = self.cash + liquidation_value
+        positions = []
+        for p in self.open_positions():
+            raw_quote = (quotes or {}).get((p.platform, p.ident)) or (quotes or {}).get(("", p.ident))
+            quote = raw_quote if isinstance(raw_quote, MarketQuote) else MarketQuote.from_mapping(raw_quote or {})
+            bid = quote.bid(p.side)
+            # ``liquidation_value`` deliberately values a missing/zero bid at
+            # zero for conservative account-risk calculations.  That is not a
+            # real mark, though: exposing it as $0.00 / $0 P&L in the UI made
+            # an unavailable quote look like a flat position.  Keep the
+            # portfolio calculation conservative while making per-position
+            # display values explicitly unavailable until an executable bid
+            # exists.
+            mark_available = bid is not None and bid > 0.0
+            mark_value = p.quantity * float(bid) if mark_available else None
+            positions.append({
+                "platform": p.platform,
+                "ident": p.ident,
+                "side": p.side,
+                "quantity": round(p.quantity, 6),
+                "cost_basis": round(p.cost_basis, 6),
+                "avg_entry_price": round(p.avg_entry_price, 6),
+                "current_price": round(float(bid), 6) if mark_available else None,
+                "unrealized_pnl": round(float(mark_value) - p.cost_basis, 6) if mark_value is not None else None,
+                "valuation_status": "bid_liquidation" if mark_available else "unpriced_no_executable_bid",
+            })
         open_basis = sum(p.cost_basis for p in self.open_positions())
         return {
             "ts": _iso(ts or _now()),
@@ -354,17 +379,7 @@ class PredictionMarketAccount:
             "unrealized_pnl": round(liquidation_value - open_basis, 6),
             "realized_pnl": round(self.realized_pnl, 6),
             "fees_paid": round(self.fees_paid, 6),
-            "open_positions": [
-                {
-                    "platform": p.platform,
-                    "ident": p.ident,
-                    "side": p.side,
-                    "quantity": round(p.quantity, 6),
-                    "cost_basis": round(p.cost_basis, 6),
-                    "avg_entry_price": round(p.avg_entry_price, 6),
-                }
-                for p in self.open_positions()
-            ],
+            "open_positions": positions,
             "illiquid_positions": illiquid,
         }
 

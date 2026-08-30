@@ -108,6 +108,8 @@ class LeaderboardTests(unittest.TestCase):
         self.assertAlmostEqual(row["account_value"], 9_600.0 + 55.0)
         self.assertAlmostEqual(row["unrealized_pnl"], 55.0 - 40.0)
         self.assertAlmostEqual(row["total_pnl"], (9_600.0 + 55.0) - 10_000.0)
+        self.assertAlmostEqual(row["open_positions"][0]["current_price"], 0.55)
+        self.assertAlmostEqual(row["open_positions"][0]["unrealized_pnl"], 15.0)
 
     def test_total_pnl_matches_account_value_minus_starting_cash_accounting_for_fees(self):
         with _fixture_conn() as conn:
