@@ -2169,7 +2169,7 @@ def _verified_reduce_only_close(
 
 
 def _resolve_shadow_marketability(
-    ticker: str, side: str, requested_price: float, *, platform: str = "kalshi"
+    ticker: str, side: str, requested_price: Optional[float], *, platform: str = "kalshi"
 ) -> Dict[str, Any]:
     """Check a shadow-mode Kalshi or Polymarket order against a live quote before filling it.
 
@@ -2181,6 +2181,11 @@ def _resolve_shadow_marketability(
     caller than their own request) and only fill at all if the requested
     price actually crosses it, mirroring how the immediate-or-cancel orders
     this tool issues would behave against a real book.
+
+    If an autonomous paper order omits a price, the tool may use the fresh
+    executable ask it just fetched. That is deliberately different from
+    accepting an invented price: no quote means no fill, and a supplied limit
+    still has to cross the live ask.
 
     If the quote can't be fetched (unknown ticker, provider hiccup), the
     order doesn't fill -- a real IOC order has no book to route against
@@ -2212,12 +2217,21 @@ def _resolve_shadow_marketability(
     except Exception:
         real_ask = None
 
-    if real_ask is None:
+    if real_ask is None or real_ask <= 0:
         return {
             "marketable": False,
             "price": requested_price,
             "real_ask": None,
             "status": "shadow_quote_unavailable",
+            "weather_brief": weather_brief,
+        }
+
+    if requested_price is None:
+        return {
+            "marketable": True,
+            "price": round(real_ask, 4),
+            "real_ask": round(real_ask, 4),
+            "status": "shadow_price_from_live_quote",
             "weather_brief": weather_brief,
         }
 
@@ -2368,20 +2382,62 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 "status": "not_checked",
                 "real_ask": None,
             }
+            supplied_price = order.get("price")
             try:
-                requested_price = float(order.get("price"))
+                requested_price = float(supplied_price) if supplied_price is not None else None
             except (TypeError, ValueError):
                 requested_price = None
-            if requested_price is not None and requested_price > 0:
-                market_check = _resolve_shadow_marketability(ticker, side, requested_price, platform=platform)
-                shadow_marketable = market_check["marketable"]
-                weather_brief = market_check.get("weather_brief")
-                if not shadow_marketable:
-                    shadow_unfilled_status = market_check["status"]
-                if market_check["real_ask"] is not None:
-                    # Fill at the real ask (never worse than what was asked
-                    # for) instead of whatever price the caller guessed.
-                    order["price"] = market_check["price"]
+            if supplied_price is not None and (requested_price is None or requested_price <= 0):
+                span.set_attributes({"outcome": "invalid_order_price", "trade.submitted": False})
+                _finish_tool(tool, start, "invalid_order_price")
+                return {
+                    "ok": False,
+                    "tool": tool,
+                    "error_type": "input_validation",
+                    "reason": "invalid_order_price",
+                    "message": "Paper order price must be a positive number when supplied.",
+                    "mode": mode,
+                    "submitted": False,
+                    "execution": {
+                        "immediate_only": True,
+                        "filled_quantity": 0.0,
+                        "fill_status": "invalid_order_price",
+                    },
+                }
+
+            market_check = _resolve_shadow_marketability(
+                ticker, side, requested_price, platform=platform
+            )
+            shadow_marketable = market_check["marketable"]
+            weather_brief = market_check.get("weather_brief")
+            if not shadow_marketable:
+                shadow_unfilled_status = market_check["status"]
+            if market_check["real_ask"] is not None:
+                # A supplied limit must cross the live ask. For a price-less
+                # autonomous paper order, use that fresh executable ask rather
+                # than failing during sizing or trusting a guessed price.
+                order["price"] = market_check["price"]
+            elif requested_price is None:
+                # A caller that supplied a valid limit can still be recorded
+                # as an unfilled IOC attempt during a quote outage. A
+                # price-less order cannot: there is no defensible price to
+                # size or record without a fresh executable ask.
+                span.set_attributes({"outcome": "quote_unavailable", "trade.submitted": False})
+                _finish_tool(tool, start, "quote_unavailable")
+                return {
+                    "ok": False,
+                    "tool": tool,
+                    "error_type": "market_data",
+                    "reason": "shadow_quote_unavailable",
+                    "message": "No fresh executable venue quote was available; no paper order was recorded.",
+                    "mode": mode,
+                    "submitted": False,
+                    "execution": {
+                        "immediate_only": True,
+                        "filled_quantity": 0.0,
+                        "fill_status": "shadow_quote_unavailable",
+                    },
+                }
 
             sizing = _sizing_plan(
                 args,

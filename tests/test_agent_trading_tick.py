@@ -995,6 +995,33 @@ class RunCycleTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "filled")
         self.assertIn("**Paper execution**: PAPER ORDER FILLED", rendered)
 
+    def test_recorded_tool_error_is_not_presented_as_a_guardrail_rejection(self):
+        thesis = """### 1. Decision & Execution
+- **Action**: BUY YES
+- **Market & Venue**: KXERROR on Kalshi
+- **Order Sizing**: Quarter Kelly 5% cap
+
+### 3. Model Edge & Valuation
+- **Model Probability**: 70% vs **Market Price**: 40% (Edge: +30%)"""
+        transcript = [{
+            "action": "place_trade",
+            "args": {"ticker": "KXERROR"},
+            "observation": json.dumps({
+                "ok": False,
+                "tool": "place_trade",
+                "error": "float() argument must be a string or a real number, not 'NoneType'",
+            }),
+        }]
+
+        rendered, result = agent_trading_tick._reconcile_thesis_execution(
+            agent_id="model-tool-error", thesis=thesis, transcript=transcript, candidates=[]
+        )
+
+        self.assertEqual(result["outcome"], "error")
+        self.assertIn("**Paper execution**: PAPER ORDER ERROR", rendered)
+        self.assertIn("NoneType", rendered)
+        self.assertNotIn("rejected by a guardrail", rendered)
+
     def test_run_cycle_configures_order_notional_from_current_account_value_before_the_tool_loop(self):
         # Regression: _configure_max_order_notional() used to run before
         # held_quotes existed, reading the static starting-cash baseline --
