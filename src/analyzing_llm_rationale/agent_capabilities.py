@@ -256,6 +256,68 @@ def parse_action(text: str) -> Optional[Dict[str, Any]]:
 OnStep = Callable[[Dict[str, Any]], Awaitable[None]]
 
 
+def _bounded_trade_observation(observation: str, limit: int) -> str:
+    """Keep large paper-trade observations valid and useful to later readers.
+
+    ``place_trade`` returns a deliberately rich account snapshot.  Cutting its
+    serialized JSON at a character boundary corrupts the transcript, which in
+    turn makes a recorded fill look like an unknown attempt on the Agentic
+    board.  Retain the bounded execution/audit fields rather than a malformed
+    prefix; the full durable account action remains the source of record.
+    """
+    if len(observation) <= limit:
+        return observation
+    try:
+        result = json.loads(observation)
+    except (TypeError, ValueError):
+        return observation[:limit]
+    if not isinstance(result, dict):
+        return observation[:limit]
+
+    compact: Dict[str, Any] = {"observation_truncated": True}
+    for key in (
+        "ok", "tool", "message", "error", "error_type", "reason", "rejected",
+        "skipped", "submitted", "mode", "action_id",
+    ):
+        value = result.get(key)
+        if isinstance(value, str):
+            compact[key] = value[:400]
+        elif value is not None:
+            compact[key] = value
+    for key, fields in {
+        "execution": (
+            "fill_status", "fill_outcome", "filled_quantity", "requested_quantity",
+            "unfilled_quantity_cancelled", "immediate_only", "time_in_force",
+        ),
+        "normalized_order": ("platform", "ticker", "outcome", "price", "quantity"),
+        "risk_guard": ("allowed", "reasons", "cycle_id", "notional", "filled_notional"),
+        "sizing": ("mode", "label", "eligible", "reason", "target_notional"),
+    }.items():
+        value = result.get(key)
+        if isinstance(value, dict):
+            compact[key] = {field: value[field] for field in fields if field in value}
+    encoded = json.dumps(compact, sort_keys=True, separators=(",", ":"), default=str)
+    if len(encoded) <= limit:
+        return encoded
+    # Keep context machine-readable even for a pathological result with a
+    # huge error/reasons payload. The durable transcript above remains whole.
+    minimal = {
+        "observation_truncated": True,
+        "ok": result.get("ok"),
+        "tool": result.get("tool"),
+        "reason": str(result.get("reason") or "execution_summary_omitted")[:120],
+    }
+    return json.dumps(minimal, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _bounded_observation(action: str, observation: Any, limit: int) -> str:
+    """Bound model context without changing the durable tool transcript."""
+    text = str(observation or "")
+    if str(action).strip().lower() in {"place_trade", "place_order", "buy", "buy_order"}:
+        return _bounded_trade_observation(text, limit)
+    return text[:limit]
+
+
 async def run_tool_loop(
     question: str,
     tools: Dict[str, Tool],
@@ -343,8 +405,13 @@ async def run_tool_loop(
         except Exception:
             obs = f"(tool '{name}' failed)"
             errored = True
-        obs = (obs or "")[:obs_limit]
-        transcript.append({"action": name, "args": args, "observation": obs})
+        # Keep every byte of the tool result in the transcript/audit record.
+        # Only the follow-up prompt gets a compact representation, because
+        # model context length is a provider constraint rather than a reason
+        # to corrupt or discard execution evidence.
+        raw_observation = str(obs or "")
+        context_observation = _bounded_observation(name, raw_observation, obs_limit)
+        transcript.append({"action": name, "args": args, "observation": raw_observation})
         if on_step is not None:
             try:
                 await on_step({
@@ -352,13 +419,13 @@ async def run_tool_loop(
                     "thought": thought,
                     "action": name,
                     "args": args,
-                    "observation": obs,
+                    "observation": raw_observation,
                     "error": errored,
                 })
             except Exception:
                 pass
         messages.append({"role": "assistant", "content": out})
-        messages.append({"role": "user", "content": f"Observation: {obs}"})
+        messages.append({"role": "user", "content": f"Observation: {context_observation}"})
     # Out of steps — force one terminal JSON answer. Asking for plain text
     # contradicted the system contract and let some providers emit a pasted
     # sequence of prior tool-call envelopes instead of a final thesis.

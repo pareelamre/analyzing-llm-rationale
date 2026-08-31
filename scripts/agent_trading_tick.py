@@ -1325,6 +1325,17 @@ def _recorded_trade_attempt_result(transcript: List[Dict[str, Any]]) -> tuple[st
             try:
                 observation = json.loads(observation)
             except (TypeError, ValueError):
+                # Versions before compact tool observations cut a rich JSON
+                # trade response at a character boundary. Recover a confirmed
+                # fill only when the retained prefix contains both `ok: true`
+                # and a positive filled quantity; do not guess any other
+                # outcome from malformed legacy data.
+                ok = bool(re.search(r'"ok"\s*:\s*true\b', observation, re.IGNORECASE))
+                quantity = re.search(
+                    r'"filled_quantity"\s*:\s*([0-9]+(?:\.[0-9]+)?)', observation
+                )
+                if ok and quantity and float(quantity.group(1)) > 0:
+                    return "filled", "Paper fill confirmed from the retained execution summary."
                 return "attempted_unknown", "The tool result was not readable."
         if not isinstance(observation, dict):
             return "attempted_unknown", "The tool result was not structured."
@@ -1416,7 +1427,7 @@ def _reconcile_thesis_execution(
             "rejected": "PAPER ORDER REJECTED",
             "unfilled": "PAPER ORDER UNFILLED",
             "error": "PAPER ORDER ERROR",
-            "attempted_unknown": "PAPER ORDER ATTEMPT RECORDED",
+            "attempted_unknown": "PAPER ORDER RESULT UNAVAILABLE",
         }[outcome]
         thesis_execution_reconciliations.add(1, {"outcome": f"already_attempted_{outcome}"})
         return _append_paper_execution(
