@@ -1137,6 +1137,10 @@
     .agentic-thesis-copy ul { display: grid; gap: 5px; list-style: none; margin: 0 0 11px; padding: 0; }
     .agentic-thesis-copy li { padding-left: 14px; position: relative; }
     .agentic-thesis-copy li::before { background: #14b8a6; border-radius: 50%; content: ''; height: 5px; left: 1px; position: absolute; top: .57em; width: 5px; }
+    .agentic-thesis-state { align-items: flex-start; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 9px; color: #475569; display: flex; gap: 10px; padding: 12px; }
+    .agentic-thesis-state-mark { background: #e2e8f0; border-radius: 50%; color: #475569; display: grid; flex: 0 0 auto; font-size: 12px; font-weight: 800; height: 20px; place-items: center; width: 20px; }
+    .agentic-thesis-state strong { color: #334155; display: block; font-size: 12px; margin-bottom: 2px; }
+    .agentic-thesis-state span { font-size: 12px; line-height: 1.45; }
     .agentic-action { border-radius: 5px; display: inline-block; font-size: 10px; font-weight: 750; letter-spacing: .03em; padding: 2px 6px; }
     .agentic-action--yes { background: #dcfce7; color: #15803d; }
     .agentic-action--no { background: #fee2e2; color: #b91c1c; }
@@ -6525,6 +6529,12 @@ function _thesisBulletForDisplay(rawBullet) {
 function _formatThesisHtml(rawThesis) {
   const clean = _cleanThesisText(rawThesis);
   if (!clean) return '';
+  if (/^This model completed a research pass but did not return a publishable final thesis\.?$/i.test(clean)) {
+    return `<div class="agentic-thesis-state"><span class="agentic-thesis-state-mark">i</span><span><strong>Research cycle incomplete</strong>No reader-ready thesis was returned for this cycle. The private tool record is retained for audit.</span></div>`;
+  }
+  if (/\*\*Paper execution\*\*:\s*PAPER ORDER ATTEMPT RECORDED\s*[—-]\s*The tool result was not readable\.?/i.test(clean)) {
+    return `<div class="agentic-thesis-state"><span class="agentic-thesis-state-mark">i</span><span><strong>Execution result unavailable</strong>This legacy tool record is incomplete, so the panel does not infer a fill or a rejection.</span></div>`;
+  }
   const inline = value => {
     let s = escHtml(value);
     s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');

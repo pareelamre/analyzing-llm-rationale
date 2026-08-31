@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -168,6 +169,40 @@ class ToolLoopTests(unittest.TestCase):
         res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=3))
         self.assertIn("unknown tool", res["transcript"][0]["observation"])
         self.assertEqual(res["answer"], "done anyway")
+
+    def test_large_paper_trade_observation_stays_valid_json(self):
+        async def place_trade(_args):
+            return json.dumps({
+                "ok": True,
+                "tool": "place_trade",
+                "action_id": "audit-123",
+                "execution": {"fill_status": "shadow_assumed_full", "filled_quantity": 7.5},
+                "account": {"open_positions": [{"ticker": "X", "padding": "x" * 10_000}]},
+            })
+
+        turns = iter([
+            '{"action":"place_trade","args":{"ticker":"X"}}',
+            '{"final":"Recorded."}',
+        ])
+
+        seen_messages = []
+
+        async def chat_fn(messages):
+            seen_messages.append(messages)
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"place_trade": place_trade}, [], chat_fn, max_steps=2, obs_limit=4_000
+        ))
+        observation = json.loads(res["transcript"][0]["observation"])
+        self.assertTrue(observation["ok"])
+        self.assertEqual(observation["action_id"], "audit-123")
+        self.assertEqual(observation["execution"]["filled_quantity"], 7.5)
+        self.assertEqual(observation["account"]["open_positions"][0]["padding"], "x" * 10_000)
+        context = seen_messages[1][-1]["content"].removeprefix("Observation: ")
+        context_observation = json.loads(context)
+        self.assertTrue(context_observation["observation_truncated"])
+        self.assertNotIn("account", context_observation)
 
     def test_truncates_at_max_steps(self):
         async def tool(args):

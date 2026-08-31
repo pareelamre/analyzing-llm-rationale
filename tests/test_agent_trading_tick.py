@@ -1022,6 +1022,24 @@ class RunCycleTests(unittest.TestCase):
         self.assertIn("NoneType", rendered)
         self.assertNotIn("rejected by a guardrail", rendered)
 
+    def test_legacy_truncated_successful_trade_is_recovered_as_a_fill(self):
+        thesis = "BUY YES on KXLEGACY on Kalshi"
+        transcript = [{
+            "action": "place_trade",
+            "observation": (
+                '{"ok": true, "execution": {"filled_quantity": 4.25}, '
+                '"account": {"open_positions": ['
+            ),
+        }]
+
+        rendered, result = agent_trading_tick._reconcile_thesis_execution(
+            agent_id="model-legacy-fill", thesis=thesis, transcript=transcript, candidates=[]
+        )
+
+        self.assertEqual(result["outcome"], "filled")
+        self.assertIn("PAPER ORDER FILLED", rendered)
+        self.assertIn("retained execution summary", rendered)
+
     def test_run_cycle_configures_order_notional_from_current_account_value_before_the_tool_loop(self):
         # Regression: _configure_max_order_notional() used to run before
         # held_quotes existed, reading the static starting-cash baseline --

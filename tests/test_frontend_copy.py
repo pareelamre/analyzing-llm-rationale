@@ -421,6 +421,15 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("publishable final thesis", cleaner)
         self.assertIn('"action"', cleaner)
 
+    def test_agentic_thesis_cards_render_clean_states_for_incomplete_cycles(self):
+        index = self._both()["frontend"]
+        formatter = index.split("function _formatThesisHtml(rawThesis) {", 1)[1].split(
+            "function _toggleAgentPositions", 1
+        )[0]
+        self.assertIn("Research cycle incomplete", formatter)
+        self.assertIn("Execution result unavailable", formatter)
+        self.assertIn("agentic-thesis-state", index)
+
     def test_agentic_is_a_real_edge_board_tab(self):
         for name, index in self._both().items():
             with self.subTest(file=name):
