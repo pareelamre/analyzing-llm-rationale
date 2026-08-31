@@ -285,6 +285,69 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(result["execution"]["filled_quantity"], 2.0)
         self.assertTrue(result["risk_guard"]["allowed"])
 
+    def test_place_trade_prices_a_price_less_polymarket_order_from_a_fresh_live_ask(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-price-from-quote", require_kelly_sizing=True)
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "10000",
+                "FORESEA_AGENT_PLACE_TRADE_MODE": "shadow",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_polymarket",
+                    return_value={"yes_ask": 0.42, "no_ask": 0.58},
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {
+                        "platform": "polymarket",
+                        "ticker": "price-less-poly-market",
+                        "side": "yes",
+                        "token_id": "12345",
+                        "sizing_mode": "quarter_kelly",
+                        "model_probability": 0.90,
+                    },
+                    ctx,
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["normalized_order"]["price"], 0.42)
+        self.assertEqual(result["execution"]["fill_status"], "shadow_assumed_full")
+
+    def test_place_trade_without_price_does_not_record_an_order_when_quote_is_unavailable(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-no-quote", require_kelly_sizing=True)
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=RuntimeError("venue unavailable"),
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {
+                        "ticker": "KXNOQUOTE",
+                        "side": "yes",
+                        "sizing_mode": "quarter_kelly",
+                        "model_probability": 0.90,
+                    },
+                    ctx,
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["reason"], "shadow_quote_unavailable")
+        self.assertEqual(result["execution"]["filled_quantity"], 0.0)
+
     def test_quarter_kelly_sizing_is_applied_and_capped_at_five_percent(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-quarter", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:

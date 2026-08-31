@@ -1306,8 +1306,13 @@ def _has_trade_attempt(transcript: List[Dict[str, Any]]) -> bool:
     )
 
 
-def _recorded_trade_attempt_outcome(transcript: List[Dict[str, Any]]) -> str:
-    """Derive one bounded paper outcome from a model's recorded tool result."""
+def _recorded_trade_attempt_result(transcript: List[Dict[str, Any]]) -> tuple[str, str]:
+    """Derive a bounded paper outcome and public-safe detail from tool output.
+
+    A failed tool invocation is not necessarily a risk-guard rejection. Only
+    the explicit ``rejected`` shape is a guardrail decision; input, quote, and
+    unexpected tool failures must remain visible as execution errors.
+    """
     for step in reversed(transcript or []):
         if not isinstance(step, dict):
             continue
@@ -1320,9 +1325,9 @@ def _recorded_trade_attempt_outcome(transcript: List[Dict[str, Any]]) -> str:
             try:
                 observation = json.loads(observation)
             except (TypeError, ValueError):
-                return "attempted_unknown"
+                return "attempted_unknown", "The tool result was not readable."
         if not isinstance(observation, dict):
-            return "attempted_unknown"
+            return "attempted_unknown", "The tool result was not structured."
         execution = observation.get("execution")
         if not isinstance(execution, dict):
             execution = {}
@@ -1331,11 +1336,24 @@ def _recorded_trade_attempt_outcome(transcript: List[Dict[str, Any]]) -> str:
         except (TypeError, ValueError):
             filled_quantity = 0.0
         if bool(observation.get("ok")) and filled_quantity > 0:
-            return "filled"
+            return "filled", "The agent called the guarded paper-trade tool and its recorded order filled."
         if bool(observation.get("ok")):
-            return "unfilled"
-        return "rejected"
-    return "attempted_unknown"
+            return "unfilled", "The agent called the guarded paper-trade tool, but no executable paper fill was recorded."
+        if bool(observation.get("rejected")):
+            return "rejected", str(observation.get("reason") or "risk_guard")
+        detail = str(
+            observation.get("message")
+            or observation.get("reason")
+            or observation.get("error")
+            or "The paper-trade tool failed before a guardrail decision."
+        )
+        return "error", detail
+    return "attempted_unknown", "The agent called the guarded paper-trade tool; inspect its tool transcript for the exact result."
+
+
+def _recorded_trade_attempt_outcome(transcript: List[Dict[str, Any]]) -> str:
+    """Backward-compatible outcome-only view used by existing callers."""
+    return _recorded_trade_attempt_result(transcript)[0]
 
 
 def _append_paper_execution(thesis: str, status: str, detail: str) -> str:
@@ -1392,18 +1410,13 @@ def _reconcile_thesis_execution(
 
     action = str(decision["action"])
     if _has_trade_attempt(transcript):
-        outcome = _recorded_trade_attempt_outcome(transcript)
+        outcome, detail = _recorded_trade_attempt_result(transcript)
         status = {
             "filled": "PAPER ORDER FILLED",
             "rejected": "PAPER ORDER REJECTED",
             "unfilled": "PAPER ORDER UNFILLED",
+            "error": "PAPER ORDER ERROR",
             "attempted_unknown": "PAPER ORDER ATTEMPT RECORDED",
-        }[outcome]
-        detail = {
-            "filled": "The agent called the guarded paper-trade tool and its recorded order filled.",
-            "rejected": "The agent called the guarded paper-trade tool, but its recorded order was rejected by a guardrail.",
-            "unfilled": "The agent called the guarded paper-trade tool, but no executable paper fill was recorded.",
-            "attempted_unknown": "The agent called the guarded paper-trade tool; inspect its tool transcript for the exact result.",
         }[outcome]
         thesis_execution_reconciliations.add(1, {"outcome": f"already_attempted_{outcome}"})
         return _append_paper_execution(
