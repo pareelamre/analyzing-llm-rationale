@@ -1507,7 +1507,14 @@ class ServerTests(unittest.TestCase):
                 "provider_degraded": [{"agent_id": "gpt-oss-120b", "status": "provider_unavailable"}],
             },
         }
-        with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
+        archive_manifest = {
+            "retired_models": ["kimi-k3"],
+            "archives": {"kimi-k3": [{"month": "2026-08", "records": 14}]},
+        }
+        with (
+            mock.patch.object(server_module, "_read_agent_trading_board", return_value=live),
+            mock.patch.object(server_module, "_read_agent_trading_audit_archive_manifest", return_value=archive_manifest),
+        ):
             response = self.client.get("/agent-trading/board")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -1529,6 +1536,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["operational_health"]["status"], "provider_degraded")
         self.assertEqual(payload["operational_health"]["models_total"], 1)
         self.assertEqual(payload["operational_health"]["provider_degraded"][0]["agent_id"], "gpt-oss-120b")
+        self.assertEqual(payload["retired_artifacts"], [{
+            "agent_id": "kimi-k3", "archive_periods": 1, "records": 14,
+        }])
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])
 
@@ -1538,7 +1548,10 @@ class ServerTests(unittest.TestCase):
         # artifact itself might (incorrectly) claim, not pass through a
         # "mode" field from the live payload.
         live = {"generated_at": "now", "mode": "live", "leaderboard": []}
-        with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
+        with (
+            mock.patch.object(server_module, "_read_agent_trading_board", return_value=live),
+            mock.patch.object(server_module, "_read_agent_trading_audit_archive_manifest", return_value={}),
+        ):
             response = self.client.get("/agent-trading/board")
         self.assertEqual(response.json()["mode"], "shadow")
 
@@ -1644,7 +1657,10 @@ class ServerTests(unittest.TestCase):
             },
             "weather_operations": {"window_hours": 999, "candidates_offered": 100_001},
         }
-        with mock.patch.object(server_module, "_read_agent_trading_board", return_value=live):
+        with (
+            mock.patch.object(server_module, "_read_agent_trading_board", return_value=live),
+            mock.patch.object(server_module, "_read_agent_trading_audit_archive_manifest", return_value={}),
+        ):
             payload = self.client.get("/agent-trading/board").json()
 
         self.assertEqual(len(payload["models"]), server_module._AGENT_TRADING_MAX_MODELS)
@@ -1663,7 +1679,10 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["weather_operations"]["candidates_offered"], 10_000)
 
     def test_agent_trading_board_endpoint_defaults_to_empty_when_no_live_file(self):
-        with mock.patch.object(server_module, "_read_agent_trading_board", return_value=None):
+        with (
+            mock.patch.object(server_module, "_read_agent_trading_board", return_value=None),
+            mock.patch.object(server_module, "_read_agent_trading_audit_archive_manifest", return_value={}),
+        ):
             response = self.client.get("/agent-trading/board")
         self.assertEqual(response.status_code, 200)
         payload = response.json()

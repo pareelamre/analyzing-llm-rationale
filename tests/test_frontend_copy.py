@@ -330,6 +330,9 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("Last worker attempt", renderer)
         self.assertIn("latestTheses[activeFilter]", renderer)
         self.assertIn("No published thesis for", renderer)
+        self.assertIn("const retiredArtifacts = Array.isArray(d.retired_artifacts)", renderer)
+        self.assertIn("Retired model audit trail", renderer)
+        self.assertIn("excluded from live rankings, health, and paper-trading decisions", renderer)
         self.assertIn("const banner = ", renderer)
         # Present in the loading and error early-return branches too.
         self.assertIn("host.innerHTML = `${banner}<p", renderer)
