@@ -149,6 +149,53 @@ class AgentTradingAuditTests(unittest.TestCase):
         self.assertEqual(archive["archives"]["kimi-k3"][0]["records"], 1)
         self.assertEqual(archive["archives"]["scads-alias-code"][0]["records"], 1)
 
+    def test_archived_account_snapshot_replays_book_value_without_live_quotes(self):
+        records = [
+            {
+                "recorded_at": "2026-08-01T01:00:00+00:00",
+                "action_id": "open",
+                "event_type": "trade",
+                "outcome": "open",
+                "execution": {"cash_delta": -105, "notional": 100, "realized_pnl": 0},
+            },
+            {
+                "recorded_at": "2026-08-01T02:00:00+00:00",
+                "action_id": "close",
+                "event_type": "trade",
+                "outcome": "realized",
+                "execution": {"cash_delta": 145, "notional": 100, "realized_pnl": 45},
+            },
+            {
+                "recorded_at": "2026-08-01T03:00:00+00:00",
+                "action_id": "open-loss",
+                "event_type": "trade",
+                "outcome": "open",
+                "execution": {"cash_delta": -21, "notional": 20, "realized_pnl": 0},
+            },
+            {
+                "recorded_at": "2026-08-01T04:00:00+00:00",
+                "action_id": "loss-settlement",
+                "event_type": "settlement",
+                "outcome": "no",
+                "execution": {"cash_delta": 0, "notional": 0, "realized_pnl": -20},
+            },
+            {
+                "recorded_at": "2026-08-01T05:00:00+00:00",
+                "action_id": "rejected",
+                "event_type": "trade",
+                "outcome": "rejected",
+                "execution": {"cash_delta": -999, "notional": 999, "realized_pnl": 0},
+            },
+        ]
+
+        snapshot = build_agent_trading_audit._archived_account_snapshot(reversed(records))
+
+        self.assertEqual(snapshot["starting_cash"], 10_000.0)
+        self.assertEqual(snapshot["open_cost_basis"], 0.0)
+        self.assertEqual(snapshot["account_value"], 10_019.0)
+        self.assertEqual(snapshot["total_pnl"], 19.0)
+        self.assertEqual(snapshot["return_pct"], 0.19)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1963,6 +1963,8 @@ def _compact_retired_agent_artifacts(manifest: Any) -> List[Dict[str, Any]]:
     source = manifest if isinstance(manifest, dict) else {}
     raw_archives = source.get("archives")
     archives = raw_archives if isinstance(raw_archives, dict) else {}
+    raw_account_values = source.get("retired_account_values")
+    account_values = raw_account_values if isinstance(raw_account_values, dict) else {}
     raw_retired = source.get("retired_models")
     retired_models = raw_retired if isinstance(raw_retired, list) else []
     artifacts: List[Dict[str, Any]] = []
@@ -1985,11 +1987,33 @@ def _compact_retired_agent_artifacts(manifest: Any) -> List[Dict[str, Any]]:
                 records += max(0, min(100_000, int(period.get("records") or 0)))
             except (TypeError, ValueError):
                 continue
-        artifacts.append({
+        artifact: Dict[str, Any] = {
             "agent_id": model,
             "archive_periods": valid_periods,
             "records": records,
-        })
+        }
+        # The archive publisher gives the board a bounded final ledger replay
+        # (cash plus unmarked open cost basis), so a retired row can show its
+        # account value without making this live endpoint fetch every monthly
+        # JSON artifact.  Omit malformed or legacy summaries rather than
+        # inventing a financial value.
+        summary = account_values.get(model)
+        if isinstance(summary, dict):
+            compact_summary: Dict[str, float] = {}
+            for key in ("starting_cash", "account_value", "total_pnl", "return_pct", "open_cost_basis"):
+                value = summary.get(key)
+                if isinstance(value, bool):
+                    continue
+                try:
+                    number = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(number):
+                    compact_summary[key] = round(number, 6)
+            if "account_value" in compact_summary:
+                artifact.update(compact_summary)
+                artifact["value_source"] = "archived_audit_replay"
+        artifacts.append(artifact)
         if len(artifacts) >= _AGENT_TRADING_MAX_MODELS:
             break
     return artifacts

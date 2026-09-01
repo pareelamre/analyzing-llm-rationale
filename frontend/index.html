@@ -6922,10 +6922,21 @@ function renderAgentTradingBoard(d) {
     ? `<tr class="agentic-retired-divider"><td colspan="10">Retired models · read-only archived records</td></tr>${retiredArtifacts.map(item => {
         const agentId = String(item?.agent_id || '');
         const records = Math.max(0, Number(item?.records) || 0);
+        const archivedAccountValue = Number(item?.account_value);
+        const archivedPnl = Number(item?.total_pnl);
+        const archivedReturnPct = Number(item?.return_pct);
+        const hasArchivedAccountValue = Number.isFinite(archivedAccountValue);
+        const hasArchivedPnl = Number.isFinite(archivedPnl);
+        const hasArchivedReturnPct = Number.isFinite(archivedReturnPct);
+        const archivedValueTitle = 'Final archived shadow-account book value, replayed from immutable paper-trade records. It is cash plus open cost basis, not a current market mark.';
+        const archivedPnlColor = archivedPnl >= 0 ? '#0a7' : '#c33';
         return `<tr class="eb-row agentic-retired-row" style="cursor:pointer" title="Open this model's archived paper-trading records" onclick="_filterAgentActivity('${escAttr(agentId)}', true)">
           <td>—</td>
           <td><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span><span class="agentic-retired-tag">Retired</span></td>
-          <td>Archived</td><td>—</td><td>—</td><td>—</td><td>—</td>
+          <td>Archived</td>
+          <td title="${escAttr(archivedValueTitle)}"><b>${hasArchivedAccountValue ? _usd(archivedAccountValue) : '—'}</b></td>
+          <td style="color:${hasArchivedPnl ? archivedPnlColor : 'var(--text-dim)'};font-weight:600" title="${escAttr(archivedValueTitle)}">${hasArchivedPnl ? `${archivedPnl >= 0 ? '+' : ''}${_usd(archivedPnl)}` : '—'}</td>
+          <td style="color:${hasArchivedReturnPct ? archivedPnlColor : 'var(--text-dim)'};font-weight:600" title="${escAttr(archivedValueTitle)}">${hasArchivedReturnPct ? _roiPct(archivedReturnPct / 100) : '—'}</td><td>—</td>
           <td><span class="agentic-retired-records">${records.toLocaleString()} record${records === 1 ? '' : 's'} · view</span></td>
           <td>—</td><td>—</td>
         </tr>`;
