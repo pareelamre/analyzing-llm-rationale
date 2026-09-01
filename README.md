@@ -315,7 +315,7 @@ gcloud run services update analyzing-llm-rationale \
   --timeout 180 \
   --cpu-throttling \
   --cpu-boost \
-  --update-env-vars INTERACTIVE_DEFAULT_MODEL=gemma-4-31b-it,INTERACTIVE_MAX_TOKENS=384,CHAT_PROVIDER_TIMEOUT_S=15,CHAT_PROVIDER_MAX_RETRIES=0,EVIDENCE_TIMEOUT_S=6,EVIDENCE_MAX_CONCURRENCY=4
+  --update-env-vars INTERACTIVE_DEFAULT_MODEL=gemma-4-26b-a4b-it,INTERACTIVE_MAX_TOKENS=384,CHAT_PROVIDER_TIMEOUT_S=15,CHAT_PROVIDER_MAX_RETRIES=0,EVIDENCE_TIMEOUT_S=6,EVIDENCE_MAX_CONCURRENCY=4
 ```
 
 Measure deployed forecast latency after each runtime change:

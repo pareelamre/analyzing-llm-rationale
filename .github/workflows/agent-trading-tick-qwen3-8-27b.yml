@@ -1,4 +1,4 @@
-name: Agent trading tick (qwen3-coder-30b-a3b-instruct)
+name: Agent trading tick (qwen3-8-27b)
 
 on:
   workflow_dispatch: {}
@@ -7,6 +7,6 @@ jobs:
   trade:
     uses: ./.github/workflows/_agent-trading-tick-reusable.yml
     with:
-      models: qwen3-coder-30b-a3b-instruct
+      models: qwen3-8-27b
       lane: "0"
     secrets: inherit

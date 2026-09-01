@@ -158,7 +158,7 @@ jobs:
           python scripts/measure_forecast_latency.py \
             --url "${SERVICE_URL}" \
             --mode stream \
-            --models minimax-m3,kimi-k3,gemma-4-26b-a4b-it \
+            --models minimax-m3,qwen3-8-27b,gemma-4-26b-a4b-it \
             --runs 1 \
             --no-attach-evidence \
             --max-tokens 64 \
@@ -168,7 +168,7 @@ jobs:
           import json
 
           payload = json.load(open("stream-latency.json", "r", encoding="utf-8"))
-          requested_models = {"minimax-m3", "kimi-k3", "gemma-4-26b-a4b-it"}
+          requested_models = {"minimax-m3", "qwen3-8-27b", "gemma-4-26b-a4b-it"}
           successes = [
               row for row in payload["rows"]
               if row.get("status") == 200

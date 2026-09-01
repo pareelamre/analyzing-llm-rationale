@@ -42,10 +42,9 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    # SCADS team access to this model was revoked (500 "team not allowed to
-    # access model") -- every forecast attempt fails, so its MTM/edge-Kelly
-    # accounts sat frozen at the starting balance forever. Re-enable once
-    # SCADS access is restored.
+    # Retired upstream. Keep its configuration only to render historical
+    # records; never expose or schedule a provider call for this model.
+    forecasting_enabled: false
     track_record_enabled: false
   llama-4-scout-17b-16e-instruct:
     result_label: Llama-4-Scout-17B-16E-Instruct
@@ -56,8 +55,8 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    # Not in the active track-record-forecast.yml CI matrix -- never gets a
-    # snapshot, so it sat frozen at the starting balance on the MTM board.
+    # Retired upstream. Kept for historical audit only.
+    forecasting_enabled: false
     track_record_enabled: false
   scads-alias-code:
     result_label: SCADS Alias Code
@@ -69,6 +68,10 @@ models:
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
+    # Alias Code currently resolves to Qwen3.8-27B.  Keep it in chat, but
+    # never create a duplicate agent account for the same underlying model.
+    agent_trading_enabled: false
+    agent_model_identity: Qwen/Qwen3.8-27B
     fallback_model_chain:
       - openai/gpt-oss-120b
       - google/gemma-4-26B-A4B-it
@@ -82,10 +85,12 @@ models:
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
+    agent_trading_enabled: false
+    agent_model_identity: meta-llama/Llama-3.3-70B-Instruct
     fallback_model_chain:
       - google/gemma-4-26B-A4B-it
       - openai/gpt-oss-120b
-      - MiniMaxAI/MiniMax-M3-MXFP8
+      - MiniMaxAI/MiniMax-M3
   scads-alias-reasoning:
     result_label: SCADS Alias Reasoning
     provider: openai-compatible
@@ -96,9 +101,11 @@ models:
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
+    agent_trading_enabled: false
+    agent_model_identity: google/gemma-4-26B-A4B-it
     fallback_model_chain:
       - openai/gpt-oss-120b
-      - MiniMaxAI/MiniMax-M3-MXFP8
+      - MiniMaxAI/MiniMax-M3
   scads-alias-huge:
     result_label: SCADS Alias Huge
     provider: openai-compatible
@@ -126,8 +133,8 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    # Not in the active track-record-forecast.yml CI matrix -- never gets a
-    # snapshot, so it sat frozen at the starting balance on the MTM board.
+    # Retired upstream. Kept for historical audit only.
+    forecasting_enabled: false
     track_record_enabled: false
   qwen3-coder-30b-a3b-instruct:
     result_label: Qwen3-Coder-30B-A3B-Instruct
@@ -138,22 +145,38 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    # Replaced upstream by Qwen/Qwen3.8-27B.  Do not reuse this agent key for
+    # the replacement: a new key keeps its pre-retirement performance history
+    # from being attributed to a different underlying model.
+    forecasting_enabled: false
+    chat_interface_enabled: false
+    track_record_enabled: false
+  qwen3-8-27b:
+    result_label: Qwen3.8-27B
+    provider: openai-compatible
+    local_model_name: Qwen/Qwen3.8-27B
+    router_model_name: Qwen/Qwen3.8-27B
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
     chat_interface_enabled: true
+    track_record_enabled: true
     fallback_model_chain:
       - openai/gpt-oss-120b
       - google/gemma-4-26B-A4B-it
   minimax-m3:
     result_label: MiniMax-M3
     provider: openai-compatible
-    local_model_name: MiniMaxAI/MiniMax-M3-MXFP8
-    router_model_name: MiniMaxAI/MiniMax-M3-MXFP8
+    local_model_name: MiniMaxAI/MiniMax-M3
+    router_model_name: MiniMaxAI/MiniMax-M3
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
     fallback_model_chain:
-      - moonshotai/Kimi-K3
+      - openai/gpt-oss-120b
       - google/gemma-4-26B-A4B-it
   kimi-k3:
     result_label: Kimi-K3
@@ -164,11 +187,10 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    chat_interface_enabled: true
-    track_record_enabled: true
-    fallback_model_chain:
-      - MiniMaxAI/MiniMax-M3-MXFP8
-      - openai/gpt-oss-120b
+    # Trial access expired upstream. Kept for historical audit only.
+    forecasting_enabled: false
+    chat_interface_enabled: false
+    track_record_enabled: false
   kimi-k2.7-code:
     result_label: Kimi-K2.7-Code
     provider: openai-compatible
@@ -178,6 +200,7 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    forecasting_enabled: false
     chat_interface_enabled: false
     track_record_enabled: false
   glm-5.2-fp8:
@@ -195,7 +218,37 @@ models:
     # actually published there; every other model's listing omits it.
     context_window_tokens: 524288
     fallback_model_chain:
-      - MiniMaxAI/MiniMax-M3-MXFP8
+      - MiniMaxAI/MiniMax-M3
+  glm-5-3-flash:
+    result_label: GLM-5.3-Flash
+    provider: openai-compatible
+    local_model_name: zai-org/GLM-5.3-Flash
+    router_model_name: zai-org/GLM-5.3-Flash
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+    chat_interface_enabled: true
+    # It joins the paper-trading board immediately; keep MTM out until the
+    # forecast scheduler has accumulated a non-empty comparison history.
+    track_record_enabled: false
+    fallback_model_chain:
+      - zai-org/GLM-5.2-FP8
+      - openai/gpt-oss-120b
+  deepseek-v4-flash:
+    result_label: DeepSeek-V4-Flash
+    provider: openai-compatible
+    local_model_name: deepseek-ai/DeepSeek-V4-Flash
+    router_model_name: deepseek-ai/DeepSeek-V4-Flash
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    api_key_file: SCADS_AI_API_KEY.txt
+    access: hosted
+    chat_interface_enabled: true
+    track_record_enabled: false
+    fallback_model_chain:
+      - openai/gpt-oss-120b
+      - google/gemma-4-26B-A4B-it
   deepseek-r1:
     result_label: DeepSeek-R1
     provider: openai-compatible
@@ -214,8 +267,8 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    # Not in the active track-record-forecast.yml CI matrix -- never gets a
-    # snapshot, so it sat frozen at the starting balance on the MTM board.
+    # Retired upstream. Kept for historical audit only.
+    forecasting_enabled: false
     track_record_enabled: false
   gpt-5:
     result_label: GPT-5
@@ -261,6 +314,8 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    # Replaced upstream by Gemma 4-26B-A4B. Kept for historical audit only.
+    forecasting_enabled: false
     chat_interface_enabled: false
     track_record_enabled: false
   kimi-k2.5:
@@ -272,8 +327,8 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    # Not in the active track-record-forecast.yml CI matrix -- never gets a
-    # snapshot, so it sat frozen at the starting balance on the MTM board.
+    # Retired upstream. Kept for historical audit only.
+    forecasting_enabled: false
     track_record_enabled: false
   kimi-k2.6:
     result_label: Kimi-K2.6
@@ -284,3 +339,6 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
+    # Retired upstream. Kept for historical audit only.
+    forecasting_enabled: false
+    track_record_enabled: false

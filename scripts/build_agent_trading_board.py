@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Aggregate every agentic-trading model's shadow account into one board JSON.
 
-Each of the 10 SCADS models trades through its own isolated GCS-synced SQLite
-store (see scripts/agent_trading_tick.py); this script reads all 10 (already
+Each of the eight distinct SCADS models trades through its own isolated
+GCS-synced SQLite store (see scripts/agent_trading_tick.py); this script reads
+all eight (already
 downloaded locally, one directory per model, by the publish workflow),
 fetches a live quote (Kalshi or Polymarket, matching each position's own
 venue) for every ticker anyone currently holds, and writes
@@ -33,7 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import agent_trading_stats, benchmark_tools, market_data  # noqa: E402
-from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
+from analyzing_llm_rationale.config import scads_agent_trading_model_labels  # noqa: E402
 
 STORE_DIR = Path(os.environ.get("AGENT_TRADING_BOARD_STORE_DIR", "tmp/agent-trading-board"))
 OUTPUT_PATH = Path(os.environ.get("AGENT_TRADING_BOARD_OUTPUT", "static/agent_trading_live.json"))
@@ -56,9 +57,8 @@ MODEL_HEALTH_STALE_AFTER_SECONDS = int(
 )
 
 
-def _chat_capable_models() -> List[str]:
-    models = load_model_configs(ROOT / "configs" / "models.yaml")
-    return sorted(name for name, cfg in models.items() if cfg.chat_interface_enabled)
+def _agent_trading_models() -> List[str]:
+    return list(scads_agent_trading_model_labels(ROOT / "configs" / "models.yaml"))
 
 
 def _open_store(model: str) -> sqlite3.Connection:
@@ -357,7 +357,7 @@ def _weather_operations(conns: Dict[str, sqlite3.Connection], now: datetime) -> 
 
 
 def build_board() -> Dict[str, Any]:
-    models = _chat_capable_models()
+    models = _agent_trading_models()
     store_presence = {model: (STORE_DIR / model / "store.sqlite").exists() for model in models}
     conns = {model: _open_store(model) for model in models}
     try:

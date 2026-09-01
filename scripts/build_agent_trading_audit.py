@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import benchmark_tools  # noqa: E402
-from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
+from analyzing_llm_rationale.config import scads_agent_trading_model_labels  # noqa: E402
 
 tracer = trace.get_tracer("foresea.agent_trading_audit")
 meter = metrics.get_meter("foresea.agent_trading_audit")
@@ -81,9 +81,8 @@ PER_MODEL_LIMIT = max(
 _AUDITED_ACTIONS = ("trade", "rejected_trade", "settlement")
 
 
-def _chat_capable_models() -> List[str]:
-    models = load_model_configs(ROOT / "configs" / "models.yaml")
-    return sorted(name for name, cfg in models.items() if cfg.chat_interface_enabled)
+def _agent_trading_models() -> List[str]:
+    return list(scads_agent_trading_model_labels(ROOT / "configs" / "models.yaml"))
 
 
 def _open_store(path: Path) -> sqlite3.Connection:
@@ -232,7 +231,7 @@ def build_audit_archive(
     publisher workflow these files are the long-term audit copy in GitHub.
     """
     started = time.perf_counter()
-    chosen_models = list(models) if models is not None else _chat_capable_models()
+    chosen_models = list(models) if models is not None else _agent_trading_models()
     with tracer.start_as_current_span("agent_trading.build_audit_archive") as span:
         span.set_attribute("agent.models", len(chosen_models))
         try:
@@ -292,7 +291,7 @@ def build_audit_artifact(
 ) -> Dict[str, Any]:
     """Build a bounded, independently fetchable audit index from all model ledgers."""
     started = time.perf_counter()
-    chosen_models = list(models) if models is not None else _chat_capable_models()
+    chosen_models = list(models) if models is not None else _agent_trading_models()
     with tracer.start_as_current_span("agent_trading.build_audit_artifact") as span:
         span.set_attributes({"agent.models": len(chosen_models), "audit.per_model_limit": per_model_limit})
         try:
