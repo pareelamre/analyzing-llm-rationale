@@ -126,14 +126,15 @@ class AgentTradingAuditTests(unittest.TestCase):
     def test_retired_model_archives_remain_discoverable_without_a_live_ledger(self):
         with tempfile.TemporaryDirectory() as td:
             archive_root = Path(td) / "static" / "agent_trading_audits"
-            retired_path = archive_root / "kimi-k3" / "2026-08.json"
-            retired_path.parent.mkdir(parents=True)
-            retired_path.write_text(json.dumps({
-                "schema_version": 1,
-                "agent_id": "kimi-k3",
-                "month": "2026-08",
-                "items": [{"action_id": "retired-action"}],
-            }), encoding="utf-8")
+            for model in ("kimi-k3", "scads-alias-code"):
+                retired_path = archive_root / model / "2026-08.json"
+                retired_path.parent.mkdir(parents=True)
+                retired_path.write_text(json.dumps({
+                    "schema_version": 1,
+                    "agent_id": model,
+                    "month": "2026-08",
+                    "items": [{"action_id": f"{model}-retired-action"}],
+                }), encoding="utf-8")
             manifest_path = Path(td) / "static" / "agent_trading_audit_archive_manifest.json"
 
             with mock.patch.object(build_agent_trading_audit, "ROOT", Path.cwd()):
@@ -144,7 +145,9 @@ class AgentTradingAuditTests(unittest.TestCase):
                 )
 
         self.assertIn("kimi-k3", archive["retired_models"])
+        self.assertIn("scads-alias-code", archive["retired_models"])
         self.assertEqual(archive["archives"]["kimi-k3"][0]["records"], 1)
+        self.assertEqual(archive["archives"]["scads-alias-code"][0]["records"], 1)
 
 
 if __name__ == "__main__":
