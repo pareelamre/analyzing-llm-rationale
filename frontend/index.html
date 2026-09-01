@@ -1102,6 +1102,13 @@
     .agentic-weather-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 7px; padding: 0 0 12px; }
     .agentic-weather-summary-label { color: #0f766e; font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-right: 2px; text-transform: uppercase; }
     .agentic-weather-summary-count { color: var(--text); font-weight: 650; }
+    .agentic-artifacts { background: #f8fafc; border: 1px solid #dbe4eb; border-radius: 12px; display: grid; gap: 12px; grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.5fr); padding: 14px 16px; }
+    .agentic-artifacts-kicker { color: #64748b; display: block; font-size: 9px; font-weight: 750; letter-spacing: .08em; margin-bottom: 4px; text-transform: uppercase; }
+    .agentic-artifacts-title { color: var(--ink); font-size: 13px; font-weight: 700; margin: 0; }
+    .agentic-artifacts-copy { color: var(--text-dim); font-size: 11px; line-height: 1.45; margin: 4px 0 0; }
+    .agentic-artifacts-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-start; }
+    .agentic-artifact { background: #fff; border: 1px solid #dbe4eb; border-radius: 8px; color: #334155; font-size: 10px; line-height: 1.35; padding: 6px 8px; }
+    .agentic-artifact strong { color: #0f172a; display: block; font-size: 11px; }
     .agentic-learning-summary { background: linear-gradient(115deg, #f0fdfa, #f8fafc 62%); border: 1px solid #cbd5e1; border-radius: 12px; display: grid; gap: 10px 16px; grid-template-columns: minmax(150px, 1.4fr) repeat(3, minmax(0, 1fr)); margin: 14px 0; padding: 13px 15px; }
     .agentic-learning-kicker { color: #0f766e; display: block; font-size: 9px; font-weight: 750; letter-spacing: .08em; margin-bottom: 4px; text-transform: uppercase; }
     .agentic-learning-title { color: var(--ink); font-size: 13px; font-weight: 700; margin: 0; }
@@ -1150,6 +1157,7 @@
       .agentic-panel-head, .agentic-feed-head { align-items: flex-start; flex-direction: column; gap: 7px; }
       .agentic-learning-summary { grid-template-columns: 1fr 1fr; }
       .agentic-learning-summary > :first-child { grid-column: 1 / -1; }
+      .agentic-artifacts { grid-template-columns: 1fr; }
       .agentic-activity { padding: 14px; }
       .agentic-activity-meta { align-items: flex-start; flex-direction: column; gap: 5px; }
     }
@@ -6708,6 +6716,7 @@ function renderAgentTradingBoard(d) {
   const modelHealth = d.model_health || {};
   const forecastLearning = d.forecast_learning || {};
   const weatherOperations = d.weather_operations || {};
+  const retiredArtifacts = Array.isArray(d.retired_artifacts) ? d.retired_artifacts.slice(0, 8) : [];
   const activity = d.recent_activity || [];
   const latestTheses = d.latest_theses || {};
   const _healthStatus = health => String(health?.status || 'unverified');
@@ -6883,6 +6892,17 @@ function renderAgentTradingBoard(d) {
   const weatherOperationalSummary = weatherStages.some(([key]) => Number(weatherOperations[key]) > 0)
     ? `<div class="agentic-weather-summary" title="Source-verified NWS weather-candidate coverage. These counts describe activity, not profitability."><span class="agentic-weather-summary-label">Weather lane · ${Math.max(1, Number(weatherOperations.window_hours) || 24)}h</span>${weatherStages.map(([key, label]) => `<span><span class="agentic-weather-summary-count">${Math.max(0, Number(weatherOperations[key]) || 0)}</span> ${label}</span>`).join('<span aria-hidden="true">·</span>')}</div>`
     : '';
+  const retiredArtifactSummary = retiredArtifacts.length
+    ? `<section class="agentic-artifacts" aria-label="Historical retired model artifacts">
+        <div><span class="agentic-artifacts-kicker">Historical artifacts</span><h4 class="agentic-artifacts-title">Retired model audit trail</h4><p class="agentic-artifacts-copy">Kept for auditability only. These records are excluded from live rankings, health, and paper-trading decisions.</p></div>
+        <div class="agentic-artifacts-list">${retiredArtifacts.map(item => {
+          const model = String(item?.agent_id || 'Retired model');
+          const periods = Math.max(0, Number(item?.archive_periods) || 0);
+          const records = Math.max(0, Number(item?.records) || 0);
+          return `<span class="agentic-artifact"><strong>${escHtml(_ebModelLabel(model))}</strong>${records.toLocaleString()} audit record${records === 1 ? '' : 's'} · ${periods} archive period${periods === 1 ? '' : 's'}</span>`;
+        }).join('')}</div>
+      </section>`
+    : '';
 
   // Model filter pill bar
   const activeFilter = window._agentActivityFilter || 'all';
@@ -6934,6 +6954,7 @@ function renderAgentTradingBoard(d) {
     </section>
     ${healthSummary ? `<div class="agentic-health-summary"><span class="agentic-health-summary-label">Cycle health</span>${healthSummary}</div>` : ''}
     ${weatherOperationalSummary}
+    ${retiredArtifactSummary}
     <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}</tbody></table>
     <div class="agentic-feed-head">
       <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : activeFilter)}</span>

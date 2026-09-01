@@ -1958,6 +1958,43 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
     }
 
 
+def _compact_retired_agent_artifacts(manifest: Any) -> List[Dict[str, Any]]:
+    """Expose a small historical index without promoting retired models live."""
+    source = manifest if isinstance(manifest, dict) else {}
+    raw_archives = source.get("archives")
+    archives = raw_archives if isinstance(raw_archives, dict) else {}
+    raw_retired = source.get("retired_models")
+    retired_models = raw_retired if isinstance(raw_retired, list) else []
+    artifacts: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw_model in retired_models:
+        model = str(raw_model or "")
+        if not model or model in seen or not re.fullmatch(r"[A-Za-z0-9_.:-]+", model):
+            continue
+        seen.add(model)
+        periods = archives.get(model)
+        if not isinstance(periods, list):
+            continue
+        records = 0
+        valid_periods = 0
+        for period in periods[:_AGENT_TRADING_AUDIT_ARCHIVE_MAX_PERIODS]:
+            if not isinstance(period, dict):
+                continue
+            valid_periods += 1
+            try:
+                records += max(0, min(100_000, int(period.get("records") or 0)))
+            except (TypeError, ValueError):
+                continue
+        artifacts.append({
+            "agent_id": model,
+            "archive_periods": valid_periods,
+            "records": records,
+        })
+        if len(artifacts) >= _AGENT_TRADING_MAX_MODELS:
+            break
+    return artifacts
+
+
 _LIVE_TRACK_RECORD_READER = live_track_record_support.LiveTrackRecordReader(
     cache_key=_cache_key,
     cache_get=_cache_get,
@@ -3443,13 +3480,19 @@ async def agent_trading_board():
       ledger-maintenance attention, without obscuring individual model status.
     """
     with _tracer.start_as_current_span("agent_trading.board.read") as span:
-        live = await asyncio.get_running_loop().run_in_executor(None, _read_agent_trading_board)
+        loop = asyncio.get_running_loop()
+        live, archive_manifest = await asyncio.gather(
+            loop.run_in_executor(None, _read_agent_trading_board),
+            loop.run_in_executor(None, _read_agent_trading_audit_archive_manifest),
+        )
         live = live or {}
         freshness = _agent_trading_board_freshness(live)
         compact = _compact_agent_trading_board(live)
+        retired_artifacts = _compact_retired_agent_artifacts(archive_manifest)
         health = compact["model_health"]
         span.set_attribute("agent_trading.board.models", len(compact["models"]))
         span.set_attribute("agent_trading.board.health_models", len(health))
+        span.set_attribute("agent_trading.board.retired_artifacts", len(retired_artifacts))
         for item in health.values():
             status = str(item.get("status") or "unverified")
             _agent_trading_board_health.add(1, {"status": status})
@@ -3472,6 +3515,9 @@ async def agent_trading_board():
             "weather_operations": compact["weather_operations"],
             "model_health": compact["model_health"],
             "operational_health": compact["operational_health"],
+            # Historical records remain inspectable but do not participate in
+            # live ranking, balances, health, or trading decisions.
+            "retired_artifacts": retired_artifacts,
         },
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
