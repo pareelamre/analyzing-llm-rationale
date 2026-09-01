@@ -13079,10 +13079,11 @@ except Exception as exc:  # pragma: no cover - defensive production fallback.
     _SCADS_MODEL_ALLOWLIST = {
         "gpt-oss-120b": "openai/gpt-oss-120b",
         "gemma-4-26b-a4b-it": "google/gemma-4-26B-A4B-it",
-        "gemma-4-31b-it": "google/gemma-4-31B-it",
         "scads-alias-reasoning": "alias-reasoning",
-        "kimi-k3": "moonshotai/Kimi-K3",
-        "kimi-k2.7-code": "moonshotai/Kimi-K2.7-Code",
+        "qwen3-8-27b": "Qwen/Qwen3.8-27B",
+        "minimax-m3": "MiniMaxAI/MiniMax-M3",
+        "glm-5-3-flash": "zai-org/GLM-5.3-Flash",
+        "deepseek-v4-flash": "deepseek-ai/DeepSeek-V4-Flash",
     }
     _SCADS_CHAT_MODEL_OPTIONS = ()
     _SCADS_MODEL_FALLBACKS = {"gpt-oss-120b": ("google/gemma-4-26B-A4B-it",)}

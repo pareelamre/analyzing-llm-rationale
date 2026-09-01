@@ -1775,10 +1775,11 @@ class ServerTests(unittest.TestCase):
         expected = scads_hosted_model_allowlist(server_module._REPO_ROOT / "configs" / "models.yaml")
         self.assertEqual(server_module._SCADS_MODEL_ALLOWLIST, expected)
         self.assertIn("scads-alias-reasoning", server_module._SCADS_MODEL_ALLOWLIST)
-        self.assertIn("kimi-k3", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertIn("qwen3-8-27b", server_module._SCADS_MODEL_ALLOWLIST)
         self.assertIn("gemma-4-26b-a4b-it", server_module._SCADS_MODEL_ALLOWLIST)
-        self.assertIn("deepseek-v3", server_module._SCADS_MODEL_ALLOWLIST)
-        self.assertIn("kimi-k2.6", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertNotIn("deepseek-v3", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertNotIn("kimi-k2.6", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertNotIn("kimi-k3", server_module._SCADS_MODEL_ALLOWLIST)
 
     def test_analytics_event_summary_counts_events(self):
         response = self.client.post(
@@ -3581,7 +3582,7 @@ class ServerTests(unittest.TestCase):
             mock.patch.object(
                 server_module,
                 "_SCADS_MODEL_ALLOWLIST",
-                {"minimax-m3": "MiniMaxAI/MiniMax-M3-MXFP8"},
+                {"minimax-m3": "MiniMaxAI/MiniMax-M3"},
             ),
             mock.patch.object(server_module, "_scads_alt_provider", return_value=alt_provider) as alt_provider_mock,
             tempfile.TemporaryDirectory() as td,
@@ -5056,7 +5057,7 @@ class ServerTests(unittest.TestCase):
             mock.patch.object(
                 server_module,
                 "_SCADS_MODEL_ALLOWLIST",
-                {"minimax-m3": "MiniMaxAI/MiniMax-M3-MXFP8"},
+                {"minimax-m3": "MiniMaxAI/MiniMax-M3"},
             ),
             mock.patch.object(server_module, "_scads_alt_provider", return_value=fast_provider) as alt_provider,
             mock.patch.dict(os.environ, {"SCADS_AI_API_KEY": "test-key"}, clear=False),
@@ -5082,7 +5083,7 @@ class ServerTests(unittest.TestCase):
             mock.patch.object(
                 server_module,
                 "_SCADS_MODEL_ALLOWLIST",
-                {"minimax-m3": "MiniMaxAI/MiniMax-M3-MXFP8"},
+                {"minimax-m3": "MiniMaxAI/MiniMax-M3"},
             ),
             mock.patch.object(server_module, "_scads_alt_provider") as alt_provider,
         ):

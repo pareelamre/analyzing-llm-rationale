@@ -233,7 +233,7 @@ class BuildBoardTests(unittest.TestCase):
             )
             with (
                 mock.patch.object(board_script, "STORE_DIR", store_dir),
-                mock.patch.object(board_script, "_chat_capable_models", return_value=["provider-down"]),
+                mock.patch.object(board_script, "_agent_trading_models", return_value=["provider-down"]),
                 mock.patch.object(board_script, "_fetch_quotes", return_value={}),
                 mock.patch.object(board_script, "datetime") as mock_datetime,
             ):
@@ -265,7 +265,7 @@ class BuildBoardTests(unittest.TestCase):
             _seed_thesis(store_dir / "stale" / "store.sqlite", "stale", ts="2026-08-11T01:00:00+00:00", thesis="Old")
             with (
                 mock.patch.object(board_script, "STORE_DIR", store_dir),
-                mock.patch.object(board_script, "_chat_capable_models", return_value=["active", "no-trade", "delayed", "stale", "unverified"]),
+                mock.patch.object(board_script, "_agent_trading_models", return_value=["active", "no-trade", "delayed", "stale", "unverified"]),
                 mock.patch.object(board_script, "_fetch_quotes", return_value={}),
                 mock.patch.object(board_script, "datetime") as mock_datetime,
             ):
@@ -291,7 +291,7 @@ class BuildBoardTests(unittest.TestCase):
 
             with (
                 mock.patch.object(board_script, "STORE_DIR", store_dir),
-                mock.patch.object(board_script, "_chat_capable_models", return_value=["model-a", "model-b"]),
+                mock.patch.object(board_script, "_agent_trading_models", return_value=["model-a", "model-b"]),
                 mock.patch.object(
                     market_data, "fetch_kalshi",
                     return_value={"platform": "Kalshi", "ident": "KXFOO-26", "yes_bid": 0.6},
@@ -326,7 +326,7 @@ class BuildBoardTests(unittest.TestCase):
             _seed_thesis(path, "model-a", ts="2026-08-01T00:00:00+00:00", thesis="Older thesis")
             with (
                 mock.patch.object(board_script, "STORE_DIR", store_dir),
-                mock.patch.object(board_script, "_chat_capable_models", return_value=["model-a"]),
+                mock.patch.object(board_script, "_agent_trading_models", return_value=["model-a"]),
             ):
                 board = board_script.build_board()
 
@@ -340,7 +340,7 @@ class BuildBoardTests(unittest.TestCase):
             with (
                 mock.patch.object(board_script, "STORE_DIR", store_dir),
                 mock.patch.object(board_script, "OUTPUT_PATH", out_path),
-                mock.patch.object(board_script, "_chat_capable_models", return_value=["model-a"]),
+                mock.patch.object(board_script, "_agent_trading_models", return_value=["model-a"]),
             ):
                 rc = board_script.main()
             self.assertEqual(rc, 0)

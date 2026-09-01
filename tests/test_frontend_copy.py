@@ -28,6 +28,10 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("'scads-alias-code':", index)
         self.assertIn("'scads-alias-reasoning':", index)
         self.assertIn("'kimi-k3':", index)
+        source = (
+            Path(__file__).resolve().parents[1] / "frontend" / "index.html"
+        ).read_text(encoding="utf-8")
+        self.assertIn("'qwen3-8-27b':", source)
         self.assertIn("'gemma-4-26b-a4b-it':", index)
         self.assertIn("raw.includes('kimi-k3')", index)
         # padR is derived from the head-bubble radius so the newest value is

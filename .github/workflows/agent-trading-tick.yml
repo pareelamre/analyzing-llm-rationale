@@ -4,7 +4,7 @@ name: Agent trading tick
 # remains manually runnable, but does not depend on its own GitHub cron: a
 # missed scheduler event must not silently stall all agent cycles.
 #
-# A single dispatcher prevents ten separate cold starts. Agent trading owns one
+# A single dispatcher prevents eight separate cold starts. Agent trading owns one
 # of the two SCADS provider slots; forecast snapshots own the other.
 on:
   workflow_call: {}
@@ -20,7 +20,7 @@ jobs:
       matrix:
         include:
           - lane: "reserved"
-            models: "gemma-4-26b-a4b-it glm-5.2-fp8 gpt-oss-120b kimi-k3 llama-3.3-70b-instruct minimax-m3 qwen3-coder-30b-a3b-instruct scads-alias-code scads-alias-ha scads-alias-reasoning"
+            models: "deepseek-v4-flash gemma-4-26b-a4b-it glm-5-3-flash glm-5.2-fp8 gpt-oss-120b llama-3.3-70b-instruct minimax-m3 qwen3-8-27b"
     uses: ./.github/workflows/_agent-trading-tick-reusable.yml
     with:
       lane: ${{ matrix.lane }}

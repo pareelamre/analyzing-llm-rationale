@@ -29,6 +29,8 @@ class ModelConfig:
     request_timeout_cap_s: float | None = None
     forecasting_enabled: bool = True
     chat_interface_enabled: bool = False
+    agent_trading_enabled: bool = True
+    agent_model_identity: str | None = None
     track_record_enabled: bool = True
     fallback_model_chain: Tuple[str, ...] = ()
 
@@ -84,6 +86,8 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
         request_timeout_cap_s = payload.get("request_timeout_cap_s")
         forecasting_enabled = payload.get("forecasting_enabled", True)
         chat_interface_enabled = payload.get("chat_interface_enabled", False)
+        agent_trading_enabled = payload.get("agent_trading_enabled", True)
+        agent_model_identity = payload.get("agent_model_identity")
         track_record_enabled = payload.get("track_record_enabled", True)
         fallback_model_chain = payload.get("fallback_model_chain", [])
         if not all(isinstance(value, str) for value in (result_label, provider, local_model_name, router_model_name)):
@@ -112,6 +116,10 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             raise ValueError(f"Model '{name}' forecasting_enabled must be boolean when provided")
         if not isinstance(chat_interface_enabled, bool):
             raise ValueError(f"Model '{name}' chat_interface_enabled must be boolean when provided")
+        if not isinstance(agent_trading_enabled, bool):
+            raise ValueError(f"Model '{name}' agent_trading_enabled must be boolean when provided")
+        if agent_model_identity is not None and not isinstance(agent_model_identity, str):
+            raise ValueError(f"Model '{name}' agent_model_identity must be a string when provided")
         if not isinstance(track_record_enabled, bool):
             raise ValueError(f"Model '{name}' track_record_enabled must be boolean when provided")
         if not isinstance(fallback_model_chain, Sequence) or isinstance(fallback_model_chain, (str, bytes)):
@@ -133,6 +141,8 @@ def load_model_configs(path: Path) -> Dict[str, ModelConfig]:
             ),
             forecasting_enabled=forecasting_enabled,
             chat_interface_enabled=chat_interface_enabled,
+            agent_trading_enabled=agent_trading_enabled,
+            agent_model_identity=agent_model_identity,
             track_record_enabled=track_record_enabled,
             fallback_model_chain=fallback_chain,
         )
@@ -186,6 +196,33 @@ def scads_chat_model_options(path: Path) -> Tuple[ModelConfig, ...]:
             and "llm.scads.ai" in cfg.api_base_url
         )
     )
+
+
+def scads_agent_trading_model_labels(path: Path) -> Tuple[str, ...]:
+    """Live chat models eligible for the Agentic board, once per underlying model.
+
+    SCADS aliases are convenient chat shortcuts, but some resolve to the same
+    provider model as a named option.  A duplicate would produce two shadow
+    accounts for the same model and falsely diversify the board.  Configs
+    therefore give aliases their canonical ``agent_model_identity`` and opt
+    them out of agent trading.  If one is accidentally opted back in, fail
+    before a tick is scheduled rather than silently double-counting it.
+    """
+    selected: list[str] = []
+    identities: Dict[str, str] = {}
+    for cfg in scads_chat_model_options(path):
+        if not cfg.agent_trading_enabled:
+            continue
+        identity = cfg.agent_model_identity or cfg.router_model_name
+        existing = identities.get(identity)
+        if existing is not None:
+            raise ValueError(
+                "Agent trading model identity is duplicated: "
+                f"'{existing}' and '{cfg.name}' both resolve to '{identity}'"
+            )
+        identities[identity] = cfg.name
+        selected.append(cfg.name)
+    return tuple(sorted(selected))
 
 
 def scads_hosted_model_fallbacks(path: Path) -> Dict[str, Tuple[str, ...]]:

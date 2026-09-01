@@ -1,4 +1,4 @@
-name: Agent trading tick (kimi-k3)
+name: Agent trading tick (deepseek-v4-flash)
 
 on:
   workflow_dispatch: {}
@@ -7,6 +7,6 @@ jobs:
   trade:
     uses: ./.github/workflows/_agent-trading-tick-reusable.yml
     with:
-      models: kimi-k3
-      lane: "1"
+      models: deepseek-v4-flash
+      lane: "0"
     secrets: inherit

@@ -1,4 +1,4 @@
-name: Agent trading tick (scads-alias-ha)
+name: Agent trading tick (glm-5-3-flash)
 
 on:
   workflow_dispatch: {}
@@ -7,6 +7,6 @@ jobs:
   trade:
     uses: ./.github/workflows/_agent-trading-tick-reusable.yml
     with:
-      models: scads-alias-ha
-      lane: "0"
+      models: glm-5-3-flash
+      lane: "1"
     secrets: inherit

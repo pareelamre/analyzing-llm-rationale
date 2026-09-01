@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
+from analyzing_llm_rationale.config import scads_agent_trading_model_labels  # noqa: E402
 
 _ROOT = Path(__file__).resolve().parents[1]
 _WORKFLOWS_DIR = _ROOT / ".github" / "workflows"
@@ -20,8 +20,7 @@ _BOARD_PUBLISH_PATH = _WORKFLOWS_DIR / "agent-trading-board-publish.yml"
 
 
 def _chat_capable_models() -> list[str]:
-    models = load_model_configs(_ROOT / "configs" / "models.yaml")
-    return sorted(name for name, cfg in models.items() if cfg.chat_interface_enabled)
+    return list(scads_agent_trading_model_labels(_ROOT / "configs" / "models.yaml"))
 
 
 class AgentTradingReusableWorkflowTests(unittest.TestCase):
@@ -82,9 +81,9 @@ class AgentTradingReusableWorkflowTests(unittest.TestCase):
 
 
 class AgentTradingPerModelWorkflowTests(unittest.TestCase):
-    def test_every_chat_capable_scads_model_has_its_own_workflow_file(self):
+    def test_every_agent_trading_model_has_its_own_workflow_file(self):
         models = _chat_capable_models()
-        self.assertEqual(len(models), 10)
+        self.assertEqual(len(models), 8)
         for model in models:
             path = _WORKFLOWS_DIR / f"agent-trading-tick-{model}.yml"
             self.assertTrue(path.exists(), f"missing workflow file for {model}: {path}")
@@ -144,7 +143,7 @@ class TrackRecordForecastWorkflowTests(unittest.TestCase):
         self.assertIn("max-parallel: 1", text)
         self.assertIn("REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}", text)
         self.assertIn("cancel-in-progress: false", text)
-        self.assertEqual(len(re.findall(r"^\s+lane: \"[01]\"$", text, re.MULTILINE)), 14)
+        self.assertEqual(len(re.findall(r"^\s+lane: \"[01]\"$", text, re.MULTILINE)), 13)
 
 
 if __name__ == "__main__":

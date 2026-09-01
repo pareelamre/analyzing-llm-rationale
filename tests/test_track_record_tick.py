@@ -122,9 +122,7 @@ class TrackRecordTickTests(unittest.TestCase):
             "gpt-oss-120b",
             "gemma-4-26b-a4b-it",
             "minimax-m3",
-            "kimi-k3",
-            "kimi-k2.6",
-            "qwen3-coder-30b-a3b-instruct",
+            "qwen3-8-27b",
             "glm-5.2-fp8",
             "crowd-follow",
         ):
@@ -141,8 +139,11 @@ class TrackRecordTickTests(unittest.TestCase):
             "qwen3-vl-8b-instruct",
             "deepseek-v3",
             "kimi-k2.5",
+            "kimi-k2.6",
             "gemma-4-31b-it",
             "kimi-k2.7-code",
+            "kimi-k3",
+            "qwen3-coder-30b-a3b-instruct",
         ):
             self.assertNotIn(model, track_record_tick.TRACK_MODELS)
         self.assertNotIn("model: llama-3.1-8b-instruct", workflow)

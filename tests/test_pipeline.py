@@ -20,6 +20,7 @@ from analyzing_llm_rationale.cli import main as cli_main
 from analyzing_llm_rationale.config import (  # noqa: E402
     load_model_configs,
     load_variant_configs,
+    scads_agent_trading_model_labels,
     scads_chat_model_options,
     scads_hosted_model_allowlist,
     scads_track_model_labels,
@@ -577,17 +578,17 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("scads-alias-code", scads_models)
         self.assertIn("scads-alias-reasoning", scads_models)
         track_model_labels = scads_track_model_labels(repo_root / "configs" / "models.yaml")
-        self.assertIn("kimi-k3", track_model_labels)
+        self.assertIn("qwen3-8-27b", track_model_labels)
         self.assertIn("gemma-4-26b-a4b-it", track_model_labels)
-        self.assertIn("deepseek-v3", scads_models)
-        self.assertTrue(all(cfg.forecasting_enabled for cfg in models.values()))
-        # deepseek-v3 stays /predict-able and chat-eligible (forecasting_enabled
-        # is untouched) but is excluded from the live track-record/MTM
-        # comparison board -- it's not in the active CI tracking matrix and
-        # would otherwise sit frozen at the starting balance forever.
+        self.assertNotIn("deepseek-v3", scads_models)
+        self.assertNotIn("kimi-k3", scads_models)
+        self.assertTrue(models["qwen3-8-27b"].forecasting_enabled)
+        self.assertFalse(models["kimi-k3"].forecasting_enabled)
+        # Retired SCADS models are retained as historical configuration only;
+        # disabling forecasting prevents them from returning avoidable 403s.
         self.assertFalse(models["deepseek-v3"].track_record_enabled)
         self.assertNotIn("deepseek-v3", track_model_labels)
-        self.assertTrue(models["kimi-k3"].track_record_enabled)
+        self.assertFalse(models["kimi-k3"].track_record_enabled)
         self.assertNotIn("gpt-5", scads_models)
         self.assertEqual(
             models["scads-alias-code"].fallback_model_chain,
@@ -595,15 +596,61 @@ class PipelineTests(unittest.TestCase):
         )
         self.assertEqual(
             models["minimax-m3"].fallback_model_chain,
-            ("moonshotai/Kimi-K3", "google/gemma-4-26B-A4B-it"),
+            ("openai/gpt-oss-120b", "google/gemma-4-26B-A4B-it"),
         )
         chat_models = {cfg.name for cfg in scads_chat_model_options(repo_root / "configs" / "models.yaml")}
-        self.assertIn("qwen3-coder-30b-a3b-instruct", chat_models)
+        self.assertIn("qwen3-8-27b", chat_models)
         self.assertIn("glm-5.2-fp8", chat_models)
-        self.assertIn("kimi-k3", chat_models)
+        self.assertNotIn("kimi-k3", chat_models)
         self.assertIn("gemma-4-26b-a4b-it", chat_models)
         self.assertNotIn("qwen3-vl-8b-instruct", chat_models)
+        self.assertIn("deepseek-v4-flash", chat_models)
+        self.assertIn("glm-5-3-flash", chat_models)
+        agent_models = scads_agent_trading_model_labels(repo_root / "configs" / "models.yaml")
+        self.assertEqual(
+            agent_models,
+            (
+                "deepseek-v4-flash",
+                "gemma-4-26b-a4b-it",
+                "glm-5-3-flash",
+                "glm-5.2-fp8",
+                "gpt-oss-120b",
+                "llama-3.3-70b-instruct",
+                "minimax-m3",
+                "qwen3-8-27b",
+            ),
+        )
+        self.assertNotIn("scads-alias-code", agent_models)
+        self.assertFalse(models["scads-alias-code"].agent_trading_enabled)
         self.assertEqual(temperature_to_tag(0.7), "temperature_07")
+
+    def test_agent_trading_model_identity_duplicate_fails_closed(self):
+        config = """\
+models:
+  first:
+    result_label: First
+    provider: openai-compatible
+    local_model_name: first
+    router_model_name: first
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    chat_interface_enabled: true
+    agent_model_identity: canonical/model
+  alias-accidentally-enabled:
+    result_label: Alias
+    provider: openai-compatible
+    local_model_name: alias
+    router_model_name: alias
+    api_base_url: https://llm.scads.ai/v1/chat/completions
+    api_key_env_var: SCADS_AI_API_KEY
+    chat_interface_enabled: true
+    agent_model_identity: canonical/model
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "models.yaml"
+            path.write_text(config, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "identity is duplicated"):
+                scads_agent_trading_model_labels(path)
 
     def test_resolve_run_config_builds_output_path_from_variant_model_and_temperature(self):
         repo_root = Path(__file__).resolve().parents[1]
