@@ -2021,7 +2021,11 @@ _AGENT_TRADING_BOARD_READER = live_track_record_support.LiveTrackRecordReader(
         bundled_path=_STATIC_DIR / "agent_trading_live.json",
         request_timeout_seconds=_AGENT_TRADING_BOARD_TIMEOUT,
         cache_namespace="agent_trading_live",
-        cache_version="v1",
+        # Invalidate the legacy Redis entry that held a pre-SCADS-refresh
+        # artifact beyond its intended TTL. New board publications retain the
+        # normal short TTL; this one-time version bump makes the live board
+        # fetch the current GitHub-backed roster immediately.
+        cache_version="v2",
         resource_label="agent trading board",
         user_agent="Foresea/agent-trading-board",
     ),
