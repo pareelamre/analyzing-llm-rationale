@@ -333,6 +333,8 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("const retiredArtifacts = Array.isArray(d.retired_artifacts)", renderer)
         self.assertIn("const retiredTableRows = retiredArtifacts.length", renderer)
         self.assertIn("agentic-retired-tag", renderer)
+        self.assertIn("item?.account_value", renderer)
+        self.assertIn("Final archived shadow-account book value", renderer)
         self.assertIn("_filterAgentActivity('${escAttr(agentId)}', true)", renderer)
         self.assertIn("Loading archived paper-trading records", renderer)
         self.assertNotIn("Retired model audit trail", renderer)

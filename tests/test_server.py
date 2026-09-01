@@ -1510,6 +1510,13 @@ class ServerTests(unittest.TestCase):
         archive_manifest = {
             "retired_models": ["kimi-k3"],
             "archives": {"kimi-k3": [{"month": "2026-08", "records": 14}]},
+            "retired_account_values": {"kimi-k3": {
+                "starting_cash": 10_000,
+                "account_value": 10_664.928,
+                "total_pnl": 664.928,
+                "return_pct": 6.6493,
+                "open_cost_basis": 325,
+            }},
         }
         with (
             mock.patch.object(server_module, "_read_agent_trading_board", return_value=live),
@@ -1538,6 +1545,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["operational_health"]["provider_degraded"][0]["agent_id"], "gpt-oss-120b")
         self.assertEqual(payload["retired_artifacts"], [{
             "agent_id": "kimi-k3", "archive_periods": 1, "records": 14,
+            "starting_cash": 10_000.0, "account_value": 10_664.928,
+            "total_pnl": 664.928, "return_pct": 6.6493, "open_cost_basis": 325.0,
+            "value_source": "archived_audit_replay",
         }])
         self.assertEqual(payload["freshness"]["generated_at"], live["generated_at"])
         self.assertIn("no-cache", response.headers["cache-control"])

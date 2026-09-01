@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import sqlite3
 import sys
@@ -243,23 +244,96 @@ def _archive_manifest_path(path: Path) -> str:
 
 def _existing_archive_periods(archive_root: Path, model: str) -> List[Dict[str, Any]]:
     """Describe valid existing monthly artifacts without rewriting them."""
+    return _read_existing_archive_periods(archive_root, model)[0]
+
+
+def _read_existing_archive_periods(
+    archive_root: Path, model: str,
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Read retired artifacts once for a small manifest index and snapshot."""
     periods: List[Dict[str, Any]] = []
+    records: List[Dict[str, Any]] = []
     model_root = archive_root / model
     for path in sorted(model_root.glob("*.json"), reverse=True):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            records = payload.get("items") if isinstance(payload, dict) else None
-            if not isinstance(records, list):
+            items = payload.get("items") if isinstance(payload, dict) else None
+            if not isinstance(items, list):
                 continue
         except (OSError, ValueError):
             logger.warning("skipping unreadable retired audit artifact: %s", path)
             continue
+        records.extend(item for item in items if isinstance(item, dict))
         periods.append({
             "month": path.stem,
             "path": _archive_manifest_path(path),
-            "records": len(records),
+            "records": len(items),
         })
-    return periods
+    return periods, records
+
+
+def _finite_number(value: Any) -> Optional[float]:
+    """Return a finite audit number without allowing malformed JSON through."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _archived_account_snapshot(records: Iterable[Dict[str, Any]]) -> Optional[Dict[str, float]]:
+    """Replay immutable paper-trade cash flows into a final book-value snapshot.
+
+    The audit archive intentionally excludes mutable account tables and live
+    quotes.  Replaying cash plus the remaining position cost basis gives a
+    durable final ledger value for a retired model without presenting it as a
+    current mark-to-market quote.  This mirrors the live equity-curve replay's
+    treatment of openings, netting closes, and settlements.
+    """
+    starting_cash = float(benchmark_tools.DEFAULT_AGENT_ACCOUNT_VALUE)
+    running_cash = starting_cash
+    open_positions_basis = 0.0
+    replayed = 0
+    ordered = sorted(
+        (record for record in records if isinstance(record, dict)),
+        key=lambda record: (str(record.get("recorded_at") or ""), str(record.get("action_id") or "")),
+    )
+    for record in ordered:
+        event_type = str(record.get("event_type") or "")
+        execution = record.get("execution")
+        if event_type not in {"trade", "settlement"} or not isinstance(execution, dict):
+            continue
+        outcome = str(record.get("outcome") or "")
+        if event_type == "trade" and outcome == "rejected":
+            continue
+        cash_delta = _finite_number(execution.get("cash_delta")) or 0.0
+        realized_pnl = _finite_number(execution.get("realized_pnl")) or 0.0
+        notional = _finite_number(execution.get("notional")) or 0.0
+        running_cash += cash_delta
+        if event_type == "trade" and outcome != "realized":
+            if notional > 0:
+                open_positions_basis += notional
+        else:
+            # An archived action has cash_delta and realized_pnl even where
+            # the live SQLite-only ``payout`` column is unavailable. Their
+            # difference is the original basis returned or written off.
+            cost_basis_closed = max(0.0, cash_delta - realized_pnl)
+            open_positions_basis = max(0.0, open_positions_basis - cost_basis_closed)
+        replayed += 1
+
+    if not replayed:
+        return None
+    account_value = running_cash + open_positions_basis
+    total_pnl = account_value - starting_cash
+    return {
+        "starting_cash": round(starting_cash, 6),
+        "account_value": round(account_value, 6),
+        "total_pnl": round(total_pnl, 6),
+        "return_pct": round((total_pnl / starting_cash) * 100.0, 4) if starting_cash > 0 else 0.0,
+        "open_cost_basis": round(open_positions_basis, 6),
+    }
 
 
 def build_audit_archive(
@@ -309,8 +383,13 @@ def build_audit_archive(
             # existing periods in the same index so on-demand audit lookups
             # continue to work, but never open a retired provider ledger or
             # schedule a new model call merely to refresh history.
+            retired_account_values: Dict[str, Dict[str, float]] = {}
             for model in retired_models:
-                archives[model] = _existing_archive_periods(archive_root, model)
+                periods, records = _read_existing_archive_periods(archive_root, model)
+                archives[model] = periods
+                snapshot = _archived_account_snapshot(records)
+                if snapshot is not None:
+                    retired_account_values[model] = snapshot
 
             manifest = {
                 "schema_version": 1,
@@ -319,11 +398,18 @@ def build_audit_archive(
                 "storage": "github_repository",
                 "archives": archives,
                 "retired_models": retired_models,
+                # Fast board reads consume this bounded replay instead of
+                # downloading every retired monthly artifact on page load.
+                "retired_account_values": retired_account_values,
             }
             _write_json_if_changed(manifest_path, manifest)
             audit_archive_builds.add(1, {"outcome": "success"})
             audit_archive_records.add(record_count, {"storage": "github_repository"})
-            span.set_attributes({"outcome": "success", "audit.records": record_count})
+            span.set_attributes({
+                "outcome": "success",
+                "audit.records": record_count,
+                "audit.retired_account_values": len(retired_account_values),
+            })
             logger.info("agent paper-trade audit archive built models=%d records=%d", len(chosen_models), record_count)
             return manifest
         except Exception as exc:
