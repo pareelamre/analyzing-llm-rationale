@@ -3532,14 +3532,16 @@ def _read_agent_trading_audit_archive_records(
     manifest: Dict[str, Any],
     *,
     agent_id: str,
-    action_id: str,
+    action_id: Optional[str],
     limit: int,
 ) -> tuple[List[Dict[str, Any]], int]:
-    """Retrieve an archived immutable action from GitHub only when requested.
+    """Retrieve archived immutable actions for one model only when requested.
 
     The board and normal audit reads stay on the compact current index.  This
     intentionally narrow fallback avoids loading years of history into Cloud
-    Run memory, while preserving a long-term inspect-on-demand path.
+    Run memory, while preserving a long-term inspect-on-demand path.  An
+    action ID narrows the lookup to one record; an agent-only lookup returns
+    the newest bounded archive slice for the retired-model decision feed.
     """
     archives = manifest.get("archives") if isinstance(manifest, dict) else None
     periods = archives.get(agent_id) if isinstance(archives, dict) else None
@@ -3572,12 +3574,18 @@ def _read_agent_trading_audit_archive_records(
                 _cache_set(cache_key, payload, _AGENT_TRADING_AUDIT_TTL)
         items = payload.get("items") if isinstance(payload, dict) else None
         for item in items if isinstance(items, list) else []:
-            if not isinstance(item, dict) or str(item.get("action_id") or "") != action_id:
+            if not isinstance(item, dict):
+                continue
+            if action_id is not None and str(item.get("action_id") or "") != action_id:
                 continue
             records.append(dict(item))
-            if len(records) >= limit:
+            if action_id is not None and len(records) >= limit:
                 return records, scanned
-    return records, scanned
+    records.sort(
+        key=lambda item: (str(item.get("recorded_at") or ""), str(item.get("action_id") or "")),
+        reverse=True,
+    )
+    return records[:limit], scanned
 
 
 @app.get(
@@ -3613,6 +3621,7 @@ async def agent_trading_audits(
         span.set_attributes({
             "audit.filtered_agent": bool(agent_id),
             "audit.lookup_action": bool(action_id),
+            "audit.archive_listing": bool(agent_id and not action_id),
             "audit.limit": limit,
         })
         loop = asyncio.get_running_loop()
@@ -3642,13 +3651,13 @@ async def agent_trading_audits(
         records.sort(key=lambda item: (str(item.get("recorded_at") or ""), str(item.get("action_id") or "")), reverse=True)
         storage = "github_recent_index"
         archive_periods_scanned = 0
-        if action_id is not None and not records:
-            if agent_id is None:
-                _agent_trading_audit_reads.add(1, {"outcome": "agent_required_for_archive"})
-                raise HTTPException(
-                    status_code=404,
-                    detail="Paper-trade audit action was not found in the recent index; pass agent_id to search its archive.",
-                )
+        if action_id is not None and not records and agent_id is None:
+            _agent_trading_audit_reads.add(1, {"outcome": "agent_required_for_archive"})
+            raise HTTPException(
+                status_code=404,
+                detail="Paper-trade audit action was not found in the recent index; pass agent_id to search its archive.",
+            )
+        if agent_id is not None and not records and agent_id in archive_models:
             records, archive_periods_scanned = await loop.run_in_executor(
                 None,
                 lambda: _read_agent_trading_audit_archive_records(

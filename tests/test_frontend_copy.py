@@ -331,8 +331,11 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("latestTheses[activeFilter]", renderer)
         self.assertIn("No published thesis for", renderer)
         self.assertIn("const retiredArtifacts = Array.isArray(d.retired_artifacts)", renderer)
-        self.assertIn("Retired model audit trail", renderer)
-        self.assertIn("excluded from live rankings, health, and paper-trading decisions", renderer)
+        self.assertIn("const retiredTableRows = retiredArtifacts.length", renderer)
+        self.assertIn("agentic-retired-tag", renderer)
+        self.assertIn("_filterAgentActivity('${escAttr(agentId)}', true)", renderer)
+        self.assertIn("Loading archived paper-trading records", renderer)
+        self.assertNotIn("Retired model audit trail", renderer)
         self.assertIn("const banner = ", renderer)
         # Present in the loading and error early-return branches too.
         self.assertIn("host.innerHTML = `${banner}<p", renderer)

@@ -1102,13 +1102,11 @@
     .agentic-weather-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 7px; padding: 0 0 12px; }
     .agentic-weather-summary-label { color: #0f766e; font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-right: 2px; text-transform: uppercase; }
     .agentic-weather-summary-count { color: var(--text); font-weight: 650; }
-    .agentic-artifacts { background: #f8fafc; border: 1px solid #dbe4eb; border-radius: 12px; display: grid; gap: 12px; grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.5fr); padding: 14px 16px; }
-    .agentic-artifacts-kicker { color: #64748b; display: block; font-size: 9px; font-weight: 750; letter-spacing: .08em; margin-bottom: 4px; text-transform: uppercase; }
-    .agentic-artifacts-title { color: var(--ink); font-size: 13px; font-weight: 700; margin: 0; }
-    .agentic-artifacts-copy { color: var(--text-dim); font-size: 11px; line-height: 1.45; margin: 4px 0 0; }
-    .agentic-artifacts-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-start; }
-    .agentic-artifact { background: #fff; border: 1px solid #dbe4eb; border-radius: 8px; color: #334155; font-size: 10px; line-height: 1.35; padding: 6px 8px; }
-    .agentic-artifact strong { color: #0f172a; display: block; font-size: 11px; }
+    .agentic-retired-tag { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 999px; color: #64748b; display: inline-block; font-size: 8px; font-weight: 750; letter-spacing: .07em; line-height: 1; margin-left: 6px; padding: 3px 5px; text-transform: uppercase; vertical-align: middle; }
+    .agentic-retired-row { background: #fafafa; color: #64748b; }
+    .agentic-retired-row:hover { background: #f8fafc; }
+    .agentic-retired-divider td { background: #f8fafc; border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .07em; padding: 8px 12px; text-transform: uppercase; }
+    .agentic-retired-records { color: #475569; font-size: 10px; font-weight: 650; text-decoration: underline; text-decoration-color: #cbd5e1; text-underline-offset: 3px; }
     .agentic-learning-summary { background: linear-gradient(115deg, #f0fdfa, #f8fafc 62%); border: 1px solid #cbd5e1; border-radius: 12px; display: grid; gap: 10px 16px; grid-template-columns: minmax(150px, 1.4fr) repeat(3, minmax(0, 1fr)); margin: 14px 0; padding: 13px 15px; }
     .agentic-learning-kicker { color: #0f766e; display: block; font-size: 9px; font-weight: 750; letter-spacing: .08em; margin-bottom: 4px; text-transform: uppercase; }
     .agentic-learning-title { color: var(--ink); font-size: 13px; font-weight: 700; margin: 0; }
@@ -1157,7 +1155,6 @@
       .agentic-panel-head, .agentic-feed-head { align-items: flex-start; flex-direction: column; gap: 7px; }
       .agentic-learning-summary { grid-template-columns: 1fr 1fr; }
       .agentic-learning-summary > :first-child { grid-column: 1 / -1; }
-      .agentic-artifacts { grid-template-columns: 1fr; }
       .agentic-activity { padding: 14px; }
       .agentic-activity-meta { align-items: flex-start; flex-direction: column; gap: 5px; }
     }
@@ -6591,9 +6588,47 @@ function _toggleAgentPositions(agentId) {
 }
 
 window._agentActivityFilter = window._agentActivityFilter || 'all';
+window._agentRetiredActivityCache = window._agentRetiredActivityCache || {};
+window._agentRetiredActivityLoading = window._agentRetiredActivityLoading || {};
+window._agentRetiredActivityErrors = window._agentRetiredActivityErrors || {};
 
-function _filterAgentActivity(modelId) {
+function _agentAuditRecordToActivity(record) {
+  const market = record && typeof record.market === 'object' ? record.market : {};
+  const execution = record && typeof record.execution === 'object' ? record.execution : {};
+  return {
+    agent_id: record?.agent_id || '',
+    archived: true,
+    platform: market.platform || '',
+    price: execution.price,
+    quantity: execution.quantity,
+    realized_pnl: execution.realized_pnl,
+    side: market.side || '',
+    ticker: market.ticker || '',
+    ts: record?.recorded_at || '',
+    type: record?.event_type || 'note',
+  };
+}
+
+async function _filterAgentActivity(modelId, retired = false) {
   window._agentActivityFilter = modelId;
+  if (retired && !Object.prototype.hasOwnProperty.call(window._agentRetiredActivityCache, modelId)
+      && !window._agentRetiredActivityLoading[modelId]) {
+    window._agentRetiredActivityLoading[modelId] = true;
+    delete window._agentRetiredActivityErrors[modelId];
+    if (window._lastAgentBoardData) renderAgentTradingBoard(window._lastAgentBoardData);
+    try {
+      const response = await _liveJsonFetch(`/agent-trading/audits?agent_id=${encodeURIComponent(modelId)}&limit=${AGENTIC_RENDER_MAX_ACTIVITY_ITEMS}`);
+      if (!response.ok) throw new Error('Archived records could not be loaded.');
+      const payload = await _readJson(response);
+      window._agentRetiredActivityCache[modelId] = Array.isArray(payload?.items)
+        ? payload.items.map(_agentAuditRecordToActivity)
+        : [];
+    } catch (err) {
+      window._agentRetiredActivityErrors[modelId] = err?.message || 'Archived records could not be loaded.';
+    } finally {
+      delete window._agentRetiredActivityLoading[modelId];
+    }
+  }
   if (window._lastAgentBoardData) {
     renderAgentTradingBoard(window._lastAgentBoardData);
   }
@@ -6717,6 +6752,7 @@ function renderAgentTradingBoard(d) {
   const forecastLearning = d.forecast_learning || {};
   const weatherOperations = d.weather_operations || {};
   const retiredArtifacts = Array.isArray(d.retired_artifacts) ? d.retired_artifacts.slice(0, 8) : [];
+  const retiredArtifactsById = Object.fromEntries(retiredArtifacts.map(item => [String(item?.agent_id || ''), item]));
   const activity = d.recent_activity || [];
   const latestTheses = d.latest_theses || {};
   const _healthStatus = health => String(health?.status || 'unverified');
@@ -6882,6 +6918,19 @@ function renderAgentTradingBoard(d) {
       </td>
     </tr>`;
   }).join('');
+  const retiredTableRows = retiredArtifacts.length
+    ? `<tr class="agentic-retired-divider"><td colspan="10">Retired models · read-only archived records</td></tr>${retiredArtifacts.map(item => {
+        const agentId = String(item?.agent_id || '');
+        const records = Math.max(0, Number(item?.records) || 0);
+        return `<tr class="eb-row agentic-retired-row" style="cursor:pointer" title="Open this model's archived paper-trading records" onclick="_filterAgentActivity('${escAttr(agentId)}', true)">
+          <td>—</td>
+          <td><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span><span class="agentic-retired-tag">Retired</span></td>
+          <td>Archived</td><td>—</td><td>—</td><td>—</td><td>—</td>
+          <td><span class="agentic-retired-records">${records.toLocaleString()} record${records === 1 ? '' : 's'} · view</span></td>
+          <td>—</td><td>—</td>
+        </tr>`;
+      }).join('')}`
+    : '';
   const healthSummary = Object.entries(modelHealth).sort(([a], [b]) => a.localeCompare(b)).map(([agentId, health]) =>
     _healthBadge({ ...(health || {}), agent_id: agentId }, { withModel: true })
   ).join('');
@@ -6892,20 +6941,13 @@ function renderAgentTradingBoard(d) {
   const weatherOperationalSummary = weatherStages.some(([key]) => Number(weatherOperations[key]) > 0)
     ? `<div class="agentic-weather-summary" title="Source-verified NWS weather-candidate coverage. These counts describe activity, not profitability."><span class="agentic-weather-summary-label">Weather lane · ${Math.max(1, Number(weatherOperations.window_hours) || 24)}h</span>${weatherStages.map(([key, label]) => `<span><span class="agentic-weather-summary-count">${Math.max(0, Number(weatherOperations[key]) || 0)}</span> ${label}</span>`).join('<span aria-hidden="true">·</span>')}</div>`
     : '';
-  const retiredArtifactSummary = retiredArtifacts.length
-    ? `<section class="agentic-artifacts" aria-label="Historical retired model artifacts">
-        <div><span class="agentic-artifacts-kicker">Historical artifacts</span><h4 class="agentic-artifacts-title">Retired model audit trail</h4><p class="agentic-artifacts-copy">Kept for auditability only. These records are excluded from live rankings, health, and paper-trading decisions.</p></div>
-        <div class="agentic-artifacts-list">${retiredArtifacts.map(item => {
-          const model = String(item?.agent_id || 'Retired model');
-          const periods = Math.max(0, Number(item?.archive_periods) || 0);
-          const records = Math.max(0, Number(item?.records) || 0);
-          return `<span class="agentic-artifact"><strong>${escHtml(_ebModelLabel(model))}</strong>${records.toLocaleString()} audit record${records === 1 ? '' : 's'} · ${periods} archive period${periods === 1 ? '' : 's'}</span>`;
-        }).join('')}</div>
-      </section>`
-    : '';
-
   // Model filter pill bar
   const activeFilter = window._agentActivityFilter || 'all';
+  const selectedRetiredArtifact = retiredArtifactsById[activeFilter];
+  const selectedRetired = Boolean(selectedRetiredArtifact);
+  const retiredActivity = selectedRetired ? window._agentRetiredActivityCache[activeFilter] : null;
+  const retiredActivityLoading = selectedRetired && Boolean(window._agentRetiredActivityLoading[activeFilter]);
+  const retiredActivityError = selectedRetired ? window._agentRetiredActivityErrors[activeFilter] : '';
   const filterPills = [
     `<button type="button" class="eb-view-tab ${activeFilter === 'all' ? 'active' : ''}" onclick="_filterAgentActivity('all')">All Models</button>`
   ];
@@ -6915,13 +6957,21 @@ function renderAgentTradingBoard(d) {
       `<button type="button" class="eb-view-tab ${activeFilter === aId ? 'active' : ''}" onclick="_filterAgentActivity('${escAttr(aId)}')">${escHtml(_ebModelHead(aId))}</button>`
     );
   });
+  retiredArtifacts.forEach(item => {
+    const aId = String(item?.agent_id || '');
+    filterPills.push(
+      `<button type="button" class="eb-view-tab ${activeFilter === aId ? 'active' : ''}" title="View archived paper-trading records" onclick="_filterAgentActivity('${escAttr(aId)}', true)">${escHtml(_ebModelHead(aId))}<span class="agentic-retired-tag">Retired</span></button>`
+    );
+  });
 
-  let filteredActivity = activeFilter === 'all'
-    ? activity
-    : activity.filter(a => a.agent_id === activeFilter);
+  let filteredActivity = selectedRetired
+    ? (Array.isArray(retiredActivity) ? retiredActivity : [])
+    : activeFilter === 'all'
+      ? activity
+      : activity.filter(a => a.agent_id === activeFilter);
   const hasVisibleThesis = filteredActivity.some(a => a.type === 'thesis');
-  const latestThesis = activeFilter === 'all' ? null : latestTheses[activeFilter];
-  const learningSummary = activeFilter === 'all'
+  const latestThesis = selectedRetired || activeFilter === 'all' ? null : latestTheses[activeFilter];
+  const learningSummary = selectedRetired || activeFilter === 'all'
     ? ''
     : _agentForecastLearningSummary(forecastLearning[activeFilter], activeFilter);
   // The board's global activity window may be filled by other models. Keep a
@@ -6936,10 +6986,9 @@ function renderAgentTradingBoard(d) {
     const body = _agentTradingActivityLine(a);
     if (!body) return '';
     const isThesis = a.type === 'thesis';
-    const typeLabel = String(a.type || 'activity').replace(/_/g, ' ');
     return `<article class="agentic-activity ${isThesis ? 'agentic-activity--thesis' : ''}">
       <div class="agentic-activity-meta">
-        <span><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b> · <span style="text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escHtml(a.type || '')}</span></span>
+        <span><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b>${a.archived ? '<span class="agentic-retired-tag">Retired</span>' : ''} · <span style="text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escHtml(a.type || '')}</span></span>
         <span>${escHtml(when)}</span>
       </div>
       <div class="agentic-activity-body">${body}</div>
@@ -6954,17 +7003,22 @@ function renderAgentTradingBoard(d) {
     </section>
     ${healthSummary ? `<div class="agentic-health-summary"><span class="agentic-health-summary-label">Cycle health</span>${healthSummary}</div>` : ''}
     ${weatherOperationalSummary}
-    ${retiredArtifactSummary}
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}</tbody></table>
+    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades / records</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}${retiredTableRows}</tbody></table>
     <div class="agentic-feed-head">
-      <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : activeFilter)}</span>
+      <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : _ebModelLabel(activeFilter))}${selectedRetired ? '<span class="agentic-retired-tag">Retired</span>' : ''}</span>
     </div>
     <div class="agentic-filterbar">
       ${filterPills.join('')}
     </div>
     ${learningSummary}
-    <div class="agentic-activity-list">${activityRows || (activeFilter !== 'all'
-      ? `<p class="text-sm text-gray-500">No published thesis for ${escHtml(_ebModelLabel(activeFilter))} yet. Its next scheduled research run will retry automatically.</p>`
+    <div class="agentic-activity-list">${retiredActivityLoading
+      ? '<p class="text-sm text-gray-500">Loading archived paper-trading records…</p>'
+      : retiredActivityError
+        ? `<p class="text-sm text-gray-500">${escHtml(retiredActivityError)} <a href="#" onclick="event.preventDefault(); delete window._agentRetiredActivityErrors['${escAttr(activeFilter)}']; _filterAgentActivity('${escAttr(activeFilter)}', true);" style="text-decoration:underline">Retry</a></p>`
+        : activityRows || (selectedRetired
+          ? `<p class="text-sm text-gray-500">No archived paper-trading records were found for ${escHtml(_ebModelLabel(activeFilter))}.</p>`
+          : activeFilter !== 'all'
+            ? `<p class="text-sm text-gray-500">No published thesis for ${escHtml(_ebModelLabel(activeFilter))} yet. Its next scheduled research run will retry automatically.</p>`
       : '<p class="text-sm text-gray-500">No activity matching this filter.</p>')}</div>`;
   const svgEl = document.getElementById('agentTradingSvg');
   if (svgEl) _attachEquityHover(svgEl);

@@ -1632,6 +1632,34 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["archive_periods_scanned"], 1)
         self.assertEqual(payload["items"], [archived])
 
+    def test_agent_trading_audits_lists_retired_model_archive_on_demand(self):
+        archived = {
+            "action_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "recorded_at": "2026-06-02T10:00:00+00:00",
+            "agent_id": "kimi-k3",
+            "event_type": "trade",
+            "audit": {"status": "legacy_record"},
+        }
+        manifest = {
+            "archives": {"kimi-k3": [{"month": "2026-06", "path": "static/agent_trading_audits/kimi-k3/2026-06.json"}]},
+        }
+        with (
+            mock.patch.object(server_module, "_read_agent_trading_audit", return_value={"audits": {}}),
+            mock.patch.object(server_module, "_read_agent_trading_audit_archive_manifest", return_value=manifest),
+            mock.patch.object(server_module, "_read_agent_trading_audit_archive_records", return_value=([archived], 1)) as read_archive,
+        ):
+            response = self.client.get("/agent-trading/audits", params={"agent_id": "kimi-k3", "limit": 12})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["storage"], "github_monthly_archive")
+        self.assertEqual(payload["archive_periods_scanned"], 1)
+        self.assertEqual(payload["items"], [archived])
+        self.assertEqual(
+            read_archive.call_args.kwargs,
+            {"agent_id": "kimi-k3", "action_id": None, "limit": 12},
+        )
+
     def test_agent_trading_board_endpoint_enforces_rendering_payload_budgets(self):
         model_count = server_module._AGENT_TRADING_MAX_MODELS + 4
         curve_length = server_module._AGENT_TRADING_CURVE_MAX_POINTS + 40
