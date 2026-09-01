@@ -67,9 +67,11 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    chat_interface_enabled: true
-    # Alias Code currently resolves to Qwen3.8-27B.  Keep it in chat, but
-    # never create a duplicate agent account for the same underlying model.
+    # This resolves to Qwen3.8-27B, which is available directly. Keep the
+    # historical/provider configuration, but do not repeat it in chat.
+    chat_interface_enabled: false
+    # Alias Code resolves to Qwen3.8-27B, which is offered directly. Retain
+    # this provider mapping for historical records, but do not expose it.
     agent_trading_enabled: false
     agent_model_identity: Qwen/Qwen3.8-27B
     fallback_model_chain:
@@ -84,7 +86,8 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    chat_interface_enabled: true
+    # This resolves to Llama-3.3-70B-Instruct, which is offered directly.
+    chat_interface_enabled: false
     agent_trading_enabled: false
     agent_model_identity: meta-llama/Llama-3.3-70B-Instruct
     fallback_model_chain:
@@ -100,7 +103,8 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    chat_interface_enabled: true
+    # This resolves to Gemma-4-26B-A4B-it, which is offered directly.
+    chat_interface_enabled: false
     agent_trading_enabled: false
     agent_model_identity: google/gemma-4-26B-A4B-it
     fallback_model_chain:

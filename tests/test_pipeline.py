@@ -606,6 +606,9 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("qwen3-vl-8b-instruct", chat_models)
         self.assertIn("deepseek-v4-flash", chat_models)
         self.assertIn("glm-5-3-flash", chat_models)
+        self.assertNotIn("scads-alias-code", chat_models)
+        self.assertNotIn("scads-alias-ha", chat_models)
+        self.assertNotIn("scads-alias-reasoning", chat_models)
         agent_models = scads_agent_trading_model_labels(repo_root / "configs" / "models.yaml")
         self.assertEqual(
             agent_models,
@@ -620,6 +623,7 @@ class PipelineTests(unittest.TestCase):
                 "qwen3-8-27b",
             ),
         )
+        self.assertEqual(chat_models, set(agent_models))
         self.assertNotIn("scads-alias-code", agent_models)
         self.assertFalse(models["scads-alias-code"].agent_trading_enabled)
         self.assertEqual(temperature_to_tag(0.7), "temperature_07")
