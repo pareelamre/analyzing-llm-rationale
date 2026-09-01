@@ -3,6 +3,36 @@
     "deepseek-v4-flash": [],
     "gemma-4-26b-a4b-it": [
       {
+        "action_id": "72b8fd54-dd0e-4ef1-8833-9deae7830ef5",
+        "agent_id": "gemma-4-26b-a4b-it",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:993498",
+        "event_type": "settlement",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": null,
+          "quantity": 100.0,
+          "realized_pnl": -10.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXMLBDEBUT-FARIAS-26SEP01"
+        },
+        "mode": "shadow",
+        "outcome": "no",
+        "record_hash": "d6344478afe3686553686b4d7880005b285f73b885f8e929075fb79ac0313adb",
+        "recorded_at": "2026-09-01T21:25:37.148055+00:00"
+      },
+      {
         "action_id": "f6f67002-2fe5-4b8f-a5dd-3919fc541dda",
         "agent_id": "gemma-4-26b-a4b-it",
         "audit": {
@@ -787,6 +817,36 @@
       }
     ],
     "gpt-oss-120b": [
+      {
+        "action_id": "0dcd7245-29fe-421a-8ef2-0b6758d48099",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:993499",
+        "event_type": "settlement",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": null,
+          "quantity": 100.0,
+          "realized_pnl": -10.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXMLBDEBUT-FARIAS-26SEP01"
+        },
+        "mode": "shadow",
+        "outcome": "no",
+        "record_hash": "d0859b16d26b336a98a21eeda1afbe4e7ee81ea70f23b6b9a7574d26a8a88193",
+        "recorded_at": "2026-09-01T21:32:49.070255+00:00"
+      },
       {
         "action_id": "d35c6711-5982-4472-846d-b95a440a4bd0",
         "agent_id": "gpt-oss-120b",
@@ -2334,6 +2394,119 @@
       }
     ],
     "llama-3.3-70b-instruct": [
+      {
+        "action_id": "489c5eb5-349a-4f68-9924-259fd3c4365b",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_unfilled_below_market",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "marketable": false,
+            "observed_ask": 0.94,
+            "source": "live_venue_quote",
+            "status": "shadow_unfilled_below_market"
+          },
+          "requested_order": {
+            "price": 0.48,
+            "quantity": 100
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 6479.315805,
+            "cash_required": 42.847745,
+            "concentration_cap": 1289.897371,
+            "cycle_id": "30m:993499",
+            "cycle_spend_after": 42.847745,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 42.847745,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2579.794741,
+            "drawdown_after": 0.188219,
+            "fee": 1.50488,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 41.342864,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 41.342864,
+            "open_markets_after": 4,
+            "per_cycle_spend_limit": 1719.863161,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.02,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.05,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 41.342864,
+            "target_quantity": 86.1309675981572
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993499",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 0.48,
+          "quantity": 0.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXNFLRETIRE-MSTAFFORD9-2627"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "c547d179ca9387d364a7466da2564f8f60bd4495e306a5e64e071b48bb4ee5ec",
+        "recorded_at": "2026-09-01T21:34:33.646160+00:00"
+      },
+      {
+        "action_id": "b6626c0d-0446-4a6d-bff8-2dbb38332595",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:993499",
+        "event_type": "settlement",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": null,
+          "quantity": 1000.0,
+          "realized_pnl": -100.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXMLBDEBUT-FARIAS-26SEP01"
+        },
+        "mode": "shadow",
+        "outcome": "no",
+        "record_hash": "6bd66f7546e89de1fe68849e996960e8d88c9d458fd26d2eeeac7fa0742df75f",
+        "recorded_at": "2026-09-01T21:33:42.248271+00:00"
+      },
       {
         "action_id": "3ab6aa33-241d-4f4a-9486-e4a861ad4a1a",
         "agent_id": "llama-3.3-70b-instruct",
@@ -6959,7 +7132,7 @@
     ],
     "qwen3-8-27b": []
   },
-  "generated_at": "2026-09-01T18:53:22.457305+00:00",
+  "generated_at": "2026-09-01T21:40:18.172961+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
