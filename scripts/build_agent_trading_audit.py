@@ -100,7 +100,12 @@ def _retired_agent_artifact_models(archive_root: Path) -> List[str]:
     return sorted(
         name
         for name, config in configs.items()
-        if not config.forecasting_enabled and (archive_root / name).is_dir()
+        if (
+            not config.forecasting_enabled
+            or not config.chat_interface_enabled
+            or not config.agent_trading_enabled
+        )
+        and (archive_root / name).is_dir()
     )
 
 
