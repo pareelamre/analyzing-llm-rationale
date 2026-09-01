@@ -3,6 +3,36 @@
     "deepseek-v4-flash": [],
     "gemma-4-26b-a4b-it": [
       {
+        "action_id": "f6f67002-2fe5-4b8f-a5dd-3919fc541dda",
+        "agent_id": "gemma-4-26b-a4b-it",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:993486",
+        "event_type": "settlement",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": null,
+          "quantity": 200.0,
+          "realized_pnl": -26.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXCABLEAVE-26MAY22-26SEP"
+        },
+        "mode": "shadow",
+        "outcome": "no",
+        "record_hash": "5790bae3177a6da8b814c094b48c10ba16b18939a89ff6ebbfc3006b4d90bd14",
+        "recorded_at": "2026-09-01T15:16:05.053392+00:00"
+      },
+      {
         "action_id": "2ecf3165-809e-4edb-81fd-cfd1a75d7364",
         "agent_id": "gemma-4-26b-a4b-it",
         "audit": {
@@ -757,6 +787,111 @@
       }
     ],
     "gpt-oss-120b": [
+      {
+        "action_id": "dc0bffc8-9826-4877-84cd-7135ba3873df",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 500.0
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.43,
+            "source": "live_venue_quote",
+            "status": "shadow_price_from_live_quote"
+          },
+          "requested_order": {
+            "price": null,
+            "quantity": 500
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 9625.956,
+            "cash_required": 0.0,
+            "concentration_cap": 1486.6434,
+            "cycle_id": "30m:993486",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2973.2868,
+            "drawdown_after": 0.013204,
+            "fee": 0.0,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 215.0,
+            "open_markets_after": 2,
+            "per_cycle_spend_limit": 1982.1912,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993486",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 285.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 500.0,
+          "notional": 215.0,
+          "price": 0.43,
+          "quantity": 500.0,
+          "realized_pnl": 140.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "d35aa36a6cdf8727388aa2009f254225b2ec2ec2a6c90d988988655c95d02e67",
+        "recorded_at": "2026-09-01T15:19:37.925847+00:00"
+      },
+      {
+        "action_id": "9ccc248a-342c-495b-9331-a33880886f4f",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:993486",
+        "event_type": "settlement",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": null,
+          "quantity": 100.0,
+          "realized_pnl": -16.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXCABLEAVE-26MAY22-26SEP"
+        },
+        "mode": "shadow",
+        "outcome": "no",
+        "record_hash": "c17d8a96704d34f95992c6bd937a9c8cc668ebe77e45383ee46d40c1517661a6",
+        "recorded_at": "2026-09-01T15:19:02.843906+00:00"
+      },
       {
         "action_id": "132d3255-a28b-4d7f-b88b-e6e2d3158ff2",
         "agent_id": "gpt-oss-120b",
@@ -6749,7 +6884,7 @@
     ],
     "qwen3-8-27b": []
   },
-  "generated_at": "2026-09-01T15:01:54.503417+00:00",
+  "generated_at": "2026-09-01T15:26:51.663996+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
