@@ -30,7 +30,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import benchmark_tools  # noqa: E402
-from analyzing_llm_rationale.config import scads_agent_trading_model_labels  # noqa: E402
+from analyzing_llm_rationale.config import (  # noqa: E402
+    load_model_configs,
+    scads_agent_trading_model_labels,
+)
 
 tracer = trace.get_tracer("foresea.agent_trading_audit")
 meter = metrics.get_meter("foresea.agent_trading_audit")
@@ -83,6 +86,22 @@ _AUDITED_ACTIONS = ("trade", "rejected_trade", "settlement")
 
 def _agent_trading_models() -> List[str]:
     return list(scads_agent_trading_model_labels(ROOT / "configs" / "models.yaml"))
+
+
+def _retired_agent_artifact_models(archive_root: Path) -> List[str]:
+    """Return retired model IDs that already have durable audit artifacts.
+
+    Retiring a provider must stop new calls, not make its paper-trade history
+    disappear.  The publisher deliberately keeps old monthly JSON files in
+    Git, and this helper makes those files discoverable through the manifest
+    without reopening or scheduling the retired provider.
+    """
+    configs = load_model_configs(ROOT / "configs" / "models.yaml")
+    return sorted(
+        name
+        for name, config in configs.items()
+        if not config.forecasting_enabled and (archive_root / name).is_dir()
+    )
 
 
 def _open_store(path: Path) -> sqlite3.Connection:
@@ -217,6 +236,27 @@ def _archive_manifest_path(path: Path) -> str:
         return str(path)
 
 
+def _existing_archive_periods(archive_root: Path, model: str) -> List[Dict[str, Any]]:
+    """Describe valid existing monthly artifacts without rewriting them."""
+    periods: List[Dict[str, Any]] = []
+    model_root = archive_root / model
+    for path in sorted(model_root.glob("*.json"), reverse=True):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            records = payload.get("items") if isinstance(payload, dict) else None
+            if not isinstance(records, list):
+                continue
+        except (OSError, ValueError):
+            logger.warning("skipping unreadable retired audit artifact: %s", path)
+            continue
+        periods.append({
+            "month": path.stem,
+            "path": _archive_manifest_path(path),
+            "records": len(records),
+        })
+    return periods
+
+
 def build_audit_archive(
     *,
     store_dir: Path = STORE_DIR,
@@ -232,6 +272,7 @@ def build_audit_archive(
     """
     started = time.perf_counter()
     chosen_models = list(models) if models is not None else _agent_trading_models()
+    retired_models = _retired_agent_artifact_models(archive_root) if models is None else []
     with tracer.start_as_current_span("agent_trading.build_audit_archive") as span:
         span.set_attribute("agent.models", len(chosen_models))
         try:
@@ -259,12 +300,20 @@ def build_audit_archive(
                     record_count += len(records)
                 archives[str(model)] = periods
 
+            # Retired model files are immutable artifacts.  Include their
+            # existing periods in the same index so on-demand audit lookups
+            # continue to work, but never open a retired provider ledger or
+            # schedule a new model call merely to refresh history.
+            for model in retired_models:
+                archives[model] = _existing_archive_periods(archive_root, model)
+
             manifest = {
                 "schema_version": 1,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "mode": "shadow",
                 "storage": "github_repository",
                 "archives": archives,
+                "retired_models": retired_models,
             }
             _write_json_if_changed(manifest_path, manifest)
             audit_archive_builds.add(1, {"outcome": "success"})
