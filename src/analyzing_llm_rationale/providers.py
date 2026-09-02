@@ -23,6 +23,23 @@ class ProviderError(RuntimeError):
 class RetryableProviderError(ProviderError):
     """The request may succeed if retried."""
 
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        status_code: Optional[int] = None,
+        retry_after_s: Optional[float] = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        # The provider's advisory is useful for recovery scheduling, but it
+        # must never be trusted as an unbounded sleep instruction.
+        self.retry_after_s = (
+            max(0.0, min(float(retry_after_s), 60.0))
+            if retry_after_s is not None
+            else None
+        )
+
 
 class ContextLimitError(ProviderError):
     """The prompt exceeded the provider's effective context window."""
@@ -122,6 +139,17 @@ def clean_http_header_value(value: object) -> str:
     return cleaned.encode("latin-1", errors="ignore").decode("latin-1")
 
 
+def retry_after_seconds(headers: Any) -> Optional[float]:
+    """Return a bounded numeric Retry-After hint when the provider sent one."""
+    try:
+        raw = headers.get("Retry-After")
+        if raw is None:
+            return None
+        return max(0.0, min(float(str(raw).strip()), 60.0))
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def normalize_openai_chat_completions_url(base_url: str) -> str:
     """Accept either an OpenAI-compatible /v1 base URL or the full chat endpoint."""
     url = clean_provider_string(base_url)
@@ -219,7 +247,9 @@ class OpenAICompatibleProvider(ChatProvider):
             raise ContextLimitError(response_text)
         if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
             raise RetryableProviderError(
-                f"status={response.status_code} body={response_text}"
+                f"status={response.status_code} body={response_text}",
+                status_code=response.status_code,
+                retry_after_s=retry_after_seconds(getattr(response, "headers", None)),
             )
         if response.status_code != 200:
             raise ProviderResponseError(
@@ -257,7 +287,11 @@ class OpenAICompatibleProvider(ChatProvider):
         if response.status_code == 400 and "maximum context length" in response_text.lower():
             raise ContextLimitError(response_text)
         if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
-            raise RetryableProviderError(f"status={response.status_code} body={response_text}")
+            raise RetryableProviderError(
+                f"status={response.status_code} body={response_text}",
+                status_code=response.status_code,
+                retry_after_s=retry_after_seconds(getattr(response, "headers", None)),
+            )
         if response.status_code != 200:
             raise ProviderResponseError(f"status={response.status_code} body={response_text}")
 
@@ -346,7 +380,11 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         )
         response_text = response.text[:500]
         if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
-            raise RetryableProviderError(f"status={response.status_code} body={response_text}")
+            raise RetryableProviderError(
+                f"status={response.status_code} body={response_text}",
+                status_code=response.status_code,
+                retry_after_s=retry_after_seconds(getattr(response, "headers", None)),
+            )
         if response.status_code != 200:
             raise ProviderResponseError(f"status={response.status_code} body={response_text}")
         try:
@@ -435,7 +473,11 @@ class AnthropicProvider(ChatProvider):
         )
         response_text = response.text[:500]
         if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
-            raise RetryableProviderError(f"status={response.status_code} body={response_text}")
+            raise RetryableProviderError(
+                f"status={response.status_code} body={response_text}",
+                status_code=response.status_code,
+                retry_after_s=retry_after_seconds(getattr(response, "headers", None)),
+            )
         if response.status_code != 200:
             raise ProviderResponseError(f"status={response.status_code} body={response_text}")
         try:
@@ -469,7 +511,11 @@ class AnthropicProvider(ChatProvider):
         )
         response_text = response.text[:500] if response.status_code != 200 else ""
         if response.status_code in (408, 409, 425, 429) or response.status_code >= 500:
-            raise RetryableProviderError(f"status={response.status_code} body={response_text}")
+            raise RetryableProviderError(
+                f"status={response.status_code} body={response_text}",
+                status_code=response.status_code,
+                retry_after_s=retry_after_seconds(getattr(response, "headers", None)),
+            )
         if response.status_code != 200:
             raise ProviderResponseError(f"status={response.status_code} body={response_text}")
 

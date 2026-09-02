@@ -318,6 +318,33 @@ def _bounded_observation(action: str, observation: Any, limit: int) -> str:
     return text[:limit]
 
 
+def _compact_observation_context(messages: List[Dict[str, str]], max_chars: int) -> None:
+    """Keep the prompt bounded while retaining the full durable transcript.
+
+    Long tool-use work is more likely to fail late in a run because every
+    observation is replayed to every subsequent model turn. Preserve the most
+    recent observations verbatim, then compact the oldest context only when
+    the combined observation budget would otherwise be exceeded.
+    """
+    if max_chars <= 0:
+        return
+    observation_indexes = [
+        index
+        for index, message in enumerate(messages)
+        if message.get("role") == "user" and message.get("content", "").startswith("Observation: ")
+    ]
+    total = sum(len(messages[index]["content"]) for index in observation_indexes)
+    for index in observation_indexes:
+        if total <= max_chars:
+            break
+        original = messages[index]["content"]
+        compact = "Observation: [Earlier observation compacted; full result is in the audit transcript.]"
+        if original == compact:
+            continue
+        messages[index]["content"] = compact
+        total -= len(original) - len(compact)
+
+
 async def run_tool_loop(
     question: str,
     tools: Dict[str, Tool],
@@ -326,6 +353,7 @@ async def run_tool_loop(
     *,
     max_steps: int = 5,
     obs_limit: int = 4000,
+    observation_context_limit: int = 12000,
     extra_rules: str = "",
     on_step: Optional[OnStep] = None,
     on_step_start: Optional[OnStep] = None,
@@ -426,6 +454,7 @@ async def run_tool_loop(
                 pass
         messages.append({"role": "assistant", "content": out})
         messages.append({"role": "user", "content": f"Observation: {context_observation}"})
+        _compact_observation_context(messages, observation_context_limit)
     # Out of steps — force one terminal JSON answer. Asking for plain text
     # contradicted the system contract and let some providers emit a pasted
     # sequence of prior tool-call envelopes instead of a final thesis.
