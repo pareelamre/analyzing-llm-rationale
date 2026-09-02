@@ -525,6 +525,12 @@ class RecentActivityTests(unittest.TestCase):
         display = agent_trading_stats.clean_thesis_display(thesis)
         self.assertEqual(display, "")
 
+    def test_clean_thesis_display_omits_truncated_json_envelope(self):
+        self.assertEqual(
+            agent_trading_stats.clean_thesis_display('{"thought": "unfinished tool response'),
+            "",
+        )
+
     def test_clean_thesis_display_uses_only_explicit_reader_ready_json_field(self):
         display = agent_trading_stats.clean_thesis_display(json.dumps({
             "thought": "Private chain of thought",

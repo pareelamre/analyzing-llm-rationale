@@ -451,7 +451,14 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
             # cycle transcript, where it can still be inspected on demand.
             if text.startswith("{"):
                 return ""
-    if re.search(r'\{\s*"(?:thought|reasoning|analysis)"\s*:\s*.*?"(?:action|args|query)"\s*:', text, re.DOTALL):
+    # A provider may be interrupted while serialising its final/tool payload,
+    # leaving an unterminated JSON object such as ``{"thought": ...``.  It
+    # has no safe reader-facing boundary, so retain it only in the transcript.
+    if text.startswith("{") or re.search(
+        r'\{\s*"(?:thought|reasoning|analysis)"\s*:\s*.*?"(?:action|args|query)"\s*:',
+        text,
+        re.DOTALL,
+    ):
         return ""
     if text.upper() in {"PASS", "HOLD", "NO ACTION", "N/A"}:
         return ""
