@@ -1202,6 +1202,16 @@ class AgentAnalyzeRetryTests(unittest.TestCase):
 
 
 class CycleTelemetryTests(unittest.TestCase):
+    def test_failure_detail_uses_chained_provider_status_without_leaking_response(self):
+        upstream = RuntimeError("status=503 body=authorization=super-secret-response")
+        wrapper = RuntimeError("The forecasting model is temporarily unavailable.")
+        wrapper.__cause__ = upstream
+
+        self.assertEqual(
+            agent_trading_tick._failure_detail(wrapper),
+            "Upstream provider returned HTTP 503.",
+        )
+
     def test_main_persists_a_successful_structured_cycle_telemetry_record(self):
         with tempfile.TemporaryDirectory() as td:
             env = {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}
@@ -1257,7 +1267,7 @@ class CycleTelemetryTests(unittest.TestCase):
 
         self.assertEqual(row["outcome"], "failure")
         self.assertEqual(row["failure_kind"], "provider_unavailable")
-        self.assertIn("temporarily unavailable", row["failure_detail"])
+        self.assertEqual(row["failure_detail"], "Upstream provider returned HTTP 503.")
         self.assertIsNotNone(row["finished_at"])
 
 

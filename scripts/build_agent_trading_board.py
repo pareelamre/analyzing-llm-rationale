@@ -161,7 +161,11 @@ def _model_health(
     )
 
     if latest_attempt_failed:
-        status = str(telemetry["failure_kind"] or "cycle_error")
+        # A failed worker turn is historical execution information.  It does
+        # not prove that the model provider is unavailable *now*; a status
+        # probe or a later turn may already have recovered.  Keep the cause in
+        # ``last_failure_kind`` for maintenance, but use a neutral UI state.
+        status = "last_attempt_failed"
         detail = "Latest worker attempt failed"
         if telemetry["failure_detail"]:
             detail += f": {telemetry['failure_detail']}"
@@ -254,12 +258,11 @@ def _recent_cycle_telemetry(conn: sqlite3.Connection, model: str, *, limit: int 
 
 
 def _operational_health(model_health: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-    """Summarise model availability without hiding per-model failure detail."""
-    provider_statuses = {"provider_unavailable", "provider_rate_limited", "provider_timeout"}
-    provider_degraded = [
+    """Summarise recent execution outcomes without claiming live availability."""
+    last_attempt_failures = [
         {"agent_id": model, "status": health["status"]}
         for model, health in sorted(model_health.items())
-        if health.get("status") in provider_statuses
+        if health.get("status") == "last_attempt_failed"
     ]
     cycle_failed = [
         {"agent_id": model, "status": health["status"]}
@@ -273,21 +276,21 @@ def _operational_health(model_health: Dict[str, Dict[str, Any]]) -> Dict[str, An
     if cycle_failed:
         status = "attention"
         detail = f"{len(cycle_failed)} model ledger(s) need maintenance attention."
-    elif provider_degraded:
-        status = "provider_degraded"
+    elif last_attempt_failures:
+        status = "attempts_failed"
         detail = (
-            f"{len(provider_degraded)} model provider(s) are temporarily unavailable; "
-            "completed paper cycles remain valid."
+            f"{len(last_attempt_failures)} model agent attempt(s) most recently failed. "
+            "This is historical execution status, not a live provider availability check."
         )
     else:
         status = "healthy"
-        detail = "All latest model attempts completed without an upstream provider degradation."
+        detail = "All latest model attempts completed without failure."
     return {
         "status": status,
         "detail": detail,
         "models_total": len(model_health),
         "models_verified": verified,
-        "provider_degraded": provider_degraded,
+        "last_attempt_failures": last_attempt_failures,
         "attention_required": cycle_failed,
     }
 

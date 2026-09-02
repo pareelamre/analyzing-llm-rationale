@@ -1095,7 +1095,7 @@
     .agentic-health--active { background: #ecfdf5; color: #047857; }
     .agentic-health--no-trade { background: #eff6ff; color: #1d4ed8; }
     .agentic-health--delayed { background: #fffbeb; color: #a16207; }
-    .agentic-health--provider-unavailable, .agentic-health--provider-timeout, .agentic-health--provider-context-limit, .agentic-health--cycle-error, .agentic-health--stale, .agentic-health--unverified { background: #fef2f2; color: #b91c1c; }
+    .agentic-health--last-attempt-failed, .agentic-health--provider-unavailable, .agentic-health--provider-timeout, .agentic-health--provider-context-limit, .agentic-health--cycle-error, .agentic-health--stale, .agentic-health--unverified { background: #fef2f2; color: #b91c1c; }
     .agentic-health--provider-rate-limited { background: #fffbeb; color: #a16207; }
     .agentic-health-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 6px; padding: 0 0 12px; }
     .agentic-health-summary-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-right: 2px; text-transform: uppercase; }
@@ -6855,8 +6855,11 @@ function renderAgentTradingBoard(d) {
   const staleBadge = d && d.freshness && d.freshness.stale ? ' · <span style="color:#b45309;font-weight:600">Stale</span>' : '';
   const updatedStr = gen ? ` Updated ${escHtml(gen)}${staleBadge}.` : '';
   const operationalHealth = d?.operational_health || {};
-  const availabilityNotice = operationalHealth.status === 'provider_degraded'
-    ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);color:var(--text)"><strong>Provider availability:</strong> ${escHtml(operationalHealth.detail || 'Some model providers are temporarily unavailable.')} Completed paper cycles and balances remain valid.</p>`
+  const failedAttemptCount = Array.isArray(operationalHealth.last_attempt_failures)
+    ? operationalHealth.last_attempt_failures.length
+    : (Array.isArray(operationalHealth.provider_degraded) ? operationalHealth.provider_degraded.length : 0);
+  const availabilityNotice = (operationalHealth.status === 'attempts_failed' || operationalHealth.status === 'provider_degraded')
+    ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);color:var(--text)"><strong>Latest agent attempts:</strong> ${failedAttemptCount || 'Some'} model${failedAttemptCount === 1 ? '' : 's'} most recently ended with a provider error. This is historical execution status, not a live SCADS availability check. Completed paper cycles and balances remain valid.</p>`
     : operationalHealth.status === 'attention'
       ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--text)"><strong>Agent maintenance attention:</strong> ${escHtml(operationalHealth.detail || 'One or more model ledgers need review.')}</p>`
       : '';
@@ -6881,8 +6884,9 @@ function renderAgentTradingBoard(d) {
   const _healthStatus = health => String(health?.status || 'unverified');
   const _healthLabel = status => ({
     active: 'Verified', no_trade: 'No trade', delayed: 'Delayed', stale: 'Stalled', unverified: 'Unverified',
-    provider_unavailable: 'Provider unavailable', provider_rate_limited: 'Rate limited',
-    provider_timeout: 'Provider timeout', provider_context_limit: 'Context limit', cycle_error: 'Cycle failed'
+    last_attempt_failed: 'Last attempt failed',
+    provider_unavailable: 'Last attempt: upstream 503', provider_rate_limited: 'Last attempt: rate limited',
+    provider_timeout: 'Last attempt: timed out', provider_context_limit: 'Last attempt: context limit', cycle_error: 'Last attempt failed'
   })[status] || 'Unverified';
   const _healthAge = health => {
     const seconds = Number(health?.cycle_age_seconds);
@@ -6895,7 +6899,8 @@ function renderAgentTradingBoard(d) {
     const status = _healthStatus(health);
     const label = _healthLabel(status);
     const prefix = withModel ? `${_ebModelHead(health?.agent_id || '')} · ` : '';
-    const title = `${health?.detail || 'No per-model cycle health report.'}${health?.last_cycle_at ? ` Last confirmed cycle: ${health.last_cycle_at}.` : ''}${health?.last_attempt_at ? ` Last worker attempt: ${health.last_attempt_at}.` : ''}`;
+    const historicalAttempt = ['last_attempt_failed', 'provider_unavailable', 'provider_rate_limited', 'provider_timeout', 'provider_context_limit', 'cycle_error'].includes(status);
+    const title = `${historicalAttempt ? 'Latest agent attempt failed. This is historical execution status, not a live SCADS availability check.' : (health?.detail || 'No per-model cycle health report.')}${health?.last_failure_detail ? ` Failure reason: ${health.last_failure_detail}.` : ''}${health?.last_cycle_at ? ` Last confirmed cycle: ${health.last_cycle_at}.` : ''}${health?.last_attempt_at ? ` Last worker attempt: ${health.last_attempt_at}.` : ''}`;
     return `<span class="agentic-health agentic-health--${escAttr(status)}" title="${escAttr(title)}">${escHtml(prefix + label)} · ${escHtml(_healthAge(health))}</span>`;
   };
   const _usd = v => Number.isFinite(Number(v))

@@ -1514,6 +1514,8 @@ class ServerTests(unittest.TestCase):
             },
             "model_health": {"gpt-oss-120b": {"status": "no_trade", "cycle_age_seconds": 120}},
             "operational_health": {
+                # A previously published artifact used the old, misleading
+                # provider_degraded wording; the public API must normalize it.
                 "status": "provider_degraded",
                 "detail": "One provider is temporarily unavailable.",
                 "provider_degraded": [{"agent_id": "gpt-oss-120b", "status": "provider_unavailable"}],
@@ -1552,9 +1554,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["weather_operations"]["candidates_offered"], 5)
         self.assertEqual(payload["weather_operations"]["traded"], 1)
         self.assertEqual(payload["model_health"]["gpt-oss-120b"]["status"], "no_trade")
-        self.assertEqual(payload["operational_health"]["status"], "provider_degraded")
+        self.assertEqual(payload["operational_health"]["status"], "attempts_failed")
         self.assertEqual(payload["operational_health"]["models_total"], 1)
-        self.assertEqual(payload["operational_health"]["provider_degraded"][0]["agent_id"], "gpt-oss-120b")
+        self.assertEqual(payload["operational_health"]["last_attempt_failures"][0]["agent_id"], "gpt-oss-120b")
         self.assertEqual(payload["retired_artifacts"], [{
             "agent_id": "kimi-k3", "archive_periods": 1, "records": 14,
             "starting_cash": 10_000.0, "account_value": 10_664.928,
