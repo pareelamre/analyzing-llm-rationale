@@ -1,3 +1,5 @@
+import json
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -468,6 +470,50 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("Research cycle incomplete", formatter)
         self.assertIn("Execution result unavailable", formatter)
         self.assertIn("agentic-thesis-state", index)
+
+    def test_agentic_thesis_cards_hide_partial_markdown_and_explain_missing_edge(self):
+        index = self._both()["frontend"]
+        formatter = index.split("function _isThesisMarkupFragment(rawLine) {", 1)[1].split(
+            "function _toggleAgentPositions", 1
+        )[0]
+        self.assertIn("replace(/\\\\([*_`])/g, '$1')", formatter)
+        self.assertIn("_isThesisMarkupFragment(bullet[1])", formatter)
+        self.assertIn("_thesisSectionFallback(heading[1])", formatter)
+        self.assertIn("#{2,6}", formatter)
+        self.assertIn(
+            "No model probability, executable market price, or edge was supplied for this cycle.",
+            formatter,
+        )
+
+    def test_agentic_thesis_cards_render_five_level_edge_heading_without_dangling_markdown(self):
+        source = self._both()["frontend"]
+        formatter_start = source.index("function _extractThesisJsonField(")
+        formatter_end = source.index("function _toggleAgentPositions", formatter_start)
+        sample = """##### 2. Resolution Rules & Compliance Audit
+- **Rules Verification**: No new contract assessed
+- **Observation Window**: No new contract assessed
+
+##### 3. Model Edge & Valuation
+- \\*\\*
+"""
+        script = """
+function escHtml(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+""" + source[formatter_start:formatter_end] + "\nprocess.stdout.write(_formatThesisHtml(" + json.dumps(sample) + "));"
+        result = subprocess.run(
+            ["node", "-e", script],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertIn("<h5>3. Model Edge &amp; Valuation</h5>", result.stdout)
+        self.assertIn(
+            "No model probability, executable market price, or edge was supplied for this cycle.",
+            result.stdout,
+        )
+        self.assertNotIn("\\\\*\\\\*", result.stdout)
 
     def test_agentic_is_a_real_edge_board_tab(self):
         for name, index in self._both().items():

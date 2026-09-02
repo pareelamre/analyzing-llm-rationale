@@ -6583,7 +6583,7 @@ function _cleanThesisText(raw) {
 
   // 4. Preprocess compressed single-line formatting into real multi-line markdown
   // Normalize section headers (e.g. "### 1. Decision & Execution - **Action**:" -> "\n\n### 1. Decision & Execution\n")
-  str = str.replace(/(?:^|\s*-\s*|\s+)###\s*([0-9]+\.\s*[^#\n\-]+?)(?=\s*-\s*\*\*|\s*###|\s*$)/g, '\n\n### $1\n');
+  str = str.replace(/(?:^|\s*-\s*|\s+)#{2,6}\s*([0-9]+\.\s*[^#\n\-]+?)(?=\s*-\s*\*\*|\s*#{2,6}|\s*$)/g, '\n\n### $1\n');
   
   // Normalize inline bullet items (e.g. " - **Action**:" or " - **Rules Verification**:" -> "\n- **Action**:")
   str = str.replace(/(?:\s*-\s*|\n\s*|\s{2,})(\*\*[A-Za-z0-9\s/&—\-\.,]+?\*\*:\s*)/g, '\n- $1');
@@ -6607,6 +6607,29 @@ function _thesisBulletForDisplay(rawBullet) {
   return value
     .replace(/\[?\s*N\s*\/\s*A\s*\]?\s*\(([^)]+)\)/gi, '$1')
     .replace(/\[?\s*N\s*\/\s*A\s*\]?/gi, 'not assessed');
+}
+
+function _isThesisMarkupFragment(rawLine) {
+  // Providers occasionally stop midway through a Markdown token, leaving a
+  // line such as "- \\*\\*" in an otherwise useful final thesis. It is not
+  // reader-facing content, so drop it without changing the retained raw
+  // record used for audit.
+  const normalized = String(rawLine || '')
+    .replace(/\\([*_`])/g, '$1')
+    .trim();
+  return /^(?:[-*•\s]*)(?:\*{1,3}|_{1,3}|`{1,3})(?:[-*•\s]*)$/.test(normalized);
+}
+
+function _thesisSectionFallback(rawHeading) {
+  const title = String(rawHeading || '')
+    .replace(/^\d+\.\s*/, '')
+    .replace(/[*_`]/g, '')
+    .trim()
+    .toLowerCase();
+  if (title === 'model edge & valuation') {
+    return 'No model probability, executable market price, or edge was supplied for this cycle.';
+  }
+  return '';
 }
 
 function _formatThesisHtml(rawThesis) {
@@ -6645,11 +6668,30 @@ function _formatThesisHtml(rawThesis) {
     if (visibleBullets.length) blocks.push(`<ul>${visibleBullets.map(item => `<li>${inline(item)}</li>`).join('')}</ul>`);
     bullets = [];
   };
-  clean.split(/\r?\n/).forEach(rawLine => {
+  const thesisLines = clean.split(/\r?\n/).filter(rawLine => {
+    const bullet = rawLine.trim().match(/^-\s*(.*)$/);
+    return !bullet || !_isThesisMarkupFragment(bullet[1]);
+  });
+  const sectionHasContent = startIndex => {
+    for (let i = startIndex + 1; i < thesisLines.length; i += 1) {
+      const line = thesisLines[i].trim();
+      if (/^#{2,6}\s+/.test(line)) return false;
+      if (line) return true;
+    }
+    return false;
+  };
+  thesisLines.forEach((rawLine, lineIndex) => {
     const line = rawLine.trim();
     if (!line) { flushParagraph(); flushBullets(); return; }
-    const heading = line.match(/^#{2,3}\s*(.+)$/);
-    if (heading) { flushParagraph(); flushBullets(); blocks.push(`<h5>${inline(heading[1])}</h5>`); return; }
+    const heading = line.match(/^#{2,6}\s*(.+)$/);
+    if (heading) {
+      flushParagraph();
+      flushBullets();
+      blocks.push(`<h5>${inline(heading[1])}</h5>`);
+      const fallback = _thesisSectionFallback(heading[1]);
+      if (fallback && !sectionHasContent(lineIndex)) blocks.push(`<p>${inline(fallback)}</p>`);
+      return;
+    }
     const bullet = line.match(/^-\s+(.+)$/);
     if (bullet) { flushParagraph(); bullets.push(bullet[1]); return; }
     flushBullets();
