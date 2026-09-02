@@ -1950,8 +1950,16 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
         ]
 
     operational_status = str(operational_source.get("status") or "healthy")
-    if operational_status not in {"healthy", "provider_degraded", "attention"}:
+    if operational_status not in {"healthy", "attempts_failed", "provider_degraded", "attention"}:
         operational_status = "attention"
+    # ``provider_degraded`` was emitted by older board artifacts.  It meant a
+    # failed attempt, not a real-time availability probe; normalize it at the
+    # public boundary so current clients cannot repeat that misleading claim.
+    if operational_status == "provider_degraded":
+        operational_status = "attempts_failed"
+    raw_last_attempt_failures = operational_source.get("last_attempt_failures")
+    if not isinstance(raw_last_attempt_failures, list):
+        raw_last_attempt_failures = operational_source.get("provider_degraded")
     operational_health = {
         "status": operational_status,
         "detail": str(operational_source.get("detail") or "")[:320],
@@ -1960,7 +1968,7 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
             str(value.get("status") or "") in {"active", "no_trade"}
             for value in model_health.values()
         ),
-        "provider_degraded": _compact_operational_models(operational_source.get("provider_degraded")),
+        "last_attempt_failures": _compact_operational_models(raw_last_attempt_failures),
         "attention_required": _compact_operational_models(operational_source.get("attention_required")),
     }
     return {

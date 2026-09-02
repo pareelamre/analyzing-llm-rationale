@@ -242,14 +242,14 @@ class BuildBoardTests(unittest.TestCase):
                 board = board_script.build_board()
 
         health = board["model_health"]["provider-down"]
-        self.assertEqual(health["status"], "provider_unavailable")
+        self.assertEqual(health["status"], "last_attempt_failed")
         self.assertEqual(health["last_failure_kind"], "provider_unavailable")
         self.assertIn("503", health["last_failure_detail"])
         self.assertEqual(board["recent_cycle_telemetry"][0]["agent_id"], "provider-down")
         self.assertEqual(board["recent_cycle_telemetry"][0]["outcome"], "failure")
-        self.assertEqual(board["operational_health"]["status"], "provider_degraded")
+        self.assertEqual(board["operational_health"]["status"], "attempts_failed")
         self.assertEqual(board["operational_health"]["models_total"], 1)
-        self.assertEqual(board["operational_health"]["provider_degraded"][0]["agent_id"], "provider-down")
+        self.assertEqual(board["operational_health"]["last_attempt_failures"][0]["agent_id"], "provider-down")
 
     def test_model_health_distinguishes_no_trade_delayed_stale_and_unverified(self):
         with tempfile.TemporaryDirectory() as td:

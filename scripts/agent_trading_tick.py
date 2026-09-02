@@ -1889,9 +1889,37 @@ def _safe_failure_detail(exc: BaseException) -> str:
     return detail[:320] or exc.__class__.__name__
 
 
+def _exception_messages(exc: BaseException) -> List[str]:
+    """Return a short exception chain without ever persisting raw responses."""
+    messages: List[str] = []
+    current: Optional[BaseException] = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen and len(messages) < 6:
+        seen.add(id(current))
+        messages.append(str(current))
+        cause = current.__cause__
+        current = cause if isinstance(cause, BaseException) else None
+    return messages
+
+
+def _failure_detail(exc: BaseException) -> str:
+    """Persist a bounded, actionable reason rather than a generic HTTP wrapper."""
+    messages = _exception_messages(exc)
+    for message in messages:
+        match = re.search(r"(?<!\d)(4[0-9]{2}|5[0-9]{2})(?!\d)", message)
+        if match:
+            return f"Upstream provider returned HTTP {match.group(1)}."
+    detail = " ".join(messages).lower()
+    if "timeout" in detail or "timed out" in detail:
+        return "Provider request timed out before completing."
+    if "context" in detail and "limit" in detail:
+        return "Provider rejected the request for exceeding its context limit."
+    return _safe_failure_detail(exc)
+
+
 def _failure_kind(exc: BaseException) -> str:
     """Map volatile provider text into a stable maintenance-facing category."""
-    detail = str(exc).lower()
+    detail = " ".join(_exception_messages(exc)).lower()
     if "429" in detail or "rate limit" in detail or "max_parallel_requests" in detail:
         return "provider_rate_limited"
     if "503" in detail or "temporarily unavailable" in detail or "service unavailable" in detail:
@@ -2145,7 +2173,7 @@ def main() -> int:
                     outcome="failure",
                     duration_ms=round(duration_seconds * 1000),
                     failure_kind=failure_kind,
-                    failure_detail=_safe_failure_detail(exc),
+                    failure_detail=_failure_detail(exc),
                 )
                 span.record_exception(exc)
                 span.set_status(Status(StatusCode.ERROR))
@@ -2157,7 +2185,7 @@ def main() -> int:
                     provider_degradations.add(1, {"failure_kind": failure_kind})
                 logger.warning(
                     "agent trading cycle failed model=%s cycle=%s failure_kind=%s detail=%s",
-                    MODEL, cycle_id, failure_kind, _safe_failure_detail(exc),
+                    MODEL, cycle_id, failure_kind, _failure_detail(exc),
                 )
                 raise
             duration_seconds = time.perf_counter() - started
