@@ -6885,7 +6885,7 @@ function renderAgentTradingBoard(d) {
   const _healthLabel = status => ({
     active: 'Verified', no_trade: 'No trade', delayed: 'Delayed', stale: 'Stalled', unverified: 'Unverified',
     last_attempt_failed: 'Last attempt failed',
-    provider_unavailable: 'Last attempt: upstream 503', provider_rate_limited: 'Last attempt: rate limited',
+    provider_unavailable: 'Last attempt: retryable provider error', provider_rate_limited: 'Last attempt: rate limited',
     provider_timeout: 'Last attempt: timed out', provider_context_limit: 'Last attempt: context limit', cycle_error: 'Last attempt failed'
   })[status] || 'Unverified';
   const _healthAge = health => {

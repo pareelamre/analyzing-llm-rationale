@@ -354,6 +354,7 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         self.assertIn("No trade", renderer)
         self.assertIn("Last confirmed cycle", renderer)
         self.assertIn("Last attempt failed", renderer)
+        self.assertIn("Last attempt: retryable provider error", renderer)
         self.assertIn("const operationalHealth = d?.operational_health || {};", renderer)
         self.assertIn("Latest agent attempts:", renderer)
         self.assertIn("not a live SCADS availability check", renderer)
