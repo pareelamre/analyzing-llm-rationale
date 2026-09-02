@@ -779,6 +779,7 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
             paper_execution_outcome TEXT,
             weather_candidates_offered INTEGER NOT NULL DEFAULT 0,
             weather_candidates_researched INTEGER NOT NULL DEFAULT 0,
+            provider_model TEXT,
             duration_ms INTEGER,
             source TEXT NOT NULL DEFAULT 'worker'
         );
@@ -806,6 +807,8 @@ def _ensure_account_schema(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE agent_cycle_telemetry ADD COLUMN weather_candidates_researched INTEGER NOT NULL DEFAULT 0"
         )
+    if "provider_model" not in telemetry_columns:
+        conn.execute("ALTER TABLE agent_cycle_telemetry ADD COLUMN provider_model TEXT")
     thesis_columns = {
         str(row[1]) for row in conn.execute("PRAGMA table_info(agent_thesis_forecasts)")
     }

@@ -318,8 +318,27 @@ def _public_tool_loop_thesis(
     forecast_thesis: Optional[str],
 ) -> str:
     """Return reader-facing thesis prose, never a raw ReAct tool trace."""
-    if not finalization_failed and raw_answer:
-        return raw_answer
+    text = str(raw_answer or "").strip()
+    if not finalization_failed and text:
+        # A provider can stop immediately after emitting a tool payload such
+        # as {"query": ..., "topn": ...}. That object is a private ReAct
+        # instruction, not a reader-facing thesis. Keep a genuine final or
+        # thesis field when present; otherwise use the uniform incomplete
+        # state below instead of leaking provider-specific JSON to the board.
+        if text.startswith(("{", "[")):
+            try:
+                payload = json.loads(text)
+            except (TypeError, ValueError):
+                payload = None
+            if isinstance(payload, dict):
+                for field in ("final", "thesis"):
+                    value = payload.get(field)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+                return _UNPUBLISHABLE_TOOL_THESIS
+            if payload is not None:
+                return _UNPUBLISHABLE_TOOL_THESIS
+        return text
     fallback = str(forecast_thesis or "").strip()
     return fallback or _UNPUBLISHABLE_TOOL_THESIS
 
@@ -5226,6 +5245,10 @@ class LiveTradeIntent(BaseModel):
 class AgentReport(BaseModel):
     """End-to-end analysis of a live question produced by the agent."""
     question: str
+    served_model_name: Optional[str] = Field(
+        None,
+        description="Exact upstream model that served the final agent response, when reported by the provider.",
+    )
     pipeline: List[str] = Field(default_factory=list, description="Ordered steps the agent ran.")
     platform: Optional[str] = None
     market_url: Optional[str] = None
@@ -14066,6 +14089,7 @@ async def _agent_report_from_prediction(
     )
     report = AgentReport(
         question=question,
+        served_model_name=result.served_model_name,
         pipeline=pipeline,
         platform=market_platform,
         market_url=market_url,
@@ -14976,7 +15000,9 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             "observation": raw_answer[:4000],
         })
     report = AgentReport(
-        question=question, pipeline=pipeline,
+        question=question,
+        served_model_name=_provider_served_model_name(provider),
+        pipeline=pipeline,
         platform=market_platform,
         market_url=market_url,
         outcome=outcome, market_probability=last.get("market_probability"),
