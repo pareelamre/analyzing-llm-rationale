@@ -152,6 +152,33 @@ class FrontendCopyTests(unittest.TestCase):
         )[0]
         self.assertIn("_installEdgeBoardPullToRefresh()", opener)
 
+    def test_edge_board_restores_scroll_after_screen_and_history_navigation(self):
+        root = Path(__file__).resolve().parents[1]
+        index = (root / "frontend" / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("function _captureEdgeBoardScroll()", index)
+        self.assertIn("function _restoreEdgeBoardScroll()", index)
+        self.assertIn("function _installEdgeBoardScrollMemory()", index)
+        self.assertIn("edgeScrollTop", index)
+        self.assertIn("host.addEventListener('scroll'", index)
+
+        opener = index.split("async function openEdgeBoard(", 1)[1].split(
+            "async function openForecastDrift", 1
+        )[0]
+        self.assertIn("_installEdgeBoardScrollMemory()", opener)
+        self.assertIn("_restoreEdgeBoardScroll()", opener)
+
+        closer = index.split("function closeEdgeBoard(", 1)[1].split(
+            "function _ebAskQuestion", 1
+        )[0]
+        self.assertIn("_saveEdgeBoardScrollToHistory()", closer)
+
+        history = index.split("function applyHistoryState(state) {", 1)[1].split(
+            "window.addEventListener('popstate'", 1
+        )[0]
+        self.assertIn("state?.edgeScrollTop", history)
+        self.assertIn("_edgeBoardScrollTop = edgeScrollTop", history)
+
     def test_mtm_sizing_controls_use_delegated_button_handlers(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
