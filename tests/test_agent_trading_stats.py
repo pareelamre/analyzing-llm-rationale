@@ -515,7 +515,7 @@ class ForecastLearningTests(unittest.TestCase):
 
 
 class RecentActivityTests(unittest.TestCase):
-    def test_clean_thesis_display_hides_raw_react_tool_transcript(self):
+    def test_clean_thesis_display_omits_raw_react_tool_transcript(self):
         thesis = (
             'Planning research. {"thought":"Check the market",'
             '"action":"web_search","args":{"query":"market news"}}'
@@ -523,10 +523,26 @@ class RecentActivityTests(unittest.TestCase):
             '"action":"web_search","args":{"query":"market news"}}'
         )
         display = agent_trading_stats.clean_thesis_display(thesis)
-        self.assertEqual(
-            display,
-            "This model completed a research pass but did not return a publishable final thesis.",
+        self.assertEqual(display, "")
+
+    def test_clean_thesis_display_uses_only_explicit_reader_ready_json_field(self):
+        display = agent_trading_stats.clean_thesis_display(json.dumps({
+            "thought": "Private chain of thought",
+            "action": "place_trade",
+            "final": "### 1. Decision & Execution\n- **Action**: HOLD",
+        }))
+        self.assertEqual(display, "### 1. Decision & Execution\n- **Action**: HOLD")
+
+    def test_clean_thesis_display_keeps_only_first_complete_template(self):
+        thesis = (
+            "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n"
+            "### 1. Decision & Execution\n- **Action**: HOLD\n\n"
+            "### 0. Research Delta\n- **Strategy**: CATALYST_EDGE\n"
+            "### 1. Decision & Execution\n- **Action**: BUY YES"
         )
+        display = agent_trading_stats.clean_thesis_display(thesis)
+        self.assertIn("EVIDENCE_EDGE", display)
+        self.assertNotIn("CATALYST_EDGE", display)
 
     def test_clean_thesis_display_does_not_repeat_matching_json_fields(self):
         thesis = json.dumps({
@@ -560,6 +576,17 @@ class RecentActivityTests(unittest.TestCase):
             items = agent_trading_stats.recent_activity(conn, {}, limit=10)
         self.assertEqual([i["type"] for i in items], ["admin_reset"])
         self.assertEqual(items[0]["outcome"], "reset")
+
+    def test_zero_fill_is_labeled_unfilled_not_trade(self):
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-a")
+            _insert_action(conn, "model-a", action_type="trade", quantity=0.0, outcome="open")
+            conn.commit()
+            items = agent_trading_stats.recent_activity(conn, {}, limit=10)
+            rows = agent_trading_stats.compute_agent_leaderboard(conn, {})
+
+        self.assertEqual(items[0]["type"], "unfilled_order")
+        self.assertEqual(rows[0]["trade_count"], 0)
 
     def test_limit_is_respected_after_merge(self):
         with _fixture_conn() as conn:

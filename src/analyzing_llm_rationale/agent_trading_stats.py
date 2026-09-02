@@ -83,7 +83,10 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
         snap = account.snapshot(quotes)
 
         since_ts = _latest_reset_ts(conn, agent_id)
-        trade_sql = "SELECT COUNT(*) FROM agent_actions WHERE agent_id = ? AND action_type = 'trade'"
+        trade_sql = (
+            "SELECT COUNT(*) FROM agent_actions WHERE agent_id = ? AND action_type = 'trade' "
+            "AND (quantity IS NULL OR quantity > 0 OR outcome = 'realized')"
+        )
         settlement_sql = (
             "SELECT realized_pnl FROM agent_actions WHERE agent_id = ? AND action_type = 'settlement'"
         )
@@ -420,8 +423,9 @@ def compute_forecast_learning(
 def clean_thesis_display(raw_thesis: Optional[str]) -> str:
     """Normalize and format an agent's thesis for display on the trading board.
 
-    Extracts substantive thought/rationale if the model produced a JSON envelope
-    (e.g. `{"thought": "...", "action": "..."}` or `{"final": "..."}`).
+    A reader-facing card only accepts a model's explicit final/thesis field.
+    Tool calls and private reasoning remain in the durable transcript for audit,
+    but are never promoted into public board copy.
     """
     if not raw_thesis:
         return ""
@@ -429,8 +433,6 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
     # Old cycles may predate the server-side publication guard. Their ReAct
     # traces are useful in the durable run record, but a card must never render
     # raw {thought, action, args} tool envelopes as a thesis.
-    if re.search(r'\{\s*"thought"\s*:\s*.*?"action"\s*:', text, re.DOTALL):
-        return "This model completed a research pass but did not return a publishable final thesis."
     if (text.startswith("{") and text.endswith("}")) or (text.startswith("```json") and text.endswith("```")):
         clean_json = text
         if text.startswith("```json"):
@@ -438,18 +440,27 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
         try:
             parsed = json.loads(clean_json)
             if isinstance(parsed, dict):
-                thought = parsed.get("thought") or parsed.get("reasoning") or parsed.get("analysis")
                 final = parsed.get("final") or parsed.get("answer") or parsed.get("thesis")
-                if final and thought:
-                    if _same_thesis_content(str(final), str(thought)):
-                        return str(final if len(str(final)) >= len(str(thought)) else thought).strip()
-                    return f"{final}\n\n**Detailed Analysis:**\n{thought}".strip()
                 if final:
-                    return str(final).strip()
-                if thought:
-                    return str(thought).strip()
+                    text = str(final).strip()
+                else:
+                    return ""
         except Exception:
-            pass
+            # A truncated JSON tool envelope is equally unsuitable for a
+            # reader-facing thesis. The original payload remains in the
+            # cycle transcript, where it can still be inspected on demand.
+            if text.startswith("{"):
+                return ""
+    if re.search(r'\{\s*"(?:thought|reasoning|analysis)"\s*:\s*.*?"(?:action|args|query)"\s*:', text, re.DOTALL):
+        return ""
+    if text.upper() in {"PASS", "HOLD", "NO ACTION", "N/A"}:
+        return ""
+    # A provider can append a second entire final template after the first
+    # one. It is not a second audited decision, so preserve the first complete
+    # thesis rather than rendering conflicting actions in one card.
+    duplicate_template = list(re.finditer(r"(?im)^###\s*0\.\s*research\s+delta\b", text))
+    if len(duplicate_template) > 1:
+        text = text[:duplicate_template[1].start()].rstrip()
     return text
 
 
@@ -492,10 +503,21 @@ def recent_activity(
         "ORDER BY ts DESC LIMIT ?",
         (limit * 2,),
     ):
+        action_type = str(row["action_type"] or "")
+        quantity = row["quantity"]
+        # IOC simulation attempts with no executable fill are retained in the
+        # ledger, but they did not open or close a position. Calling them
+        # trades on the public feed was misleading.
+        try:
+            zero_fill = quantity is not None and float(quantity) <= 0
+        except (TypeError, ValueError):
+            zero_fill = False
+        if action_type == "trade" and zero_fill:
+            action_type = "unfilled_order"
         items.append({
             "ts": row["ts"],
             "agent_id": row["agent_id"],
-            "type": row["action_type"],
+            "type": action_type,
             "mode": row["mode"],
             "platform": row["platform"],
             "ticker": row["ticker"],

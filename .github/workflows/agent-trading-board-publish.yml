@@ -111,6 +111,7 @@ jobs:
           # allows individual monthly archive files to resolve safely.
           GIT_REBASE_KEEP_THEIRS: "static/agent_trading_live.json,static/agent_trading_audit_live.json,static/agent_trading_audit_archive_manifest.json,static/agent_trading_audits/"
           GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           MTM_PUBLISH_DEPLOY_KEY_B64: ${{ secrets.MTM_PUBLISH_DEPLOY_KEY_B64 }}
         run: |
           git config user.name  "github-actions[bot]"

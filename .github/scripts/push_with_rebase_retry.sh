@@ -23,7 +23,7 @@ resolve_allowed_rebase_conflicts() {
     allowed=0
     while IFS= read -r keep_path; do
       [ -z "$keep_path" ] && continue
-      if [ "$keep_path" = "$file" ] || { [[ "$keep_path" == */ ]] && [[ "$file" == "$keep_path"* ]]; }; then
+      if [[ "$keep_path" == "$file" || ( "$keep_path" == */ && "$file" == "$keep_path"* ) ]]; then
         allowed=1
         break
       fi
@@ -34,6 +34,7 @@ resolve_allowed_rebase_conflicts() {
   done <<< "$conflicted"
 
   while IFS= read -r file; do
+    echo "Keeping generated artifact from this publish: ${file}" >&2
     git checkout --theirs -- "$file"
     git add "$file"
   done <<< "$conflicted"
@@ -49,6 +50,13 @@ publish_through_pr() {
     echo "gh CLI is required for PR fallback publishing." >&2
     return 1
   fi
+  if [ -z "${GH_TOKEN:-}" ] && [ -n "${GITHUB_TOKEN:-}" ]; then
+    export GH_TOKEN="$GITHUB_TOKEN"
+  fi
+  if [ -z "${GH_TOKEN:-}" ]; then
+    echo "GH_TOKEN is required for PR fallback publishing." >&2
+    return 1
+  fi
 
   local workflow run_id branch_slug update_branch title body pr_url
   workflow="$(slugify "${GITHUB_WORKFLOW:-scheduled-update}")"
@@ -60,7 +68,10 @@ publish_through_pr() {
 
   echo "Publishing through PR branch ${update_branch}." >&2
   git push --force-with-lease "$remote" "HEAD:refs/heads/${update_branch}"
-  pr_url="$(gh pr create --base "$branch" --head "$update_branch" --title "$title" --body "$body")"
+  if ! pr_url="$(gh pr create --base "$branch" --head "$update_branch" --title "$title" --body "$body")"; then
+    echo "Could not create fallback publish pull request." >&2
+    return 1
+  fi
   echo "Created ${pr_url}." >&2
   gh pr merge "$pr_url" --squash --delete-branch --subject "$title" --body "$body"
 }
