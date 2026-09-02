@@ -995,6 +995,26 @@ class RunCycleTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "filled")
         self.assertIn("**Paper execution**: PAPER ORDER FILLED", rendered)
 
+    def test_recorded_paper_attempt_replaces_a_false_live_trading_disabled_claim(self):
+        thesis = """### 1. Decision & Execution
+- **Action**: **HOLD (trade to close was attempted but live trading is disabled; position remains open)**
+- **Paper execution**: not available
+"""
+        transcript = [{
+            "action": "place_trade",
+            "args": {"ticker": "KXCLOSE"},
+            "observation": json.dumps({"ok": True, "execution": {"filled_quantity": 2.5}}),
+        }]
+
+        rendered, result = agent_trading_tick._reconcile_thesis_execution(
+            agent_id="model-close-simulation", thesis=thesis, transcript=transcript, candidates=[]
+        )
+
+        self.assertEqual(result["outcome"], "filled")
+        self.assertIn("CLOSE ATTEMPT RECORDED", rendered)
+        self.assertIn("**Paper execution**: PAPER ORDER FILLED", rendered)
+        self.assertNotIn("live trading is disabled", rendered.lower())
+
     def test_recorded_tool_error_is_not_presented_as_a_guardrail_rejection(self):
         thesis = """### 1. Decision & Execution
 - **Action**: BUY YES
@@ -1163,6 +1183,23 @@ class AgentAnalyzeRetryTests(unittest.TestCase):
 
         self.assertTrue(captured["require_kelly_sizing"])
 
+    def test_agent_analyze_request_binds_the_worker_model(self):
+        import asyncio
+
+        captured = {}
+
+        async def _capture(req, request=None):
+            captured["model"] = req.model
+            return SimpleNamespace(thesis="Passed.", tool_transcript=[])
+
+        with (
+            mock.patch.object(agent_trading_tick, "MODEL", "glm-5-3-flash"),
+            mock.patch("analyzing_llm_rationale.server.agent_analyze", side_effect=_capture),
+        ):
+            asyncio.run(agent_trading_tick._call_agent_analyze("question text"))
+
+        self.assertEqual(captured["model"], "glm-5-3-flash")
+
 
 class CycleTelemetryTests(unittest.TestCase):
     def test_main_persists_a_successful_structured_cycle_telemetry_record(self):
@@ -1175,6 +1212,7 @@ class CycleTelemetryTests(unittest.TestCase):
                 "thesis_published": True,
                 "forecast_records": 1,
                 "paper_execution_outcome": "filled",
+                "provider_model": "zai-org/GLM-5.3-Flash",
             }
             with (
                 mock.patch.dict(os.environ, env, clear=False),
@@ -1195,6 +1233,7 @@ class CycleTelemetryTests(unittest.TestCase):
         self.assertEqual(row["thesis_published"], 1)
         self.assertEqual(row["forecast_records"], 1)
         self.assertEqual(row["paper_execution_outcome"], "filled")
+        self.assertEqual(row["provider_model"], "zai-org/GLM-5.3-Flash")
         self.assertIsNotNone(row["finished_at"])
         self.assertIsNotNone(row["duration_ms"])
 

@@ -946,6 +946,18 @@ class ServerTests(unittest.TestCase):
         normal = "It should rain tomorrow. I expect YES."
         self.assertEqual(server_module._SELF_CALIBRATION_ECHO_RE.sub("", normal).strip(), normal)
 
+    def test_public_tool_loop_thesis_hides_a_raw_tool_payload(self):
+        thesis = server_module._public_tool_loop_thesis(
+            '{"query": "Israel Iran ceasefire July 2026 news", "topn": 5, "source": "news"}',
+            finalization_failed=False,
+            forecast_thesis=None,
+        )
+
+        self.assertEqual(
+            thesis,
+            "This model completed a research pass but did not return a publishable final thesis.",
+        )
+
     def test_market_forecast_stream_returns_model_probability(self):
         token = _issue_session("stream-user", "user@example.com", "Stream User", "")
         self.provider.stream_response = json.dumps(self.provider.response)
@@ -3664,6 +3676,7 @@ class ServerTests(unittest.TestCase):
             alt_provider_mock.assert_called_once_with("minimax-m3")
             self.assertGreater(len(alt_provider.calls), 0)
             self.assertEqual(len(self.provider.calls), 0)  # server default was never used
+            self.assertEqual(response.json()["served_model_name"], "fake-model")
 
             notes = json.loads((Path(td) / "notes.json").read_text())
         self.assertIn("minimax-m3", notes)

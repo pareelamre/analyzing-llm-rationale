@@ -139,7 +139,7 @@ def _model_health(
         SELECT cycle_id, started_at, finished_at, outcome, failure_kind, failure_detail,
                candidate_count, tool_steps, thesis_published, forecast_records,
                weather_candidates_offered, weather_candidates_researched,
-               paper_execution_outcome, duration_ms
+               paper_execution_outcome, provider_model, duration_ms
         FROM agent_cycle_telemetry
         WHERE agent_id = ?
         ORDER BY started_at DESC
@@ -205,6 +205,7 @@ def _model_health(
         "last_weather_candidates_offered": telemetry["weather_candidates_offered"] if telemetry else 0,
         "last_weather_candidates_researched": telemetry["weather_candidates_researched"] if telemetry else 0,
         "last_paper_execution_outcome": telemetry["paper_execution_outcome"] if telemetry else None,
+        "last_provider_model": telemetry["provider_model"] if telemetry else None,
         "cycle_age_seconds": age_seconds,
         "expected_cycle_seconds": MODEL_HEALTH_EXPECTED_CYCLE_SECONDS,
         "delayed_after_seconds": MODEL_HEALTH_DELAYED_AFTER_SECONDS,
@@ -233,6 +234,7 @@ def _recent_cycle_telemetry(conn: sqlite3.Connection, model: str, *, limit: int 
             "weather_candidates_offered": row["weather_candidates_offered"],
             "weather_candidates_researched": row["weather_candidates_researched"],
             "paper_execution_outcome": row["paper_execution_outcome"],
+            "provider_model": row["provider_model"],
             "duration_ms": row["duration_ms"],
         }
         for row in conn.execute(
@@ -240,7 +242,7 @@ def _recent_cycle_telemetry(conn: sqlite3.Connection, model: str, *, limit: int 
             SELECT run_id, cycle_id, started_at, finished_at, outcome, failure_kind,
                    failure_detail, candidate_count, tool_steps, settled_count,
                    thesis_published, forecast_records, weather_candidates_offered,
-                   weather_candidates_researched, paper_execution_outcome, duration_ms
+                   weather_candidates_researched, paper_execution_outcome, provider_model, duration_ms
             FROM agent_cycle_telemetry
             WHERE agent_id = ?
             ORDER BY started_at DESC

@@ -6465,10 +6465,30 @@ function _cleanThesisText(raw) {
   if (/\{\s*"thought"\s*:\s*[\s\S]*?"action"\s*:/i.test(str)) {
     return 'This model completed a research pass but did not return a publishable final thesis.';
   }
+
+  // Legacy board artifacts can contain a complete raw tool payload (for
+  // example {"query": ..., "topn": 5}) rather than the model's final prose.
+  // A public thesis only accepts explicit `final` or `thesis` fields; do not
+  // promote a query, action, arguments, or private thought to card copy.
+  if (str.startsWith('{') && str.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed && typeof parsed === 'object') {
+        const readerText = typeof parsed.final === 'string' ? parsed.final
+          : typeof parsed.thesis === 'string' ? parsed.thesis : '';
+        if (readerText.trim()) str = readerText.trim();
+        else return 'This model completed a research pass but did not return a publishable final thesis.';
+      }
+    } catch (_) {
+      if (/"(?:query|action|args|topn|source)"\s*:/i.test(str)) {
+        return 'This model completed a research pass but did not return a publishable final thesis.';
+      }
+    }
+  }
   
   // Some providers save a partial tool-call envelope. Pull its readable
   // rationale out even when the trailing action/args JSON is incomplete.
-  const embeddedThesis = _extractThesisJsonField(str);
+  const embeddedThesis = _extractThesisJsonField(str, ['final', 'thesis']);
   if (embeddedThesis) {
     str = embeddedThesis;
   } else if (str.startsWith('{') && str.endsWith('}')) {

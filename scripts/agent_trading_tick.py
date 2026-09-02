@@ -997,6 +997,10 @@ async def _call_agent_analyze(question: str):
 
     req = AgentAnalyzeRequest(
         question=question,
+        # A worker ledger is one model's paper account.  Leaving this unset
+        # lets /agent/analyze auto-route the request, which means the board can
+        # attribute another provider's failure (or answer) to this ledger.
+        model=MODEL,
         tool_loop=True,
         benchmark_tools=True,
         max_tool_steps=MAX_TOOL_STEPS,
@@ -1005,11 +1009,17 @@ async def _call_agent_analyze(question: str):
     for attempt in range(AGENT_ANALYZE_RETRIES):
         try:
             report = await agent_analyze(req, request=None)
-            agent_analyze_attempts.add(1, {"outcome": "success"})
+            agent_analyze_attempts.add(1, {"model": MODEL or "unknown", "outcome": "success"})
             return report
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
-            agent_analyze_attempts.add(1, {"outcome": "retry" if attempt + 1 < AGENT_ANALYZE_RETRIES else "failure"})
+            agent_analyze_attempts.add(
+                1,
+                {
+                    "model": MODEL or "unknown",
+                    "outcome": "retry" if attempt + 1 < AGENT_ANALYZE_RETRIES else "failure",
+                },
+            )
             print(f"  agent_analyze attempt {attempt + 1}/{AGENT_ANALYZE_RETRIES} failed: {exc}", file=sys.stderr)
             if attempt + 1 < AGENT_ANALYZE_RETRIES:
                 delay_s = AGENT_ANALYZE_RETRY_BACKOFF_S * (2 ** attempt)
@@ -1057,7 +1067,9 @@ _TRADING_INSTRUCTION = (
     "a commitment to act in this shadow account. Call place_trade BEFORE writing "
     "that final action. If the tool rejects or cannot fill the order, say so plainly "
     "in the final thesis and do not present the recommendation as an executed trade. "
-    "A final HOLD or PASS means no paper order.\n\n"
+    "A final HOLD or PASS means no paper order. This is a paper-trading simulation: "
+    "never say that live trading is disabled. The recorded place_trade result, not "
+    "the live-trading setting, is the authoritative outcome of an attempted simulation.\n\n"
     "CRITICAL RULES COMPLIANCE: Read the 'Resolution rules' provided for every "
     "market carefully before taking any action. Market resolution is governed "
     "strictly by the venue's legal resolution rules, definitions, and specific "
@@ -1367,11 +1379,27 @@ def _recorded_trade_attempt_outcome(transcript: List[Dict[str, Any]]) -> str:
     return _recorded_trade_attempt_result(transcript)[0]
 
 
+_PAPER_EXECUTION_LINE_RE = re.compile(
+    r"(?im)^\s*(?:[-*]\s*)?\*\*Paper execution\*\*:\s*[^\r\n]*(?:\r?\n)?"
+)
+_LIVE_DISABLED_CLOSE_CLAIM_RE = re.compile(
+    r"(?im)^\s*[-*]\s*\*\*Action\*\*\s*:\s*\**\s*HOLD\s*\("
+    r"[^\r\n]*?live\s+trading\s+(?:is|was)\s+disabled[^\r\n]*?\)\s*\**\s*$"
+)
+
+
 def _append_paper_execution(thesis: str, status: str, detail: str) -> str:
-    """Make the public thesis honest about whether paper cash actually moved."""
-    normalized = str(thesis or "").rstrip()
-    if "**Paper execution**" in normalized:
-        return normalized
+    """Make the public thesis honest about whether paper cash actually moved.
+
+    Model prose is not an execution source of truth.  Replace any model-written
+    paper-execution line with the durable tool result, and correct the known
+    "live trading is disabled" close hallucination before publishing it.
+    """
+    normalized = _PAPER_EXECUTION_LINE_RE.sub("", str(thesis or "")).rstrip()
+    normalized = _LIVE_DISABLED_CLOSE_CLAIM_RE.sub(
+        "- **Action**: **CLOSE ATTEMPT RECORDED — see paper execution below.**",
+        normalized,
+    ).rstrip()
     return f"{normalized}\n\n**Paper execution**: {status} — {_excerpt(detail, 500)}"
 
 
@@ -1417,6 +1445,21 @@ def _reconcile_thesis_execution(
     """
     decision = _declared_thesis_execution(thesis)
     if decision is None:
+        # A model sometimes writes HOLD while still calling place_trade, then
+        # incorrectly blames the unrelated live-trading gate.  Its transcript
+        # is the durable simulation record, so surface that outcome even when
+        # the final prose did not contain a reconcilable BUY/SELL/CLOSE action.
+        if _has_trade_attempt(transcript) and _LIVE_DISABLED_CLOSE_CLAIM_RE.search(str(thesis or "")):
+            outcome, detail = _recorded_trade_attempt_result(transcript)
+            status = {
+                "filled": "PAPER ORDER FILLED",
+                "rejected": "PAPER ORDER REJECTED",
+                "unfilled": "PAPER ORDER UNFILLED",
+                "error": "PAPER ORDER ERROR",
+                "attempted_unknown": "PAPER ORDER RESULT UNAVAILABLE",
+            }[outcome]
+            thesis_execution_reconciliations.add(1, {"outcome": f"attempted_without_action_{outcome}"})
+            return _append_paper_execution(thesis, status, detail), {"outcome": outcome, "action": None}
         return thesis, None
 
     action = str(decision["action"])
@@ -1889,7 +1932,7 @@ def _finish_cycle_telemetry(
             SET finished_at = ?, outcome = ?, failure_kind = ?, failure_detail = ?,
                 candidate_count = ?, tool_steps = ?, settled_count = ?,
                 thesis_published = ?, forecast_records = ?, paper_execution_outcome = ?, duration_ms = ?,
-                weather_candidates_offered = ?, weather_candidates_researched = ?
+                weather_candidates_offered = ?, weather_candidates_researched = ?, provider_model = ?
             WHERE run_id = ?
             """,
             (
@@ -1906,6 +1949,7 @@ def _finish_cycle_telemetry(
                 duration_ms,
                 int(summary.get("weather_candidates_offered") or 0),
                 int(summary.get("weather_candidates_researched") or 0),
+                summary.get("provider_model"),
                 run_id,
             ),
         )
@@ -2042,6 +2086,9 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         "paper_execution_outcome": (thesis_execution or {}).get("outcome"),
         "weather_candidates_offered": weather_candidates_offered,
         "weather_candidates_researched": weather_candidates_researched,
+        # The provider may return a concrete revision/alias.  Preserve it for
+        # audit and maintenance; do not infer it when the upstream omits it.
+        "provider_model": getattr(report, "served_model_name", None),
     }
 
 
@@ -2126,6 +2173,8 @@ def main() -> int:
                 "tool.steps": int(summary["tool_steps"]),
                 "thesis.published": bool(summary["thesis_published"]),
             })
+            if summary.get("provider_model"):
+                span.set_attribute("gen_ai.response.model", str(summary["provider_model"]))
             cycle_runs.add(1, {"model": MODEL, "outcome": "success"})
             cycle_duration.record(duration_seconds, {"model": MODEL, "outcome": "success"})
             logger.info(
