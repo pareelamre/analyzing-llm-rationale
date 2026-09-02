@@ -1512,7 +1512,12 @@ class ServerTests(unittest.TestCase):
                 "traded": 1,
                 "resolved": 0,
             },
-            "model_health": {"gpt-oss-120b": {"status": "no_trade", "cycle_age_seconds": 120}},
+            "model_health": {"gpt-oss-120b": {
+                "status": "provider_unavailable",
+                "detail": "Latest worker attempt failed: 503: The forecasting model is temporarily unavailable.",
+                "last_failure_detail": "503: The forecasting model is temporarily unavailable.",
+                "cycle_age_seconds": 120,
+            }},
             "operational_health": {
                 # A previously published artifact used the old, misleading
                 # provider_degraded wording; the public API must normalize it.
@@ -1553,7 +1558,12 @@ class ServerTests(unittest.TestCase):
         )
         self.assertEqual(payload["weather_operations"]["candidates_offered"], 5)
         self.assertEqual(payload["weather_operations"]["traded"], 1)
-        self.assertEqual(payload["model_health"]["gpt-oss-120b"]["status"], "no_trade")
+        self.assertEqual(payload["model_health"]["gpt-oss-120b"]["status"], "last_attempt_failed")
+        self.assertEqual(payload["model_health"]["gpt-oss-120b"]["last_failure_kind"], "provider_unavailable")
+        self.assertEqual(
+            payload["model_health"]["gpt-oss-120b"]["last_failure_detail"],
+            "Upstream provider returned HTTP 503.",
+        )
         self.assertEqual(payload["operational_health"]["status"], "attempts_failed")
         self.assertEqual(payload["operational_health"]["models_total"], 1)
         self.assertEqual(payload["operational_health"]["last_attempt_failures"][0]["agent_id"], "gpt-oss-120b")

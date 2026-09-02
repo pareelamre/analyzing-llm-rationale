@@ -1932,11 +1932,30 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
         "resolved": _bounded_nonnegative_int(weather_source.get("resolved"), maximum=10_000),
     }
     raw_health = source.get("model_health")
-    model_health = {
-        str(agent_id): dict(value)
-        for agent_id, value in (raw_health.items() if isinstance(raw_health, dict) else [])
-        if str(agent_id) in model_ids and isinstance(value, dict)
+    legacy_attempt_statuses = {
+        "provider_unavailable",
+        "provider_rate_limited",
+        "provider_timeout",
+        "provider_context_limit",
+        "cycle_error",
     }
+    model_health: Dict[str, Dict[str, Any]] = {}
+    for agent_id, value in (raw_health.items() if isinstance(raw_health, dict) else []):
+        if str(agent_id) not in model_ids or not isinstance(value, dict):
+            continue
+        health = dict(value)
+        legacy_status = str(health.get("status") or "")
+        if legacy_status in legacy_attempt_statuses:
+            # Older artifacts overloaded a failed *past* worker attempt as a
+            # live provider-health state. Normalize it here as well as in the
+            # renderer, so API clients see the same truthful semantics.
+            health["status"] = "last_attempt_failed"
+            health.setdefault("last_failure_kind", legacy_status)
+            health["detail"] = "Latest agent attempt failed; see the recorded failure reason."
+            failure_detail = str(health.get("last_failure_detail") or "")
+            if legacy_status == "provider_unavailable" and "503" in failure_detail:
+                health["last_failure_detail"] = "Upstream provider returned HTTP 503."
+        model_health[str(agent_id)] = health
     raw_operational_health = source.get("operational_health")
     operational_source = raw_operational_health if isinstance(raw_operational_health, dict) else {}
 
