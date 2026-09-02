@@ -5282,9 +5282,63 @@ function legacyRouteFromHash(hash = window.location.hash) {
   return view ? { view, convId: null } : null;
 }
 
+// The Edge Board is a scrollable overlay, so rebuilding its contents (or
+// navigating away and back through the SPA) otherwise resets the reader to
+// the first row. Keep this independent of payload refreshes and persist it in
+// the active history entry for Back/Forward restoration too.
+let _edgeBoardScrollTop = 0;
+let _edgeBoardScrollRestoreFrame = 0;
+let _edgeBoardScrollSaveTimer = null;
+
+function _isEdgeHistoryView(view) {
+  return view === 'edge-app' || view === 'edge-landing';
+}
+
+function _captureEdgeBoardScroll() {
+  const host = document.getElementById('edgeBody');
+  if (host) _edgeBoardScrollTop = Math.max(0, Number(host.scrollTop) || 0);
+  return _edgeBoardScrollTop;
+}
+
+function _saveEdgeBoardScrollToHistory() {
+  const state = window.history?.state;
+  if (isApplyingHistory || !state || !_isEdgeHistoryView(state.view)) return;
+  window.history.replaceState({ ...state, edgeScrollTop: _captureEdgeBoardScroll() }, '', window.location.href);
+}
+
+function _restoreEdgeBoardScroll() {
+  const scrollTop = Math.max(0, Number(_edgeBoardScrollTop) || 0);
+  cancelAnimationFrame(_edgeBoardScrollRestoreFrame);
+  _edgeBoardScrollRestoreFrame = requestAnimationFrame(() => {
+    const host = document.getElementById('edgeBody');
+    if (host) host.scrollTop = scrollTop;
+  });
+}
+
+function _installEdgeBoardScrollMemory() {
+  const host = document.getElementById('edgeBody');
+  if (!host || host.dataset.scrollMemoryBound === 'true') return;
+  host.dataset.scrollMemoryBound = 'true';
+  host.addEventListener('scroll', () => {
+    _captureEdgeBoardScroll();
+    clearTimeout(_edgeBoardScrollSaveTimer);
+    _edgeBoardScrollSaveTimer = setTimeout(_saveEdgeBoardScrollToHistory, 120);
+  }, { passive: true });
+}
+
 function setHistoryState(view, mode = 'push', options = {}) {
   if (isApplyingHistory || !window.history) return;
-  const state = { view, convId: options.convId || null, panel: options.panel || null };
+  const isEdgeView = view === 'edge-app' || view === 'edge-landing';
+  const requestedScrollTop = Number(options.edgeScrollTop);
+  const edgeScrollTop = Number.isFinite(requestedScrollTop)
+    ? Math.max(0, requestedScrollTop)
+    : _edgeBoardScrollTop;
+  const state = {
+    view,
+    convId: options.convId || null,
+    panel: options.panel || null,
+    ...(isEdgeView ? { edgeScrollTop } : {}),
+  };
   const url = historyUrlFor(view, state.convId, state.panel);
   if (mode === 'replace') history.replaceState(state, '', url);
   else if (history.state?.view !== view || history.state?.convId !== state.convId || history.state?.panel !== state.panel) history.pushState(state, '', url);
@@ -5729,7 +5783,7 @@ async function refreshEdgeForecasts() {
     const d = await _readJson(r);
     const host = document.getElementById('edgeBody');
     if (host) {
-      const scrollTop = host.scrollTop;
+      const scrollTop = _captureEdgeBoardScroll();
       const previousPage = _ebPage;
       host.innerHTML = renderEdgeBoard(d);
       if (previousPage > 0 && _ebBoardData.length) {
@@ -5739,7 +5793,8 @@ async function refreshEdgeForecasts() {
         if (boardSection) boardSection.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
       }
       _attachEdgeBoardChartHovers(host);
-      host.scrollTop = scrollTop;
+      _edgeBoardScrollTop = scrollTop;
+      _restoreEdgeBoardScroll();
       refreshEdgePrices();
       // renderEdgeBoard() only emits a "Loading…" placeholder for the
       // Agentic tab (its data isn't part of this /edge-board payload), so
@@ -6049,6 +6104,7 @@ document.addEventListener('visibilitychange', () => {
 async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
   const ov = document.getElementById('edgeOverlay');
   _installEdgeBoardPullToRefresh();
+  _installEdgeBoardScrollMemory();
   _edgeOpenSeq++;
   _ebSetView(panel || 'markets');
   if (ov.classList.contains('open')) {
@@ -6058,6 +6114,7 @@ async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
     // that is left is to make sure polling is running again.
     ov.style.opacity = '';
     _startEdgeTimers();
+    _restoreEdgeBoardScroll();
     return;
   }
   lastFocusedBeforeDialog = document.activeElement;
@@ -6070,6 +6127,7 @@ async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   }
   if (!edgeLoaded) { edgeLoaded = true; loadEdgeBoard(); }
+  else _restoreEdgeBoardScroll();
   refreshEdgePrices();
   loadCrypto5mEquity();
   _startEdgeTimers();
@@ -6080,6 +6138,8 @@ async function openForecastDrift() {
   setTimeout(() => document.getElementById('forecastDriftPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
 }
 function closeEdgeBoard({ updateHistory = true } = {}) {
+  _captureEdgeBoardScroll();
+  _saveEdgeBoardScrollToHistory();
   _stopEdgeTimers();
   const ov = document.getElementById('edgeOverlay');
   if (!ov.classList.contains('open')) return;
@@ -6136,6 +6196,7 @@ async function loadEdgeBoard() {
     // Deep link / refresh straight into the Agentic panel: renderEdgeBoard() only
     // emits a placeholder for it since its data isn't part of this payload.
     if (_ebView === 'agentic') loadAgentTradingSection();
+    _restoreEdgeBoardScroll();
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#edgeBody .tr-stat',
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
@@ -7455,8 +7516,10 @@ function _ebSetView(view) {
     }
     return;
   }
+  _captureEdgeBoardScroll();
   host.innerHTML = renderEdgeBoard(_ebLastData);
   _attachEdgeBoardChartHovers(host);
+  _restoreEdgeBoardScroll();
   refreshEdgePrices();
   if (_ebView === 'agentic') loadAgentTradingSection();
 }
@@ -8186,8 +8249,10 @@ function _refreshActiveEdgeBoardHost() {
   if (_updateMtmViewInPlace()) return;
   const edgeHost = document.getElementById('edgeBody');
   if (edgeHost) {
+    _captureEdgeBoardScroll();
     edgeHost.innerHTML = renderEdgeBoard(_ebLastData);
     _attachEdgeBoardChartHovers(edgeHost);
+    _restoreEdgeBoardScroll();
   }
   const trackHost = document.getElementById('trackBody');
   if (trackHost) {
@@ -8545,6 +8610,7 @@ function applyHistoryState(state) {
     || _PATH_VIEW[normaliseAppPath()]
     || 'landing';
   const edgePanel = state?.panel || legacyRoute?.panel || (edgePath ? edgePath.panel : null);
+  const edgeScrollTop = Math.max(0, Number(state?.edgeScrollTop) || 0);
 
   // Close all overlays first — avoids every case having to enumerate which to close
   closeTrackRecord({ updateHistory: false });
@@ -8585,6 +8651,13 @@ function applyHistoryState(state) {
     openPersonalLedger({ updateHistory: false });
   } else {
     showLanding({ updateHistory: false });
+  }
+  // The open helper may synchronously re-render the previous board before it
+  // sees the destination history entry. Apply this after routing so a Back or
+  // Forward navigation always wins over that stale in-memory offset.
+  if (_isEdgeHistoryView(view)) {
+    _edgeBoardScrollTop = edgeScrollTop;
+    _restoreEdgeBoardScroll();
   }
   isApplyingHistory = false;
 }
