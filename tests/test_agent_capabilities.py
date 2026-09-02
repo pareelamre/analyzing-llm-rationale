@@ -204,6 +204,45 @@ class ToolLoopTests(unittest.TestCase):
         self.assertTrue(context_observation["observation_truncated"])
         self.assertNotIn("account", context_observation)
 
+    def test_long_tool_loop_compacts_old_prompt_observations_but_keeps_audit_full(self):
+        async def research(_args):
+            return "evidence-" * 1_000
+
+        turns = iter([
+            '{"action":"research","args":{"round":1}}',
+            '{"action":"research","args":{"round":2}}',
+            '{"action":"research","args":{"round":3}}',
+            '{"action":"research","args":{"round":4}}',
+            '{"final":"The completed research supports a cautious trade."}',
+        ])
+        seen_messages = []
+
+        async def chat_fn(messages):
+            seen_messages.append([dict(message) for message in messages])
+            return next(turns)
+
+        result = asyncio.run(ac.run_tool_loop(
+            "Research this market.",
+            {"research": research},
+            [{"name": "research", "description": "collect evidence"}],
+            chat_fn,
+            max_steps=4,
+            obs_limit=4_000,
+            observation_context_limit=9_000,
+        ))
+
+        # The model's final turn stays under the prompt budget, while the
+        # durable transcript remains complete for audit/replay.
+        final_observations = [
+            message["content"]
+            for message in seen_messages[-1]
+            if message["content"].startswith("Observation: ")
+        ]
+        self.assertLessEqual(sum(map(len, final_observations)), 9_000)
+        self.assertTrue(any("Earlier observation compacted" in item for item in final_observations))
+        self.assertEqual(len(result["transcript"]), 4)
+        self.assertTrue(all(len(step["observation"]) == 9_000 for step in result["transcript"]))
+
     def test_truncates_at_max_steps(self):
         async def tool(args):
             return "obs"

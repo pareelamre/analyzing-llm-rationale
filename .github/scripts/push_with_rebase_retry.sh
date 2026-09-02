@@ -13,14 +13,22 @@ slugify() {
 }
 
 resolve_allowed_rebase_conflicts() {
-  local conflicted file
+  local conflicted file allowed
   conflicted="$(git diff --name-only --diff-filter=U || true)"
   if [ -z "$conflicted" ] || [ -z "$keep_theirs_csv" ]; then
     return 1
   fi
 
   while IFS= read -r file; do
-    if ! printf '%s\n' "$keep_theirs_csv" | tr ',' '\n' | grep -Fx -- "$file" >/dev/null; then
+    allowed=0
+    while IFS= read -r keep_path; do
+      [ -z "$keep_path" ] && continue
+      if [ "$keep_path" = "$file" ] || { [[ "$keep_path" == */ ]] && [[ "$file" == "$keep_path"* ]]; }; then
+        allowed=1
+        break
+      fi
+    done < <(printf '%s\n' "$keep_theirs_csv" | tr ',' '\n')
+    if [ "$allowed" -ne 1 ]; then
       return 1
     fi
   done <<< "$conflicted"

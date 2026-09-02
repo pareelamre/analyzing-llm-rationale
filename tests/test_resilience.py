@@ -94,6 +94,47 @@ class ProviderRetryUnitTests(unittest.TestCase):
             asyncio.run(_provider_chat(provider, [], 0.0, 64, max_retries=0))
         self.assertEqual(provider.calls, 1)
 
+    def test_call_can_use_a_larger_retry_budget_for_a_long_agent_turn(self):
+        # A multi-turn tool loop should not lose its completed observations
+        # because one individual model turn needs a few more transient retries.
+        provider = FlakyProvider(fail_times=4, error=RetryableProviderError("503"))
+        out = asyncio.run(_provider_chat(provider, [], 0.0, 64, max_retries=4))
+        self.assertIn("predicted_answer", out)
+        self.assertEqual(provider.calls, 5)
+
+    def test_context_local_agent_retry_policy_covers_nested_tool_forecasts(self):
+        # ``forecast`` is invoked from inside the tool loop. Its provider call
+        # has no explicit retry parameters, so the context-local policy is the
+        # bridge that keeps it as resilient as the planning/final turns.
+        provider = FlakyProvider(fail_times=4, error=RetryableProviderError("503"))
+        token = server._provider_retry_policy.set((4, 1, 0.0))
+        try:
+            out = asyncio.run(_provider_chat(provider, [], 0.0, 64))
+        finally:
+            server._provider_retry_policy.reset(token)
+        self.assertIn("predicted_answer", out)
+        self.assertEqual(provider.calls, 5)
+
+    def test_timeout_retry_budget_can_be_lower_than_transient_status_budget(self):
+        provider = FlakyProvider(fail_times=99, error=asyncio.TimeoutError())
+        with self.assertRaises(asyncio.TimeoutError):
+            asyncio.run(_provider_chat(
+                provider, [], 0.0, 64, max_retries=4, max_timeout_retries=1,
+            ))
+        self.assertEqual(provider.calls, 2)
+
+    def test_provider_retry_after_hint_is_respected(self):
+        provider = FlakyProvider(
+            fail_times=1,
+            error=RetryableProviderError("429", retry_after_s=2.0),
+        )
+        with (
+            mock.patch.object(server.random, "uniform", return_value=0.0),
+            mock.patch.object(server.asyncio, "sleep", new_callable=mock.AsyncMock) as sleep,
+        ):
+            asyncio.run(_provider_chat(provider, [], 0.0, 64, backoff_base_s=0.0))
+        sleep.assert_awaited_once_with(2.0)
+
     def test_call_can_override_timeout(self):
         class SlowProvider:
             model_name = "slow"

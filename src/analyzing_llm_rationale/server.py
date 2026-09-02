@@ -21,6 +21,7 @@ import traceback
 import uuid
 from collections import OrderedDict, defaultdict
 from contextlib import AsyncExitStack, asynccontextmanager
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
@@ -244,6 +245,26 @@ logger = logging.getLogger("foresea")
 _PROVIDER_MAX_RETRIES = int(os.environ.get("PROVIDER_MAX_RETRIES", "2"))      # attempts = retries + 1
 _PROVIDER_TIMEOUT_S = float(os.environ.get("PROVIDER_TIMEOUT_S", "90"))       # per-attempt wall-clock budget
 _PROVIDER_BACKOFF_BASE_S = float(os.environ.get("PROVIDER_BACKOFF_BASE_S", "0.5"))
+# A paper-trading agent has a multi-turn ReAct loop. A brief 5xx on any one
+# turn should not discard the already completed research/actions, so this path
+# gets a little more recovery budget than a one-shot forecast. Timeout retries
+# stay deliberately lower: a slow call is expensive and an abandoned executor
+# request cannot safely be cancelled by asyncio.
+_AGENT_TOOL_PROVIDER_MAX_RETRIES = max(
+    0, int(os.environ.get("AGENT_TOOL_PROVIDER_MAX_RETRIES", "4"))
+)
+_AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES = max(
+    0, int(os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES", "1"))
+)
+_AGENT_TOOL_PROVIDER_BACKOFF_BASE_S = max(
+    0.0, float(os.environ.get("AGENT_TOOL_PROVIDER_BACKOFF_BASE_S", "1.0"))
+)
+# A context-local policy extends recovery to the model calls nested inside the
+# ``forecast`` tool without letting an agent's budget leak into another
+# request handled concurrently by the same FastAPI process.
+_provider_retry_policy: ContextVar[Optional[tuple[int, int, float]]] = ContextVar(
+    "provider_retry_policy", default=None
+)
 _INTERACTIVE_DEFAULT_MODEL = os.environ.get("INTERACTIVE_DEFAULT_MODEL", "gemma-4-26b-a4b-it").strip()
 _INTERACTIVE_MAX_TOKENS = int(os.environ.get("INTERACTIVE_MAX_TOKENS", "768"))
 _CHAT_PROVIDER_TIMEOUT_S = float(os.environ.get("CHAT_PROVIDER_TIMEOUT_S", "15"))
@@ -2413,6 +2434,11 @@ _llm_calls = _meter.create_counter(
 _llm_errors = _meter.create_counter(
     "llm.errors", unit="1", description="LLM provider call failures"
 )
+_agent_tool_turn_recoveries = _meter.create_counter(
+    "agent.tool_turn.recoveries",
+    unit="1",
+    description="Recovered transient LLM failures during a multi-turn agent tool loop",
+)
 _council_member_calls = _meter.create_counter(
     "forecast.council.member.calls",
     unit="1",
@@ -2714,6 +2740,8 @@ async def _provider_chat(
     *,
     timeout_s: Optional[float] = None,
     max_retries: Optional[int] = None,
+    max_timeout_retries: Optional[int] = None,
+    backoff_base_s: Optional[float] = None,
     call_site: str = "predict",
     reasoning_effort: Optional[str] = None,
 ) -> str:
@@ -2735,8 +2763,23 @@ async def _provider_chat(
 
     model_name = getattr(provider, "model_name", "unknown")
     provider_type = type(provider).__name__
+    policy = _provider_retry_policy.get()
     effective_timeout_s = _PROVIDER_TIMEOUT_S if timeout_s is None else max(0.001, timeout_s)
-    effective_max_retries = _PROVIDER_MAX_RETRIES if max_retries is None else max(0, max_retries)
+    effective_max_retries = (
+        _PROVIDER_MAX_RETRIES
+        if max_retries is None and policy is None
+        else (policy[0] if max_retries is None else max(0, max_retries))
+    )
+    effective_max_timeout_retries = (
+        (policy[1] if policy is not None else effective_max_retries)
+        if max_timeout_retries is None
+        else max(0, max_timeout_retries)
+    )
+    effective_backoff_base_s = (
+        (policy[2] if policy is not None else _PROVIDER_BACKOFF_BASE_S)
+        if backoff_base_s is None
+        else max(0.0, backoff_base_s)
+    )
 
     with _tracer.start_as_current_span("llm.chat_completion") as span:
         span.set_attributes({
@@ -2753,9 +2796,10 @@ async def _provider_chat(
         })
 
         loop = asyncio.get_running_loop()
-        attempts = effective_max_retries + 1
+        retries_used = 0
+        timeout_retries_used = 0
         last_exc: Optional[Exception] = None
-        for attempt in range(attempts):
+        while True:
             try:
                 result = await asyncio.wait_for(
                     loop.run_in_executor(
@@ -2767,6 +2811,12 @@ async def _provider_chat(
                     timeout=effective_timeout_s,
                 )
                 span.set_attribute("outcome", "success")
+                span.set_attribute("foresea.llm.retry_count", retries_used)
+                if retries_used and (call_site == "agent_tool_loop" or policy is not None):
+                    _agent_tool_turn_recoveries.add(1, {
+                        "outcome": "success",
+                        "call_site": call_site,
+                    })
                 return result
             except ContextLimitError as exc:
                 span.record_exception(exc)
@@ -2776,13 +2826,22 @@ async def _provider_chat(
                 raise
             except (RetryableProviderError, asyncio.TimeoutError) as exc:
                 last_exc = exc
-                if attempt == attempts - 1:
+                is_timeout = isinstance(exc, asyncio.TimeoutError)
+                if retries_used >= effective_max_retries or (
+                    is_timeout and timeout_retries_used >= effective_max_timeout_retries
+                ):
                     break
-                delay = _PROVIDER_BACKOFF_BASE_S * (2 ** attempt)
+                retries_used += 1
+                if is_timeout:
+                    timeout_retries_used += 1
+                delay = effective_backoff_base_s * (2 ** (retries_used - 1))
+                provider_retry_after = getattr(exc, "retry_after_s", None)
+                if isinstance(provider_retry_after, (int, float)):
+                    delay = max(delay, float(provider_retry_after))
                 delay += random.uniform(0, delay * 0.25)  # jitter to avoid thundering herd
                 logger.warning(
                     "provider call failed (attempt %d/%d), retrying in %.2fs: %s",
-                    attempt + 1, attempts, delay, type(exc).__name__,
+                    retries_used, effective_max_retries + 1, delay, type(exc).__name__,
                 )
                 await asyncio.sleep(delay)
 
@@ -2790,6 +2849,7 @@ async def _provider_chat(
         span.record_exception(last_exc)
         span.set_status(Status(StatusCode.ERROR))
         span.set_attribute("outcome", "error")
+        span.set_attribute("foresea.llm.retry_count", retries_used)
         error_type = "timeout" if isinstance(last_exc, asyncio.TimeoutError) else "retryable"
         _llm_errors.add(1, {"gen_ai.request.model": model_name, "error.type": error_type})
         raise last_exc
@@ -14897,7 +14957,19 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             logger.warning("venue MCP discovery failed", exc_info=True)
 
     async def chat_fn(messages):
-        return await _provider_chat(provider, messages, temperature, max_tokens)
+        # Retrying here is safe: it repeats only the same model turn and does
+        # not re-run any completed tool/action. That is materially different
+        # from retrying the entire ReAct loop, which could replay a paper trade.
+        return await _provider_chat(
+            provider,
+            messages,
+            temperature,
+            max_tokens,
+            max_retries=_AGENT_TOOL_PROVIDER_MAX_RETRIES,
+            max_timeout_retries=_AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES,
+            backoff_base_s=_AGENT_TOOL_PROVIDER_BACKOFF_BASE_S,
+            call_site="agent_tool_loop",
+        )
 
     q = question
     rule = ("You MUST call the `forecast` tool before your final answer — it produces "
@@ -14980,6 +15052,11 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             f"in your final answer]\n{grounding_note}"
         )
     backstopped = False
+    policy_token = _provider_retry_policy.set((
+        _AGENT_TOOL_PROVIDER_MAX_RETRIES,
+        _AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES,
+        _AGENT_TOOL_PROVIDER_BACKOFF_BASE_S,
+    ))
     try:
         res = await agent_capabilities.run_tool_loop(
             q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule,
@@ -14992,6 +15069,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                                   "market_probability": (quote.probability if quote else req.market_probability)})
     except Exception as exc:
         raise _provider_http_error(exc) from exc
+    finally:
+        _provider_retry_policy.reset(policy_token)
 
     outcome = (quote.outcome if quote else None) or "Yes"
     edge = last.get("edge")
