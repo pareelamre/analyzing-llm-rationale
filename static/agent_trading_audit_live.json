@@ -818,6 +818,81 @@
     ],
     "gpt-oss-120b": [
       {
+        "action_id": "dde3e2c8-2d72-49b9-92b2-12967df6be82",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_unfilled_below_market",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "marketable": false,
+            "observed_ask": 1.0,
+            "source": "live_venue_quote",
+            "status": "shadow_unfilled_below_market"
+          },
+          "requested_order": {
+            "price": 0.999,
+            "quantity": 200
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 9910.956,
+            "cash_required": 0.0,
+            "concentration_cap": 1486.6434,
+            "cycle_id": "30m:993537",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2973.2868,
+            "drawdown_after": 0.008884,
+            "fee": 0.0,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 199.8,
+            "open_markets_after": 0,
+            "per_cycle_spend_limit": 1982.1912,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993537",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 0.999,
+          "quantity": 0.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "israel-x-iran-ceasefire-continues-through-august-31-20260716224448970-754-896-823"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "b8aaa1df20f5164eb0a42f138de25ce021879c698975a8998d3a2bffb64da52b",
+        "recorded_at": "2026-09-02T16:42:23.079684+00:00"
+      },
+      {
         "action_id": "ec5431b7-f8da-486f-8f76-db8b537855f2",
         "agent_id": "gpt-oss-120b",
         "audit": {
@@ -2469,6 +2544,89 @@
       }
     ],
     "llama-3.3-70b-instruct": [
+      {
+        "action_id": "6d89efd8-4337-4013-a6b9-2d1ce7cf979c",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_unfilled_below_market",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "marketable": false,
+            "observed_ask": 0.94,
+            "source": "live_venue_quote",
+            "status": "shadow_unfilled_below_market"
+          },
+          "requested_order": {
+            "price": 0.02,
+            "quantity": 100
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 6479.315805,
+            "cash_required": 327.42346,
+            "concentration_cap": 1286.897371,
+            "cycle_id": "30m:993537",
+            "cycle_spend_after": 327.42346,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 327.42346,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2573.794741,
+            "drawdown_after": 0.19017,
+            "fee": 21.019324,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 306.404136,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 306.404136,
+            "open_markets_after": 4,
+            "per_cycle_spend_limit": 1715.863161,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.28,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.05,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 306.404136,
+            "target_quantity": 15320.206794642856
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993537",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 0.02,
+          "quantity": 0.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "yes",
+          "ticker": "KXNFLRETIRE-MSTAFFORD9-2627"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "eb3897b0b8aaf9608cd0b99ca43566977f2b4864d51d494ddfcbfb7519dd6f21",
+        "recorded_at": "2026-09-02T16:43:29.988504+00:00"
+      },
       {
         "action_id": "489c5eb5-349a-4f68-9924-259fd3c4365b",
         "agent_id": "llama-3.3-70b-instruct",
@@ -7207,7 +7365,7 @@
     ],
     "qwen3-8-27b": []
   },
-  "generated_at": "2026-09-02T12:12:40.287033+00:00",
+  "generated_at": "2026-09-02T16:48:40.462721+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
