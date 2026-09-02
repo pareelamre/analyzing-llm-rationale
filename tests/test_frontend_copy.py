@@ -446,6 +446,19 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
                 self.assertIn("hasUnrealizedPnl", positions)
                 self.assertIn("No executable bid is currently available", positions)
                 self.assertNotIn("Number(p.unrealized_pnl) || 0", positions)
+                self.assertIn("p.ticker || p.ident", positions)
+                self.assertIn("_agenticMarketUrl", positions)
+                self.assertIn("noopener noreferrer", positions)
+
+    def test_agentic_positions_link_to_the_source_market(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                helper = index.split("function _agenticMarketUrl(platform, ident) {", 1)[1].split(
+                    "// ── Lightweight", 1
+                )[0]
+                self.assertIn("polymarket.com/event", helper)
+                self.assertIn("kalshi.com/markets", helper)
+                self.assertIn("encodeURIComponent", helper)
 
     def test_agentic_thesis_cards_extract_reasoning_from_partial_json(self):
         index = self._both()["frontend"]

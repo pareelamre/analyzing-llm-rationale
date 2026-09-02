@@ -87,12 +87,15 @@ def _latest_thesis(conn: sqlite3.Connection, model: str) -> Dict[str, Any] | Non
     ).fetchone()
     if row is None:
         return None
+    thesis = agent_trading_stats.clean_thesis_display(row["thesis"])
+    if not thesis:
+        return None
     return {
         "ts": row["ts"],
         "agent_id": row["agent_id"],
         "type": "thesis",
         "cycle_id": row["cycle_id"],
-        "thesis": agent_trading_stats.clean_thesis_display(row["thesis"]),
+        "thesis": thesis,
     }
 
 
@@ -352,6 +355,7 @@ def _weather_operations(conns: Dict[str, sqlite3.Connection], now: datetime) -> 
              AND forecast.platform = action.platform
              AND forecast.ticker = action.ticker
             WHERE action.action_type = 'trade'
+              AND (action.quantity IS NULL OR action.quantity > 0)
               AND action.ts >= ?
               AND forecast.weather_market_type IS NOT NULL
             """,

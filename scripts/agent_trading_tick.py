@@ -56,7 +56,7 @@ from opentelemetry.trace import Status, StatusCode
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from analyzing_llm_rationale import benchmark_tools, market_data, weather_markets  # noqa: E402
+from analyzing_llm_rationale import agent_trading_stats, benchmark_tools, market_data, weather_markets  # noqa: E402
 from analyzing_llm_rationale.accounting import MarketQuote  # noqa: E402
 from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
 from analyzing_llm_rationale.observability import init_observability  # noqa: E402
@@ -1121,7 +1121,13 @@ _TRADING_INSTRUCTION = (
 
 
 def _assemble_question(portfolio_block: str, candidates_block: str) -> str:
-    return "\n\n".join(filter(None, [portfolio_block, candidates_block, _TRADING_INSTRUCTION]))
+    as_of = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    time_anchor = (
+        f"=== Current simulation time ===\n{as_of}\n"
+        "Treat dates before this timestamp as historical, never as upcoming catalysts. "
+        "Use a catalyst only when it is still ahead and inside the selected contract's resolution window."
+    )
+    return "\n\n".join(filter(None, [time_anchor, portfolio_block, candidates_block, _TRADING_INSTRUCTION]))
 
 
 def _trim_block_to_lines(block: str, budget: int) -> str:
@@ -1192,7 +1198,9 @@ def _build_question(portfolio_block: str, candidates_block: str) -> str:
     # 4) Absolute last resort -- guarantee the limit is never exceeded no
     # matter how large a single remaining line is. Keep the instruction
     # intact (the model needs it every cycle) and hard-clamp the rest.
-    budget = max(0, MAX_QUESTION_CHARS - len(_TRADING_INSTRUCTION) - 2)
+    # The clock anchor is fixed prompt context too; reserve space for it so
+    # the absolute fallback remains a real hard cap.
+    budget = max(0, MAX_QUESTION_CHARS - len(_assemble_question("", "")) - 2)
     if len(trimmed_portfolio) > budget:
         trimmed_portfolio = trimmed_portfolio[: max(0, budget - 1)].rstrip() + "…"
     return _assemble_question(trimmed_portfolio, "")
@@ -2041,6 +2049,10 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     question = _build_question(portfolio_block, _build_candidates_block(held_quotes, new_quotes))
 
     report = asyncio.run(_call_agent_analyze(question))
+    # The durable transcript retains raw tool output. Store only reader-ready
+    # final copy in the cycle field so tool envelopes cannot masquerade as a
+    # model thesis on the public board.
+    report.thesis = agent_trading_stats.clean_thesis_display(report.thesis)
     all_candidates = [*held_quotes, *new_quotes]
     report.thesis, thesis_execution = _reconcile_thesis_execution(
         agent_id=agent_id,
