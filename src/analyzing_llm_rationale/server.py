@@ -1952,9 +1952,15 @@ def _compact_agent_trading_board(live: Any) -> Dict[str, Any]:
             health["status"] = "last_attempt_failed"
             health.setdefault("last_failure_kind", legacy_status)
             health["detail"] = "Latest agent attempt failed; see the recorded failure reason."
-            failure_detail = str(health.get("last_failure_detail") or "")
-            if legacy_status == "provider_unavailable" and "503" in failure_detail:
-                health["last_failure_detail"] = "Upstream provider returned HTTP 503."
+            # Older workers persisted only Foresea's generic HTTP 503 wrapper.
+            # It could have originated from a timeout, a retryable non-503
+            # status, or a malformed provider response, so do not invent an
+            # upstream HTTP status that was never retained.
+            if legacy_status == "provider_unavailable":
+                health["last_failure_detail"] = (
+                    "Foresea recorded a retryable provider error; "
+                    "the original upstream reason was not retained."
+                )
         model_health[str(agent_id)] = health
     raw_operational_health = source.get("operational_health")
     operational_source = raw_operational_health if isinstance(raw_operational_health, dict) else {}

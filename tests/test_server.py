@@ -1562,7 +1562,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["model_health"]["gpt-oss-120b"]["last_failure_kind"], "provider_unavailable")
         self.assertEqual(
             payload["model_health"]["gpt-oss-120b"]["last_failure_detail"],
-            "Upstream provider returned HTTP 503.",
+            "Foresea recorded a retryable provider error; the original upstream reason was not retained.",
         )
         self.assertEqual(payload["operational_health"]["status"], "attempts_failed")
         self.assertEqual(payload["operational_health"]["models_total"], 1)
