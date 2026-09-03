@@ -1202,6 +1202,34 @@ class AgentAnalyzeRetryTests(unittest.TestCase):
 
 
 class CycleTelemetryTests(unittest.TestCase):
+    def test_scads_status_precheck_matches_router_model_and_fails_open(self):
+        response = mock.Mock()
+        response.json.return_value = {
+            "models": {
+                "default": [{
+                    "name": "zai-org/GLM-5.3-Flash",
+                    "real_name": "zai-org/GLM-5.3-Flash",
+                    "state": "down",
+                }]
+            }
+        }
+        response.raise_for_status.return_value = None
+        with (
+            mock.patch.object(agent_trading_tick, "SCADS_STATUS_PRECHECK", True),
+            mock.patch.object(agent_trading_tick.requests, "get", return_value=response),
+        ):
+            state, detail = agent_trading_tick._scads_model_readiness("glm-5-3-flash")
+        self.assertEqual(state, "down")
+        self.assertIn("GLM-5.3-Flash", detail)
+
+        with (
+            mock.patch.object(agent_trading_tick, "SCADS_STATUS_PRECHECK", True),
+            mock.patch.object(agent_trading_tick.requests, "get", side_effect=RuntimeError("status host down")),
+        ):
+            state, detail = agent_trading_tick._scads_model_readiness("glm-5-3-flash")
+        self.assertIsNone(state)
+        self.assertIsNone(detail)
+
     def test_failure_detail_uses_chained_provider_status_without_leaking_response(self):
         upstream = RuntimeError("status=503 body=authorization=super-secret-response")
         wrapper = RuntimeError("The forecasting model is temporarily unavailable.")
@@ -1229,6 +1257,7 @@ class CycleTelemetryTests(unittest.TestCase):
                 mock.patch.object(agent_trading_tick, "MODEL", "model-telemetry"),
                 mock.patch.object(benchmark_tools, "_current_cycle_id", return_value="cycle-telemetry"),
                 mock.patch.object(agent_trading_tick, "init_observability"),
+                mock.patch.object(agent_trading_tick, "_scads_model_readiness", return_value=(None, None)),
                 mock.patch.object(agent_trading_tick, "run_cycle", return_value=summary) as run,
             ):
                 self.assertEqual(agent_trading_tick.main(), 0)
@@ -1255,6 +1284,7 @@ class CycleTelemetryTests(unittest.TestCase):
                 mock.patch.object(agent_trading_tick, "MODEL", "model-telemetry"),
                 mock.patch.object(benchmark_tools, "_current_cycle_id", return_value="cycle-provider-503"),
                 mock.patch.object(agent_trading_tick, "init_observability"),
+                mock.patch.object(agent_trading_tick, "_scads_model_readiness", return_value=(None, None)),
                 mock.patch.object(
                     agent_trading_tick,
                     "run_cycle",
@@ -1269,6 +1299,30 @@ class CycleTelemetryTests(unittest.TestCase):
         self.assertEqual(row["failure_kind"], "provider_unavailable")
         self.assertEqual(row["failure_detail"], "Upstream provider returned HTTP 503.")
         self.assertIsNotNone(row["finished_at"])
+
+    def test_main_defers_a_model_explicitly_paused_by_scads_without_running_tools(self):
+        with tempfile.TemporaryDirectory() as td:
+            env = {"FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite")}
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch.object(agent_trading_tick, "MODEL", "model-paused"),
+                mock.patch.object(benchmark_tools, "_current_cycle_id", return_value="cycle-paused"),
+                mock.patch.object(agent_trading_tick, "init_observability"),
+                mock.patch.object(
+                    agent_trading_tick,
+                    "_scads_model_readiness",
+                    return_value=("down", "SCADS status check reports model-paused as down."),
+                ),
+                mock.patch.object(agent_trading_tick, "run_cycle") as run,
+            ):
+                self.assertEqual(agent_trading_tick.main(), agent_trading_tick.PROVIDER_DEGRADATION_EXIT_CODE)
+                with benchmark_tools._account_transaction() as conn:
+                    row = conn.execute("SELECT * FROM agent_cycle_telemetry").fetchone()
+
+        run.assert_not_called()
+        self.assertEqual(row["outcome"], "deferred")
+        self.assertEqual(row["failure_kind"], "provider_paused")
+        self.assertIn("status check", row["failure_detail"])
 
 
 if __name__ == "__main__":

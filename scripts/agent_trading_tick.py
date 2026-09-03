@@ -47,16 +47,22 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
+import requests
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from analyzing_llm_rationale import agent_trading_stats, benchmark_tools, market_data, weather_markets  # noqa: E402
+from analyzing_llm_rationale import (  # noqa: E402
+    agent_trading_stats,
+    benchmark_tools,
+    market_data,
+    weather_markets,
+)
 from analyzing_llm_rationale.accounting import MarketQuote  # noqa: E402
 from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
 from analyzing_llm_rationale.observability import init_observability  # noqa: E402
@@ -165,6 +171,17 @@ PROVIDER_DEGRADATION_FAILURE_KINDS = {
     "provider_rate_limited",
     "provider_timeout",
 }
+# SCADS publishes a five-minute model-health probe.  Treat it as an advisory
+# circuit breaker: when it explicitly says a configured model is down, do not
+# spend a full ReAct/tool-loop retry budget merely to obtain a predictable 503.
+# The check fails open if the status page itself is unavailable, so Foresea
+# never turns a status-site outage into an agent outage.
+SCADS_STATUS_PRECHECK = os.environ.get("AGENT_TRADING_SCADS_STATUS_PRECHECK", "true").strip().lower() not in {
+    "0", "false", "no", "off",
+}
+SCADS_STATUS_URL = os.environ.get("AGENT_TRADING_SCADS_STATUS_URL", "https://llm.scads.ai/status/state.json")
+SCADS_STATUS_TIMEOUT_S = max(0.1, float(os.environ.get("AGENT_TRADING_SCADS_STATUS_TIMEOUT_S", "5")))
+SCADS_UNAVAILABLE_STATES = {"down", "timeout", "not_listed"}
 # AgentAnalyzeRequest.question used to have a tight 2000-char server-side
 # limit (see server.py) that was found silently destroying almost an entire
 # candidates block, including every Polymarket candidate, down to a mid-word
@@ -1939,6 +1956,44 @@ def _failure_kind(exc: BaseException) -> str:
     return "cycle_error"
 
 
+def _scads_model_readiness(model: str) -> Tuple[Optional[str], Optional[str]]:
+    """Return SCADS' current state for ``model`` without making it a dependency.
+
+    ``None`` means the public status probe could not be trusted or reached, so
+    the caller must continue normally.  A concrete unavailable state is useful
+    operational evidence: the worker records a *deferred* cycle rather than a
+    misleading failed tool run, then automatically tries again after SCADS'
+    next status refresh reports the model up.
+    """
+    if not SCADS_STATUS_PRECHECK:
+        return None, None
+    try:
+        config = load_model_configs(ROOT / "configs" / "models.yaml").get(model)
+        target = (config.router_model_name if config else "").strip()
+        if not target:
+            return None, None
+        response = requests.get(SCADS_STATUS_URL, timeout=SCADS_STATUS_TIMEOUT_S)
+        response.raise_for_status()
+        payload = response.json()
+        groups = payload.get("models") if isinstance(payload, dict) else None
+        records = (
+            item
+            for items in (groups or {}).values()
+            if isinstance(items, list)
+            for item in items
+            if isinstance(item, dict)
+        )
+        for item in records:
+            names = {str(item.get("name") or "").strip(), str(item.get("real_name") or "").strip()}
+            if target in names:
+                state = str(item.get("state") or "unknown").strip().lower()
+                return state, f"SCADS status check reports {target} as {state}."
+        return "not_listed", f"SCADS status check does not list configured model {target}."
+    except Exception as exc:  # noqa: BLE001 - availability checks must fail open
+        logger.info("SCADS status precheck unavailable for model=%s: %s", model, type(exc).__name__)
+        return None, None
+
+
 def _start_cycle_telemetry(run_id: str, agent_id: str, cycle_id: str, started_at: str) -> None:
     with benchmark_tools._account_transaction() as conn:
         conn.execute(
@@ -2175,6 +2230,30 @@ def main() -> int:
                 "agent.cycle_id": cycle_id,
                 "agent.run_id": run_id,
             })
+            provider_state, provider_detail = _scads_model_readiness(MODEL)
+            if provider_state in SCADS_UNAVAILABLE_STATES:
+                duration_seconds = time.perf_counter() - started
+                detail = provider_detail or "SCADS status check has temporarily paused this model."
+                _finish_cycle_telemetry(
+                    run_id,
+                    outcome="deferred",
+                    duration_ms=round(duration_seconds * 1000),
+                    failure_kind="provider_paused",
+                    failure_detail=detail,
+                )
+                span.set_attributes({
+                    "outcome": "deferred",
+                    "provider.state": provider_state,
+                    "provider.degraded": True,
+                })
+                cycle_runs.add(1, {"model": MODEL, "outcome": "deferred", "failure_kind": "provider_paused"})
+                cycle_duration.record(duration_seconds, {"model": MODEL, "outcome": "deferred"})
+                provider_degradations.add(1, {"failure_kind": "provider_paused"})
+                logger.info(
+                    "agent trading cycle deferred model=%s cycle=%s provider_state=%s",
+                    MODEL, cycle_id, provider_state,
+                )
+                return PROVIDER_DEGRADATION_EXIT_CODE
             try:
                 summary = run_cycle(MODEL, cycle_id=cycle_id)
             except Exception as exc:  # noqa: BLE001

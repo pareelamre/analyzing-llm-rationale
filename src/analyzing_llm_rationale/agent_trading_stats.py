@@ -127,6 +127,7 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
             "return_pct": round(return_pct, 4),
             "open_positions": snap["open_positions"],
             "illiquid_positions": snap["illiquid_positions"],
+            "mark_coverage": snap["mark_coverage"],
             "trade_count": trade_count,
             "settled_count": settled_count,
             "realized_count": realized_count,

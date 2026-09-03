@@ -366,11 +366,10 @@ if (!bubble.innerHTML.includes('>Gathering evidence<')) throw new Error('status 
         self.assertIn("!!step.started_at && !step.completed_at", self.index_html)
         self.assertIn("Started but never completed", self.index_html)
 
-    def test_agentic_trading_board_surfaces_promotion_eligibility(self) -> None:
-        self.assertIn("d.eligibility || {}", self.index_html)
-        self.assertIn("function _eligibilityReasonText", self.index_html)
-        self.assertIn("Not yet eligible", self.index_html)
-        self.assertIn(">Eligible</th>", self.index_html)
+    def test_agentic_trading_board_omits_ambiguous_promotion_eligibility(self) -> None:
+        self.assertNotIn("d.eligibility || {}", self.index_html)
+        self.assertNotIn("function _eligibilityReasonText", self.index_html)
+        self.assertNotIn(">Eligible</th>", self.index_html)
 
     def test_users_can_copy_a_public_agent_without_private_trading_state(self) -> None:
         self.assertNotIn("Copy agent", self.index_html)

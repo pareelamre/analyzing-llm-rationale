@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Foresea is the intelligence layer for prediction markets: forecasts, evidence, rationales, and market-price gaps for tradeable questions." />
   <meta name="theme-color" content="#111111" />
+  <link rel="icon" type="image/svg+xml" href="/static/foresea-mark.svg" />
   <link rel="canonical" href="https://foresea.ink/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Foresea" />
@@ -1081,11 +1082,11 @@
     .agentic-panel-title { color: var(--ink); font-size: 14px; font-weight: 650; letter-spacing: -.01em; margin: 0; }
     .agentic-panel-copy { color: var(--text-dim); font-size: 11px; line-height: 1.45; margin: 4px 0 0; }
     .agentic-chart { border-top: 1px solid var(--border); padding: 7px 10px 3px; }
-    #eb-agentic-section > .eb-table { background: #fff; border: 1px solid var(--border); border-radius: 14px; display: block; max-width: 100%; overflow-x: auto; }
+    #eb-agentic-section > .eb-table { background: #fff; border: 1px solid var(--border); border-radius: 14px; display: block; max-width: 100%; overflow-x: clip; }
     #eb-agentic-section > .eb-table th { background: #fafafa; color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .06em; padding-bottom: 9px; padding-top: 9px; text-transform: uppercase; }
     #eb-agentic-section > .eb-table td { border-bottom-color: #f0f1f3; padding-bottom: 10px; padding-top: 10px; }
-    .agentic-table-wrap { overflow-x: auto; }
-    .agentic-table { margin: 0; min-width: 720px; }
+    .agentic-table-wrap { overflow-x: clip; }
+    .agentic-table { margin: 0; min-width: 0; width: 100%; }
     .agentic-table th { background: #fafafa; color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .06em; padding-bottom: 9px; padding-top: 9px; text-transform: uppercase; }
     .agentic-table td { border-bottom-color: #f0f1f3; padding-bottom: 10px; padding-top: 10px; }
     .agentic-table .agentic-model { color: var(--ink); font-size: 12px; font-weight: 650; }
@@ -1096,7 +1097,7 @@
     .agentic-health--no-trade { background: #eff6ff; color: #1d4ed8; }
     .agentic-health--delayed { background: #fffbeb; color: #a16207; }
     .agentic-health--last-attempt-failed, .agentic-health--provider-unavailable, .agentic-health--provider-timeout, .agentic-health--provider-context-limit, .agentic-health--cycle-error, .agentic-health--stale, .agentic-health--unverified { background: #fef2f2; color: #b91c1c; }
-    .agentic-health--provider-rate-limited { background: #fffbeb; color: #a16207; }
+    .agentic-health--provider-rate-limited, .agentic-health--provider-paused { background: #fffbeb; color: #a16207; }
     .agentic-health-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 6px; padding: 0 0 12px; }
     .agentic-health-summary-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-right: 2px; text-transform: uppercase; }
     .agentic-weather-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 7px; padding: 0 0 12px; }
@@ -1118,6 +1119,30 @@
     .agentic-position-button { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; color: #475569; cursor: pointer; font-size: 10px; font-weight: 650; padding: 3px 8px; }
     .agentic-position-button:hover { background: #f1f5f9; color: #0f172a; }
     .agentic-position-row > td { background: #fbfdff; }
+    .agentic-valuation-note { color: var(--text-dim); display: block; font-size: 9px; font-weight: 500; line-height: 1.3; margin-top: 3px; }
+    .agentic-positions-table code { overflow-wrap: anywhere; word-break: break-word; }
+    @media (max-width: 720px) {
+      .agentic-table-wrap { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+      .agentic-table { border-collapse: separate; border-spacing: 0; }
+      .agentic-table > thead, .agentic-positions-table > thead { border: 0; clip: rect(0 0 0 0); height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; }
+      .agentic-table > tbody, .agentic-table > tbody > tr, .agentic-table > tbody > tr > td,
+      .agentic-positions-table > tbody, .agentic-positions-table > tbody > tr, .agentic-positions-table > tbody > tr > td { display: block; }
+      .agentic-table > tbody > .eb-row { border-bottom: 1px solid var(--border); padding: 8px 13px; }
+      .agentic-table > tbody > .eb-row > td { align-items: center; border: 0; display: grid; gap: 10px; grid-template-columns: minmax(92px, .8fr) minmax(0, 1.2fr); min-height: 30px; padding: 5px 0; text-align: right; }
+      .agentic-table > tbody > .eb-row > td::before { color: var(--text-dim); content: attr(data-label); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
+      .agentic-table > tbody > .eb-row > td:nth-child(2) { text-align: left; }
+      .agentic-table > tbody > .eb-row > td:nth-child(2) > :not(.agentic-model-id) { text-align: right; }
+      .agentic-table .agentic-model-id { overflow-wrap: anywhere; }
+      .agentic-position-row > td { border: 0 !important; display: block !important; padding: 10px !important; }
+      .agentic-positions-table { border: 0 !important; border-radius: 0 !important; width: 100%; }
+      .agentic-positions-table > tbody > tr { border-top: 1px solid #e2e8f0; padding: 7px 0; }
+      .agentic-positions-table > tbody > tr > td { align-items: start; border: 0; display: grid; gap: 8px; grid-template-columns: 86px minmax(0, 1fr); padding: 4px 0 !important; text-align: right; }
+      .agentic-positions-table > tbody > tr > td::before { color: var(--text-dim); content: attr(data-label); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
+      .agentic-positions-table > tbody > tr > td:first-child { text-align: left; }
+      .agentic-retired-divider { border-bottom: 1px solid var(--border); display: block !important; padding: 8px 13px; }
+      .agentic-retired-divider > td { display: block !important; padding: 0 !important; }
+      .agentic-retired-divider > td::before { content: none !important; }
+    }
     .agentic-feed-head { align-items: end; display: flex; gap: 16px; justify-content: space-between; }
     .agentic-feed-head .eb-h { margin: 0; }
     .agentic-filter-status { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
@@ -6799,21 +6824,6 @@ function _agentTradingActivityLine(a) {
   return '';
 }
 
-function _eligibilityReasonText(elig) {
-  if (!elig || !elig.checks) return 'Not enough data yet.';
-  if (elig.eligible) return 'Meets the shadow-trading promotion bar (observational only — grants nothing).';
-  const c = elig.checks;
-  const reasons = [];
-  if (!c.sufficient_sample) reasons.push(`needs ${elig.min_settled_trades_required}+ settled trades (has ${elig.settled_count})`);
-  if (!c.positive_return) reasons.push('return is not positive');
-  if (!c.sharpe_above_floor) reasons.push(`Sharpe below ${elig.min_sharpe_required} (${elig.sharpe ?? 'n/a'})`);
-  if (!c.drawdown_within_cap) {
-    const dd = elig.max_drawdown != null ? `${Math.round(elig.max_drawdown * 100)}%` : 'n/a';
-    reasons.push(`drawdown above ${Math.round(elig.max_drawdown_allowed * 100)}% (${dd})`);
-  }
-  return reasons.length ? `Not yet eligible: ${reasons.join('; ')}.` : 'Not yet eligible.';
-}
-
 function _agentForecastLearningSummary(learning, agentId) {
   const label = _ebModelLabel(agentId || 'selected model');
   const recorded = Number(learning?.recorded_forecasts || 0);
@@ -6870,8 +6880,10 @@ function renderAgentTradingBoard(d) {
   const failedAttemptCount = Array.isArray(operationalHealth.last_attempt_failures)
     ? operationalHealth.last_attempt_failures.length
     : (Array.isArray(operationalHealth.provider_degraded) ? operationalHealth.provider_degraded.length : 0);
-  const availabilityNotice = (operationalHealth.status === 'attempts_failed' || operationalHealth.status === 'provider_degraded')
-    ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);color:var(--text)"><strong>Latest agent attempts:</strong> ${failedAttemptCount || 'Some'} model${failedAttemptCount === 1 ? '' : 's'} most recently ended with a provider error. This is historical execution status, not a live SCADS availability check. Completed paper cycles and balances remain valid.</p>`
+  const availabilityNotice = operationalHealth.status === 'provider_paused'
+    ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--text)"><strong>Provider-paused cycles:</strong> ${escHtml(operationalHealth.detail || 'The affected model will retry automatically when SCADS reports it as available again.')} No paper trade was attempted while paused.</p>`
+    : (operationalHealth.status === 'attempts_failed' || operationalHealth.status === 'provider_degraded')
+    ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);color:var(--text)"><strong>Retryable provider errors:</strong> ${failedAttemptCount || 'Some'} model${failedAttemptCount === 1 ? '' : 's'} most recently ended with a provider error. A later successful cycle supersedes this historical event; paper balances remain valid.</p>`
     : operationalHealth.status === 'attention'
       ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--text)"><strong>Agent maintenance attention:</strong> ${escHtml(operationalHealth.detail || 'One or more model ledgers need review.')}</p>`
       : '';
@@ -6885,7 +6897,6 @@ function renderAgentTradingBoard(d) {
   }
   const leaderboard = d.leaderboard || [];
   const equityCurves = d.equity_curves || {};
-  const eligibility = d.eligibility || {};
   const modelHealth = d.model_health || {};
   const forecastLearning = d.forecast_learning || {};
   const weatherOperations = d.weather_operations || {};
@@ -6893,13 +6904,14 @@ function renderAgentTradingBoard(d) {
   const retiredArtifactsById = Object.fromEntries(retiredArtifacts.map(item => [String(item?.agent_id || ''), item]));
   const activity = d.recent_activity || [];
   const latestTheses = d.latest_theses || {};
-  const _healthStatus = health => String(health?.status || 'unverified');
+  const _healthStatus = health => String(health?.status || 'no_cycle_record');
   const _healthLabel = status => ({
-    active: 'Verified', no_trade: 'No trade', delayed: 'Delayed', stale: 'Stalled', unverified: 'Unverified',
-    last_attempt_failed: 'Last attempt failed',
-    provider_unavailable: 'Last attempt: retryable provider error', provider_rate_limited: 'Last attempt: rate limited',
-    provider_timeout: 'Last attempt: timed out', provider_context_limit: 'Last attempt: context limit', cycle_error: 'Last attempt failed'
-  })[status] || 'Unverified';
+    active: 'Cycle completed · traded', no_trade: 'Cycle completed · no trade', delayed: 'Cycle delayed', stale: 'Cycle stale',
+    unverified: 'No cycle record', no_cycle_record: 'No cycle record', provider_paused: 'Provider paused',
+    last_attempt_failed: 'Retryable provider error',
+    provider_unavailable: 'Retryable provider error', provider_rate_limited: 'Provider rate-limited',
+    provider_timeout: 'Provider timed out', provider_context_limit: 'Context limit reached', cycle_error: 'Cycle error'
+  })[status] || 'Cycle state unknown';
   const _healthAge = health => {
     const seconds = Number(health?.cycle_age_seconds);
     if (!Number.isFinite(seconds)) return 'no cycle';
@@ -6912,7 +6924,7 @@ function renderAgentTradingBoard(d) {
     const label = _healthLabel(status);
     const prefix = withModel ? `${_ebModelHead(health?.agent_id || '')} · ` : '';
     const historicalAttempt = ['last_attempt_failed', 'provider_unavailable', 'provider_rate_limited', 'provider_timeout', 'provider_context_limit', 'cycle_error'].includes(status);
-    const title = `${historicalAttempt ? 'Latest agent attempt failed. This is historical execution status, not a live SCADS availability check.' : (health?.detail || 'No per-model cycle health report.')}${health?.last_failure_detail ? ` Failure reason: ${health.last_failure_detail}.` : ''}${health?.last_cycle_at ? ` Last confirmed cycle: ${health.last_cycle_at}.` : ''}${health?.last_attempt_at ? ` Last worker attempt: ${health.last_attempt_at}.` : ''}`;
+    const title = `${historicalAttempt ? 'The latest attempt ended with a retryable error. This does not assert the provider is unavailable now.' : (health?.detail || 'No per-model cycle health report.')}${health?.last_failure_detail ? ` Detail: ${health.last_failure_detail}.` : ''}${health?.last_cycle_at ? ` Last completed cycle: ${health.last_cycle_at}.` : ''}${health?.last_attempt_at ? ` Last worker attempt: ${health.last_attempt_at}.` : ''}`;
     return `<span class="agentic-health agentic-health--${escAttr(status)}" title="${escAttr(title)}">${escHtml(prefix + label)} · ${escHtml(_healthAge(health))}</span>`;
   };
   const _usd = v => Number.isFinite(Number(v))
@@ -7002,14 +7014,19 @@ function renderAgentTradingBoard(d) {
     const agentId = String(row.agent_id || '');
     const health = { ...(modelHealth[agentId] || {}), agent_id: agentId };
     const healthCell = _healthBadge(health);
-    const elig = eligibility[agentId];
-    const eligCell = elig && elig.eligible
-      ? `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:#0a7">${uiIcon('check')}</span>`
-      : `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:var(--text-dim)">—</span>`;
     const feesPaid = Number(row.fees_paid) || 0;
+    const markCoverage = row.mark_coverage || {};
+    const pricedPositions = Math.max(0, Number(markCoverage.priced_positions) || 0);
+    const unpricedPositions = Math.max(0, Number(markCoverage.unpriced_positions) || 0);
+    const markedPositions = pricedPositions + unpricedPositions;
+    const markCoverageNote = unpricedPositions > 0
+      ? `${pricedPositions}/${markedPositions} positions have executable bids; ${unpricedPositions} unpriced position${unpricedPositions === 1 ? '' : 's'} use the conservative $0 liquidation floor.`
+      : markedPositions > 0
+        ? `All ${markedPositions} open position${markedPositions === 1 ? '' : 's'} have executable bid marks.`
+        : 'No open positions.';
     const pnlTitle = feesPaid > 0
-      ? `Net P&L: ${_usd(pnl)} (Realized: ${_usd(row.realized_pnl || 0)}, Unrealized: ${_usd(row.unrealized_pnl || 0)}, Fees: ${_usd(feesPaid)})`
-      : `Net P&L: ${_usd(pnl)}`;
+      ? `Net P&L: ${_usd(pnl)} (Realized: ${_usd(row.realized_pnl || 0)}, Unrealized: ${_usd(row.unrealized_pnl || 0)}, Fees: ${_usd(feesPaid)}). ${markCoverageNote}`
+      : `Net P&L: ${_usd(pnl)}. ${markCoverageNote}`;
 
     const openPos = row.open_positions || [];
     let posDrawerRows = '<p class="text-xs text-gray-500 my-1">No open positions held. Cash: ' + _usd(row.cash) + '</p>';
@@ -7029,34 +7046,33 @@ function renderAgentTradingBoard(d) {
         const isYes = String(p.side || '').toUpperCase() === 'YES';
         const unpricedHint = 'No executable bid is currently available. Account liquidation value is conservatively treated as $0 until the venue publishes a bid.';
         return `<tr>
-          <td style="padding:6px 10px;"><b>[${escHtml(p.platform || 'Venue')}]</b> ${marketLink}</td>
-          <td style="padding:6px 10px;"><span class="eb-badge" style="background:${isYes ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};color:${isYes ? '#059669' : '#dc2626'};font-weight:700;">${escHtml(String(p.side || '').toUpperCase())}</span></td>
-          <td style="padding:6px 10px;">${Number(p.quantity).toLocaleString()}</td>
-          <td style="padding:6px 10px;">${_usd(p.avg_entry_price)}</td>
-          <td style="padding:6px 10px;" title="${hasExecutableMark ? 'Bid-side liquidation mark' : unpricedHint}">${hasExecutableMark ? _usd(markPrice) : '—'}</td>
-          <td style="padding:6px 10px;color:${hasUnrealizedPnl ? uPnlColor : 'var(--text-dim)'};font-weight:600" title="${hasUnrealizedPnl ? 'Marked at the current executable bid' : unpricedHint}">${hasUnrealizedPnl ? `${uPnl >= 0 ? '+' : ''}${_usd(uPnl)}` : '—'}</td>
+          <td data-label="Market" style="padding:6px 10px;"><b>[${escHtml(p.platform || 'Venue')}]</b> ${marketLink}</td>
+          <td data-label="Side" style="padding:6px 10px;"><span class="eb-badge" style="background:${isYes ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};color:${isYes ? '#059669' : '#dc2626'};font-weight:700;">${escHtml(String(p.side || '').toUpperCase())}</span></td>
+          <td data-label="Contracts" style="padding:6px 10px;">${Number(p.quantity).toLocaleString()}</td>
+          <td data-label="Avg entry" style="padding:6px 10px;">${_usd(p.avg_entry_price)}</td>
+          <td data-label="Bid mark" style="padding:6px 10px;" title="${hasExecutableMark ? 'Bid-side liquidation mark' : unpricedHint}">${hasExecutableMark ? _usd(markPrice) : '—'}</td>
+          <td data-label="Unrealized P&amp;L" style="padding:6px 10px;color:${hasUnrealizedPnl ? uPnlColor : 'var(--text-dim)'};font-weight:600" title="${hasUnrealizedPnl ? 'Marked at the current executable bid' : unpricedHint}">${hasUnrealizedPnl ? `${uPnl >= 0 ? '+' : ''}${_usd(uPnl)}` : '—'}</td>
         </tr>`;
       }).join('');
-      posDrawerRows = `<table class="eb-table text-xs" style="margin-top:6px;background:var(--paper, #fff);border:1px solid var(--border);border-radius:6px;">
+      posDrawerRows = `<table class="eb-table agentic-positions-table text-xs" style="margin-top:6px;background:var(--paper, #fff);border:1px solid var(--border);border-radius:6px;">
         <thead><tr><th>Market</th><th>Side</th><th>Contracts</th><th>Avg Entry</th><th>Mark Price</th><th>Unrealized P&L</th></tr></thead>
         <tbody>${posTableLines}</tbody>
       </table>`;
     }
 
     return `<tr class="eb-row" style="cursor:pointer" onclick="_toggleAgentPositions('${escAttr(agentId)}')">
-      <td><b>${i + 1}</b></td>
-      <td><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span></td>
-      <td>${healthCell}</td>
-      <td><b>${_usd(row.account_value)}</b></td>
-      <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnl >= 0 ? '+' : ''}${_usd(pnl)}</td>
-      <td style="color:${pnlColor};font-weight:600">${_roiPct((Number(row.return_pct) || 0) / 100)}</td>
-      <td>${winRate}</td>
-      <td>${row.trade_count ?? 0}</td>
-      <td><span class="eb-badge" style="cursor:pointer" title="Click to view open positions">${openPos.length} pos ▾</span></td>
-      <td>${eligCell}</td>
+      <td data-label="Rank"><b>${i + 1}</b></td>
+      <td data-label="Model"><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span></td>
+      <td data-label="Cycle">${healthCell}</td>
+      <td data-label="Account value"><b>${_usd(row.account_value)}</b></td>
+      <td data-label="Net P&amp;L" style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnl >= 0 ? '+' : ''}${_usd(pnl)}${unpricedPositions ? `<span class="agentic-valuation-note">${escHtml(markCoverageNote)}</span>` : ''}</td>
+      <td data-label="Return" style="color:${pnlColor};font-weight:600">${_roiPct((Number(row.return_pct) || 0) / 100)}</td>
+      <td data-label="Win rate">${winRate}</td>
+      <td data-label="Trades">${row.trade_count ?? 0}</td>
+      <td data-label="Open"><span class="eb-badge" style="cursor:pointer" title="Click to view open positions">${openPos.length} pos ▾</span></td>
     </tr>
     <tr id="agent-pos-${escAttr(agentId)}" class="hidden-view agentic-position-row">
-      <td colspan="10" style="padding:10px 14px;border-bottom:1px solid var(--border);border-top:1px dashed var(--border);">
+      <td colspan="9" style="padding:10px 14px;border-bottom:1px solid var(--border);border-top:1px dashed var(--border);">
         <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">
           Active Book · ${escHtml(_ebModelLabel(agentId))} (Cash: ${_usd(row.cash)})
         </div>
@@ -7065,7 +7081,7 @@ function renderAgentTradingBoard(d) {
     </tr>`;
   }).join('');
   const retiredTableRows = retiredArtifacts.length
-    ? `<tr class="agentic-retired-divider"><td colspan="10">Retired models · read-only archived records</td></tr>${retiredArtifacts.map(item => {
+    ? `<tr class="agentic-retired-divider"><td colspan="9">Retired models · read-only archived records</td></tr>${retiredArtifacts.map(item => {
         const agentId = String(item?.agent_id || '');
         const records = Math.max(0, Number(item?.records) || 0);
         const archivedAccountValue = Number(item?.account_value);
@@ -7077,14 +7093,14 @@ function renderAgentTradingBoard(d) {
         const archivedValueTitle = 'Final archived shadow-account book value, replayed from immutable paper-trade records. It is cash plus open cost basis, not a current market mark.';
         const archivedPnlColor = archivedPnl >= 0 ? '#0a7' : '#c33';
         return `<tr class="eb-row agentic-retired-row" style="cursor:pointer" title="Open this model's archived paper-trading records" onclick="_filterAgentActivity('${escAttr(agentId)}', true)">
-          <td>—</td>
-          <td><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span><span class="agentic-retired-tag">Retired</span></td>
-          <td>Archived</td>
-          <td title="${escAttr(archivedValueTitle)}"><b>${hasArchivedAccountValue ? _usd(archivedAccountValue) : '—'}</b></td>
-          <td style="color:${hasArchivedPnl ? archivedPnlColor : 'var(--text-dim)'};font-weight:600" title="${escAttr(archivedValueTitle)}">${hasArchivedPnl ? `${archivedPnl >= 0 ? '+' : ''}${_usd(archivedPnl)}` : '—'}</td>
-          <td style="color:${hasArchivedReturnPct ? archivedPnlColor : 'var(--text-dim)'};font-weight:600" title="${escAttr(archivedValueTitle)}">${hasArchivedReturnPct ? _roiPct(archivedReturnPct / 100) : '—'}</td><td>—</td>
-          <td><span class="agentic-retired-records">${records.toLocaleString()} record${records === 1 ? '' : 's'} · view</span></td>
-          <td>—</td><td>—</td>
+          <td data-label="Rank">—</td>
+          <td data-label="Model"><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span><span class="agentic-retired-tag">Retired</span></td>
+          <td data-label="Cycle">Archived</td>
+          <td data-label="Account value" title="${escAttr(archivedValueTitle)}"><b>${hasArchivedAccountValue ? _usd(archivedAccountValue) : '—'}</b></td>
+          <td data-label="Net P&amp;L" style="color:${hasArchivedPnl ? archivedPnlColor : 'var(--text-dim)'};font-weight:600" title="${escAttr(archivedValueTitle)}">${hasArchivedPnl ? `${archivedPnl >= 0 ? '+' : ''}${_usd(archivedPnl)}` : '—'}</td>
+          <td data-label="Return" style="color:${hasArchivedReturnPct ? archivedPnlColor : 'var(--text-dim)'};font-weight:600" title="${escAttr(archivedValueTitle)}">${hasArchivedReturnPct ? _roiPct(archivedReturnPct / 100) : '—'}</td><td data-label="Win rate">—</td>
+          <td data-label="Records"><span class="agentic-retired-records">${records.toLocaleString()} record${records === 1 ? '' : 's'} · view</span></td>
+          <td data-label="Open">—</td>
         </tr>`;
       }).join('')}`
     : '';
@@ -7160,7 +7176,7 @@ function renderAgentTradingBoard(d) {
     </section>
     ${healthSummary ? `<div class="agentic-health-summary"><span class="agentic-health-summary-label">Cycle health</span>${healthSummary}</div>` : ''}
     ${weatherOperationalSummary}
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades / records</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}${retiredTableRows}</tbody></table>
+    <div class="agentic-table-wrap"><table class="eb-table agentic-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades / records</th><th>Open</th></tr></thead><tbody>${tableRows}${retiredTableRows}</tbody></table></div>
     <div class="agentic-feed-head">
       <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : _ebModelLabel(activeFilter))}${selectedRetired ? '<span class="agentic-retired-tag">Retired</span>' : ''}</span>
     </div>
