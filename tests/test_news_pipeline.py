@@ -610,6 +610,65 @@ class NewsPipelineSourceTests(unittest.TestCase):
         self.assertNotIn("stooq", channels)
         self.assertNotIn("rss", channels)
 
+    def test_generic_feeds_never_take_a_reserved_diversity_slot(self):
+        # Live incident: the per-channel diversity pass *reserved* a slot for
+        # the query-agnostic rss channel, so a BBC homepage headline displaced
+        # a genuinely relevant article even when query-specific channels had
+        # plenty. Generic feeds may now only be picked up by the relevance-
+        # ordered fill, never by holding a slot open for their channel.
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        pipeline._fetch_sources = ("bing-news", "rss")
+        pipeline._min_relevance = 0.0
+        ranked = [
+            {"title": "RSS junk", "url": "https://e.com/r", "source_channel": "rss", "relevance": 0.9},
+            {"title": "Relevant 1", "url": "https://e.com/1", "source_channel": "bing-news", "relevance": 0.8},
+            {"title": "Relevant 2", "url": "https://e.com/2", "source_channel": "bing-news", "relevance": 0.7},
+        ]
+
+        selected = pipeline.select_diverse_sources(ranked, top_k=2)
+
+        # Slot 1 goes to the query-specific channel; the remaining slot is
+        # filled by rank order, so the top-ranked rss item can still appear --
+        # it just no longer gets a slot reserved for it.
+        self.assertEqual(selected[0]["source_channel"], "bing-news")
+
+    def test_generic_relevance_floor_rejects_incidental_word_overlap(self):
+        # 0.1 was low enough that UK-politics headlines cleared it for a Fed
+        # question purely on incidental overlap.
+        from analyzing_llm_rationale.news_pipeline import _MIN_GENERIC_RELEVANCE
+
+        self.assertGreaterEqual(_MIN_GENERIC_RELEVANCE, 0.3)
+
+    def test_fetch_bing_news_parses_rss_items(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        xml = (
+            '<?xml version="1.0"?><rss version="2.0"><channel>'
+            "<item><title>September FOMC odds plunge</title>"
+            "<link>https://example.com/fomc</link>"
+            "<pubDate>Wed, 03 Sep 2026 10:00:00 GMT</pubDate>"
+            "<description>Rate-hike odds fell to 25%.</description></item>"
+            "</channel></rss>"
+        ).encode()
+
+        class _Resp:
+            content = xml
+
+            def raise_for_status(self):
+                return None
+
+        with mock.patch("requests.get", return_value=_Resp()):
+            articles = pipeline._fetch_bing_news("FOMC September 2026", limit=5)
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["source_channel"], "bing-news")
+        self.assertEqual(articles[0]["url"], "https://example.com/fomc")
+        self.assertIn("odds", articles[0]["title"])
+
+    def test_fetch_bing_news_fails_open_on_error(self):
+        pipeline = NewsPipeline.__new__(NewsPipeline)
+        with mock.patch("requests.get", side_effect=RuntimeError("blocked")):
+            self.assertEqual(pipeline._fetch_bing_news("q", limit=5), [])
+
     def test_select_diverse_tries_next_channel_article_after_floor_rejection(self):
         pipeline = NewsPipeline.__new__(NewsPipeline)
         pipeline._fetch_sources = ("gdelt", "rss")

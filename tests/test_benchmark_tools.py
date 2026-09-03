@@ -246,6 +246,55 @@ class BenchmarkToolTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
 
+    def test_web_search_flags_degraded_when_only_generic_feeds_answer(self):
+        # Live incident: from CI datacenter IPs every query-specific channel
+        # (keyless DuckDuckGo, Google News RSS, GDELT, NewsAPI) returned
+        # nothing, so agents were handed BBC homepage headlines -- UK politics,
+        # an El Nino warning -- as "evidence" for a Fed FOMC question, with
+        # ok:true and no signal that anything was wrong.
+        from analyzing_llm_rationale import news_pipeline
+
+        articles = [
+            {"title": "Badenoch accuses Burnham", "url": "https://bbc.co.uk/a",
+             "summary": "UK politics.", "source_channel": "rss"},
+            {"title": "UN warns of El Nino", "url": "https://bbc.co.uk/b",
+             "summary": "Weather.", "source_channel": "rss"},
+        ]
+        mock_pipeline = mock.Mock()
+        mock_pipeline.fetch_summarize_rank.return_value = articles
+
+        with mock.patch.object(news_pipeline, "NewsPipeline", return_value=mock_pipeline):
+            result = benchmark_tools.web_search({"query": "Fed September 2026 FOMC odds"})
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["degraded"])
+        self.assertIn("do not cite", result["warning"])
+
+    def test_web_search_is_not_degraded_when_a_query_specific_channel_answers(self):
+        from analyzing_llm_rationale import news_pipeline
+
+        articles = [
+            {"title": "September FOMC odds", "url": "https://example.com/fomc",
+             "summary": "Real evidence.", "source_channel": "bing-news"},
+            {"title": "Unrelated homepage item", "url": "https://bbc.co.uk/b",
+             "summary": "Filler.", "source_channel": "rss"},
+        ]
+        mock_pipeline = mock.Mock()
+        mock_pipeline.fetch_summarize_rank.return_value = articles
+
+        with mock.patch.object(news_pipeline, "NewsPipeline", return_value=mock_pipeline):
+            result = benchmark_tools.web_search({"query": "Fed September 2026 FOMC odds"})
+
+        self.assertTrue(result["ok"])
+        self.assertNotIn("degraded", result)
+        self.assertNotIn("warning", result)
+
+    def test_web_search_keeps_a_keyless_query_specific_channel_wired_in(self):
+        # Guards the fix: at least one channel that is both keyless and
+        # query-specific must stay configured, or CI runs (which have no
+        # search-provider API keys) degrade to generic filler again.
+        self.assertIn("bing-news", benchmark_tools.WEB_SEARCH_SOURCES)
+
     def test_web_search_requires_a_query(self):
         result = benchmark_tools.web_search({"query": "  "})
         self.assertFalse(result["ok"])
