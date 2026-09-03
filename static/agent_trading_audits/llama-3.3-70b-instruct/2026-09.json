@@ -226,6 +226,83 @@
       "outcome": "open",
       "record_hash": "eb3897b0b8aaf9608cd0b99ca43566977f2b4864d51d494ddfcbfb7519dd6f21",
       "recorded_at": "2026-09-02T16:43:29.988504+00:00"
+    },
+    {
+      "action_id": "c8a16bbf-294e-4ebb-baa9-4a6f54143dc1",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "execution": {
+          "fill_status": "rejected_before_execution",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "marketable": false,
+          "observed_ask": 0.98,
+          "source": "live_venue_quote",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.06,
+          "quantity": "1000"
+        },
+        "risk": {
+          "allowed": false,
+          "cash_before": 6479.315805,
+          "cash_required": 63.948,
+          "concentration_cap": 1274.897371,
+          "cycle_id": "30m:993552",
+          "cycle_spend_after": 63.948,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 63.948,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2549.794741,
+          "drawdown_after": 0.188463,
+          "fee": 3.948,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 60.0,
+          "max_drawdown_limit": 0.2,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 60.0,
+          "open_markets_after": 4,
+          "per_cycle_spend_limit": 1699.863161,
+          "reasons": [
+            "close_exceeds_open_position"
+          ],
+          "risk_reducing": true
+        },
+        "sizing": {
+          "applied": false,
+          "mode": "close"
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:993552",
+      "event_type": "rejected_trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 63.948,
+        "fee": 3.948,
+        "netting_payout": 0.0,
+        "notional": 60.0,
+        "price": 0.06,
+        "quantity": 1000.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "no",
+        "ticker": "KXNFLRETIRE-MSTAFFORD9-2627"
+      },
+      "mode": "shadow",
+      "outcome": "rejected",
+      "record_hash": "368243d5b89b055ca58f9776bf4a0389e52da418beedd5893b1b2d4c54a40291",
+      "recorded_at": "2026-09-03T00:27:37.080752+00:00"
     }
   ],
   "month": "2026-09",
