@@ -251,6 +251,36 @@ class BuildBoardTests(unittest.TestCase):
         self.assertEqual(board["operational_health"]["models_total"], 1)
         self.assertEqual(board["operational_health"]["last_attempt_failures"][0]["agent_id"], "provider-down")
 
+    def test_model_health_calls_a_status_paused_cycle_deferred_not_failed(self):
+        with tempfile.TemporaryDirectory() as td:
+            store_dir = Path(td) / "stores"
+            store_dir.mkdir()
+            (store_dir / "provider-paused").mkdir()
+            path = store_dir / "provider-paused" / "store.sqlite"
+            _seed_store(path, "provider-paused")
+            _seed_telemetry(
+                path,
+                "provider-paused",
+                outcome="deferred",
+                started_at="2026-08-11T11:58:00+00:00",
+                failure_kind="provider_paused",
+                failure_detail="SCADS status check reports provider-paused as down.",
+            )
+            with (
+                mock.patch.object(board_script, "STORE_DIR", store_dir),
+                mock.patch.object(board_script, "_agent_trading_models", return_value=["provider-paused"]),
+                mock.patch.object(board_script, "_fetch_quotes", return_value={}),
+                mock.patch.object(board_script, "datetime") as mock_datetime,
+            ):
+                mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+                mock_datetime.now.return_value = board_script._parse_timestamp("2026-08-11T12:00:00+00:00")
+                board = board_script.build_board()
+
+        health = board["model_health"]["provider-paused"]
+        self.assertEqual(health["status"], "provider_paused")
+        self.assertEqual(board["operational_health"]["status"], "provider_paused")
+        self.assertEqual(board["operational_health"]["provider_paused"][0]["agent_id"], "provider-paused")
+
     def test_model_health_distinguishes_no_trade_delayed_stale_and_unverified(self):
         with tempfile.TemporaryDirectory() as td:
             store_dir = Path(td) / "stores"

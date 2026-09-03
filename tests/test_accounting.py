@@ -57,6 +57,13 @@ class PredictionMarketAccountTests(unittest.TestCase):
         self.assertIsNone(position["current_price"])
         self.assertIsNone(position["unrealized_pnl"])
         self.assertEqual(position["valuation_status"], "unpriced_no_executable_bid")
+        self.assertEqual(snap["mark_coverage"], {
+            "open_positions": 1,
+            "priced_positions": 0,
+            "unpriced_positions": 1,
+            "priced_cost_basis": 0.0,
+            "unpriced_cost_basis": 6.0,
+        })
 
     def test_buying_opposite_side_realizes_kalshi_pair_netting(self):
         account = PredictionMarketAccount(starting_cash=100.0)

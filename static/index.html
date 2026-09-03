@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Foresea is the intelligence layer for prediction markets: forecasts, evidence, rationales, and market-price gaps for tradeable questions." />
   <meta name="theme-color" content="#111111" />
+  <link rel="icon" type="image/svg+xml" href="/static/foresea-mark.svg" />
   <link rel="canonical" href="https://foresea.ink/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Foresea" />
@@ -1081,11 +1082,11 @@
     .agentic-panel-title { color: var(--ink); font-size: 14px; font-weight: 650; letter-spacing: -.01em; margin: 0; }
     .agentic-panel-copy { color: var(--text-dim); font-size: 11px; line-height: 1.45; margin: 4px 0 0; }
     .agentic-chart { border-top: 1px solid var(--border); padding: 7px 10px 3px; }
-    #eb-agentic-section > .eb-table { background: #fff; border: 1px solid var(--border); border-radius: 14px; display: block; max-width: 100%; overflow-x: auto; }
+    #eb-agentic-section > .eb-table { background: #fff; border: 1px solid var(--border); border-radius: 14px; display: block; max-width: 100%; overflow-x: clip; }
     #eb-agentic-section > .eb-table th { background: #fafafa; color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .06em; padding-bottom: 9px; padding-top: 9px; text-transform: uppercase; }
     #eb-agentic-section > .eb-table td { border-bottom-color: #f0f1f3; padding-bottom: 10px; padding-top: 10px; }
-    .agentic-table-wrap { overflow-x: auto; }
-    .agentic-table { margin: 0; min-width: 720px; }
+    .agentic-table-wrap { overflow-x: clip; }
+    .agentic-table { margin: 0; min-width: 0; width: 100%; }
     .agentic-table th { background: #fafafa; color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .06em; padding-bottom: 9px; padding-top: 9px; text-transform: uppercase; }
     .agentic-table td { border-bottom-color: #f0f1f3; padding-bottom: 10px; padding-top: 10px; }
     .agentic-table .agentic-model { color: var(--ink); font-size: 12px; font-weight: 650; }
@@ -1095,13 +1096,18 @@
     .agentic-health--active { background: #ecfdf5; color: #047857; }
     .agentic-health--no-trade { background: #eff6ff; color: #1d4ed8; }
     .agentic-health--delayed { background: #fffbeb; color: #a16207; }
-    .agentic-health--provider-unavailable, .agentic-health--provider-timeout, .agentic-health--provider-context-limit, .agentic-health--cycle-error, .agentic-health--stale, .agentic-health--unverified { background: #fef2f2; color: #b91c1c; }
-    .agentic-health--provider-rate-limited { background: #fffbeb; color: #a16207; }
+    .agentic-health--last-attempt-failed, .agentic-health--provider-unavailable, .agentic-health--provider-timeout, .agentic-health--provider-context-limit, .agentic-health--cycle-error, .agentic-health--stale, .agentic-health--unverified { background: #fef2f2; color: #b91c1c; }
+    .agentic-health--provider-rate-limited, .agentic-health--provider-paused { background: #fffbeb; color: #a16207; }
     .agentic-health-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 6px; padding: 0 0 12px; }
     .agentic-health-summary-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-right: 2px; text-transform: uppercase; }
     .agentic-weather-summary { align-items: center; border-bottom: 1px solid var(--border); color: var(--text-dim); display: flex; flex-wrap: wrap; font-size: 10px; gap: 7px; padding: 0 0 12px; }
     .agentic-weather-summary-label { color: #0f766e; font-size: 10px; font-weight: 700; letter-spacing: .06em; margin-right: 2px; text-transform: uppercase; }
     .agentic-weather-summary-count { color: var(--text); font-weight: 650; }
+    .agentic-retired-tag { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 999px; color: #64748b; display: inline-block; font-size: 8px; font-weight: 750; letter-spacing: .07em; line-height: 1; margin-left: 6px; padding: 3px 5px; text-transform: uppercase; vertical-align: middle; }
+    .agentic-retired-row { background: #fafafa; color: #64748b; }
+    .agentic-retired-row:hover { background: #f8fafc; }
+    .agentic-retired-divider td { background: #f8fafc; border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .07em; padding: 8px 12px; text-transform: uppercase; }
+    .agentic-retired-records { color: #475569; font-size: 10px; font-weight: 650; text-decoration: underline; text-decoration-color: #cbd5e1; text-underline-offset: 3px; }
     .agentic-learning-summary { background: linear-gradient(115deg, #f0fdfa, #f8fafc 62%); border: 1px solid #cbd5e1; border-radius: 12px; display: grid; gap: 10px 16px; grid-template-columns: minmax(150px, 1.4fr) repeat(3, minmax(0, 1fr)); margin: 14px 0; padding: 13px 15px; }
     .agentic-learning-kicker { color: #0f766e; display: block; font-size: 9px; font-weight: 750; letter-spacing: .08em; margin-bottom: 4px; text-transform: uppercase; }
     .agentic-learning-title { color: var(--ink); font-size: 13px; font-weight: 700; margin: 0; }
@@ -1113,6 +1119,30 @@
     .agentic-position-button { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; color: #475569; cursor: pointer; font-size: 10px; font-weight: 650; padding: 3px 8px; }
     .agentic-position-button:hover { background: #f1f5f9; color: #0f172a; }
     .agentic-position-row > td { background: #fbfdff; }
+    .agentic-valuation-note { color: var(--text-dim); display: block; font-size: 9px; font-weight: 500; line-height: 1.3; margin-top: 3px; }
+    .agentic-positions-table code { overflow-wrap: anywhere; word-break: break-word; }
+    @media (max-width: 720px) {
+      .agentic-table-wrap { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+      .agentic-table { border-collapse: separate; border-spacing: 0; }
+      .agentic-table > thead, .agentic-positions-table > thead { border: 0; clip: rect(0 0 0 0); height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; }
+      .agentic-table > tbody, .agentic-table > tbody > tr, .agentic-table > tbody > tr > td,
+      .agentic-positions-table > tbody, .agentic-positions-table > tbody > tr, .agentic-positions-table > tbody > tr > td { display: block; }
+      .agentic-table > tbody > .eb-row { border-bottom: 1px solid var(--border); padding: 8px 13px; }
+      .agentic-table > tbody > .eb-row > td { align-items: center; border: 0; display: grid; gap: 10px; grid-template-columns: minmax(92px, .8fr) minmax(0, 1.2fr); min-height: 30px; padding: 5px 0; text-align: right; }
+      .agentic-table > tbody > .eb-row > td::before { color: var(--text-dim); content: attr(data-label); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
+      .agentic-table > tbody > .eb-row > td:nth-child(2) { text-align: left; }
+      .agentic-table > tbody > .eb-row > td:nth-child(2) > :not(.agentic-model-id) { text-align: right; }
+      .agentic-table .agentic-model-id { overflow-wrap: anywhere; }
+      .agentic-position-row > td { border: 0 !important; display: block !important; padding: 10px !important; }
+      .agentic-positions-table { border: 0 !important; border-radius: 0 !important; width: 100%; }
+      .agentic-positions-table > tbody > tr { border-top: 1px solid #e2e8f0; padding: 7px 0; }
+      .agentic-positions-table > tbody > tr > td { align-items: start; border: 0; display: grid; gap: 8px; grid-template-columns: 86px minmax(0, 1fr); padding: 4px 0 !important; text-align: right; }
+      .agentic-positions-table > tbody > tr > td::before { color: var(--text-dim); content: attr(data-label); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
+      .agentic-positions-table > tbody > tr > td:first-child { text-align: left; }
+      .agentic-retired-divider { border-bottom: 1px solid var(--border); display: block !important; padding: 8px 13px; }
+      .agentic-retired-divider > td { display: block !important; padding: 0 !important; }
+      .agentic-retired-divider > td::before { content: none !important; }
+    }
     .agentic-feed-head { align-items: end; display: flex; gap: 16px; justify-content: space-between; }
     .agentic-feed-head .eb-h { margin: 0; }
     .agentic-filter-status { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
@@ -1137,6 +1167,10 @@
     .agentic-thesis-copy ul { display: grid; gap: 5px; list-style: none; margin: 0 0 11px; padding: 0; }
     .agentic-thesis-copy li { padding-left: 14px; position: relative; }
     .agentic-thesis-copy li::before { background: #14b8a6; border-radius: 50%; content: ''; height: 5px; left: 1px; position: absolute; top: .57em; width: 5px; }
+    .agentic-thesis-state { align-items: flex-start; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 9px; color: #475569; display: flex; gap: 10px; padding: 12px; }
+    .agentic-thesis-state-mark { background: #e2e8f0; border-radius: 50%; color: #475569; display: grid; flex: 0 0 auto; font-size: 12px; font-weight: 800; height: 20px; place-items: center; width: 20px; }
+    .agentic-thesis-state strong { color: #334155; display: block; font-size: 12px; margin-bottom: 2px; }
+    .agentic-thesis-state span { font-size: 12px; line-height: 1.45; }
     .agentic-action { border-radius: 5px; display: inline-block; font-size: 10px; font-weight: 750; letter-spacing: .03em; padding: 2px 6px; }
     .agentic-action--yes { background: #dcfce7; color: #15803d; }
     .agentic-action--no { background: #fee2e2; color: #b91c1c; }
@@ -1979,7 +2013,7 @@
     .mp-label { font-size: 10.5px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
     .mp-link { font-size: 10.5px; color: var(--brand, #4f46e5); text-decoration: none; font-weight: 500; }
     .mp-link:hover { text-decoration: underline; }
-    
+
     .mp-key-input-wrapper { position: relative; display: flex; align-items: center; }
     .mp-key-input { width: 100%; padding-right: 32px; font-family: monospace; font-size: 11.5px; }
     .mp-peek-btn {
@@ -2961,18 +2995,14 @@ const MARKET_EXAMPLES = [
   'When will SpaceX complete its next major Starship milestone?'
 ];
 const BUILTIN_CHAT_MODELS_FALLBACK = [
-  { key: 'scads-alias-code', label: 'Alias Code', model: 'alias-code', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-26B-A4B-it'] },
-  { key: 'scads-alias-ha', label: 'Alias HA', model: 'alias-ha', fallbacks: ['google/gemma-4-26B-A4B-it', 'openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
-  { key: 'scads-alias-reasoning', label: 'Alias Reasoning', model: 'alias-reasoning', fallbacks: ['openai/gpt-oss-120b', 'MiniMaxAI/MiniMax-M3-MXFP8'] },
   { key: 'gpt-oss-120b', label: 'GPT-OSS-120B', model: 'openai/gpt-oss-120b', fallbacks: ['google/gemma-4-26B-A4B-it'] },
   { key: 'gemma-4-26b-a4b-it', label: 'Gemma-4-26B', model: 'google/gemma-4-26B-A4B-it', fallbacks: ['openai/gpt-oss-120b', 'meta-llama/Llama-3.3-70B-Instruct'] },
-  { key: 'gemma-4-31b-it', label: 'Gemma-4-31B', model: 'google/gemma-4-31B-it', fallbacks: ['openai/gpt-oss-120b', 'meta-llama/Llama-3.3-70B-Instruct'] },
   { key: 'llama-3.3-70b-instruct', label: 'Llama-3.3-70B', model: 'meta-llama/Llama-3.3-70B-Instruct', fallbacks: ['google/gemma-4-26B-A4B-it', 'openai/gpt-oss-120b'] },
-  { key: 'minimax-m3', label: 'MiniMax-M3', model: 'MiniMaxAI/MiniMax-M3-MXFP8', fallbacks: ['moonshotai/Kimi-K3'] },
-  { key: 'kimi-k3', label: 'Kimi-K3', model: 'moonshotai/Kimi-K3', fallbacks: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
-  { key: 'kimi-k2.7-code', label: 'Kimi-K2.7-Code', model: 'moonshotai/Kimi-K2.7-Code', fallbacks: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
-  { key: 'qwen3-coder-30b-a3b-instruct', label: 'Qwen3 Coder 30B', model: 'Qwen/Qwen3-Coder-30B-A3B-Instruct', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-26B-A4B-it'] },
-  { key: 'glm-5.2-fp8', label: 'GLM-5.2-FP8', model: 'zai-org/GLM-5.2-FP8', fallbacks: ['MiniMaxAI/MiniMax-M3-MXFP8'] },
+  { key: 'minimax-m3', label: 'MiniMax-M3', model: 'MiniMaxAI/MiniMax-M3', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-26B-A4B-it'] },
+  { key: 'qwen3-8-27b', label: 'Qwen3.8-27B', model: 'Qwen/Qwen3.8-27B', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-26B-A4B-it'] },
+  { key: 'glm-5.2-fp8', label: 'GLM-5.2-FP8', model: 'zai-org/GLM-5.2-FP8', fallbacks: ['MiniMaxAI/MiniMax-M3'] },
+  { key: 'glm-5-3-flash', label: 'GLM-5.3 Flash', model: 'zai-org/GLM-5.3-Flash', fallbacks: ['zai-org/GLM-5.2-FP8', 'openai/gpt-oss-120b'] },
+  { key: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', model: 'deepseek-ai/DeepSeek-V4-Flash', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-26B-A4B-it'] },
 ];
 let builtinChatModels = BUILTIN_CHAT_MODELS_FALLBACK.slice();
 
@@ -5286,9 +5316,63 @@ function legacyRouteFromHash(hash = window.location.hash) {
   return view ? { view, convId: null } : null;
 }
 
+// The Edge Board is a scrollable overlay, so rebuilding its contents (or
+// navigating away and back through the SPA) otherwise resets the reader to
+// the first row. Keep this independent of payload refreshes and persist it in
+// the active history entry for Back/Forward restoration too.
+let _edgeBoardScrollTop = 0;
+let _edgeBoardScrollRestoreFrame = 0;
+let _edgeBoardScrollSaveTimer = null;
+
+function _isEdgeHistoryView(view) {
+  return view === 'edge-app' || view === 'edge-landing';
+}
+
+function _captureEdgeBoardScroll() {
+  const host = document.getElementById('edgeBody');
+  if (host) _edgeBoardScrollTop = Math.max(0, Number(host.scrollTop) || 0);
+  return _edgeBoardScrollTop;
+}
+
+function _saveEdgeBoardScrollToHistory() {
+  const state = window.history?.state;
+  if (isApplyingHistory || !state || !_isEdgeHistoryView(state.view)) return;
+  window.history.replaceState({ ...state, edgeScrollTop: _captureEdgeBoardScroll() }, '', window.location.href);
+}
+
+function _restoreEdgeBoardScroll() {
+  const scrollTop = Math.max(0, Number(_edgeBoardScrollTop) || 0);
+  cancelAnimationFrame(_edgeBoardScrollRestoreFrame);
+  _edgeBoardScrollRestoreFrame = requestAnimationFrame(() => {
+    const host = document.getElementById('edgeBody');
+    if (host) host.scrollTop = scrollTop;
+  });
+}
+
+function _installEdgeBoardScrollMemory() {
+  const host = document.getElementById('edgeBody');
+  if (!host || host.dataset.scrollMemoryBound === 'true') return;
+  host.dataset.scrollMemoryBound = 'true';
+  host.addEventListener('scroll', () => {
+    _captureEdgeBoardScroll();
+    clearTimeout(_edgeBoardScrollSaveTimer);
+    _edgeBoardScrollSaveTimer = setTimeout(_saveEdgeBoardScrollToHistory, 120);
+  }, { passive: true });
+}
+
 function setHistoryState(view, mode = 'push', options = {}) {
   if (isApplyingHistory || !window.history) return;
-  const state = { view, convId: options.convId || null, panel: options.panel || null };
+  const isEdgeView = view === 'edge-app' || view === 'edge-landing';
+  const requestedScrollTop = Number(options.edgeScrollTop);
+  const edgeScrollTop = Number.isFinite(requestedScrollTop)
+    ? Math.max(0, requestedScrollTop)
+    : _edgeBoardScrollTop;
+  const state = {
+    view,
+    convId: options.convId || null,
+    panel: options.panel || null,
+    ...(isEdgeView ? { edgeScrollTop } : {}),
+  };
   const url = historyUrlFor(view, state.convId, state.panel);
   if (mode === 'replace') history.replaceState(state, '', url);
   else if (history.state?.view !== view || history.state?.convId !== state.convId || history.state?.panel !== state.panel) history.pushState(state, '', url);
@@ -5715,6 +5799,7 @@ const _MTM_MODEL_COLORS = {
   'kimi-k3': '#f43f5e',
   'minimax-m3': '#22c55e',
   'qwen3-coder-30b-a3b-instruct': '#14b8a6',
+  'qwen3-8-27b': '#14b8a6',
   'glm-5.2-fp8': '#eab308',
   'crowd-follow': '#94a3b8',
   'market-follow': '#64748b',
@@ -5732,7 +5817,7 @@ async function refreshEdgeForecasts() {
     const d = await _readJson(r);
     const host = document.getElementById('edgeBody');
     if (host) {
-      const scrollTop = host.scrollTop;
+      const scrollTop = _captureEdgeBoardScroll();
       const previousPage = _ebPage;
       host.innerHTML = renderEdgeBoard(d);
       if (previousPage > 0 && _ebBoardData.length) {
@@ -5742,7 +5827,8 @@ async function refreshEdgeForecasts() {
         if (boardSection) boardSection.innerHTML = _renderBoardPage(_ebBoardData, _ebPage);
       }
       _attachEdgeBoardChartHovers(host);
-      host.scrollTop = scrollTop;
+      _edgeBoardScrollTop = scrollTop;
+      _restoreEdgeBoardScroll();
       refreshEdgePrices();
       // renderEdgeBoard() only emits a "Loading…" placeholder for the
       // Agentic tab (its data isn't part of this /edge-board payload), so
@@ -6052,6 +6138,7 @@ document.addEventListener('visibilitychange', () => {
 async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
   const ov = document.getElementById('edgeOverlay');
   _installEdgeBoardPullToRefresh();
+  _installEdgeBoardScrollMemory();
   _edgeOpenSeq++;
   _ebSetView(panel || 'markets');
   if (ov.classList.contains('open')) {
@@ -6061,6 +6148,7 @@ async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
     // that is left is to make sure polling is running again.
     ov.style.opacity = '';
     _startEdgeTimers();
+    _restoreEdgeBoardScroll();
     return;
   }
   lastFocusedBeforeDialog = document.activeElement;
@@ -6073,6 +6161,7 @@ async function openEdgeBoard({ updateHistory = true, panel = null } = {}) {
     Motion.animate(ov, { opacity: [0, 1] }, { duration: 0.3, easing: EASE });
   }
   if (!edgeLoaded) { edgeLoaded = true; loadEdgeBoard(); }
+  else _restoreEdgeBoardScroll();
   refreshEdgePrices();
   loadCrypto5mEquity();
   _startEdgeTimers();
@@ -6083,6 +6172,8 @@ async function openForecastDrift() {
   setTimeout(() => document.getElementById('forecastDriftPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
 }
 function closeEdgeBoard({ updateHistory = true } = {}) {
+  _captureEdgeBoardScroll();
+  _saveEdgeBoardScrollToHistory();
   _stopEdgeTimers();
   const ov = document.getElementById('edgeOverlay');
   if (!ov.classList.contains('open')) return;
@@ -6139,6 +6230,7 @@ async function loadEdgeBoard() {
     // Deep link / refresh straight into the Agentic panel: renderEdgeBoard() only
     // emits a placeholder for it since its data isn't part of this payload.
     if (_ebView === 'agentic') loadAgentTradingSection();
+    _restoreEdgeBoardScroll();
     if (window.Motion && !prefersReduced()) {
       Motion.animate('#edgeBody .tr-stat',
         { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
@@ -6468,10 +6560,30 @@ function _cleanThesisText(raw) {
   if (/\{\s*"thought"\s*:\s*[\s\S]*?"action"\s*:/i.test(str)) {
     return 'This model completed a research pass but did not return a publishable final thesis.';
   }
-  
+
+  // Legacy board artifacts can contain a complete raw tool payload (for
+  // example {"query": ..., "topn": 5}) rather than the model's final prose.
+  // A public thesis only accepts explicit `final` or `thesis` fields; do not
+  // promote a query, action, arguments, or private thought to card copy.
+  if (str.startsWith('{') && str.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed && typeof parsed === 'object') {
+        const readerText = typeof parsed.final === 'string' ? parsed.final
+          : typeof parsed.thesis === 'string' ? parsed.thesis : '';
+        if (readerText.trim()) str = readerText.trim();
+        else return 'This model completed a research pass but did not return a publishable final thesis.';
+      }
+    } catch (_) {
+      if (/"(?:query|action|args|topn|source)"\s*:/i.test(str)) {
+        return 'This model completed a research pass but did not return a publishable final thesis.';
+      }
+    }
+  }
+
   // Some providers save a partial tool-call envelope. Pull its readable
   // rationale out even when the trailing action/args JSON is incomplete.
-  const embeddedThesis = _extractThesisJsonField(str);
+  const embeddedThesis = _extractThesisJsonField(str, ['final', 'thesis']);
   if (embeddedThesis) {
     str = embeddedThesis;
   } else if (str.startsWith('{') && str.endsWith('}')) {
@@ -6499,14 +6611,14 @@ function _cleanThesisText(raw) {
   str = str.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '');
   str = str.replace(/```(?:json)?\s*\{\s*"action"[\s\S]*$/g, '');
   str = str.replace(/\{"action"\s*:[\s\S]*$/g, '');
-  
+
   // 3. Clean replacement character artifacts
   str = str.replace(/\uFFFD/g, '—');
 
   // 4. Preprocess compressed single-line formatting into real multi-line markdown
   // Normalize section headers (e.g. "### 1. Decision & Execution - **Action**:" -> "\n\n### 1. Decision & Execution\n")
-  str = str.replace(/(?:^|\s*-\s*|\s+)###\s*([0-9]+\.\s*[^#\n\-]+?)(?=\s*-\s*\*\*|\s*###|\s*$)/g, '\n\n### $1\n');
-  
+  str = str.replace(/(?:^|\s*-\s*|\s+)#{2,6}\s*([0-9]+\.\s*[^#\n\-]+?)(?=\s*-\s*\*\*|\s*#{2,6}|\s*$)/g, '\n\n### $1\n');
+
   // Normalize inline bullet items (e.g. " - **Action**:" or " - **Rules Verification**:" -> "\n- **Action**:")
   str = str.replace(/(?:\s*-\s*|\n\s*|\s{2,})(\*\*[A-Za-z0-9\s/&—\-\.,]+?\*\*:\s*)/g, '\n- $1');
 
@@ -6531,9 +6643,38 @@ function _thesisBulletForDisplay(rawBullet) {
     .replace(/\[?\s*N\s*\/\s*A\s*\]?/gi, 'not assessed');
 }
 
+function _isThesisMarkupFragment(rawLine) {
+  // Providers occasionally stop midway through a Markdown token, leaving a
+  // line such as "- \\*\\*" in an otherwise useful final thesis. It is not
+  // reader-facing content, so drop it without changing the retained raw
+  // record used for audit.
+  const normalized = String(rawLine || '')
+    .replace(/\\([*_`])/g, '$1')
+    .trim();
+  return /^(?:[-*•\s]*)(?:\*{1,3}|_{1,3}|`{1,3})(?:[-*•\s]*)$/.test(normalized);
+}
+
+function _thesisSectionFallback(rawHeading) {
+  const title = String(rawHeading || '')
+    .replace(/^\d+\.\s*/, '')
+    .replace(/[*_`]/g, '')
+    .trim()
+    .toLowerCase();
+  if (title === 'model edge & valuation') {
+    return 'No model probability, executable market price, or edge was supplied for this cycle.';
+  }
+  return '';
+}
+
 function _formatThesisHtml(rawThesis) {
   const clean = _cleanThesisText(rawThesis);
   if (!clean) return '';
+  if (/^This model completed a research pass but did not return a publishable final thesis\.?$/i.test(clean)) {
+    return `<div class="agentic-thesis-state"><span class="agentic-thesis-state-mark">i</span><span><strong>Research cycle incomplete</strong>No reader-ready thesis was returned for this cycle. The private tool record is retained for audit.</span></div>`;
+  }
+  if (/\*\*Paper execution\*\*:\s*PAPER ORDER ATTEMPT RECORDED\s*[—-]\s*The tool result was not readable\.?/i.test(clean)) {
+    return `<div class="agentic-thesis-state"><span class="agentic-thesis-state-mark">i</span><span><strong>Execution result unavailable</strong>This legacy tool record is incomplete, so the panel does not infer a fill or a rejection.</span></div>`;
+  }
   const inline = value => {
     let s = escHtml(value);
     s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -6561,11 +6702,30 @@ function _formatThesisHtml(rawThesis) {
     if (visibleBullets.length) blocks.push(`<ul>${visibleBullets.map(item => `<li>${inline(item)}</li>`).join('')}</ul>`);
     bullets = [];
   };
-  clean.split(/\r?\n/).forEach(rawLine => {
+  const thesisLines = clean.split(/\r?\n/).filter(rawLine => {
+    const bullet = rawLine.trim().match(/^-\s*(.*)$/);
+    return !bullet || !_isThesisMarkupFragment(bullet[1]);
+  });
+  const sectionHasContent = startIndex => {
+    for (let i = startIndex + 1; i < thesisLines.length; i += 1) {
+      const line = thesisLines[i].trim();
+      if (/^#{2,6}\s+/.test(line)) return false;
+      if (line) return true;
+    }
+    return false;
+  };
+  thesisLines.forEach((rawLine, lineIndex) => {
     const line = rawLine.trim();
     if (!line) { flushParagraph(); flushBullets(); return; }
-    const heading = line.match(/^#{2,3}\s*(.+)$/);
-    if (heading) { flushParagraph(); flushBullets(); blocks.push(`<h5>${inline(heading[1])}</h5>`); return; }
+    const heading = line.match(/^#{2,6}\s*(.+)$/);
+    if (heading) {
+      flushParagraph();
+      flushBullets();
+      blocks.push(`<h5>${inline(heading[1])}</h5>`);
+      const fallback = _thesisSectionFallback(heading[1]);
+      if (fallback && !sectionHasContent(lineIndex)) blocks.push(`<p>${inline(fallback)}</p>`);
+      return;
+    }
     const bullet = line.match(/^-\s+(.+)$/);
     if (bullet) { flushParagraph(); bullets.push(bullet[1]); return; }
     flushBullets();
@@ -6585,9 +6745,47 @@ function _toggleAgentPositions(agentId) {
 }
 
 window._agentActivityFilter = window._agentActivityFilter || 'all';
+window._agentRetiredActivityCache = window._agentRetiredActivityCache || {};
+window._agentRetiredActivityLoading = window._agentRetiredActivityLoading || {};
+window._agentRetiredActivityErrors = window._agentRetiredActivityErrors || {};
 
-function _filterAgentActivity(modelId) {
+function _agentAuditRecordToActivity(record) {
+  const market = record && typeof record.market === 'object' ? record.market : {};
+  const execution = record && typeof record.execution === 'object' ? record.execution : {};
+  return {
+    agent_id: record?.agent_id || '',
+    archived: true,
+    platform: market.platform || '',
+    price: execution.price,
+    quantity: execution.quantity,
+    realized_pnl: execution.realized_pnl,
+    side: market.side || '',
+    ticker: market.ticker || '',
+    ts: record?.recorded_at || '',
+    type: record?.event_type || 'note',
+  };
+}
+
+async function _filterAgentActivity(modelId, retired = false) {
   window._agentActivityFilter = modelId;
+  if (retired && !Object.prototype.hasOwnProperty.call(window._agentRetiredActivityCache, modelId)
+      && !window._agentRetiredActivityLoading[modelId]) {
+    window._agentRetiredActivityLoading[modelId] = true;
+    delete window._agentRetiredActivityErrors[modelId];
+    if (window._lastAgentBoardData) renderAgentTradingBoard(window._lastAgentBoardData);
+    try {
+      const response = await _liveJsonFetch(`/agent-trading/audits?agent_id=${encodeURIComponent(modelId)}&limit=${AGENTIC_RENDER_MAX_ACTIVITY_ITEMS}`);
+      if (!response.ok) throw new Error('Archived records could not be loaded.');
+      const payload = await _readJson(response);
+      window._agentRetiredActivityCache[modelId] = Array.isArray(payload?.items)
+        ? payload.items.map(_agentAuditRecordToActivity)
+        : [];
+    } catch (err) {
+      window._agentRetiredActivityErrors[modelId] = err?.message || 'Archived records could not be loaded.';
+    } finally {
+      delete window._agentRetiredActivityLoading[modelId];
+    }
+  }
   if (window._lastAgentBoardData) {
     renderAgentTradingBoard(window._lastAgentBoardData);
   }
@@ -6596,7 +6794,7 @@ function _filterAgentActivity(modelId) {
 function _agentTradingActivityLine(a) {
   const platform = a.platform ? escHtml(String(a.platform).toUpperCase()) : '';
   const platformTag = platform ? `<span class="eb-badge" style="background:rgba(6,182,212,0.1);color:#0891b2;font-weight:600;font-size:10px;margin-right:4px;">${platform}</span>` : '';
-  
+
   if (a.type === 'trade') {
     const isYes = String(a.side || '').toUpperCase() === 'YES';
     const sideBadge = `<span class="eb-badge" style="background:${isYes ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};color:${isYes ? '#059669' : '#dc2626'};font-weight:700;">${isYes ? 'BUY YES' : 'BUY NO'}</span>`;
@@ -6624,21 +6822,6 @@ function _agentTradingActivityLine(a) {
     return `Note: ${escHtml(a.text || '')}`;
   }
   return '';
-}
-
-function _eligibilityReasonText(elig) {
-  if (!elig || !elig.checks) return 'Not enough data yet.';
-  if (elig.eligible) return 'Meets the shadow-trading promotion bar (observational only — grants nothing).';
-  const c = elig.checks;
-  const reasons = [];
-  if (!c.sufficient_sample) reasons.push(`needs ${elig.min_settled_trades_required}+ settled trades (has ${elig.settled_count})`);
-  if (!c.positive_return) reasons.push('return is not positive');
-  if (!c.sharpe_above_floor) reasons.push(`Sharpe below ${elig.min_sharpe_required} (${elig.sharpe ?? 'n/a'})`);
-  if (!c.drawdown_within_cap) {
-    const dd = elig.max_drawdown != null ? `${Math.round(elig.max_drawdown * 100)}%` : 'n/a';
-    reasons.push(`drawdown above ${Math.round(elig.max_drawdown_allowed * 100)}% (${dd})`);
-  }
-  return reasons.length ? `Not yet eligible: ${reasons.join('; ')}.` : 'Not yet eligible.';
 }
 
 function _agentForecastLearningSummary(learning, agentId) {
@@ -6694,8 +6877,13 @@ function renderAgentTradingBoard(d) {
   const staleBadge = d && d.freshness && d.freshness.stale ? ' · <span style="color:#b45309;font-weight:600">Stale</span>' : '';
   const updatedStr = gen ? ` Updated ${escHtml(gen)}${staleBadge}.` : '';
   const operationalHealth = d?.operational_health || {};
-  const availabilityNotice = operationalHealth.status === 'provider_degraded'
-    ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);color:var(--text)"><strong>Provider availability:</strong> ${escHtml(operationalHealth.detail || 'Some model providers are temporarily unavailable.')} Completed paper cycles and balances remain valid.</p>`
+  const failedAttemptCount = Array.isArray(operationalHealth.last_attempt_failures)
+    ? operationalHealth.last_attempt_failures.length
+    : (Array.isArray(operationalHealth.provider_degraded) ? operationalHealth.provider_degraded.length : 0);
+  const availabilityNotice = operationalHealth.status === 'provider_paused'
+    ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--text)"><strong>Provider-paused cycles:</strong> ${escHtml(operationalHealth.detail || 'The affected model will retry automatically when SCADS reports it as available again.')} No paper trade was attempted while paused.</p>`
+    : (operationalHealth.status === 'attempts_failed' || operationalHealth.status === 'provider_degraded')
+    ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);color:var(--text)"><strong>Retryable provider errors:</strong> ${failedAttemptCount || 'Some'} model${failedAttemptCount === 1 ? '' : 's'} most recently ended with a provider error. A later successful cycle supersedes this historical event; paper balances remain valid.</p>`
     : operationalHealth.status === 'attention'
       ? `<p class="text-sm" style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--text)"><strong>Agent maintenance attention:</strong> ${escHtml(operationalHealth.detail || 'One or more model ledgers need review.')}</p>`
       : '';
@@ -6709,18 +6897,21 @@ function renderAgentTradingBoard(d) {
   }
   const leaderboard = d.leaderboard || [];
   const equityCurves = d.equity_curves || {};
-  const eligibility = d.eligibility || {};
   const modelHealth = d.model_health || {};
   const forecastLearning = d.forecast_learning || {};
   const weatherOperations = d.weather_operations || {};
+  const retiredArtifacts = Array.isArray(d.retired_artifacts) ? d.retired_artifacts.slice(0, 8) : [];
+  const retiredArtifactsById = Object.fromEntries(retiredArtifacts.map(item => [String(item?.agent_id || ''), item]));
   const activity = d.recent_activity || [];
   const latestTheses = d.latest_theses || {};
-  const _healthStatus = health => String(health?.status || 'unverified');
+  const _healthStatus = health => String(health?.status || 'no_cycle_record');
   const _healthLabel = status => ({
-    active: 'Verified', no_trade: 'No trade', delayed: 'Delayed', stale: 'Stalled', unverified: 'Unverified',
-    provider_unavailable: 'Provider unavailable', provider_rate_limited: 'Rate limited',
-    provider_timeout: 'Provider timeout', provider_context_limit: 'Context limit', cycle_error: 'Cycle failed'
-  })[status] || 'Unverified';
+    active: 'Cycle completed · traded', no_trade: 'Cycle completed · no trade', delayed: 'Cycle delayed', stale: 'Cycle stale',
+    unverified: 'No cycle record', no_cycle_record: 'No cycle record', provider_paused: 'Provider paused',
+    last_attempt_failed: 'Retryable provider error',
+    provider_unavailable: 'Retryable provider error', provider_rate_limited: 'Provider rate-limited',
+    provider_timeout: 'Provider timed out', provider_context_limit: 'Context limit reached', cycle_error: 'Cycle error'
+  })[status] || 'Cycle state unknown';
   const _healthAge = health => {
     const seconds = Number(health?.cycle_age_seconds);
     if (!Number.isFinite(seconds)) return 'no cycle';
@@ -6732,7 +6923,8 @@ function renderAgentTradingBoard(d) {
     const status = _healthStatus(health);
     const label = _healthLabel(status);
     const prefix = withModel ? `${_ebModelHead(health?.agent_id || '')} · ` : '';
-    const title = `${health?.detail || 'No per-model cycle health report.'}${health?.last_cycle_at ? ` Last confirmed cycle: ${health.last_cycle_at}.` : ''}${health?.last_attempt_at ? ` Last worker attempt: ${health.last_attempt_at}.` : ''}`;
+    const historicalAttempt = ['last_attempt_failed', 'provider_unavailable', 'provider_rate_limited', 'provider_timeout', 'provider_context_limit', 'cycle_error'].includes(status);
+    const title = `${historicalAttempt ? 'The latest attempt ended with a retryable error. This does not assert the provider is unavailable now.' : (health?.detail || 'No per-model cycle health report.')}${health?.last_failure_detail ? ` Detail: ${health.last_failure_detail}.` : ''}${health?.last_cycle_at ? ` Last completed cycle: ${health.last_cycle_at}.` : ''}${health?.last_attempt_at ? ` Last worker attempt: ${health.last_attempt_at}.` : ''}`;
     return `<span class="agentic-health agentic-health--${escAttr(status)}" title="${escAttr(title)}">${escHtml(prefix + label)} · ${escHtml(_healthAge(health))}</span>`;
   };
   const _usd = v => Number.isFinite(Number(v))
@@ -6822,15 +7014,20 @@ function renderAgentTradingBoard(d) {
     const agentId = String(row.agent_id || '');
     const health = { ...(modelHealth[agentId] || {}), agent_id: agentId };
     const healthCell = _healthBadge(health);
-    const elig = eligibility[agentId];
-    const eligCell = elig && elig.eligible
-      ? `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:#0a7">${uiIcon('check')}</span>`
-      : `<span title="${escAttr(_eligibilityReasonText(elig))}" style="color:var(--text-dim)">—</span>`;
     const feesPaid = Number(row.fees_paid) || 0;
+    const markCoverage = row.mark_coverage || {};
+    const pricedPositions = Math.max(0, Number(markCoverage.priced_positions) || 0);
+    const unpricedPositions = Math.max(0, Number(markCoverage.unpriced_positions) || 0);
+    const markedPositions = pricedPositions + unpricedPositions;
+    const markCoverageNote = unpricedPositions > 0
+      ? `${pricedPositions}/${markedPositions} positions have executable bids; ${unpricedPositions} unpriced position${unpricedPositions === 1 ? '' : 's'} use the conservative $0 liquidation floor.`
+      : markedPositions > 0
+        ? `All ${markedPositions} open position${markedPositions === 1 ? '' : 's'} have executable bid marks.`
+        : 'No open positions.';
     const pnlTitle = feesPaid > 0
-      ? `Net P&L: ${_usd(pnl)} (Realized: ${_usd(row.realized_pnl || 0)}, Unrealized: ${_usd(row.unrealized_pnl || 0)}, Fees: ${_usd(feesPaid)})`
-      : `Net P&L: ${_usd(pnl)}`;
-    
+      ? `Net P&L: ${_usd(pnl)} (Realized: ${_usd(row.realized_pnl || 0)}, Unrealized: ${_usd(row.unrealized_pnl || 0)}, Fees: ${_usd(feesPaid)}). ${markCoverageNote}`
+      : `Net P&L: ${_usd(pnl)}. ${markCoverageNote}`;
+
     const openPos = row.open_positions || [];
     let posDrawerRows = '<p class="text-xs text-gray-500 my-1">No open positions held. Cash: ' + _usd(row.cash) + '</p>';
     if (openPos.length > 0) {
@@ -6849,34 +7046,33 @@ function renderAgentTradingBoard(d) {
         const isYes = String(p.side || '').toUpperCase() === 'YES';
         const unpricedHint = 'No executable bid is currently available. Account liquidation value is conservatively treated as $0 until the venue publishes a bid.';
         return `<tr>
-          <td style="padding:6px 10px;"><b>[${escHtml(p.platform || 'Venue')}]</b> ${marketLink}</td>
-          <td style="padding:6px 10px;"><span class="eb-badge" style="background:${isYes ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};color:${isYes ? '#059669' : '#dc2626'};font-weight:700;">${escHtml(String(p.side || '').toUpperCase())}</span></td>
-          <td style="padding:6px 10px;">${Number(p.quantity).toLocaleString()}</td>
-          <td style="padding:6px 10px;">${_usd(p.avg_entry_price)}</td>
-          <td style="padding:6px 10px;" title="${hasExecutableMark ? 'Bid-side liquidation mark' : unpricedHint}">${hasExecutableMark ? _usd(markPrice) : '—'}</td>
-          <td style="padding:6px 10px;color:${hasUnrealizedPnl ? uPnlColor : 'var(--text-dim)'};font-weight:600" title="${hasUnrealizedPnl ? 'Marked at the current executable bid' : unpricedHint}">${hasUnrealizedPnl ? `${uPnl >= 0 ? '+' : ''}${_usd(uPnl)}` : '—'}</td>
+          <td data-label="Market" style="padding:6px 10px;"><b>[${escHtml(p.platform || 'Venue')}]</b> ${marketLink}</td>
+          <td data-label="Side" style="padding:6px 10px;"><span class="eb-badge" style="background:${isYes ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'};color:${isYes ? '#059669' : '#dc2626'};font-weight:700;">${escHtml(String(p.side || '').toUpperCase())}</span></td>
+          <td data-label="Contracts" style="padding:6px 10px;">${Number(p.quantity).toLocaleString()}</td>
+          <td data-label="Avg entry" style="padding:6px 10px;">${_usd(p.avg_entry_price)}</td>
+          <td data-label="Bid mark" style="padding:6px 10px;" title="${hasExecutableMark ? 'Bid-side liquidation mark' : unpricedHint}">${hasExecutableMark ? _usd(markPrice) : '—'}</td>
+          <td data-label="Unrealized P&amp;L" style="padding:6px 10px;color:${hasUnrealizedPnl ? uPnlColor : 'var(--text-dim)'};font-weight:600" title="${hasUnrealizedPnl ? 'Marked at the current executable bid' : unpricedHint}">${hasUnrealizedPnl ? `${uPnl >= 0 ? '+' : ''}${_usd(uPnl)}` : '—'}</td>
         </tr>`;
       }).join('');
-      posDrawerRows = `<table class="eb-table text-xs" style="margin-top:6px;background:var(--paper, #fff);border:1px solid var(--border);border-radius:6px;">
+      posDrawerRows = `<table class="eb-table agentic-positions-table text-xs" style="margin-top:6px;background:var(--paper, #fff);border:1px solid var(--border);border-radius:6px;">
         <thead><tr><th>Market</th><th>Side</th><th>Contracts</th><th>Avg Entry</th><th>Mark Price</th><th>Unrealized P&L</th></tr></thead>
         <tbody>${posTableLines}</tbody>
       </table>`;
     }
 
     return `<tr class="eb-row" style="cursor:pointer" onclick="_toggleAgentPositions('${escAttr(agentId)}')">
-      <td><b>${i + 1}</b></td>
-      <td><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span></td>
-      <td>${healthCell}</td>
-      <td><b>${_usd(row.account_value)}</b></td>
-      <td style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnl >= 0 ? '+' : ''}${_usd(pnl)}</td>
-      <td style="color:${pnlColor};font-weight:600">${_roiPct((Number(row.return_pct) || 0) / 100)}</td>
-      <td>${winRate}</td>
-      <td>${row.trade_count ?? 0}</td>
-      <td><span class="eb-badge" style="cursor:pointer" title="Click to view open positions">${openPos.length} pos ▾</span></td>
-      <td>${eligCell}</td>
+      <td data-label="Rank"><b>${i + 1}</b></td>
+      <td data-label="Model"><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span></td>
+      <td data-label="Cycle">${healthCell}</td>
+      <td data-label="Account value"><b>${_usd(row.account_value)}</b></td>
+      <td data-label="Net P&amp;L" style="color:${pnlColor};font-weight:600" title="${escAttr(pnlTitle)}">${pnl >= 0 ? '+' : ''}${_usd(pnl)}${unpricedPositions ? `<span class="agentic-valuation-note">${escHtml(markCoverageNote)}</span>` : ''}</td>
+      <td data-label="Return" style="color:${pnlColor};font-weight:600">${_roiPct((Number(row.return_pct) || 0) / 100)}</td>
+      <td data-label="Win rate">${winRate}</td>
+      <td data-label="Trades">${row.trade_count ?? 0}</td>
+      <td data-label="Open"><span class="eb-badge" style="cursor:pointer" title="Click to view open positions">${openPos.length} pos ▾</span></td>
     </tr>
     <tr id="agent-pos-${escAttr(agentId)}" class="hidden-view agentic-position-row">
-      <td colspan="10" style="padding:10px 14px;border-bottom:1px solid var(--border);border-top:1px dashed var(--border);">
+      <td colspan="9" style="padding:10px 14px;border-bottom:1px solid var(--border);border-top:1px dashed var(--border);">
         <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">
           Active Book · ${escHtml(_ebModelLabel(agentId))} (Cash: ${_usd(row.cash)})
         </div>
@@ -6884,6 +7080,30 @@ function renderAgentTradingBoard(d) {
       </td>
     </tr>`;
   }).join('');
+  const retiredTableRows = retiredArtifacts.length
+    ? `<tr class="agentic-retired-divider"><td colspan="9">Retired models · read-only archived records</td></tr>${retiredArtifacts.map(item => {
+        const agentId = String(item?.agent_id || '');
+        const records = Math.max(0, Number(item?.records) || 0);
+        const archivedAccountValue = Number(item?.account_value);
+        const archivedPnl = Number(item?.total_pnl);
+        const archivedReturnPct = Number(item?.return_pct);
+        const hasArchivedAccountValue = Number.isFinite(archivedAccountValue);
+        const hasArchivedPnl = Number.isFinite(archivedPnl);
+        const hasArchivedReturnPct = Number.isFinite(archivedReturnPct);
+        const archivedValueTitle = 'Final archived shadow-account book value, replayed from immutable paper-trade records. It is cash plus open cost basis, not a current market mark.';
+        const archivedPnlColor = archivedPnl >= 0 ? '#0a7' : '#c33';
+        return `<tr class="eb-row agentic-retired-row" style="cursor:pointer" title="Open this model's archived paper-trading records" onclick="_filterAgentActivity('${escAttr(agentId)}', true)">
+          <td data-label="Rank">—</td>
+          <td data-label="Model"><span class="agentic-model">${escHtml(_ebModelHead(agentId))}</span><span class="agentic-model-id">${escHtml(agentId)}</span><span class="agentic-retired-tag">Retired</span></td>
+          <td data-label="Cycle">Archived</td>
+          <td data-label="Account value" title="${escAttr(archivedValueTitle)}"><b>${hasArchivedAccountValue ? _usd(archivedAccountValue) : '—'}</b></td>
+          <td data-label="Net P&amp;L" style="color:${hasArchivedPnl ? archivedPnlColor : 'var(--text-dim)'};font-weight:600" title="${escAttr(archivedValueTitle)}">${hasArchivedPnl ? `${archivedPnl >= 0 ? '+' : ''}${_usd(archivedPnl)}` : '—'}</td>
+          <td data-label="Return" style="color:${hasArchivedReturnPct ? archivedPnlColor : 'var(--text-dim)'};font-weight:600" title="${escAttr(archivedValueTitle)}">${hasArchivedReturnPct ? _roiPct(archivedReturnPct / 100) : '—'}</td><td data-label="Win rate">—</td>
+          <td data-label="Records"><span class="agentic-retired-records">${records.toLocaleString()} record${records === 1 ? '' : 's'} · view</span></td>
+          <td data-label="Open">—</td>
+        </tr>`;
+      }).join('')}`
+    : '';
   const healthSummary = Object.entries(modelHealth).sort(([a], [b]) => a.localeCompare(b)).map(([agentId, health]) =>
     _healthBadge({ ...(health || {}), agent_id: agentId }, { withModel: true })
   ).join('');
@@ -6894,9 +7114,13 @@ function renderAgentTradingBoard(d) {
   const weatherOperationalSummary = weatherStages.some(([key]) => Number(weatherOperations[key]) > 0)
     ? `<div class="agentic-weather-summary" title="Source-verified NWS weather-candidate coverage. These counts describe activity, not profitability."><span class="agentic-weather-summary-label">Weather lane · ${Math.max(1, Number(weatherOperations.window_hours) || 24)}h</span>${weatherStages.map(([key, label]) => `<span><span class="agentic-weather-summary-count">${Math.max(0, Number(weatherOperations[key]) || 0)}</span> ${label}</span>`).join('<span aria-hidden="true">·</span>')}</div>`
     : '';
-
   // Model filter pill bar
   const activeFilter = window._agentActivityFilter || 'all';
+  const selectedRetiredArtifact = retiredArtifactsById[activeFilter];
+  const selectedRetired = Boolean(selectedRetiredArtifact);
+  const retiredActivity = selectedRetired ? window._agentRetiredActivityCache[activeFilter] : null;
+  const retiredActivityLoading = selectedRetired && Boolean(window._agentRetiredActivityLoading[activeFilter]);
+  const retiredActivityError = selectedRetired ? window._agentRetiredActivityErrors[activeFilter] : '';
   const filterPills = [
     `<button type="button" class="eb-view-tab ${activeFilter === 'all' ? 'active' : ''}" onclick="_filterAgentActivity('all')">All Models</button>`
   ];
@@ -6906,13 +7130,21 @@ function renderAgentTradingBoard(d) {
       `<button type="button" class="eb-view-tab ${activeFilter === aId ? 'active' : ''}" onclick="_filterAgentActivity('${escAttr(aId)}')">${escHtml(_ebModelHead(aId))}</button>`
     );
   });
+  retiredArtifacts.forEach(item => {
+    const aId = String(item?.agent_id || '');
+    filterPills.push(
+      `<button type="button" class="eb-view-tab ${activeFilter === aId ? 'active' : ''}" title="View archived paper-trading records" onclick="_filterAgentActivity('${escAttr(aId)}', true)">${escHtml(_ebModelHead(aId))}<span class="agentic-retired-tag">Retired</span></button>`
+    );
+  });
 
-  let filteredActivity = activeFilter === 'all'
-    ? activity
-    : activity.filter(a => a.agent_id === activeFilter);
+  let filteredActivity = selectedRetired
+    ? (Array.isArray(retiredActivity) ? retiredActivity : [])
+    : activeFilter === 'all'
+      ? activity
+      : activity.filter(a => a.agent_id === activeFilter);
   const hasVisibleThesis = filteredActivity.some(a => a.type === 'thesis');
-  const latestThesis = activeFilter === 'all' ? null : latestTheses[activeFilter];
-  const learningSummary = activeFilter === 'all'
+  const latestThesis = selectedRetired || activeFilter === 'all' ? null : latestTheses[activeFilter];
+  const learningSummary = selectedRetired || activeFilter === 'all'
     ? ''
     : _agentForecastLearningSummary(forecastLearning[activeFilter], activeFilter);
   // The board's global activity window may be filled by other models. Keep a
@@ -6927,10 +7159,9 @@ function renderAgentTradingBoard(d) {
     const body = _agentTradingActivityLine(a);
     if (!body) return '';
     const isThesis = a.type === 'thesis';
-    const typeLabel = String(a.type || 'activity').replace(/_/g, ' ');
     return `<article class="agentic-activity ${isThesis ? 'agentic-activity--thesis' : ''}">
       <div class="agentic-activity-meta">
-        <span><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b> · <span style="text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escHtml(a.type || '')}</span></span>
+        <span><b>${escHtml(_ebModelLabel(a.agent_id || ''))}</b>${a.archived ? '<span class="agentic-retired-tag">Retired</span>' : ''} · <span style="text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escHtml(a.type || '')}</span></span>
         <span>${escHtml(when)}</span>
       </div>
       <div class="agentic-activity-body">${body}</div>
@@ -6945,16 +7176,22 @@ function renderAgentTradingBoard(d) {
     </section>
     ${healthSummary ? `<div class="agentic-health-summary"><span class="agentic-health-summary-label">Cycle health</span>${healthSummary}</div>` : ''}
     ${weatherOperationalSummary}
-    <table class="eb-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades</th><th>Open</th><th title="Whether the model's shadow track record currently clears a conservative bar — observational only, grants nothing">Eligible</th></tr></thead><tbody>${tableRows}</tbody></table>
+    <div class="agentic-table-wrap"><table class="eb-table agentic-table"><thead><tr><th>Rank</th><th>Model</th><th title="Latest persisted cycle heartbeat. No trade means the model completed a turn without executing.">Cycle</th><th>Account Value</th><th>P&amp;L</th><th>Return %</th><th>Win Rate</th><th>Trades / records</th><th>Open</th></tr></thead><tbody>${tableRows}${retiredTableRows}</tbody></table></div>
     <div class="agentic-feed-head">
-      <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : activeFilter)}</span>
+      <span class="agentic-filter-status">Showing: ${escHtml(activeFilter === 'all' ? 'All models' : _ebModelLabel(activeFilter))}${selectedRetired ? '<span class="agentic-retired-tag">Retired</span>' : ''}</span>
     </div>
     <div class="agentic-filterbar">
       ${filterPills.join('')}
     </div>
     ${learningSummary}
-    <div class="agentic-activity-list">${activityRows || (activeFilter !== 'all'
-      ? `<p class="text-sm text-gray-500">No published thesis for ${escHtml(_ebModelLabel(activeFilter))} yet. Its next scheduled research run will retry automatically.</p>`
+    <div class="agentic-activity-list">${retiredActivityLoading
+      ? '<p class="text-sm text-gray-500">Loading archived paper-trading records…</p>'
+      : retiredActivityError
+        ? `<p class="text-sm text-gray-500">${escHtml(retiredActivityError)} <a href="#" onclick="event.preventDefault(); delete window._agentRetiredActivityErrors['${escAttr(activeFilter)}']; _filterAgentActivity('${escAttr(activeFilter)}', true);" style="text-decoration:underline">Retry</a></p>`
+        : activityRows || (selectedRetired
+          ? `<p class="text-sm text-gray-500">No archived paper-trading records were found for ${escHtml(_ebModelLabel(activeFilter))}.</p>`
+          : activeFilter !== 'all'
+            ? `<p class="text-sm text-gray-500">No published thesis for ${escHtml(_ebModelLabel(activeFilter))} yet. Its next scheduled research run will retry automatically.</p>`
       : '<p class="text-sm text-gray-500">No activity matching this filter.</p>')}</div>`;
   const svgEl = document.getElementById('agentTradingSvg');
   if (svgEl) _attachEquityHover(svgEl);
@@ -7250,6 +7487,7 @@ function _ebModelLabel(model) {
   if (raw === 'gemma-4-31b-it') return 'Gemma 4 31B IT';
   if (raw === 'minimax-m3') return 'MiniMax M3';
   if (raw === 'qwen3-coder-30b-a3b-instruct') return 'Qwen3 Coder 30B';
+  if (raw === 'qwen3-8-27b') return 'Qwen3.8 27B';
   if (raw === 'glm-5.2-fp8') return 'GLM 5.2';
   if (raw === 'kimi-k2.5') return 'Kimi K2.5';
   if (raw === 'kimi-k2.6') return 'Kimi K2.6';
@@ -7274,6 +7512,7 @@ function _ebModelHead(model) {
   if (raw.includes('gemma')) return 'GEM';
   if (raw.includes('minimax')) return 'MM';
   if (raw.includes('qwen3-coder')) return 'Q3C';
+  if (raw.includes('qwen3-8')) return 'Q38';
   if (raw.includes('glm')) return 'GLM';
   if (raw.includes('kimi-k3') || raw === 'kimi-k3') return 'K3';
   if (raw.includes('kimi-k2.7')) return 'K27';
@@ -7358,8 +7597,10 @@ function _ebSetView(view) {
     }
     return;
   }
+  _captureEdgeBoardScroll();
   host.innerHTML = renderEdgeBoard(_ebLastData);
   _attachEdgeBoardChartHovers(host);
+  _restoreEdgeBoardScroll();
   refreshEdgePrices();
   if (_ebView === 'agentic') loadAgentTradingSection();
 }
@@ -8089,8 +8330,10 @@ function _refreshActiveEdgeBoardHost() {
   if (_updateMtmViewInPlace()) return;
   const edgeHost = document.getElementById('edgeBody');
   if (edgeHost) {
+    _captureEdgeBoardScroll();
     edgeHost.innerHTML = renderEdgeBoard(_ebLastData);
     _attachEdgeBoardChartHovers(edgeHost);
+    _restoreEdgeBoardScroll();
   }
   const trackHost = document.getElementById('trackBody');
   if (trackHost) {
@@ -8448,6 +8691,7 @@ function applyHistoryState(state) {
     || _PATH_VIEW[normaliseAppPath()]
     || 'landing';
   const edgePanel = state?.panel || legacyRoute?.panel || (edgePath ? edgePath.panel : null);
+  const edgeScrollTop = Math.max(0, Number(state?.edgeScrollTop) || 0);
 
   // Close all overlays first — avoids every case having to enumerate which to close
   closeTrackRecord({ updateHistory: false });
@@ -8488,6 +8732,13 @@ function applyHistoryState(state) {
     openPersonalLedger({ updateHistory: false });
   } else {
     showLanding({ updateHistory: false });
+  }
+  // The open helper may synchronously re-render the previous board before it
+  // sees the destination history entry. Apply this after routing so a Back or
+  // Forward navigation always wins over that stale in-memory offset.
+  if (_isEdgeHistoryView(view)) {
+    _edgeBoardScrollTop = edgeScrollTop;
+    _restoreEdgeBoardScroll();
   }
   isApplyingHistory = false;
 }

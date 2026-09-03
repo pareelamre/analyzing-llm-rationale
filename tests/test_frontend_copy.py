@@ -351,13 +351,14 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
         )[0]
         self.assertIn("const latestTheses = d.latest_theses || {};", renderer)
         self.assertIn("const modelHealth = d.model_health || {};", renderer)
-        self.assertIn("No trade", renderer)
-        self.assertIn("Last confirmed cycle", renderer)
-        self.assertIn("Last attempt failed", renderer)
-        self.assertIn("Last attempt: retryable provider error", renderer)
+        self.assertIn("Cycle completed · no trade", renderer)
+        self.assertIn("Last completed cycle", renderer)
+        self.assertIn("Retryable provider error", renderer)
+        self.assertIn("Provider paused", renderer)
+        self.assertIn("No cycle record", renderer)
         self.assertIn("const operationalHealth = d?.operational_health || {};", renderer)
-        self.assertIn("Latest agent attempts:", renderer)
-        self.assertIn("not a live SCADS availability check", renderer)
+        self.assertIn("Retryable provider errors:", renderer)
+        self.assertIn("Provider-paused cycles:", renderer)
         self.assertIn("Last worker attempt", renderer)
         self.assertIn("latestTheses[activeFilter]", renderer)
         self.assertIn("No published thesis for", renderer)
@@ -449,6 +450,41 @@ class AgentTradingBoardFrontendTests(unittest.TestCase):
                 self.assertIn("p.ticker || p.ident", positions)
                 self.assertIn("_agenticMarketUrl", positions)
                 self.assertIn("noopener noreferrer", positions)
+                self.assertIn('data-label="Unrealized P&amp;L"', positions)
+
+    def test_agentic_ledger_becomes_readable_cards_on_narrow_screens(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                self.assertIn("agentic-table-wrap", index)
+                self.assertIn("agentic-positions-table", index)
+                self.assertIn("@media (max-width: 720px)", index)
+                self.assertIn("content: attr(data-label)", index)
+                self.assertNotIn(".agentic-table { margin: 0; min-width: 720px; }", index)
+                self.assertNotIn(".agentic-table-wrap { overflow-x: auto; }", index)
+
+    def test_agentic_ledger_omits_the_ambiguous_eligibility_column(self):
+        renderer = self._both()["frontend"].split("function renderAgentTradingBoard(d) {", 1)[1].split(
+            "async function removePersonalLedgerEntry", 1
+        )[0]
+        self.assertNotIn('data-label="Eligibility"', renderer)
+        self.assertNotIn(">Eligible</th>", renderer)
+        self.assertNotIn("const eligibility = d.eligibility", renderer)
+
+    def test_foresea_mark_is_the_tab_icon(self):
+        root = Path(__file__).resolve().parents[1]
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                self.assertIn('rel="icon" type="image/svg+xml" href="/static/foresea-mark.svg"', index)
+        self.assertTrue((root / "frontend" / "public" / "foresea-mark.svg").is_file())
+        self.assertTrue((root / "static" / "foresea-mark.svg").is_file())
+
+    def test_agentic_pnl_discloses_unpriced_position_coverage(self):
+        renderer = self._both()["frontend"].split("function renderAgentTradingBoard(d) {", 1)[1].split(
+            "async function removePersonalLedgerEntry", 1
+        )[0]
+        self.assertIn("const markCoverage = row.mark_coverage || {};", renderer)
+        self.assertIn("conservative $0 liquidation floor", renderer)
+        self.assertIn("agentic-valuation-note", renderer)
 
     def test_agentic_positions_link_to_the_source_market(self):
         for name, index in self._both().items():

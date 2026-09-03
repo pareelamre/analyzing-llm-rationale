@@ -345,6 +345,10 @@ class PredictionMarketAccount:
         liquidation_value, illiquid = self.liquidation_value(quotes or {})
         account_value = self.cash + liquidation_value
         positions = []
+        priced_position_count = 0
+        unpriced_position_count = 0
+        priced_cost_basis = 0.0
+        unpriced_cost_basis = 0.0
         for p in self.open_positions():
             raw_quote = (quotes or {}).get((p.platform, p.ident)) or (quotes or {}).get(("", p.ident))
             quote = raw_quote if isinstance(raw_quote, MarketQuote) else MarketQuote.from_mapping(raw_quote or {})
@@ -358,6 +362,12 @@ class PredictionMarketAccount:
             # exists.
             mark_available = bid is not None and bid > 0.0
             mark_value = p.quantity * float(bid) if mark_available else None
+            if mark_available:
+                priced_position_count += 1
+                priced_cost_basis += p.cost_basis
+            else:
+                unpriced_position_count += 1
+                unpriced_cost_basis += p.cost_basis
             positions.append({
                 "platform": p.platform,
                 "ident": p.ident,
@@ -381,6 +391,17 @@ class PredictionMarketAccount:
             "fees_paid": round(self.fees_paid, 6),
             "open_positions": positions,
             "illiquid_positions": illiquid,
+            # Keep the conservative whole-book liquidation convention above,
+            # but expose exactly how much of it has a current executable bid.
+            # Consumers can therefore distinguish a fully marked loss from a
+            # risk-floor valuation that still contains unpriced inventory.
+            "mark_coverage": {
+                "open_positions": len(positions),
+                "priced_positions": priced_position_count,
+                "unpriced_positions": unpriced_position_count,
+                "priced_cost_basis": round(priced_cost_basis, 6),
+                "unpriced_cost_basis": round(unpriced_cost_basis, 6),
+            },
         }
 
 

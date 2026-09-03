@@ -162,8 +162,18 @@ def _model_health(
         and telemetry["outcome"] == "failure"
         and (cycle_at is None or (telemetry_at is not None and telemetry_at >= cycle_at))
     )
+    latest_attempt_deferred = bool(
+        telemetry
+        and telemetry["outcome"] == "deferred"
+        and (cycle_at is None or (telemetry_at is not None and telemetry_at >= cycle_at))
+    )
 
-    if latest_attempt_failed:
+    if latest_attempt_deferred:
+        status = "provider_paused"
+        detail = "Provider status check has temporarily paused this cycle"
+        if telemetry["failure_detail"]:
+            detail += f": {telemetry['failure_detail']}"
+    elif latest_attempt_failed:
         # A failed worker turn is historical execution information.  It does
         # not prove that the model provider is unavailable *now*; a status
         # probe or a later turn may already have recovered.  Keep the cause in
@@ -267,18 +277,29 @@ def _operational_health(model_health: Dict[str, Dict[str, Any]]) -> Dict[str, An
         for model, health in sorted(model_health.items())
         if health.get("status") == "last_attempt_failed"
     ]
+    provider_paused = [
+        {"agent_id": model, "status": health["status"]}
+        for model, health in sorted(model_health.items())
+        if health.get("status") == "provider_paused"
+    ]
     cycle_failed = [
         {"agent_id": model, "status": health["status"]}
         for model, health in sorted(model_health.items())
         if health.get("status") in {"cycle_error", "unverified", "stale"}
     ]
-    verified = sum(
+    confirmed_cycles = sum(
         health.get("status") in {"active", "no_trade"}
         for health in model_health.values()
     )
     if cycle_failed:
         status = "attention"
         detail = f"{len(cycle_failed)} model ledger(s) need maintenance attention."
+    elif provider_paused:
+        status = "provider_paused"
+        detail = (
+            f"{len(provider_paused)} model cycle(s) are paused because the public SCADS status check "
+            "currently reports them unavailable. They will retry automatically when that status recovers."
+        )
     elif last_attempt_failures:
         status = "attempts_failed"
         detail = (
@@ -292,8 +313,13 @@ def _operational_health(model_health: Dict[str, Dict[str, Any]]) -> Dict[str, An
         "status": status,
         "detail": detail,
         "models_total": len(model_health),
-        "models_verified": verified,
+        # ``models_verified`` is retained for old API clients.  The UI uses
+        # the precise name below: a completed worker cycle is not a claim that
+        # a model, forecast, or provider has been independently verified.
+        "models_verified": confirmed_cycles,
+        "models_with_confirmed_cycle": confirmed_cycles,
         "last_attempt_failures": last_attempt_failures,
+        "provider_paused": provider_paused,
         "attention_required": cycle_failed,
     }
 

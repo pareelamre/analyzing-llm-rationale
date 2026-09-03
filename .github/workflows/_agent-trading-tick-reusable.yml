@@ -126,10 +126,16 @@ jobs:
           KALSHI_PRIVATE_KEY_FILE: tmp/agent-trading/kalshi_private_key.pem
           MAX_TOOL_STEPS: "4"
           CANDIDATE_COUNT: "3"
-          # agent_analyze owns bounded per-provider retries. Re-running the
-          # complete tool loop after it exhausts them replays work and turns a
-          # provider outage into a request storm.
+          # Retry one provider turn (never a completed tool loop) with a
+          # slightly longer bounded budget. This recovers short 503s without
+          # duplicating an already-recorded paper trade.
           AGENT_TRADING_RETRIES: "1"
+          AGENT_TOOL_PROVIDER_MAX_RETRIES: "5"
+          AGENT_TOOL_PROVIDER_BACKOFF_BASE_S: "1.5"
+          # Consult SCADS' public five-minute status probe first. Explicitly
+          # down models are deferred (not marked failed) and resume on the
+          # next healthy probe; a status-probe outage fails open.
+          AGENT_TRADING_SCADS_STATUS_PRECHECK: "true"
         run: |
           hard_failures=0
           provider_degradations=0
