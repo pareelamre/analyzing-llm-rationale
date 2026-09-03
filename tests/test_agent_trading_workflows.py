@@ -143,7 +143,13 @@ class TrackRecordForecastWorkflowTests(unittest.TestCase):
         self.assertIn("max-parallel: 1", text)
         self.assertIn("REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}", text)
         self.assertIn("cancel-in-progress: false", text)
-        self.assertEqual(len(re.findall(r"^\s+lane: \"[01]\"$", text, re.MULTILINE)), 13)
+        # The matrix is resolved from the canonical Agentic model selector at
+        # runtime, so the second reserved provider slot serializes the whole
+        # active roster instead of depending on a stale static lane list.
+        self.assertIn("build active MTM model roster", text)
+        self.assertIn("scads_agent_trading_model_labels", text)
+        self.assertIn("matrix: ${{ fromJSON(needs.roster.outputs.matrix) }}", text)
+        self.assertNotIn('lane: "', text)
 
 
 if __name__ == "__main__":

@@ -1788,7 +1788,7 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(account["max_concentration"], 0.05)
         self.assertEqual(account["market_shrinkage"], 0.5)
 
-    def test_quarter_kelly_keeps_collecting_and_historical_models_visible(self):
+    def test_quarter_kelly_keeps_collecting_models_without_reviving_retired_models(self):
         rows = [
             self._resolved_row(
                 ident="retired-1", model_p=0.65, market_p=0.5,
@@ -1801,8 +1801,7 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         by_model = {account["model"]: account for account in accounts}
         self.assertEqual(by_model["active-model"]["status"], "collecting_history")
         self.assertEqual(by_model["active-model"]["n_trades"], 0)
-        self.assertEqual(by_model["retired-model"]["status"], "active")
-        self.assertEqual(by_model["retired-model"]["n_trades"], 1)
+        self.assertNotIn("retired-model", by_model)
 
     def test_growth_accounts_are_edge_kelly_ledgers_per_model(self):
         rows = [
@@ -1830,6 +1829,19 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(account["value_curve"][-1]["event_type"], "mark_to_market")
         self.assertEqual(account["value_curve"][-1]["account_value"], account["account_value"])
         self.assertEqual(one_percent["collecting"]["status"], "collecting_history")
+
+    def test_growth_accounts_do_not_revive_historical_models(self):
+        rows = [
+            self._resolved_row(
+                ident="retired-1", model_p=0.65, market_p=0.5,
+                outcome=1, day=1, model="retired-model",
+            ),
+        ]
+        accounts = trl.build_growth_accounts(
+            rows, {}, default_model="active-model", tracked_models=["active-model"],
+        )
+        for strategy_accounts in accounts.values():
+            self.assertEqual([entry["model"] for entry in strategy_accounts], ["active-model"])
 
     def test_growth_accounts_skip_extreme_prices(self):
         rows = [

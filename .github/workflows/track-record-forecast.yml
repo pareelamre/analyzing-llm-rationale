@@ -43,7 +43,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  roster:
+    name: build active MTM model roster
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Resolve the canonical Agentic model roster
+        id: matrix
+        shell: bash
+        run: |
+          python -m pip install --quiet pyyaml
+          matrix="$(PYTHONPATH=src python -c "import json; from pathlib import Path; from analyzing_llm_rationale.config import scads_agent_trading_model_labels; labels = ['crowd-follow', 'council', *scads_agent_trading_model_labels(Path('configs/models.yaml'))]; print(json.dumps({'include': [{'model': label, 'artifact': label} for label in labels]}, separators=(',', ':'))) ")"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   forecast:
+    needs: roster
     name: forecast (${{ matrix.model }})
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -59,47 +78,7 @@ jobs:
       # One forecast call plus one reserved agent call is the safe global
       # fan-out for SCADS' two-request account limit.
       max-parallel: 1
-      matrix:
-        include:
-          - model: crowd-follow
-            artifact: crowd-follow
-            lane: "0"
-          - model: council
-            artifact: council
-            lane: "1"
-          - model: scads-alias-code
-            artifact: scads-alias-code
-            lane: "0"
-          - model: scads-alias-ha
-            artifact: scads-alias-ha
-            lane: "1"
-          - model: scads-alias-reasoning
-            artifact: scads-alias-reasoning
-            lane: "0"
-          - model: scads-alias-huge
-            artifact: scads-alias-huge
-            lane: "1"
-          - model: scads-alias-huge-no-thinking
-            artifact: scads-alias-huge-no-thinking
-            lane: "0"
-          - model: llama-3.3-70b-instruct
-            artifact: llama-3.3-70b-instruct
-            lane: "1"
-          - model: gpt-oss-120b
-            artifact: gpt-oss-120b
-            lane: "0"
-          - model: gemma-4-26b-a4b-it
-            artifact: gemma-4-26b-a4b-it
-            lane: "1"
-          - model: minimax-m3
-            artifact: minimax-m3
-            lane: "0"
-          - model: qwen3-8-27b
-            artifact: qwen3-8-27b
-            lane: "0"
-          - model: glm-5.2-fp8
-            artifact: glm-5.2-fp8
-            lane: "1"
+      matrix: ${{ fromJSON(needs.roster.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
