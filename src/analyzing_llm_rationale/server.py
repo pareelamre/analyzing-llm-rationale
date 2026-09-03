@@ -2206,6 +2206,7 @@ _AGENT_TRADING_AUDIT_ARCHIVE_READER = live_track_record_support.LiveTrackRecordR
 _read_agent_trading_audit_archive_manifest = _AGENT_TRADING_AUDIT_ARCHIVE_READER.read
 
 _MARK_TO_MARKET_MERGE_KEYS = (
+    "models_comparison",
     "edge_board",
     "discrepancy_monitor",
     "arbitrage_signals",

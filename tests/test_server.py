@@ -1829,6 +1829,7 @@ class ServerTests(unittest.TestCase):
         }
         mtm = {
             "generated_at": "2026-06-28T23:15:00+00:00",
+            "models_comparison": [{"model": "gpt-oss-120b"}],
             "edge_board": [{"question": "Fresh MTM edge?", "edge": 0.2}],
             "mark_to_market_account": {"account_value": 9999.47, "n_open_positions": 8},
             "mark_to_market_by_model": [{"model": "council", "account_value": 9999.47}],
@@ -1847,7 +1848,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["freshness"]["generated_at"], mtm["generated_at"])
         self.assertEqual(payload["edge_board"][0]["question"], "Fresh MTM edge?")
         self.assertEqual(payload["mark_to_market_account"]["account_value"], 9999.47)
-        self.assertEqual(payload["models_comparison"][0]["model"], "council")
+        self.assertEqual(payload["models_comparison"][0]["model"], "gpt-oss-120b")
         self.assertEqual(payload["resolved_log"][0]["question"], "Resolved edge?")
 
     def test_scads_allowlist_includes_board_models(self):
