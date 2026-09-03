@@ -42,7 +42,7 @@ class TrackRecordTickTests(unittest.TestCase):
 
             self.assertEqual(target.read_text(encoding="utf-8"), previous)
 
-    def test_forecast_workflow_uses_bounded_rotating_cycles_and_configured_scads_models(self):
+    def test_forecast_workflow_uses_bounded_rotating_cycles_and_agentic_model_roster(self):
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "track-record-forecast.yml"
@@ -52,6 +52,10 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn('SNAPSHOT_SLOT_MINUTES: "5"', workflow)
         self.assertIn('TRACK_RECORD_PREDICT_MODE: "local"', workflow)
         self.assertIn("strategy:", workflow)
+        self.assertIn("build active MTM model roster", workflow)
+        self.assertIn("scads_agent_trading_model_labels", workflow)
+        self.assertIn("needs: roster", workflow)
+        self.assertIn("fromJSON(needs.roster.outputs.matrix)", workflow)
         self.assertIn("continue-on-error: true", workflow)
         self.assertIn("fail-fast: false", workflow)
         self.assertIn("group: track-record-forecast", workflow)
@@ -113,20 +117,25 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertNotIn("git add data/track_record_store.duckdb", workflow)
         for model in (
             "council",
+            "deepseek-v4-flash",
+            "gemma-4-26b-a4b-it",
+            "glm-5-3-flash",
+            "glm-5.2-fp8",
+            "gpt-oss-120b",
+            "llama-3.3-70b-instruct",
+            "minimax-m3",
+            "qwen3-8-27b",
+            "crowd-follow",
+        ):
+            self.assertIn(model, track_record_tick.DEFAULT_TRACK_MODELS)
+        for alias in (
             "scads-alias-code",
             "scads-alias-ha",
             "scads-alias-reasoning",
             "scads-alias-huge",
             "scads-alias-huge-no-thinking",
-            "llama-3.3-70b-instruct",
-            "gpt-oss-120b",
-            "gemma-4-26b-a4b-it",
-            "minimax-m3",
-            "qwen3-8-27b",
-            "glm-5.2-fp8",
-            "crowd-follow",
         ):
-            self.assertIn(model, track_record_tick.TRACK_MODELS)
+            self.assertNotIn(alias, track_record_tick.DEFAULT_TRACK_MODELS)
         # These carry `track_record_enabled: false` in configs/models.yaml --
         # either not in the active CI matrix (llama-4-scout-17b-16e-instruct,
         # qwen3-vl-8b-instruct, deepseek-v3, kimi-k2.5) or actively failing on
@@ -145,7 +154,7 @@ class TrackRecordTickTests(unittest.TestCase):
             "kimi-k3",
             "qwen3-coder-30b-a3b-instruct",
         ):
-            self.assertNotIn(model, track_record_tick.TRACK_MODELS)
+            self.assertNotIn(model, track_record_tick.DEFAULT_TRACK_MODELS)
         self.assertNotIn("model: llama-3.1-8b-instruct", workflow)
 
     def test_model_sharding_rotates_models_and_keeps_always_models(self):

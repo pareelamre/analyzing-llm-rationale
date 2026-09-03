@@ -58,7 +58,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analyzing_llm_rationale import market_data  # noqa: E402
 from analyzing_llm_rationale import track_record_live as trl  # noqa: E402
-from analyzing_llm_rationale.config import scads_track_model_labels  # noqa: E402
+from analyzing_llm_rationale.config import scads_agent_trading_model_labels  # noqa: E402
 from analyzing_llm_rationale.forecast_evaluation import ResolvedForecast  # noqa: E402
 from analyzing_llm_rationale.forecast_evaluation_report import (  # noqa: E402
     EvaluationPolicy,
@@ -104,8 +104,12 @@ EVALUATION_PATH = Path(
 
 BASE_URL = os.environ.get("FORESEA_BASE_URL", "https://foresea.ink").rstrip("/")
 MODEL = os.environ.get("TRACK_MODEL", "council").strip()
-SCADS_TRACK_MODELS = scads_track_model_labels(ROOT / "configs" / "models.yaml")
-DEFAULT_TRACK_MODELS = ("council", *SCADS_TRACK_MODELS, "crowd-follow")
+# MTM is the forecast-account view for the same direct, non-duplicated SCADS
+# models that trade on the Agentic board.  Do not use the broader historical
+# track-record allowlist here: aliases double-count their backing model and
+# retired records would otherwise keep rendering as active accounts.
+SCADS_MTM_MODELS = scads_agent_trading_model_labels(ROOT / "configs" / "models.yaml")
+DEFAULT_TRACK_MODELS = ("council", *SCADS_MTM_MODELS, "crowd-follow")
 
 
 def _csv_list(value: str | None) -> list[str]:
