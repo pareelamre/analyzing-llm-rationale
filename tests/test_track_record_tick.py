@@ -298,6 +298,7 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertNotIn("growth_1pct_by_model", resolved)
         self.assertNotIn("edge_board", resolved)
         self.assertEqual(mtm["source"], "mark_to_market_live")
+        self.assertEqual(mtm["models_comparison"][0]["model"], "council")
         self.assertEqual(mtm["mark_to_market_account"]["account_value"], 9999.5)
         self.assertEqual(mtm["quarter_kelly_by_model"][0]["model"], "council")
         quarter_curve = mtm["quarter_kelly_by_model"][0]["account"]["value_curve"]

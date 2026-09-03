@@ -779,6 +779,7 @@ _LIVE_MARKET_KEYS = (
     "primary_model",
     "n_markets_open",
     "n_markets_tracked",
+    "models_comparison",
     "edge_board",
     "discrepancy_monitor",
     "arbitrage_signals",
