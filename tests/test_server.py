@@ -1862,6 +1862,7 @@ class ServerTests(unittest.TestCase):
         self.assertNotIn("deepseek-v3", server_module._SCADS_MODEL_ALLOWLIST)
         self.assertNotIn("kimi-k2.6", server_module._SCADS_MODEL_ALLOWLIST)
         self.assertNotIn("kimi-k3", server_module._SCADS_MODEL_ALLOWLIST)
+        self.assertNotIn("minimax-m3", server_module._SCADS_MODEL_ALLOWLIST)
 
     def test_analytics_event_summary_counts_events(self):
         response = self.client.post(

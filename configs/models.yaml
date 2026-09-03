@@ -178,7 +178,11 @@ models:
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
-    chat_interface_enabled: true
+    # SCADS routes MiniMaxAI/MiniMax-M3 → MiniMaxAI/MiniMax-M3-MXFP8 internally,
+    # which no longer exists upstream (404 on every call since 2026-06-28).
+    forecasting_enabled: false
+    chat_interface_enabled: false
+    track_record_enabled: false
     fallback_model_chain:
       - openai/gpt-oss-120b
       - google/gemma-4-26B-A4B-it

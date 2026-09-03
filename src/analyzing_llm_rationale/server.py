@@ -13281,7 +13281,6 @@ except Exception as exc:  # pragma: no cover - defensive production fallback.
         "gemma-4-26b-a4b-it": "google/gemma-4-26B-A4B-it",
         "scads-alias-reasoning": "alias-reasoning",
         "qwen3-8-27b": "Qwen/Qwen3.8-27B",
-        "minimax-m3": "MiniMaxAI/MiniMax-M3",
         "glm-5-3-flash": "zai-org/GLM-5.3-Flash",
         "deepseek-v4-flash": "deepseek-ai/DeepSeek-V4-Flash",
     }
