@@ -7815,9 +7815,93 @@
         "recorded_at": "2026-08-11T04:55:00.219345+00:00"
       }
     ],
-    "qwen3-8-27b": []
+    "qwen3-8-27b": [
+      {
+        "action_id": "10e64d6a-58a7-407a-8e65-5dc5a67ea844",
+        "agent_id": "qwen3-8-27b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 923.64532
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.42,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.42,
+            "quantity": 1
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 10000.0,
+            "cash_required": 387.931034,
+            "concentration_cap": 1500.0,
+            "cycle_id": "30m:993588",
+            "cycle_spend_after": 387.931034,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 387.931034,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 3000.0,
+            "drawdown_after": 0.0,
+            "fee": 0.0,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 387.931034,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 387.931034,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 2000.0,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.18,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.05,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 387.931034,
+            "target_quantity": 923.6453201970447
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993588",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -387.9310344827588,
+          "cash_required": 387.9310344827588,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 387.9310344827588,
+          "price": 0.42,
+          "quantity": 923.6453201970447,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "0099fbba1f59d7c021e35935c65a68ae8f2e18eac513ca4fb58b527967738605",
+        "recorded_at": "2026-09-03T18:18:19.322551+00:00"
+      }
+    ]
   },
-  "generated_at": "2026-09-03T17:26:01.523138+00:00",
+  "generated_at": "2026-09-03T18:19:47.063050+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
