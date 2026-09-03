@@ -1289,17 +1289,6 @@ _LIQUIDITY_BUCKETS = [
     ("liquid (>$25k)", 25_000.0, float("inf")),
 ]
 
-# Models with an established, non-degenerate resolved history for the public
-# "Model comparison" table. Newer forecast-matrix additions start out with all
-# their resolved snapshots coming from a single backlog market
-# (n_markets_resolved == 1) — that reads like a real track record but isn't.
-# Keep the comparison to models with real accumulated history until a new
-# model actually builds one; MTM is intentionally NOT filtered by this list.
-_RESOLVED_QUALITY_MODELS = {
-    "council", "crowd-follow", "gpt-oss-120b", "gemma-4-26b-a4b-it", "gemma-4-31b-it", "kimi-k3", "kimi-k2.6",
-}
-
-
 def _edge(row: Dict[str, Any]) -> float:
     """Absolute model-vs-market disagreement for a snapshot."""
     return abs(float(row.get("model_probability") or 0.0)
@@ -2065,9 +2054,12 @@ def build_validated_kelly_accounts(
         by_model.setdefault(label, []).append(row)
 
     accounts: List[Dict[str, Any]] = []
-    # Keep the configured roster visible, but also retain historical labels
-    # when a model has since been retired from the forecasting rotation.
-    labels = list(dict.fromkeys([*(tracked_models or []), *by_model.keys()]))
+    # MTM is an active-account board. Historical forecasts remain in the
+    # ledger, but must not render as a current model after that model leaves
+    # the canonical Agentic roster.
+    labels = list(dict.fromkeys(
+        tracked_models if tracked_models is not None else by_model.keys()
+    ))
     for label in labels:
         if label == "crowd-follow":
             continue
@@ -2278,7 +2270,11 @@ def build_growth_accounts(
         label = str(row.get("model") or default_model)
         by_model.setdefault(label, []).append(row)
 
-    labels = list(dict.fromkeys([*(tracked_models or []), *by_model.keys()]))
+    # See build_validated_kelly_accounts: only the current active roster is
+    # eligible for a live MTM chart or account row.
+    labels = list(dict.fromkeys(
+        tracked_models if tracked_models is not None else by_model.keys()
+    ))
     strategies = {
         "growth_1pct": {
             "strategy_name": "live_edge_kelly_5pct_ewma_ledger",
@@ -3291,6 +3287,8 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
     _crowd_ref_rows = _crowd_baseline_reference_rows(resolved, default_model=model)
     _crowd_base = crowd_baseline_equity(_crowd_ref_rows)
 
+    active_mtm_models = set(tracked_models or [model, "crowd-follow"])
+
     payload.update({
         "overall": overall,
         "primary_overall": _bucket_stats(resolved_primary),
@@ -3320,7 +3318,10 @@ def aggregate(client, *, model: str, variant: str, temperature: float,
         },
         "arbitrage_signals": build_arbitrage_board(open_primary, latest_price),
         "models_comparison": build_models_comparison(
-            [r for r in resolved if (r.get("model") or model) in _RESOLVED_QUALITY_MODELS],
+            [
+                r for r in resolved
+                if (r.get("model") or model) in active_mtm_models
+            ],
             default_model=model,
             crowd_baseline=_crowd_base,
             crowd_reference_rows=_crowd_ref_rows,
