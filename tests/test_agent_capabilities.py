@@ -51,6 +51,39 @@ class ParseActionTests(unittest.TestCase):
     def test_no_json_returns_none(self):
         self.assertIsNone(ac.parse_action("just prose, no json here"))
 
+    def test_salvages_the_live_glm_malformed_envelope(self):
+        # Verbatim from glm-5.2-fp8's store: a stray `,"` after the thought
+        # string makes this invalid JSON. It repeated identically in 24 of its
+        # last 25 cycles, each ending at step 0 having called no tool at all,
+        # with this envelope stored as the model's public thesis.
+        raw = (
+            '{"thought": "I need to research all three candidate markets to form '
+            'independent probability assessments. Let me start with parallel web '
+            'searches on each topic."," "action": "web_search", "args": {"query": '
+            '"Matthew Stafford retirement 2026 NFL Rams news 2025"}}'
+        )
+        a = ac.parse_action(raw)
+        self.assertIsNotNone(a)
+        self.assertEqual(a["action"], "web_search")
+        self.assertEqual(a["args"]["query"], "Matthew Stafford retirement 2026 NFL Rams news 2025")
+
+    def test_salvage_keeps_nested_arg_objects_intact(self):
+        a = ac.parse_action('{"thought": "x",, "action": "place_trade", '
+                            '"args": {"order": {"qty": 3}, "ticker": "T"}}')
+        self.assertEqual(a["action"], "place_trade")
+        self.assertEqual(a["args"], {"order": {"qty": 3}, "ticker": "T"})
+
+    def test_salvage_applies_tool_aliases(self):
+        a = ac.parse_action('{"thought": "x",, "action": "google_search", "args": {"query": "q"}}')
+        self.assertEqual(a["action"], "web_search")
+
+    def test_salvage_does_not_invent_a_call_from_prose(self):
+        # Prose that merely mentions an action word must stay a final answer.
+        self.assertIsNone(ac.parse_action("I will use web_search to check the odds."))
+
+    def test_salvage_requires_an_explicit_tool_name(self):
+        self.assertIsNone(ac.parse_action('{"thought": "just thinking",, "args": {"query": "q"}}'))
+
     def test_normalizes_openai_style_native_function_call(self):
         # Regression: minimax-m3 (live, observed) defaults to its own native
         # function-calling shape instead of the prompted {"action", "args"}

@@ -421,6 +421,34 @@ def compute_forecast_learning(
     }
 
 
+def _salvage_final_text(text: str) -> str:
+    """Pull the final/answer copy out of a malformed or truncated envelope.
+
+    Returns "" unless a final field is present with real prose, so a bare tool
+    envelope (thought + action only) still yields nothing reader-facing.
+    """
+    match = re.search(r'"(?:final|answer|thesis)"\s*:\s*"', text)
+    if not match:
+        return ""
+    body = text[match.end():]
+    out: list[str] = []
+    escape = False
+    for ch in body:
+        if escape:
+            # Only the escapes a model actually emits in prose; anything else
+            # passes through as written rather than corrupting the text.
+            out.append({"n": "\n", "t": "\t", '"': '"', "\\": "\\"}.get(ch, ch))
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            break  # closing quote of a complete final field
+        out.append(ch)
+    return "".join(out).strip()
+
+
 def clean_thesis_display(raw_thesis: Optional[str]) -> str:
     """Normalize and format an agent's thesis for display on the trading board.
 
@@ -447,14 +475,25 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
                 else:
                     return ""
         except Exception:
-            # A truncated JSON tool envelope is equally unsuitable for a
-            # reader-facing thesis. The original payload remains in the
-            # cycle transcript, where it can still be inspected on demand.
-            if text.startswith("{"):
+            # Malformed/truncated envelope. A provider is often cut off *after*
+            # writing most of its final copy, so discarding the whole payload
+            # loses a thesis the model actually wrote and leaves a blank card.
+            # Recover the final text when it is unambiguously present; only
+            # fall back to dropping the payload (it stays in the transcript)
+            # when there is no readable final section at all.
+            salvaged = _salvage_final_text(text)
+            if salvaged:
+                text = salvaged
+            elif text.startswith("{"):
                 return ""
     # A provider may be interrupted while serialising its final/tool payload,
-    # leaving an unterminated JSON object such as ``{"thought": ...``.  It
-    # has no safe reader-facing boundary, so retain it only in the transcript.
+    # leaving an unterminated JSON object such as ``{"thought": ...``. Such a
+    # payload never reaches the parse branch above (it has no closing brace),
+    # so try the same recovery here before dropping it to the transcript.
+    if text.startswith("{"):
+        salvaged = _salvage_final_text(text)
+        if salvaged:
+            text = salvaged
     if text.startswith("{") or re.search(
         r'\{\s*"(?:thought|reasoning|analysis)"\s*:\s*.*?"(?:action|args|query)"\s*:',
         text,

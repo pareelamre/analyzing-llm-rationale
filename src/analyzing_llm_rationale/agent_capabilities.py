@@ -217,6 +217,62 @@ def _normalize_action(obj: Dict[str, Any]) -> Dict[str, Any]:
     return {"thought": obj.get("thought", ""), "action": name, "args": params}
 
 
+def _salvage_action(text: str) -> Optional[Dict[str, Any]]:
+    """Recover a tool call from a turn whose JSON is malformed but whose intent
+    is unambiguous.
+
+    Live incident: glm-5.2-fp8 emitted the same near-miss every cycle --
+    ``{"thought": "...on each topic."," "action": "web_search", "args": {...}}``
+    -- a stray ``,"`` after the thought string. Strict parsing rejects it, so
+    24 of its last 25 cycles ended at step 0 having called nothing, with the
+    raw envelope stored as the model's thesis. The action and args are plainly
+    readable, so recover them rather than discarding the whole cycle.
+
+    Only an explicit tool name plus a balanced args object counts; anything
+    less returns None so a genuine prose answer is never mistaken for a call.
+    """
+    name_match = re.search(r'"(?:action|name|tool)"\s*:\s*"([A-Za-z0-9_.\-]+)"', text)
+    if not name_match:
+        return None
+    args: Dict[str, Any] = {}
+    args_match = re.search(r'"(?:args|arguments|parameters)"\s*:\s*\{', text)
+    if args_match:
+        # Walk from the opening brace to its match so nested objects survive.
+        depth = 0
+        in_string = False
+        escape = False
+        start = args_match.end() - 1
+        for i in range(start, len(text)):
+            ch = text[i]
+            if escape:
+                escape = False
+                continue
+            if ch == "\\" and in_string:
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        parsed = json.loads(text[start:i + 1])
+                    except ValueError:
+                        parsed = None
+                    if isinstance(parsed, dict):
+                        args = parsed
+                    break
+    thought_match = re.search(r'"(?:thought|reasoning)"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    thought = thought_match.group(1) if thought_match else ""
+    name = TOOL_ALIASES.get(name_match.group(1), name_match.group(1))
+    return {"thought": thought, "action": name, "args": args}
+
+
 def parse_action(text: str) -> Optional[Dict[str, Any]]:
     """Extract the first JSON object from a model turn. Returns the dict, or None
     if no JSON is found (caller treats that as a plain final answer)."""
@@ -250,7 +306,10 @@ def parse_action(text: str) -> Optional[Dict[str, Any]]:
                     except ValueError:
                         start = -1  # keep scanning for a valid object
         escape = False
-    return None
+    # No strictly-valid object anywhere. Before giving up (which costs the model
+    # its whole cycle), try to recover an unambiguous tool call from malformed
+    # JSON -- see _salvage_action.
+    return _salvage_action(cleaned)
 
 
 OnStep = Callable[[Dict[str, Any]], Awaitable[None]]

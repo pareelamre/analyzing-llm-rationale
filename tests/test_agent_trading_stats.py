@@ -531,6 +531,29 @@ class RecentActivityTests(unittest.TestCase):
             "",
         )
 
+    def test_clean_thesis_display_salvages_final_copy_from_a_truncated_envelope(self):
+        # A provider cut off mid-serialisation after it had already written its
+        # final copy. Dropping the whole payload left a blank card for a cycle
+        # in which the model really did produce a thesis.
+        truncated = (
+            '{"thought": "All three markets evaluated.", "final": '
+            '"### 0. Research Delta\\n- **Action**: PASS\\n- No edge clears the gate.'
+        )
+        display = agent_trading_stats.clean_thesis_display(truncated)
+        self.assertIn("### 0. Research Delta", display)
+        self.assertIn("**Action**: PASS", display)
+        self.assertNotIn('"thought"', display)
+
+    def test_clean_thesis_display_still_drops_a_bare_tool_envelope(self):
+        # No final copy anywhere -> nothing reader-facing to salvage.
+        self.assertEqual(
+            agent_trading_stats.clean_thesis_display(
+                '{"thought": "I need to research these markets."," "action": "web_search", '
+                '"args": {"query": "x"}}'
+            ),
+            "",
+        )
+
     def test_clean_thesis_display_uses_only_explicit_reader_ready_json_field(self):
         display = agent_trading_stats.clean_thesis_display(json.dumps({
             "thought": "Private chain of thought",
