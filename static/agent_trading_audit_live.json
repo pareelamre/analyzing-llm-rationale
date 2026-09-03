@@ -2920,6 +2920,121 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "bb569250-3d0a-4bd3-aba5-7a358e7369a4",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "rejected_before_execution",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.43,
+            "source": "live_venue_quote",
+            "status": "shadow_price_from_live_quote"
+          },
+          "requested_order": {
+            "price": null,
+            "quantity": 1
+          },
+          "risk": {
+            "allowed": false,
+            "cash_before": 6479.315805,
+            "cash_required": 414.46579,
+            "concentration_cap": 1243.397371,
+            "cycle_id": "30m:993599",
+            "cycle_spend_after": 414.46579,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 414.46579,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2486.794741,
+            "drawdown_after": 0.194068,
+            "fee": 0.0,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 1274.46579,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 414.46579,
+            "open_markets_after": 2,
+            "per_cycle_spend_limit": 1657.863161,
+            "reasons": [
+              "concentration_limit"
+            ],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.23,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.05,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 414.46579,
+            "target_quantity": 963.8739308139536
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993599",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 414.46579,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 414.46579,
+          "price": 0.43,
+          "quantity": 963.8739308139536,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "9c9b9c1a111b3b7dff55ea93fe36d5c99950074c64139bd17a81732c70f8833c",
+        "recorded_at": "2026-09-03T23:34:20.605781+00:00"
+      },
+      {
+        "action_id": "a56f9e66-d717-4e90-839b-09b835df3951",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:993599",
+        "event_type": "settlement",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": null,
+          "quantity": 1000.0,
+          "realized_pnl": -60.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "israel-x-iran-ceasefire-continues-through-august-31-20260716224448970-754-896-823"
+        },
+        "mode": "shadow",
+        "outcome": "yes",
+        "record_hash": "ccde7706bd489b70ff6ef79143c6d150e8093fdb6f940c6d9c3d2eaa7b08f460",
+        "recorded_at": "2026-09-03T23:33:29.296228+00:00"
+      },
+      {
         "action_id": "c8a16bbf-294e-4ebb-baa9-4a6f54143dc1",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -7976,7 +8091,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-03T22:42:25.329610+00:00",
+  "generated_at": "2026-09-03T23:37:40.924177+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
