@@ -27,8 +27,8 @@ STOOQ_RSS_FEEDS = (
 # and leaked irrelevant headlines into evidence. It stays available if explicitly
 # configured. `web` prefers a configured provider (Tavily, Serper, Brave, or
 # SearXNG) and otherwise uses the existing keyless DuckDuckGo fallback.
-DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "rss", "open-meteo")
-SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "newsapi", "rss", "stooq", "fred", "open-meteo")
+DEFAULT_FETCH_SOURCES = ("web", "newsapi", "gdelt", "google-news", "bing-news", "rss", "open-meteo")
+SOURCE_DIVERSITY_ORDER = ("web", "gdelt", "google-news", "bing-news", "newsapi", "rss", "stooq", "fred", "open-meteo")
 HIGH_CREDIBILITY_SOURCES = {
     "abc news",
     "al jazeera",
@@ -78,6 +78,7 @@ CHANNEL_CREDIBILITY = {
     "newsapi": 0.75,
     "gdelt": 0.72,
     "google-news": 0.70,
+    "bing-news": 0.70,
     "rss": 0.68,
     "stooq": 0.55,
     "fred": 0.90,       # St. Louis Fed official data
@@ -89,7 +90,20 @@ CHANNEL_CREDIBILITY = {
 # articles are only kept when they clear a minimum relevance to the question,
 # so they stop padding evidence for unrelated or conversational queries.
 _QUERY_AGNOSTIC_CHANNELS = ("stooq", "rss")
-_MIN_GENERIC_RELEVANCE = 0.1
+# A 0.1 floor let publisher-homepage headlines (UK politics, obituaries) clear
+# it for finance/politics questions purely on incidental word overlap, and the
+# per-channel diversity pass then *reserved* a slot for them. When every
+# query-specific channel is blocked (as happens from datacenter IPs without a
+# keyed search provider), that filled the entire evidence pack with headlines
+# unrelated to the question, which agents correctly refused to forecast from.
+_MIN_GENERIC_RELEVANCE = 0.35
+
+# Channels whose results are actually matched to the query. If none of these
+# return anything, the evidence pack is not trustworthy as question-specific
+# evidence, and callers are told so rather than being handed generic filler.
+_QUERY_SPECIFIC_CHANNELS = (
+    "web", "gdelt", "google-news", "bing-news", "newsapi", "fred", "open-meteo",
+)
 
 # Open-Meteo is fetched only for weather-related questions.
 _WEATHER_HINTS = {
@@ -431,6 +445,9 @@ class NewsPipeline:
         if "google-news" in self._fetch_sources:
             articles.extend(self._fetch_google_news(query, limit=per_source_limit))
 
+        if "bing-news" in self._fetch_sources:
+            articles.extend(self._fetch_bing_news(query, limit=per_source_limit))
+
         if "stooq" in self._fetch_sources and _is_finance_query(query):
             articles.extend(self._fetch_stooq(limit=per_source_limit))
 
@@ -754,6 +771,49 @@ class NewsPipeline:
             return articles
         except Exception:
             return []
+
+    def _fetch_bing_news(self, query: str, limit: int = 20) -> List[dict]:
+        """Keyless, query-specific news search via Bing's public RSS endpoint.
+
+        Google News RSS and the keyless DuckDuckGo web fallback are both soft-
+        blocked from datacenter IPs (they answer 200 with an empty channel), so
+        agents running in CI had no working query-specific channel at all. Bing
+        News RSS answers normally from those IPs and needs no API key.
+        """
+        feed_url = "https://www.bing.com/news/search?" + urlencode({
+            "q": query,
+            "format": "RSS",
+        })
+        try:
+            import requests
+
+            resp = requests.get(
+                feed_url,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; forecasting-evidence-bot/1.0)"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            root = ElementTree.fromstring(resp.content)
+        except Exception:
+            return []
+
+        articles: List[dict] = []
+        for item in root.findall("./channel/item")[:limit]:
+            title = item.findtext("title") or ""
+            link = item.findtext("link") or ""
+            if not link:
+                continue
+            description = item.findtext("description") or ""
+            articles.append({
+                "title": title,
+                "url": link,
+                "publish_date": item.findtext("pubDate") or "",
+                "text": description or title,
+                "summary": description or title,
+                "source": self._domain(link),
+                "source_channel": "bing-news",
+            })
+        return articles
 
     def _fetch_google_news(self, query: str, limit: int = 20) -> List[dict]:
         params = urlencode({
@@ -1241,6 +1301,12 @@ class NewsPipeline:
 
         for channel in SOURCE_DIVERSITY_ORDER:
             if channel not in self._fetch_sources:
+                continue
+            # Never *reserve* a slot for a query-agnostic channel: diversity is
+            # only worth spending a slot on when the result actually answers the
+            # question. Generic homepage/market RSS can still be picked up by the
+            # relevance-ordered fill below if it clears the stricter floor.
+            if channel in _QUERY_AGNOSTIC_CHANNELS:
                 continue
             for article in ranked:
                 if article.get("source_channel") == channel and add(article):

@@ -58,7 +58,7 @@ reduce_only_notional_overrides = meter.create_counter(
 BLACKLISTED_WEB_DOMAINS = ("coinmarketcap.com",)
 MAX_NOTES_PER_AGENT = 50
 MAX_NOTE_CHARS = 1200
-WEB_SEARCH_SOURCES = ("web", "gdelt", "google-news", "rss", "newsapi", "open-meteo")
+WEB_SEARCH_SOURCES = ("web", "gdelt", "google-news", "bing-news", "rss", "newsapi", "open-meteo")
 WEB_SEARCH_TOP_K = 5
 DEFAULT_AGENT_ACCOUNT_VALUE = 10_000.0
 DEFAULT_CONCENTRATION_LIMIT = 0.15
@@ -2905,14 +2905,26 @@ def web_search(args: Mapping[str, Any]) -> Dict[str, Any]:
                 if article.get("summary") and article.get("url")
                 and not _domain_blacklisted(str(article["url"]))
             )
+            # Query-agnostic channels (publisher homepage RSS, Stooq) return the
+            # same headlines no matter what was asked. If they are ALL that came
+            # back, every query-specific channel was blocked or empty, and the
+            # caller must not mistake generic headlines for question evidence.
+            from analyzing_llm_rationale.news_pipeline import _QUERY_AGNOSTIC_CHANNELS
+
+            query_specific = [
+                a for a in articles
+                if a.get("source_channel") not in _QUERY_AGNOSTIC_CHANNELS
+            ]
+            degraded = bool(articles) and not query_specific
             span.set_attributes({
-                "outcome": "success",
+                "outcome": "degraded" if degraded else "success",
                 "gen_ai.provider.name": "scads",
                 "web.citations.count": len(sources),
                 "web.blocked_results.count": len(blocked),
+                "web.query_specific.count": len(query_specific),
             })
-            _finish_tool(tool, start, "success")
-            return {
+            _finish_tool(tool, start, "degraded" if degraded else "success")
+            result = {
                 "ok": True,
                 "tool": tool,
                 "query": query,
@@ -2921,6 +2933,15 @@ def web_search(args: Mapping[str, Any]) -> Dict[str, Any]:
                 "blacklisted_domains": list(BLACKLISTED_WEB_DOMAINS),
                 "blocked_results": len(blocked),
             }
+            if degraded:
+                result["degraded"] = True
+                result["warning"] = (
+                    "No query-specific search channel returned results; every source "
+                    "below is a generic publisher headline feed unrelated to this "
+                    "query. Treat this as NO evidence -- do not cite these or let "
+                    "them influence the forecast."
+                )
+            return result
         except Exception as exc:
             span.record_exception(exc)
             span.set_status(Status(StatusCode.ERROR))
