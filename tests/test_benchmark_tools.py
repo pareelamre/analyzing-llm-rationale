@@ -163,6 +163,50 @@ class BenchmarkToolTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_note_action_synonyms_are_accepted(self):
+        # Live: 73 of 219 manage_notes calls (33%) used an action name that
+        # does not exist -- "store" 32, "create" 24, "update" 11, "read" 4,
+        # "save_note" 1 -- and every one raised, silently losing the note.
+        # Largest single cause of agents failing to accumulate memory.
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "notes.json"
+            ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+            for verb in ("store", "create", "save_note", "remember"):
+                res = benchmark_tools.manage_notes(
+                    {"action": verb, "text": f"note via {verb}"}, ctx, path=path,
+                )
+                self.assertTrue(res["ok"], f"{verb} should be accepted")
+                self.assertEqual(res["action"], "add")
+
+            listed = benchmark_tools.manage_notes({"action": "read"}, ctx, path=path)
+            self.assertTrue(listed["ok"])
+            self.assertEqual(listed["action"], "list")
+            self.assertEqual(len(listed["notes"]), 4)
+
+            first = listed["notes"][0]["id"]
+            edited = benchmark_tools.manage_notes(
+                {"action": "update", "id": first, "text": "revised"}, ctx, path=path,
+            )
+            self.assertEqual(edited["action"], "edit")
+            self.assertEqual(edited["note"]["text"], "revised")
+
+            removed = benchmark_tools.manage_notes(
+                {"action": "forget", "id": first}, ctx, path=path,
+            )
+            self.assertEqual(removed["action"], "delete")
+            self.assertEqual(removed["deleted"], 1)
+
+    def test_genuinely_unknown_note_action_still_errors(self):
+        # Aliasing must not swallow a real mistake into a silent no-op.
+        with tempfile.TemporaryDirectory() as td:
+            res = benchmark_tools.manage_notes(
+                {"action": "teleport", "text": "x"},
+                benchmark_tools.ToolContext(agent_id="model-a"),
+                path=Path(td) / "notes.json",
+            )
+            self.assertFalse(res["ok"])
+
     def test_full_notebook_evicts_the_lowest_value_note_instead_of_failing(self):
         # Live: llama-3.3-70b-instruct sat at the 50-note cap, so every new
         # observation was rejected outright while entries like "No new evidence
