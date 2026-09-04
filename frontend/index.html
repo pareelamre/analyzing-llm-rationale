@@ -6204,7 +6204,12 @@ async function openForecastDrift() {
   await openEdgeBoard();
   setTimeout(() => document.getElementById('forecastDriftPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
 }
-function closeEdgeBoard({ updateHistory = true } = {}) {
+// `immediate` closes without the fade, for callers that navigate somewhere
+// else in the same tick. The fade defers finish() by 220ms, and any routing
+// that runs in between bumps _edgeOpenSeq, which finish() reads as "re-opened
+// while fading" and so deliberately leaves the overlay open -- stranding the
+// board on screen over the view we just navigated to.
+function closeEdgeBoard({ updateHistory = true, immediate = false } = {}) {
   _captureEdgeBoardScroll();
   _saveEdgeBoardScrollToHistory();
   _stopEdgeTimers();
@@ -6221,7 +6226,7 @@ function closeEdgeBoard({ updateHistory = true } = {}) {
     document.body.style.overflow = isAppVisible ? 'hidden' : 'auto';
     if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
   };
-  if (window.Motion && !prefersReduced()) {
+  if (!immediate && window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
 
@@ -6248,7 +6253,10 @@ function _ebAskQuestion(ident) {
   if (entry.resolution_criteria)        ctx.resolution_criteria = entry.resolution_criteria;
   if (entry.categories?.length)         ctx.categories = entry.categories;
   ctx.model = 'council';
-  closeEdgeBoard({ updateHistory: false });
+  // Close synchronously: startForecast() routes to the chat view in this same
+  // tick, and a deferred (faded) close gets cancelled by that routing, leaving
+  // the board stranded on top of the chat.
+  closeEdgeBoard({ updateHistory: false, immediate: true });
   startForecast(entry.question || '', ctx);
 }
 
