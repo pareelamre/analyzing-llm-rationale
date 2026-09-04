@@ -28,6 +28,26 @@ class TransportFailureClassificationTests(unittest.TestCase):
         with self.assertRaises(providers.RetryableProviderError):
             providers._post(_TimingOutSession(), "https://example.invalid")
 
+    def test_timeout_uses_the_timeout_retry_budget_not_the_general_one(self):
+        # A timeout costs the full timeout window on every attempt. Budgeting
+        # it as a generic retryable failure (5 attempts) instead of a timeout
+        # (1) let each stuck model burn ~13 minutes and the fleet cycle was
+        # cancelled having completed 1 of 8 models.
+        from analyzing_llm_rationale import providers
+
+        self.assertTrue(
+            issubclass(providers.ProviderTimeoutError, providers.RetryableProviderError),
+            "a timeout must still be retryable",
+        )
+        import requests
+
+        class _TimingOutSession:
+            def post(self, *_args, **_kwargs):
+                raise requests.exceptions.ReadTimeout("read timed out")
+
+        with self.assertRaises(providers.ProviderTimeoutError):
+            providers._post(_TimingOutSession(), "https://example.invalid")
+
     def test_connection_error_is_retryable(self):
         import requests
 
