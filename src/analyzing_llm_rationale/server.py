@@ -449,7 +449,7 @@ def _estimate_question_effort(question: str, history_len: int = 0) -> str:
 
 
 _EFFORT_EVIDENCE_TOP_K = {"simple": 8, "standard": 20, "deep": 40}
-_EFFORT_MAX_TOOL_STEPS = {"simple": 2, "standard": 5, "deep": 8}
+_EFFORT_MAX_TOOL_STEPS = {"simple": 2, "standard": 6, "deep": 16}
 
 
 def _apply_effort_tier(req: "AgentAnalyzeRequest", question: str) -> None:
@@ -5335,7 +5335,11 @@ class AgentAnalyzeRequest(BaseModel):
             "so the model must answer on its first turn). Unset exposes all three."
         ),
     )
-    max_tool_steps: int = Field(5, ge=1, le=8, description="Max tool calls in the loop.")
+    # No upper bound: an 8-step ceiling silently truncated research-heavy
+    # cycles. Live, 489 agent cycles hit the ceiling and 38 of them described
+    # a BUY the model never got to place -- the decision existed only in prose.
+    # The loop still terminates on the model's own final answer.
+    max_tool_steps: int = Field(5, ge=1, description="Max tool calls in the loop.")
     effort_tier: Optional[Literal["simple", "standard", "deep"]] = Field(
         None,
         description=(
@@ -14619,7 +14623,27 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                 return "Specify platform 'polymarket' or 'kalshi' plus a slug/ticker."
         except HTTPException as exc:
             return f"(market fetch failed: {exc.detail})"
-        return f"{q.platform}: {q.question} — {q.outcome} at {round((q.probability or 0) * 100)}% ({q.market_url})"
+        # Quote the executable book, not just the mid. Returning only "Yes at
+        # 48%" forced agents to infer a NO price as 1 - 0.48 = 0.52, which is
+        # the mid: an order priced there sits below the ask and never fills.
+        # 11% of live trade attempts (23/211) died as
+        # shadow_unfilled_below_market this way -- research done, decision
+        # made, nothing executed. NO prices derive from the YES book
+        # (no_bid = 1 - yes_ask, no_ask = 1 - yes_bid).
+        px = lambda v: "n/a" if v is None else f"{float(v):.2f}"  # noqa: E731
+        book = ""
+        if q.yes_bid is not None or q.yes_ask is not None:
+            no_bid = None if q.yes_ask is None else 1.0 - float(q.yes_ask)
+            no_ask = None if q.yes_bid is None else 1.0 - float(q.yes_bid)
+            book = (
+                f" | yes bid/ask {px(q.yes_bid)}/{px(q.yes_ask)}"
+                f", no bid/ask {px(no_bid)}/{px(no_ask)}"
+                " (to buy, price at or above the ask for that side)"
+            )
+        return (
+            f"{q.platform}: {q.question} — {q.outcome} at "
+            f"{round((q.probability or 0) * 100)}%{book} ({q.market_url})"
+        )
 
     async def _tool_search_evidence(args):
         ep = _state.get("evidence_pipeline")

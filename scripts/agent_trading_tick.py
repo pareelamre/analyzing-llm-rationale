@@ -160,7 +160,11 @@ weather_candidate_discovery_duration = meter.create_histogram(
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
 CANDIDATE_COUNT = max(1, int(os.environ.get("CANDIDATE_COUNT", "3")))
-MAX_TOOL_STEPS = max(1, min(8, int(os.environ.get("MAX_TOOL_STEPS", "4"))))
+# No upper clamp. At 4 steps, research-heavy cycles ran out before executing:
+# 489 live cycles hit the ceiling and 38 described a BUY the model never got
+# to place. The loop still ends as soon as the model gives a final answer, so
+# a higher ceiling costs nothing on cycles that finish early.
+MAX_TOOL_STEPS = max(1, int(os.environ.get("MAX_TOOL_STEPS", "8")))
 MIN_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MIN_CLOSE_DAYS", "1"))
 MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "30"))
 WEATHER_CANDIDATE_QUOTA = max(
@@ -1084,6 +1088,10 @@ _TRADING_INSTRUCTION = (
     "forward. Your notes are never shown to you automatically, so notes you "
     "do not read back are wasted work; a note recording only 'no new "
     "evidence' is not worth storing. "
+    "A decision only counts if you place it: describing a BUY in your final "
+    "answer without calling place_trade leaves your account unchanged, and 38 "
+    "live cycles were lost exactly that way. Budget your tool calls so at "
+    "least one remains for execution. "
     "Price orders off the live yes/no bid/ask shown above -- not an "
     "estimate. Never guess a price or reuse your entry price for the "
     "opposite side when closing: yes and no move independently. A real "

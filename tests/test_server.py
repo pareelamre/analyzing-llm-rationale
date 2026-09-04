@@ -703,6 +703,45 @@ class ServerTests(unittest.TestCase):
         self.assertIn("gpt-oss-120b", response.json()["detail"])
         self.assertNotIn("upstream unavailable", response.json()["detail"])
 
+    def test_get_market_quotes_the_executable_book_not_just_the_mid(self):
+        # Live: get_market returned only "Yes at 48%", so an agent inferred a
+        # NO price of 1-0.48 = 0.52 -- the mid. An order at the mid sits below
+        # the ask and never fills: 23 of 211 trade attempts (11%) died as
+        # shadow_unfilled_below_market with the research already done.
+        self.provider.response = {
+            "thought": "check the book",
+            "action": "get_market",
+            "args": {"platform": "kalshi", "ticker": "KXFAKE"},
+        }
+        quote = server_module.MarketQuote(
+            platform="Kalshi",
+            question="Will X retire?",
+            market_url="https://kalshi.com/markets/x",
+            outcome="Yes",
+            probability=0.48,
+            yes_bid=0.47,
+            yes_ask=0.50,
+        )
+        with mock.patch.object(
+            server_module, "_fetch_market_quote", new=mock.AsyncMock(return_value=quote)
+        ):
+            response = self.client.post(
+                "/agent/analyze",
+                json={
+                    "question": "what is the book?",
+                    "tool_loop": True,
+                    "benchmark_tools": True,
+                    "max_tool_steps": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        observation = response.json()["tool_transcript"][0]["observation"]
+        self.assertIn("yes bid/ask 0.47/0.50", observation)
+        # NO derives from the YES book: no_bid = 1 - yes_ask, no_ask = 1 - yes_bid.
+        self.assertIn("no bid/ask 0.50/0.53", observation)
+        self.assertIn("at or above the ask", observation)
+
     def test_provider_timeout_is_reported_as_a_timeout_not_an_outage(self):
         # Live incident: agent-trading ticks reported "upstream provider is
         # unavailable" for deepseek-v4-flash and glm-5-3-flash, which SCADS'
