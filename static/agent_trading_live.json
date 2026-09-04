@@ -51,23 +51,6 @@
       "settled_count": 0,
       "sharpe": null
     },
-    "glm-5.2-fp8": {
-      "agent_id": "glm-5.2-fp8",
-      "checks": {
-        "drawdown_within_cap": true,
-        "positive_return": true,
-        "sharpe_above_floor": true,
-        "sufficient_sample": false
-      },
-      "eligible": false,
-      "max_drawdown": 0.0031,
-      "max_drawdown_allowed": 0.25,
-      "min_settled_trades_required": 30,
-      "min_sharpe_required": 0.5,
-      "return_pct": 12.8766,
-      "settled_count": 0,
-      "sharpe": 0.5572
-    },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
       "checks": {
@@ -98,9 +81,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -17.0068,
+      "return_pct": -17.1068,
       "settled_count": 8,
-      "sharpe": -0.0825
+      "sharpe": -0.0832
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
@@ -123,18 +106,18 @@
       "agent_id": "qwen3-8-27b",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": true,
-        "sharpe_above_floor": true,
+        "positive_return": false,
+        "sharpe_above_floor": false,
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0,
+      "max_drawdown": 0.0009,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.0924,
+      "return_pct": -0.0922,
       "settled_count": 0,
-      "sharpe": 0.5783
+      "sharpe": -0.5764
     }
   },
   "equity_curves": {
@@ -151,7 +134,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T01:36:13.994583+00:00"
+          "ts": "2026-09-04T05:18:52.762377+00:00"
         }
       ]
     },
@@ -258,7 +241,19 @@
         {
           "account_value": 10514.6904,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T01:36:13.994583+00:00"
+          "ts": "2026-09-04T05:18:52.762377+00:00"
+        }
+      ]
+    },
+    "glm-5-3": {
+      "agent_id": "glm-5-3",
+      "max_drawdown": null,
+      "sharpe": null,
+      "value_curve": [
+        {
+          "account_value": 0.0,
+          "event_type": "starting_cash",
+          "ts": null
         }
       ]
     },
@@ -275,34 +270,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T01:36:13.994583+00:00"
-        }
-      ]
-    },
-    "glm-5.2-fp8": {
-      "agent_id": "glm-5.2-fp8",
-      "max_drawdown": 0.0031,
-      "sharpe": 0.5572,
-      "value_curve": [
-        {
-          "account_value": 10000.0,
-          "event_type": "admin_reset",
-          "ts": "2026-08-16T09:01:35.558490+00:00"
-        },
-        {
-          "account_value": 9969.046,
-          "event_type": "trade",
-          "ts": "2026-08-17T17:50:33.546600+00:00"
-        },
-        {
-          "account_value": 11287.66,
-          "event_type": "trade",
-          "ts": "2026-08-21T15:09:06.450789+00:00"
-        },
-        {
-          "account_value": 11287.66,
-          "event_type": "mark_to_market",
-          "ts": "2026-09-04T01:36:13.994583+00:00"
+          "ts": "2026-09-04T05:18:52.762377+00:00"
         }
       ]
     },
@@ -459,14 +427,14 @@
         {
           "account_value": 9911.556,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T01:36:13.994583+00:00"
+          "ts": "2026-09-04T05:18:52.762377+00:00"
         }
       ]
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
       "max_drawdown": 0.2967,
-      "sharpe": -0.0825,
+      "sharpe": -0.0832,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -824,9 +792,9 @@
           "ts": "2026-09-03T23:34:20.605781+00:00"
         },
         {
-          "account_value": 8299.315805,
+          "account_value": 8289.315805,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T01:36:13.994583+00:00"
+          "ts": "2026-09-04T05:18:52.762377+00:00"
         }
       ]
     },
@@ -931,16 +899,16 @@
           "ts": "2026-08-30T17:53:17.369544+00:00"
         },
         {
-          "account_value": 8548.479431,
+          "account_value": 8548.479791,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T01:36:13.994583+00:00"
+          "ts": "2026-09-04T05:18:52.762377+00:00"
         }
       ]
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "max_drawdown": 0.0,
-      "sharpe": 0.5783,
+      "max_drawdown": 0.0009,
+      "sharpe": -0.5764,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -958,9 +926,9 @@
           "ts": "2026-09-03T21:19:33.375992+00:00"
         },
         {
-          "account_value": 10009.236453,
+          "account_value": 9990.783547,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T01:36:13.994583+00:00"
+          "ts": "2026-09-04T05:18:52.762377+00:00"
         }
       ]
     }
@@ -1011,8 +979,8 @@
       "status": "small_sample",
       "weather_calibration": []
     },
-    "glm-5-3-flash": {
-      "agent_id": "glm-5-3-flash",
+    "glm-5-3": {
+      "agent_id": "glm-5-3",
       "brier_score": null,
       "market_brier_score": null,
       "probability_bias": null,
@@ -1022,8 +990,8 @@
       "status": "not_recording",
       "weather_calibration": []
     },
-    "glm-5.2-fp8": {
-      "agent_id": "glm-5.2-fp8",
+    "glm-5-3-flash": {
+      "agent_id": "glm-5-3-flash",
       "brier_score": null,
       "market_brier_score": null,
       "probability_bias": null,
@@ -1124,7 +1092,7 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-09-04T01:36:14.048266+00:00",
+  "generated_at": "2026-09-04T05:18:52.812565+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
@@ -1140,8 +1108,8 @@
       "ts": "2026-09-04T01:29:00.520174+00:00",
       "type": "thesis"
     },
+    "glm-5-3": null,
     "glm-5-3-flash": null,
-    "glm-5.2-fp8": null,
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
       "cycle_id": "30m:993603",
@@ -1173,32 +1141,6 @@
   },
   "leaderboard": [
     {
-      "account_value": 11287.66,
-      "agent_id": "glm-5.2-fp8",
-      "cash": 11287.66,
-      "fees_paid": 32.34,
-      "illiquid_positions": [],
-      "mark_coverage": {
-        "open_positions": 0,
-        "priced_cost_basis": 0.0,
-        "priced_positions": 0,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
-      },
-      "open_positions": [],
-      "realized_count": 1,
-      "realized_pnl": 1318.614,
-      "return_pct": 12.8766,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "total_pnl": 1287.66,
-      "trade_count": 2,
-      "unrealized_pnl": 0.0,
-      "updated_at": "2026-08-21T15:09:06.449910+00:00",
-      "win_rate": 1.0,
-      "won_count": 1
-    },
-    {
       "account_value": 10514.6904,
       "agent_id": "gemma-4-26b-a4b-it",
       "cash": 10514.6904,
@@ -1223,44 +1165,6 @@
       "updated_at": "2026-09-03T09:53:11.847196+00:00",
       "win_rate": 0.4,
       "won_count": 2
-    },
-    {
-      "account_value": 10009.236453,
-      "agent_id": "qwen3-8-27b",
-      "cash": 9612.498966,
-      "fees_paid": 0.0,
-      "illiquid_positions": [],
-      "mark_coverage": {
-        "open_positions": 1,
-        "priced_cost_basis": 387.511034,
-        "priced_positions": 1,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
-      },
-      "open_positions": [
-        {
-          "avg_entry_price": 0.42,
-          "cost_basis": 387.511034,
-          "current_price": 0.43,
-          "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
-          "platform": "polymarket",
-          "quantity": 922.64532,
-          "side": "NO",
-          "unrealized_pnl": 9.226453,
-          "valuation_status": "bid_liquidation"
-        }
-      ],
-      "realized_count": 1,
-      "realized_pnl": 0.01,
-      "return_pct": 0.0924,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "total_pnl": 9.236453,
-      "trade_count": 2,
-      "unrealized_pnl": 9.226453,
-      "updated_at": "2026-09-03T21:19:33.375367+00:00",
-      "win_rate": 1.0,
-      "won_count": 1
     },
     {
       "account_value": 10000.0,
@@ -1315,6 +1219,44 @@
       "won_count": 0
     },
     {
+      "account_value": 9990.783547,
+      "agent_id": "qwen3-8-27b",
+      "cash": 9612.498966,
+      "fees_paid": 0.0,
+      "illiquid_positions": [],
+      "mark_coverage": {
+        "open_positions": 1,
+        "priced_cost_basis": 387.511034,
+        "priced_positions": 1,
+        "unpriced_cost_basis": 0.0,
+        "unpriced_positions": 0
+      },
+      "open_positions": [
+        {
+          "avg_entry_price": 0.42,
+          "cost_basis": 387.511034,
+          "current_price": 0.41,
+          "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
+          "platform": "polymarket",
+          "quantity": 922.64532,
+          "side": "NO",
+          "unrealized_pnl": -9.226453,
+          "valuation_status": "bid_liquidation"
+        }
+      ],
+      "realized_count": 1,
+      "realized_pnl": 0.01,
+      "return_pct": -0.0922,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "total_pnl": -9.216453,
+      "trade_count": 2,
+      "unrealized_pnl": -9.226453,
+      "updated_at": "2026-09-03T21:19:33.375367+00:00",
+      "win_rate": 1.0,
+      "won_count": 1
+    },
+    {
       "account_value": 9911.556,
       "agent_id": "gpt-oss-120b",
       "cash": 9911.556,
@@ -1341,7 +1283,7 @@
       "won_count": 2
     },
     {
-      "account_value": 8548.479431,
+      "account_value": 8548.479791,
       "agent_id": "minimax-m3",
       "cash": 8548.469335,
       "fees_paid": 161.60565,
@@ -1357,12 +1299,12 @@
         {
           "avg_entry_price": 0.54,
           "cost_basis": 0.009735,
-          "current_price": 0.56,
+          "current_price": 0.58,
           "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
           "platform": "polymarket",
           "quantity": 0.018027,
           "side": "YES",
-          "unrealized_pnl": 0.000361,
+          "unrealized_pnl": 0.000721,
           "valuation_status": "bid_liquidation"
         }
       ],
@@ -1371,15 +1313,15 @@
       "return_pct": -14.5152,
       "settled_count": 1,
       "starting_cash": 10000.0,
-      "total_pnl": -1451.520569,
+      "total_pnl": -1451.520209,
       "trade_count": 10,
-      "unrealized_pnl": 0.000361,
+      "unrealized_pnl": 0.000721,
       "updated_at": "2026-08-30T17:53:17.368899+00:00",
       "win_rate": 0.0,
       "won_count": 0
     },
     {
-      "account_value": 8299.315805,
+      "account_value": 8289.315805,
       "agent_id": "llama-3.3-70b-instruct",
       "cash": 6479.315805,
       "fees_paid": 72.478,
@@ -1395,34 +1337,34 @@
         {
           "avg_entry_price": 0.286667,
           "cost_basis": 860.0,
-          "current_price": 0.42,
+          "current_price": 0.41,
           "ident": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649",
           "platform": "polymarket",
           "quantity": 3000.0,
           "side": "YES",
-          "unrealized_pnl": 400.0,
+          "unrealized_pnl": 370.0,
           "valuation_status": "bid_liquidation"
         },
         {
           "avg_entry_price": 0.72,
           "cost_basis": 720.0,
-          "current_price": 0.56,
+          "current_price": 0.58,
           "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
           "platform": "polymarket",
           "quantity": 1000.0,
           "side": "YES",
-          "unrealized_pnl": -160.0,
+          "unrealized_pnl": -140.0,
           "valuation_status": "bid_liquidation"
         }
       ],
       "realized_count": 12,
       "realized_pnl": -1901.582195,
-      "return_pct": -17.0068,
+      "return_pct": -17.1068,
       "settled_count": 8,
       "starting_cash": 10000.0,
-      "total_pnl": -1700.684195,
+      "total_pnl": -1710.684195,
       "trade_count": 22,
-      "unrealized_pnl": 240.0,
+      "unrealized_pnl": 230.0,
       "updated_at": "2026-09-03T23:33:29.296039+00:00",
       "win_rate": 0.1667,
       "won_count": 2
@@ -1431,7 +1373,7 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 39463,
+      "cycle_age_seconds": 52822,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 503.",
       "expected_cycle_seconds": 1800,
@@ -1457,9 +1399,9 @@
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 433,
+      "cycle_age_seconds": 13792,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-03T09:53:11.847196+00:00",
       "last_action_at": "2026-09-03T09:53:11.847823+00:00",
@@ -1479,11 +1421,37 @@
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "no_trade",
+      "status": "delayed",
       "store_present": true
     },
+    "glm-5-3": {
+      "cycle_age_seconds": null,
+      "delayed_after_seconds": 5400,
+      "detail": "No downloaded model ledger is available to verify a cycle.",
+      "expected_cycle_seconds": 1800,
+      "last_account_updated_at": null,
+      "last_action_at": null,
+      "last_attempt_at": null,
+      "last_attempt_outcome": null,
+      "last_candidate_count": null,
+      "last_cycle_at": null,
+      "last_cycle_id": null,
+      "last_duration_ms": null,
+      "last_failure_detail": null,
+      "last_failure_kind": null,
+      "last_forecast_records": null,
+      "last_paper_execution_outcome": null,
+      "last_provider_model": null,
+      "last_thesis_published": null,
+      "last_tool_steps": null,
+      "last_weather_candidates_offered": 0,
+      "last_weather_candidates_researched": 0,
+      "stale_after_seconds": 28800,
+      "status": "unverified",
+      "store_present": false
+    },
     "glm-5-3-flash": {
-      "cycle_age_seconds": 155126,
+      "cycle_age_seconds": 168485,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 503.",
       "expected_cycle_seconds": 1800,
@@ -1508,36 +1476,10 @@
       "status": "last_attempt_failed",
       "store_present": true
     },
-    "glm-5.2-fp8": {
-      "cycle_age_seconds": 135618,
-      "delayed_after_seconds": 5400,
-      "detail": "Provider status check has temporarily paused this cycle: SCADS status check does not list configured model zai-org/GLM-5.2-FP8.",
-      "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-08-21T15:09:06.449910+00:00",
-      "last_action_at": "2026-08-21T15:09:06.450789+00:00",
-      "last_attempt_at": "2026-09-04T01:31:28.812766+00:00",
-      "last_attempt_outcome": "deferred",
-      "last_candidate_count": null,
-      "last_cycle_at": "2026-09-02T11:55:55.052506+00:00",
-      "last_cycle_id": "30m:993527",
-      "last_duration_ms": 406,
-      "last_failure_detail": "SCADS status check does not list configured model zai-org/GLM-5.2-FP8.",
-      "last_failure_kind": "provider_paused",
-      "last_forecast_records": 0,
-      "last_paper_execution_outcome": null,
-      "last_provider_model": null,
-      "last_thesis_published": false,
-      "last_tool_steps": null,
-      "last_weather_candidates_offered": 0,
-      "last_weather_candidates_researched": 0,
-      "stale_after_seconds": 28800,
-      "status": "provider_paused",
-      "store_present": true
-    },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 192,
+      "cycle_age_seconds": 13550,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-03T09:53:47.658001+00:00",
       "last_action_at": "2026-09-03T09:53:47.658614+00:00",
@@ -1557,13 +1499,13 @@
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "no_trade",
+      "status": "delayed",
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 166,
+      "cycle_age_seconds": 13525,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-03T23:33:29.296039+00:00",
       "last_action_at": "2026-09-03T23:34:20.605781+00:00",
@@ -1583,11 +1525,11 @@
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "no_trade",
+      "status": "delayed",
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 107841,
+      "cycle_age_seconds": 121199,
       "delayed_after_seconds": 5400,
       "detail": "Provider status check has temporarily paused this cycle: SCADS status check reports MiniMaxAI/MiniMax-M3 as down.",
       "expected_cycle_seconds": 1800,
@@ -1613,9 +1555,9 @@
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 78,
+      "cycle_age_seconds": 13436,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-03T21:19:33.375367+00:00",
       "last_action_at": "2026-09-03T21:19:33.375992+00:00",
@@ -1635,15 +1577,15 @@
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "no_trade",
+      "status": "delayed",
       "store_present": true
     }
   },
   "models": [
     "deepseek-v4-flash",
     "gemma-4-26b-a4b-it",
+    "glm-5-3",
     "glm-5-3-flash",
-    "glm-5.2-fp8",
     "gpt-oss-120b",
     "llama-3.3-70b-instruct",
     "minimax-m3",
@@ -1651,8 +1593,13 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "operational_health": {
-    "attention_required": [],
-    "detail": "2 model cycle(s) are paused because the public SCADS status check currently reports them unavailable. They will retry automatically when that status recovers.",
+    "attention_required": [
+      {
+        "agent_id": "glm-5-3",
+        "status": "unverified"
+      }
+    ],
+    "detail": "1 model ledger(s) need maintenance attention.",
     "last_attempt_failures": [
       {
         "agent_id": "deepseek-v4-flash",
@@ -1664,19 +1611,15 @@
       }
     ],
     "models_total": 8,
-    "models_verified": 4,
-    "models_with_confirmed_cycle": 4,
+    "models_verified": 0,
+    "models_with_confirmed_cycle": 0,
     "provider_paused": [
-      {
-        "agent_id": "glm-5.2-fp8",
-        "status": "provider_paused"
-      },
       {
         "agent_id": "minimax-m3",
         "status": "provider_paused"
       }
     ],
-    "status": "provider_paused"
+    "status": "attention"
   },
   "recent_activity": [
     {
@@ -2179,26 +2122,6 @@
       "weather_candidates_researched": 0
     },
     {
-      "agent_id": "glm-5.2-fp8",
-      "candidate_count": null,
-      "cycle_id": "30m:993603",
-      "duration_ms": 406,
-      "failure_detail": "SCADS status check does not list configured model zai-org/GLM-5.2-FP8.",
-      "failure_kind": "provider_paused",
-      "finished_at": "2026-09-04T01:31:29.220067+00:00",
-      "forecast_records": 0,
-      "outcome": "deferred",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "dfddd639a7a2484781932d6dc352b73d",
-      "settled_count": null,
-      "started_at": "2026-09-04T01:31:28.812766+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
       "agent_id": "glm-5-3-flash",
       "candidate_count": null,
       "cycle_id": "30m:993602",
@@ -2335,26 +2258,6 @@
       "started_at": "2026-09-03T23:30:26.950500+00:00",
       "thesis_published": true,
       "tool_steps": 4,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "candidate_count": null,
-      "cycle_id": "30m:993599",
-      "duration_ms": 825,
-      "failure_detail": "SCADS status check does not list configured model zai-org/GLM-5.2-FP8.",
-      "failure_kind": "provider_paused",
-      "finished_at": "2026-09-03T23:30:23.490548+00:00",
-      "forecast_records": 0,
-      "outcome": "deferred",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "000e86840966428c96a812e82b49e810",
-      "settled_count": null,
-      "started_at": "2026-09-03T23:30:22.665091+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
       "weather_candidates_offered": 0,
       "weather_candidates_researched": 0
     },
@@ -2499,26 +2402,6 @@
       "weather_candidates_researched": 0
     },
     {
-      "agent_id": "glm-5.2-fp8",
-      "candidate_count": null,
-      "cycle_id": "30m:993594",
-      "duration_ms": 561,
-      "failure_detail": "SCADS status check does not list configured model zai-org/GLM-5.2-FP8.",
-      "failure_kind": "provider_paused",
-      "finished_at": "2026-09-03T21:14:38.972228+00:00",
-      "forecast_records": 0,
-      "outcome": "deferred",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "cd24b287bfe54766b13b6f7fe6df50dd",
-      "settled_count": null,
-      "started_at": "2026-09-03T21:14:38.410786+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
       "agent_id": "glm-5-3-flash",
       "candidate_count": null,
       "cycle_id": "30m:993594",
@@ -2659,26 +2542,6 @@
       "weather_candidates_researched": 0
     },
     {
-      "agent_id": "glm-5.2-fp8",
-      "candidate_count": null,
-      "cycle_id": "30m:993588",
-      "duration_ms": 589,
-      "failure_detail": "SCADS status check does not list configured model zai-org/GLM-5.2-FP8.",
-      "failure_kind": "provider_paused",
-      "finished_at": "2026-09-03T18:15:18.762836+00:00",
-      "forecast_records": 0,
-      "outcome": "deferred",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "833b7aaab58f4ce9bd283c2445387fca",
-      "settled_count": null,
-      "started_at": "2026-09-03T18:15:18.173382+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
       "agent_id": "glm-5-3-flash",
       "candidate_count": null,
       "cycle_id": "30m:993588",
@@ -2815,26 +2678,6 @@
       "started_at": "2026-09-03T14:43:26.624406+00:00",
       "thesis_published": true,
       "tool_steps": 4,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "glm-5.2-fp8",
-      "candidate_count": null,
-      "cycle_id": "30m:993581",
-      "duration_ms": 412,
-      "failure_detail": "SCADS status check does not list configured model zai-org/GLM-5.2-FP8.",
-      "failure_kind": "provider_paused",
-      "finished_at": "2026-09-03T14:43:22.553810+00:00",
-      "forecast_records": 0,
-      "outcome": "deferred",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "15f4e63c5fab471f81bbd4e8e30e47cf",
-      "settled_count": null,
-      "started_at": "2026-09-03T14:43:22.140585+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
       "weather_candidates_offered": 0,
       "weather_candidates_researched": 0
     },
