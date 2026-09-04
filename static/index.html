@@ -9837,9 +9837,13 @@ async function openTradeModal(prefill) {
   await _loadVenueConnections();
   // If no account is connected yet, point the user at the Connect-exchange panel.
   if (!_venueConnected('kalshi') && !_venueConnected('polymarket')) {
-    openSidebar();
-    const panel = document.getElementById('tradingPanel');
-    if (panel) { panel.open = true; panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    // The exchange-connection UI moved into the Settings modal
+    // (#settingsSectionConnections). This used to open the sidebar and reach
+    // for #tradingPanel, which no longer exists, so the guard returned having
+    // shown nothing: "Review Trade Run" appeared to do nothing at all for any
+    // user without a connected venue. #venueErr lives inside that modal, so
+    // the message was written to a hidden element too.
+    openSettingsModal('connections');
     _venueErr('Connect a Kalshi or Polymarket account here first, then Place an order.');
     return;
   }

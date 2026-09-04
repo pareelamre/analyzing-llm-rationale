@@ -5,6 +5,25 @@ from pathlib import Path
 
 
 class FrontendCopyTests(unittest.TestCase):
+    def test_trade_run_guard_targets_dom_that_actually_exists(self):
+        # "Review Trade Run" silently did nothing for every user without a
+        # connected exchange: openTradeModal's guard called openSidebar() and
+        # reached for #tradingPanel, which the Settings-modal rework removed,
+        # so it returned having shown nothing at all. The venue UI (and the
+        # #venueErr slot it writes into) now live in the Settings modal's
+        # connections section.
+        index = (
+            Path(__file__).resolve().parents[1] / "static" / "index.html"
+        ).read_text(encoding="utf-8")
+        guard = index.split("async function openTradeModal(prefill) {", 1)[1].split(
+            "const handoff = tradeRunHandoff(prefill);", 1
+        )[0]
+
+        self.assertIn("openSettingsModal('connections')", guard)
+        self.assertNotIn("getElementById('tradingPanel')", guard)
+        for element_id in ("settingsOverlay", "settingsSectionConnections", "venueErr"):
+            self.assertIn(f'id="{element_id}"', index, f"missing #{element_id}")
+
     def test_edge_board_omits_paper_return_language(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
