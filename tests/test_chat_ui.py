@@ -626,6 +626,202 @@ if (!jsonText.includes('Evidence indicates high probability.') || !jsonText.incl
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_review_trade_run_opens_the_connections_ui_when_no_venue_linked(self) -> None:
+        # Functional test, not a text search: it runs the real page JS and
+        # calls openTradeModal the way the "Review Trade Run" button does,
+        # with a signed-in user and no connected exchange -- the state in
+        # which the button previously did nothing at all because it reached
+        # for a #tradingPanel that no longer exists.
+        script = r'''
+const fs = require('fs');
+const vm = require('vm');
+const html = fs.readFileSync('static/index.html', 'utf8');
+
+// Stateful DOM: same id returns the same element, and classList really tracks.
+const els = new Map();
+const makeEl = (id = '') => {
+  const classes = new Set();
+  const el = {
+    id, style: {}, hidden: false, textContent: '', innerHTML: '', open: false,
+    classList: {
+      contains: (c) => classes.has(c),
+      add: (c) => classes.add(c),
+      remove: (c) => classes.delete(c),
+      toggle: (c) => (classes.has(c) ? classes.delete(c) : classes.add(c)),
+    },
+    _classes: classes,
+    setAttribute: () => {}, getAttribute: () => null, focus: () => {},
+    scrollIntoView: () => {}, querySelector: () => null, querySelectorAll: () => [],
+    appendChild: () => {}, insertAdjacentHTML: () => {},
+  };
+  return el;
+};
+const getEl = (id) => { if (!els.has(id)) els.set(id, makeEl(id)); return els.get(id); };
+
+const storageMock = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+const sandbox = {
+  window: { location: { pathname: '/', hash: '', search: '' }, addEventListener: () => {}, matchMedia: () => ({ matches: false }), scrollTo: () => {}, localStorage: storageMock, sessionStorage: storageMock, open: () => ({}) },
+  document: { body: makeEl('body'), getElementById: getEl, querySelector: () => null, querySelectorAll: () => [], addEventListener: () => {}, createElement: () => makeEl() },
+  navigator: { sendBeacon: () => true },
+  history: { pushState: () => {}, replaceState: () => {}, state: null },
+  localStorage: storageMock, sessionStorage: storageMock,
+  URL: globalThis.URL, URLSearchParams: globalThis.URLSearchParams,
+  Blob: globalThis.Blob, crypto: globalThis.crypto,
+  setTimeout: (f) => { if (typeof f === 'function') f(); return 1; },
+  clearTimeout: () => {}, setInterval: () => 1, clearInterval: () => {},
+  console: { log: () => {}, warn: () => {}, error: () => {} },
+  fetch: () => Promise.resolve({ ok: false, json: async () => ({}) }),
+  trackEvent: () => {}, Motion: null,
+};
+const context = vm.createContext(sandbox);
+const scriptMatches = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+let fullJs = '';
+for (const match of scriptMatches) {
+  const attrs = match[1];
+  if (!attrs.includes('src=') && !attrs.includes('ld+json')) fullJs += match[2] + '\n';
+}
+vm.runInContext(fullJs, context);
+
+// Signed in, but no exchange connected -- the reported failing state.
+// currentUser is a top-level `let`, which in a VM is a lexical binding and
+// NOT a property of the context -- it has to be assigned inside the VM.
+vm.runInContext(`
+  currentUser = { id: 'u1' };
+  _loadVenueConnections = async () => {};
+  _venueConnected = () => false;
+  renderVenueStatus = () => {};
+  _loadModelProviders = () => {};
+  _closeAcctMenu = () => {};
+  openSidebar = () => {};
+  openAuthModal = () => { throw new Error('should not ask for login when signed in'); };
+`, context);
+
+(async () => {
+  await context.openTradeModal({ platform: 'kalshi', ident: 'KXTEST', question: 'Will X happen?' });
+
+  const overlay = els.get('settingsOverlay');
+  if (!overlay || !overlay.classList.contains('show')) {
+    throw new Error('settings modal did not open: the button is still a no-op');
+  }
+  const err = els.get('venueErr');
+  if (!err || !String(err.textContent).toLowerCase().includes('connect')) {
+    throw new Error(`no guidance shown to the user, got: ${err && err.textContent}`);
+  }
+  if (err.hidden) throw new Error('guidance element left hidden');
+})().catch((e) => { console.error(e.message); process.exit(1); });
+'''
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_clicking_an_edge_board_question_closes_the_board(self) -> None:
+        # Functional test for the reported bug: clicking a question routed to
+        # the chat but left the Edge Board covering it. closeEdgeBoard defers
+        # removing .open behind a fade, and startForecast's routing bumps
+        # _edgeOpenSeq in the same tick, which the deferred finish() reads as
+        # "re-opened while fading" and so leaves the overlay open.
+        script = r'''
+const fs = require('fs');
+const vm = require('vm');
+const html = fs.readFileSync('static/index.html', 'utf8');
+
+const els = new Map();
+const makeEl = (id = '') => {
+  const classes = new Set();
+  return {
+    id, style: {}, hidden: false, textContent: '', innerHTML: '', dataset: {},
+    classList: {
+      contains: (c) => classes.has(c), add: (c) => classes.add(c),
+      remove: (c) => classes.delete(c),
+      toggle: (c) => (classes.has(c) ? classes.delete(c) : classes.add(c)),
+    },
+    _classes: classes,
+    setAttribute: () => {}, getAttribute: () => null, focus: () => {},
+    scrollIntoView: () => {}, querySelector: () => null, querySelectorAll: () => [],
+    appendChild: () => {}, insertAdjacentHTML: () => {},
+    addEventListener: () => {}, removeEventListener: () => {},
+    getBoundingClientRect: () => ({ top: 0, left: 0, width: 0, height: 0 }),
+  };
+};
+const getEl = (id) => { if (!els.has(id)) els.set(id, makeEl(id)); return els.get(id); };
+const storageMock = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+const sandbox = {
+  window: { location: { pathname: '/edge', hash: '', search: '' }, addEventListener: () => {}, matchMedia: () => ({ matches: false }), scrollTo: () => {}, localStorage: storageMock, sessionStorage: storageMock },
+  document: { body: makeEl('body'), getElementById: getEl, querySelector: () => null, querySelectorAll: () => [], addEventListener: () => {}, createElement: () => makeEl() },
+  navigator: { sendBeacon: () => true },
+  history: { pushState: () => {}, replaceState: () => {}, state: null },
+  localStorage: storageMock, sessionStorage: storageMock,
+  URL: globalThis.URL, URLSearchParams: globalThis.URLSearchParams,
+  Blob: globalThis.Blob, crypto: globalThis.crypto,
+  setTimeout: () => 1, requestAnimationFrame: () => 1, cancelAnimationFrame: () => {},
+  clearTimeout: () => {}, setInterval: () => 1, clearInterval: () => {},
+  console: { log: () => {}, warn: () => {}, error: () => {} },
+  fetch: () => Promise.resolve({ ok: false, json: async () => ({}) }),
+  trackEvent: () => {}, Motion: null,
+};
+const context = vm.createContext(sandbox);
+const scriptMatches = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+let fullJs = '';
+for (const match of scriptMatches) {
+  const attrs = match[1];
+  if (!attrs.includes('src=') && !attrs.includes('ld+json')) fullJs += match[2] + '\n';
+}
+try { vm.runInContext(fullJs, context); } catch (_) { /* load-time DOM stubs are incomplete by design */ }
+
+// Real Motion is present in production, so exercise the animated path: that
+// is the path that regressed. Its promise resolves on a later microtask,
+// exactly like the browser.
+// closeEdgeBoard reads window.Motion; in a VM that is a different binding
+// from the bare Motion global, so set the one the code actually checks.
+sandbox.window.Motion = { animate: () => ({ finished: Promise.resolve() }), stagger: () => 0 };
+vm.runInContext(`
+  Motion = { animate: () => ({ finished: Promise.resolve() }), stagger: () => 0 };
+  prefersReduced = () => false;
+  _ebBoardData = [{ ident: 'mkt-1', question: 'Will X happen?', platform: 'Kalshi', market_probability: 0.4 }];
+  startForecast = () => { _edgeOpenSeq++; };   // routing bumps the token
+  _captureEdgeBoardScroll = () => {};
+  _saveEdgeBoardScrollToHistory = () => {};
+  _stopEdgeTimers = () => {};
+`, context);
+
+const ov = getEl('edgeOverlay');
+
+// Reproduce the race directly on closeEdgeBoard, which is where it lives.
+// Deferred close + a routing bump in the same tick = finish() sees a changed
+// token, reads it as "re-opened while fading", and leaves the overlay open.
+const run = async (opts) => {
+  ov.classList.add('open');
+  vm.runInContext('_edgeOpenSeq = 0;', context);
+  context.closeEdgeBoard(opts);
+  vm.runInContext('_edgeOpenSeq++;', context);   // startForecast's routing
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  return ov.classList.contains('open');
+};
+
+(async () => {
+  const stillOpenWhenDeferred = await run({ updateHistory: false });
+  if (!stillOpenWhenDeferred) {
+    throw new Error('harness did not reproduce the deferred-close race; this test would not catch a regression');
+  }
+  const stillOpenWhenImmediate = await run({ updateHistory: false, immediate: true });
+  if (stillOpenWhenImmediate) {
+    throw new Error('edge board still open after an immediate close: the board would cover the chat');
+  }
+})().catch((e) => { console.error(e.message); process.exit(1); });
+'''
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_edge_board_navigation_and_history_routing(self) -> None:
         script = r'''
 const fs = require('fs');

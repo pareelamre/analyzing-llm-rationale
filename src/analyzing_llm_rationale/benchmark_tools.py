@@ -2006,6 +2006,39 @@ def _load_guard_account(
     return account, usage
 
 
+# Models reach for the verb they would use in ordinary English, not the exact
+# enum. Across the live fleet 73 of 219 manage_notes calls (33%) used an
+# unsupported action -- "store" 32, "create" 24, "update" 11, "read" 4,
+# "save_note" 1 -- and every one raised, losing the note outright. That is the
+# single largest cause of agents failing to accumulate memory across cycles.
+_NOTE_ACTION_ALIASES: Dict[str, str] = {
+    "store": "add",
+    "create": "add",
+    "save": "add",
+    "save_note": "add",
+    "write": "add",
+    "record": "add",
+    "remember": "add",
+    "new": "add",
+    "append": "add",
+    "read": "list",
+    "get": "list",
+    "fetch": "list",
+    "recall": "list",
+    "retrieve": "list",
+    "show": "list",
+    "update": "edit",
+    "modify": "edit",
+    "revise": "edit",
+    "remove": "delete",
+    "forget": "delete",
+    "del": "delete",
+    "find": "search",
+    "query": "search",
+    "lookup": "search",
+}
+
+
 _LOW_VALUE_NOTE_MARKERS = (
     "no new evidence",
     "no evidence found",
@@ -3054,6 +3087,7 @@ def manage_notes(args: Mapping[str, Any], ctx: ToolContext, *, path: Optional[Pa
     tool = "manage_notes"
     agent_id = _bounded_agent_id(ctx.agent_id)
     action = str(args.get("action") or "list").strip().lower()
+    action = _NOTE_ACTION_ALIASES.get(action, action)
     with tracer.start_as_current_span("benchmark_tools.manage_notes") as span:
         span.set_attributes({
             "agent.id": agent_id,
