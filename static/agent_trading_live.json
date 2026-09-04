@@ -72,7 +72,7 @@
       "agent_id": "gpt-oss-120b",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": false,
+        "positive_return": true,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
@@ -81,9 +81,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -1.0053,
+      "return_pct": 0.2034,
       "settled_count": 5,
-      "sharpe": -0.072
+      "sharpe": 0.016
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
@@ -98,9 +98,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -17.3067,
+      "return_pct": -15.6076,
       "settled_count": 8,
-      "sharpe": -0.084
+      "sharpe": -0.0719
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
@@ -123,18 +123,18 @@
       "agent_id": "qwen3-8-27b",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": false,
-        "sharpe_above_floor": false,
+        "positive_return": true,
+        "sharpe_above_floor": true,
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0018,
+      "max_drawdown": 0.0,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -0.1844,
+      "return_pct": 0.7382,
       "settled_count": 0,
-      "sharpe": -0.5769
+      "sharpe": 0.5775
     }
   },
   "equity_curves": {
@@ -151,7 +151,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T12:06:04.387326+00:00"
+          "ts": "2026-09-04T13:55:31.251212+00:00"
         }
       ]
     },
@@ -258,7 +258,7 @@
         {
           "account_value": 10514.6904,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T12:06:04.387326+00:00"
+          "ts": "2026-09-04T13:55:31.251212+00:00"
         }
       ]
     },
@@ -275,7 +275,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T12:06:04.387326+00:00"
+          "ts": "2026-09-04T13:55:31.251212+00:00"
         }
       ]
     },
@@ -292,14 +292,14 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T12:06:04.387326+00:00"
+          "ts": "2026-09-04T13:55:31.251212+00:00"
         }
       ]
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
       "max_drawdown": 0.0208,
-      "sharpe": -0.072,
+      "sharpe": 0.016,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -452,16 +452,16 @@
           "ts": "2026-09-04T11:59:33.216335+00:00"
         },
         {
-          "account_value": 9899.468737,
+          "account_value": 10020.341371,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T12:06:04.387326+00:00"
+          "ts": "2026-09-04T13:55:31.251212+00:00"
         }
       ]
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
       "max_drawdown": 0.2967,
-      "sharpe": -0.084,
+      "sharpe": -0.0719,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -824,9 +824,9 @@
           "ts": "2026-09-04T07:06:32.260290+00:00"
         },
         {
-          "account_value": 8269.325805,
+          "account_value": 8439.235805,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T12:06:04.387326+00:00"
+          "ts": "2026-09-04T13:55:31.251212+00:00"
         }
       ]
     },
@@ -931,16 +931,16 @@
           "ts": "2026-08-30T17:53:17.369544+00:00"
         },
         {
-          "account_value": 8548.479971,
+          "account_value": 8548.478169,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T12:06:04.387326+00:00"
+          "ts": "2026-09-04T13:55:31.251212+00:00"
         }
       ]
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "max_drawdown": 0.0018,
-      "sharpe": -0.5769,
+      "max_drawdown": 0.0,
+      "sharpe": 0.5775,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -958,9 +958,9 @@
           "ts": "2026-09-03T21:19:33.375992+00:00"
         },
         {
-          "account_value": 9981.557094,
+          "account_value": 10073.821626,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T12:06:04.387326+00:00"
+          "ts": "2026-09-04T13:55:31.251212+00:00"
         }
       ]
     }
@@ -1124,7 +1124,7 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-09-04T12:06:04.438359+00:00",
+  "generated_at": "2026-09-04T13:55:31.289803+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
@@ -1196,6 +1196,82 @@
       "unrealized_pnl": 0.0,
       "updated_at": "2026-09-03T09:53:11.847196+00:00",
       "win_rate": 0.4,
+      "won_count": 2
+    },
+    {
+      "account_value": 10073.821626,
+      "agent_id": "qwen3-8-27b",
+      "cash": 9612.498966,
+      "fees_paid": 0.0,
+      "illiquid_positions": [],
+      "mark_coverage": {
+        "open_positions": 1,
+        "priced_cost_basis": 387.511034,
+        "priced_positions": 1,
+        "unpriced_cost_basis": 0.0,
+        "unpriced_positions": 0
+      },
+      "open_positions": [
+        {
+          "avg_entry_price": 0.42,
+          "cost_basis": 387.511034,
+          "current_price": 0.5,
+          "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
+          "platform": "polymarket",
+          "quantity": 922.64532,
+          "side": "NO",
+          "unrealized_pnl": 73.811626,
+          "valuation_status": "bid_liquidation"
+        }
+      ],
+      "realized_count": 1,
+      "realized_pnl": 0.01,
+      "return_pct": 0.7382,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "total_pnl": 73.821626,
+      "trade_count": 2,
+      "unrealized_pnl": 73.811626,
+      "updated_at": "2026-09-03T21:19:33.375367+00:00",
+      "win_rate": 1.0,
+      "won_count": 1
+    },
+    {
+      "account_value": 10020.341371,
+      "agent_id": "gpt-oss-120b",
+      "cash": 9415.9782,
+      "fees_paid": 30.044,
+      "illiquid_positions": [],
+      "mark_coverage": {
+        "open_positions": 1,
+        "priced_cost_basis": 495.5778,
+        "priced_positions": 1,
+        "unpriced_cost_basis": 0.0,
+        "unpriced_positions": 0
+      },
+      "open_positions": [
+        {
+          "avg_entry_price": 0.41,
+          "cost_basis": 495.5778,
+          "current_price": 0.5,
+          "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
+          "platform": "polymarket",
+          "quantity": 1208.726341,
+          "side": "NO",
+          "unrealized_pnl": 108.785371,
+          "valuation_status": "bid_liquidation"
+        }
+      ],
+      "realized_count": 11,
+      "realized_pnl": -70.132,
+      "return_pct": 0.2034,
+      "settled_count": 5,
+      "starting_cash": 10000.0,
+      "total_pnl": 20.341371,
+      "trade_count": 16,
+      "unrealized_pnl": 108.785371,
+      "updated_at": "2026-09-04T11:59:33.215502+00:00",
+      "win_rate": 0.1818,
       "won_count": 2
     },
     {
@@ -1277,83 +1353,7 @@
       "won_count": 0
     },
     {
-      "account_value": 9981.557094,
-      "agent_id": "qwen3-8-27b",
-      "cash": 9612.498966,
-      "fees_paid": 0.0,
-      "illiquid_positions": [],
-      "mark_coverage": {
-        "open_positions": 1,
-        "priced_cost_basis": 387.511034,
-        "priced_positions": 1,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
-      },
-      "open_positions": [
-        {
-          "avg_entry_price": 0.42,
-          "cost_basis": 387.511034,
-          "current_price": 0.4,
-          "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
-          "platform": "polymarket",
-          "quantity": 922.64532,
-          "side": "NO",
-          "unrealized_pnl": -18.452906,
-          "valuation_status": "bid_liquidation"
-        }
-      ],
-      "realized_count": 1,
-      "realized_pnl": 0.01,
-      "return_pct": -0.1844,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "total_pnl": -18.442906,
-      "trade_count": 2,
-      "unrealized_pnl": -18.452906,
-      "updated_at": "2026-09-03T21:19:33.375367+00:00",
-      "win_rate": 1.0,
-      "won_count": 1
-    },
-    {
-      "account_value": 9899.468737,
-      "agent_id": "gpt-oss-120b",
-      "cash": 9415.9782,
-      "fees_paid": 30.044,
-      "illiquid_positions": [],
-      "mark_coverage": {
-        "open_positions": 1,
-        "priced_cost_basis": 495.5778,
-        "priced_positions": 1,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
-      },
-      "open_positions": [
-        {
-          "avg_entry_price": 0.41,
-          "cost_basis": 495.5778,
-          "current_price": 0.4,
-          "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
-          "platform": "polymarket",
-          "quantity": 1208.726341,
-          "side": "NO",
-          "unrealized_pnl": -12.087263,
-          "valuation_status": "bid_liquidation"
-        }
-      ],
-      "realized_count": 11,
-      "realized_pnl": -70.132,
-      "return_pct": -1.0053,
-      "settled_count": 5,
-      "starting_cash": 10000.0,
-      "total_pnl": -100.531263,
-      "trade_count": 16,
-      "unrealized_pnl": -12.087263,
-      "updated_at": "2026-09-04T11:59:33.215502+00:00",
-      "win_rate": 0.1818,
-      "won_count": 2
-    },
-    {
-      "account_value": 8548.479971,
+      "account_value": 8548.478169,
       "agent_id": "minimax-m3",
       "cash": 8548.469335,
       "fees_paid": 161.60565,
@@ -1369,12 +1369,12 @@
         {
           "avg_entry_price": 0.54,
           "cost_basis": 0.009735,
-          "current_price": 0.59,
+          "current_price": 0.49,
           "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
           "platform": "polymarket",
           "quantity": 0.018027,
           "side": "YES",
-          "unrealized_pnl": 0.000901,
+          "unrealized_pnl": -0.000901,
           "valuation_status": "bid_liquidation"
         }
       ],
@@ -1383,15 +1383,15 @@
       "return_pct": -14.5152,
       "settled_count": 1,
       "starting_cash": 10000.0,
-      "total_pnl": -1451.520029,
+      "total_pnl": -1451.521831,
       "trade_count": 10,
-      "unrealized_pnl": 0.000901,
+      "unrealized_pnl": -0.000901,
       "updated_at": "2026-08-30T17:53:17.368899+00:00",
       "win_rate": 0.0,
       "won_count": 0
     },
     {
-      "account_value": 8269.325805,
+      "account_value": 8439.235805,
       "agent_id": "llama-3.3-70b-instruct",
       "cash": 6479.725805,
       "fees_paid": 72.478,
@@ -1407,34 +1407,34 @@
         {
           "avg_entry_price": 0.286667,
           "cost_basis": 859.713333,
-          "current_price": 0.4,
+          "current_price": 0.49,
           "ident": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649",
           "platform": "polymarket",
           "quantity": 2999.0,
           "side": "YES",
-          "unrealized_pnl": 339.886667,
+          "unrealized_pnl": 609.796667,
           "valuation_status": "bid_liquidation"
         },
         {
           "avg_entry_price": 0.72,
           "cost_basis": 720.0,
-          "current_price": 0.59,
+          "current_price": 0.49,
           "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
           "platform": "polymarket",
           "quantity": 1000.0,
           "side": "YES",
-          "unrealized_pnl": -130.0,
+          "unrealized_pnl": -230.0,
           "valuation_status": "bid_liquidation"
         }
       ],
       "realized_count": 13,
       "realized_pnl": -1901.458862,
-      "return_pct": -17.3067,
+      "return_pct": -15.6076,
       "settled_count": 8,
       "starting_cash": 10000.0,
-      "total_pnl": -1730.674195,
+      "total_pnl": -1560.764195,
       "trade_count": 23,
-      "unrealized_pnl": 209.886667,
+      "unrealized_pnl": 379.796667,
       "updated_at": "2026-09-04T07:06:32.259416+00:00",
       "win_rate": 0.2308,
       "won_count": 3
@@ -1443,9 +1443,9 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 1031,
+      "cycle_age_seconds": 7597,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-01T05:43:43.131613+00:00",
       "last_action_at": null,
@@ -1465,13 +1465,13 @@
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "no_trade",
+      "status": "delayed",
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 983,
+      "cycle_age_seconds": 7550,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-03T09:53:11.847196+00:00",
       "last_action_at": "2026-09-03T09:53:11.847823+00:00",
@@ -1491,7 +1491,7 @@
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "no_trade",
+      "status": "delayed",
       "store_present": true
     },
     "glm-5-3": {
@@ -1521,7 +1521,7 @@
       "store_present": true
     },
     "glm-5-3-flash": {
-      "cycle_age_seconds": 192917,
+      "cycle_age_seconds": 199484,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 503.",
       "expected_cycle_seconds": 1800,
@@ -1547,9 +1547,9 @@
       "store_present": true
     },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 387,
+      "cycle_age_seconds": 6954,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle recorded an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-04T11:59:33.215502+00:00",
       "last_action_at": "2026-09-04T11:59:33.216335+00:00",
@@ -1569,13 +1569,13 @@
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "active",
+      "status": "delayed",
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 330,
+      "cycle_age_seconds": 6897,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-04T07:06:32.259416+00:00",
       "last_action_at": "2026-09-04T07:06:32.260290+00:00",
@@ -1595,13 +1595,13 @@
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "no_trade",
+      "status": "delayed",
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 209,
+      "cycle_age_seconds": 6775,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-08-30T17:53:17.368899+00:00",
       "last_action_at": "2026-08-30T17:53:17.369544+00:00",
@@ -1621,13 +1621,13 @@
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "no_trade",
+      "status": "delayed",
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 72,
+      "cycle_age_seconds": 6638,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "The most recent confirmed cycle is later than the expected cadence.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-03T21:19:33.375367+00:00",
       "last_action_at": "2026-09-03T21:19:33.375992+00:00",
@@ -1647,7 +1647,7 @@
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "no_trade",
+      "status": "delayed",
       "store_present": true
     }
   },
@@ -1676,8 +1676,8 @@
       }
     ],
     "models_total": 8,
-    "models_verified": 6,
-    "models_with_confirmed_cycle": 6,
+    "models_verified": 0,
+    "models_with_confirmed_cycle": 0,
     "provider_paused": [],
     "status": "attempts_failed"
   },
