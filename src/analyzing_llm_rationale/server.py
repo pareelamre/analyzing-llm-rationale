@@ -253,6 +253,14 @@ _PROVIDER_BACKOFF_BASE_S = float(os.environ.get("PROVIDER_BACKOFF_BASE_S", "0.5"
 _AGENT_TOOL_PROVIDER_MAX_RETRIES = max(
     0, int(os.environ.get("AGENT_TOOL_PROVIDER_MAX_RETRIES", "4"))
 )
+# Agent-loop turns carry the full trading prompt and are not interactive, so
+# they get no wall-clock ceiling by default (<=0 means "await the call").
+# Measured against SCADS: DeepSeek-V4-Flash answers an 83k-token prompt in
+# ~6s, so the previous 90s ceiling was never the real constraint -- but a
+# ceiling here truncates a slow-but-healthy model for no benefit.
+_AGENT_TOOL_PROVIDER_TIMEOUT_S = float(
+    os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_S", "0")
+)
 _AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES = max(
     0, int(os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES", "1"))
 )
@@ -2765,7 +2773,15 @@ async def _provider_chat(
     model_name = getattr(provider, "model_name", "unknown")
     provider_type = type(provider).__name__
     policy = _provider_retry_policy.get()
-    effective_timeout_s = _PROVIDER_TIMEOUT_S if timeout_s is None else max(0.001, timeout_s)
+    # A non-positive budget means "no timeout": asyncio.wait_for(timeout=None)
+    # simply awaits the call. Used by the agent tool loop, whose models are
+    # given very large prompts and must not be cut off mid-answer.
+    if timeout_s is None:
+        effective_timeout_s = _PROVIDER_TIMEOUT_S
+    elif timeout_s <= 0:
+        effective_timeout_s = None
+    else:
+        effective_timeout_s = max(0.001, timeout_s)
     effective_max_retries = (
         _PROVIDER_MAX_RETRIES
         if max_retries is None and policy is None
@@ -2924,11 +2940,29 @@ def _provider_http_error(exc: Exception, *, model_name: Optional[str] = None) ->
         # model's own outage surfaces as-is instead of being silently masked
         # by a substituted model. Name the model so that's diagnosable
         # instead of reading as a generic, unexplained "forecasting is down".
-        detail = "The forecasting model is temporarily unavailable. Please retry in a moment."
-        if model_name:
+        #
+        # A local timeout and a genuine upstream outage used to collapse into
+        # one identical sentence, so agent-trading ticks reported "upstream
+        # provider is unavailable" for models SCADS' own status probe listed
+        # as up -- the real cause (we timed out) was invisible, and the only
+        # record of it was a server-side log line that never reached the
+        # runner. Say which of the two happened, and carry the upstream status
+        # code when the provider gave us one. Neither leaks prompts or keys.
+        timed_out = isinstance(exc, asyncio.TimeoutError)
+        subject = f"The '{model_name}'" if model_name else "The"
+        if timed_out:
             detail = (
-                f"The '{model_name}' forecasting model is temporarily unavailable. "
-                "Please retry in a moment, or pass a different `model` in the request."
+                f"{subject} forecasting model did not respond before the request "
+                "timed out (the provider may be reachable but slow). Please retry "
+                "in a moment, or pass a different `model` in the request."
+            )
+        else:
+            upstream = getattr(exc, "status_code", None)
+            upstream_note = f" (upstream returned HTTP {upstream})" if upstream else ""
+            detail = (
+                f"{subject} forecasting model is temporarily unavailable"
+                f"{upstream_note}. Please retry in a moment, or pass a different "
+                "`model` in the request."
             )
         return HTTPException(
             status_code=503,
@@ -14966,6 +15000,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             messages,
             temperature,
             max_tokens,
+            timeout_s=_AGENT_TOOL_PROVIDER_TIMEOUT_S,
             max_retries=_AGENT_TOOL_PROVIDER_MAX_RETRIES,
             max_timeout_retries=_AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES,
             backoff_base_s=_AGENT_TOOL_PROVIDER_BACKOFF_BASE_S,

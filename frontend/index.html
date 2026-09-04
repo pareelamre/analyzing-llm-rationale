@@ -3000,8 +3000,8 @@ const BUILTIN_CHAT_MODELS_FALLBACK = [
   { key: 'llama-3.3-70b-instruct', label: 'Llama-3.3-70B', model: 'meta-llama/Llama-3.3-70B-Instruct', fallbacks: ['google/gemma-4-26B-A4B-it', 'openai/gpt-oss-120b'] },
   { key: 'minimax-m3', label: 'MiniMax-M3', model: 'MiniMaxAI/MiniMax-M3', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-26B-A4B-it'] },
   { key: 'qwen3-8-27b', label: 'Qwen3.8-27B', model: 'Qwen/Qwen3.8-27B', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-26B-A4B-it'] },
-  { key: 'glm-5.2-fp8', label: 'GLM-5.2-FP8', model: 'zai-org/GLM-5.2-FP8', fallbacks: ['MiniMaxAI/MiniMax-M3'] },
-  { key: 'glm-5-3-flash', label: 'GLM-5.3 Flash', model: 'zai-org/GLM-5.3-Flash', fallbacks: ['zai-org/GLM-5.2-FP8', 'openai/gpt-oss-120b'] },
+  { key: 'glm-5-3', label: 'GLM-5.3', model: 'zai-org/GLM-5.3', fallbacks: ['zai-org/GLM-5.3-Flash', 'openai/gpt-oss-120b'] },
+  { key: 'glm-5-3-flash', label: 'GLM-5.3 Flash', model: 'zai-org/GLM-5.3-Flash', fallbacks: ['zai-org/GLM-5.3', 'openai/gpt-oss-120b'] },
   { key: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', model: 'deepseek-ai/DeepSeek-V4-Flash', fallbacks: ['openai/gpt-oss-120b', 'google/gemma-4-26B-A4B-it'] },
 ];
 let builtinChatModels = BUILTIN_CHAT_MODELS_FALLBACK.slice();
@@ -5800,7 +5800,7 @@ const _MTM_MODEL_COLORS = {
   'minimax-m3': '#22c55e',
   'qwen3-coder-30b-a3b-instruct': '#14b8a6',
   'qwen3-8-27b': '#14b8a6',
-  'glm-5.2-fp8': '#eab308',
+  'glm-5-3': '#eab308',
   'crowd-follow': '#94a3b8',
   'market-follow': '#64748b',
 };
@@ -7488,7 +7488,7 @@ function _ebModelLabel(model) {
   if (raw === 'minimax-m3') return 'MiniMax M3';
   if (raw === 'qwen3-coder-30b-a3b-instruct') return 'Qwen3 Coder 30B';
   if (raw === 'qwen3-8-27b') return 'Qwen3.8 27B';
-  if (raw === 'glm-5.2-fp8') return 'GLM 5.2';
+  if (raw === 'glm-5-3') return 'GLM 5.3';
   if (raw === 'kimi-k2.5') return 'Kimi K2.5';
   if (raw === 'kimi-k2.6') return 'Kimi K2.6';
   if (raw === 'kimi-k2.7-code') return 'Kimi K2.7 Code';

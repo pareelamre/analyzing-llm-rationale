@@ -513,13 +513,13 @@ class PaperCalibrationContextTests(unittest.TestCase):
 
 class ModelBackstopCharsTests(unittest.TestCase):
     def test_uses_the_model_s_verified_context_window_when_known(self):
-        # glm-5.2-fp8 is the only one of the ten agent-trading models whose
+        # glm-5-3 is the only one of the ten agent-trading models whose
         # deployed context length SCADS AI's own /v1/models listing actually
         # publishes (524288 tokens, checked 2026-08-18). Half reserved for
         # the rest of the real prompt (system prompt, ~17 tool specs, ReAct
         # loop history), 4 chars/token.
         self.assertEqual(
-            agent_trading_tick._model_backstop_chars("glm-5.2-fp8"),
+            agent_trading_tick._model_backstop_chars("glm-5-3"),
             int(524288 * 4 * 0.5),
         )
 
@@ -586,10 +586,16 @@ class BuildQuestionTests(unittest.TestCase):
         # somewhere -- verify the overflow is handled by dropping whole
         # trailing lines (leaving every surviving candidate fully readable),
         # never by slicing raw characters mid-line.
+        #
+        # The cap is opt-in now (AGENT_TRADING_MAX_QUESTION_CHARS, unlimited
+        # by default), so set one explicitly to exercise the retained trimming
+        # machinery rather than asserting against an unlimited budget.
+        cap = 200_000
         new = [_quote(f"KX{i}", question=f"Candidate market number {i} with a fairly long question text") for i in range(1500)]
         candidates = agent_trading_tick._build_candidates_block([], new)
-        question = agent_trading_tick._build_question("PORTFOLIO", candidates)
-        self.assertLessEqual(len(question), agent_trading_tick.MAX_QUESTION_CHARS)
+        with mock.patch.object(agent_trading_tick, "MAX_QUESTION_CHARS", cap):
+            question = agent_trading_tick._build_question("PORTFOLIO", candidates)
+        self.assertLessEqual(len(question), cap)
         self.assertIn(agent_trading_tick._TRADING_INSTRUCTION, question)
         self.assertIn("(more omitted for space)", question)
         # Every candidate line that DID survive must be a complete, intact

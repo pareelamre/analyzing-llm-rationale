@@ -703,6 +703,36 @@ class ServerTests(unittest.TestCase):
         self.assertIn("gpt-oss-120b", response.json()["detail"])
         self.assertNotIn("upstream unavailable", response.json()["detail"])
 
+    def test_provider_timeout_is_reported_as_a_timeout_not_an_outage(self):
+        # Live incident: agent-trading ticks reported "upstream provider is
+        # unavailable" for deepseek-v4-flash and glm-5-3-flash, which SCADS'
+        # own status probe listed as up. The real cause was a local timeout,
+        # collapsed into the identical outage sentence, so half the fleet
+        # looked like a provider outage for hours.
+        err = server_module._provider_http_error(asyncio.TimeoutError(), model_name="deepseek-v4-flash")
+        self.assertEqual(err.status_code, 503)
+        self.assertIn("deepseek-v4-flash", err.detail)
+        self.assertIn("timed out", err.detail)
+        self.assertNotIn("temporarily unavailable", err.detail)
+
+    def test_provider_outage_reports_the_upstream_status_code(self):
+        from analyzing_llm_rationale.providers import RetryableProviderError
+
+        err = server_module._provider_http_error(
+            RetryableProviderError("rate limited", status_code=429), model_name="glm-5-3"
+        )
+        self.assertEqual(err.status_code, 503)
+        self.assertIn("glm-5-3", err.detail)
+        self.assertIn("HTTP 429", err.detail)
+        self.assertNotIn("timed out", err.detail)
+
+    def test_provider_outage_without_an_upstream_code_stays_clean(self):
+        from analyzing_llm_rationale.providers import RetryableProviderError
+
+        err = server_module._provider_http_error(RetryableProviderError("boom"), model_name="glm-5-3")
+        self.assertIn("temporarily unavailable.", err.detail)
+        self.assertNotIn("HTTP", err.detail)
+
     def test_predict_allows_anonymous_when_api_key_unset(self):
         with mock.patch.object(server_module, "_REQUIRED_API_KEY", None):
             response = self.client.post(

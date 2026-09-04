@@ -567,7 +567,7 @@ class PipelineTests(unittest.TestCase):
         # left unset elsewhere rather than guessed, since agent_trading_tick
         # .py's backstop must never overestimate a model's real capacity.
         self.assertIsNone(models["llama-3.3-70b-instruct"].context_window_tokens)
-        self.assertEqual(models["glm-5.2-fp8"].context_window_tokens, 524288)
+        self.assertEqual(models["glm-5-3"].context_window_tokens, 524288)
         self.assertIn("gpt-5", models)
         self.assertEqual(models["gpt-5"].provider, "openai-compatible")
         self.assertEqual(models["gpt-5"].router_model_name, "gpt-5")
@@ -600,7 +600,7 @@ class PipelineTests(unittest.TestCase):
         )
         chat_models = {cfg.name for cfg in scads_chat_model_options(repo_root / "configs" / "models.yaml")}
         self.assertIn("qwen3-8-27b", chat_models)
-        self.assertIn("glm-5.2-fp8", chat_models)
+        self.assertIn("glm-5-3", chat_models)
         self.assertNotIn("kimi-k3", chat_models)
         self.assertIn("gemma-4-26b-a4b-it", chat_models)
         self.assertNotIn("qwen3-vl-8b-instruct", chat_models)
@@ -615,8 +615,8 @@ class PipelineTests(unittest.TestCase):
             (
                 "deepseek-v4-flash",
                 "gemma-4-26b-a4b-it",
+                "glm-5-3",
                 "glm-5-3-flash",
-                "glm-5.2-fp8",
                 "gpt-oss-120b",
                 "llama-3.3-70b-instruct",
                 "minimax-m3",
