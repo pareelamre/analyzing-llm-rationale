@@ -505,22 +505,28 @@ https://foresea.ink/.well-known/mcp/server.json
 
 The remote MCP server is a thin tool layer over the public API. It exposes:
 
-- `foresea_forecast`: calls `POST /predict` — produce calibrated probability forecasts with evidence.
-- `foresea_analyze_market`: calls `POST /agent/analyze` — evaluate a specific Polymarket/Kalshi market with edge & thesis.
-- `foresea_scan_markets`: calls `GET /agent/scan` — scan live markets ranked by model-vs-market disagreement.
-- `foresea_batch_quotes`: calls `GET /market/batch` — fetch multi-market quotes in one roundtrip.
-- `foresea_edge_board`: calls `GET /edge-board` — top open trading opportunities ranked by statistical edge.
-- `foresea_track_record`: calls `GET /track-record` — public accuracy, Brier score, ECE, and calibration metrics.
+- `foresea_forecast`: produce calibrated probability forecasts with rationale and news evidence.
+- `foresea_analyze_market`: evaluate a specific Polymarket/Kalshi market with model-vs-market edge & thesis.
+- `foresea_scan_markets`: scan live markets ranked by model-vs-market disagreement.
+- `foresea_batch_quotes`: fetch multi-market quotes across venues in one roundtrip.
+- `foresea_check_run`: check background execution status for long-running market research runs.
+- `foresea_edge_board`: top open trading opportunities ranked by statistical edge.
+- `foresea_track_record`: public accuracy, Brier score, ECE, and calibration metrics.
+- `foresea_debate_market`: conduct adversarial multi-agent debate (Bull vs. Bear vs. Risk Judge).
+- `foresea_optimize_portfolio`: calculate optimal Fractional Kelly capital allocations across open edges.
+- `foresea_feed_latest`: real-time alpha feed combining live market edges, agent trades, and leaderboard rankings.
 - `foresea_exchange_status`: inspect Kalshi exchange status (trading active flag) and operating schedule.
 - `foresea_orderbook`: fetch live bids and asks orderbook depth for Kalshi tickers or Polymarket tokens.
 - `foresea_market_tags`: fetch active category taxonomy and tags from Polymarket.
 - `foresea_price_history`: fetch historical price points or OHLC candlesticks.
 - `foresea_live_data`: fetch real-time sports game statistics, play-by-play data, and live event feeds.
 - `foresea_polymarket_meta`: fetch event series listings, community discussion comments, or sports metadata.
-- `foresea_recent_trades`: fetch recent executed trade tape / prints (prices, sizes, timestamps) on Kalshi or Polymarket.
-- `foresea_market_leaderboard`: fetch top profitable trader leaderboard and volume rankings from Polymarket.
-- `foresea_pr_agent`: calls `GET /pr-agent` — concise copy and install metadata for agents/catalogs that ask how to describe Foresea.
-- Resources: `foresea://track-record`, `foresea://pr-agent`, and `foresea://openapi.json`.
+- `foresea_recent_trades`: fetch recent executed trade tape / prints (prices, sizes, timestamps).
+- `foresea_market_leaderboard`: fetch top profitable trader leaderboard and volume rankings.
+- **Resources**: `foresea://edge-board`, `foresea://markets/trending`, `foresea://track-record`, `foresea://openapi.json`.
+- **Prompts**: `foresea_market_risk_prompt`, `foresea_calibrate_hypothesis`, `foresea_forecast_prompt`, `foresea_system_prompt`.
+
+See [docs/mcp_commercial_guide.md](docs/mcp_commercial_guide.md) for full harness setup guides (Claude Code, Google Antigravity, OpenAI Codex, Cursor, Windsurf, OpenHands, Smithery.ai).
 
 ### Custom Integrations & Ecosystem Tools
 
@@ -618,11 +624,20 @@ in `data/pr_manual_targets.json`. Current manual/GitHub target: mcp.so issue
 
 #### Add Foresea to your agent (10 seconds)
 
-It's a remote, **anonymous** Streamable-HTTP server — no key, no install. Point any MCP client at the URL:
-
+##### Option A: Zero-Install Remote Streamable-HTTP (Claude Code / Cursor / Windsurf)
 ```bash
-# Claude Code
+# Claude Code (Remote HTTP)
 claude mcp add --transport http foresea https://foresea.ink/mcp/
+```
+
+##### Option B: Zero-Install Local Stdio via `uvx` (Claude Desktop / Antigravity / Codex)
+```bash
+uvx --from git+https://github.com/pareelamre/analyzing-llm-rationale.git foresea-mcp
+```
+
+##### Option C: 1-Click Smithery.ai CLI
+```bash
+npx -y @smithery/cli install foresea --client claude
 ```
 
 ```jsonc
