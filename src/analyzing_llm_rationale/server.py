@@ -2969,7 +2969,16 @@ def _provider_http_error(exc: Exception, *, model_name: Optional[str] = None) ->
             detail=detail,
             headers={"Retry-After": "10"},
         )
-    return HTTPException(status_code=502, detail="The forecasting model returned an unexpected response.")
+    # Name the failure class. This branch is a catch-all -- anything raised in
+    # the agent tool loop lands here -- so a bare "unexpected response" gave no
+    # way to tell an upstream format problem from a bug in our own tool code.
+    # The class name carries no prompt, URL, or key; the message does not.
+    subject = f"The '{model_name}'" if model_name else "The"
+    return HTTPException(
+        status_code=502,
+        detail=(f"{subject} forecasting model returned an unexpected response "
+                f"({type(exc).__name__})."),
+    )
 
 
 def _json_script_payload(payload: Dict[str, Any]) -> str:
@@ -15104,7 +15113,10 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             await _tool_forecast({"question": question,
                                   "market_probability": (quote.probability if quote else req.market_probability)})
     except Exception as exc:
-        raise _provider_http_error(exc) from exc
+        # Name the model: this is the agent-trading path, where each ledger is
+        # one model, and an unnamed failure is unattributable on the board.
+        logger.exception("agent tool loop failed for model=%s", req.model)
+        raise _provider_http_error(exc, model_name=req.model) from exc
     finally:
         _provider_retry_policy.reset(policy_token)
 

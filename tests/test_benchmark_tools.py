@@ -163,6 +163,82 @@ class BenchmarkToolTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_full_notebook_evicts_the_lowest_value_note_instead_of_failing(self):
+        # Live: llama-3.3-70b-instruct sat at the 50-note cap, so every new
+        # observation was rejected outright while entries like "No new evidence
+        # found in search results." kept their slots. Memory must keep turning
+        # over instead of freezing.
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "notes.json"
+            ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+            # One placeholder note plus enough substantive ones to fill the cap.
+            benchmark_tools.manage_notes(
+                {"action": "add", "text": "No new evidence found in search results."},
+                ctx, path=path,
+            )
+            for i in range(benchmark_tools.MAX_NOTES_PER_AGENT - 1):
+                benchmark_tools.manage_notes(
+                    {"action": "add",
+                     "text": f"Fed Sep 2026: model 45% vs market 42%, edge below threshold ({i}).",
+                     "tags": ["fed"]},
+                    ctx, path=path,
+                )
+
+            added = benchmark_tools.manage_notes(
+                {"action": "add", "text": "CME FedWatch now 56% no-change.", "tags": ["fed"]},
+                ctx, path=path,
+            )
+
+            self.assertTrue(added["ok"])
+            self.assertIn("No new evidence found", added["evicted"]["text"])
+            listed = benchmark_tools.manage_notes({"action": "list"}, ctx, path=path)
+            texts = [n["text"] for n in listed["notes"]]
+            self.assertEqual(len(texts), benchmark_tools.MAX_NOTES_PER_AGENT)
+            self.assertIn("CME FedWatch now 56% no-change.", texts)
+            self.assertNotIn("No new evidence found in search results.", texts)
+
+    def test_edge_below_fee_floor_is_rejected_and_clear_edge_passes(self):
+        # gpt-oss-120b turned +308 gross into -28 net paying 337 in fees: an
+        # edge thinner than the round-trip cost loses however good the call.
+        thin = benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.55},
+            price=0.53, quantity=100, fee=1.50, side="yes", risk_reducing=False,
+        )
+        self.assertTrue(thin["checked"])
+        self.assertFalse(thin["clears"])  # 2pp gross edge, 1.5pp fee -> 0.5pp net
+
+        fat = benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.70},
+            price=0.53, quantity=100, fee=1.50, side="yes", risk_reducing=False,
+        )
+        self.assertTrue(fat["clears"])  # 17pp gross edge easily clears
+
+    def test_edge_gate_prices_the_no_side_off_one_minus_p(self):
+        # A NO contract wins when the event does not happen.
+        no_side = benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.20},
+            price=0.55, quantity=100, fee=0.50, side="no", risk_reducing=False,
+        )
+        self.assertTrue(no_side["clears"])  # P(NO)=0.80 vs 0.55 paid
+
+        wrong_way = benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.80},
+            price=0.55, quantity=100, fee=0.50, side="no", risk_reducing=False,
+        )
+        self.assertFalse(wrong_way["clears"])  # P(NO)=0.20 vs 0.55 paid
+
+    def test_edge_gate_skips_closes_and_unstated_probabilities(self):
+        # The gate holds an agent to the number it stated; it never invents one,
+        # and a risk-reducing close must stay available.
+        self.assertFalse(benchmark_tools._edge_clears_fees(
+            {}, price=0.5, quantity=10, fee=0.1, side="yes", risk_reducing=False,
+        )["checked"])
+        self.assertFalse(benchmark_tools._edge_clears_fees(
+            {"model_probability": 0.9},
+            price=0.5, quantity=10, fee=0.1, side="yes", risk_reducing=True,
+        )["checked"])
+
     def test_manage_notes_add_search_edit_delete_with_limits(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "notes.json"
