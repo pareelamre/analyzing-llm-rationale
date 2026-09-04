@@ -197,10 +197,11 @@ class ForeseaClient:
     def _headers(self) -> Dict[str, str]:
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "foresea-mcp/0.1",
+            "User-Agent": "foresea-mcp/0.2",
         }
         if self.api_key:
             headers["X-API-Key"] = self.api_key
+            headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
     def _url(self, path: str) -> str:
@@ -855,6 +856,26 @@ def create_mcp_server(
         return json.dumps(await _call_tool_async(client.atrack_record), sort_keys=True)
 
     @mcp.resource(
+        "foresea://edge-board",
+        name="Foresea live edge board",
+        mime_type="application/json",
+    )
+    async def edge_board_resource() -> str:
+        """Live prediction market edge board with model-vs-market mispricings."""
+
+        return json.dumps(await _call_tool_async(client.aedge_board), sort_keys=True)
+
+    @mcp.resource(
+        "foresea://markets/trending",
+        name="Foresea trending markets",
+        mime_type="application/json",
+    )
+    async def trending_markets_resource() -> str:
+        """Top trending and active prediction markets across Polymarket and Kalshi."""
+
+        return json.dumps(await _call_tool_async(client.afeed_latest, 10, 0.05), sort_keys=True)
+
+    @mcp.resource(
         "foresea://openapi.json",
         name="Foresea OpenAPI schema",
         mime_type="application/json",
@@ -875,10 +896,31 @@ def create_mcp_server(
         )
 
     @mcp.prompt()
+    def foresea_market_risk_prompt(market_or_topic: str) -> str:
+        """Evaluate macroeconomic or event risks using live prediction market probability consensus."""
+
+        return (
+            f"Analyze the market risks and probability shift for '{market_or_topic}'. "
+            "1. Use foresea_scan_markets to find related prediction markets.\n"
+            "2. Call foresea_analyze_market or foresea_forecast to assess if current pricing underestimates or overestimates risk.\n"
+            "3. Summarize the bull/bear cases, model edge, and recommended hedging stance."
+        )
+
+    @mcp.prompt()
+    def foresea_calibrate_hypothesis(hypothesis: str) -> str:
+        """Cross-examine a factual or forward-looking hypothesis against calibrated forecasting models."""
+
+        return (
+            f"Test and calibrate this hypothesis: '{hypothesis}'.\n"
+            "1. Use foresea_forecast to generate a calibrated probability estimate with cited evidence.\n"
+            "2. If applicable, use foresea_debate_market to conduct an adversarial Bull vs Bear examination.\n"
+            "3. Report the calibrated probability, key vulnerability drivers, and final recommendation."
+        )
+
+    @mcp.prompt()
     def foresea_system_prompt() -> str:
-        """Returns the recommended system prompt snippet for Claude Desktop users.
-        Paste this into your claude_desktop_config.json system prompt to make Claude
-        proactively use Foresea tools for forecasting questions."""
+        """Returns the recommended system prompt snippet for Claude Desktop and agent harnesses.
+        Paste this into your configuration to make the agent proactively use Foresea tools."""
 
         return (
             "You have access to Foresea (foresea.ink), a calibrated AI forecasting "
@@ -916,3 +958,60 @@ def run_mcp_server(
         streamable_http_path=streamable_http_path,
     )
     mcp.run(transport=transport)
+
+
+def main_cli(argv: Optional[List[str]] = None) -> int:
+    """Standalone CLI entrypoint for launching the Foresea FastMCP server (for uvx/npx)."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="foresea-mcp",
+        description="Foresea Model Context Protocol (FastMCP) Server for AI Agent Harnesses",
+    )
+    parser.add_argument(
+        "--transport",
+        choices=list(SUPPORTED_TRANSPORTS),
+        default=os.environ.get("FORESEA_MCP_TRANSPORT", "stdio"),
+        help="Transport protocol: 'stdio' (Claude Code/Antigravity/Codex), 'sse', or 'streamable-http'.",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=os.environ.get("FORESEA_BASE_URL", DEFAULT_FORESEA_BASE_URL),
+        help=f"Foresea backend URL (default: {DEFAULT_FORESEA_BASE_URL}).",
+    )
+    parser.add_argument(
+        "--api-key",
+        default=os.environ.get("FORESEA_API_KEY") or os.environ.get("API_KEY"),
+        help="Foresea API key for authenticated tiers.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=float(os.environ.get("FORESEA_MCP_TIMEOUT_S", "120")),
+        help="HTTP timeout in seconds (default: 120).",
+    )
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("FORESEA_MCP_HOST", "127.0.0.1"),
+        help="Host address to bind when running HTTP/SSE transport (default: 127.0.0.1).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("FORESEA_MCP_PORT", "8000")),
+        help="Port to bind when running HTTP/SSE transport (default: 8000).",
+    )
+    args = parser.parse_args(argv)
+    run_mcp_server(
+        transport=args.transport,
+        base_url=args.base_url,
+        api_key=args.api_key,
+        timeout_s=args.timeout,
+        host=args.host,
+        port=args.port,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main_cli())
