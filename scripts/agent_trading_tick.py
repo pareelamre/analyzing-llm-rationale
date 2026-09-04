@@ -1163,14 +1163,59 @@ _TRADING_INSTRUCTION = (
 )
 
 
-def _assemble_question(portfolio_block: str, candidates_block: str) -> str:
+def _recalled_notes_block(agent_id: str, limit: int = 20) -> str:
+    """The agent's own notes, injected straight into the cycle prompt.
+
+    Recall used to depend on the model choosing to spend one of its scarce
+    tool steps calling manage_notes. Most never did: gemma, gpt-oss and qwen
+    each wrote notes across dozens of cycles and read them back exactly zero
+    times, so memory accumulated and was never used -- writing without
+    reading is not self-improvement. Surfacing notes here makes recall
+    automatic and costs no tool step; manage_notes stays available for
+    search, edit, and recording new observations.
+    """
+    try:
+        from analyzing_llm_rationale import benchmark_tools
+
+        notes = benchmark_tools._load_notes().get(agent_id, [])
+    except Exception:
+        return ""
+    if not notes:
+        return ""
+    # Newest last: the model reads top-to-bottom and recency matters most.
+    ordered = sorted(notes, key=lambda n: str(n.get("created_at") or ""))[-limit:]
+    lines = []
+    for note in ordered:
+        text = " ".join(str(note.get("text") or "").split())
+        if not text:
+            continue
+        stamp = str(note.get("created_at") or "")[:10]
+        tags = ", ".join(str(t) for t in (note.get("tags") or []))
+        suffix = f"  [{tags}]" if tags else ""
+        lines.append(f"  - ({stamp}) {text}{suffix}")
+    if not lines:
+        return ""
+    return (
+        "=== Your notes from previous cycles ===\n"
+        + "\n".join(lines)
+        + "\nThese are your own prior conclusions, not external evidence. Re-verify "
+        "anything time-sensitive before acting on it, and use manage_notes to add or "
+        "correct entries as your view changes."
+    )
+
+
+def _assemble_question(portfolio_block: str, candidates_block: str,
+                       agent_id: Optional[str] = None) -> str:
     as_of = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     time_anchor = (
         f"=== Current simulation time ===\n{as_of}\n"
         "Treat dates before this timestamp as historical, never as upcoming catalysts. "
         "Use a catalyst only when it is still ahead and inside the selected contract's resolution window."
     )
-    return "\n\n".join(filter(None, [time_anchor, portfolio_block, candidates_block, _TRADING_INSTRUCTION]))
+    notes_block = _recalled_notes_block(agent_id or MODEL)
+    return "\n\n".join(filter(None, [
+        time_anchor, portfolio_block, notes_block, candidates_block, _TRADING_INSTRUCTION,
+    ]))
 
 
 def _trim_block_to_lines(block: str, budget: int) -> str:
@@ -1202,8 +1247,9 @@ def _trim_block_to_lines(block: str, budget: int) -> str:
     return "\n".join(kept)
 
 
-def _build_question(portfolio_block: str, candidates_block: str) -> str:
-    question = _assemble_question(portfolio_block, candidates_block)
+def _build_question(portfolio_block: str, candidates_block: str,
+                    agent_id: Optional[str] = None) -> str:
+    question = _assemble_question(portfolio_block, candidates_block, agent_id)
     if len(question) <= MAX_QUESTION_CHARS:
         return question
     # Over MAX_QUESTION_CHARS -- server.py no longer caps AgentAnalyzeRequest
@@ -1218,7 +1264,7 @@ def _build_question(portfolio_block: str, candidates_block: str) -> str:
     # tried BEFORE touching candidates_block, since the candidates being
     # visible at all is the entire point of offering them.
     trimmed_portfolio = portfolio_block.split("\n=== Research carried forward from your prior cycle ===")[0]
-    question = _assemble_question(trimmed_portfolio, candidates_block)
+    question = _assemble_question(trimmed_portfolio, candidates_block, agent_id)
     if len(question) <= MAX_QUESTION_CHARS:
         return question
     # 2) Still too long -- trim the candidates block by whole lines. Held
@@ -1227,7 +1273,7 @@ def _build_question(portfolio_block: str, candidates_block: str) -> str:
     # act on what it already holds without seeing anything new this cycle).
     overage = len(question) - MAX_QUESTION_CHARS
     trimmed_candidates = _trim_block_to_lines(candidates_block, len(candidates_block) - overage)
-    question = _assemble_question(trimmed_portfolio, trimmed_candidates)
+    question = _assemble_question(trimmed_portfolio, trimmed_candidates, agent_id)
     if len(question) <= MAX_QUESTION_CHARS:
         return question
     # 3) Candidates already emptied and it's still too long -- the
@@ -1235,7 +1281,7 @@ def _build_question(portfolio_block: str, candidates_block: str) -> str:
     # number of tickers) is the overage. Trim it the same whole-line way.
     overage = len(question) - MAX_QUESTION_CHARS
     trimmed_portfolio = _trim_block_to_lines(trimmed_portfolio, len(trimmed_portfolio) - overage)
-    question = _assemble_question(trimmed_portfolio, "")
+    question = _assemble_question(trimmed_portfolio, "", agent_id)
     if len(question) <= MAX_QUESTION_CHARS:
         return question
     # 4) Absolute last resort -- guarantee the limit is never exceeded no
@@ -1243,10 +1289,10 @@ def _build_question(portfolio_block: str, candidates_block: str) -> str:
     # intact (the model needs it every cycle) and hard-clamp the rest.
     # The clock anchor is fixed prompt context too; reserve space for it so
     # the absolute fallback remains a real hard cap.
-    budget = max(0, MAX_QUESTION_CHARS - len(_assemble_question("", "")) - 2)
+    budget = max(0, MAX_QUESTION_CHARS - len(_assemble_question("", "", agent_id)) - 2)
     if len(trimmed_portfolio) > budget:
         trimmed_portfolio = trimmed_portfolio[: max(0, budget - 1)].rstrip() + "…"
-    return _assemble_question(trimmed_portfolio, "")
+    return _assemble_question(trimmed_portfolio, "", agent_id)
 
 
 _STRATEGY_ALIASES = {
@@ -2127,7 +2173,9 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         os.environ["FORESEA_AGENT_ACCOUNT_VALUE"] = str(_current_account_value(conn, agent_id, held_quotes))
     _configure_max_order_notional()
 
-    question = _build_question(portfolio_block, _build_candidates_block(held_quotes, new_quotes))
+    question = _build_question(
+        portfolio_block, _build_candidates_block(held_quotes, new_quotes), agent_id,
+    )
 
     report = asyncio.run(_call_agent_analyze(question))
     # The durable transcript retains raw tool output. Store only reader-ready
