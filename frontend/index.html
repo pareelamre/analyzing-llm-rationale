@@ -47,7 +47,40 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.js"></script>
+  <!-- motion@10.18.0 ships no dist/motion.js; that URL 404s, so window.Motion
+       was undefined on every page load and every unguarded Motion.* call threw
+       mid-transition. dist/motion.umd.js is the build that defines the global. -->
+  <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.umd.js"></script>
+  <script>
+    // Animation is progressive enhancement: a blocked or moved CDN must never
+    // leave a view half-transitioned (overlay still open, chat never shown).
+    // If the global is missing, stand in a no-op that jumps straight to the
+    // final keyframe, so transitions complete instantly instead of throwing.
+    // Assign through globalThis (=== window in a browser) so bare `Motion.x`
+    // references resolve too, not just `window.Motion`.
+    if (!globalThis.Motion) {
+      globalThis.Motion = {
+        animate: function (target, keyframes) {
+          try {
+            var els = typeof target === 'string'
+              ? document.querySelectorAll(target)
+              : (target && target.nodeType ? [target] : []);
+            Object.keys(keyframes || {}).forEach(function (prop) {
+              var v = keyframes[prop];
+              var end = Array.isArray(v) ? v[v.length - 1] : v;
+              Array.prototype.forEach.call(els, function (el) {
+                el.style[prop] = end;
+              });
+            });
+          } catch (_) { /* never let the stand-in break a transition */ }
+          return { finished: Promise.resolve() };
+        },
+        stagger: function () { return 0; },
+        inView: function () { return function () {}; },
+        scroll: function () { return function () {}; },
+      };
+    }
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
   <style>
     :root {
