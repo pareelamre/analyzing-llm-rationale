@@ -2747,6 +2747,81 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "ffd518a5-7ef1-420a-980a-fa1270350d6b",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 2999.0
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.49,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.52,
+            "quantity": 2999.0
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 6949.725805,
+            "cash_required": 0.0,
+            "concentration_cap": 1271.882371,
+            "cycle_id": "30m:993637",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 0.0,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2543.764741,
+            "drawdown_after": 0.174071,
+            "fee": 0.0,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 1469.51,
+            "open_markets_after": 0,
+            "per_cycle_spend_limit": 1695.843161,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993637",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 1529.49,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 2999.0,
+          "notional": 1469.51,
+          "price": 0.49,
+          "quantity": 2999.0,
+          "realized_pnl": 669.7766666666669,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "ff6e1ad46e913b73de58e9f616b84c256ec3f95fd4c2b4d384cfc66a105715ca",
+        "recorded_at": "2026-09-04T18:36:21.812088+00:00"
+      },
+      {
         "action_id": "31271fe8-dafe-4300-bbc2-83dcfed2c055",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -8143,7 +8218,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-04T17:23:33.310359+00:00",
+  "generated_at": "2026-09-04T18:45:18.524245+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
