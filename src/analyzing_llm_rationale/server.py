@@ -2767,6 +2767,7 @@ async def _provider_chat(
 
     from analyzing_llm_rationale.providers import (
         ContextLimitError,
+        ProviderTimeoutError,
         RetryableProviderError,
     )
 
@@ -2843,7 +2844,13 @@ async def _provider_chat(
                 raise
             except (RetryableProviderError, asyncio.TimeoutError) as exc:
                 last_exc = exc
-                is_timeout = isinstance(exc, asyncio.TimeoutError)
+                # A transport timeout costs the full timeout window on every
+                # attempt, so it must draw on the tight timeout budget rather
+                # than the general retryable one. Live: classifying HTTP
+                # timeouts as merely "retryable" let each stuck model burn
+                # ~13 minutes of a fleet cycle (5 attempts x 120s + backoff),
+                # and the run was cancelled having completed 1 of 8 models.
+                is_timeout = isinstance(exc, (asyncio.TimeoutError, ProviderTimeoutError))
                 if retries_used >= effective_max_retries or (
                     is_timeout and timeout_retries_used >= effective_max_timeout_retries
                 ):

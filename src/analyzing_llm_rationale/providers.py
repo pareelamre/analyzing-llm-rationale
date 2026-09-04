@@ -41,6 +41,15 @@ class RetryableProviderError(ProviderError):
         )
 
 
+class ProviderTimeoutError(RetryableProviderError):
+    """The provider did not respond in time.
+
+    Retryable, but budgeted separately from other retryable failures: a
+    timeout costs the full timeout window on every attempt, so retrying it as
+    freely as a fast 429 lets one stuck model consume an entire fleet cycle.
+    """
+
+
 class ContextLimitError(ProviderError):
     """The prompt exceeded the provider's effective context window."""
 
@@ -65,7 +74,7 @@ def _post(session: Any, *args: Any, **kwargs: Any) -> Any:
     try:
         return session.post(*args, **kwargs)
     except requests.exceptions.Timeout as exc:
-        raise RetryableProviderError(f"provider request timed out: {exc}") from exc
+        raise ProviderTimeoutError(f"provider request timed out: {exc}") from exc
     except requests.exceptions.ConnectionError as exc:
         raise RetryableProviderError(f"provider connection failed: {exc}") from exc
 
