@@ -67,6 +67,17 @@ from analyzing_llm_rationale.accounting import MarketQuote  # noqa: E402
 from analyzing_llm_rationale.config import load_model_configs  # noqa: E402
 from analyzing_llm_rationale.observability import init_observability  # noqa: E402
 
+# Without a root handler, every logger.error/exception in the server modules
+# this script drives is discarded. That is how a glm-5-3 cycle could fail with
+# only "502: unexpected response" in the workflow log and no trace of the
+# actual exception anywhere -- the one line that would have named it was
+# written to a logger with nowhere to go.
+logging.basicConfig(
+    level=os.environ.get("AGENT_TRADING_LOG_LEVEL", "INFO").upper(),
+    format="%(levelname)s %(name)s: %(message)s",
+    stream=sys.stderr,
+)
+
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer("foresea.agent_trading_tick")
 meter = metrics.get_meter("foresea.agent_trading_tick")

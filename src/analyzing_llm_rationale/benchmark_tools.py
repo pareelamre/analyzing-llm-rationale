@@ -2006,6 +2006,88 @@ def _load_guard_account(
     return account, usage
 
 
+_LOW_VALUE_NOTE_MARKERS = (
+    "no new evidence",
+    "no evidence found",
+    "no material new evidence",
+    "no relevant results",
+    "nothing new",
+    "no update",
+)
+
+
+def _note_value_score(note: Mapping[str, Any]) -> tuple:
+    """Rank a note for eviction; the lowest-scoring note is dropped first.
+
+    Ordering, least valuable first: notes whose text is a "found nothing"
+    placeholder, then untagged notes, then shorter notes, then older ones.
+    Length is a crude proxy for specificity, but it separates a recorded
+    number or thesis from a one-line shrug, which is the distinction that
+    actually matters here.
+    """
+    text = str(note.get("text") or "").strip()
+    lowered = text.lower()
+    informative = 0 if any(m in lowered for m in _LOW_VALUE_NOTE_MARKERS) else 1
+    tagged = 1 if (note.get("tags") or []) else 0
+    return (informative, tagged, len(text), str(note.get("created_at") or ""))
+
+
+def _evict_least_useful_note(notes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Remove and return the least useful note, or None when there is none."""
+    if not notes:
+        return None
+    victim = min(notes, key=_note_value_score)
+    notes.remove(victim)
+    return victim
+
+
+def _min_net_edge() -> float:
+    """Edge, in probability points, a new position must keep after fees."""
+    try:
+        value = float(os.environ.get("FORESEA_AGENT_MIN_NET_EDGE", "0.02"))
+    except (TypeError, ValueError):
+        return 0.02
+    return max(0.0, value)
+
+
+def _edge_clears_fees(
+    args: Mapping[str, Any],
+    *,
+    price: float,
+    quantity: float,
+    fee: float,
+    side: str,
+    risk_reducing: bool,
+) -> Dict[str, Any]:
+    """Does the agent's own stated edge survive this trade's fee?
+
+    Returns ``checked: False`` when the agent supplied no usable
+    ``model_probability`` -- the gate never guesses an edge on the agent's
+    behalf, it only holds the agent to the number it stated.
+    """
+    if risk_reducing or quantity <= 0 or price <= 0:
+        return {"checked": False, "reason": "not_applicable"}
+    model_probability = _as_float(args.get("model_probability"))
+    if model_probability is None or not (0.0 < model_probability < 1.0):
+        return {"checked": False, "reason": "no_model_probability"}
+    # A NO contract pays out when the event does not happen, so its win
+    # probability is 1 - P(YES). Both sides settle at $1, so expected value
+    # per contract is (win probability - price paid).
+    win_probability = model_probability if side == "yes" else 1.0 - model_probability
+    gross_edge = win_probability - price
+    fee_per_contract = (fee / quantity) if quantity else 0.0
+    net_edge = gross_edge - fee_per_contract
+    floor = _min_net_edge()
+    return {
+        "checked": True,
+        "clears": net_edge >= floor - 1e-9,
+        "gross_edge": round(gross_edge, 6),
+        "fee_per_contract": round(fee_per_contract, 6),
+        "net_edge": round(net_edge, 6),
+        "min_net_edge": floor,
+    }
+
+
 def _check_trade_guards(
     *,
     args: Mapping[str, Any],
@@ -2064,10 +2146,24 @@ def _check_trade_guards(
     drawdown_after = max(0.0, 1.0 - (book_equity_after / high_watermark)) if high_watermark else 0.0
     risk_reducing = sizing_detail.get("mode") == "close"
 
+    # Fees are the difference between a winning book and a losing one at this
+    # scale: across the live fleet they ran 1.75-2.72% of traded notional, and
+    # gpt-oss-120b turned +308 gross into -28 net paying 337 in fees on 12.4k
+    # of notional. An edge thinner than the round-trip cost is a guaranteed
+    # loser however good the forecast, so require the stated edge to clear the
+    # fee with a margin before new exposure is allowed. A close is exempt: it
+    # removes risk and must stay available.
+    edge_check = _edge_clears_fees(
+        args, price=price, quantity=quantity, fee=fee, side=side,
+        risk_reducing=risk_reducing,
+    )
+
     reasons: List[str] = []
     if sizing_detail.get("mode") == "close":
         if quantity > closeable_opposite_quantity + 1e-9:
             reasons.append("close_exceeds_open_position")
+    if edge_check.get("checked") and not edge_check.get("clears"):
+        reasons.append("edge_below_fee_floor")
     if market_cost_basis_after > concentration_cap + 1e-9:
         reasons.append("concentration_limit")
     if cash_required > cash_before + 1e-9:
@@ -2092,6 +2188,7 @@ def _check_trade_guards(
     detail = {
         "allowed": not reasons,
         "reasons": reasons,
+        "edge_after_fees": edge_check,
         "account_value": round(policy.account_value, 6),
         "cash_before": round(cash_before, 6),
         "concentration_limit": policy.concentration_limit,
@@ -2974,8 +3071,15 @@ def manage_notes(args: Mapping[str, Any], ctx: ToolContext, *, path: Optional[Pa
                     raise ValueError("text is required for add")
                 if len(text) > MAX_NOTE_CHARS:
                     raise ValueError(f"notes are limited to {MAX_NOTE_CHARS} characters")
+                # A full notebook used to hard-fail every subsequent add, so an
+                # agent that reached the cap simply stopped being able to learn
+                # -- llama-3.3-70b-instruct sat at 50/50 with entries like "No
+                # new evidence found in search results." while newer, better
+                # observations were rejected. Evict the least useful note
+                # instead, so memory keeps turning over.
+                evicted = None
                 if len(notes) >= MAX_NOTES_PER_AGENT:
-                    raise ValueError(f"agent already has {MAX_NOTES_PER_AGENT} notes")
+                    evicted = _evict_least_useful_note(notes)
                 note = {
                     "id": str(args.get("id") or uuid.uuid4()),
                     "text": text,
@@ -2985,6 +3089,17 @@ def manage_notes(args: Mapping[str, Any], ctx: ToolContext, *, path: Optional[Pa
                 }
                 notes.append(note)
                 result = {"note": note}
+                if evicted is not None:
+                    # Tell the agent what was dropped: silent eviction would
+                    # make its own memory unreliable without explanation.
+                    result["evicted"] = {
+                        "id": evicted.get("id"),
+                        "text": str(evicted.get("text") or "")[:160],
+                    }
+                    result["note_capacity"] = (
+                        f"notebook was full ({MAX_NOTES_PER_AGENT}); dropped the "
+                        "lowest-value note to make room"
+                    )
             elif action == "edit":
                 note_id = str(args.get("id") or "")
                 text = str(args.get("text") or "").strip()
