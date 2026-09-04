@@ -11,6 +11,46 @@ from analyzing_llm_rationale.providers import (
 )
 
 
+class TransportFailureClassificationTests(unittest.TestCase):
+    def test_read_timeout_is_retryable_not_a_hard_failure(self):
+        # Live regression: removing the agent tool loop's asyncio ceiling let
+        # the HTTP client's own 120s read timeout surface instead. requests'
+        # Timeout is not a ProviderError, so it escaped as a non-retryable
+        # 502 and five of eight models hard-failed with no retry at all.
+        import requests
+
+        from analyzing_llm_rationale import providers
+
+        class _TimingOutSession:
+            def post(self, *_args, **_kwargs):
+                raise requests.exceptions.ReadTimeout("read timed out")
+
+        with self.assertRaises(providers.RetryableProviderError):
+            providers._post(_TimingOutSession(), "https://example.invalid")
+
+    def test_connection_error_is_retryable(self):
+        import requests
+
+        from analyzing_llm_rationale import providers
+
+        class _DroppedSession:
+            def post(self, *_args, **_kwargs):
+                raise requests.exceptions.ConnectionError("connection reset")
+
+        with self.assertRaises(providers.RetryableProviderError):
+            providers._post(_DroppedSession(), "https://example.invalid")
+
+    def test_unrelated_errors_are_not_reclassified(self):
+        from analyzing_llm_rationale import providers
+
+        class _BrokenSession:
+            def post(self, *_args, **_kwargs):
+                raise ValueError("programming error")
+
+        with self.assertRaises(ValueError):
+            providers._post(_BrokenSession(), "https://example.invalid")
+
+
 class ProviderHeaderSanitizationTests(unittest.TestCase):
     def test_api_key_bom_is_removed_before_authorization_header(self):
         provider = OpenAICompatibleProvider(

@@ -49,6 +49,27 @@ class ProviderResponseError(ProviderError):
     """The provider returned a non-retryable error."""
 
 
+def _post(session: Any, *args: Any, **kwargs: Any) -> Any:
+    """POST, classifying transport failures as retryable.
+
+    A read timeout or dropped connection is transient by nature, but the
+    underlying HTTP client raises its own exception types, which escaped
+    uncaught and surfaced as a non-retryable 502. This was masked while an
+    outer asyncio ceiling (90s) always fired before the HTTP timeout (120s);
+    once the agent tool loop stopped imposing a ceiling, five of eight live
+    models began hard-failing on ReadTimeout with no retry at all. A timeout
+    belongs on the retryable path.
+    """
+    import requests
+
+    try:
+        return session.post(*args, **kwargs)
+    except requests.exceptions.Timeout as exc:
+        raise RetryableProviderError(f"provider request timed out: {exc}") from exc
+    except requests.exceptions.ConnectionError as exc:
+        raise RetryableProviderError(f"provider connection failed: {exc}") from exc
+
+
 class ChatProvider:
     def chat_completion(
         self,
@@ -236,7 +257,8 @@ class OpenAICompatibleProvider(ChatProvider):
         reasoning_effort: Optional[str] = None,
     ) -> str:
         payload = self._payload(messages, temperature, max_tokens, reasoning_effort=reasoning_effort)
-        response = self._session.post(
+        response = _post(
+            self._session,
             self.base_url,
             headers=self._headers(),
             json=payload,
@@ -276,7 +298,8 @@ class OpenAICompatibleProvider(ChatProvider):
         reasoning_effort: Optional[str] = None,
     ) -> Iterator[str]:
         self.last_response_model = None
-        response = self._session.post(
+        response = _post(
+            self._session,
             self.base_url,
             headers=self._headers(),
             json=self._payload(messages, temperature, max_tokens, stream=True, reasoning_effort=reasoning_effort),
@@ -372,7 +395,8 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         reasoning_effort: Optional[str] = None,
     ) -> str:
         payload = self._payload(messages, temperature, max_tokens, reasoning_effort=reasoning_effort)
-        response = self._session.post(
+        response = _post(
+            self._session,
             self.base_url,
             headers=self._headers(),
             json=payload,
@@ -465,7 +489,8 @@ class AnthropicProvider(ChatProvider):
     ) -> str:
         del reasoning_effort
         payload = self._payload(messages, temperature, max_tokens)
-        response = self._session.post(
+        response = _post(
+            self._session,
             self.base_url,
             headers=self._headers(),
             json=payload,
@@ -502,7 +527,8 @@ class AnthropicProvider(ChatProvider):
     ) -> Iterator[str]:
         del reasoning_effort
         self.last_response_model = None
-        response = self._session.post(
+        response = _post(
+            self._session,
             self.base_url,
             headers=self._headers(),
             json=self._payload(messages, temperature, max_tokens, stream=True),
