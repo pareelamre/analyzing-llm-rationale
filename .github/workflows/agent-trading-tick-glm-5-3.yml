@@ -1,4 +1,4 @@
-name: Agent trading tick (glm-5.2-fp8)
+name: Agent trading tick (glm-5-3)
 
 on:
   workflow_dispatch: {}
@@ -7,6 +7,6 @@ jobs:
   trade:
     uses: ./.github/workflows/_agent-trading-tick-reusable.yml
     with:
-      models: glm-5.2-fp8
+      models: glm-5-3
       lane: "1"
     secrets: inherit

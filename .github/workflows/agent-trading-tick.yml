@@ -20,7 +20,7 @@ jobs:
       matrix:
         include:
           - lane: "reserved"
-            models: "deepseek-v4-flash gemma-4-26b-a4b-it glm-5-3-flash glm-5.2-fp8 gpt-oss-120b llama-3.3-70b-instruct minimax-m3 qwen3-8-27b"
+            models: "deepseek-v4-flash gemma-4-26b-a4b-it glm-5-3 glm-5-3-flash gpt-oss-120b llama-3.3-70b-instruct minimax-m3 qwen3-8-27b"
     uses: ./.github/workflows/_agent-trading-tick-reusable.yml
     with:
       lane: ${{ matrix.lane }}

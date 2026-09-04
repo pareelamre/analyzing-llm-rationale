@@ -77,7 +77,7 @@ jobs:
       - name: Download every model's shadow account store
         run: |
           set -u
-          models="deepseek-v4-flash gemma-4-26b-a4b-it glm-5-3-flash glm-5.2-fp8 gpt-oss-120b llama-3.3-70b-instruct minimax-m3 qwen3-8-27b"
+          models="deepseek-v4-flash gemma-4-26b-a4b-it glm-5-3 glm-5-3-flash gpt-oss-120b llama-3.3-70b-instruct minimax-m3 qwen3-8-27b"
           for model in $models; do
             mkdir -p "tmp/agent-trading-board/$model"
             gcloud storage cp "$AGENT_TRADING_STORE_BUCKET/agent_trading_store__${model}.sqlite" \

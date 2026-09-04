@@ -120,7 +120,7 @@ class TrackRecordTickTests(unittest.TestCase):
             "deepseek-v4-flash",
             "gemma-4-26b-a4b-it",
             "glm-5-3-flash",
-            "glm-5.2-fp8",
+            "glm-5-3",
             "gpt-oss-120b",
             "llama-3.3-70b-instruct",
             "minimax-m3",

@@ -219,7 +219,7 @@ def _model_backstop_chars(model: str) -> int:
     """The backstop scales with THIS model's actual context window rather
     than a single arbitrary constant. SCADS AI's own /v1/models listing
     (queried 2026-08-18) only publishes context length for one of the ten
-    agent-trading models (glm-5.2-fp8, 524288 tokens) -- everything else,
+    agent-trading models (glm-5-3, 524288 tokens) -- everything else,
     including all three scads-alias-* models, returns nothing, so those
     fall back to a conservative shared default (128K tokens -- safe across
     the other hosted models here: Llama 3.3, Qwen3-Coder, Kimi-K3,
@@ -247,7 +247,17 @@ def _model_backstop_chars(model: str) -> int:
     return int(context_window_tokens * chars_per_token * (1 - reserved_fraction))
 
 
-MAX_QUESTION_CHARS = _model_backstop_chars(MODEL)
+# No character cap by default. The trimming machinery below is retained as an
+# opt-in escape hatch (set AGENT_TRADING_MAX_QUESTION_CHARS to a positive
+# number to re-enable it), but nothing is withheld from the model otherwise:
+# measured against SCADS, DeepSeek-V4-Flash accepted an 83k-token prompt and
+# answered in ~6s, and every agent-trading route publishes a context window of
+# at least 65k tokens, so the previous derived cap only ever risked dropping
+# decision-relevant markets and resolution rules for no gain.
+_configured_question_chars = int(os.environ.get("AGENT_TRADING_MAX_QUESTION_CHARS", "0"))
+MAX_QUESTION_CHARS = (
+    _configured_question_chars if _configured_question_chars > 0 else sys.maxsize
+)
 # trading.py's FORESEA_MAX_ORDER_NOTIONAL is a flat-dollar cap shared by every
 # order path (human BYO trading included), so it can't be changed here without
 # affecting those too. Instead this driver overrides it per-cycle, scoped to

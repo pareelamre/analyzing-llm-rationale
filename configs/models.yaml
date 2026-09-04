@@ -207,22 +207,30 @@ models:
     forecasting_enabled: false
     chat_interface_enabled: false
     track_record_enabled: false
-  glm-5.2-fp8:
-    result_label: GLM-5.2-FP8
+  glm-5-3:
+    result_label: GLM-5.3
     provider: openai-compatible
-    local_model_name: zai-org/GLM-5.2-FP8
-    router_model_name: zai-org/GLM-5.2-FP8
+    # Replaces the retired glm-5.2-fp8 entry. SCADS deleted the
+    # zai-org/GLM-5.2-FP8 route outright -- it is absent from their public
+    # status probe (https://llm.scads.ai/status/state.json), which lists
+    # GLM-5.3 and GLM-5.3-Flash as the current ZhipuAI routes. Every call to
+    # the old route failed, so that agent completed no cycle after 2026-09-02
+    # while reporting only a generic "provider unavailable".
+    local_model_name: zai-org/GLM-5.3
+    router_model_name: zai-org/GLM-5.3
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
     access: hosted
     chat_interface_enabled: true
-    # Verified against SCADS AI's own /v1/models listing (2026-08-18) --
-    # the only one of these hosted models whose deployed context length is
-    # actually published there; every other model's listing omits it.
+    # Published as max_tokens for this route by the status probe (verified
+    # 2026-09-04); the /v1/models listing still omits context length.
     context_window_tokens: 524288
+    # The old chain pointed at MiniMaxAI/MiniMax-M3, which the same probe
+    # reports as down -- a dead route falling back to a dead route.
     fallback_model_chain:
-      - MiniMaxAI/MiniMax-M3
+      - zai-org/GLM-5.3-Flash
+      - openai/gpt-oss-120b
   glm-5-3-flash:
     result_label: GLM-5.3-Flash
     provider: openai-compatible
@@ -237,7 +245,7 @@ models:
     # forecast scheduler has accumulated a non-empty comparison history.
     track_record_enabled: false
     fallback_model_chain:
-      - zai-org/GLM-5.2-FP8
+      - zai-org/GLM-5.3
       - openai/gpt-oss-120b
   deepseek-v4-flash:
     result_label: DeepSeek-V4-Flash
