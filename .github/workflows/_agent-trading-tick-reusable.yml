@@ -124,7 +124,11 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           KALSHI_ACCESS_KEY_ID: ${{ secrets.KALSHI_ACCESS_KEY_ID }}
           KALSHI_PRIVATE_KEY_FILE: tmp/agent-trading/kalshi_private_key.pem
-          MAX_TOOL_STEPS: "4"
+          # Research-heavy cycles need room to research AND execute: at 4,
+          # 489 live cycles hit the ceiling and 38 described a BUY the model
+          # never got to place. The loop exits as soon as the model answers,
+          # so a high ceiling costs nothing on cycles that finish early.
+          MAX_TOOL_STEPS: "16"
           CANDIDATE_COUNT: "3"
           # Retry one provider turn (never a completed tool loop) with a
           # slightly longer bounded budget. This recovers short 503s without
