@@ -538,6 +538,57 @@ class ModelBackstopCharsTests(unittest.TestCase):
         self.assertEqual(agent_trading_tick._model_backstop_chars("not-a-real-model"), int(128000 * 4 * 0.5))
 
 
+class RecalledNotesTests(unittest.TestCase):
+    def _write_notes(self, directory, agent_id, notes):
+        path = Path(directory) / "notes.json"
+        path.write_text(json.dumps({agent_id: notes}), encoding="utf-8")
+        return path
+
+    def test_prior_notes_are_injected_into_the_cycle_prompt(self):
+        # Recall used to require the model to spend one of its 4 tool steps
+        # calling manage_notes. gemma, gpt-oss and qwen each wrote notes over
+        # dozens of cycles and read them back zero times, so memory was
+        # written and never used. Surface it directly instead.
+        with tempfile.TemporaryDirectory() as td:
+            path = self._write_notes(td, "model-a", [
+                {"text": "Fed Sep 2026: model 45% vs market 42%, edge below threshold.",
+                 "tags": ["fed"], "created_at": "2026-09-01T00:00:00+00:00"},
+            ])
+            with mock.patch.dict(os.environ, {"FORESEA_AGENT_NOTES_PATH": str(path)}):
+                question = agent_trading_tick._build_question(
+                    "PORTFOLIO", "CANDIDATES", "model-a",
+                )
+        self.assertIn("Your notes from previous cycles", question)
+        self.assertIn("edge below threshold", question)
+        self.assertIn("[fed]", question)
+
+    def test_only_the_agents_own_notes_are_recalled(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "notes.json"
+            path.write_text(json.dumps({
+                "model-a": [{"text": "mine", "created_at": "2026-09-01T00:00:00+00:00"}],
+                "model-b": [{"text": "someone else's", "created_at": "2026-09-01T00:00:00+00:00"}],
+            }), encoding="utf-8")
+            with mock.patch.dict(os.environ, {"FORESEA_AGENT_NOTES_PATH": str(path)}):
+                question = agent_trading_tick._build_question("P", "C", "model-a")
+        self.assertIn("mine", question)
+        self.assertNotIn("someone else's", question)
+
+    def test_no_notes_adds_no_section(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = self._write_notes(td, "model-a", [])
+            with mock.patch.dict(os.environ, {"FORESEA_AGENT_NOTES_PATH": str(path)}):
+                question = agent_trading_tick._build_question("P", "C", "model-a")
+        self.assertNotIn("Your notes from previous cycles", question)
+
+    def test_recall_survives_an_unreadable_notes_file(self):
+        # A missing or corrupt notes file must never break a trading cycle.
+        with mock.patch.dict(os.environ, {"FORESEA_AGENT_NOTES_PATH": "/nonexistent/notes.json"}):
+            question = agent_trading_tick._build_question("P", "C", "model-a")
+        self.assertIn("PORTFOLIO" if "PORTFOLIO" in question else "P", question)
+        self.assertNotIn("Your notes from previous cycles", question)
+
+
 class BuildQuestionTests(unittest.TestCase):
     def test_instructs_checking_the_resolution_window_before_trading_on_news(self):
         question = agent_trading_tick._build_question("PORTFOLIO", "CANDIDATES")
