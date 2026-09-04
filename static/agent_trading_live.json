@@ -81,9 +81,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -0.8844,
+      "return_pct": -1.0053,
       "settled_count": 5,
-      "sharpe": -0.0641
+      "sharpe": -0.072
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
@@ -151,7 +151,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T09:48:56.714764+00:00"
+          "ts": "2026-09-04T12:06:04.387326+00:00"
         }
       ]
     },
@@ -258,7 +258,7 @@
         {
           "account_value": 10514.6904,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T09:48:56.714764+00:00"
+          "ts": "2026-09-04T12:06:04.387326+00:00"
         }
       ]
     },
@@ -275,7 +275,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T09:48:56.714764+00:00"
+          "ts": "2026-09-04T12:06:04.387326+00:00"
         }
       ]
     },
@@ -292,14 +292,14 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T09:48:56.714764+00:00"
+          "ts": "2026-09-04T12:06:04.387326+00:00"
         }
       ]
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
       "max_drawdown": 0.0208,
-      "sharpe": -0.0641,
+      "sharpe": -0.072,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -448,8 +448,13 @@
         },
         {
           "account_value": 9911.556,
+          "event_type": "trade",
+          "ts": "2026-09-04T11:59:33.216335+00:00"
+        },
+        {
+          "account_value": 9899.468737,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T09:48:56.714764+00:00"
+          "ts": "2026-09-04T12:06:04.387326+00:00"
         }
       ]
     },
@@ -821,7 +826,7 @@
         {
           "account_value": 8269.325805,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T09:48:56.714764+00:00"
+          "ts": "2026-09-04T12:06:04.387326+00:00"
         }
       ]
     },
@@ -928,7 +933,7 @@
         {
           "account_value": 8548.479971,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T09:48:56.714764+00:00"
+          "ts": "2026-09-04T12:06:04.387326+00:00"
         }
       ]
     },
@@ -955,7 +960,7 @@
         {
           "account_value": 9981.557094,
           "event_type": "mark_to_market",
-          "ts": "2026-09-04T09:48:56.714764+00:00"
+          "ts": "2026-09-04T12:06:04.387326+00:00"
         }
       ]
     }
@@ -1057,7 +1062,7 @@
           "ticker": "KXMLBDEBUT-FARIAS-26SEP01"
         }
       ],
-      "recorded_forecasts": 4,
+      "recorded_forecasts": 5,
       "resolved_forecasts": 2,
       "status": "small_sample",
       "weather_calibration": []
@@ -1091,7 +1096,7 @@
           "ticker": "will-ethereum-dip-to-2400-in-august-2026-from-august-23"
         }
       ],
-      "recorded_forecasts": 10,
+      "recorded_forecasts": 11,
       "resolved_forecasts": 2,
       "status": "small_sample",
       "weather_calibration": []
@@ -1119,50 +1124,50 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-09-04T09:48:56.765560+00:00",
+  "generated_at": "2026-09-04T12:06:04.438359+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
-      "cycle_id": "30m:993581",
-      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE (attempted; no material evidence obtained \u2192 PASS)\n- **New evidence**: No material new evidence. This cycle's web searches returned only irrelevant BBC feeds (UK politics, El Ni\u00f1o, energy bills) and a Google News RSS query for \"FOMC September 2026 rate decision\" returned an empty channel. No dated, Fed-specific data point (CME FedWatch, FOMC commentary, or economic release) was retrievable this cycle.\n- **Belief update**: No material change. Prior conflicting signals (Forbes ~66% hike odds vs. CNBC odds tumbling after July jobs miss) remain unresolved; I cannot independently derive a calibrated P(YES) for the September no-change market without fresh data.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position (assessed: [will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615] on Polymarket; [KXNFLRETIRE-MSTAFFORD9-2627] and [KXNFLRETIRE-MEVANS5-2627] on Kalshi)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Fed market rules verified: resolves to the basis-point change in the upper bound of the target federal funds range per the FOMC statement after the September 15\u201316, 2026 meeting; \"no change\" bracket applies if no statement is released by the next meeting's end date. No person/entity exclusions. NFL retirement markets verified: resolve YES only if Stafford/Evans announces retirement effective immediately or before the first 2026-27 regular-season game; no exclusions noted.\n- **Observation Window**: Fed market window 2026-05-13 \u2192 2026-09-16; current date 2026-09-03 is inside the window, and the FOMC meeting (Sept 15\u201316) is still ahead. NFL markets' windows close 2026-09-30, but their spreads (0.02/0.94 and 0.00/0.15) make them untradeable and no retirement evidence exists.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No reliable model probability derived this cycle (prior unresolved) vs **Market Price**: ~57% no-change (Polymarket mid 0.57). Edge: not assessable.\n- **Information Asymmetry / Rationale**: No verified evidence delta clears the research-quality gate. Trading the Fed market at 0.57 without fresh macro data would be speculation, not edge. The NFL markets are effectively unexecutable due to 90+ point bid/ask spreads and zero supporting news.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: FOMC statement September 16, 2026 (meeting Sept 15\u201316); any intervening CPI/jobs data before that date.\n- **Invalidation Trigger**: This PASS thesis is invalidated (i.e., would become a trade) only if a dated, credible source this cycle shows a clear market-implied probability diverging >10pp from the ~57% no-change price \u2014 e.g., CME FedWatch showing a decisive cut/hike lean \u2014 or if Stafford/Evans retirement news emerges inside the NFL windows. Absent that, HOLD/PASS remains correct.",
-      "ts": "2026-09-03T14:38:30.067011+00:00",
+      "cycle_id": "30m:993623",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: (1) Matthew Stafford has publicly committed to return for the 2026 NFL season (Rams official news via Google News RSS, dated this cycle; corroborated by Yahoo Sports/ESPN analyst commentary that he is not retiring after 2026). This is a dated, material fact inside the Kalshi resolution window (2026-05-28 \u2192 2026-09-30) and directly lowers P(YES) for KXNFLRETIRE-MSTAFFORD9-2627. (2) Fed coverage this cycle (Financial Express, TheStreet, Yahoo Finance) shows a divided FOMC under Chair Kevin Warsh with elevated inflation and a stable labor market ahead of the September 15-16, 2026 meeting \u2014 mixed, not decisive, and consistent with the ~60% no-change market price. No new evidence on Mike Evans.\n- **Belief update**: Stafford retirement P(YES): ~5% \u2192 ~2% (public commitment to play). Fed no-change P(YES): ~57% \u2192 ~60% (no material change; market already prices the mixed macro picture). Evans: no material change.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position (assessed: [KXNFLRETIRE-MSTAFFORD9-2627] and [KXNFLRETIRE-MEVANS5-2627] on Kalshi; [will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615] on Polymarket)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Stafford/Evans contracts resolve YES only if the player announces retirement effective immediately or before the 2026-27 NFL season start (first regular-season game). Stafford's public commitment to play in 2026 is a direct negative signal for YES; no exclusion applies. Fed market resolves to the basis-point change in the upper bound of the target federal funds range per the FOMC statement after the September 15-16, 2026 meeting, with \"no change\" if no statement is released \u2014 verified against the official FOMC calendar source.\n- **Observation Window**: Stafford/Evans: 2026-05-28 \u2192 2026-09-30 (Stafford news dated this cycle falls inside). Fed: 2026-05-13 \u2192 2026-09-16 (FOMC decision on Sept 16 is inside the window).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: Stafford NO \u2248 98% vs Market Price: 98% (NO ask 0.98; Edge: ~0%). Fed no-change \u2248 60% vs Market Price: 60% (mid 0.595; Edge: ~0%). Evans: no reliable independent probability; NO ask 1.00 offers no edge.\n- **Information Asymmetry / Rationale**: The Stafford commitment is already fully reflected in the 0.98 NO ask \u2014 buying NO at 0.98 leaves no spread/fee-adjusted edge, and buying YES at 0.94 is deeply mispriced against the evidence. The Fed market is efficient at ~60% given the mixed inflation/labor signals; no dated catalyst this cycle moves the needle more than a few points, which is below the executable spread and Kelly threshold.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: FOMC statement September 16, 2026 (meeting Sept 15-16); any intervening CPI/jobs data before that date; NFL season start (first regular-season game, early September 2026) for the retirement contracts.\n- **Invalidation Trigger**: This PASS thesis becomes a trade only if (a) a dated, credible source shows Stafford or Evans announcing retirement before the 2026-27 season start (then BUY YES on the relevant Kalshi contract), or (b) a decisive market-implied Fed signal (e.g., CME FedWatch showing a clear cut/hike lean) diverges >10pp from the ~60% no-change price. Absent that, HOLD/PASS remains correct.",
+      "ts": "2026-09-04T11:48:53.292890+00:00",
       "type": "thesis"
     },
     "gemma-4-26b-a4b-it": {
       "agent_id": "gemma-4-26b-a4b-it",
-      "cycle_id": "30m:993613",
-      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: No material new evidence \u2013 recent heavy.com articles discuss speculation and fantasy outlook but contain no dated, verifiable announcement that Matthew\u202fStafford has retired as of 2026\u201109\u201104.\n- **Belief update**: No material change (model still assigns ~2% probability of retirement).\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: No new market assessed\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: None\n- **Invalidation Trigger**: None",
-      "ts": "2026-09-04T06:51:49.756880+00:00",
+      "cycle_id": "30m:993623",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: No material new evidence \u2013 recent searches returned only speculative or pre\u2011season commentary, with no official retirement announcement for Matthew Stafford as of 2026\u201109\u201104.\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: No new evidence to justify deviating from market pricing\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: None\n- **Invalidation Trigger**: None",
+      "ts": "2026-09-04T11:49:40.612409+00:00",
       "type": "thesis"
     },
     "glm-5-3": null,
     "glm-5-3-flash": null,
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
-      "cycle_id": "30m:993614",
-      "thesis": "### 0. Research Delta\n- **Strategy**: POSITION_RISK_REDUCTION\n- **New evidence**: No material new evidence \u2013 web search found only speculative articles about Matthew\u202fStafford and Mike\u202fEvans with no official retirement announcements as of 2026\u201109\u201104. Market prices are Matthew\u202fStafford\u202fYES\u202f48% and Mike\u202fEvans\u202fYES\u202f9%, unchanged from prior observations. No new data on Fed rates.\n- **Belief update**: No material change (previous probabilities unchanged).\n\n### 1. Decision & Execution\n- **Action**: CLOSE\n- **Market & Venue**: No new position (no open contracts to close)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed.\n- **Observation Window**: No new contract assessed.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed.\n- **Information Asymmetry / Rationale**: No new edge identified.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: None.\n- **Invalidation Trigger**: Any official retirement announcement for Matthew\u202fStafford or Mike\u202fEvans before the 2026\u201127 season would invalidate the current no\u2011position stance.",
-      "ts": "2026-09-04T07:05:33.195690+00:00",
+      "cycle_id": "30m:993623",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: Recent (2026\u201109\u201104) analyses from Intellectia AI, Kalshi market pricing, and J.P. Morgan all indicate rising inflation pressure and a market consensus that the Fed is likely to raise rates by 25\u202fbps at the September\u202f2026 meeting, making a \u201cno\u2011change\u201d outcome unlikely.\n- **Belief update**: No prior quantitative view \u2192 **P(YES\u202fno\u2011change) \u2248\u202f35\u202f%** (implying **P(NO\u202fchange) \u2248\u202f65\u202f%**).\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615 on Polymarket\n- **Order Sizing**: Quarter Kelly 5% cap, 1,208.73 contracts @ $0.41, notional: $495.58 (shadow\u2011executed).\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The market resolves to \u201cNo change\u201d if the upper bound of the target federal funds rate is unchanged after the September\u202f15\u201116\u202f2026 FOMC meeting. Our NO position bets on any change, which is fully covered with no exclusions.\n- **Observation Window**: 2026\u201105\u201113\u202f21:23\u202fUTC \u2192 2026\u201109\u201116\u202f00:00\u202fUTC (current date 2026\u201109\u201104 is within the window).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 65\u202f% for **NO** (rate change) vs **Market Price**: 0.41\u202f\u2192\u202f41\u202f% implied probability for NO. **Edge**: +24\u202fpp in favor of NO.\n- **Information Asymmetry / Rationale**: Independent macro commentary and Kalshi pricing show a strong tilt toward a rate hike, which the Polymarket market underweights, creating a sizable edge for a NO position.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: The FOMC\u2019s September\u202f15\u201116\u202f2026 meeting outcome (official statement) will resolve the contract.\n- **Invalidation Trigger**: Any credible Fed communication before the meeting that explicitly confirms the target rate will remain unchanged would invalidate the \u201crate change\u201d thesis and warrant a position close.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 The agent called the guarded paper-trade tool and its recorded order filled.",
+      "ts": "2026-09-04T11:59:36.953606+00:00",
       "type": "thesis"
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "30m:993614",
-      "thesis": "Given the uncertainty in the Fed's decision due to high inflation and cool job growth, and the recent closure of a position in 'will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649', the portfolio will maintain its current composition, with a cash balance of $6479.73 and one open position in 'will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615'. The decision to close the position was based on the dependence of the interest rate decision on upcoming economic data, particularly the inflation report, and the desire to reduce risk.",
-      "ts": "2026-09-04T07:06:40.565126+00:00",
+      "cycle_id": "30m:993623",
+      "thesis": "The US Fed's interest rate decision in September 2026 remains uncertain, with various predictions and factors influencing the decision. The current market conditions and model estimates do not meet the requirements for a trade according to the Quarter Kelly sizing policy with a 5% cap. Therefore, the portfolio will maintain its current composition, with a cash balance of $6,479.73 and one open position in 'will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615'. No new positions will be taken at this time.",
+      "ts": "2026-09-04T12:00:33.628508+00:00",
       "type": "thesis"
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
-      "cycle_id": "30m:993543",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS (no strategy cleared the research-quality and edge gates)\n- **New evidence**: \n  - Stafford: Multiple sources confirm he has publicly committed to play his 18th NFL season in 2026 (Rams official, Yahoo Sports). Market YES at 2-6% is consistent with this \u2014 no edge.\n  - Lane Johnson: Said he's 'probably' retiring AFTER the 2026 season (NYT, AP, Yahoo Sports). His contract has officially expired (heavy.com). A separate 'good news' piece hints at a possible return/extension. The market asks if he retires BEFORE the 2026-27 season starts (Sept 2026). His 'after 2026' comment is ambiguous \u2014 it could mean after the 2025 season (already past) or after the 2026 season (meaning he plays 2026 then retires). Market YES at 23-24% is not clearly mispriced given the ambiguity and my inability to confirm a definitive announcement.\n  - Fed Sept 2026: No material new evidence this cycle. Market +25bps at 56-57% consistent with prior 55-60% estimate.\n- **Belief update**: No material change. Stafford P(YES) ~3% (market 2-6%, no edge). Lane Johnson P(YES) ~15-25% (market 23-24%, no clear edge given ambiguity). Fed +25bps P(YES) ~55-60% (market 56-57%, no edge).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: After 6 consecutive losses (-$1,347 realized), I am explicitly applying the discrepancy discipline gate. Stafford's commitment to 2026 is already priced in. Lane Johnson's 'probably retiring after 2026' is genuinely ambiguous and could resolve either way \u2014 not a high-conviction edge. Fed market has no dated catalyst delta. None of the three candidates clear the 10pp edge threshold with high confidence.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: FOMC Sept 15-16, 2026 (Fed); NFL 2026-27 regular season start ~Sept 10, 2026 (Stafford/Johnson retirement window closes)\n- **Invalidation Trigger**: A definitive Lane Johnson retirement announcement (before Sept 2026) or a Stafford reversal would reopen the NFL markets; a major Fed pivot (dot-plot or Powell speech) would reopen the Fed market. Until then, capital preservation is the correct posture given the 0-for-6 recent track record.\n\n**Final action: PASS. No paper trade executed this cycle.**",
-      "ts": "2026-09-02T19:38:52.887721+00:00",
+      "cycle_id": "30m:993624",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS (no trade)\n- **New evidence**: Multiple sources this week (cryptobriefing, MSN, FXStreet) cite Fed funds futures pricing 58-68% probability of a September 2026 rate hike after Chair Warsh flagged 3.7% inflation. Polymarket prices only 40% hike / 60% no-change. This is a ~20-28pp discrepancy vs. institutional futures. However, FXStreet argues the fears are overblown at 58%, and the Polymarket market is liquid with tight spreads (0.40/0.41), suggesting informed participation.\n- **Belief update**: My prior P(hike) was ~30-35% (matching Polymarket). New evidence shifts my estimate to ~50-55% (midpoint of cited futures range, discounted for adverse selection and remaining 12-day window with NFP/CPI releases). This is a material update but the edge is uncertain because (a) Fed funds futures and Polymarket have different participant bases, (b) the 12-day window includes major data catalysts that could shift expectations, and (c) my 0-for-6 track record demands higher conviction than a mixed-signal discrepancy.\n- **Decision rationale**: The evidence delta is real but not decisive enough to overcome my poor calibration. The prudent move is to preserve capital and wait for either (i) a clearer consensus shift, (ii) post-data-release repricing, or (iii) a less ambiguous catalyst. The Polymarket market may be correctly pricing political/policy uncertainty that futures traders are underweighting.\n\n### 1. Decision & Execution\n- **Action**: PASS",
+      "ts": "2026-09-04T12:02:35.377018+00:00",
       "type": "thesis"
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:993603",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence. Web search returned headlines consistent with the prior view (Forbes Fed Meeting Tracker, Financial Express on July minutes showing 3 members backed a hike, Intellectia AI on 25bps move amid inflation fears). No new dated data point (PCE, CPI, Warsh speech) has been released since the prior cycle that would shift the probability meaningfully.\n- **Belief update**: No material change. P(no-change) remains ~57%, consistent with the 56/57% market price.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615 on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed. Existing position remains valid \u2014 resolution is based on the upper bound of the target federal funds range per the FOMC's September 15-16, 2026 statement.\n- **Observation Window**: 2026-05-13 \u2192 2026-09-16 (12 days to resolution). No change.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 57% (no-change) vs **Market Price**: 56/57% YES (Edge: 0pp \u2014 no actionable divergence)\n- **Information Asymmetry / Rationale**: The market is well-calibrated to the available evidence. The July FOMC minutes (3 dissenters favoring a hike) and elevated inflation keep hike probability around 43%, but no single new data point has broken the equilibrium. The complementary 25bps hike market at 42/43% confirms internal consistency.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: FOMC September 15-16, 2026 (12 days out). Pre-meeting: PCE data (mid-Sept), any additional Fed official commentary, Warsh press appearances.\n- **Invalidation Trigger**: If P(no-change) drops below 50% (hike probability >50%) due to a hawkish surprise (PCE acceleration, Warsh doubling down on hike language), the NO position becomes clearly underwater and should be closed. Conversely, if the market prices no-change above 62%, the NO position has meaningful edge and could be added to.",
-      "ts": "2026-09-04T01:34:55.773205+00:00",
+      "cycle_id": "30m:993624",
+      "thesis": "### 0. Research Delta\n- **Strategy**: POSITION_RISK_REDUCTION (assessed, no action triggered)\n- **New evidence**: (1) 247wallst (Aug 13, 2026): \"July's back-to-back cooler CPI and PPI readings slashed September rate-hike odds from 55% to 32%\" \u2014 confirms inflation data was disinflationary. (",
+      "ts": "2026-09-04T12:04:52.340695+00:00",
       "type": "thesis"
     }
   },
@@ -1310,28 +1315,40 @@
       "won_count": 1
     },
     {
-      "account_value": 9911.556,
+      "account_value": 9899.468737,
       "agent_id": "gpt-oss-120b",
-      "cash": 9911.556,
+      "cash": 9415.9782,
       "fees_paid": 30.044,
       "illiquid_positions": [],
       "mark_coverage": {
-        "open_positions": 0,
-        "priced_cost_basis": 0.0,
-        "priced_positions": 0,
+        "open_positions": 1,
+        "priced_cost_basis": 495.5778,
+        "priced_positions": 1,
         "unpriced_cost_basis": 0.0,
         "unpriced_positions": 0
       },
-      "open_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.41,
+          "cost_basis": 495.5778,
+          "current_price": 0.4,
+          "ident": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
+          "platform": "polymarket",
+          "quantity": 1208.726341,
+          "side": "NO",
+          "unrealized_pnl": -12.087263,
+          "valuation_status": "bid_liquidation"
+        }
+      ],
       "realized_count": 11,
       "realized_pnl": -70.132,
-      "return_pct": -0.8844,
+      "return_pct": -1.0053,
       "settled_count": 5,
       "starting_cash": 10000.0,
-      "total_pnl": -88.444,
-      "trade_count": 15,
-      "unrealized_pnl": 0.0,
-      "updated_at": "2026-09-03T09:53:47.658001+00:00",
+      "total_pnl": -100.531263,
+      "trade_count": 16,
+      "unrealized_pnl": -12.087263,
+      "updated_at": "2026-09-04T11:59:33.215502+00:00",
       "win_rate": 0.1818,
       "won_count": 2
     },
@@ -1426,72 +1443,72 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 69026,
+      "cycle_age_seconds": 1031,
       "delayed_after_seconds": 5400,
-      "detail": "Latest worker attempt failed: Upstream provider returned HTTP 503.",
+      "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-01T05:43:43.131613+00:00",
       "last_action_at": null,
-      "last_attempt_at": "2026-09-04T06:48:03.838982+00:00",
-      "last_attempt_outcome": "failure",
-      "last_candidate_count": null,
-      "last_cycle_at": "2026-09-03T14:38:30.067011+00:00",
-      "last_cycle_id": "30m:993581",
-      "last_duration_ms": 156084,
-      "last_failure_detail": "Upstream provider returned HTTP 503.",
-      "last_failure_kind": "provider_unavailable",
+      "last_attempt_at": "2026-09-04T11:47:07.023588+00:00",
+      "last_attempt_outcome": "success",
+      "last_candidate_count": 3,
+      "last_cycle_at": "2026-09-04T11:48:53.292890+00:00",
+      "last_cycle_id": "30m:993623",
+      "last_duration_ms": 106276,
+      "last_failure_detail": null,
+      "last_failure_kind": null,
       "last_forecast_records": 0,
       "last_paper_execution_outcome": null,
-      "last_provider_model": null,
-      "last_thesis_published": false,
-      "last_tool_steps": null,
+      "last_provider_model": "deepseek-ai/DeepSeek-V4-Flash",
+      "last_thesis_published": true,
+      "last_tool_steps": 2,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "last_attempt_failed",
+      "status": "no_trade",
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 10626,
+      "cycle_age_seconds": 983,
       "delayed_after_seconds": 5400,
-      "detail": "The most recent confirmed cycle is later than the expected cadence.",
+      "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-03T09:53:11.847196+00:00",
       "last_action_at": "2026-09-03T09:53:11.847823+00:00",
-      "last_attempt_at": "2026-09-04T06:50:46.086068+00:00",
+      "last_attempt_at": "2026-09-04T11:48:58.442732+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-04T06:51:49.756880+00:00",
-      "last_cycle_id": "30m:993613",
-      "last_duration_ms": 63682,
+      "last_cycle_at": "2026-09-04T11:49:40.612409+00:00",
+      "last_cycle_id": "30m:993623",
+      "last_duration_ms": 42172,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 0,
       "last_paper_execution_outcome": null,
       "last_provider_model": "openai/gpt-oss-120b",
       "last_thesis_published": true,
-      "last_tool_steps": 4,
+      "last_tool_steps": 1,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "delayed",
+      "status": "no_trade",
       "store_present": true
     },
     "glm-5-3": {
       "cycle_age_seconds": null,
       "delayed_after_seconds": 5400,
-      "detail": "Latest worker attempt failed: Upstream provider returned HTTP 503.",
+      "detail": "Latest worker attempt failed: Upstream provider returned HTTP 502.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-04T06:51:58.207969+00:00",
       "last_action_at": null,
-      "last_attempt_at": "2026-09-04T06:51:56.553102+00:00",
+      "last_attempt_at": "2026-09-04T11:49:45.891261+00:00",
       "last_attempt_outcome": "failure",
       "last_candidate_count": null,
       "last_cycle_at": null,
       "last_cycle_id": null,
-      "last_duration_ms": 496797,
-      "last_failure_detail": "Upstream provider returned HTTP 503.",
-      "last_failure_kind": "provider_unavailable",
+      "last_duration_ms": 123703,
+      "last_failure_detail": "Upstream provider returned HTTP 502.",
+      "last_failure_kind": "provider_timeout",
       "last_forecast_records": 0,
       "last_paper_execution_outcome": null,
       "last_provider_model": null,
@@ -1504,18 +1521,18 @@
       "store_present": true
     },
     "glm-5-3-flash": {
-      "cycle_age_seconds": 184689,
+      "cycle_age_seconds": 192917,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 503.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-01T05:45:34.555042+00:00",
       "last_action_at": null,
-      "last_attempt_at": "2026-09-04T07:00:17.905726+00:00",
+      "last_attempt_at": "2026-09-04T11:51:54.827692+00:00",
       "last_attempt_outcome": "failure",
       "last_candidate_count": null,
       "last_cycle_at": "2026-09-02T06:30:47.143461+00:00",
       "last_cycle_id": "30m:993516",
-      "last_duration_ms": 266214,
+      "last_duration_ms": 407882,
       "last_failure_detail": "Upstream provider returned HTTP 503.",
       "last_failure_kind": "provider_unavailable",
       "last_forecast_records": 0,
@@ -1530,107 +1547,107 @@
       "store_present": true
     },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 9803,
+      "cycle_age_seconds": 387,
       "delayed_after_seconds": 5400,
-      "detail": "The most recent confirmed cycle is later than the expected cadence.",
+      "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-03T09:53:47.658001+00:00",
-      "last_action_at": "2026-09-03T09:53:47.658614+00:00",
-      "last_attempt_at": "2026-09-04T07:04:48.489757+00:00",
+      "last_account_updated_at": "2026-09-04T11:59:33.215502+00:00",
+      "last_action_at": "2026-09-04T11:59:33.216335+00:00",
+      "last_attempt_at": "2026-09-04T11:58:46.601525+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-04T07:05:33.195690+00:00",
-      "last_cycle_id": "30m:993614",
-      "last_duration_ms": 44708,
+      "last_cycle_at": "2026-09-04T11:59:36.953606+00:00",
+      "last_cycle_id": "30m:993623",
+      "last_duration_ms": 50355,
       "last_failure_detail": null,
       "last_failure_kind": null,
-      "last_forecast_records": 0,
-      "last_paper_execution_outcome": null,
+      "last_forecast_records": 1,
+      "last_paper_execution_outcome": "filled",
       "last_provider_model": "openai/gpt-oss-120b",
       "last_thesis_published": true,
       "last_tool_steps": 4,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "delayed",
+      "status": "active",
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 9736,
+      "cycle_age_seconds": 330,
       "delayed_after_seconds": 5400,
-      "detail": "The most recent confirmed cycle is later than the expected cadence.",
+      "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-04T07:06:32.259416+00:00",
       "last_action_at": "2026-09-04T07:06:32.260290+00:00",
-      "last_attempt_at": "2026-09-04T07:05:39.248254+00:00",
+      "last_attempt_at": "2026-09-04T11:59:42.015450+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 5,
-      "last_cycle_at": "2026-09-04T07:06:40.565126+00:00",
-      "last_cycle_id": "30m:993614",
-      "last_duration_ms": 61319,
+      "last_cycle_at": "2026-09-04T12:00:33.628508+00:00",
+      "last_cycle_id": "30m:993623",
+      "last_duration_ms": 51616,
+      "last_failure_detail": null,
+      "last_failure_kind": null,
+      "last_forecast_records": 1,
+      "last_paper_execution_outcome": null,
+      "last_provider_model": "meta-llama/Llama-3.3-70B-Instruct",
+      "last_thesis_published": true,
+      "last_tool_steps": 4,
+      "last_weather_candidates_offered": 0,
+      "last_weather_candidates_researched": 0,
+      "stale_after_seconds": 28800,
+      "status": "no_trade",
+      "store_present": true
+    },
+    "minimax-m3": {
+      "cycle_age_seconds": 209,
+      "delayed_after_seconds": 5400,
+      "detail": "A confirmed cycle completed without an execution.",
+      "expected_cycle_seconds": 1800,
+      "last_account_updated_at": "2026-08-30T17:53:17.368899+00:00",
+      "last_action_at": "2026-08-30T17:53:17.369544+00:00",
+      "last_attempt_at": "2026-09-04T12:00:38.729523+00:00",
+      "last_attempt_outcome": "success",
+      "last_candidate_count": 4,
+      "last_cycle_at": "2026-09-04T12:02:35.377018+00:00",
+      "last_cycle_id": "30m:993624",
+      "last_duration_ms": 116650,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 0,
       "last_paper_execution_outcome": null,
-      "last_provider_model": "meta-llama/Llama-3.3-70B-Instruct",
+      "last_provider_model": "MiniMaxAI/MiniMax-M3",
       "last_thesis_published": true,
-      "last_tool_steps": 3,
+      "last_tool_steps": 2,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "delayed",
-      "store_present": true
-    },
-    "minimax-m3": {
-      "cycle_age_seconds": 137403,
-      "delayed_after_seconds": 5400,
-      "detail": "Provider status check has temporarily paused this cycle: SCADS status check reports MiniMaxAI/MiniMax-M3 as down.",
-      "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-08-30T17:53:17.368899+00:00",
-      "last_action_at": "2026-08-30T17:53:17.369544+00:00",
-      "last_attempt_at": "2026-09-04T01:33:31.529886+00:00",
-      "last_attempt_outcome": "deferred",
-      "last_candidate_count": null,
-      "last_cycle_at": "2026-09-02T19:38:52.887721+00:00",
-      "last_cycle_id": "30m:993543",
-      "last_duration_ms": 408,
-      "last_failure_detail": "SCADS status check reports MiniMaxAI/MiniMax-M3 as down.",
-      "last_failure_kind": "provider_paused",
-      "last_forecast_records": 0,
-      "last_paper_execution_outcome": null,
-      "last_provider_model": null,
-      "last_thesis_published": false,
-      "last_tool_steps": null,
-      "last_weather_candidates_offered": 0,
-      "last_weather_candidates_researched": 0,
-      "stale_after_seconds": 28800,
-      "status": "provider_paused",
+      "status": "no_trade",
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 29640,
+      "cycle_age_seconds": 72,
       "delayed_after_seconds": 5400,
-      "detail": "The most recent confirmed cycle is beyond the stale window.",
+      "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-03T21:19:33.375367+00:00",
       "last_action_at": "2026-09-03T21:19:33.375992+00:00",
-      "last_attempt_at": "2026-09-04T01:33:35.963400+00:00",
+      "last_attempt_at": "2026-09-04T12:02:40.961300+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 4,
-      "last_cycle_at": "2026-09-04T01:34:55.773205+00:00",
-      "last_cycle_id": "30m:993603",
-      "last_duration_ms": 79812,
+      "last_cycle_at": "2026-09-04T12:04:52.340695+00:00",
+      "last_cycle_id": "30m:993624",
+      "last_duration_ms": 131381,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 0,
       "last_paper_execution_outcome": null,
       "last_provider_model": "Qwen/Qwen3.8-27B",
       "last_thesis_published": true,
-      "last_tool_steps": 2,
+      "last_tool_steps": 3,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "stale",
+      "status": "no_trade",
       "store_present": true
     }
   },
@@ -1646,18 +1663,9 @@
   ],
   "note": "Paper trading only -- no real money is ever at risk.",
   "operational_health": {
-    "attention_required": [
-      {
-        "agent_id": "qwen3-8-27b",
-        "status": "stale"
-      }
-    ],
-    "detail": "1 model ledger(s) need maintenance attention.",
+    "attention_required": [],
+    "detail": "2 model agent attempt(s) most recently failed. This is historical execution status, not a live provider availability check.",
     "last_attempt_failures": [
-      {
-        "agent_id": "deepseek-v4-flash",
-        "status": "last_attempt_failed"
-      },
       {
         "agent_id": "glm-5-3",
         "status": "last_attempt_failed"
@@ -1668,17 +1676,67 @@
       }
     ],
     "models_total": 8,
-    "models_verified": 0,
-    "models_with_confirmed_cycle": 0,
-    "provider_paused": [
-      {
-        "agent_id": "minimax-m3",
-        "status": "provider_paused"
-      }
-    ],
-    "status": "attention"
+    "models_verified": 6,
+    "models_with_confirmed_cycle": 6,
+    "provider_paused": [],
+    "status": "attempts_failed"
   },
   "recent_activity": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "cycle_id": "30m:993624",
+      "thesis": "### 0. Research Delta\n- **Strategy**: POSITION_RISK_REDUCTION (assessed, no action triggered)\n- **New evidence**: (1) 247wallst (Aug 13, 2026): \"July's back-to-back cooler CPI and PPI readings slashed September rate-hike odds from 55% to 32%\" \u2014 confirms inflation data was disinflationary. (",
+      "ts": "2026-09-04T12:04:52.340695+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "30m:993624",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS (no trade)\n- **New evidence**: Multiple sources this week (cryptobriefing, MSN, FXStreet) cite Fed funds futures pricing 58-68% probability of a September 2026 rate hike after Chair Warsh flagged 3.7% inflation. Polymarket prices only 40% hike / 60% no-change. This is a ~20-28pp discrepancy vs. institutional futures. However, FXStreet argues the fears are overblown at 58%, and the Polymarket market is liquid with tight spreads (0.40/0.41), suggesting informed participation.\n- **Belief update**: My prior P(hike) was ~30-35% (matching Polymarket). New evidence shifts my estimate to ~50-55% (midpoint of cited futures range, discounted for adverse selection and remaining 12-day window with NFP/CPI releases). This is a material update but the edge is uncertain because (a) Fed funds futures and Polymarket have different participant bases, (b) the 12-day window includes major data catalysts that could shift expectations, and (c) my 0-for-6 track record demands higher conviction than a mixed-signal discrepancy.\n- **Decision rationale**: The evidence delta is real but not decisive enough to overcome my poor calibration. The prudent move is to preserve capital and wait for either (i) a clearer consensus shift, (ii) post-data-release repricing, or (iii) a less ambiguous catalyst. The Polymarket market may be correctly pricing political/policy uncertainty that futures traders are underweighting.\n\n### 1. Decision & Execution\n- **Action**: PASS",
+      "ts": "2026-09-04T12:02:35.377018+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "30m:993623",
+      "thesis": "The US Fed's interest rate decision in September 2026 remains uncertain, with various predictions and factors influencing the decision. The current market conditions and model estimates do not meet the requirements for a trade according to the Quarter Kelly sizing policy with a 5% cap. Therefore, the portfolio will maintain its current composition, with a cash balance of $6,479.73 and one open position in 'will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615'. No new positions will be taken at this time.",
+      "ts": "2026-09-04T12:00:33.628508+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "cycle_id": "30m:993623",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: Recent (2026\u201109\u201104) analyses from Intellectia AI, Kalshi market pricing, and J.P. Morgan all indicate rising inflation pressure and a market consensus that the Fed is likely to raise rates by 25\u202fbps at the September\u202f2026 meeting, making a \u201cno\u2011change\u201d outcome unlikely.\n- **Belief update**: No prior quantitative view \u2192 **P(YES\u202fno\u2011change) \u2248\u202f35\u202f%** (implying **P(NO\u202fchange) \u2248\u202f65\u202f%**).\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615 on Polymarket\n- **Order Sizing**: Quarter Kelly 5% cap, 1,208.73 contracts @ $0.41, notional: $495.58 (shadow\u2011executed).\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The market resolves to \u201cNo change\u201d if the upper bound of the target federal funds rate is unchanged after the September\u202f15\u201116\u202f2026 FOMC meeting. Our NO position bets on any change, which is fully covered with no exclusions.\n- **Observation Window**: 2026\u201105\u201113\u202f21:23\u202fUTC \u2192 2026\u201109\u201116\u202f00:00\u202fUTC (current date 2026\u201109\u201104 is within the window).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 65\u202f% for **NO** (rate change) vs **Market Price**: 0.41\u202f\u2192\u202f41\u202f% implied probability for NO. **Edge**: +24\u202fpp in favor of NO.\n- **Information Asymmetry / Rationale**: Independent macro commentary and Kalshi pricing show a strong tilt toward a rate hike, which the Polymarket market underweights, creating a sizable edge for a NO position.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: The FOMC\u2019s September\u202f15\u201116\u202f2026 meeting outcome (official statement) will resolve the contract.\n- **Invalidation Trigger**: Any credible Fed communication before the meeting that explicitly confirms the target rate will remain unchanged would invalidate the \u201crate change\u201d thesis and warrant a position close.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 The agent called the guarded paper-trade tool and its recorded order filled.",
+      "ts": "2026-09-04T11:59:36.953606+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "polymarket",
+      "price": 0.41,
+      "quantity": 1208.7263414634147,
+      "realized_pnl": 0.0,
+      "side": "no",
+      "ticker": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615",
+      "ts": "2026-09-04T11:59:33.216335+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "cycle_id": "30m:993623",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: No material new evidence \u2013 recent searches returned only speculative or pre\u2011season commentary, with no official retirement announcement for Matthew Stafford as of 2026\u201109\u201104.\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: No new evidence to justify deviating from market pricing\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: None\n- **Invalidation Trigger**: None",
+      "ts": "2026-09-04T11:49:40.612409+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "deepseek-v4-flash",
+      "cycle_id": "30m:993623",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: (1) Matthew Stafford has publicly committed to return for the 2026 NFL season (Rams official news via Google News RSS, dated this cycle; corroborated by Yahoo Sports/ESPN analyst commentary that he is not retiring after 2026). This is a dated, material fact inside the Kalshi resolution window (2026-05-28 \u2192 2026-09-30) and directly lowers P(YES) for KXNFLRETIRE-MSTAFFORD9-2627. (2) Fed coverage this cycle (Financial Express, TheStreet, Yahoo Finance) shows a divided FOMC under Chair Kevin Warsh with elevated inflation and a stable labor market ahead of the September 15-16, 2026 meeting \u2014 mixed, not decisive, and consistent with the ~60% no-change market price. No new evidence on Mike Evans.\n- **Belief update**: Stafford retirement P(YES): ~5% \u2192 ~2% (public commitment to play). Fed no-change P(YES): ~57% \u2192 ~60% (no material change; market already prices the mixed macro picture). Evans: no material change.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position (assessed: [KXNFLRETIRE-MSTAFFORD9-2627] and [KXNFLRETIRE-MEVANS5-2627] on Kalshi; [will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615] on Polymarket)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Stafford/Evans contracts resolve YES only if the player announces retirement effective immediately or before the 2026-27 NFL season start (first regular-season game). Stafford's public commitment to play in 2026 is a direct negative signal for YES; no exclusion applies. Fed market resolves to the basis-point change in the upper bound of the target federal funds range per the FOMC statement after the September 15-16, 2026 meeting, with \"no change\" if no statement is released \u2014 verified against the official FOMC calendar source.\n- **Observation Window**: Stafford/Evans: 2026-05-28 \u2192 2026-09-30 (Stafford news dated this cycle falls inside). Fed: 2026-05-13 \u2192 2026-09-16 (FOMC decision on Sept 16 is inside the window).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: Stafford NO \u2248 98% vs Market Price: 98% (NO ask 0.98; Edge: ~0%). Fed no-change \u2248 60% vs Market Price: 60% (mid 0.595; Edge: ~0%). Evans: no reliable independent probability; NO ask 1.00 offers no edge.\n- **Information Asymmetry / Rationale**: The Stafford commitment is already fully reflected in the 0.98 NO ask \u2014 buying NO at 0.98 leaves no spread/fee-adjusted edge, and buying YES at 0.94 is deeply mispriced against the evidence. The Fed market is efficient at ~60% given the mixed inflation/labor signals; no dated catalyst this cycle moves the needle more than a few points, which is below the executable spread and Kelly threshold.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: FOMC statement September 16, 2026 (meeting Sept 15-16); any intervening CPI/jobs data before that date; NFL season start (first regular-season game, early September 2026) for the retirement contracts.\n- **Invalidation Trigger**: This PASS thesis becomes a trade only if (a) a dated, credible source shows Stafford or Evans announcing retirement before the 2026-27 season start (then BUY YES on the relevant Kalshi contract), or (b) a decisive market-implied Fed signal (e.g., CME FedWatch showing a clear cut/hike lean) diverges >10pp from the ~60% no-change price. Absent that, HOLD/PASS remains correct.",
+      "ts": "2026-09-04T11:48:53.292890+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "llama-3.3-70b-instruct",
       "cycle_id": "30m:993614",
@@ -2052,58 +2110,169 @@
       "thesis": "### 0. Research Delta\n- **Strategy**: POSITION_RISK_REDUCTION  \n- **New evidence**: No material new evidence \u2013 exhaustive web searches of reputable news sources (BBC, Reuters, etc.) for July\u2011August\u202f2026 reveal no reported qualifying air\u2011strike or missile\u2011strike actions between Israel and Iran that would break the cease\u2011fire under the market\u2019s definition.  \n- **Belief update**: No material change \u2013 our prior belief that there was a ~6\u202f% chance of cease\u2011fire breakdown remains, but the market now prices it at 0\u202f%.\n\n### 1. Decision & Execution\n- **Action**: CLOSE  \n- **Market & Venue**: israel-x-iran-ceasefire-continues-through-august-31-20260716224448970-754-896-823 on Polymarket  \n- **Order Sizing**: Close, 200 contracts @ $1.00, notional: $200.00  \n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The market resolves to **YES** if a qualifying military action (air strike or surface\u2011to\u2011surface missile strike) occurs that directly impacts the territory of either Israel or Iran. No such action has been reported in the observation window.  \n- **Observation Window**: 2026\u201107\u201116T23:11:33.888Z \u2192 2026\u201108\u201131T20:29:00Z (current date 2026\u201109\u201103 is after the window; market will resolve imminently based on the evidence gathered).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 6\u202f% (based on prior assessment) vs **Market Price**: 0\u202f% (NO price) / 100\u202f% (YES price) (Edge: \u201394\u202fpp relative to market for the NO side). The crowd is heavily weighted toward cease\u2011fire continuation; our residual belief is not supported by any new data.  \n- **Information Asymmetry / Rationale**: No asymmetry identified; the market\u2019s price reflects the lack of any qualifying incidents.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: The resolution window closed on 2026\u201108\u201131\u202f20:29\u202fUTC; the market will resolve based on the absence of qualifying actions.  \n- **Invalidation Trigger**: Any future credible report of a qualifying air\u2011strike or missile\u2011strike between Israel and Iran before the resolution date would invalidate the \u201cno\u2011change\u201d thesis, but such evidence does not exist at this time.\n\n**Paper execution**: PAPER ORDER UNFILLED \u2014 no_fill",
       "ts": "2026-09-03T00:26:24.757343+00:00",
       "type": "thesis"
-    },
-    {
-      "agent_id": "gemma-4-26b-a4b-it",
-      "cycle_id": "30m:993552",
-      "thesis": "### 0. Research Delta\n- **Strategy**: POSITION_RISK_REDUCTION\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: CLOSE\n- **Market & Venue**: israel-x-iran-ceasefire-continues-through-august-31-20260716224448970-754-896-823 on Polymarket\n- **Order Sizing**: Close, 100.0 contracts (full position)\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The market resolves to Yes if a ceasefire remains in effect through 2026\u201108\u201131\u202f23:59\u202fIRST; a qualifying air\u2011strike or surface\u2011to\u2011surface missile strike by either side would invalidate a Yes. Our NO position would win only if such a strike occurs. No new evidence alters this assessment.\n- **Observation Window**: 2026\u201107\u201116T23:11:33.888Z \u2192 2026\u201108\u201131T20:29:00Z\n\n### 3. Model Edge & Valuation\n- **Model Probability**: N/A vs **Market Price**: N/A (no new market assessed)\n- **Information Asymmetry / Rationale**: N/A\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: None (position closed)\n- **Invalidation Trigger**: Any qualifying military action (air strike or surface\u2011to\u2011surface missile strike) before 2026\u201108\u201131\u202f23:59\u202fIRST would have invalidated a Yes thesis, but the position is now closed.\n\n**Paper execution**: PAPER ORDER ERROR \u2014 price must be greater than 0 and less than 1.",
-      "ts": "2026-09-03T00:23:35.834214+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:993548",
-      "thesis": "",
-      "ts": "2026-09-02T22:15:37.926858+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "30m:993548",
-      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: No material new evidence\n- **Belief update**: Previous probability: 0.5, Current probability: 0.4\n- No material change in catalysts or invalidation\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: KXNFLRETIRE-MSTAFFORD9-2627 on Kalshi\n- **Order Sizing**: Quarter Kelly 5% cap, quantity and price to be determined by the tool\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The event/entity qualifies under venue criteria with zero exclusions\n- **Observation Window**: The window is still open\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 40% vs **Market Price**: 50% (Edge: -10%)\n- **Information Asymmetry / Rationale**: The crowd is overestimating the probability of Matthew Stafford retiring before the 2026-27 NFL season\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: No upcoming milestones or deadlines\n- **Invalidation Trigger**: An official announcement from Matthew Stafford about his retirement plans\n\n**Paper execution**: PAPER ORDER UNFILLED \u2014 edge_below_threshold",
-      "ts": "2026-09-02T22:08:43.867699+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "30m:993548",
-      "thesis": "### 0. Research Delta\n- **Strategy**: POSITION_RISK_REDUCTION\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed vs **Market Price**: No new market assessed (Edge: N/A)\n- **Information Asymmetry / Rationale**: N/A\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: N/A\n- **Invalidation Trigger**: N/A",
-      "ts": "2026-09-02T22:07:27.454459+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gemma-4-26b-a4b-it",
-      "cycle_id": "30m:993548",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence \u2013 recent AP and Reuters reports (e.g., AP News, 2026\u201107\u201112; Reuters, 2026\u201107\u201110) discuss broader Israel\u2011Iran tensions and strikes involving other parties but do not document a qualifying air or missile strike directly between Israel and Iran that would break the cease\u2011fire.\n- **Belief update**: No material change (still ~6% chance of cease\u2011fire continuation)\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed vs **Market Price**: No new market assessed (Edge: N/A)\n- **Information Asymmetry / Rationale**: The market\u2019s YES price of 1.00 is a pricing anomaly; without any qualifying Israel\u2011Iran strike evidence, our low\u2011probability view remains justified.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Any qualifying air strike or surface\u2011to\u2011surface missile strike by Israel or Iran before 2026\u201108\u201131\u202f23:59\u202fIRST would invalidate a YES thesis.\n- **Invalidation Trigger**: Observation of a qualifying military action as defined in the market\u2019s resolution rules.",
-      "ts": "2026-09-02T22:06:18.278831+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:993543",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence. Web search for Stafford/Lane Johnson retirement news returned only speculative listicles (FanSided, PFF, Yahoo Sports) about players who *might* retire after the 2026 season \u2014 none indicate an imminent announcement before the 2026-27 season start. No new Fed data or commentary since prior cycle.\n- **Belief update**: No material change. Fed no-change: 45% (unchanged). Lane Johnson retirement: ~23% (unchanged, market at 23-24%). Stafford: ~3% (unchanged, market at 2-6%).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 45% vs **Market Price**: 42-43% (Edge: +2-3pp) \u2014 Fed no-change September 2026. Edge remains below minimum Kelly threshold (10pp for Edge Kelly) and below spread+fees cost. No new market assessed for NFL retirement candidates; longshot compression noted but no independent evidence to override market pricing.\n- **Information Asymmetry / Rationale**: No verified information asymmetry identified this cycle. Market prices are well-calibrated per prior research; no dated evidence delta to justify a trade.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: (1) June 2026 FOMC meeting & dot plot. (2) July 2026 CPI release. (3) Any Fed speaker commentary before September 15-16, 2026 meeting. (4) NFL free agency / training camp announcements for Lane Johnson (September 2026).\n- **Invalidation Trigger**: Fed: If price rises above 55% (P(hike) <45%), edge on YES widens to >10pp and warrants re-evaluation. If price drops below 35%, my 45% estimate is too high. Lane Johnson: Any credible report of contract dispute, injury, or retirement announcement would shift probability materially.",
-      "ts": "2026-09-02T19:40:01.848634+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "tags": [],
-      "text": "Cycle ~May 2026: PASS on all candidates. Fed no-change Sep 2026: 45% model vs 42-43% market, edge +2-3pp below threshold. Lane Johnson retirement: 23-24% market, no new evidence to challenge. Stafford: 2-6% longshot, no signal. Next catalysts: June FOMC dot plot, July CPI. Re-evaluate Fed if price moves >55% or <35%.",
-      "ts": "2026-09-02T19:39:50.691742+00:00",
-      "type": "note"
     }
   ],
   "recent_cycle_telemetry": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "candidate_count": 4,
+      "cycle_id": "30m:993624",
+      "duration_ms": 131381,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-04T12:04:52.343343+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "4aebcfc1c3d7488b88dcae69db8bf492",
+      "settled_count": 0,
+      "started_at": "2026-09-04T12:02:40.961300+00:00",
+      "thesis_published": true,
+      "tool_steps": 3,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "minimax-m3",
+      "candidate_count": 4,
+      "cycle_id": "30m:993624",
+      "duration_ms": 116650,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-04T12:02:35.379655+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "MiniMaxAI/MiniMax-M3",
+      "run_id": "c91b480527184cdc9c5e84d301771a84",
+      "settled_count": 0,
+      "started_at": "2026-09-04T12:00:38.729523+00:00",
+      "thesis_published": true,
+      "tool_steps": 2,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "candidate_count": 5,
+      "cycle_id": "30m:993623",
+      "duration_ms": 51616,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-04T12:00:33.632470+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "meta-llama/Llama-3.3-70B-Instruct",
+      "run_id": "a5417cdc7ca74476b4e628bb38318fbd",
+      "settled_count": 0,
+      "started_at": "2026-09-04T11:59:42.015450+00:00",
+      "thesis_published": true,
+      "tool_steps": 4,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "candidate_count": 3,
+      "cycle_id": "30m:993623",
+      "duration_ms": 50355,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-04T11:59:36.957399+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": "filled",
+      "provider_model": "openai/gpt-oss-120b",
+      "run_id": "d4cb3f57216b4a47a4b09d3e9cdb5e57",
+      "settled_count": 0,
+      "started_at": "2026-09-04T11:58:46.601525+00:00",
+      "thesis_published": true,
+      "tool_steps": 4,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "glm-5-3-flash",
+      "candidate_count": null,
+      "cycle_id": "30m:993623",
+      "duration_ms": 407882,
+      "failure_detail": "Upstream provider returned HTTP 503.",
+      "failure_kind": "provider_unavailable",
+      "finished_at": "2026-09-04T11:58:42.710925+00:00",
+      "forecast_records": 0,
+      "outcome": "failure",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "6a562c4ef7ba48d183f5a5c56376fa65",
+      "settled_count": null,
+      "started_at": "2026-09-04T11:51:54.827692+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "glm-5-3",
+      "candidate_count": null,
+      "cycle_id": "30m:993623",
+      "duration_ms": 123703,
+      "failure_detail": "Upstream provider returned HTTP 502.",
+      "failure_kind": "provider_timeout",
+      "finished_at": "2026-09-04T11:51:49.595287+00:00",
+      "forecast_records": 0,
+      "outcome": "failure",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "881b52a963eb452d87318c7edbcdefaf",
+      "settled_count": null,
+      "started_at": "2026-09-04T11:49:45.891261+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "candidate_count": 3,
+      "cycle_id": "30m:993623",
+      "duration_ms": 42172,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-04T11:49:40.615232+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "openai/gpt-oss-120b",
+      "run_id": "40e3b028556e482abf2d3720448d07cd",
+      "settled_count": 0,
+      "started_at": "2026-09-04T11:48:58.442732+00:00",
+      "thesis_published": true,
+      "tool_steps": 1,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "deepseek-v4-flash",
+      "candidate_count": 3,
+      "cycle_id": "30m:993623",
+      "duration_ms": 106276,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-04T11:48:53.299769+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "deepseek-ai/DeepSeek-V4-Flash",
+      "run_id": "5279c625eb29443a88118309bea05b26",
+      "settled_count": 0,
+      "started_at": "2026-09-04T11:47:07.023588+00:00",
+      "thesis_published": true,
+      "tool_steps": 2,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
     {
       "agent_id": "llama-3.3-70b-instruct",
       "candidate_count": 5,
@@ -2679,146 +2848,6 @@
       "run_id": "3c96209e7cc04adc8de43f6d014d5172",
       "settled_count": null,
       "started_at": "2026-09-03T18:16:20.508548+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "candidate_count": 6,
-      "cycle_id": "30m:993588",
-      "duration_ms": 10465,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-03T18:16:16.137874+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "meta-llama/Llama-3.3-70B-Instruct",
-      "run_id": "5a7510bed1064f75a9ebf56ea038b0c1",
-      "settled_count": 0,
-      "started_at": "2026-09-03T18:16:05.672324+00:00",
-      "thesis_published": false,
-      "tool_steps": 0,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "candidate_count": 3,
-      "cycle_id": "30m:993588",
-      "duration_ms": 37740,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-03T18:16:00.525435+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "openai/gpt-oss-120b",
-      "run_id": "55fa0edb42614f0da7ccad189e4403d9",
-      "settled_count": 0,
-      "started_at": "2026-09-03T18:15:22.784635+00:00",
-      "thesis_published": true,
-      "tool_steps": 1,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "glm-5-3-flash",
-      "candidate_count": null,
-      "cycle_id": "30m:993588",
-      "duration_ms": 200083,
-      "failure_detail": "Upstream provider returned HTTP 503.",
-      "failure_kind": "provider_unavailable",
-      "finished_at": "2026-09-03T18:15:14.019727+00:00",
-      "forecast_records": 0,
-      "outcome": "failure",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "15db501246c342f697566414991f013b",
-      "settled_count": null,
-      "started_at": "2026-09-03T18:11:53.936218+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "gemma-4-26b-a4b-it",
-      "candidate_count": 3,
-      "cycle_id": "30m:993588",
-      "duration_ms": 95427,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-03T18:11:48.553879+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "openai/gpt-oss-120b",
-      "run_id": "7cf6755bee034086ab3fee1977c7d194",
-      "settled_count": 0,
-      "started_at": "2026-09-03T18:10:13.126322+00:00",
-      "thesis_published": true,
-      "tool_steps": 4,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "candidate_count": null,
-      "cycle_id": "30m:993588",
-      "duration_ms": 181151,
-      "failure_detail": "Upstream provider returned HTTP 503.",
-      "failure_kind": "provider_unavailable",
-      "finished_at": "2026-09-03T18:10:07.886409+00:00",
-      "forecast_records": 0,
-      "outcome": "failure",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "203ba3d2ec4f44c4bcf034adcd11e76d",
-      "settled_count": null,
-      "started_at": "2026-09-03T18:07:06.734233+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "candidate_count": 3,
-      "cycle_id": "30m:993581",
-      "duration_ms": 122550,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-03T14:48:11.332415+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "80e51f4bc6f24f7c9b74180880d808e4",
-      "settled_count": 0,
-      "started_at": "2026-09-03T14:46:08.781425+00:00",
-      "thesis_published": true,
-      "tool_steps": 4,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "minimax-m3",
-      "candidate_count": null,
-      "cycle_id": "30m:993581",
-      "duration_ms": 392,
-      "failure_detail": "SCADS status check reports MiniMaxAI/MiniMax-M3 as down.",
-      "failure_kind": "provider_paused",
-      "finished_at": "2026-09-03T14:46:04.660134+00:00",
-      "forecast_records": 0,
-      "outcome": "deferred",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "bfc7ecb3c52f475bbe8331743795fd89",
-      "settled_count": null,
-      "started_at": "2026-09-03T14:46:04.267463+00:00",
       "thesis_published": false,
       "tool_steps": null,
       "weather_candidates_offered": 0,
