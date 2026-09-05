@@ -708,5 +708,29 @@ function escHtml(value) {
                 self.assertIn(".brand-home:active", index)
 
 
+    def test_edge_board_and_track_record_motion_animate_guarded_when_elements_absent(self):
+        # Regression: On views where .tr-stat is not present (such as /edge/agentic
+        # and /edge/mtm, or when track record log/calib is empty), Motion.animate
+        # with a selector string throws "No valid element provided" when 0 elements
+        # match. The catch block caught this invariant error and displayed
+        # "Edge board is not available yet. Retry".
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                edge_loader = index.split("async function loadEdgeBoard() {", 1)[1].split(
+                    "async function openWatchlistPage", 1
+                )[0]
+                self.assertIn("const stats = host.querySelectorAll('.tr-stat');", edge_loader)
+                self.assertIn("if (stats.length) {", edge_loader)
+                self.assertNotIn("Motion.animate('#edgeBody .tr-stat'", edge_loader)
+
+                track_loader = index.split("async function loadTrackRecord() {", 1)[1].split(
+                    "let edgeLoaded", 1
+                )[0]
+                self.assertIn("const stats = host.querySelectorAll('.tr-stat');", track_loader)
+                self.assertIn("if (stats.length) {", track_loader)
+                self.assertNotIn("Motion.animate('#trackBody .tr-stat'", track_loader)
+
+
 if __name__ == "__main__":
     unittest.main()
+
