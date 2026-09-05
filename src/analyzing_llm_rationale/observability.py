@@ -16,10 +16,62 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import (
+    BatchSpanProcessor,
+    SimpleSpanProcessor,
+    SpanExporter,
+    SpanExportResult,
+)
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+
+logger = logging.getLogger(__name__)
+
+# Attributes that record a decision rather than a step. A span carrying any of
+# them is worth a log line on its own.
+_DECISION_KEYS = (
+    "outcome",
+    "trade.fill_status",
+    "trade.fill_outcome",
+    "trade.sizing_reason",
+    "trade.executable_price",
+    "risk_guard.reason",
+    "risk_guard.allowed",
+    "failure.kind",
+    "provider.state",
+)
+
+
+class _DecisionSpanLogger(SpanExporter):
+    """Mirror decision-carrying spans into the ordinary log.
+
+    The OTLP exporter has been returning 402 Payment Required, so every
+    ``outcome`` / ``fill_status`` / ``risk_guard.reason`` attribute the trading
+    path sets has been discarded. Those are the fields that answer "why did it
+    not trade?", and losing them meant reconstructing decisions from the
+    audits endpoint and the venue's own API instead of reading a log.
+
+    Spans still *record* -- only the export fails -- so a second processor
+    recovers them without depending on the backend being paid up. Scoped to
+    decision attributes deliberately: mirroring every span would bury the
+    handful that matter under fetch/parse noise.
+    """
+
+    def export(self, spans) -> SpanExportResult:
+        for span in spans:
+            attrs = dict(getattr(span, "attributes", None) or {})
+            if not any(key in attrs for key in _DECISION_KEYS):
+                continue
+            detail = " ".join(f"{k}={attrs[k]}" for k in sorted(attrs))
+            logger.info("trace %s %s", getattr(span, "name", "span"), detail)
+        return SpanExportResult.SUCCESS
+
+    def shutdown(self) -> None:
+        return None
+
+    def force_flush(self, timeout_millis: int = 30_000) -> bool:
+        return True
 
 SUPERLOG_ENDPOINT = "https://intake.superlog.sh"
 SUPERLOG_PUBLIC_TOKEN = "sl_public_4V3439ks2mBsBuUqSIoSBiG-b3F2pPcIWj89ONGBXgo"
@@ -60,6 +112,13 @@ def init_observability(app: "FastAPI | None" = None) -> None:
             )
         )
     )
+    # Simple, not Batch: a tick is a short-lived process and a batched
+    # processor can exit before flushing, which would drop exactly the last
+    # decision of a cycle -- usually the interesting one.
+    if os.environ.get("FORESEA_LOG_DECISION_SPANS", "1").strip().lower() not in (
+        "0", "false", "no", "off",
+    ):
+        tracer_provider.add_span_processor(SimpleSpanProcessor(_DecisionSpanLogger()))
     trace.set_tracer_provider(tracer_provider)
 
     # Metrics
