@@ -1024,6 +1024,43 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(result["execution"]["fill_status"], "shadow_unfilled_below_market")
         self.assertEqual(result["account"]["n_open_positions"], 0)
 
+    def test_edge_is_measured_against_the_price_the_order_would_actually_pay(self):
+        # Live, KXNFLRETIRE-MSTAFFORD9-2627: yes_bid 0.00 / yes_ask 0.93, so
+        # the executable NO ask was 1.00. An agent bid 0.07 -- exactly the NO
+        # bid, the resting side of a book this tool never rests on -- and the
+        # audit recorded `edge: 0.73`, computed from its own limit, on a trade
+        # whose real edge was -0.20. That fantasy cleared the fee floor and
+        # was Kelly-sized to 6,056 contracts before the fill check zeroed it.
+        # A side quoted at 1.00 cannot return more than it costs, so there is
+        # nothing to size here at any edge.
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    return_value={"yes_bid": 0.0, "yes_ask": 0.93},
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXDEAD", "side": "no", "price": 0.07,
+                     "model_probability": 0.20, "sizing_mode": "quarter_kelly"},
+                    ctx,
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["reason"], "no_executable_price")
+        self.assertEqual(result["execution"]["fill_status"], "no_executable_price")
+        self.assertEqual(result["execution"]["filled_quantity"], 0.0)
+        self.assertFalse(result["submitted"])
+        # A recorded rejection, not a bare ValueError leaving no board trace.
+        self.assertIn("1.00", result["message"])
+
     def test_place_trade_does_not_fill_when_no_live_quote_is_available(self):
         # Regression: _resolve_shadow_marketability used to trust the
         # caller's price outright when a live quote couldn't be fetched,

@@ -2586,9 +2586,54 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     },
                 }
 
+            # Edge has to be measured against the price this order would
+            # actually pay, not the one the agent asked for. Live: an agent
+            # bid 0.07 on a side whose executable ask was 1.00 and recorded
+            # `edge: 0.73` -- computed from its own limit -- on a trade whose
+            # real edge was -0.20. It cleared the fee floor on that fantasy
+            # and was Kelly-sized to 6,056 contracts before the fill check
+            # zeroed it. No money moved, but the audit trail, the published
+            # thesis, and every guard that reads `edge` were all working from
+            # a number no venue would have honoured. `market_check["price"]`
+            # only equals the executable ask when the limit already crossed
+            # it, so it cannot be used for this.
+            executable_price = market_check["real_ask"]
+            if executable_price is None:
+                executable_price = order["price"]
+            executable_price = float(executable_price)
+            # A side quoted at or above 1.00 has no upside at all: the most it
+            # can return is the dollar it costs. _sizing_plan raises on such a
+            # price, and that ValueError was escaping as a bare warning with
+            # no ledger row, so the attempt vanished from the board entirely
+            # rather than being recorded as the rejection it is.
+            if not 0.0 < executable_price < 1.0:
+                span.set_attributes({
+                    "outcome": "rejected",
+                    "trade.submitted": False,
+                    "trade.executable_price": executable_price,
+                })
+                _finish_tool(tool, start, "rejected")
+                return {
+                    "ok": False,
+                    "tool": tool,
+                    "error_type": "risk_guard",
+                    "reason": "no_executable_price",
+                    "message": (
+                        f"The executable {side} price is {executable_price:.2f}, which leaves no "
+                        "profit available on this side -- the contract cannot return more than it "
+                        "costs. No paper order was recorded."
+                    ),
+                    "mode": mode,
+                    "submitted": False,
+                    "execution": {
+                        "immediate_only": True,
+                        "filled_quantity": 0.0,
+                        "fill_status": "no_executable_price",
+                    },
+                }
             sizing = _sizing_plan(
                 args,
-                price=float(order["price"]),
+                price=executable_price,
                 side=side,
                 account_value=_risk_guard_policy().account_value,
             )
