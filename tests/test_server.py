@@ -3833,7 +3833,10 @@ class ServerTests(unittest.TestCase):
             )
 
             self.assertEqual(response.status_code, 200)
-            alt_provider_mock.assert_called_once_with("minimax-m3")
+            alt_provider_mock.assert_called_once_with(
+                "minimax-m3",
+                request_timeout_s=server_module._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
+            )
             self.assertGreater(len(alt_provider.calls), 0)
             self.assertEqual(len(self.provider.calls), 0)  # server default was never used
             self.assertEqual(response.json()["served_model_name"], "fake-model")
@@ -3856,7 +3859,10 @@ class ServerTests(unittest.TestCase):
         ):
             req = server_module.AgentAnalyzeRequest(question="Will X happen?")
             provider, temperature, max_tokens = server_module._select_agent_provider(req)
-        alt_provider_mock.assert_called_once_with("gpt-oss-120b")
+        alt_provider_mock.assert_called_once_with(
+                "gpt-oss-120b",
+                request_timeout_s=server_module._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
+            )
         self.assertIs(provider, alt_provider)
 
     def test_select_agent_provider_prefers_explicit_model_over_auto_selection(self):
@@ -3867,7 +3873,10 @@ class ServerTests(unittest.TestCase):
         ):
             req = server_module.AgentAnalyzeRequest(question="Will X happen?", model="minimax-m3")
             server_module._select_agent_provider(req)
-        alt_provider_mock.assert_called_once_with("minimax-m3")
+        alt_provider_mock.assert_called_once_with(
+                "minimax-m3",
+                request_timeout_s=server_module._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
+            )
 
     def test_select_agent_provider_prefers_byok_over_auto_selection(self):
         with mock.patch.object(server_module, "_auto_selected_model") as auto_mock:
@@ -5303,6 +5312,9 @@ class ServerTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["model_key"], "minimax-m3")
+        # Interactive chat, not the agent tool loop: it keeps the lower
+        # provider default on purpose, so it must NOT inherit the agent
+        # read timeout, which exists for long unattended trading turns.
         alt_provider.assert_called_once_with("minimax-m3")
         self.assertEqual(len(fast_provider.calls), 1)
         self.assertEqual(len(self.provider.calls), 0)

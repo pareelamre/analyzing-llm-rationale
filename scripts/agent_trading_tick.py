@@ -2130,9 +2130,38 @@ def _failure_detail(exc: BaseException) -> str:
     return _safe_failure_detail(exc)
 
 
+def _is_timeout_exception(exc: BaseException) -> bool:
+    """True when a timeout appears anywhere in the exception's cause chain.
+
+    Text alone cannot answer this. A read timeout on the agent path is
+    re-raised as "503: The '<model>' forecasting model is temporarily
+    unavailable", so the 503 string test below matched first and filed every
+    timeout as an outage. glm-5-3 was reported as an unavailable provider for
+    days on that basis, while SCADS listed the route up with tools enabled --
+    it was simply slower than the read timeout. Exception types do not lie the
+    way a wrapper's message does, so ask them before matching text.
+    """
+    seen: set[int] = set()
+    current: Optional[BaseException] = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, (TimeoutError, requests.Timeout)):
+            return True
+        if type(current).__name__ in {"ProviderTimeoutError", "ReadTimeout", "ConnectTimeout"}:
+            return True
+        nxt = current.__cause__ or current.__context__
+        current = nxt if isinstance(nxt, BaseException) else None
+    return False
+
+
 def _failure_kind(exc: BaseException) -> str:
     """Map volatile provider text into a stable maintenance-facing category."""
     detail = " ".join(_exception_messages(exc)).lower()
+    # Ask the exception types before the wrapper's words: a wrapped timeout is
+    # a timeout, not an outage, and mislabelling it hides a slow model behind
+    # a provider-outage story that no amount of retrying can fix.
+    if _is_timeout_exception(exc):
+        return "provider_timeout"
     if "429" in detail or "rate limit" in detail or "max_parallel_requests" in detail:
         return "provider_rate_limited"
     if "503" in detail or "temporarily unavailable" in detail or "service unavailable" in detail:
