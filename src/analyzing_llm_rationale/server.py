@@ -15136,7 +15136,12 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
     try:
         res = await agent_capabilities.run_tool_loop(
             q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule,
-            on_step=_on_step, on_step_start=_on_step_start)
+            on_step=_on_step, on_step_start=_on_step_start,
+            # Only the non-benchmark path has the deterministic forecast
+            # backstop below to salvage a keyless JSON answer. On the
+            # agent-trading path that shape is a wasted cycle, so ask once
+            # for a usable turn instead of accepting it.
+            retry_unusable_final=bool(req.benchmark_tools))
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
         if not last and not req.benchmark_tools:
