@@ -6,10 +6,6 @@ name: Track record forecast snapshots
 # pushes once, avoiding parallel write contention on main.
 
 on:
-  schedule:
-    # A rotating shard pass is bounded below; starting a new full matrix every
-    # five minutes only created a cancelled backlog.
-    - cron: "12,42 * * * *"
   workflow_dispatch:
     inputs:
       reforecast_each_tick:

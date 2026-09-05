@@ -47,7 +47,8 @@ class TrackRecordTickTests(unittest.TestCase):
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "track-record-forecast.yml"
         ).read_text()
-        self.assertIn('cron: "12,42 * * * *"', workflow)
+        self.assertNotIn('cron: "12,42 * * * *"', workflow)
+        self.assertIn("workflow_dispatch:", workflow)
         self.assertIn('CYCLE_INTERVAL_MINUTES: "5"', workflow)
         self.assertIn('SNAPSHOT_SLOT_MINUTES: "5"', workflow)
         self.assertIn('TRACK_RECORD_PREDICT_MODE: "local"', workflow)
