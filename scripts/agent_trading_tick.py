@@ -159,7 +159,15 @@ weather_candidate_discovery_duration = meter.create_histogram(
 
 MODEL = os.environ.get("AGENT_TRADING_MODEL", "").strip()
 VARIANT = os.environ.get("TRACK_VARIANT", "variant0_neutral_baseline")
-CANDIDATE_COUNT = max(1, int(os.environ.get("CANDIDATE_COUNT", "3")))
+# How many markets an agent is offered per cycle. At 3 the menu was the
+# binding constraint on trade rate, not the gate: a trade needs its edge to
+# beat half-spread + fee + floor, only ~24% of live sides sit at or below
+# 4pp, and three markets in listing order usually contained nothing
+# reachable however good the read was. The candidates are now ranked by
+# that hurdle, so a wider menu means more genuinely actionable markets
+# rather than more noise -- and the merit gate still decides what is worth
+# trading, so nothing here forces a position.
+CANDIDATE_COUNT = max(1, int(os.environ.get("CANDIDATE_COUNT", "8")))
 # No upper clamp. At 4 steps, research-heavy cycles ran out before executing:
 # 489 live cycles hit the ceiling and 38 described a BUY the model never got
 # to place. The loop still ends as soon as the model gives a final answer, so
@@ -844,38 +852,51 @@ def _paper_calibration_context(quote: Dict[str, Any], *, now: Optional[datetime]
             calibration_context_duration.record(time.perf_counter() - started)
 
 
-def _fmt_edge_hurdle(quote: Dict[str, Any]) -> str:
-    """How far from the market a view must be before this trade can clear.
+def _edge_hurdle_by_side(quote: Dict[str, Any]) -> Dict[str, float]:
+    """Edge needed on each side before a position can clear fees and the floor.
 
-    A position is only permitted when its net edge beats fees plus
-    FORESEA_AGENT_MIN_NET_EDGE, measured against the executable ask -- not the
-    market's mid. So the real hurdle is half the spread, plus fee, plus the
-    floor. Measured across live candidates that ranges from 3pp to 49pp, a
-    16x difference in how much conviction the same 2% floor demands, and none
-    of it was visible: an agent saw two markets quoted 0.42/0.44 and
-    0.07/1.00 and had no way to tell that the second needs a near-certainty
-    to be tradeable at all. Stating it turns "find an edge" into "find an edge
-    bigger than this number", and lets a cycle spend its steps on the
-    candidates where that is even possible.
+    Half the spread (a buy pays the ask, the fair estimate sits at the mid),
+    plus the per-contract fee, plus FORESEA_AGENT_MIN_NET_EDGE. Sides without
+    a two-sided quote, or quoted at or above 1.00, are omitted -- there is no
+    reachable bar on a contract that cannot return more than it costs.
     """
     from analyzing_llm_rationale.benchmark_tools import _kalshi_fee, _min_net_edge
 
     q = MarketQuote.from_mapping(quote)
-    out: List[str] = []
+    out: Dict[str, float] = {}
     for side in ("YES", "NO"):
         ask, bid = q.ask(side), q.bid(side)
         if ask is None or bid is None or not 0.0 < ask < 1.0:
             continue
-        mid = (ask + bid) / 2.0
         try:
             fee = _kalshi_fee(ask, 1.0)
         except Exception:
             fee = 0.0
-        hurdle = (ask - mid) + fee + _min_net_edge()
-        out.append(f"{side.lower()} +{hurdle * 100:.1f}pp")
-    if not out:
+        out[side.lower()] = (ask - (ask + bid) / 2.0) + fee + _min_net_edge()
+    return out
+
+
+def _edge_hurdle_pp(quote: Dict[str, Any]) -> float:
+    """Cheapest side's hurdle, for ranking. Untradeable sorts last."""
+    hurdles = _edge_hurdle_by_side(quote)
+    return min(hurdles.values()) if hurdles else float("inf")
+
+
+def _fmt_edge_hurdle(quote: Dict[str, Any]) -> str:
+    """State the hurdle per side, so "find an edge" becomes a number.
+
+    Measured across live candidates this runs 3pp to 49pp: the same 2% floor
+    demanding sixteen times more conviction depending on the book, none of it
+    previously visible. An agent saw two quotes and could not tell that one
+    needed a near-certainty to be tradeable at all.
+    """
+    parts = [
+        f"{side} +{hurdle * 100:.1f}pp"
+        for side, hurdle in sorted(_edge_hurdle_by_side(quote).items())
+    ]
+    if not parts:
         return "edge hurdle n/a (no two-sided quote)"
-    return "edge needed vs mid to clear fees+floor: " + ", ".join(out)
+    return "edge needed vs mid to clear fees+floor: " + ", ".join(parts)
 
 
 def _fmt_participation(quote: Dict[str, Any]) -> str:
@@ -1054,7 +1075,12 @@ def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
     per_venue_limit = CANDIDATE_COUNT * 3
     iterators = [iter(_list_venue(p, per_venue_limit)) for p in ("kalshi", "polymarket")]
     active = list(iterators)
-    while active and len(new_quotes) < CANDIDATE_COUNT:
+    # Gather a wider pool than we will offer, so there is something to choose
+    # between: taking the first N in listing order is a random draw with
+    # respect to the only property that decides whether a trade is possible.
+    pool: List[Dict[str, Any]] = []
+    pool_target = max(CANDIDATE_COUNT * 4, CANDIDATE_COUNT + 8)
+    while active and len(pool) < pool_target:
         for it in list(active):
             try:
                 quote = next(it)
@@ -1064,10 +1090,29 @@ def _discover_candidates(known_tickers: set) -> List[Dict[str, Any]]:
             ident = quote.get("ident")
             if not ident or ident in known_tickers or quote.get("probability") is None:
                 continue
-            new_quotes.append(quote)
+            pool.append(quote)
             known_tickers.add(ident)
-            if len(new_quotes) >= CANDIDATE_COUNT:
+            if len(pool) >= pool_target:
                 break
+    # Offer the markets where a position can actually clear. A trade needs its
+    # net edge to beat fees plus the min-net-edge floor measured against the
+    # executable ask, so the real hurdle is half-spread + fee + floor --
+    # measured live, 3pp to 49pp across candidates. Only 4% of sides sit at or
+    # below 3pp and only 24% at or below 4pp, so three markets taken in
+    # listing order usually held nothing an agent could act on however good
+    # its read was. Ranking by hurdle puts the ~3pp markets in front of it
+    # every cycle, roughly halving the conviction a trade needs -- without
+    # touching the gate, the fees, or the floor.
+    #
+    # The tension is worth stating rather than hiding: a tight spread usually
+    # means a liquid, well-priced market, which the Kalshi calibration study
+    # finds hardest to beat. But 20pp of genuine edge essentially never
+    # exists -- this fleet's own resolved record puts 20pp+ disagreements at
+    # 26.6% accuracy -- so a reachable bar on a well-priced market is a better
+    # proposition than an unreachable one on a stale quote.
+    pool.sort(key=_edge_hurdle_pp)
+    room = max(0, CANDIDATE_COUNT - len(new_quotes))
+    new_quotes.extend(pool[:room])
     return new_quotes
 
 

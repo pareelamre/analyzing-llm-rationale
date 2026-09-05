@@ -306,6 +306,51 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("volume 41,234", line)
         self.assertIn("depth/open interest 8,800", line)
 
+    def test_candidates_are_ranked_by_the_edge_they_require(self):
+        # The menu, not the gate, was the binding constraint on trade rate.
+        # A trade needs its edge to beat half-spread + fee + floor; measured
+        # live that runs 3pp to 49pp, and only ~24% of sides sit at or below
+        # 4pp. Three markets taken in listing order therefore usually held
+        # nothing an agent could act on however good its read was. Ranking by
+        # hurdle puts the reachable markets in front of it every cycle.
+        cheap = _quote("KXCHEAP", bid=0.07, ask=0.08)
+        mid = _quote("KXMID", bid=0.40, ask=0.45)
+        wide = _quote("KXWIDE", bid=0.00, ask=0.93)
+
+        ranked = sorted([wide, mid, cheap], key=agent_trading_tick._edge_hurdle_pp)
+
+        self.assertEqual([q["ident"] for q in ranked],
+                         ["KXCHEAP", "KXMID", "KXWIDE"])
+        self.assertLess(agent_trading_tick._edge_hurdle_pp(cheap), 0.04)
+        self.assertGreater(agent_trading_tick._edge_hurdle_pp(wide), 0.20)
+
+    def test_an_untradeable_market_sorts_last_rather_than_first(self):
+        # A side quoted at or above 1.00 has no reachable bar at all. It must
+        # not sort to the front by looking like a zero hurdle.
+        dead = _quote("KXDEAD")
+        for key in ("yes_bid", "yes_ask", "no_bid", "no_ask"):
+            dead.pop(key, None)
+        ok = _quote("KXOK", bid=0.40, ask=0.45)
+        self.assertEqual(agent_trading_tick._edge_hurdle_pp(dead), float("inf"))
+        self.assertEqual(
+            [q["ident"] for q in sorted([dead, ok],
+                                        key=agent_trading_tick._edge_hurdle_pp)],
+            ["KXOK", "KXDEAD"])
+
+    def test_the_menu_is_wide_enough_to_contain_a_reachable_market(self):
+        # At 3, a random draw usually contained none. Ranking only helps if
+        # there is a pool to rank.
+        self.assertGreaterEqual(agent_trading_tick.CANDIDATE_COUNT, 8)
+
+    def test_display_and_ranking_read_the_same_hurdle(self):
+        # If these ever diverge, an agent is ranked toward one market and
+        # told the number for another.
+        quote = _quote("KXQ", bid=0.07, ask=0.08)
+        cheapest = min(agent_trading_tick._edge_hurdle_by_side(quote).values())
+        self.assertEqual(agent_trading_tick._edge_hurdle_pp(quote), cheapest)
+        self.assertIn("%.1fpp" % (100 * cheapest),
+                      agent_trading_tick._fmt_edge_hurdle(quote))
+
     def test_candidate_line_states_the_edge_needed_to_clear_the_gate(self):
         # A position only clears when its net edge beats fees plus the
         # min-net-edge floor, measured against the executable ask rather than
