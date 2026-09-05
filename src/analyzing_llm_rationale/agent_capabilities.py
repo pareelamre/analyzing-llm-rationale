@@ -596,16 +596,25 @@ async def run_tool_loop(
             # rather than crashing on it -- the content is still the model's
             # answer, just not in prose form.
             answer = _coerce_answer_text(action.get("final")) or _coerce_answer_text(out)
-            # A bare verdict with no research behind it is not a decision.
-            # Live: llama-3.3-70b-instruct returned "PASS" on turn 0 with zero
-            # tool calls, in under a second, five times in two days. Downstream
-            # that renders as a completely blank card, because a bare PASS is
-            # stripped as content-free. Give one chance to actually do the work
-            # before accepting an unexamined verdict.
+            # A verdict with no research behind it is not a decision, however
+            # well it is written. This first caught llama-3.3-70b-instruct
+            # returning a bare "PASS" on turn 0 with zero tool calls, so it
+            # tested whether the TEXT looked empty -- which let fluency stand
+            # in for work. minimax-m3 then published a full house-format
+            # thesis on a zero-tool cycle: "### 0. Research Delta", a strategy
+            # line, and specific probabilities ("Stafford P(YES) ~2%, Evans
+            # P(YES) ~12%"), having fetched no market and searched no
+            # evidence. On a public board that reads as researched analysis
+            # when it is recall and priors. What matters is whether any tool
+            # ran this cycle, not how the answer is phrased -- so ask once for
+            # the work regardless of how substantial the prose looks.
+            # `tools` guards the turns that deliberately offer none (a pure
+            # sizing or reasoning stage): with nothing to call, answering
+            # straight away is the correct behaviour, not a skipped step.
             if (
                 not transcript
+                and tools
                 and not substantive_retry_used
-                and _is_content_free_answer(answer)
                 and step < max_steps - 1
             ):
                 substantive_retry_used = True

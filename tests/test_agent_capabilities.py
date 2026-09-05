@@ -870,6 +870,55 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["steps"], 0)
         self.assertIn("probability", res["answer"])
 
+    def test_a_fluent_thesis_with_no_tool_calls_is_sent_back_for_research(self):
+        # minimax-m3, live: published a full house-format thesis on a
+        # zero-tool cycle -- "### 0. Research Delta", a strategy line and
+        # specific probabilities -- having fetched no market and searched no
+        # evidence. The old guard only caught a bare one-liner, so fluency
+        # stood in for work and the board showed priors as research.
+        searched = []
+        polished = (
+            '{"final": "### 0. Research Delta\\n- **Strategy**: PASS\\n'
+            '- **New evidence**: No material new evidence this cycle. Prior research '
+            'already established the incumbent is returning.\\n'
+            '- **Belief update**: No material change. P(YES) ~2%."}'
+        )
+
+        async def web_search(_args):
+            searched.append(1)
+            return "3 sources"
+
+        turns = iter([
+            polished,
+            '{"thought":"check it","action":"web_search","args":{"q":"x"}}',
+            '{"final": "PASS - checked the market, no edge after fees."}',
+        ])
+
+        async def chat_fn(_messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"web_search": web_search},
+            [{"name": "web_search", "description": "d"}], chat_fn, max_steps=5))
+
+        # Sent back once, and the work actually happened before the verdict.
+        self.assertEqual(len(searched), 1)
+        self.assertEqual(len(res["transcript"]), 1)
+        self.assertIn("no edge", res["answer"])
+
+    def test_a_tool_less_turn_still_accepts_a_reasoned_answer(self):
+        # The counterpart: a stage that deliberately offers no tools must not
+        # be nagged to call one that does not exist.
+        calls = []
+
+        async def chat_fn(_messages):
+            calls.append(1)
+            return '{"final": "PASS - no edge: my 47% vs market 48%, inside fees."}'
+
+        res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=5))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(res["steps"], 0)
+
     def test_retry_does_not_fire_for_a_well_formed_final_answer(self):
         calls = []
 
