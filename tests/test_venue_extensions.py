@@ -80,6 +80,40 @@ class VenueReadTests(unittest.TestCase):
                 md.resolve_kalshi("OLD-MARKET")
             self.assertEqual(get.call_count, 1)
 
+    def test_series_prefixed_ticker_is_normalised_before_the_archive_fallback(self):
+        # Two independent fixes met on these exact lines and each is easy to
+        # lose in a merge: normalising a "series/ticker" ident left by an older
+        # ident_from_url (#337), and falling back to the historical endpoint
+        # for archived markets (#412). Order matters -- _kalshi_market_detail
+        # percent-encodes with safe="", so a surviving "/" would go upstream as
+        # "%2F" and match nothing on either endpoint. Pin both together.
+        with patch.object(
+            md, "_get_json",
+            side_effect=[md.MarketDataNotFound(), {"market": {"status": "settled", "result": "yes"}}],
+        ) as get:
+            self.assertEqual(md.resolve_kalshi("KXSERIES/KXSERIES-26SEP"), 1)
+            urls = [c.args[0] for c in get.call_args_list]
+        # The series prefix is gone, and was never percent-encoded instead.
+        for url in urls:
+            self.assertNotIn("%2F", url)
+            self.assertNotIn("KXSERIES/KXSERIES", url)
+        self.assertTrue(urls[0].endswith("/KXSERIES-26SEP"))
+        # And the archive fallback still fired for the archived ticker.
+        self.assertIn("/historical/markets/KXSERIES-26SEP", urls[1])
+
+    def test_fetch_kalshi_also_normalises_before_the_archive_fallback(self):
+        # The same pair of fixes collided in the other function too.
+        with patch.object(
+            md, "_get_json",
+            side_effect=[md.MarketDataNotFound(),
+                         {"market": {"ticker": "KXSERIES-26SEP", "status": "active"}}],
+        ) as get:
+            md.fetch_kalshi("kxseries/kxseries-26sep")
+            urls = [c.args[0] for c in get.call_args_list]
+        self.assertNotIn("%2F", urls[0])
+        self.assertTrue(urls[0].endswith("/KXSERIES-26SEP"))
+        self.assertIn("/historical/markets/KXSERIES-26SEP", urls[1])
+
     def test_empty_live_candles_can_use_archive(self):
         with patch.object(md, "_get_json", side_effect=[{"candlesticks": []}, {"candlesticks": [{"end_period_ts": 100}]}]) as get:
             rows = md.fetch_kalshi_candlesticks("OLD-MARKET", start_ts=1, end_ts=100)

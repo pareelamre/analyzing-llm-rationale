@@ -61,8 +61,18 @@ def build_grounding_note(aggregate: Optional[Dict[str, Any]]) -> str:
     if cal.get("applied"):
         parts.append(f"- Calibration: raw ECE {cal.get('raw_ece')}, model is miscalibrated; "
                      "adjust extreme probabilities toward the calibrated mapping.")
-    parts.append("- Discrepancy Discipline: In empirical tracking, model-vs-market disagreements >20pp "
-                 "have a 73.4% error rate. When you perceive an extreme edge, heavily challenge your thesis and anchor toward market odds unless you possess verified primary-source proof.")
+    # The figure this replaced -- "disagreements >20pp have a 73.4% error rate"
+    # -- was stated to every model as measured fact but had no traceable source
+    # in this repo or anywhere else. These numbers come from Kalshi Research,
+    # "Calibration in Prediction Markets", which measures the full resolved
+    # history of the venue (2,243,741 markets, 2021 to mid-2026).
+    parts.append("- Discrepancy Discipline: Kalshi's resolved history (2,243,741 markets) shows prices "
+                 "behaving like genuine probabilities -- Brier about 0.02 at close, and calibration improving "
+                 "monotonically with volume at every horizon. A large disagreement with a liquid, "
+                 "near-resolution price is more likely your error than the market's, so challenge your thesis "
+                 "and anchor toward market odds unless you hold verified primary-source proof. Room for a real "
+                 "edge widens with distance from resolution: long-dated markets never reach a 0.05 Brier at "
+                 "any level of participation.")
     parts.append("- Calibration Bias: Historical predictions in the 80-90% range resolve YES only ~68% of the time. "
                  "Account for 11th-hour cancellations, appeals, and procedural delays by damping extreme high-confidence calls.")
     parts.append("- Known tendency: this model has overpriced low-probability/longshot "
@@ -312,6 +322,16 @@ def parse_action(text: str) -> Optional[Dict[str, Any]]:
     return _salvage_action(cleaned)
 
 
+def _estimate_message_tokens(messages: List[Dict[str, str]]) -> int:
+    """Rough token count for a turn's payload, at the usual ~4 chars/token.
+
+    Deliberately an estimate: the point is to keep a cycle inside a provider
+    quota, and an approximate ceiling does that without a tokenizer
+    dependency or a per-provider special case.
+    """
+    return sum(len(str(m.get("content") or "")) for m in messages) // 4
+
+
 def _coerce_answer_text(value: Any) -> str:
     """A model's final answer as text, whatever shape it arrived in.
 
@@ -452,6 +472,7 @@ async def run_tool_loop(
     on_step: Optional[OnStep] = None,
     on_step_start: Optional[OnStep] = None,
     retry_unusable_final: bool = False,
+    token_budget: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Drive the ReAct loop. Returns {answer, transcript, steps, truncated}.
 
@@ -470,6 +491,13 @@ async def run_tool_loop(
         {"role": "system", "content": system},
         {"role": "user", "content": f"Question: {question}"},
     ]
+    # A ReAct turn resends the whole conversation, so cost grows with every
+    # step. Measured on the live fleet, one cycle runs 10-21k tokens against
+    # a 10,000-token-per-minute provider quota -- a single deep cycle can
+    # spend the entire minute and 429 whichever model runs next in the serial
+    # lane. A step count cannot express that; a token budget can, and it lets
+    # a cheap cycle keep every step it wants while stopping a runaway one.
+    tokens_used = 0
     transcript: List[Dict[str, Any]] = []
     reformat_hint = (
         "That reply could not be parsed. Respond with exactly one JSON object: either "
@@ -486,7 +514,22 @@ async def run_tool_loop(
     )
     substantive_retry_used = False
     unusable_retry_used = False
+    # Why a cycle stopped is not recoverable from `steps`/`truncated` alone:
+    # a budget stop and an out-of-steps stop both report steps=max_steps and
+    # truncated=True, which made a shallow cycle indistinguishable from a
+    # capped one when diagnosing a slow tick. Report the cause explicitly.
+    stop_reason = "max_steps"
+    steps_completed = 0
     for step in range(max_steps):
+        turn_tokens = _estimate_message_tokens(messages)
+        # Stop before spending a turn we cannot afford, not after. The step
+        # already completed is worth finalising; the one that would blow the
+        # budget just earns a 429 for this model and the next one in line.
+        if token_budget and step and tokens_used + turn_tokens > token_budget:
+            stop_reason = "token_budget"
+            break
+        tokens_used += turn_tokens
+        steps_completed = step + 1
         out = await chat_fn(messages)
         action = parse_action(out)
         if action is not None and "final" in action:
@@ -595,9 +638,12 @@ async def run_tool_loop(
         messages.append({"role": "assistant", "content": out})
         messages.append({"role": "user", "content": f"Observation: {context_observation}"})
         _compact_observation_context(messages, observation_context_limit)
-    # Out of steps — force one terminal JSON answer. Asking for plain text
-    # contradicted the system contract and let some providers emit a pasted
-    # sequence of prior tool-call envelopes instead of a final thesis.
+    # Out of steps (or out of token budget) — force one terminal JSON answer.
+    # Asking for plain text contradicted the system contract and let some
+    # providers emit a pasted sequence of prior tool-call envelopes instead of
+    # a final thesis.
+    stopped = {"stop_reason": stop_reason, "tokens_used": tokens_used,
+               "steps_completed": steps_completed}
     final = await chat_fn(messages + [{"role": "user", "content": (
         "Stop calling tools. Return exactly one JSON object with a `final` field now: "
         '{"final":"your concise publishable thesis"}. Do not include an action, args, '
@@ -608,12 +654,15 @@ async def run_tool_loop(
     if isinstance(parsed_final, dict) and "final" in parsed_final:
         final_text = str(parsed_final["final"]).strip()
         return {"answer": final_text, "transcript": transcript,
-                "steps": max_steps, "truncated": True, "finalization_failed": False}
+                "steps": max_steps, "truncated": True, "finalization_failed": False,
+                **stopped}
     # Never promote a tool-call envelope (or a repetition of several of them)
     # to the public thesis. The durable transcript preserves that detail for
     # operators; callers can publish a truthful fallback instead.
     if isinstance(parsed_final, dict) and "action" in parsed_final:
         return {"answer": "", "transcript": transcript,
-                "steps": max_steps, "truncated": True, "finalization_failed": True}
+                "steps": max_steps, "truncated": True, "finalization_failed": True,
+                **stopped}
     return {"answer": final_text, "transcript": transcript,
-            "steps": max_steps, "truncated": True, "finalization_failed": False}
+            "steps": max_steps, "truncated": True, "finalization_failed": False,
+            **stopped}

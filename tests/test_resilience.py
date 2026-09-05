@@ -157,6 +157,13 @@ class ProviderRetryUnitTests(unittest.TestCase):
 
 
 class ProviderErrorMappingTests(unittest.TestCase):
+    def setUp(self):
+        self._logger_patch = mock.patch.object(server, "logger")
+        self._logger_patch.start()
+
+    def tearDown(self):
+        self._logger_patch.stop()
+
     def test_context_limit_maps_to_422(self):
         self.assertEqual(_provider_http_error(ContextLimitError("x")).status_code, 422)
 

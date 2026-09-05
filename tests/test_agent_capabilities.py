@@ -502,6 +502,134 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["answer"], "no tools needed")
         self.assertEqual(seen, [])
 
+    def test_token_budget_stops_a_runaway_cycle(self):
+        # Measured live: one cycle runs 10-21k tokens against a shared
+        # 10,000-token-per-minute provider quota, so a deep cycle spends the
+        # whole minute and the next model in the serial lane collects the 429.
+        calls = []
+
+        async def big_tool(args):
+            calls.append(1)
+            return "x" * 40000   # ~10k tokens of observation per step
+
+        async def chat_fn(messages):
+            return '{"action":"big","args":{}}'
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"big": big_tool}, [{"name": "big", "description": "d"}],
+            chat_fn, max_steps=16, token_budget=20000))
+
+        # Far fewer than the 16 steps allowed -- stopped on cost, not count.
+        self.assertLess(len(calls), 16)
+        self.assertGreaterEqual(len(calls), 1)
+        self.assertTrue(res["truncated"])
+
+    def test_default_budget_is_a_runaway_guard_not_a_per_cycle_limiter(self):
+        # At 20,000 this stopped every healthy model after 2-3 tool calls of
+        # the 16 allowed, because the loop resends the whole conversation each
+        # turn. The default has to clear the deepest cycle actually observed
+        # (7 tool calls) and still catch a true runaway.
+        from analyzing_llm_rationale.server import _AGENT_TOOL_TOKEN_BUDGET as default
+
+        async def realistic_tool(_args):
+            return "x" * 6000        # ~1.5k tokens of observation, as measured
+
+        async def chat_fn(_messages):
+            return '{"action":"t","args":{}}'
+
+        spec = [{"name": "t", "description": "d"}]
+        capped = asyncio.run(ac.run_tool_loop(
+            "q" * 4000, {"t": realistic_tool}, spec, chat_fn,
+            max_steps=16, token_budget=20000))
+        current = asyncio.run(ac.run_tool_loop(
+            "q" * 4000, {"t": realistic_tool}, spec, chat_fn,
+            max_steps=16, token_budget=default))
+        uncapped = asyncio.run(ac.run_tool_loop(
+            "q" * 4000, {"t": realistic_tool}, spec, chat_fn,
+            max_steps=16, token_budget=None))
+
+        # The regression this guards: the old ceiling truncated an ordinary
+        # deep cycle less than half way through.
+        self.assertEqual(capped["stop_reason"], "token_budget")
+        self.assertLess(len(capped["transcript"]), 16)
+        # At the current default that same cycle is indistinguishable from
+        # having no budget at all -- depth is decided by max_steps, not cost.
+        self.assertEqual(current["stop_reason"], "max_steps")
+        self.assertEqual(len(current["transcript"]), len(uncapped["transcript"]))
+        self.assertEqual(current["tokens_used"], uncapped["tokens_used"])
+        # ...and the guard still sits meaningfully above that cycle's cost,
+        # so a genuine runaway is still caught.
+        self.assertGreater(default, uncapped["tokens_used"])
+
+    def test_budget_stop_is_distinguishable_from_running_out_of_steps(self):
+        # Both stops report truncated=True and steps=max_steps, so without an
+        # explicit reason a budget-capped cycle is indistinguishable from one
+        # that simply used every step -- which is how a capped tick went
+        # undiagnosed. The reason has to survive to the caller.
+        async def big_tool(_args):
+            return "x" * 40000
+
+        async def small_tool(_args):
+            return "obs"
+
+        async def chat_fn_big(_messages):
+            return '{"action":"big","args":{}}'
+
+        async def chat_fn_small(_messages):
+            return '{"action":"t","args":{}}'
+
+        capped = asyncio.run(ac.run_tool_loop(
+            "q", {"big": big_tool}, [{"name": "big", "description": "d"}],
+            chat_fn_big, max_steps=16, token_budget=20000))
+        exhausted = asyncio.run(ac.run_tool_loop(
+            "q", {"t": small_tool}, [{"name": "t", "description": "d"}],
+            chat_fn_small, max_steps=3))
+
+        # Same truncated flag, different cause.
+        self.assertTrue(capped["truncated"])
+        self.assertTrue(exhausted["truncated"])
+        self.assertEqual(capped["stop_reason"], "token_budget")
+        self.assertEqual(exhausted["stop_reason"], "max_steps")
+        # And the budget stop reports what it actually managed, not max_steps.
+        self.assertLess(capped["steps_completed"], 16)
+        self.assertGreaterEqual(capped["steps_completed"], 1)
+        self.assertGreater(capped["tokens_used"], 0)
+
+    def test_no_budget_means_no_token_cap(self):
+        calls = []
+
+        async def tool(args):
+            calls.append(1)
+            return "x" * 40000
+
+        async def chat_fn(messages):
+            return '{"action":"t","args":{}}'
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"t": tool}, [{"name": "t", "description": "d"}],
+            chat_fn, max_steps=4))
+        self.assertEqual(len(calls), 4)
+        self.assertTrue(res["truncated"])
+
+    def test_a_cheap_cycle_keeps_every_step_it_wants(self):
+        # The budget must not penalise a small cycle.
+        calls = []
+
+        async def tool(args):
+            calls.append(1)
+            return "short"
+
+        turns = iter(['{"action":"t","args":{}}'] * 3 + ['{"final":"done, no edge found"}'])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"t": tool}, [{"name": "t", "description": "d"}],
+            chat_fn, max_steps=16, token_budget=20000))
+        self.assertEqual(len(calls), 3)
+        self.assertIn("no edge", res["answer"])
+
     def test_keyless_json_is_retried_when_the_caller_has_no_backstop(self):
         # Live: gemma-4-26b-a4b-it and gpt-oss-120b both ended at step 0 with
         # valid JSON that was neither an action nor a final, and the board

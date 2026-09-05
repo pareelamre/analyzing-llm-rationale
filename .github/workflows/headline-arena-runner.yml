@@ -1,0 +1,34 @@
+name: Headline Arena Forecast Runner
+
+on:
+  schedule:
+    # Runs every 4 hours to catch newly posted daily and flash challenges
+    - cron: "5 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+
+      - name: Run Headline Arena Forecasting Agent
+        env:
+          HEADLINE_ARENA_AGENT_ID: ${{ secrets.HEADLINE_ARENA_AGENT_ID || 'agt_56952984bb35' }}
+          HEADLINE_ARENA_CLIENT_SECRET: ${{ secrets.HEADLINE_ARENA_CLIENT_SECRET }}
+          FORESEA_API_URL: "https://foresea.ink"
+        run: |
+          python scripts/headline_arena_agent.py

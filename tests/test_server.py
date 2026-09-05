@@ -538,6 +538,36 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["model_key"], "council")
         self.assertEqual(len(self.provider.calls), 1)
 
+    def test_predict_council_uses_top_three_models_by_default(self):
+        allowlist = {
+            "gemma-4-26b-a4b-it": "google/gemma-4-26B-A4B-it",
+            "gpt-oss-120b": "openai/gpt-oss-120b",
+            "qwen3-8-27b": "Qwen/Qwen3.8-27B",
+            "other-model-1": "other/1",
+            "other-model-2": "other/2",
+        }
+        called = set()
+
+        def fake_provider(label):
+            called.add(label)
+            return FakeProvider()
+
+        with (
+            mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", allowlist),
+            mock.patch.object(server_module, "_council_provider", side_effect=fake_provider),
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates?",
+                    "model": "council",
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(called, {"gemma-4-26b-a4b-it", "gpt-oss-120b", "qwen3-8-27b"})
+
     def test_predict_stream_council_uses_council_orchestration(self):
         with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": {}}):
             response = self.client.post(
@@ -1050,6 +1080,18 @@ class ServerTests(unittest.TestCase):
         # A normal answer with no leak must pass through untouched.
         normal = "It should rain tomorrow. I expect YES."
         self.assertEqual(server_module._SELF_CALIBRATION_ECHO_RE.sub("", normal).strip(), normal)
+
+    def test_agent_tool_loop_short_question_skips_backstop_and_returns_200(self):
+        # Regression: _agent_tool_loop's deterministic backstop called _tool_forecast
+        # with the raw question even when it was too short for PredictRequest's
+        # standalone-question validator (< 10 chars, no history).  The resulting
+        # ValidationError was caught and re-raised as HTTP 502.
+        # The fix: skip the backstop when the question would fail validation.
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "check it", "tool_loop": True, "max_tool_steps": 1},
+        )
+        self.assertEqual(response.status_code, 200)
 
     def test_public_tool_loop_thesis_hides_a_raw_tool_payload(self):
         thesis = server_module._public_tool_loop_thesis(
@@ -3791,7 +3833,10 @@ class ServerTests(unittest.TestCase):
             )
 
             self.assertEqual(response.status_code, 200)
-            alt_provider_mock.assert_called_once_with("minimax-m3")
+            alt_provider_mock.assert_called_once_with(
+                "minimax-m3",
+                request_timeout_s=server_module._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
+            )
             self.assertGreater(len(alt_provider.calls), 0)
             self.assertEqual(len(self.provider.calls), 0)  # server default was never used
             self.assertEqual(response.json()["served_model_name"], "fake-model")
@@ -3814,7 +3859,10 @@ class ServerTests(unittest.TestCase):
         ):
             req = server_module.AgentAnalyzeRequest(question="Will X happen?")
             provider, temperature, max_tokens = server_module._select_agent_provider(req)
-        alt_provider_mock.assert_called_once_with("gpt-oss-120b")
+        alt_provider_mock.assert_called_once_with(
+                "gpt-oss-120b",
+                request_timeout_s=server_module._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
+            )
         self.assertIs(provider, alt_provider)
 
     def test_select_agent_provider_prefers_explicit_model_over_auto_selection(self):
@@ -3825,7 +3873,10 @@ class ServerTests(unittest.TestCase):
         ):
             req = server_module.AgentAnalyzeRequest(question="Will X happen?", model="minimax-m3")
             server_module._select_agent_provider(req)
-        alt_provider_mock.assert_called_once_with("minimax-m3")
+        alt_provider_mock.assert_called_once_with(
+                "minimax-m3",
+                request_timeout_s=server_module._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
+            )
 
     def test_select_agent_provider_prefers_byok_over_auto_selection(self):
         with mock.patch.object(server_module, "_auto_selected_model") as auto_mock:
@@ -5261,6 +5312,9 @@ class ServerTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["model_key"], "minimax-m3")
+        # Interactive chat, not the agent tool loop: it keeps the lower
+        # provider default on purpose, so it must NOT inherit the agent
+        # read timeout, which exists for long unattended trading turns.
         alt_provider.assert_called_once_with("minimax-m3")
         self.assertEqual(len(fast_provider.calls), 1)
         self.assertEqual(len(self.provider.calls), 0)

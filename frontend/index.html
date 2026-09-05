@@ -1205,13 +1205,20 @@
     .agentic-activity-time { color: #94a3b8; letter-spacing: 0; text-transform: none; }
     .agentic-activity-body { color: var(--text); font-size: 13px; line-height: 1.55; }
     .agentic-activity-body code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px; color: #334155; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 2px 5px; }
-    .agentic-thesis-copy { color: #334155; font-size: 13px; line-height: 1.65; }
+    /* Theses cite sources, and a Google News RSS URL is a single ~200-char
+       token with no break opportunity: without `anywhere` it runs straight
+       out of the card instead of wrapping. `min-width: 0` is needed too --
+       the bullet list is a grid, whose items default to min-width: auto and
+       so refuse to shrink below their longest word. */
+    .agentic-thesis-copy { color: #334155; font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+    .agentic-thesis-copy a { color: #0f766e; text-decoration: underline; text-underline-offset: 2px; }
+    .agentic-thesis-copy a:hover { color: #115e59; }
     .agentic-thesis-copy p { margin: 0 0 10px; }
     .agentic-thesis-copy p:last-child { margin-bottom: 0; }
     .agentic-thesis-copy h5 { border-bottom: 1px solid #e2e8f0; color: #0f172a; font-size: 10px; font-weight: 750; letter-spacing: .09em; margin: 15px 0 8px; padding-bottom: 6px; text-transform: uppercase; }
     .agentic-thesis-copy h5:first-child { margin-top: 0; }
     .agentic-thesis-copy ul { display: grid; gap: 5px; list-style: none; margin: 0 0 11px; padding: 0; }
-    .agentic-thesis-copy li { padding-left: 14px; position: relative; }
+    .agentic-thesis-copy li { padding-left: 14px; position: relative; min-width: 0; }
     .agentic-thesis-copy li::before { background: #14b8a6; border-radius: 50%; content: ''; height: 5px; left: 1px; position: absolute; top: .57em; width: 5px; }
     .agentic-thesis-state { align-items: flex-start; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 9px; color: #475569; display: flex; gap: 10px; padding: 12px; }
     .agentic-thesis-state-mark { background: #e2e8f0; border-radius: 50%; color: #475569; display: grid; flex: 0 0 auto; font-size: 12px; font-weight: 800; height: 20px; place-items: center; width: 20px; }
@@ -6789,6 +6796,21 @@ function _formatThesisHtml(rawThesis) {
     actionClasses.forEach(([action, className]) => {
       const re = new RegExp(`(<strong>Action<\\/strong>:\\s*)(${action}[^<]*)`, 'gi');
       s = s.replace(re, `$1<span class="agentic-action ${className}">$2</span>`);
+    });
+    // Cited sources are published, so make them followable. This runs on
+    // already-escaped text, and the pattern admits only http(s), so a thesis
+    // cannot smuggle markup or a javascript: URL into the card. The `[^\s<]`
+    // class stops at the tags added above, so a link inside <strong> stays
+    // intact. Markdown links are converted first, otherwise the bare-URL pass
+    // would consume the target inside the parentheses.
+    const linkAttrs = 'target="_blank" rel="noopener noreferrer nofollow"';
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      (_m, label, href) => `<a href="${href}" ${linkAttrs}>${label}</a>`);
+    s = s.replace(/(^|[\s(])(https?:\/\/[^\s<]+)/g, (_m, lead, url) => {
+      // Trailing punctuation belongs to the sentence, not the URL.
+      const trail = url.match(/[.,;:!?)\]]+$/);
+      const href = trail ? url.slice(0, -trail[0].length) : url;
+      return `${lead}<a href="${href}" ${linkAttrs}>${href}</a>${trail ? trail[0] : ''}`;
     });
     return s;
   };

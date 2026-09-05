@@ -344,7 +344,14 @@ def resolve_kalshi(ticker: str) -> Optional[int]:
     """
     if not ticker:
         return None
-    data = _kalshi_market_detail(ticker.strip().upper())
+    ticker = ticker.strip()
+    # Normalise a "series/ticker" ident produced by an older ident_from_url
+    # that did not strip the series-ticker prefix from Kalshi two-level web
+    # URLs. This must run BEFORE _kalshi_market_detail, which percent-encodes
+    # the whole ticker (safe="") and would turn a surviving "/" into "%2F".
+    if "/" in ticker:
+        ticker = ticker.rsplit("/", 1)[-1]
+    data = _kalshi_market_detail(ticker.upper())
     market = data.get("market") if isinstance(data, dict) else None
     if not market:
         return None
@@ -586,7 +593,14 @@ def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     """Fetch a Kalshi market by ticker via the public trade API v2."""
     if not ticker:
         raise MarketDataError("Provide a Kalshi market ticker.")
-    ticker = ticker.strip().upper()
+    ticker = ticker.strip()
+    # Normalise a "series/ticker" ident produced by an older ident_from_url
+    # that did not strip the series-ticker prefix from Kalshi two-level web
+    # URLs. This must run BEFORE _kalshi_market_detail, which percent-encodes
+    # the whole ticker (safe="") and would turn a surviving "/" into "%2F".
+    if "/" in ticker:
+        ticker = ticker.rsplit("/", 1)[-1]
+    ticker = ticker.upper()
     data = _kalshi_market_detail(ticker)
     market = data.get("market") if isinstance(data, dict) else None
     if not market:

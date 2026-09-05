@@ -292,6 +292,48 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("2026-09-02T03:59:00Z", line)
         self.assertIn("resolution window", line)
 
+    def test_candidate_line_shows_participation_depth(self):
+        # Kalshi Research finds Brier falls monotonically with volume within
+        # every horizon, so depth is the agent's best read on whether a price
+        # is worth disputing. It previously saw only whether volume existed,
+        # which cannot separate a market with 40 contracts traded from one
+        # with 40,000 -- the difference between a disputable price and one
+        # that is effectively unbeatable.
+        quote = _quote("KXFOO")
+        quote["volume"] = 41234.0
+        quote["liquidity"] = 8800.0
+        line = agent_trading_tick._fmt_candidate_line(quote)
+        self.assertIn("volume 41,234", line)
+        self.assertIn("depth/open interest 8,800", line)
+
+    def test_candidate_line_says_so_when_participation_is_unreported(self):
+        # Silence must not read as "thin, therefore beatable".
+        quote = _quote("KXFOO")
+        quote.pop("volume", None)
+        quote["liquidity"] = 0
+        line = agent_trading_tick._fmt_candidate_line(quote)
+        self.assertIn("participation unreported", line)
+        self.assertNotIn("volume 0", line)
+
+    def test_candidate_horizon_reaches_the_region_where_edge_survives(self):
+        # The study's sharpest result: long-dated markets never reach a 0.05
+        # Brier at any level of participation, while near-close prices sit at
+        # ~0.02. A 30-day ceiling excluded that region entirely, leaving
+        # agents hunting edge only where prices are closest to efficient.
+        self.assertGreaterEqual(agent_trading_tick.MAX_CLOSE_DAYS, 90)
+
+    def test_discrepancy_discipline_cites_measured_figures_not_an_unsourced_rate(self):
+        # "perceived edges >20pp fail 73.4% of the time" was presented to every
+        # model as measured fact with no traceable source. Claims that steer
+        # every forecast have to be attributable.
+        from analyzing_llm_rationale import agent_capabilities as _ac
+
+        instruction = agent_trading_tick._TRADING_INSTRUCTION
+        note = _ac.build_grounding_note({"n_snapshots_resolved": 5, "overall": {}})
+        for text in (instruction, note):
+            self.assertNotIn("73.4", text)
+            self.assertIn("2,243,741", text)
+
     def test_candidate_line_handles_a_missing_open_date(self):
         quote = _quote("KXBAR")
         del quote["created_time"]
@@ -352,6 +394,54 @@ class CandidateLineFormattingTests(unittest.TestCase):
         line = agent_trading_tick._fmt_candidate_line(quote)
 
         self.assertIn("Expected underlying resolution: 2026-08-21T00:00:00Z", line)
+
+
+class FailureClassificationTests(unittest.TestCase):
+    def test_a_wrapped_read_timeout_is_a_timeout_not_an_outage(self):
+        # The agent path re-raises a read timeout as "503 ... temporarily
+        # unavailable". Classifying on that text filed every timeout as a
+        # provider outage, which is how glm-5-3 was reported down for days
+        # while SCADS listed it up with tools enabled -- it was just slower
+        # than the 120s read timeout. Retrying an "outage" that is really a
+        # timeout also burns a second full timeout window for nothing.
+        import requests
+
+        root = requests.exceptions.ReadTimeout("The read operation timed out")
+        wrapped = RuntimeError(
+            "503: The 'glm-5-3' forecasting model is temporarily unavailable. "
+            "Please retry in a moment, or pass a different `model` in the request."
+        )
+        wrapped.__cause__ = root
+
+        self.assertEqual(agent_trading_tick._failure_kind(wrapped), "provider_timeout")
+
+    def test_a_genuine_outage_is_still_an_outage(self):
+        # The timeout check must not swallow real 503s.
+        exc = RuntimeError("503: upstream service unavailable")
+        self.assertEqual(agent_trading_tick._failure_kind(exc), "provider_unavailable")
+
+    def test_a_wrapped_rate_limit_is_still_a_rate_limit(self):
+        # The safety property that keeps 429s out of the retry path.
+        exc = RuntimeError("503: temporarily unavailable (upstream returned HTTP 429)")
+        self.assertEqual(agent_trading_tick._failure_kind(exc), "provider_rate_limited")
+
+    def test_a_timeout_is_not_retried_as_a_transient_503(self):
+        # provider_unavailable earns a second attempt; a timeout must not,
+        # or a slow model costs two full timeout windows per cycle.
+        import requests
+
+        root = requests.exceptions.ReadTimeout("The read operation timed out")
+        wrapped = RuntimeError("503: The 'glm-5-3' forecasting model is temporarily unavailable.")
+        wrapped.__cause__ = root
+        self.assertNotEqual(agent_trading_tick._failure_kind(wrapped), "provider_unavailable")
+
+    def test_agent_path_gives_a_slow_model_room_to_answer(self):
+        # The asyncio ceiling was already disabled here, but the HTTP client's
+        # own socket read timeout was never set on this path, so "no ceiling"
+        # still meant a hard 120s from the provider dataclass default.
+        from analyzing_llm_rationale import server
+
+        self.assertGreater(server._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S, 120.0)
 
 
 class DecisionQualityInstructionTests(unittest.TestCase):
@@ -1282,6 +1372,41 @@ class AgentAnalyzeRetryTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     asyncio.run(agent_trading_tick._call_agent_analyze("question text"))
         self.assertEqual(len(calls), 2)
+
+    def test_a_transient_503_earns_a_second_attempt_but_a_429_does_not(self):
+        # A bare 503 is transient -- the same model answers minutes later, and
+        # losing the cycle costs a whole model on the board. A 429 is the
+        # opposite: retrying multiplies requests during the very incident that
+        # caused it. SCADS reports a quota rejection as a 503 whose text names
+        # the 429, so the wrapped form must be treated as a 429, not a 503.
+        import asyncio
+
+        cases = [
+            ("503: The model is temporarily unavailable. Please retry.", 2),
+            ("503: temporarily unavailable (upstream returned HTTP 429)", 1),
+            ("429: rate limit exceeded", 1),
+        ]
+        for message, expected_calls in cases:
+            with self.subTest(message=message):
+                calls = []
+
+                async def _fails(req, request=None, _m=message, _calls=calls):
+                    _calls.append(1)
+                    raise RuntimeError(_m)
+
+                with (
+                    mock.patch.object(agent_trading_tick, "AGENT_ANALYZE_RETRIES", 1),
+                    mock.patch.object(
+                        agent_trading_tick, "AGENT_ANALYZE_UNAVAILABLE_RETRIES", 2),
+                    mock.patch.object(
+                        agent_trading_tick, "AGENT_ANALYZE_RETRY_BACKOFF_S", 0.0),
+                    mock.patch(
+                        "analyzing_llm_rationale.server.agent_analyze", side_effect=_fails),
+                ):
+                    with self.assertRaises(RuntimeError):
+                        asyncio.run(
+                            agent_trading_tick._call_agent_analyze("question text"))
+                self.assertEqual(len(calls), expected_calls)
 
     def test_retries_use_exponential_async_backoff_before_a_recovery(self):
         import asyncio

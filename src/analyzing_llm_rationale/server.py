@@ -283,6 +283,29 @@ _AGENT_TOOL_PROVIDER_MAX_RETRIES = max(
 _AGENT_TOOL_PROVIDER_TIMEOUT_S = float(
     os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_S", "0")
 )
+# The ceiling above governs asyncio; the HTTP client keeps its own socket read
+# timeout, and that one was never set on this path -- so "no wall-clock
+# ceiling" still meant a hard 120s from OpenAICompatibleProvider's default.
+# glm-5-3 (GLM-5.3, 524k context) reliably needs longer on a full trading
+# prompt, so every one of its cycles died at 120s and was reported as an
+# unavailable provider, while SCADS listed the route up with tools enabled.
+# The council path already passes its own value here; the agent path passing
+# nothing was an omission, not a decision.
+_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S = float(
+    os.environ.get("AGENT_TOOL_PROVIDER_READ_TIMEOUT_S", "600")
+)
+# Cap a single cycle's token spend, as a runaway guard -- not as the thing
+# that decides how much research a cycle gets to do. That distinction was
+# learned the hard way: at 20,000 this stopped all seven healthy models after
+# 2-3 tool calls out of the 16 allowed (measured 14.3-18.7k tokens each),
+# because the loop resends the whole conversation every turn, so cost grows
+# quadratically and an ordinary prompt exhausts the cap almost immediately.
+# Depth belongs to max_steps and to the quota backoff, which retries a 429
+# rather than pre-emptively truncating every cycle to avoid one. Measured, a
+# full 16-step cycle costs ~52k (observation compaction bounds the growth),
+# so at this ceiling such a cycle behaves exactly as it would with no budget
+# at all, and only a genuine runaway is caught. 0 disables it entirely.
+_AGENT_TOOL_TOKEN_BUDGET = int(os.environ.get("AGENT_TOOL_TOKEN_BUDGET", "100000"))
 _AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES = max(
     0, int(os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES", "1"))
 )
@@ -310,6 +333,13 @@ _REASONING_EFFORT_BY_TIER = {"simple": "low", "standard": None, "deep": "high"}
 _COUNCIL_MEMBER_TIMEOUT_S = float(os.environ.get("COUNCIL_MEMBER_TIMEOUT_S", "35"))
 _COUNCIL_MIN_SUCCESSFUL_MEMBERS = max(
     1, int(os.environ.get("COUNCIL_MIN_SUCCESSFUL_MEMBERS", "1"))
+)
+# Restrict default council to top 3 models: Foresea's #1 performer (gemma-4-26b-a4b-it),
+# flagship research model (gpt-oss-120b), and fastest calibrated model (qwen3-8-27b).
+_DEFAULT_COUNCIL_MODELS = (
+    "gemma-4-26b-a4b-it",
+    "gpt-oss-120b",
+    "qwen3-8-27b",
 )
 # Reject oversized request bodies before they reach a handler. Generous enough
 # for PDF uploads on /extract, small enough to blunt memory-exhaustion abuse.
@@ -12464,6 +12494,13 @@ _MARKETD_URL = (os.environ.get("MARKETD_URL") or "").rstrip("/")
 
 def _marketd_token(audience: str) -> Optional[str]:
     """Mint a Cloud Run identity token for the authenticated call to marketd."""
+    if not os.environ.get("K_SERVICE"):
+        # fetch_id_token probes http://169.254.169.254/ to detect the cloud
+        # environment.  On non-Cloud-Run hosts this always fails (WinError 10051
+        # on Windows, 3-second timeout on Linux) and generates spurious error
+        # spans.  Cloud Run always sets K_SERVICE, so skip the probe entirely
+        # outside that environment.
+        return None
     try:
         import google.auth.transport.requests as _greq
         import google.oauth2.id_token as _idt
@@ -12707,7 +12744,17 @@ async def _council_forecast(
     Final: median of Round-2 probabilities (robust to one outlier)."""
     temperature = _state.get("temperature", 0.0)
     max_tokens = _state.get("max_tokens", 1024)
-    council_models = list(_SCADS_MODEL_ALLOWLIST.keys())
+    configured_models = [
+        m.strip()
+        for m in os.environ.get("COUNCIL_MODELS", "").split(",")
+        if m.strip()
+    ]
+    candidate_models = configured_models or list(_DEFAULT_COUNCIL_MODELS)
+    council_models = [m for m in candidate_models if m in _SCADS_MODEL_ALLOWLIST]
+    if not council_models:
+        council_models = [
+            m for m in _DEFAULT_COUNCIL_MODELS if m in _SCADS_MODEL_ALLOWLIST
+        ] or list(_SCADS_MODEL_ALLOWLIST.keys())[:3]
 
     async def _call(label: str, msgs: List[Dict], round_number: int) -> tuple:
         from opentelemetry.trace import Status, StatusCode
@@ -12764,9 +12811,11 @@ async def _council_forecast(
             return None
         conf = parsed.get("confidence")
         if conf is None:
+            conf = parsed.get("probability") or parsed.get("model_probability")
+        if conf is None:
             return None
-        answer = (parsed.get("predicted_answer") or "").strip().lower()
-        if answer not in ("yes", "y", "no", "n"):
+        answer = str(parsed.get("predicted_answer") or parsed.get("answer") or "").strip().lower()
+        if answer not in ("yes", "y", "no", "n", "true", "1", "false", "0"):
             return None
         try:
             confidence = float(conf)
@@ -12774,10 +12823,11 @@ async def _council_forecast(
             return None
         if not 0.0 <= confidence <= 1.0:
             return None
-        prob = confidence if answer in ("yes", "y") else 1.0 - confidence
+        prob = confidence if answer in ("yes", "y", "true", "1") else 1.0 - confidence
+        rationale = (parsed.get("rationale") or parsed.get("model_rationale") or parsed.get("reasoning") or "")[:500]
         return {
             "probability": max(0.01, min(0.99, prob)),
-            "rationale": (parsed.get("rationale") or "")[:300],
+            "rationale": rationale,
         }
 
     # Round 1: independent forecasts ─────────────────────────────────────────
@@ -14186,7 +14236,11 @@ def _select_agent_provider(req: "AgentAnalyzeRequest"):
     /agent/analyze request without an explicit model benefits from the same
     evolution-loop auto-routing the main forecast already gets, instead of
     always falling straight to the server's static default."""
-    alt_provider = _scads_alt_provider(req.model) if req.model else None
+    alt_provider = (
+        _scads_alt_provider(
+            req.model, request_timeout_s=_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S)
+        if req.model else None
+    )
     if alt_provider is not None:
         return alt_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
     if (req.ollama_base_url and req.openrouter_model) or (req.openrouter_api_key and req.openrouter_model):
@@ -14196,7 +14250,8 @@ def _select_agent_provider(req: "AgentAnalyzeRequest"):
         )
     auto = _auto_selected_model()
     if auto:
-        auto_provider = _scads_alt_provider(auto)
+        auto_provider = _scads_alt_provider(
+            auto, request_timeout_s=_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S)
         if auto_provider is not None:
             return auto_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
     return _select_provider(
@@ -15229,13 +15284,31 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             # backstop below to salvage a keyless JSON answer. On the
             # agent-trading path that shape is a wasted cycle, so ask once
             # for a usable turn instead of accepting it.
-            retry_unusable_final=bool(req.benchmark_tools))
+            retry_unusable_final=bool(req.benchmark_tools),
+            token_budget=_AGENT_TOOL_TOKEN_BUDGET or None)
+        # A budget stop cuts research short, so say so loudly. Silently it
+        # looks identical to a model that simply finished early, which is
+        # exactly the ambiguity that made a capped tick hard to diagnose.
+        if res.get("stop_reason") == "token_budget":
+            logger.warning(
+                "agent tool loop hit token budget model=%s steps_completed=%s "
+                "tokens_used=%s budget=%s max_steps=%s",
+                req.model, res.get("steps_completed"), res.get("tokens_used"),
+                _AGENT_TOOL_TOKEN_BUDGET, req.max_tool_steps,
+            )
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
+        # Guard: skip the backstop when the question is too short to satisfy
+        # PredictRequest's standalone-question validator (same condition as
+        # _standalone_question_must_be_substantive) -- calling _tool_forecast
+        # with a sub-10-char question and no history would raise a
+        # ValidationError caught by the except block below and surfaced as 502.
         if not last and not req.benchmark_tools:
-            backstopped = True
-            await _tool_forecast({"question": question,
-                                  "market_probability": (quote.probability if quote else req.market_probability)})
+            _q = (question or "").strip()
+            if len(_q) >= 10 or bool(req.history) or _is_greeting_or_meta(_q):
+                backstopped = True
+                await _tool_forecast({"question": question,
+                                      "market_probability": (quote.probability if quote else req.market_probability)})
     except Exception as exc:
         # Name the model: this is the agent-trading path, where each ledger is
         # one model, and an unnamed failure is unattributable on the board.

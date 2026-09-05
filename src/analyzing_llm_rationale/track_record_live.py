@@ -234,7 +234,13 @@ def ident_from_url(platform: str, url: str) -> str:
     if "/market/" in url:
         return url.split("/market/")[-1]
     if "/markets/" in url:
-        return url.split("/markets/")[-1]
+        after = url.split("/markets/")[-1]
+        # Kalshi web URLs use /markets/{series_ticker}/{market_ticker}.
+        # The API ticker is the last segment only; a slash-containing result
+        # (e.g. "KXFOO-BAR/KXFOO-BAR-26JUL01") is not a valid Kalshi ticker.
+        if "kalshi" in url.lower() and "/" in after:
+            return after.rsplit("/", 1)[-1]
+        return after
     return url or f"{(platform or '').lower()}:unknown"
 
 
