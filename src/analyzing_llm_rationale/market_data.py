@@ -560,6 +560,15 @@ def _kalshi_quote(
         ),
         "yes_bid": yes_bid,
         "yes_ask": yes_ask,
+        # Kalshi quotes the NO side directly, but these were never stored, so
+        # MarketQuote fell through to deriving no_ask as 1 - yes_bid. That
+        # derivation cannot distinguish "nobody is bidding YES" from a stale
+        # or placeholder 0.0, and it is what every marketability check and
+        # every NO-side close price is computed from. Use the venue's own
+        # numbers and keep the derivation only as the fallback it was meant
+        # to be.
+        "no_bid": _to_float(market.get("no_bid_dollars")),
+        "no_ask": _to_float(market.get("no_ask_dollars")),
         "last_trade_price": last if last is not None else None,
         "price_change_7d": None,  # not in Kalshi API
         "resolution_source": "; ".join(source_labels) or "Kalshi",
