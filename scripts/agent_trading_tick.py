@@ -1101,6 +1101,19 @@ _TRADING_INSTRUCTION = (
     "Do not re-open or add risk solely because a previous thesis, search result, or "
     "market candidate is still visible. If there is no material evidence delta, HOLD "
     "or PASS; a fresh quote alone is not research.\n\n"
+    "EVENT MERIT GATE: Trade the event, not the number. A gap between your "
+    "probability and the market's is not by itself a reason to trade -- most large "
+    "gaps are your own error, not the crowd's, and the crowd has already priced the "
+    "obvious. Before opening a position, state three things: (1) the concrete "
+    "mechanism that decides this event and the specific dates or releases that drive "
+    "it; (2) why your read is better informed than the market's on THIS event -- a "
+    "source the price has not absorbed yet, a rule the crowd is misapplying, a "
+    "structural reason the price is stale; (3) what would prove you wrong, and at "
+    "what level you would exit. If you cannot name a reason your view beats the "
+    "market's, you do not have an edge, you have a disagreement: PASS. Prefer a "
+    "smaller number of well-understood events to broad coverage of thin gaps -- your "
+    "profit comes from being right where you genuinely know more, and every trade "
+    "pays a spread and a fee whether or not it was worth taking.\n\n"
     "SIZING: For every NEW position, call place_trade with both your calibrated "
     "P(YES) as model_probability and exactly one sizing_mode: quarter_kelly "
     "(25% Kelly, 50% market shrinkage, 5% account cap) or edge_kelly "
@@ -1315,9 +1328,19 @@ _THESIS_MARKET_RE = re.compile(
     r"(Kalshi|Polymarket)\b",
     re.IGNORECASE,
 )
+# Tolerant of how models actually write this line. deepseek-v4-flash wrote
+# "**Model Probability**: 40% (no-change) vs **Market Price**: 48.5% mid / 52%
+# NO ask" -- a correct, fully specified figure that the old pattern rejected
+# because a parenthetical sat between the percentage and "vs". Reconciliation
+# then refused the trade for having no calibrated P(YES), so a researched,
+# decided position was never opened and the agent showed zero positions.
 _THESIS_PROBABILITY_RE = re.compile(
-    r"\*\*Model\s+Probability\*\*\s*:\s*\[?\s*(\d+(?:\.\d+)?)\s*%\s*\]?\s+"
-    r"vs\s+\*\*Market\s+Price\*\*\s*:\s*\[?\s*(\d+(?:\.\d+)?)\s*%\s*\]?",
+    r"\*{0,2}Model\s+Probability\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
+    r"(\d+(?:\.\d+)?)\s*%\s*\]?"
+    r"(?:\s*\([^)]{0,60}\))?"          # optional qualifier, e.g. "(no-change)"
+    r"\s*(?:vs\.?|versus)\s+"
+    r"\*{0,2}Market\s+Price\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
+    r"(\d+(?:\.\d+)?)\s*%",
     re.IGNORECASE,
 )
 _THESIS_ACTION_RE = re.compile(
@@ -1332,8 +1355,12 @@ _LOOSE_ACTION_MARKET_RE = re.compile(
     r"([A-Za-z0-9][A-Za-z0-9_.-]{2,119})[\"'`]?\s+on\s+(Kalshi|Polymarket)\b",
     re.IGNORECASE,
 )
+# Same tolerance for the fallback: markdown emphasis, a colon, and a "~"
+# approximation marker all appear in real theses between the label and the
+# number, and each one used to defeat this pattern.
 _LOOSE_MODEL_PROBABILITY_RE = re.compile(
-    r"(?:model\s+probability(?:\s+of)?|p\(yes\)\s*(?:is|=)?)\s*(\d+(?:\.\d+)?)\s*%",
+    r"(?:\*{0,2}model\s+probability\*{0,2}|\*{0,2}p\(yes\)\*{0,2}|calibrated\s+p\(yes\))"
+    r"\s*(?:of|is|=|:)?\s*\*{0,2}\s*~?\s*(\d+(?:\.\d+)?)\s*%",
     re.IGNORECASE,
 )
 
@@ -1516,9 +1543,9 @@ def _close_order_args(
         """
         SELECT side, quantity
         FROM agent_positions
-        WHERE agent_id = ? AND platform = ? AND ticker = ? AND quantity > 0
+        WHERE agent_id = ? AND platform = ? AND ticker = ? AND quantity > ?
         """,
-        (agent_id, platform, ticker),
+        (agent_id, platform, ticker, benchmark_tools.MIN_POSITION_QUANTITY),
     ).fetchall()
     if len(rows) != 1:
         return None, None, "close_requires_exactly_one_open_position"
@@ -1528,7 +1555,7 @@ def _close_order_args(
     if expected_held_side is not None and held_side != expected_held_side:
         return None, None, "close_side_does_not_match_declared_sell"
     quantity = float(rows[0]["quantity"] or 0)
-    if quantity <= 0:
+    if quantity <= benchmark_tools.MIN_POSITION_QUANTITY:
         return None, None, "close_position_quantity_invalid"
     return ("no" if held_side == "yes" else "yes"), quantity, None
 
@@ -2154,8 +2181,8 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         held_positions = [
             (str(row["platform"] or "kalshi").lower(), row["ticker"])
             for row in conn.execute(
-                "SELECT DISTINCT platform, ticker FROM agent_positions WHERE agent_id = ? AND quantity > 0",
-                (agent_id,),
+                "SELECT DISTINCT platform, ticker FROM agent_positions WHERE agent_id = ? AND quantity > ?",
+                (agent_id, benchmark_tools.MIN_POSITION_QUANTITY),
             )
         ]
         last_cycle = conn.execute(
