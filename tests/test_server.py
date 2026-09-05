@@ -1081,6 +1081,18 @@ class ServerTests(unittest.TestCase):
         normal = "It should rain tomorrow. I expect YES."
         self.assertEqual(server_module._SELF_CALIBRATION_ECHO_RE.sub("", normal).strip(), normal)
 
+    def test_agent_tool_loop_short_question_skips_backstop_and_returns_200(self):
+        # Regression: _agent_tool_loop's deterministic backstop called _tool_forecast
+        # with the raw question even when it was too short for PredictRequest's
+        # standalone-question validator (< 10 chars, no history).  The resulting
+        # ValidationError was caught and re-raised as HTTP 502.
+        # The fix: skip the backstop when the question would fail validation.
+        response = self.client.post(
+            "/agent/analyze",
+            json={"question": "check it", "tool_loop": True, "max_tool_steps": 1},
+        )
+        self.assertEqual(response.status_code, 200)
+
     def test_public_tool_loop_thesis_hides_a_raw_tool_payload(self):
         thesis = server_module._public_tool_loop_thesis(
             '{"query": "Israel Iran ceasefire July 2026 news", "topn": 5, "source": "news"}',

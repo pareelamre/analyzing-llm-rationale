@@ -15201,10 +15201,17 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             token_budget=_AGENT_TOOL_TOKEN_BUDGET or None)
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
+        # Guard: skip the backstop when the question is too short to satisfy
+        # PredictRequest's standalone-question validator (same condition as
+        # _standalone_question_must_be_substantive) -- calling _tool_forecast
+        # with a sub-10-char question and no history would raise a
+        # ValidationError caught by the except block below and surfaced as 502.
         if not last and not req.benchmark_tools:
-            backstopped = True
-            await _tool_forecast({"question": question,
-                                  "market_probability": (quote.probability if quote else req.market_probability)})
+            _q = (question or "").strip()
+            if len(_q) >= 10 or bool(req.history) or _is_greeting_or_meta(_q):
+                backstopped = True
+                await _tool_forecast({"question": question,
+                                      "market_probability": (quote.probability if quote else req.market_probability)})
     except Exception as exc:
         # Name the model: this is the agent-trading path, where each ledger is
         # one model, and an unnamed failure is unattributable on the board.
