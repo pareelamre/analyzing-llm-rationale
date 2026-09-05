@@ -846,6 +846,7 @@ def _kalshi_request(
     *,
     creds: Creds,
     params: Optional[Mapping[str, Any]] = None,
+    json_body: Any = None,
 ) -> Dict[str, Any]:
     """Make a signed Kalshi account request without exposing its auth material."""
     import requests
@@ -865,6 +866,7 @@ def _kalshi_request(
             f"{base_url}{endpoint_path}",
             headers=headers,
             params=dict(params or {}),
+            **({"json": json_body} if json_body is not None else {}),
             timeout=DEFAULT_TIMEOUT_S,
         )
     except Exception as exc:

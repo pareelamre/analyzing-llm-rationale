@@ -277,36 +277,26 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 503)
         self.assertEqual(ctx.exception.detail, "temporarily unavailable")
 
-    async def test_async_exchange_status_returns_status_and_schedule(self):
-        client = mcp.ForeseaClient(base_url="https://foresea.test")
-        res = await client.aexchange_status()
-        self.assertIn("status", res)
-        self.assertIn("schedule", res)
+    async def test_async_venue_tools_return_real_adapter_shapes(self):
+        from unittest.mock import patch
 
-    async def test_async_market_tags_returns_list(self):
+        from analyzing_llm_rationale import market_data
         client = mcp.ForeseaClient(base_url="https://foresea.test")
-        res = await client.amarket_tags()
-        self.assertIsInstance(res, list)
+        cases = [
+            (client.amarket_tags, (), "fetch_polymarket_tags", [{"id": 1}]),
+            (client.alive_data, ("KXBTC-TEST",), "fetch_kalshi_live_data", {"live_data": {}}),
+            (client.apolymarket_meta, ("series",), "fetch_polymarket_series", [{"id": 2}]),
+            (client.arecent_trades, ("kalshi", "KXFED-25JUN-H"), "fetch_recent_trades", [{"ticker": "KXFED-25JUN-H"}]),
+            (client.amarket_leaderboard, (5,), "fetch_trader_leaderboard", [{"rank": "1"}]),
+        ]
+        for call, args, helper, payload in cases:
+            with self.subTest(helper=helper), patch.object(market_data, helper, return_value=payload):
+                self.assertEqual(await call(*args), payload)
+        with patch.object(market_data, "fetch_kalshi_exchange_status", return_value={"exchange_active": True}), patch.object(
+            market_data, "fetch_kalshi_exchange_schedule", return_value={"schedule": []},
+        ):
+            self.assertEqual(await client.aexchange_status(), {"status": {"exchange_active": True}, "schedule": {"schedule": []}})
 
-    async def test_async_live_data_returns_dict(self):
-        client = mcp.ForeseaClient(base_url="https://foresea.test")
-        res = await client.alive_data()
-        self.assertIsInstance(res, dict)
-
-    async def test_async_polymarket_meta_returns_list(self):
-        client = mcp.ForeseaClient(base_url="https://foresea.test")
-        res = await client.apolymarket_meta(target="series")
-        self.assertIsInstance(res, list)
-
-    async def test_async_recent_trades_returns_list(self):
-        client = mcp.ForeseaClient(base_url="https://foresea.test")
-        res = await client.arecent_trades(platform="kalshi", ticker_or_token="KXFED-25JUN-H")
-        self.assertIsInstance(res, list)
-
-    async def test_async_market_leaderboard_returns_list(self):
-        client = mcp.ForeseaClient(base_url="https://foresea.test")
-        res = await client.amarket_leaderboard(limit=5)
-        self.assertIsInstance(res, list)
 
 if __name__ == "__main__":
     unittest.main()

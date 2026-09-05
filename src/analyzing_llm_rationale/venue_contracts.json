@@ -1,0 +1,2627 @@
+{
+  "kalshi.historical_cutoff": {
+    "venue": "kalshi",
+    "operation": "historical_cutoff",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/historical/cutoff",
+    "access": "public",
+    "parameters": [],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.historical_markets": {
+    "venue": "kalshi",
+    "operation": "historical_markets",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/historical/markets",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "explode": false
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "tickers",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "event_ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "series_ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "mve_filter",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "exclude"
+          ],
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.historical_market": {
+    "venue": "kalshi",
+    "operation": "historical_market",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/historical/markets/{ticker}",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "ticker",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.historical_candles": {
+    "venue": "kalshi",
+    "operation": "historical_candles",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/historical/markets/{ticker}/candlesticks",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "ticker",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "start_ts",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "end_ts",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "period_interval",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "enum": [
+            1,
+            60,
+            1440
+          ]
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.historical_trades": {
+    "venue": "kalshi",
+    "operation": "historical_trades",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/historical/trades",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "min_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "max_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "explode": false
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "is_block_trade",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.historical_fills": {
+    "venue": "kalshi",
+    "operation": "historical_fills",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/historical/fills",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "max_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "explode": false
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.historical_orders": {
+    "venue": "kalshi",
+    "operation": "historical_orders",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/historical/orders",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "max_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "explode": false
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.historical_positions": {
+    "venue": "kalshi",
+    "operation": "historical_positions",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/historical/positions",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "event_ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "explode": false
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.settlements": {
+    "venue": "kalshi",
+    "operation": "settlements",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/portfolio/settlements",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "explode": false
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "event_ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "min_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "max_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.positions": {
+    "venue": "kalshi",
+    "operation": "positions",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/portfolio/positions",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "explode": false
+      },
+      {
+        "name": "count_filter",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "event_ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "exchange_index",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.orders": {
+    "venue": "kalshi",
+    "operation": "orders",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/portfolio/orders",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "event_ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "min_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "max_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "status",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "explode": false
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "exchange_index",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.fills": {
+    "venue": "kalshi",
+    "operation": "fills",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/portfolio/fills",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "order_id",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "min_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "max_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "explode": false
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "exchange_index",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.orderbooks": {
+    "venue": "kalshi",
+    "operation": "orderbooks",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/markets/orderbooks",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "tickers",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "explode": true
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.candlesticks": {
+    "venue": "kalshi",
+    "operation": "candlesticks",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/markets/candlesticks",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "market_tickers",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "start_ts",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "end_ts",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "period_interval",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "explode": false
+      },
+      {
+        "name": "include_latest_before_start",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.series_fee_changes": {
+    "venue": "kalshi",
+    "operation": "series_fee_changes",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/series/fee_changes",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "series_ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "show_historical",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.event_fee_changes": {
+    "venue": "kalshi",
+    "operation": "event_fee_changes",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/events/fee_changes",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "event_ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "explode": false
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.event_metadata": {
+    "venue": "kalshi",
+    "operation": "event_metadata",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/events/{event_ticker}/metadata",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "event_ticker",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.milestones": {
+    "venue": "kalshi",
+    "operation": "milestones",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/milestones",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "limit",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "minimum_start_date",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "category",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "competition",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "source_id",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "type",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "related_event_ticker",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "min_updated_ts",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.milestone": {
+    "venue": "kalshi",
+    "operation": "milestone",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/milestones/{milestone_id}",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "milestone_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.weather": {
+    "venue": "kalshi",
+    "operation": "weather",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/live_data/weather/{city}",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "city",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "from",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "to",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "last_sec",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "detailed",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.weather_calibrations": {
+    "venue": "kalshi",
+    "operation": "weather_calibrations",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/live_data/weather/{city}/calibrations",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "city",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.order_groups": {
+    "venue": "kalshi",
+    "operation": "order_groups",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/portfolio/order_groups",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.order_group": {
+    "venue": "kalshi",
+    "operation": "order_group",
+    "source": "kalshi",
+    "method": "GET",
+    "path": "/portfolio/order_groups/{order_group_id}",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "order_group_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.amend_order": {
+    "venue": "kalshi",
+    "operation": "amend_order",
+    "source": "kalshi",
+    "method": "POST",
+    "path": "/portfolio/events/orders/{order_id}/amend",
+    "access": "write",
+    "parameters": [
+      {
+        "name": "order_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "required": [
+        "ticker",
+        "side",
+        "price",
+        "count"
+      ],
+      "properties": {
+        "ticker": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "side": {
+          "type": "string",
+          "enum": [
+            "bid",
+            "ask"
+          ],
+          "maxLength": 500
+        },
+        "price": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "count": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "client_order_id": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "updated_client_order_id": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "exchange_index": {
+          "allOf": [
+            {
+              "type": "integer"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "kalshi.decrease_order": {
+    "venue": "kalshi",
+    "operation": "decrease_order",
+    "source": "kalshi",
+    "method": "POST",
+    "path": "/portfolio/events/orders/{order_id}/decrease",
+    "access": "write",
+    "parameters": [
+      {
+        "name": "order_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {
+        "reduce_by": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "reduce_to": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "exchange_index": {
+          "allOf": [
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "market_ticker": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "kalshi.cancel_orders": {
+    "venue": "kalshi",
+    "operation": "cancel_orders",
+    "source": "kalshi",
+    "method": "DELETE",
+    "path": "/portfolio/events/orders/batched",
+    "access": "write",
+    "parameters": [],
+    "body": {
+      "type": "object",
+      "required": [
+        "orders"
+      ],
+      "properties": {
+        "orders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "order_id"
+            ],
+            "properties": {
+              "order_id": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "subaccount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "exchange_index": {
+                "allOf": [
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "market_ticker": {
+                "type": "string",
+                "maxLength": 500
+              }
+            },
+            "additionalProperties": false
+          },
+          "maxItems": 100,
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "kalshi.cancel_all": {
+    "venue": "kalshi",
+    "operation": "cancel_all",
+    "source": "kalshi",
+    "method": "DELETE",
+    "path": "/portfolio/events/orders",
+    "access": "write",
+    "parameters": [
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.create_order_group": {
+    "venue": "kalshi",
+    "operation": "create_order_group",
+    "source": "kalshi",
+    "method": "POST",
+    "path": "/portfolio/order_groups/create",
+    "access": "write",
+    "parameters": [],
+    "body": {
+      "type": "object",
+      "properties": {
+        "subaccount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contracts_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contracts_limit_fp": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "exchange_index": {
+          "allOf": [
+            {
+              "type": "integer"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "kalshi.delete_order_group": {
+    "venue": "kalshi",
+    "operation": "delete_order_group",
+    "source": "kalshi",
+    "method": "DELETE",
+    "path": "/portfolio/order_groups/{order_group_id}",
+    "access": "write",
+    "parameters": [
+      {
+        "name": "order_group_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "exchange_index",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "kalshi.reset_order_group": {
+    "venue": "kalshi",
+    "operation": "reset_order_group",
+    "source": "kalshi",
+    "method": "PUT",
+    "path": "/portfolio/order_groups/{order_group_id}/reset",
+    "access": "write",
+    "parameters": [
+      {
+        "name": "order_group_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "exchange_index",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "additionalProperties": false
+    }
+  },
+  "kalshi.trigger_order_group": {
+    "venue": "kalshi",
+    "operation": "trigger_order_group",
+    "source": "kalshi",
+    "method": "PUT",
+    "path": "/portfolio/order_groups/{order_group_id}/trigger",
+    "access": "write",
+    "parameters": [
+      {
+        "name": "order_group_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "exchange_index",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "additionalProperties": false
+    }
+  },
+  "kalshi.limit_order_group": {
+    "venue": "kalshi",
+    "operation": "limit_order_group",
+    "source": "kalshi",
+    "method": "PUT",
+    "path": "/portfolio/order_groups/{order_group_id}/limit",
+    "access": "write",
+    "parameters": [
+      {
+        "name": "order_group_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "subaccount",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      },
+      {
+        "name": "exchange_index",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer"
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {
+        "contracts_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contracts_limit_fp": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "polymarket.books": {
+    "venue": "polymarket",
+    "operation": "books",
+    "source": "clob",
+    "method": "POST",
+    "path": "/books",
+    "access": "public",
+    "parameters": [],
+    "body": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "token_id"
+        ],
+        "properties": {
+          "token_id": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "BUY",
+              "SELL"
+            ],
+            "maxLength": 500
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 100,
+      "minItems": 1
+    }
+  },
+  "polymarket.midpoints": {
+    "venue": "polymarket",
+    "operation": "midpoints",
+    "source": "clob",
+    "method": "POST",
+    "path": "/midpoints",
+    "access": "public",
+    "parameters": [],
+    "body": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "token_id"
+        ],
+        "properties": {
+          "token_id": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "BUY",
+              "SELL"
+            ],
+            "maxLength": 500
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 100,
+      "minItems": 1
+    }
+  },
+  "polymarket.spreads": {
+    "venue": "polymarket",
+    "operation": "spreads",
+    "source": "clob",
+    "method": "POST",
+    "path": "/spreads",
+    "access": "public",
+    "parameters": [],
+    "body": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "token_id"
+        ],
+        "properties": {
+          "token_id": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "BUY",
+              "SELL"
+            ],
+            "maxLength": 500
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 100,
+      "minItems": 1
+    }
+  },
+  "polymarket.fee_rate": {
+    "venue": "polymarket",
+    "operation": "fee_rate",
+    "source": "clob",
+    "method": "GET",
+    "path": "/fee-rate/{token_id}",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "token_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.cancel_all": {
+    "venue": "polymarket",
+    "operation": "cancel_all",
+    "source": "clob",
+    "method": "DELETE",
+    "path": "/cancel-all",
+    "access": "write",
+    "parameters": [],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.cancel_market_orders": {
+    "venue": "polymarket",
+    "operation": "cancel_market_orders",
+    "source": "clob",
+    "method": "DELETE",
+    "path": "/cancel-market-orders",
+    "access": "write",
+    "parameters": [],
+    "body": {
+      "type": "object",
+      "required": [
+        "market",
+        "asset_id"
+      ],
+      "properties": {
+        "market": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "asset_id": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "polymarket.heartbeat": {
+    "venue": "polymarket",
+    "operation": "heartbeat",
+    "source": "clob",
+    "method": "POST",
+    "path": "/v1/heartbeats",
+    "access": "write",
+    "parameters": [],
+    "body": {
+      "type": "object",
+      "required": [
+        "heartbeat_id"
+      ],
+      "properties": {
+        "heartbeat_id": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "polymarket.activity": {
+    "venue": "polymarket",
+    "operation": "activity",
+    "source": "data",
+    "method": "GET",
+    "path": "/activity",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "offset",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "explode": false
+      },
+      {
+        "name": "user",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "market",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^0x[a-fA-F0-9]{64}$",
+            "maxLength": 500
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "explode": false
+      },
+      {
+        "name": "eventId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "explode": false
+      },
+      {
+        "name": "type",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "TRADE",
+              "SPLIT",
+              "MERGE",
+              "REDEEM",
+              "REWARD",
+              "CONVERSION",
+              "DEPOSIT",
+              "WITHDRAWAL",
+              "YIELD",
+              "MAKER_REBATE",
+              "TAKER_REBATE",
+              "REFERRAL_REWARD"
+            ],
+            "maxLength": 500
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "explode": false
+      },
+      {
+        "name": "excludeDepositsWithdrawals",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "explode": false
+      },
+      {
+        "name": "start",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "explode": false
+      },
+      {
+        "name": "end",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "explode": false
+      },
+      {
+        "name": "sortBy",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "TIMESTAMP",
+            "TOKENS",
+            "CASH"
+          ],
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "sortDirection",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "ASC",
+            "DESC"
+          ],
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "side",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "BUY",
+            "SELL"
+          ],
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.closed_positions": {
+    "venue": "polymarket",
+    "operation": "closed_positions",
+    "source": "data",
+    "method": "GET",
+    "path": "/closed-positions",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "user",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "market",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^0x[a-fA-F0-9]{64}$",
+            "maxLength": 500
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "explode": false
+      },
+      {
+        "name": "title",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "explode": false
+      },
+      {
+        "name": "eventId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "explode": false
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "explode": false
+      },
+      {
+        "name": "offset",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "explode": false
+      },
+      {
+        "name": "sortBy",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "REALIZEDPNL",
+            "TITLE",
+            "PRICE",
+            "AVGPRICE",
+            "TIMESTAMP"
+          ],
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "sortDirection",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "ASC",
+            "DESC"
+          ],
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.value": {
+    "venue": "polymarket",
+    "operation": "value",
+    "source": "data",
+    "method": "GET",
+    "path": "/value",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "user",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "market",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^0x[a-fA-F0-9]{64}$",
+            "maxLength": 500
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.positions": {
+    "venue": "polymarket",
+    "operation": "positions",
+    "source": "data",
+    "method": "GET",
+    "path": "/positions",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "user",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "market",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^0x[a-fA-F0-9]{64}$",
+            "maxLength": 500
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "explode": false
+      },
+      {
+        "name": "eventId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "explode": false
+      },
+      {
+        "name": "sizeThreshold",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "number",
+          "minimum": 0
+        },
+        "explode": false
+      },
+      {
+        "name": "redeemable",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "explode": false
+      },
+      {
+        "name": "mergeable",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "explode": false
+      },
+      {
+        "name": "includeArchived",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "explode": false
+      },
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "offset",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "explode": false
+      },
+      {
+        "name": "sortBy",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "CURRENT",
+            "INITIAL",
+            "TOKENS",
+            "CASHPNL",
+            "PERCENTPNL",
+            "TITLE",
+            "RESOLVING",
+            "PRICE",
+            "AVGPRICE"
+          ],
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "sortDirection",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "ASC",
+            "DESC"
+          ],
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "title",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.holders": {
+    "venue": "polymarket",
+    "operation": "holders",
+    "source": "data",
+    "method": "GET",
+    "path": "/holders",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "explode": false
+      },
+      {
+        "name": "market",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^0x[a-fA-F0-9]{64}$",
+            "maxLength": 500
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "explode": false
+      },
+      {
+        "name": "minBalance",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999999
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.oi": {
+    "venue": "polymarket",
+    "operation": "oi",
+    "source": "data",
+    "method": "GET",
+    "path": "/oi",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "market",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^0x[a-fA-F0-9]{64}$",
+            "maxLength": 500
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.live_volume": {
+    "venue": "polymarket",
+    "operation": "live_volume",
+    "source": "data",
+    "method": "GET",
+    "path": "/live-volume",
+    "access": "public",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.orders": {
+    "venue": "polymarket",
+    "operation": "orders",
+    "source": "clob",
+    "method": "GET",
+    "path": "/data/orders",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "market",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "asset_id",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "next_cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "polymarket.fills": {
+    "venue": "polymarket",
+    "operation": "fills",
+    "source": "clob",
+    "method": "GET",
+    "path": "/data/trades",
+    "access": "account",
+    "parameters": [
+      {
+        "name": "id",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "maker_address",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "market",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{64}$",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "asset_id",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "before",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "after",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "maxLength": 500
+        },
+        "explode": false
+      },
+      {
+        "name": "next_cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "explode": false
+      }
+    ],
+    "body": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  }
+}

@@ -19,13 +19,29 @@ class V1ApiEndpointsTests(unittest.TestCase):
         cls.client = TestClient(app)
 
     def test_v1_system_health(self):
-        resp = self.client.get("/v1/system/health")
+        with patch("analyzing_llm_rationale.server._read_live_track_record", return_value={}), patch(
+            "analyzing_llm_rationale.market_data.fetch_kalshi_exchange_status",
+            return_value={"trading_active": True, "exchange_active": True},
+        ), patch("analyzing_llm_rationale.market_data._get_json", return_value=[]):
+            resp = self.client.get("/v1/system/health")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["status"], "healthy")
         self.assertIn("venues", data)
         self.assertIn("polymarket", data["venues"])
         self.assertIn("kalshi", data["venues"])
+        self.assertFalse(data["venues"]["polymarket"]["native_streaming"])
+        self.assertIsNone(data["engine"]["brier_score_mean"])
+
+    def test_system_health_reports_failed_venue_probe(self):
+        from analyzing_llm_rationale.market_data import MarketDataError
+        with patch("analyzing_llm_rationale.server._read_live_track_record", return_value={}), patch(
+            "analyzing_llm_rationale.market_data.fetch_kalshi_exchange_status", side_effect=MarketDataError("offline"),
+        ), patch("analyzing_llm_rationale.market_data._get_json", return_value=[]):
+            response = self.client.get("/v1/system/health")
+        self.assertEqual(response.json()["status"], "degraded")
+        self.assertEqual(response.json()["venues"]["kalshi"]["status"], "unavailable")
+        self.assertEqual(response.json()["venues"]["polymarket"]["status"], "connected")
 
     def test_v1_arbitrage_cross_venue(self):
         with patch("analyzing_llm_rationale.arbitrage_scanner.scan_cross_venue_arbitrage") as mock_arb:

@@ -430,6 +430,8 @@ gcloud run services update analyzing-llm-rationale --region us-central1 \
 
 ## Using the API
 
+See [additional Kalshi and Polymarket endpoints](docs/venue_api_extensions.md) for historical data, account pagination, order management and native exchange streams.
+
 The public Cloud Run API is the easiest integration target. It accepts
 forecasting questions and returns a typed forecast, model rationale, and optional
 evidence articles. It is built for resolvable forecasts, not general Q&A.

@@ -15,8 +15,17 @@ Each fetcher returns a normalized dict compatible with the ``/predict``
 from __future__ import annotations
 
 import json
+import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote, urlparse
+
+from opentelemetry import metrics, trace
+
+logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
+venue_requests = metrics.get_meter(__name__).create_counter("market_data.requests", unit="1")
 
 POLYMARKET_GAMMA_URL = "https://gamma-api.polymarket.com/markets"
 POLYMARKET_TAGS_URL = "https://gamma-api.polymarket.com/tags"
@@ -25,13 +34,13 @@ POLYMARKET_HISTORY_URL = "https://clob.polymarket.com/prices-history"
 POLYMARKET_SPORTS_URL = "https://gamma-api.polymarket.com/sports"
 POLYMARKET_COMMENTS_URL = "https://gamma-api.polymarket.com/comments"
 POLYMARKET_SERIES_URL = "https://gamma-api.polymarket.com/series"
-POLYMARKET_CLOB_TRADES_URL = "https://clob.polymarket.com/trades"
-POLYMARKET_LEADERBOARD_URL = "https://data-api.polymarket.com/leaderboard"
+POLYMARKET_TRADES_URL = "https://data-api.polymarket.com/trades"
+POLYMARKET_LEADERBOARD_URL = "https://data-api.polymarket.com/v1/leaderboard"
 KALSHI_API_URL = "https://api.elections.kalshi.com/trade-api/v2/markets"
 KALSHI_EVENTS_URL = "https://api.elections.kalshi.com/trade-api/v2/events"
 KALSHI_EXCHANGE_STATUS_URL = "https://api.elections.kalshi.com/trade-api/v2/exchange/status"
 KALSHI_EXCHANGE_SCHEDULE_URL = "https://api.elections.kalshi.com/trade-api/v2/exchange/schedule"
-KALSHI_LIVE_DATA_URL = "https://api.elections.kalshi.com/trade-api/v2/live-data"
+KALSHI_LIVE_DATA_URL = "https://api.elections.kalshi.com/trade-api/v2/live_data"
 KALSHI_SERIES_URL = "https://api.elections.kalshi.com/trade-api/v2/series"
 _TIMEOUT_S = 12
 _HEADERS = {"User-Agent": "foresea-market-bot/1.0"}
@@ -47,21 +56,57 @@ class MarketDataError(RuntimeError):
     """Raised when a market cannot be fetched or parsed."""
 
 
+class MarketDataNotFound(MarketDataError):
+    """The venue returned HTTP 404, allowing an archive lookup."""
+
+
+class MarketDataInputError(ValueError):
+    """The caller supplied an invalid venue or market identifier."""
+
+
+@tracer.start_as_current_span("market_data.fetch")
 def _get_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
     import requests
 
+    host = urlparse(url).hostname or "unknown"
+    trace.get_current_span().set_attribute("server.address", host)
     try:
         resp = requests.get(url, params=params, headers=_HEADERS, timeout=_TIMEOUT_S)
-    except Exception as exc:  # network error
+        if resp.status_code == 404:
+            raise MarketDataNotFound("Market not found.")
+        if resp.status_code != 200:
+            raise MarketDataError(f"Market provider returned status {resp.status_code}.")
+        result = resp.json()
+    except Exception as exc:
+        venue_requests.add(1, {"server.address": host, "outcome": "failure"})
+        logger.warning("Market data request failed", extra={"venue_host": host}, exc_info=True)
+        if isinstance(exc, MarketDataError):
+            raise
         raise MarketDataError(f"Market request failed: {exc}") from exc
-    if resp.status_code == 404:
-        raise MarketDataError("Market not found.")
-    if resp.status_code != 200:
-        raise MarketDataError(f"Market provider returned status {resp.status_code}.")
-    try:
-        return resp.json()
-    except ValueError as exc:
-        raise MarketDataError("Market provider returned invalid JSON.") from exc
+    venue_requests.add(1, {"server.address": host, "outcome": "success"})
+    return result
+
+
+def market_platform(platform: str, reference: str = "") -> str:
+    """Honor explicit venue selection; infer only unambiguous legacy IDs."""
+    value = platform.strip().lower()
+    if value in ("poly", "polymarket"):
+        return "polymarket"
+    if value == "kalshi":
+        return value
+    if value:
+        raise MarketDataInputError("platform must be kalshi or polymarket")
+    if reference.isdigit():
+        return "polymarket"
+    if re.fullmatch(r"[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+", reference):
+        return "kalshi"
+    raise MarketDataInputError("Specify platform for this market identifier")
+
+
+def _object_rows(payload: Any, label: str) -> List[Dict[str, Any]]:
+    if not isinstance(payload, list) or any(not isinstance(row, dict) for row in payload):
+        raise MarketDataError(f"Invalid {label} response: expected a list of objects")
+    return payload
 
 
 def _as_list(value: Any) -> List[Any]:
@@ -300,11 +345,13 @@ def resolve_kalshi(ticker: str) -> Optional[int]:
     if not ticker:
         return None
     ticker = ticker.strip()
-    # Normalise a "series/ticker" ident produced by an older ident_from_url that
-    # did not strip the series-ticker prefix from Kalshi two-level web URLs.
+    # Normalise a "series/ticker" ident produced by an older ident_from_url
+    # that did not strip the series-ticker prefix from Kalshi two-level web
+    # URLs. This must run BEFORE _kalshi_market_detail, which percent-encodes
+    # the whole ticker (safe="") and would turn a surviving "/" into "%2F".
     if "/" in ticker:
         ticker = ticker.rsplit("/", 1)[-1]
-    data = _get_json(f"{KALSHI_API_URL}/{ticker.upper()}")
+    data = _kalshi_market_detail(ticker.upper())
     market = data.get("market") if isinstance(data, dict) else None
     if not market:
         return None
@@ -534,17 +581,27 @@ def _kalshi_quote(
     }
 
 
+def _kalshi_market_detail(ticker: str) -> Dict[str, Any]:
+    ticker = quote(ticker, safe="")
+    try:
+        return _get_json(f"{KALSHI_API_URL}/{ticker}")
+    except MarketDataNotFound:
+        return _get_json(f"{KALSHI_API_URL.rsplit('/markets', 1)[0]}/historical/markets/{ticker}")
+
+
 def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     """Fetch a Kalshi market by ticker via the public trade API v2."""
     if not ticker:
         raise MarketDataError("Provide a Kalshi market ticker.")
     ticker = ticker.strip()
-    # Normalise a "series/ticker" ident produced by an older ident_from_url that
-    # did not strip the series-ticker prefix from Kalshi two-level web URLs.
+    # Normalise a "series/ticker" ident produced by an older ident_from_url
+    # that did not strip the series-ticker prefix from Kalshi two-level web
+    # URLs. This must run BEFORE _kalshi_market_detail, which percent-encodes
+    # the whole ticker (safe="") and would turn a surviving "/" into "%2F".
     if "/" in ticker:
         ticker = ticker.rsplit("/", 1)[-1]
     ticker = ticker.upper()
-    data = _get_json(f"{KALSHI_API_URL}/{ticker}")
+    data = _kalshi_market_detail(ticker)
     market = data.get("market") if isinstance(data, dict) else None
     if not market:
         raise MarketDataError("Kalshi market not found.")
@@ -633,7 +690,9 @@ def list_kalshi(limit: int = 5, query: Optional[str] = None,
 def fetch_kalshi_exchange_status() -> Dict[str, Any]:
     """Fetch live exchange status from Kalshi API (/exchange/status)."""
     data = _get_json(KALSHI_EXCHANGE_STATUS_URL)
-    return data if isinstance(data, dict) else {"exchange_active": True, "trading_active": True}
+    if not isinstance(data, dict) or any(not isinstance(data.get(key), bool) for key in ("exchange_active", "trading_active")):
+        raise MarketDataError("Invalid Kalshi exchange status response")
+    return data
 
 
 def fetch_kalshi_exchange_schedule() -> Dict[str, Any]:
@@ -654,7 +713,7 @@ def fetch_kalshi_orderbook(ticker: str) -> Dict[str, Any]:
 def fetch_polymarket_tags() -> List[Dict[str, Any]]:
     """Fetch active categories/tags from Polymarket Gamma API."""
     data = _get_json(POLYMARKET_TAGS_URL)
-    return [t for t in data if isinstance(t, dict)] if isinstance(data, list) else []
+    return _object_rows(data, "tags")
 
 
 def fetch_polymarket_orderbook(token_id: str) -> Dict[str, Any]:
@@ -666,82 +725,123 @@ def fetch_polymarket_orderbook(token_id: str) -> Dict[str, Any]:
 def fetch_polymarket_price_history(market: str, interval: str = "1d") -> List[Dict[str, Any]]:
     """Fetch historical prices for a Polymarket market condition or token."""
     data = _get_json(POLYMARKET_HISTORY_URL, params={"market": market, "interval": interval})
-    if isinstance(data, dict) and "history" in data:
-        return data["history"]
-    return data if isinstance(data, list) else []
+    return _object_rows(data.get("history") if isinstance(data, dict) else None, "price history")
 
 
-def fetch_kalshi_candlesticks(ticker: str, series_ticker: str = "") -> List[Dict[str, Any]]:
+def fetch_kalshi_candlesticks(
+    ticker: str, series_ticker: str = "", *, start_ts: Optional[int] = None,
+    end_ts: Optional[int] = None, period_interval: int = 60,
+) -> List[Dict[str, Any]]:
     """Fetch historical OHLC candlesticks for a Kalshi market ticker."""
     s_ticker = series_ticker or ticker.split("-")[0]
-    url = f"https://api.elections.kalshi.com/trade-api/v2/series/{s_ticker}/markets/{ticker}/candlesticks"
-    data = _get_json(url)
-    if isinstance(data, dict) and "candlesticks" in data:
-        return data["candlesticks"]
-    return data if isinstance(data, list) else []
-def fetch_kalshi_live_data(event_ticker: str = "", data_type: str = "") -> Dict[str, Any]:
-    """Fetch real-time sports game stats and live event feeds from Kalshi (/live-data)."""
-    params = {}
-    if event_ticker:
-        params["event_ticker"] = event_ticker
-    url = f"{KALSHI_LIVE_DATA_URL}/{data_type}" if data_type else KALSHI_LIVE_DATA_URL
+    end_ts = int(datetime.now(timezone.utc).timestamp()) if end_ts is None else end_ts
+    start_ts = end_ts - 86400 if start_ts is None else start_ts
+    if not ticker or start_ts < 0 or start_ts >= end_ts or period_interval not in (1, 60, 1440):
+        raise MarketDataInputError("Provide a ticker, start_ts < end_ts, and period_interval of 1, 60, or 1440")
+    url = f"https://api.elections.kalshi.com/trade-api/v2/series/{quote(s_ticker, safe='')}/markets/{quote(ticker, safe='')}/candlesticks"
+    params = {"start_ts": start_ts, "end_ts": end_ts, "period_interval": period_interval}
     try:
-        data = _get_json(url, params=params or None)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+        data = _get_json(url, params=params)
+    except MarketDataNotFound:
+        data = None
+    if data is not None and not isinstance(data, dict):
+        raise MarketDataError("Invalid candlesticks response: expected an object")
+    rows = _object_rows(data.get("candlesticks"), "candlesticks") if isinstance(data, dict) else None
+    if rows:
+        return rows
+    historical_url = f"{KALSHI_API_URL.rsplit('/markets', 1)[0]}/historical/markets/{quote(ticker, safe='')}/candlesticks"
+    try:
+        archived = _get_json(historical_url, params=params)
+    except MarketDataNotFound:
+        if rows is not None:
+            return rows
+        raise
+    return _object_rows(archived.get("candlesticks") if isinstance(archived, dict) else None, "historical candlesticks")
+
+
+def fetch_kalshi_live_data(event_ticker: str = "", data_type: str = "", *, milestone_id: str = "") -> Dict[str, Any]:
+    """Read event charts or milestone feeds; game_stats requires a milestone ID."""
+    if milestone_id:
+        path = f"milestone/{quote(milestone_id, safe='')}"
+        if data_type == "game_stats":
+            path += "/game_stats"
+        elif data_type:
+            path = f"{quote(data_type, safe='')}/{path}"
+    elif event_ticker and not data_type:
+        path = f"events/{quote(event_ticker, safe='')}"
+    else:
+        raise MarketDataInputError("Provide event_ticker, or milestone_id for typed/game_stats feeds")
+    data = _get_json(f"{KALSHI_LIVE_DATA_URL}/{path}")
+    if not isinstance(data, dict):
+        raise MarketDataError("Invalid Kalshi live data response")
+    return data
+
+
+@tracer.start_as_current_span("market_data.polymarket_teams")
+def fetch_polymarket_teams() -> List[Dict[str, Any]]:
+    """Fetch teams rather than the distinct sports/league catalog."""
+    return _object_rows(_get_json("https://gamma-api.polymarket.com/teams"), "teams")
+
+
 def fetch_polymarket_sports() -> List[Dict[str, Any]]:
     """Fetch active sports leagues and market types from Polymarket Gamma API."""
     data = _get_json(POLYMARKET_SPORTS_URL)
-    return [s for s in data if isinstance(s, dict)] if isinstance(data, list) else []
+    return _object_rows(data, "sports")
 
 
-def fetch_polymarket_comments(market_id: str = "") -> List[Dict[str, Any]]:
-    """Fetch public community comments for a Polymarket event/market."""
-    params = {"market": market_id} if market_id else None
+def fetch_polymarket_comments(market_id: str = "", parent_entity_type: str = "Market") -> List[Dict[str, Any]]:
+    """Fetch event discussion for a market, or an explicitly selected event/series."""
+    if parent_entity_type not in ("Market", "Event", "Series"):
+        raise MarketDataInputError("parent_entity_type must be Market, Event, or Series")
+    parent_id = market_id
+    if market_id and parent_entity_type == "Market":
+        # Gamma's spec lists a market parent, but the live comments endpoint only
+        # accepts Event/Series/PerpsAsset. Market discussion belongs to its event.
+        markets = _object_rows(_get_json(POLYMARKET_GAMMA_URL, params={"id": market_id}), "markets")
+        matching = [m for m in markets if str(m.get("id")) == str(market_id)]
+        events = matching[0].get("events", []) if matching else []
+        if not events or not isinstance(events[0], dict) or events[0].get("id") is None:
+            raise MarketDataInputError("No parent event found for this Polymarket market")
+        parent_entity_type = "Event"
+        parent_id = str(events[0]["id"])
+    params = {"parent_entity_type": parent_entity_type, "parent_entity_id": parent_id} if parent_id else None
     data = _get_json(POLYMARKET_COMMENTS_URL, params=params)
-    return [c for c in data if isinstance(c, dict)] if isinstance(data, list) else []
+    return _object_rows(data, "comments")
 
 
 def fetch_polymarket_series() -> List[Dict[str, Any]]:
     """Fetch active event series listings from Polymarket Gamma API."""
     data = _get_json(POLYMARKET_SERIES_URL)
-    return [s for s in data if isinstance(s, dict)] if isinstance(data, list) else []
+    return _object_rows(data, "series")
 
 
 def fetch_recent_trades(platform: str = "kalshi", ticker_or_token: str = "", limit: int = 20) -> List[Dict[str, Any]]:
     """Fetch recent executed trade prints / public tape for Kalshi or Polymarket."""
-    p = platform.lower()
     ref = ticker_or_token.strip()
-    if p.startswith("poly") or ref.isdigit() or len(ref) > 20:
-        url = POLYMARKET_CLOB_TRADES_URL
-        params = {"limit": min(limit, 50)}
+    venue = market_platform(platform, ref)
+    params: Dict[str, Any] = {"limit": max(1, min(limit, 50))}
+    if venue == "polymarket":
         if ref:
-            params["asset_id"] = ref
-        try:
-            data = _get_json(url, params=params)
-            return [t for t in data if isinstance(t, dict)] if isinstance(data, list) else []
-        except Exception:
-            return []
-    # Kalshi
-    url = f"https://api.elections.kalshi.com/trade-api/v2/markets/{ref}/trades" if ref else "https://api.elections.kalshi.com/trade-api/v2/markets/trades"
-    params = {"limit": min(limit, 50)}
-    try:
-        data = _get_json(url, params=params)
-        if isinstance(data, dict) and "trades" in data:
-            return data["trades"]
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+            condition_id = ref
+            if ref.isdigit():
+                markets = _get_json(POLYMARKET_GAMMA_URL, params={"clob_token_ids": ref, "limit": 1})
+                matching = [m for m in _object_rows(markets, "markets") if ref in [str(t) for t in _as_list(m.get("clobTokenIds"))]]
+                condition_id = str(matching[0].get("conditionId") or "") if matching else ""
+            if not re.fullmatch(r"0x[0-9a-fA-F]{64}", condition_id):
+                raise MarketDataInputError("Polymarket trades require a condition ID or a resolvable CLOB token ID")
+            params["market"] = condition_id
+        rows = _object_rows(_get_json(POLYMARKET_TRADES_URL, params=params), "trades")
+        return [row for row in rows if not ref.isdigit() or str(row.get("asset")) == ref]
+    if ref:
+        params["ticker"] = ref
+    data = _get_json(f"{KALSHI_API_URL}/trades", params=params)
+    return _object_rows(data.get("trades") if isinstance(data, dict) else None, "trades")
 
 
 def fetch_trader_leaderboard(limit: int = 20) -> List[Dict[str, Any]]:
     """Fetch top profitable prediction market trader leaderboard from Polymarket."""
-    try:
-        data = _get_json(POLYMARKET_LEADERBOARD_URL, params={"limit": min(limit, 50)})
-        return [r for r in data if isinstance(r, dict)] if isinstance(data, list) else []
-    except Exception:
-        return []
+    data = _get_json(POLYMARKET_LEADERBOARD_URL, params={"limit": max(1, min(limit, 50))})
+    return _object_rows(data, "leaderboard")
 
 
 def fetch_kalshi_series(series_ticker: str = "") -> Any:

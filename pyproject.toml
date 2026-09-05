@@ -13,6 +13,8 @@ authors = [
   { name = "Pareel Amre" },
 ]
 dependencies = [
+  "opentelemetry-api>=1.25",
+  "jsonschema>=4.23",
   "huggingface_hub>=0.30.0",
   "pyyaml>=6.0.2",
   "requests>=2.32.3",
@@ -38,6 +40,7 @@ serve = [
   "email-validator>=2.0",
   "fastapi>=0.111",
   "uvicorn[standard]>=0.29",
+  "websockets>=14,<16",
   "google-auth>=2.0",
   "google-cloud-datastore>=2.19",
   "google-cloud-kms>=3.0",
@@ -99,3 +102,6 @@ select = ["E", "F", "I", "B"]
 # B905 (zip-without-explicit-strict) requires the `strict=` kwarg, which is
 # Python 3.10+. We also run/test on 3.9, so don't force it.
 ignore = ["E501", "B905"]
+
+[tool.setuptools.package-data]
+analyzing_llm_rationale = ["venue_contracts.json"]
