@@ -61,6 +61,7 @@ _TOOL_NAMES = {
     "orderbook": "foresea_orderbook", "aorderbook": "foresea_orderbook",
     "market_tags": "foresea_market_tags", "amarket_tags": "foresea_market_tags",
     "price_history": "foresea_price_history", "aprice_history": "foresea_price_history",
+    "venue_data": "foresea_venue_data", "avenue_data": "foresea_venue_data",
     "live_data": "foresea_live_data", "alive_data": "foresea_live_data",
     "polymarket_meta": "foresea_polymarket_meta", "apolymarket_meta": "foresea_polymarket_meta",
     "market_leaderboard": "foresea_market_leaderboard", "amarket_leaderboard": "foresea_market_leaderboard",
@@ -375,6 +376,15 @@ class ForeseaClient:
 
     async def aopenapi(self) -> Dict[str, Any]:
         return await self._arequest("GET", "/openapi.json")
+
+    def venue_data(self, platform: str = "", operation: str = "", parameters: Optional[Dict[str, Any]] = None,
+                   body: Any = None) -> Dict[str, Any]:
+        from . import venue_api
+        return venue_api.read(platform, operation, parameters, body) if operation else venue_api.catalog()
+
+    async def avenue_data(self, platform: str = "", operation: str = "", parameters: Optional[Dict[str, Any]] = None,
+                          body: Any = None) -> Dict[str, Any]:
+        return await asyncio.to_thread(self.venue_data, platform, operation, parameters, body)
 
     def exchange_status(self) -> Dict[str, Any]:
         from analyzing_llm_rationale import market_data
@@ -747,6 +757,15 @@ def create_mcp_server(
         whether the edge is historically significant, and a multi-model comparison."""
 
         return await _call_tool_async(client.aedge_board)
+
+    @mcp.tool()
+    async def foresea_venue_data(platform: str = "", operation: str = "",
+                                parameters: Optional[Dict[str, Any]] = None,
+                                body: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Read public historical markets/candles/trades, batch books/midpoints/spreads,
+        fees, holders, open interest, event volume, milestones and weather. Omit
+        operation to discover operation names and schemas. No account or write access."""
+        return await _call_tool_async(client.avenue_data, platform, operation, parameters, body)
 
     @mcp.tool()
     async def foresea_exchange_status() -> Dict[str, Any]:

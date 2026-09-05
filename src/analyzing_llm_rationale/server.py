@@ -89,6 +89,8 @@ from analyzing_llm_rationale.pipeline import (
 )
 from analyzing_llm_rationale.server_security import RateLimiter
 
+from .venue_routes import router as venue_router
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _STATIC_DIR = _REPO_ROOT / "static"
 _ANALYTICS_DB = Path(os.environ.get("ANALYTICS_DB", "/tmp/foresea_analytics.duckdb"))
@@ -10250,6 +10252,7 @@ def _has_recent_duplicate_trade(
     now: datetime,
     cooldown_seconds: int,
     exclude_run_id: Optional[str] = None,
+    exclude_audit_order_id: Optional[str] = None,
 ) -> bool:
     if cooldown_seconds <= 0:
         return False
@@ -10260,6 +10263,8 @@ def _has_recent_duplicate_trade(
     ]
     for record in candidate_records:
         if exclude_run_id and record.get("id") == exclude_run_id:
+            continue
+        if exclude_audit_order_id and (record.get("id") == exclude_audit_order_id or record.get("audit_order_id") == exclude_audit_order_id):
             continue
         if str(record.get("status") or "").lower() in {"blocked", "rejected", "canceled"}:
             continue
@@ -10343,6 +10348,7 @@ async def _validate_live_trade_guardrails(
     preview: Dict[str, Any],
     credentials: Dict[str, Any],
     trade_run_id: Optional[str] = None,
+    exclude_audit_order_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Fail closed on policy, quote, portfolio, exposure, and duplicate checks."""
     now = datetime.now(timezone.utc)
@@ -10370,6 +10376,7 @@ async def _validate_live_trade_guardrails(
         now=now,
         cooldown_seconds=int(policy["cooldown_seconds"]),
         exclude_run_id=trade_run_id,
+        exclude_audit_order_id=exclude_audit_order_id,
     ):
         raise TradingGuardrailError(
             "duplicate_cooldown",
@@ -14933,6 +14940,14 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         except Exception as exc:
             return f"(Price history fetch failed: {exc})"
 
+    async def _tool_venue_data(args):
+        from . import venue_api
+        if not args.get("operation"):
+            return json.dumps(venue_api.catalog())
+        result = await asyncio.to_thread(venue_api.read, str(args.get("platform", "")),
+                                         str(args["operation"]), args.get("parameters"), args.get("body"))
+        return json.dumps(result)
+
     async def _tool_live_data(args):
         event_ticker = str(args.get("event_ticker") or args.get("ticker") or "").strip()
         data_type = str(args.get("type") or "").strip()
@@ -15019,7 +15034,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         "orderbook_arbitrage": _tool_orderbook_arbitrage,
         "market_tags": _tool_market_tags,
         "price_history": _tool_price_history,
-        "live_data": _tool_live_data,
+        "live_data": _tool_live_data, "venue_data": _tool_venue_data,
         "polymarket_meta": _tool_polymarket_meta,
         "recent_trades": _tool_recent_trades,
         "market_leaderboard": _tool_market_leaderboard,
@@ -15044,6 +15059,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         {"name": "orderbook_arbitrage", "args": "platform, ticker? | yes_token_id,no_token_id?, fee_bps_per_leg?, min_net_edge?, latency_bps_per_leg?, requested_quantity?", "description": "Read-only live-market simulation of complementary YES+NO depth. It uses fees, a per-leg latency allowance, and optional fill-or-kill paired quantity. Kalshi needs ticker; Polymarket needs both outcome token IDs. It never submits orders, and identical resolution rules plus real-world leg risk must be verified."},
         {"name": "market_tags", "args": "", "description": "Fetch active market categories and tags on Polymarket."},
         {"name": "price_history", "args": "ticker|market, series_ticker?", "description": "Fetch historical prices or OHLC candlesticks for a market."},
+        {"name": "venue_data", "args": "platform, operation?, parameters?, body?", "description": "Read public venue historical, batch, fee, and research data. Omit operation to discover operations and input schemas."},
         {"name": "live_data", "args": "event_ticker? | milestone_id?, type?", "description": "Fetch Kalshi event charts by event_ticker, or milestone feeds by milestone_id (type=game_stats for play-by-play)."},
         {"name": "polymarket_meta", "args": "target?, market_id?", "description": "Fetch Polymarket series listings, comments, or sports metadata (target: series|comments|sports)."},
         {"name": "recent_trades", "args": "platform?, ticker?, limit?", "description": "Fetch recent public executed trades / trade tape for Kalshi or Polymarket."},
@@ -15066,7 +15082,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                  "exchange_status": _tool_exchange_status, "orderbook": _tool_orderbook,
                  "orderbook_arbitrage": _tool_orderbook_arbitrage,
                  "market_tags": _tool_market_tags, "price_history": _tool_price_history,
-                 "live_data": _tool_live_data, "polymarket_meta": _tool_polymarket_meta,
+                 "live_data": _tool_live_data, "venue_data": _tool_venue_data, "polymarket_meta": _tool_polymarket_meta,
                  "recent_trades": _tool_recent_trades, "market_leaderboard": _tool_market_leaderboard,
                  "optimize_portfolio": _tool_optimize_portfolio}
         specs = [
@@ -15083,6 +15099,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             {"name": "orderbook_arbitrage", "args": "platform, ticker? | yes_token_id,no_token_id?, fee_bps_per_leg?, min_net_edge?, latency_bps_per_leg?, requested_quantity?", "description": "Read-only live-market simulation of complementary YES+NO depth. It uses fees, a per-leg latency allowance, and optional fill-or-kill paired quantity. Kalshi needs ticker; Polymarket needs both outcome token IDs. It never submits orders, and identical resolution rules plus real-world leg risk must be verified."},
             {"name": "market_tags", "args": "", "description": "Fetch active market categories and tags on Polymarket."},
             {"name": "price_history", "args": "ticker|market, series_ticker?", "description": "Fetch historical prices or OHLC candlesticks for a market."},
+            {"name": "venue_data", "args": "platform, operation?, parameters?, body?", "description": "Read public venue historical, batch, fee, and research data. Omit operation to discover operations and input schemas."},
             {"name": "live_data", "args": "event_ticker? | milestone_id?, type?", "description": "Fetch Kalshi event charts by event_ticker, or milestone feeds by milestone_id (type=game_stats for play-by-play)."},
             {"name": "polymarket_meta", "args": "target?, market_id?", "description": "Fetch Polymarket series listings, comments, or sports metadata (target: series|comments|sports)."},
             {"name": "recent_trades", "args": "platform?, ticker?, limit?", "description": "Fetch recent public executed trades / trade tape for Kalshi or Polymarket."},
@@ -15411,3 +15428,6 @@ async def agent_scan(
 # commits the public aggregate to static/track_record_live.json. The server only
 # *serves* that result (see _read_live_track_record + GET /track-record) — no
 # batch work runs on Cloud Run, which is what kept OOM/timeout-failing.
+
+
+app.include_router(venue_router)

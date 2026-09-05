@@ -56,6 +56,10 @@ class MarketDataError(RuntimeError):
     """Raised when a market cannot be fetched or parsed."""
 
 
+class MarketDataNotFound(MarketDataError):
+    """The venue returned HTTP 404, allowing an archive lookup."""
+
+
 class MarketDataInputError(ValueError):
     """The caller supplied an invalid venue or market identifier."""
 
@@ -69,7 +73,7 @@ def _get_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
     try:
         resp = requests.get(url, params=params, headers=_HEADERS, timeout=_TIMEOUT_S)
         if resp.status_code == 404:
-            raise MarketDataError("Market not found.")
+            raise MarketDataNotFound("Market not found.")
         if resp.status_code != 200:
             raise MarketDataError(f"Market provider returned status {resp.status_code}.")
         result = resp.json()
@@ -340,7 +344,7 @@ def resolve_kalshi(ticker: str) -> Optional[int]:
     """
     if not ticker:
         return None
-    data = _get_json(f"{KALSHI_API_URL}/{ticker.strip().upper()}")
+    data = _kalshi_market_detail(ticker.strip().upper())
     market = data.get("market") if isinstance(data, dict) else None
     if not market:
         return None
@@ -570,12 +574,20 @@ def _kalshi_quote(
     }
 
 
+def _kalshi_market_detail(ticker: str) -> Dict[str, Any]:
+    ticker = quote(ticker, safe="")
+    try:
+        return _get_json(f"{KALSHI_API_URL}/{ticker}")
+    except MarketDataNotFound:
+        return _get_json(f"{KALSHI_API_URL.rsplit('/markets', 1)[0]}/historical/markets/{ticker}")
+
+
 def fetch_kalshi(ticker: str) -> Dict[str, Any]:
     """Fetch a Kalshi market by ticker via the public trade API v2."""
     if not ticker:
         raise MarketDataError("Provide a Kalshi market ticker.")
     ticker = ticker.strip().upper()
-    data = _get_json(f"{KALSHI_API_URL}/{ticker}")
+    data = _kalshi_market_detail(ticker)
     market = data.get("market") if isinstance(data, dict) else None
     if not market:
         raise MarketDataError("Kalshi market not found.")
@@ -713,8 +725,24 @@ def fetch_kalshi_candlesticks(
     if not ticker or start_ts < 0 or start_ts >= end_ts or period_interval not in (1, 60, 1440):
         raise MarketDataInputError("Provide a ticker, start_ts < end_ts, and period_interval of 1, 60, or 1440")
     url = f"https://api.elections.kalshi.com/trade-api/v2/series/{quote(s_ticker, safe='')}/markets/{quote(ticker, safe='')}/candlesticks"
-    data = _get_json(url, params={"start_ts": start_ts, "end_ts": end_ts, "period_interval": period_interval})
-    return _object_rows(data.get("candlesticks") if isinstance(data, dict) else None, "candlesticks")
+    params = {"start_ts": start_ts, "end_ts": end_ts, "period_interval": period_interval}
+    try:
+        data = _get_json(url, params=params)
+    except MarketDataNotFound:
+        data = None
+    if data is not None and not isinstance(data, dict):
+        raise MarketDataError("Invalid candlesticks response: expected an object")
+    rows = _object_rows(data.get("candlesticks"), "candlesticks") if isinstance(data, dict) else None
+    if rows:
+        return rows
+    historical_url = f"{KALSHI_API_URL.rsplit('/markets', 1)[0]}/historical/markets/{quote(ticker, safe='')}/candlesticks"
+    try:
+        archived = _get_json(historical_url, params=params)
+    except MarketDataNotFound:
+        if rows is not None:
+            return rows
+        raise
+    return _object_rows(archived.get("candlesticks") if isinstance(archived, dict) else None, "historical candlesticks")
 
 
 def fetch_kalshi_live_data(event_ticker: str = "", data_type: str = "", *, milestone_id: str = "") -> Dict[str, Any]:
