@@ -3155,6 +3155,89 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "1c3464e8-42fe-46ef-b67d-e4b6791cdf18",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_unfilled_below_market",
+            "filled_quantity": 0.0
+          },
+          "quote": {
+            "marketable": false,
+            "observed_ask": 1.0,
+            "source": "live_venue_quote",
+            "status": "shadow_unfilled_below_market"
+          },
+          "requested_order": {
+            "price": 0.07,
+            "quantity": 1
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 8479.215805,
+            "cash_required": 451.560638,
+            "concentration_cap": 1271.882371,
+            "cycle_id": "30m:993677",
+            "cycle_spend_after": 451.560638,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 451.560638,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2543.764741,
+            "drawdown_after": 0.154838,
+            "fee": 27.599847,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 423.96079,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 423.96079,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1695.843161,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.73,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.05,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 423.96079,
+            "target_quantity": 6056.582717857143
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993677",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 0.07,
+          "quantity": 0.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXNFLRETIRE-MSTAFFORD9-2627"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "10d14d39e4b7e92d9f16b7702f25e9802c78ed3dc8652ca7975ef55c3bce39c0",
+        "recorded_at": "2026-09-05T14:34:39.158882+00:00"
+      },
+      {
         "action_id": "46386af7-8a97-4cc0-a850-921efa8f6e12",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -8709,7 +8792,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-05T14:16:45.466584+00:00",
+  "generated_at": "2026-09-05T14:38:56.889658+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
