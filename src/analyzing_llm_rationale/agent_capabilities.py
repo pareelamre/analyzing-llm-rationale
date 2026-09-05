@@ -21,6 +21,11 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 # ── 1. Built-in forecasting skills ────────────────────────────────────────────
 # (name, instruction) — run through the same path as user-defined skills.
+# A calibration bin has to hold enough resolved forecasts to say anything. The
+# thinnest real bin observed carried 94, so this keeps genuine signal while
+# refusing to turn a handful of resolutions into a stated bias.
+_MIN_CALIBRATION_BIN_N = 30
+
 BUILTIN_SKILLS: List[Tuple[str, str]] = [
     ("Base rate",
      "Name the reference class for this kind of event and state the outside-view "
@@ -43,6 +48,60 @@ def builtin_skills() -> List[Dict[str, str]]:
 
 
 # ── 2. Track-record self-grounding ────────────────────────────────────────────
+def _calibration_bias_notes(bins: Any) -> List[str]:
+    """Self-calibration lines derived from resolved bins, not asserted.
+
+    These two lines used to be hardcoded, and both aged badly in different
+    ways. The high-confidence figure ("80-90% resolve YES only ~68% of the
+    time") happened to be right when written, but a fixed number silently goes
+    stale as the record grows. The tail line was worse: it told every model it
+    had "overpriced low-probability outcomes" and to shade tail YES estimates
+    DOWN, while the resolved bins showed the opposite -- forecasts near 3.5%
+    were resolving YES at 8.2%, so the advice pushed every tail estimate the
+    wrong way. Derive the direction from the data instead of stating it.
+    """
+    rows = [
+        b for b in (bins or [])
+        if isinstance(b, dict)
+        and isinstance(b.get("avg_predicted"), (int, float))
+        and isinstance(b.get("observed_yes_rate"), (int, float))
+        and (b.get("n") or 0) >= _MIN_CALIBRATION_BIN_N
+    ]
+    if not rows:
+        return []
+    notes: List[str] = []
+
+    high = [b for b in rows if b["avg_predicted"] >= 0.8]
+    if high:
+        n = sum(b["n"] for b in high)
+        predicted = sum(b["avg_predicted"] * b["n"] for b in high) / n
+        observed = sum(b["observed_yes_rate"] * b["n"] for b in high) / n
+        if observed < predicted:
+            notes.append(
+                f"- High-confidence bias: forecasts averaging {predicted:.0%} resolved YES "
+                f"{observed:.0%} of the time ({n} resolved). Damp extreme high-confidence "
+                "calls: allow for 11th-hour cancellations, appeals, and procedural delay.")
+
+    tail = [b for b in rows if b["avg_predicted"] <= 0.2]
+    if tail:
+        n = sum(b["n"] for b in tail)
+        predicted = sum(b["avg_predicted"] * b["n"] for b in tail) / n
+        observed = sum(b["observed_yes_rate"] * b["n"] for b in tail) / n
+        # Direction comes from the record, in whichever way it actually points.
+        if observed > predicted:
+            notes.append(
+                f"- Tail bias: forecasts averaging {predicted:.1%} resolved YES "
+                f"{observed:.1%} of the time ({n} resolved) -- longshots have been "
+                "UNDER-priced, so do not reflexively shade tail YES estimates down. "
+                "A prior, not a hard rule.")
+        elif observed < predicted:
+            notes.append(
+                f"- Tail bias: forecasts averaging {predicted:.1%} resolved YES "
+                f"{observed:.1%} of the time ({n} resolved) -- longshots have been "
+                "OVER-priced, so shade tail YES estimates down. A prior, not a hard rule.")
+    return notes
+
+
 def build_grounding_note(aggregate: Optional[Dict[str, Any]]) -> str:
     """Short self-calibration note from the live track-record aggregate, or '' ."""
     if not aggregate:
@@ -73,10 +132,7 @@ def build_grounding_note(aggregate: Optional[Dict[str, Any]]) -> str:
                  "and anchor toward market odds unless you hold verified primary-source proof. Room for a real "
                  "edge widens with distance from resolution: long-dated markets never reach a 0.05 Brier at "
                  "any level of participation.")
-    parts.append("- Calibration Bias: Historical predictions in the 80-90% range resolve YES only ~68% of the time. "
-                 "Account for 11th-hour cancellations, appeals, and procedural delays by damping extreme high-confidence calls.")
-    parts.append("- Known tendency: this model has overpriced low-probability/longshot "
-                 "outcomes. Treat that as a prior and shade tail YES estimates down, not a hard rule.")
+    parts.extend(_calibration_bias_notes(aggregate.get("calibration")))
     return "\n".join(parts)
 
 
