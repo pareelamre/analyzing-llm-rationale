@@ -996,6 +996,55 @@ def _record_account_action(
     return action_id
 
 
+def _record_pre_sizing_rejection(
+    *,
+    agent_id: str,
+    mode: str,
+    ticker: str,
+    side: str,
+    platform: str,
+    price: Optional[float],
+    quantity: Any,
+    reason: str,
+) -> None:
+    """Record an order refused before sizing, so it leaves an audit trail.
+
+    Guard rejections already write a ``rejected_trade`` row, but the returns
+    that fire earlier -- before a sizing plan or a guard preview exists -- did
+    not. An agent could publish "Action: BUY NO", have the order correctly
+    refused, and leave nothing behind but prose in its own thesis: no activity
+    entry, no audit row, no trace in trade_count. Fine for a paper score;
+    a hole in the record for an account meant to stand in for real execution,
+    where "why did it not trade?" has to be answerable from the ledger.
+
+    Best-effort: a bookkeeping failure must never convert a clean rejection
+    into a raised exception on the trading path.
+    """
+    try:
+        _record_rejected_account_action(
+            agent_id=agent_id,
+            mode=mode,
+            ticker=ticker,
+            side=side,
+            platform=platform,
+            normalized={"price": price, "quantity": _as_float(quantity)},
+            # No sizing or guard preview ran, so there are no notional/fee
+            # figures to report. Record the reason and say plainly that the
+            # order never reached sizing, rather than inventing zeros that
+            # read like a computed result.
+            guard={
+                "cycle_id": _current_cycle_id(),
+                "reasons": [reason],
+                "rejected_before_sizing": True,
+            },
+        )
+    except Exception:
+        logger.warning(
+            "could not record pre-sizing rejection for %s %s (%s)",
+            agent_id, ticker, reason, exc_info=True,
+        )
+
+
 def _record_rejected_account_action(
     *,
     agent_id: str,
@@ -2612,6 +2661,24 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "trade.submitted": False,
                     "trade.executable_price": executable_price,
                 })
+                # A rejection is a decision the system made about a real order,
+                # and it belongs in the ledger like any other. Guard rejections
+                # already record one; the pre-sizing returns did not, so an
+                # agent could declare "BUY NO", have it correctly refused, and
+                # leave nothing queryable behind -- the attempt survived only
+                # as prose inside its own thesis, with zero audit rows. That is
+                # tolerable for a paper score and not for an account meant to
+                # stand in for real execution.
+                _record_pre_sizing_rejection(
+                    agent_id=agent_id,
+                    mode=mode,
+                    ticker=ticker,
+                    side=side,
+                    platform=platform,
+                    price=executable_price,
+                    quantity=args.get("quantity"),
+                    reason="no_executable_price",
+                )
                 _finish_tool(tool, start, "rejected")
                 return {
                     "ok": False,

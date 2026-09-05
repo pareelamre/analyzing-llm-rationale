@@ -1061,6 +1061,80 @@ class BenchmarkToolTests(unittest.TestCase):
         # A recorded rejection, not a bare ValueError leaving no board trace.
         self.assertIn("1.00", result["message"])
 
+    def test_a_pre_sizing_rejection_still_leaves_an_audit_row(self):
+        # Guard rejections already wrote a rejected_trade row; the returns
+        # that fire before sizing did not. Live: gpt-oss-120b published
+        # "Action: BUY NO", place_trade correctly refused it with
+        # no_executable_price, and the attempt survived only as prose in its
+        # own thesis -- zero audit rows, nothing in the activity feed, no
+        # change to trade_count. Tolerable for a paper score; a hole in the
+        # record for an account meant to stand in for real execution, where
+        # "why did it not trade?" must be answerable from the ledger.
+        ctx = benchmark_tools.ToolContext(agent_id="model-reject")
+
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "accounts.sqlite"
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(db),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    return_value={"yes_bid": 0.0, "yes_ask": 0.93},
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXDEAD", "side": "no", "price": 0.07,
+                     "model_probability": 0.20, "sizing_mode": "quarter_kelly"},
+                    ctx)
+
+                conn = sqlite3.connect(str(db))
+                try:
+                    rows = conn.execute(
+                        "SELECT action_type, submitted, ticker, side, outcome "
+                        "FROM agent_actions WHERE agent_id = ?",
+                        ("model-reject",)).fetchall()
+                finally:
+                    conn.close()
+
+        self.assertEqual(result["reason"], "no_executable_price")
+        self.assertEqual(len(rows), 1, "the refused order left no audit row")
+        action_type, submitted, ticker, side, _outcome = rows[0]
+        self.assertEqual(action_type, "rejected_trade")
+        self.assertEqual(submitted, 0)
+        self.assertEqual(ticker, "KXDEAD")
+        self.assertEqual(side, "no")
+
+    def test_recording_a_rejection_never_breaks_the_trading_path(self):
+        # Bookkeeping failing must not turn a clean refusal into a raised
+        # exception mid-cycle.
+        ctx = benchmark_tools.ToolContext(agent_id="model-reject")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    return_value={"yes_bid": 0.0, "yes_ask": 0.93},
+                ),
+                mock.patch.object(
+                    benchmark_tools, "_record_rejected_account_action",
+                    side_effect=RuntimeError("ledger down")),
+            ):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXDEAD", "side": "no", "price": 0.07,
+                     "model_probability": 0.20, "sizing_mode": "quarter_kelly"},
+                    ctx)
+
+        self.assertEqual(result["reason"], "no_executable_price")
+        self.assertFalse(result["submitted"])
+
     def test_place_trade_does_not_fill_when_no_live_quote_is_available(self):
         # Regression: _resolve_shadow_marketability used to trust the
         # caller's price outright when a live quote couldn't be fetched,
