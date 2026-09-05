@@ -61,7 +61,7 @@ class TrackRecordTickTests(unittest.TestCase):
         self.assertIn("fail-fast: false", workflow)
         self.assertIn("group: track-record-forecast", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
-        self.assertIn("max-parallel: 1", workflow)
+        self.assertIn("max-parallel: 2", workflow)
         self.assertIn("group: track-record-forecast-provider-slot", workflow)
         self.assertIn("REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}", workflow)
         self.assertIn("forecast (${{ matrix.model }})", workflow)

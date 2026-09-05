@@ -23,7 +23,7 @@ on:
       max_targets:
         description: "Maximum markets to forecast in this run"
         required: false
-        default: "15"
+        default: "8"
 
 env:
   GCP_PROJECT_ID: brave-drive-471109-d9
@@ -35,7 +35,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: track-record-forecast
+  group: track-record-forecast-provider-slot
   cancel-in-progress: false
 
 jobs:
@@ -61,19 +61,13 @@ jobs:
     needs: roster
     name: forecast (${{ matrix.model }})
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 35
     continue-on-error: true
-    # Forecasting owns the second SCADS provider slot. Agent trading owns the
-    # first, so both products make progress without exceeding the two-request
-    # provider limit.
-    concurrency:
-      group: track-record-forecast-provider-slot
-      cancel-in-progress: false
     strategy:
       fail-fast: false
-      # One forecast call plus one reserved agent call is the safe global
-      # fan-out for SCADS' two-request account limit.
-      max-parallel: 1
+      # Parallel matrix of 2 models provides safe global fan-out for SCADS,
+      # bringing total roster snapshot duration down to ~16-20 minutes.
+      max-parallel: 2
       matrix: ${{ fromJSON(needs.roster.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
@@ -128,7 +122,7 @@ jobs:
           TRACK_TARGET_SHARD_COUNT: ${{ github.event.inputs.target_shard_count || '4' }}
           TRACK_TARGET_SHARD_INDEX: ${{ github.event.inputs.target_shard_index || '' }}
           TRACK_TARGET_SHARD_SLOT_MINUTES: "5"
-          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '15' }}
+          TRACK_FORECAST_MAX_TARGETS: ${{ github.event.inputs.max_targets || '8' }}
           PER_VENUE: "2"
           CONVERGENCE_PER_VENUE: "100"
           # Scheduled runs rotate target shards. Full reforecasting remains an

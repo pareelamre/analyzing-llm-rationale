@@ -177,7 +177,7 @@ class TrackRecordForecastWorkflowTests(unittest.TestCase):
     def test_forecast_jobs_use_the_second_reserved_provider_slot(self):
         text = (_WORKFLOWS_DIR / "track-record-forecast.yml").read_text(encoding="utf-8")
         self.assertIn("group: track-record-forecast-provider-slot", text)
-        self.assertIn("max-parallel: 1", text)
+        self.assertIn("max-parallel: 2", text)
         self.assertIn("REFORECAST_EACH_TICK: ${{ github.event.inputs.reforecast_each_tick || '0' }}", text)
         self.assertIn("cancel-in-progress: false", text)
         # The matrix is resolved from the canonical Agentic model selector at
