@@ -1328,9 +1328,19 @@ _THESIS_MARKET_RE = re.compile(
     r"(Kalshi|Polymarket)\b",
     re.IGNORECASE,
 )
+# Tolerant of how models actually write this line. deepseek-v4-flash wrote
+# "**Model Probability**: 40% (no-change) vs **Market Price**: 48.5% mid / 52%
+# NO ask" -- a correct, fully specified figure that the old pattern rejected
+# because a parenthetical sat between the percentage and "vs". Reconciliation
+# then refused the trade for having no calibrated P(YES), so a researched,
+# decided position was never opened and the agent showed zero positions.
 _THESIS_PROBABILITY_RE = re.compile(
-    r"\*\*Model\s+Probability\*\*\s*:\s*\[?\s*(\d+(?:\.\d+)?)\s*%\s*\]?\s+"
-    r"vs\s+\*\*Market\s+Price\*\*\s*:\s*\[?\s*(\d+(?:\.\d+)?)\s*%\s*\]?",
+    r"\*{0,2}Model\s+Probability\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
+    r"(\d+(?:\.\d+)?)\s*%\s*\]?"
+    r"(?:\s*\([^)]{0,60}\))?"          # optional qualifier, e.g. "(no-change)"
+    r"\s*(?:vs\.?|versus)\s+"
+    r"\*{0,2}Market\s+Price\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
+    r"(\d+(?:\.\d+)?)\s*%",
     re.IGNORECASE,
 )
 _THESIS_ACTION_RE = re.compile(
@@ -1345,8 +1355,12 @@ _LOOSE_ACTION_MARKET_RE = re.compile(
     r"([A-Za-z0-9][A-Za-z0-9_.-]{2,119})[\"'`]?\s+on\s+(Kalshi|Polymarket)\b",
     re.IGNORECASE,
 )
+# Same tolerance for the fallback: markdown emphasis, a colon, and a "~"
+# approximation marker all appear in real theses between the label and the
+# number, and each one used to defeat this pattern.
 _LOOSE_MODEL_PROBABILITY_RE = re.compile(
-    r"(?:model\s+probability(?:\s+of)?|p\(yes\)\s*(?:is|=)?)\s*(\d+(?:\.\d+)?)\s*%",
+    r"(?:\*{0,2}model\s+probability\*{0,2}|\*{0,2}p\(yes\)\*{0,2}|calibrated\s+p\(yes\))"
+    r"\s*(?:of|is|=|:)?\s*\*{0,2}\s*~?\s*(\d+(?:\.\d+)?)\s*%",
     re.IGNORECASE,
 )
 
