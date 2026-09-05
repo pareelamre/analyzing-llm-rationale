@@ -244,6 +244,25 @@ logger = logging.getLogger("foresea")
 # the live /predict + agent paths up to the same standard.
 _PROVIDER_MAX_RETRIES = int(os.environ.get("PROVIDER_MAX_RETRIES", "2"))      # attempts = retries + 1
 _PROVIDER_TIMEOUT_S = float(os.environ.get("PROVIDER_TIMEOUT_S", "90"))       # per-attempt wall-clock budget
+# Long enough to clear a one-minute token quota window, with a little margin.
+_TOKEN_RATE_LIMIT_COOLDOWN_S = float(
+    os.environ.get("PROVIDER_TOKEN_RATE_LIMIT_COOLDOWN_S", "65")
+)
+# Matches the upstream gateway's own wording, e.g.
+#   litellm.RateLimitError: Rate limit exceeded for model_per_key: <key>:<model>.
+#   Limit type: tokens. Current limit: 10000, Remaining: 0
+_TOKEN_RATE_LIMIT_RE = re.compile(r"limit\s+type:\s*tokens", re.IGNORECASE)
+
+
+def _is_token_rate_limit(exc: Exception) -> bool:
+    """True for a token-per-minute quota rejection, which needs a window wait.
+
+    A 429 alone is not enough: a requests-per-minute limit clears quickly,
+    while a token quota only frees when its window rolls over.
+    """
+    if getattr(exc, "status_code", None) != 429:
+        return False
+    return bool(_TOKEN_RATE_LIMIT_RE.search(str(exc)))
 _PROVIDER_BACKOFF_BASE_S = float(os.environ.get("PROVIDER_BACKOFF_BASE_S", "0.5"))
 # A paper-trading agent has a multi-turn ReAct loop. A brief 5xx on any one
 # turn should not discard the already completed research/actions, so this path
@@ -2862,10 +2881,21 @@ async def _provider_chat(
                 provider_retry_after = getattr(exc, "retry_after_s", None)
                 if isinstance(provider_retry_after, (int, float)):
                     delay = max(delay, float(provider_retry_after))
+                # A token-per-minute quota only frees up when its window rolls
+                # over, so exponential backoff from a 1.5s base is the wrong
+                # shape for it: the schedule reached ~50s across six attempts
+                # and gave up about ten seconds short of the reset. Live, that
+                # failed glm-5-3, glm-5-3-flash and deepseek-v4-flash every
+                # cycle with "litellm.RateLimitError ... Limit type: tokens.
+                # Current limit: 10000" while the same requests succeeded once
+                # the minute had passed. Wait past the boundary instead.
+                if _is_token_rate_limit(exc):
+                    delay = max(delay, _TOKEN_RATE_LIMIT_COOLDOWN_S)
                 delay += random.uniform(0, delay * 0.25)  # jitter to avoid thundering herd
                 logger.warning(
-                    "provider call failed (attempt %d/%d), retrying in %.2fs: %s",
-                    retries_used, effective_max_retries + 1, delay, type(exc).__name__,
+                    "provider call failed (attempt %d/%d), retrying in %.2fs: %s: %s",
+                    retries_used, effective_max_retries + 1, delay,
+                    type(exc).__name__, str(exc)[:200],
                 )
                 await asyncio.sleep(delay)
 
