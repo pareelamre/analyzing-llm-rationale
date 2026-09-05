@@ -389,6 +389,13 @@
       padding: 0;
       cursor: pointer;
       text-align: left;
+      transition: opacity var(--dur-med), transform var(--dur-med);
+    }
+    .brand-home:hover {
+      opacity: 0.85;
+    }
+    .brand-home:active {
+      transform: scale(0.98);
     }
 
     /* Logo mark — curvy boat with lowercase f mast */
@@ -5415,24 +5422,49 @@ function setHistoryState(view, mode = 'push', options = {}) {
   else if (history.state?.view !== view || history.state?.convId !== state.convId || history.state?.panel !== state.panel) history.pushState(state, '', url);
 }
 function showLanding({ updateHistory = true } = {}) {
+  document.documentElement?.removeAttribute?.('data-boot-view');
+  const landing = document.getElementById('landingPage');
+  const app = document.getElementById('appShell');
+  const wasLandingAlreadyVisible = currentView === 'landing' && !landing.classList.contains('hidden-view');
+
   closeSidebar();
-  closeTrackRecord({ updateHistory: false });
-  closeEdgeBoard({ updateHistory: false });
-  closeWatchlistPage({ updateHistory: false });
-  closePersonalLedger({ updateHistory: false });
+  closeTrackRecord({ updateHistory: false, immediate: true });
+  closeEdgeBoard({ updateHistory: false, immediate: true });
+  closeWatchlistPage({ updateHistory: false, immediate: true });
+  closePersonalLedger({ updateHistory: false, immediate: true });
   closeSettingsModal();
   closeAuthModal();
   closeTradeModal();
   closeFeedback();
-  document.getElementById('appShell').classList.add('hidden-view');
-  document.getElementById('landingPage').classList.remove('hidden-view');
+
+  app.classList.add('hidden-view');
+  landing.classList.remove('hidden-view');
   document.body.style.overflow = 'auto';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (wasLandingAlreadyVisible) {
+    if (window.lenisInstance) {
+      window.lenisInstance.scrollTo(0, { duration: 0.8 });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  } else {
+    if (window.lenisInstance) {
+      window.lenisInstance.scrollTo(0, { immediate: true });
+    } else {
+      window.scrollTo(0, 0);
+    }
+    if (!_bootRouting && window.Motion && !prefersReduced()) {
+      Motion.animate(landing, { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
+        { duration: 0.45, easing: EASE });
+    }
+  }
+
   currentView = 'landing';
   startTransparencyAutoRefresh();
   if (updateHistory) setHistoryState('landing');
 }
 function launchApp({ updateHistory = true } = {}) {
+  document.documentElement?.removeAttribute?.('data-boot-view');
   const app = document.getElementById('appShell');
   document.getElementById('landingPage').classList.add('hidden-view');
   stopTransparencyAutoRefresh();
@@ -5658,7 +5690,7 @@ async function openTrackRecord({ updateHistory = true } = {}) {
   if (!trackLoaded) { trackLoaded = true; await loadTrackRecord(); }
   setTimeout(() => document.getElementById('trackCloseBtn')?.focus(), 0);
 }
-function closeTrackRecord({ updateHistory = true } = {}) {
+function closeTrackRecord({ updateHistory = true, immediate = false } = {}) {
   const ov = document.getElementById('trackOverlay');
   if (!ov.classList.contains('open')) return;
   const finish = () => {
@@ -5667,11 +5699,11 @@ function closeTrackRecord({ updateHistory = true } = {}) {
     ov.style.opacity = '';
     const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
     document.body.style.overflow = isAppVisible ? 'hidden' : 'auto';
-    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) {
+    if (!immediate && lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) {
       lastFocusedBeforeDialog.focus();
     }
   };
-  if (window.Motion && !prefersReduced()) {
+  if (!immediate && window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
 
@@ -6228,7 +6260,7 @@ function closeEdgeBoard({ updateHistory = true, immediate = false } = {}) {
     ov.style.opacity = '';
     const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
     document.body.style.overflow = isAppVisible ? 'hidden' : 'auto';
-    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
+    if (!immediate && lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
   };
   if (!immediate && window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
@@ -6315,7 +6347,7 @@ async function openWatchlistPage({ updateHistory = true } = {}) {
   _watchPriceTimer = setInterval(refreshWatchlist, 8000);
   setTimeout(() => document.getElementById('watchCloseBtn')?.focus(), 0);
 }
-function closeWatchlistPage({ updateHistory = true } = {}) {
+function closeWatchlistPage({ updateHistory = true, immediate = false } = {}) {
   if (document.body.classList.contains('standalone-watch')) { window.location.href = '/'; return; }
   clearInterval(_watchPriceTimer);
   _watchPriceTimer = null;
@@ -6327,9 +6359,9 @@ function closeWatchlistPage({ updateHistory = true } = {}) {
     ov.style.opacity = '';
     const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
     document.body.style.overflow = isAppVisible ? 'hidden' : 'auto';
-    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
+    if (!immediate && lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
   };
-  if (window.Motion && !prefersReduced()) {
+  if (!immediate && window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
 
@@ -6403,7 +6435,7 @@ async function openPersonalLedger({ updateHistory = true } = {}) {
   setTimeout(() => document.getElementById('ledgerCloseBtn')?.focus(), 0);
 }
 
-function closePersonalLedger({ updateHistory = true } = {}) {
+function closePersonalLedger({ updateHistory = true, immediate = false } = {}) {
   const ov = document.getElementById('ledgerOverlay');
   if (!ov.classList.contains('open')) return;
   const finish = () => {
@@ -6412,9 +6444,9 @@ function closePersonalLedger({ updateHistory = true } = {}) {
     ov.style.opacity = '';
     const isAppVisible = !document.getElementById('appShell').classList.contains('hidden-view');
     document.body.style.overflow = isAppVisible ? 'hidden' : 'auto';
-    if (lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
+    if (!immediate && lastFocusedBeforeDialog && document.contains(lastFocusedBeforeDialog)) lastFocusedBeforeDialog.focus();
   };
-  if (window.Motion && !prefersReduced()) {
+  if (!immediate && window.Motion && !prefersReduced()) {
     Motion.animate(ov, { opacity: [1, 0] }, { duration: 0.22, easing: EASE }).finished.then(finish);
   } else { finish(); }
 
@@ -8724,6 +8756,7 @@ function syncSidebarA11y() {
   sidebar.setAttribute('aria-hidden', isMobile && !sidebar.classList.contains('open') ? 'true' : 'false');
 }
 function applyHistoryState(state) {
+  document.documentElement?.removeAttribute?.('data-boot-view');
   isApplyingHistory = true;
   // Infer a route from the path when state is missing (e.g. a direct link or refresh).
   const legacyRoute = legacyRouteFromHash();
@@ -11909,6 +11942,7 @@ else newConversation({ updateHistory: false });
 _bootRouting = true;
 if (!_maybeStandaloneWatchlist()) applyHistoryState({ view: _initView, convId: _initConversationId, panel: _initPanel });
 _bootRouting = false;
+document.documentElement?.removeAttribute?.('data-boot-view');
 
 // ── Smooth scroll + entrance choreography ────────────────────────────────────
 (function initMotion() {
@@ -11917,6 +11951,7 @@ _bootRouting = false;
   // Lenis — buttery momentum scrolling on the landing/document
   if (window.Lenis) {
     const lenis = new Lenis({ lerp: 0.1, smoothWheel: true, wheelMultiplier: 1 });
+    window.lenisInstance = lenis;
     (function raf(t) { lenis.raf(t); requestAnimationFrame(raf); })();
   }
 
