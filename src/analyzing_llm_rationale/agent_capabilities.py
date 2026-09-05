@@ -312,6 +312,25 @@ def parse_action(text: str) -> Optional[Dict[str, Any]]:
     return _salvage_action(cleaned)
 
 
+def _coerce_answer_text(value: Any) -> str:
+    """A model's final answer as text, whatever shape it arrived in.
+
+    Providers do not reliably put a string in ``final``: a dict or list there
+    used to raise AttributeError on .strip(), which reached the board as an
+    unexplained 502 and discarded an otherwise complete cycle.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (dict, list)):
+        try:
+            return json.dumps(value, ensure_ascii=False).strip()
+        except (TypeError, ValueError):
+            return str(value).strip()
+    return str(value).strip()
+
+
 _CONTENT_FREE_ANSWERS = {
     "pass", "hold", "no action", "n/a", "none", "no trade", "no trades",
     "nothing", "skip", "wait",
@@ -471,7 +490,13 @@ async def run_tool_loop(
         out = await chat_fn(messages)
         action = parse_action(out)
         if action is not None and "final" in action:
-            answer = (action.get("final") or out or "").strip()
+            # `final` is not guaranteed to be a string. gemma-4-26b-a4b-it
+            # returned a nested object there, and calling .strip() on it
+            # raised AttributeError, which surfaced to the board as a bare
+            # 502 and cost the whole cycle. Serialise a structured final
+            # rather than crashing on it -- the content is still the model's
+            # answer, just not in prose form.
+            answer = _coerce_answer_text(action.get("final")) or _coerce_answer_text(out)
             # A bare verdict with no research behind it is not a decision.
             # Live: llama-3.3-70b-instruct returned "PASS" on turn 0 with zero
             # tool calls, in under a second, five times in two days. Downstream

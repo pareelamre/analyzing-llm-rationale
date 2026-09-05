@@ -535,6 +535,24 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["steps"], 0)
         self.assertIn("probability", res["answer"])
 
+    def test_a_structured_final_does_not_crash_the_loop(self):
+        # Live: gemma-4-26b-a4b-it returned an object in `final`. Calling
+        # .strip() on it raised AttributeError, which reached the board as a
+        # bare 502 and discarded the whole cycle.
+        async def chat_fn(messages):
+            return json.dumps({"final": {"action": "PASS", "reason": "no edge"}})
+
+        res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=3))
+        self.assertIn("PASS", res["answer"])
+        self.assertIn("no edge", res["answer"])
+
+    def test_answer_coercion_handles_every_shape(self):
+        self.assertEqual(ac._coerce_answer_text("  hi  "), "hi")
+        self.assertEqual(ac._coerce_answer_text(None), "")
+        self.assertIn("PASS", ac._coerce_answer_text({"action": "PASS"}))
+        self.assertIn("a", ac._coerce_answer_text(["a", "b"]))
+        self.assertEqual(ac._coerce_answer_text(42), "42")
+
     def test_bare_verdict_with_no_research_gets_one_chance_to_do_the_work(self):
         # Live: llama-3.3-70b-instruct returned "PASS" on turn 0 with zero tool
         # calls, in under a second, five times in two days -- and the board

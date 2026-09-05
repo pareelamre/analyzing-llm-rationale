@@ -742,6 +742,42 @@ class ServerTests(unittest.TestCase):
         self.assertIn("no bid/ask 0.50/0.53", observation)
         self.assertIn("at or above the ask", observation)
 
+    def test_token_quota_rejection_waits_for_the_window_to_roll_over(self):
+        # Live: glm-5-3, glm-5-3-flash and deepseek-v4-flash failed every cycle
+        # with "litellm.RateLimitError ... Limit type: tokens. Current limit:
+        # 10000". Each attempt was rejected in under a second, so exponential
+        # backoff from a 1.5s base reached only ~50s across six attempts and
+        # gave up just short of the one-minute reset.
+        from analyzing_llm_rationale.providers import RetryableProviderError
+
+        quota = RetryableProviderError(
+            "status=429 body={\"error\":{\"message\":\"litellm.RateLimitError: Rate "
+            "limit exceeded for model_per_key: abc:zai-org/GLM-5.3-Flash. "
+            "Limit type: tokens. Current limit: 10000, Remaining: 0\"}}",
+            status_code=429,
+        )
+        self.assertTrue(server_module._is_token_rate_limit(quota))
+        self.assertGreaterEqual(server_module._TOKEN_RATE_LIMIT_COOLDOWN_S, 60)
+
+    def test_a_request_rate_limit_is_not_treated_as_a_token_quota(self):
+        # A requests-per-minute limit clears quickly and must not trigger the
+        # full window wait.
+        from analyzing_llm_rationale.providers import RetryableProviderError
+
+        rpm = RetryableProviderError(
+            "status=429 body=Rate limit exceeded. Limit type: requests.",
+            status_code=429,
+        )
+        self.assertFalse(server_module._is_token_rate_limit(rpm))
+
+    def test_non_429_failures_are_not_treated_as_a_token_quota(self):
+        from analyzing_llm_rationale.providers import RetryableProviderError
+
+        server_error = RetryableProviderError(
+            "status=503 body=Limit type: tokens", status_code=503,
+        )
+        self.assertFalse(server_module._is_token_rate_limit(server_error))
+
     def test_provider_timeout_is_reported_as_a_timeout_not_an_outage(self):
         # Live incident: agent-trading ticks reported "upstream provider is
         # unavailable" for deepseek-v4-flash and glm-5-3-flash, which SCADS'
