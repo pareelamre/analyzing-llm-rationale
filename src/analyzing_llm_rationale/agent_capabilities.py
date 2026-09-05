@@ -48,6 +48,64 @@ def builtin_skills() -> List[Dict[str, str]]:
 
 
 # ── 2. Track-record self-grounding ────────────────────────────────────────────
+def _disagreement_skill_notes(by_edge: Any) -> List[str]:
+    """What this fleet's disagreements with the market have actually been worth.
+
+    This is the single most decision-relevant fact an agent has, and it is not
+    encouraging: realized skill degrades monotonically with the size of the
+    disagreement. Measured over 2,710 resolutions --
+
+        0-5pp    n=2515  accuracy 84.0%  skill -0.0001  (level with the market)
+        5-10pp   n=  63  accuracy 71.4%  skill -0.021
+        10-20pp  n=  38  accuracy 44.7%  skill -0.148
+        20pp+    n=  94  accuracy 26.6%  skill -0.415
+
+    -- every disagreement bucket is worse than simply taking the price, and
+    the 20pp+ bucket is worse than a coin flip. The fee, spread and
+    minimum-net-edge stack means a tradeable position needs a ~6pp divergence
+    to clear, which lands squarely in the region where this record says we
+    lose. An agent that knows this can weigh a big disagreement as the warning
+    it is, rather than as the opportunity it looks like.
+    """
+    rows = [
+        b for b in (by_edge or [])
+        if isinstance(b, dict)
+        and isinstance(b.get("accuracy"), (int, float))
+        and (b.get("n") or 0) >= _MIN_CALIBRATION_BIN_N
+        and str(b.get("edge_bucket") or "").strip()
+    ]
+    if not rows:
+        return []
+    # Widest disagreement first: that is the bucket an agent is most likely to
+    # think it has found something in.
+    def _floor_pp(bucket: str) -> float:
+        digits = re.findall(r"\d+", bucket)
+        return float(digits[0]) if digits else 0.0
+
+    rows.sort(key=lambda b: _floor_pp(str(b["edge_bucket"])), reverse=True)
+    worst = rows[0]
+    parts = ", ".join(
+        "%s: %.0f%% right (n=%d)" % (b["edge_bucket"], 100 * b["accuracy"], b["n"])
+        for b in rows
+    )
+    note = (
+        f"- Your own disagreements, by size, over {sum(b['n'] for b in rows)} resolved "
+        f"forecasts -- {parts}. Accuracy falls as the gap widens"
+    )
+    skill = worst.get("skill_vs_market")
+    if isinstance(skill, (int, float)) and skill < 0:
+        note += (
+            f", and in the {worst['edge_bucket']} bucket you have trailed the market "
+            f"price by {abs(skill):.3f} Brier"
+        )
+    note += (
+        ". A wide gap is the strongest available signal that you are wrong, not that "
+        "the crowd is. Treat it as a reason to re-examine your read, and require "
+        "verified primary-source proof before acting on one."
+    )
+    return [note]
+
+
 def _calibration_bias_notes(bins: Any) -> List[str]:
     """Self-calibration lines derived from resolved bins, not asserted.
 
@@ -120,11 +178,13 @@ def build_grounding_note(aggregate: Optional[Dict[str, Any]]) -> str:
     if cal.get("applied"):
         parts.append(f"- Calibration: raw ECE {cal.get('raw_ece')}, model is miscalibrated; "
                      "adjust extreme probabilities toward the calibrated mapping.")
-    # The figure this replaced -- "disagreements >20pp have a 73.4% error rate"
-    # -- was stated to every model as measured fact but had no traceable source
-    # in this repo or anywhere else. These numbers come from Kalshi Research,
-    # "Calibration in Prediction Markets", which measures the full resolved
-    # history of the venue (2,243,741 markets, 2021 to mid-2026).
+    # Correction: the figure removed here in #411 -- "disagreements >20pp have
+    # a 73.4% error rate" -- was NOT unsourced. It is this fleet's own 20pp+
+    # by_edge bucket, whose accuracy is 26.6% on n=94, i.e. exactly a 73.4%
+    # error rate. It was dropped after searching for the literal string rather
+    # than checking whether the number reproduced from our own record. The
+    # live version is restored below, derived per-cycle so it cannot go stale.
+    parts.extend(_disagreement_skill_notes(aggregate.get("by_edge")))
     parts.append("- Discrepancy Discipline: Kalshi's resolved history (2,243,741 markets) shows prices "
                  "behaving like genuine probabilities -- Brier about 0.02 at close, and calibration improving "
                  "monotonically with volume at every horizon. A large disagreement with a liquid, "
