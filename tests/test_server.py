@@ -538,6 +538,36 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(payload["model_key"], "council")
         self.assertEqual(len(self.provider.calls), 1)
 
+    def test_predict_council_uses_top_three_models_by_default(self):
+        allowlist = {
+            "gemma-4-26b-a4b-it": "google/gemma-4-26B-A4B-it",
+            "gpt-oss-120b": "openai/gpt-oss-120b",
+            "qwen3-8-27b": "Qwen/Qwen3.8-27B",
+            "other-model-1": "other/1",
+            "other-model-2": "other/2",
+        }
+        called = set()
+
+        def fake_provider(label):
+            called.add(label)
+            return FakeProvider()
+
+        with (
+            mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", allowlist),
+            mock.patch.object(server_module, "_council_provider", side_effect=fake_provider),
+        ):
+            response = self.client.post(
+                "/predict",
+                json={
+                    "question": "Will the Fed cut rates?",
+                    "model": "council",
+                    "attach_evidence": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(called, {"gemma-4-26b-a4b-it", "gpt-oss-120b", "qwen3-8-27b"})
+
     def test_predict_stream_council_uses_council_orchestration(self):
         with mock.patch.object(server_module, "_SCADS_MODEL_ALLOWLIST", {"test-model": {}}):
             response = self.client.post(
