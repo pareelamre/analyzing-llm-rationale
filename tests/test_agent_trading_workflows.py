@@ -119,15 +119,33 @@ class AgentTradingPerModelWorkflowTests(unittest.TestCase):
         scheduled_models = [model for lane in configured for model in lane.split()]
         self.assertCountEqual(scheduled_models, _chat_capable_models())
 
-    def test_board_publisher_owns_the_agent_schedule_and_waits_before_publish(self):
+    def test_agent_cycles_have_exactly_one_trigger_and_publish_still_waits(self):
+        # Agent cycles are dispatched only by the Cloud Scheduler job
+        # foresea-tick-agent-trading. GitHub cron drops runs under load (three
+        # consecutive slots missed on 2026-09-05) and, run alongside the
+        # scheduler, produced four agent starts an hour 12-18 minutes apart
+        # against ticks taking 20-40 -- which is how queued cycles were being
+        # evicted. The 27,57 aggregation refresh stays on cron: it starts no
+        # trading pass and sits in its own concurrency group.
         text = _BOARD_PUBLISH_PATH.read_text(encoding="utf-8")
-        self.assertIn('cron: "12,42 * * * *"', text)
+        self.assertNotIn('cron: "12,42 * * * *"', text)
         self.assertIn('cron: "27,57 * * * *"', text)
-        self.assertIn("github.event.schedule == '12,42 * * * *'", text)
+        self.assertNotIn("github.event.schedule == '12,42 * * * *'", text)
         self.assertIn("uses: ./.github/workflows/agent-trading-tick.yml", text)
         self.assertIn("needs: [agent-tick]", text)
         self.assertIn("if: ${{ always() }}", text)
         self.assertIn("run_agent_tick:", text)
+
+    def test_no_schedule_can_start_a_trading_pass(self):
+        # The gate must admit only workflow_dispatch. If a schedule could ever
+        # satisfy it again, the duplicate-trigger pileup returns silently.
+        import yaml
+
+        parsed = yaml.safe_load(_BOARD_PUBLISH_PATH.read_text(encoding="utf-8"))
+        gate = " ".join(str(parsed["jobs"]["agent-tick"]["if"]).split())
+        self.assertIn("workflow_dispatch", gate)
+        self.assertIn("run_agent_tick", gate)
+        self.assertNotIn("schedule", gate)
 
     def test_publish_only_refreshes_cannot_evict_a_queued_agent_cycle(self):
         # GitHub keeps only ONE pending member per concurrency group, so a
