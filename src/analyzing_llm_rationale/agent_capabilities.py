@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Tuple
 
 # ── 1. Built-in forecasting skills ────────────────────────────────────────────
 # (name, instruction) — run through the same path as user-defined skills.
@@ -448,6 +448,18 @@ def _estimate_message_tokens(messages: List[Dict[str, str]]) -> int:
     return sum(len(str(m.get("content") or "")) for m in messages) // 4
 
 
+def _missing_sections(answer: str, required: Sequence[str]) -> List[str]:
+    """Which required section headings a final thesis failed to include.
+
+    Matched case-insensitively on the heading text alone, so a model that
+    writes "### 1. Decision and Execution" or drops the number still counts as
+    having the section. The point is to catch an answer that ignored the
+    template outright, not to police punctuation.
+    """
+    text = (answer or "").lower()
+    return [name for name in required if name.lower() not in text]
+
+
 def _coerce_answer_text(value: Any) -> str:
     """A model's final answer as text, whatever shape it arrived in.
 
@@ -588,6 +600,7 @@ async def run_tool_loop(
     on_step: Optional[OnStep] = None,
     on_step_start: Optional[OnStep] = None,
     retry_unusable_final: bool = False,
+    required_final_sections: Optional[Sequence[str]] = None,
     token_budget: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Drive the ReAct loop. Returns {answer, transcript, steps, truncated}.
@@ -630,6 +643,7 @@ async def run_tool_loop(
     )
     substantive_retry_used = False
     unusable_retry_used = False
+    structure_retry_used = False
     # Why a cycle stopped is not recoverable from `steps`/`truncated` alone:
     # a budget stop and an out-of-steps stop both report steps=max_steps and
     # truncated=True, which made a shallow cycle indistinguishable from a
@@ -680,6 +694,33 @@ async def run_tool_loop(
                 substantive_retry_used = True
                 messages.append({"role": "assistant", "content": out})
                 messages.append({"role": "user", "content": substantive_hint})
+                continue
+            # The required sections are how everything downstream reads a
+            # thesis: the action, the market, and the model-vs-market
+            # probabilities are all pulled out of them by regex. A model that
+            # answers with its deliberation instead -- "Let me reconsider...
+            # Hmm, but actually... Wait" -- publishes a wall of text whose
+            # decision cannot be scored, which is why five of six agents in a
+            # recent tick recorded forecasts=0 while all of them believed they
+            # had reported one. Ask once for the structure it was given.
+            if (
+                required_final_sections
+                and not structure_retry_used
+                and _missing_sections(answer, required_final_sections)
+                and step < max_steps - 1
+            ):
+                structure_retry_used = True
+                missing = _missing_sections(answer, required_final_sections)
+                messages.append({"role": "assistant", "content": out})
+                messages.append({"role": "user", "content": (
+                    "That answer is missing the required section"
+                    f"{'s' if len(missing) > 1 else ''}: {', '.join(missing)}. "
+                    "Reply with the final thesis in the mandated template only -- "
+                    "the section headings and their fields, nothing before or "
+                    "after. Keep your deliberation out of it: report the "
+                    "conclusion you reached, not the reasoning that got you "
+                    "there."
+                )})
                 continue
             return {"answer": answer, "transcript": transcript,
                     "steps": step, "truncated": False}

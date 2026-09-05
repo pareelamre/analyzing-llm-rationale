@@ -959,5 +959,75 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["steps"], 0)
 
 
+class ThesisTemplateConformanceTests(unittest.TestCase):
+    RAMBLE = (
+        "Let me reconsider. I need to decide what to do this cycle. I have a NO "
+        "position on the Fed no-change market. My model P(no-change) = 35%, so NO "
+        "fair value ~65%, market NO ask 0.51 -> edge ~14-15pp. "
+        "Hmm, but actually -- is the market really stale? Let me think about what "
+        "the market might know. Wait, but should I add? Let me check recent trades "
+        "to see if there's"
+    )
+
+    def _loop(self, first_answer, **kw):
+        nl = chr(10)
+        conforming = json.dumps({"final": nl.join([
+            "### 0. Research Delta",
+            "- Strategy: EVIDENCE_EDGE",
+            "### 1. Decision & Execution",
+            "- Action: HOLD",
+            "### 3. Model Edge & Valuation",
+            "- Model Probability: 35% vs Market Price: 50%",
+        ])})
+        turns = iter([
+            '{"thought":"look","action":"web_search","args":{"q":"fed"}}',
+            '{"final": %s}' % json.dumps(first_answer),
+            conforming,
+        ])
+
+        async def web_search(_a):
+            return "3 sources"
+
+        async def chat_fn(_m):
+            try:
+                return next(turns)
+            except StopIteration:
+                return conforming
+
+        return asyncio.run(ac.run_tool_loop(
+            "q", {"web_search": web_search},
+            [{"name": "web_search", "description": "d"}], chat_fn, max_steps=6, **kw))
+
+    def test_deliberation_instead_of_the_template_is_sent_back(self):
+        # Live: an agent answered with its own reasoning -- "Let me reconsider...
+        # Hmm, but actually... Wait, but should I add?" -- and the harness
+        # published it. Nothing downstream could read an action or a probability
+        # out of it, which is how a tick recorded forecasts=0 for five of six
+        # agents that each believed they had reported one.
+        res = self._loop(self.RAMBLE, required_final_sections=(
+            "Research Delta", "Decision & Execution", "Model Edge"))
+        self.assertIn("### 1. Decision & Execution", res["answer"])
+        self.assertNotIn("Let me reconsider", res["answer"])
+
+    def test_a_conforming_thesis_is_accepted_first_time(self):
+        good = ("### 0. Research Delta\n- Strategy: EVIDENCE_EDGE\n"
+                "### 1. Decision & Execution\n- Action: PASS\n"
+                "### 3. Model Edge & Valuation\n- Model Probability: 35%")
+        res = self._loop(good, required_final_sections=(
+            "Research Delta", "Decision & Execution", "Model Edge"))
+        self.assertEqual(res["answer"], good)
+
+    def test_without_the_opt_in_nothing_is_enforced(self):
+        # The generic forecasting loop has no template and must not be nagged.
+        res = self._loop(self.RAMBLE)
+        self.assertIn("Let me reconsider", res["answer"])
+
+    def test_missing_sections_are_named(self):
+        missing = ac._missing_sections(
+            "### 0. Research Delta\nonly this one",
+            ("Research Delta", "Decision & Execution", "Model Edge"))
+        self.assertEqual(missing, ["Decision & Execution", "Model Edge"])
+
+
 if __name__ == "__main__":
     unittest.main()

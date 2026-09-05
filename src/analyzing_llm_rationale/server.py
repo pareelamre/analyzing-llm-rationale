@@ -291,6 +291,16 @@ _AGENT_TOOL_PROVIDER_TIMEOUT_S = float(
 # unavailable provider, while SCADS listed the route up with tools enabled.
 # The council path already passes its own value here; the agent path passing
 # nothing was an omission, not a decision.
+# Headings the agent thesis template requires. Downstream parsing keys off
+# these, so an answer without them cannot be scored, published cleanly, or
+# turned into a forecast record -- five of six agents in one tick reported
+# forecasts=0 while each believed it had stated a probability.
+_AGENT_THESIS_SECTIONS = (
+    "Research Delta",
+    "Decision & Execution",
+    "Model Edge",
+)
+
 _AGENT_TOOL_PROVIDER_READ_TIMEOUT_S = float(
     os.environ.get("AGENT_TOOL_PROVIDER_READ_TIMEOUT_S", "600")
 )
@@ -15289,6 +15299,12 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             # agent-trading path that shape is a wasted cycle, so ask once
             # for a usable turn instead of accepting it.
             retry_unusable_final=bool(req.benchmark_tools),
+            # Only the agent-trading path publishes into the mandated
+            # thesis template, and only there does a free-form answer
+            # cost anything: the action, market and probabilities are
+            # all read back out of these headings by regex.
+            required_final_sections=(
+                _AGENT_THESIS_SECTIONS if req.benchmark_tools else None),
             token_budget=_AGENT_TOOL_TOKEN_BUDGET or None)
         # A budget stop cuts research short, so say so loudly. Silently it
         # looks identical to a model that simply finished early, which is
