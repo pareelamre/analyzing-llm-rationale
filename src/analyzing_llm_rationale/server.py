@@ -13486,15 +13486,19 @@ def _scads_alt_provider(
     if not scads_key:
         raise HTTPException(status_code=503, detail="Alternate models are not configured on this server.")
     from analyzing_llm_rationale.providers import OpenAICompatibleProvider
+    if request_timeout_s is None:
+        effective_timeout = (
+            _AGENT_TOOL_PROVIDER_READ_TIMEOUT_S
+            if label == "glm-5-3"
+            else float(os.environ.get("SCADS_REQUEST_TIMEOUT_S", "120.0"))
+        )
+    else:
+        effective_timeout = max(0.001, request_timeout_s)
     return OpenAICompatibleProvider(
         model_name=_SCADS_MODEL_ALLOWLIST[label],
         api_key=scads_key,
         base_url=_SCADS_BASE_URL,
-        request_timeout_s=(
-            max(0.001, request_timeout_s)
-            if request_timeout_s is not None
-            else 120.0
-        ),
+        request_timeout_s=effective_timeout,
     )
 
 

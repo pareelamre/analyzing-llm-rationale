@@ -443,6 +443,33 @@ class FailureClassificationTests(unittest.TestCase):
 
         self.assertGreater(server._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S, 120.0)
 
+    def test_glm_5_3_defaults_to_long_read_timeout_in_all_provider_selectors(self):
+        # PR #413 passed _AGENT_TOOL_PROVIDER_READ_TIMEOUT_S to _select_agent_provider,
+        # but when an agent calls its `forecast` tool, _tool_forecast delegates to
+        # predict(), which calls _select_predict_provider and _scads_alt_provider.
+        # If neither defaults glm-5-3 to the 600s timeout, the forecast tool call
+        # still dies at 120s.
+        import os
+        from unittest import mock
+
+        from analyzing_llm_rationale import server
+
+        with mock.patch.dict(os.environ, {"SCADS_AI_API_KEY": "test-key"}):
+            # 1. Direct _scads_alt_provider without request_timeout_s
+            provider = server._scads_alt_provider("glm-5-3")
+            self.assertIsNotNone(provider)
+            self.assertEqual(provider.request_timeout_s, server._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S)
+
+            # Other models retain standard default
+            fast_provider = server._scads_alt_provider("glm-5-3-flash")
+            self.assertIsNotNone(fast_provider)
+            self.assertEqual(fast_provider.request_timeout_s, 120.0)
+
+            # 2. _select_predict_provider for glm-5-3 (used inside _tool_forecast)
+            req = server.PredictRequest(question="Will X happen?", model="glm-5-3")
+            pred_provider, _, _ = server._select_predict_provider(req)
+            self.assertEqual(pred_provider.request_timeout_s, server._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S)
+
 
 class DecisionQualityInstructionTests(unittest.TestCase):
     def test_requires_fresh_evidence_for_new_risk_and_rule_window_checks(self):

@@ -118,5 +118,90 @@ class ReasoningEffortPayloadTests(unittest.TestCase):
                 self.assertEqual(payload["reasoning"], {"effort": "high"})
 
 
+class ProviderEmptyContentFallbackTests(unittest.TestCase):
+    def test_empty_content_with_reasoning_content_falls_back(self):
+        from unittest.mock import MagicMock
+
+
+        provider = OpenAICompatibleProvider(model_name="test-model", api_key="sk-test", base_url="https://llm.scads.ai/v1")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{"message": {"role": "assistant", "content": "", "reasoning_content": "Plan: buy yes"}}]
+        }
+        mock_session = MagicMock()
+        mock_session.post.return_value = mock_response
+        provider._session = mock_session
+
+        res = provider.chat_completion([{"role": "user", "content": "hi"}], 0.0, 100)
+        self.assertEqual(res, "Plan: buy yes")
+
+    def test_empty_content_with_tool_calls_falls_back(self):
+        import json
+        from unittest.mock import MagicMock
+
+
+        provider = OpenAICompatibleProvider(model_name="test-model", api_key="sk-test", base_url="https://llm.scads.ai/v1")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [{
+                        "id": "call_1",
+                        "function": {"name": "place_trade", "arguments": '{"side": "yes", "price": 0.5}'}
+                    }]
+                }
+            }]
+        }
+        mock_session = MagicMock()
+        mock_session.post.return_value = mock_response
+        provider._session = mock_session
+
+        res = provider.chat_completion([{"role": "user", "content": "hi"}], 0.0, 100)
+        data = json.loads(res)
+        self.assertEqual(data["action"], "place_trade")
+        self.assertEqual(data["args"]["side"], "yes")
+
+    def test_empty_content_with_no_fallback_raises_retryable(self):
+        from unittest.mock import MagicMock
+
+        from analyzing_llm_rationale import providers
+
+        provider = OpenAICompatibleProvider(model_name="test-model", api_key="sk-test", base_url="https://llm.scads.ai/v1")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{"message": {"role": "assistant", "content": "   "}}]
+        }
+        mock_session = MagicMock()
+        mock_session.post.return_value = mock_response
+        provider._session = mock_session
+
+        with self.assertRaises(providers.RetryableProviderError):
+            provider.chat_completion([{"role": "user", "content": "hi"}], 0.0, 100)
+
+    def test_stream_chat_completion_with_reasoning_content(self):
+        from unittest.mock import MagicMock
+
+
+        provider = OpenAICompatibleProvider(model_name="test-model", api_key="sk-test", base_url="https://llm.scads.ai/v1")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.iter_lines.return_value = [
+            'data: {"choices": [{"delta": {"reasoning_content": "thinking"}}]}',
+            'data: [DONE]'
+        ]
+        mock_session = MagicMock()
+        mock_session.post.return_value = mock_response
+        provider._session = mock_session
+
+        chunks = list(provider.stream_chat_completion([{"role": "user", "content": "hi"}], 0.0, 100))
+        self.assertEqual(chunks, ["thinking"])
+
+
 if __name__ == "__main__":
     unittest.main()
+
