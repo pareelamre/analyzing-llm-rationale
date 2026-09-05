@@ -6268,8 +6268,19 @@ async function loadEdgeBoard() {
   const host = document.getElementById('edgeBody');
   host.innerHTML = '<div class="tr-inner"><p class="text-sm text-gray-500">Loading edge board…</p></div>';
   try {
-    const r = await _liveJsonFetch('/edge-board');
-    if (!r.ok) throw new Error('unavailable');
+    // Retry a transient failure before giving up. A deploy cycles the
+    // revision, and a request caught in that window fails once and then
+    // succeeds -- but the catch below dead-ends on the first error and asks
+    // the reader to click Retry, which is the state people actually report.
+    let r = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise(res => setTimeout(res, 400 * attempt));
+      try {
+        r = await _liveJsonFetch('/edge-board');
+        if (r.ok) break;
+      } catch (_) { r = null; }
+    }
+    if (!r || !r.ok) throw new Error('unavailable');
     host.innerHTML = renderEdgeBoard(await _readJson(r));
     _attachEdgeBoardChartHovers(host);
     // Deep link / refresh straight into the Agentic panel: renderEdgeBoard() only

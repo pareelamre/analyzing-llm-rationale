@@ -538,6 +538,46 @@ class ModelBackstopCharsTests(unittest.TestCase):
         self.assertEqual(agent_trading_tick._model_backstop_chars("not-a-real-model"), int(128000 * 4 * 0.5))
 
 
+class DeclaredThesisProbabilityTests(unittest.TestCase):
+    def test_parses_a_probability_line_with_a_qualifier_before_vs(self):
+        # Verbatim from deepseek-v4-flash: a complete, correctly stated figure
+        # that the old pattern rejected because "(no-change)" sat between the
+        # percentage and "vs". Reconciliation then refused the trade for having
+        # no calibrated P(YES), so a researched, decided position was never
+        # opened and the agent showed zero positions.
+        thesis = chr(10).join([
+            "### 1. Decision & Execution",
+            "- **Action**: BUY NO",
+            "- **Market & Venue**: will-there-be-no-change-615 on Polymarket",
+            "- **Order Sizing**: Quarter Kelly 5% cap, quantity derived by tool.",
+            "- **Model Probability**: 40% (no-change) vs **Market Price**: 48.5%"
+            " mid / 52% NO ask (Edge: ~+8.5pp vs mid).",
+        ])
+        declared = agent_trading_tick._declared_thesis_execution(thesis)
+        self.assertIsNotNone(declared)
+        self.assertEqual(declared["action"], "BUY NO")
+        self.assertEqual(declared["model_probability"], 0.4)
+        self.assertEqual(declared["sizing_mode"], "quarter_kelly")
+
+    def test_parses_the_plain_form_without_a_qualifier(self):
+        thesis = chr(10).join([
+            "- **Action**: BUY YES",
+            "- **Market & Venue**: KXTEST on Kalshi",
+            "- **Order Sizing**: Edge Kelly",
+            "- **Model Probability**: 62% vs **Market Price**: 50%",
+        ])
+        declared = agent_trading_tick._declared_thesis_execution(thesis)
+        self.assertEqual(declared["model_probability"], 0.62)
+        self.assertEqual(declared["sizing_mode"], "edge_kelly")
+
+    def test_loose_fallback_tolerates_markdown_and_approximation(self):
+        for text in ("**P(YES)**: ~37%", "calibrated P(YES) of 37%", "model probability: 37%"):
+            with self.subTest(text=text):
+                match = agent_trading_tick._LOOSE_MODEL_PROBABILITY_RE.search(text)
+                self.assertIsNotNone(match, text)
+                self.assertEqual(match.group(1), "37")
+
+
 class EventMeritGateTests(unittest.TestCase):
     def test_prompt_requires_event_merit_not_just_a_price_gap(self):
         # llama-3.3-70b-instruct traded 90 times on 19,802 of notional for a
