@@ -471,7 +471,8 @@ async def run_tool_loop(
         out = await chat_fn(messages)
         action = parse_action(out)
         if action is not None and "final" in action:
-            answer = (action.get("final") or out or "").strip()
+            _final = action.get("final")
+            answer = ((_final if isinstance(_final, str) else None) or out or "").strip()
             # A bare verdict with no research behind it is not a decision.
             # Live: llama-3.3-70b-instruct returned "PASS" on turn 0 with zero
             # tool calls, in under a second, five times in two days. Downstream

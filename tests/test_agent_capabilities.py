@@ -692,6 +692,19 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["answer"], "no tools needed")
         self.assertEqual(res["steps"], 0)
 
+    def test_dict_valued_final_falls_back_to_raw_model_output(self):
+        # Live incident: gemma-4-26b-a4b-it returned {"final": {"answer": "PASS"}}
+        # instead of {"final": "PASS"}, causing AttributeError on .strip().
+        # The raw model output is used as the answer instead.
+        raw = '{"thought": "done", "final": {"answer": "PASS", "reason": "no edge"}}'
+
+        async def chat_fn(messages):
+            return raw
+
+        res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=5))
+        self.assertEqual(res["answer"], raw.strip())
+        self.assertEqual(res["steps"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
