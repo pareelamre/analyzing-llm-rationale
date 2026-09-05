@@ -129,6 +129,25 @@ class AgentTradingPerModelWorkflowTests(unittest.TestCase):
         self.assertIn("if: ${{ always() }}", text)
         self.assertIn("run_agent_tick:", text)
 
+    def test_publish_only_refreshes_cannot_evict_a_queued_agent_cycle(self):
+        # GitHub keeps only ONE pending member per concurrency group, so a
+        # third run arriving cancels the queued one. Agent cycles (12,42) and
+        # publish-only refreshes (27,57) shared a group, giving four entrants
+        # an hour against a tick that runs 20-40 minutes -- so a refresh that
+        # does no agent work at all routinely cancelled a queued cycle. Two
+        # manual ticks were lost to this. Keep the two paths in separate
+        # queues.
+        import yaml
+
+        parsed = yaml.safe_load(_BOARD_PUBLISH_PATH.read_text(encoding="utf-8"))
+        group = " ".join(str(parsed["concurrency"]["group"]).split())
+        self.assertIn("27,57 * * * *", group)
+        self.assertIn("aggregate", group)
+        self.assertIn("agent", group)
+        # Never trade eviction for pre-emption: an in-flight cycle placing
+        # paper orders must not be killed by the next scheduled run.
+        self.assertFalse(parsed["concurrency"]["cancel-in-progress"])
+
     def test_non_core_legacy_workflows_are_manual_only(self):
         for name in ("pr-agent-outreach.yml", "trading-reconcile.yml"):
             text = (_WORKFLOWS_DIR / name).read_text(encoding="utf-8")

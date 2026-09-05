@@ -32,7 +32,19 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: agent-trading-board-publish
+  # GitHub keeps only ONE pending member per concurrency group: a third run
+  # arriving while one is in flight and one is queued silently CANCELS the
+  # queued one. Four runs an hour entered this group -- agent cycles at 12,42
+  # and publish-only refreshes at 27,57 -- against a tick that takes 20-40
+  # minutes, so queued agent cycles were routinely evicted by a refresh that
+  # does no agent work at all (see the `if:` on agent-tick below, which skips
+  # it for the 27,57 schedule). Two manual ticks were lost this way before the
+  # cause was found. Publishing touches no provider slot, so it does not
+  # belong in the same queue as the cycle it would displace.
+  group: >-
+    agent-trading-board-publish-${{
+      (github.event_name == 'schedule' && github.event.schedule == '27,57 * * * *')
+      && 'aggregate' || 'agent' }}
   cancel-in-progress: false
 
 jobs:
