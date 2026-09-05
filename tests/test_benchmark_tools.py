@@ -1061,6 +1061,92 @@ class BenchmarkToolTests(unittest.TestCase):
         # A recorded rejection, not a bare ValueError leaving no board trace.
         self.assertIn("1.00", result["message"])
 
+    def test_a_shadow_fill_is_capped_by_real_book_depth(self):
+        # A shadow fill used to return the full requested quantity whenever
+        # the limit crossed the ask, never consulting the book. One live order
+        # was Kelly-sized to 6,056 contracts on a market whose best level held
+        # 137, and the simulator would have booked all 6,056 at the top price.
+        # For a paper score that is cosmetic; for a simulation meant to stand
+        # in for real execution it flatters every strategy, and most in the
+        # thinnest markets -- the ones Kelly sizing pushes hardest into.
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    return_value={"yes_bid": 0.07, "yes_ask": 0.08},
+                ),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi_orderbook",
+                    return_value={"orderbook_fp": {
+                        # Buying YES crosses the resting NO bids: 0.92 pairs
+                        # with a 0.08 YES ask, and only 137 rest there.
+                        "no_dollars": [["0.9200", "137.00"]],
+                        "yes_dollars": [["0.0700", "24.00"]],
+                    }},
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXTHIN", "side": "yes", "price": 0.08,
+                     "quantity": 300}, ctx)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["execution"]["filled_quantity"], 137.0)
+        self.assertEqual(result["execution"]["fill_status"], "shadow_filled_partial")
+
+    def test_an_orderbook_outage_is_unknown_depth_not_an_empty_book(self):
+        # Failing closed here would let a venue blip silently zero every fill,
+        # which is a worse distortion than the one being fixed.
+        ctx = benchmark_tools.ToolContext(agent_id="model-a")
+
+        with tempfile.TemporaryDirectory() as td:
+            env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+            }
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    return_value={"yes_bid": 0.07, "yes_ask": 0.08},
+                ),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi_orderbook",
+                    side_effect=market_data.MarketDataError("book unavailable"),
+                ),
+            ):
+                result = benchmark_tools.place_trade(
+                    {"ticker": "KXTHIN", "side": "yes", "price": 0.08,
+                     "quantity": 50}, ctx)
+
+        self.assertEqual(result["execution"]["filled_quantity"], 50.0)
+        self.assertEqual(result["execution"]["fill_status"], "shadow_assumed_full")
+
+    def test_depth_crosses_the_opposite_side_of_the_book(self):
+        # Verified live: 1 - best_no_bid reproduced yes_ask exactly, so YES
+        # depth at limit p is the NO quantity resting at 1 - p or better.
+        # Reading the same side would invert the whole model.
+        book = {"orderbook_fp": {
+            "no_dollars": [["0.9200", "137.00"], ["0.9500", "10.00"]],
+            "yes_dollars": [["0.0700", "24.00"]],
+        }}
+        with mock.patch(
+            "analyzing_llm_rationale.market_data.fetch_kalshi_orderbook",
+            return_value=book,
+        ):
+            # Buying YES at 0.08 hits NO bids at 0.92 and better.
+            self.assertEqual(benchmark_tools._available_depth("KX", "yes", 0.08), 147.0)
+            # At 0.05 nothing crosses: it would need a NO bid at 0.95+.
+            self.assertEqual(benchmark_tools._available_depth("KX", "yes", 0.05), 10.0)
+            # Buying NO at 0.93 hits the YES bid at 0.07.
+            self.assertEqual(benchmark_tools._available_depth("KX", "no", 0.93), 24.0)
+
     def test_a_pre_sizing_rejection_still_leaves_an_audit_row(self):
         # Guard rejections already wrote a rejected_trade row; the returns
         # that fire before sizing did not. Live: gpt-oss-120b published
@@ -1134,7 +1220,6 @@ class BenchmarkToolTests(unittest.TestCase):
 
         self.assertEqual(result["reason"], "no_executable_price")
         self.assertFalse(result["submitted"])
-
     def test_place_trade_does_not_fill_when_no_live_quote_is_available(self):
         # Regression: _resolve_shadow_marketability used to trust the
         # caller's price outright when a live quote couldn't be fetched,
