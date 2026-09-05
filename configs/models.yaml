@@ -24,6 +24,8 @@ models:
     provider: openai-compatible
     local_model_name: meta-llama/Llama-3.3-70B-Instruct
     router_model_name: meta-llama/Llama-3.3-70B-Instruct
+    # Context window published by SCADS' status probe (verified 2026-09-05).
+    context_window_tokens: 65536
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -160,6 +162,8 @@ models:
     provider: openai-compatible
     local_model_name: Qwen/Qwen3.8-27B
     router_model_name: Qwen/Qwen3.8-27B
+    # Context window published by SCADS' status probe (verified 2026-09-05).
+    context_window_tokens: 262144
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -174,6 +178,8 @@ models:
     provider: openai-compatible
     local_model_name: MiniMaxAI/MiniMax-M3
     router_model_name: MiniMaxAI/MiniMax-M3
+    # Context window published by SCADS' status probe (verified 2026-09-05).
+    context_window_tokens: 524288
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -236,6 +242,8 @@ models:
     provider: openai-compatible
     local_model_name: zai-org/GLM-5.3-Flash
     router_model_name: zai-org/GLM-5.3-Flash
+    # Context window published by SCADS' status probe (verified 2026-09-05).
+    context_window_tokens: 1048576
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -252,6 +260,8 @@ models:
     provider: openai-compatible
     local_model_name: deepseek-ai/DeepSeek-V4-Flash
     router_model_name: deepseek-ai/DeepSeek-V4-Flash
+    # Context window published by SCADS' status probe (verified 2026-09-05).
+    context_window_tokens: 1048576
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -296,6 +306,8 @@ models:
     provider: openai-compatible
     local_model_name: openai/gpt-oss-120b
     router_model_name: openai/gpt-oss-120b
+    # Context window published by SCADS' status probe (verified 2026-09-05).
+    context_window_tokens: 131072
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
@@ -308,6 +320,8 @@ models:
     provider: openai-compatible
     local_model_name: google/gemma-4-26B-A4B-it
     router_model_name: google/gemma-4-26B-A4B-it
+    # Context window published by SCADS' status probe (verified 2026-09-05).
+    context_window_tokens: 262144
     api_base_url: https://llm.scads.ai/v1/chat/completions
     api_key_env_var: SCADS_AI_API_KEY
     api_key_file: SCADS_AI_API_KEY.txt
