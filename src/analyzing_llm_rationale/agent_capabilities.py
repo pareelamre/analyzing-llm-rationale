@@ -432,6 +432,7 @@ async def run_tool_loop(
     extra_rules: str = "",
     on_step: Optional[OnStep] = None,
     on_step_start: Optional[OnStep] = None,
+    retry_unusable_final: bool = False,
 ) -> Dict[str, Any]:
     """Drive the ReAct loop. Returns {answer, transcript, steps, truncated}.
 
@@ -465,6 +466,7 @@ async def run_tool_loop(
         "it. If the answer really is no action, say why."
     )
     substantive_retry_used = False
+    unusable_retry_used = False
     for step in range(max_steps):
         out = await chat_fn(messages)
         action = parse_action(out)
@@ -505,6 +507,21 @@ async def run_tool_loop(
             # answers directly with structured fields instead of {"final":
             # ...}) -- treat as a final answer as before; a caller-side
             # deterministic backstop may still extract structure from it.
+            #
+            # Callers with no such backstop opt into a retry instead. On the
+            # agent-trading path this shape is simply a wasted cycle: the
+            # board renders "completed a research pass but did not return a
+            # publishable final thesis", which is what gemma-4-26b-a4b-it and
+            # gpt-oss-120b both produced at step 0 with no tool calls.
+            if (
+                retry_unusable_final
+                and not unusable_retry_used
+                and step < max_steps - 1
+            ):
+                unusable_retry_used = True
+                messages.append({"role": "assistant", "content": out})
+                messages.append({"role": "user", "content": reformat_hint})
+                continue
             return {"answer": (out or "").strip(), "transcript": transcript,
                     "steps": step, "truncated": False}
         name = str(action.get("action", ""))

@@ -502,6 +502,39 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["answer"], "no tools needed")
         self.assertEqual(seen, [])
 
+    def test_keyless_json_is_retried_when_the_caller_has_no_backstop(self):
+        # Live: gemma-4-26b-a4b-it and gpt-oss-120b both ended at step 0 with
+        # valid JSON that was neither an action nor a final, and the board
+        # rendered "completed a research pass but did not return a publishable
+        # final thesis". The agent-trading path has no forecast backstop to
+        # salvage that shape, so ask once for a usable turn.
+        turns = iter([
+            '{"query": "fed rates", "topn": 5}',
+            '{"final": "PASS - market fairly priced, my 47% vs 48%."}',
+        ])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {}, [], chat_fn, max_steps=5, retry_unusable_final=True))
+        self.assertIn("fairly priced", res["answer"])
+
+    def test_keyless_json_is_still_accepted_when_a_backstop_exists(self):
+        # Default behaviour is unchanged: /agent/analyze without benchmark
+        # tools relies on the deterministic forecast backstop to extract
+        # structure from exactly this shape.
+        calls = []
+
+        async def chat_fn(messages):
+            calls.append(1)
+            return '{"probability": 0.7, "rationale": "because"}'
+
+        res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=5))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(res["steps"], 0)
+        self.assertIn("probability", res["answer"])
+
     def test_bare_verdict_with_no_research_gets_one_chance_to_do_the_work(self):
         # Live: llama-3.3-70b-instruct returned "PASS" on turn 0 with zero tool
         # calls, in under a second, five times in two days -- and the board
