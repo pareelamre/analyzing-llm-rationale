@@ -296,6 +296,24 @@ class OpenAICompatibleProvider(ChatProvider):
             raise RetryableProviderError(f"Malformed provider response: {exc}") from exc
         content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, str) or not content.strip():
+            for alt_key in ("reasoning_content", "reasoning", "thought"):
+                alt_val = message.get(alt_key) if isinstance(message, dict) else None
+                if isinstance(alt_val, str) and alt_val.strip():
+                    content = alt_val
+                    break
+        if not isinstance(content, str) or not content.strip():
+            tool_calls = message.get("tool_calls") if isinstance(message, dict) else None
+            if isinstance(tool_calls, list) and tool_calls:
+                first_call = tool_calls[0] if isinstance(tool_calls[0], dict) else {}
+                fn = first_call.get("function", {}) if isinstance(first_call, dict) else {}
+                fn_name = fn.get("name", "")
+                fn_args = fn.get("arguments", "{}")
+                try:
+                    parsed_args = json.loads(fn_args) if isinstance(fn_args, str) else (fn_args or {})
+                except Exception:
+                    parsed_args = {"raw": fn_args}
+                content = json.dumps({"thought": "Calling tool", "action": fn_name, "args": parsed_args})
+        if not isinstance(content, str) or not content.strip():
             raise RetryableProviderError("Malformed provider response: empty message content")
         return content
 
@@ -344,9 +362,11 @@ class OpenAICompatibleProvider(ChatProvider):
                 choice = (obj.get("choices") or [{}])[0]
                 delta = choice.get("delta") or {}
                 text = delta.get("content")
+                if not text:
+                    text = delta.get("reasoning_content") or delta.get("reasoning")
                 if text is None:
                     message = choice.get("message") or {}
-                    text = message.get("content")
+                    text = message.get("content") or message.get("reasoning_content") or message.get("reasoning")
             except (AttributeError, IndexError, TypeError, ValueError) as exc:
                 raise ProviderResponseError(f"Malformed provider stream: {exc}") from exc
             if text:
