@@ -49,8 +49,14 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- motion@10.18.0 ships no dist/motion.js; that URL 404s, so window.Motion
        was undefined on every page load and every unguarded Motion.* call threw
-       mid-transition. dist/motion.umd.js is the build that defines the global. -->
-  <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.umd.js"></script>
+       mid-transition. dist/motion.umd.js is the build that defines the global.
+       `defer` matters: this is 95KB, and as a blocking <head> script it delayed
+       first paint on every page -- previously invisible only because the 404
+       returned 59 bytes instantly. Animation is progressive enhancement, so it
+       must never sit on the critical path. The stand-in below covers the gap
+       until it lands; the UMD then assigns `global.Motion = {}` unconditionally,
+       replacing the stand-in so interaction animations work normally. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.umd.js"></script>
   <script>
     // Animation is progressive enhancement: a blocked or moved CDN must never
     // leave a view half-transitioned (overlay still open, chat never shown).

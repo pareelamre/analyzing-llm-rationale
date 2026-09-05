@@ -502,6 +502,56 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["answer"], "no tools needed")
         self.assertEqual(seen, [])
 
+    def test_bare_verdict_with_no_research_gets_one_chance_to_do_the_work(self):
+        # Live: llama-3.3-70b-instruct returned "PASS" on turn 0 with zero tool
+        # calls, in under a second, five times in two days -- and the board
+        # rendered a completely blank card.
+        async def web_search(args):
+            return "5 sources"
+
+        turns = iter([
+            '{"final": "PASS"}',
+            '{"action":"web_search","args":{"query":"fed"}}',
+            '{"final":"PASS - market is fairly priced at 48% vs my 47%."}',
+        ])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "assess", {"web_search": web_search},
+            [{"name": "web_search", "description": "d"}], chat_fn, max_steps=5))
+
+        self.assertIn("fairly priced", res["answer"])
+        self.assertEqual(len(res["transcript"]), 1)
+
+    def test_a_reasoned_pass_is_accepted_immediately(self):
+        # The nudge must not punish an agent that explains itself.
+        async def chat_fn(messages):
+            return '{"final": "PASS - no edge: my 47% vs market 48%, inside fees."}'
+
+        res = asyncio.run(ac.run_tool_loop("q", {}, [], chat_fn, max_steps=5))
+        self.assertEqual(res["steps"], 0)
+        self.assertIn("no edge", res["answer"])
+
+    def test_bare_verdict_is_accepted_once_research_has_been_done(self):
+        # Having called a tool, a terse PASS is a real decision.
+        async def web_search(args):
+            return "5 sources"
+
+        turns = iter([
+            '{"action":"web_search","args":{"query":"fed"}}',
+            '{"final": "PASS"}',
+        ])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"web_search": web_search},
+            [{"name": "web_search", "description": "d"}], chat_fn, max_steps=5))
+        self.assertEqual(res["answer"], "PASS")
+
     def test_retries_once_after_unparseable_turn_then_succeeds(self):
         # Regression for minimax-m3: a turn with no parseable JSON at all used
         # to be accepted as the final answer immediately, wasting the whole

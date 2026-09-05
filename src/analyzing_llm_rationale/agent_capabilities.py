@@ -312,6 +312,22 @@ def parse_action(text: str) -> Optional[Dict[str, Any]]:
     return _salvage_action(cleaned)
 
 
+_CONTENT_FREE_ANSWERS = {
+    "pass", "hold", "no action", "n/a", "none", "no trade", "no trades",
+    "nothing", "skip", "wait",
+}
+
+
+def _is_content_free_answer(answer: str) -> bool:
+    """True when a final answer carries a verdict but no reasoning at all.
+
+    Deliberately narrow: only a bare one-liner counts. Any answer that
+    actually explains itself -- even briefly -- is left alone.
+    """
+    stripped = (answer or "").strip().strip(".!*_# ").lower()
+    return not stripped or stripped in _CONTENT_FREE_ANSWERS
+
+
 OnStep = Callable[[Dict[str, Any]], Awaitable[None]]
 
 
@@ -442,12 +458,35 @@ async def run_tool_loop(
     )
     reformat_retries_used = 0
     max_reformat_retries = 1
+    substantive_hint = (
+        "That is a verdict with no analysis behind it, and you have not called "
+        "any tool this cycle. Do the research first -- check the market and the "
+        "evidence -- then give your decision with the reasoning that supports "
+        "it. If the answer really is no action, say why."
+    )
+    substantive_retry_used = False
     for step in range(max_steps):
         out = await chat_fn(messages)
         action = parse_action(out)
         if action is not None and "final" in action:
-            answer = action.get("final")
-            return {"answer": (answer or out or "").strip(), "transcript": transcript,
+            answer = (action.get("final") or out or "").strip()
+            # A bare verdict with no research behind it is not a decision.
+            # Live: llama-3.3-70b-instruct returned "PASS" on turn 0 with zero
+            # tool calls, in under a second, five times in two days. Downstream
+            # that renders as a completely blank card, because a bare PASS is
+            # stripped as content-free. Give one chance to actually do the work
+            # before accepting an unexamined verdict.
+            if (
+                not transcript
+                and not substantive_retry_used
+                and _is_content_free_answer(answer)
+                and step < max_steps - 1
+            ):
+                substantive_retry_used = True
+                messages.append({"role": "assistant", "content": out})
+                messages.append({"role": "user", "content": substantive_hint})
+                continue
+            return {"answer": answer, "transcript": transcript,
                     "steps": step, "truncated": False}
         if action is None:
             # No JSON found at all -- could be an incomplete/foreign-format
