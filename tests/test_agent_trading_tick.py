@@ -528,9 +528,22 @@ class ModelBackstopCharsTests(unittest.TestCase):
         # (SCADS doesn't publish what they route to), gets one shared
         # conservative default rather than a guessed per-model figure that
         # could overestimate real capacity.
-        for model in ("llama-3.3-70b-instruct", "scads-alias-reasoning", "scads-alias-code", "scads-alias-ha"):
+        for model in ("scads-alias-reasoning", "scads-alias-code", "scads-alias-ha"):
             with self.subTest(model=model):
                 self.assertEqual(agent_trading_tick._model_backstop_chars(model), int(128000 * 4 * 0.5))
+
+    def test_a_published_window_smaller_than_the_default_is_respected(self):
+        # llama-3.3-70b-instruct's real window is 65,536 -- half the 128k
+        # default it used to fall back to, so its prompt budget was being
+        # derived from twice its actual capacity.
+        self.assertEqual(
+            agent_trading_tick._model_backstop_chars("llama-3.3-70b-instruct"),
+            int(65536 * 4 * 0.5),
+        )
+        self.assertLess(
+            agent_trading_tick._model_backstop_chars("llama-3.3-70b-instruct"),
+            int(128000 * 4 * 0.5),
+        )
 
     def test_falls_back_for_an_unrecognized_model_name(self):
         # Must never raise -- an unknown model (e.g. a typo'd env var) still

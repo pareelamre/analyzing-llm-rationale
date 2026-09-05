@@ -566,8 +566,16 @@ class PipelineTests(unittest.TestCase):
         # /v1/models listing actually publishes it (verified 2026-08-18) --
         # left unset elsewhere rather than guessed, since agent_trading_tick
         # .py's backstop must never overestimate a model's real capacity.
-        self.assertIsNone(models["llama-3.3-70b-instruct"].context_window_tokens)
+        # A model SCADS publishes no window for stays unset rather than
+        # guessed, so the backstop can never overestimate real capacity.
+        self.assertIsNone(models["qwen2.5-7b-instruct"].context_window_tokens)
         self.assertEqual(models["glm-5-3"].context_window_tokens, 524288)
+        # Real windows from SCADS' status probe. llama's is 65,536 -- half the
+        # 128k default we used to assume, so prompts were being budgeted at
+        # twice its actual capacity.
+        self.assertEqual(models["llama-3.3-70b-instruct"].context_window_tokens, 65536)
+        self.assertEqual(models["deepseek-v4-flash"].context_window_tokens, 1048576)
+        self.assertEqual(models["gpt-oss-120b"].context_window_tokens, 131072)
         self.assertIn("gpt-5", models)
         self.assertEqual(models["gpt-5"].provider, "openai-compatible")
         self.assertEqual(models["gpt-5"].router_model_name, "gpt-5")
