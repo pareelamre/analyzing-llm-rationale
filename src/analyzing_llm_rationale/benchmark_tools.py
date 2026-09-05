@@ -319,6 +319,11 @@ def _as_float(value: Any, default: float = 0.0) -> float:
 
 def _clean_probability(value: Any, *, name: str) -> float:
     """Accept a probability in decimal or percentage form, never a guess."""
+    if value is None or value == "":
+        raise ValueError(
+            f"{name} is required; provide your model's probability estimate as a "
+            f"decimal between 0 and 1 (e.g. 0.65) or as a percentage between 1 and 100 (e.g. 65)"
+        )
     probability = _as_float(value)
     if 1.0 < probability <= 100.0:
         probability /= 100.0
