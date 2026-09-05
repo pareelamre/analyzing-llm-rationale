@@ -844,6 +844,40 @@ def _paper_calibration_context(quote: Dict[str, Any], *, now: Optional[datetime]
             calibration_context_duration.record(time.perf_counter() - started)
 
 
+def _fmt_edge_hurdle(quote: Dict[str, Any]) -> str:
+    """How far from the market a view must be before this trade can clear.
+
+    A position is only permitted when its net edge beats fees plus
+    FORESEA_AGENT_MIN_NET_EDGE, measured against the executable ask -- not the
+    market's mid. So the real hurdle is half the spread, plus fee, plus the
+    floor. Measured across live candidates that ranges from 3pp to 49pp, a
+    16x difference in how much conviction the same 2% floor demands, and none
+    of it was visible: an agent saw two markets quoted 0.42/0.44 and
+    0.07/1.00 and had no way to tell that the second needs a near-certainty
+    to be tradeable at all. Stating it turns "find an edge" into "find an edge
+    bigger than this number", and lets a cycle spend its steps on the
+    candidates where that is even possible.
+    """
+    from analyzing_llm_rationale.benchmark_tools import _kalshi_fee, _min_net_edge
+
+    q = MarketQuote.from_mapping(quote)
+    out: List[str] = []
+    for side in ("YES", "NO"):
+        ask, bid = q.ask(side), q.bid(side)
+        if ask is None or bid is None or not 0.0 < ask < 1.0:
+            continue
+        mid = (ask + bid) / 2.0
+        try:
+            fee = _kalshi_fee(ask, 1.0)
+        except Exception:
+            fee = 0.0
+        hurdle = (ask - mid) + fee + _min_net_edge()
+        out.append(f"{side.lower()} +{hurdle * 100:.1f}pp")
+    if not out:
+        return "edge hurdle n/a (no two-sided quote)"
+    return "edge needed vs mid to clear fees+floor: " + ", ".join(out)
+
+
 def _fmt_participation(quote: Dict[str, Any]) -> str:
     """Volume and resting depth for a candidate, or an explicit unknown.
 
@@ -894,6 +928,7 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
         f"(yes bid/ask {_fmt_px(yes_bid)}/{_fmt_px(yes_ask)}, "
         f"no bid/ask {_fmt_px(no_bid)}/{_fmt_px(no_ask)}, "
         f"{_fmt_participation(quote)}, "
+        f"{_fmt_edge_hurdle(quote)}, "
         f"resolution window {opens} -> {close})"
     )
     if expected_expiration:
@@ -1336,16 +1371,26 @@ def _trim_block_to_lines(block: str, budget: int) -> str:
     if len(block) <= budget:
         return block
     lines = block.split("\n")
+    # Reserve room for the marker before filling. It used to be appended after
+    # the budget was already spent, so a trimmed block could come back longer
+    # than the caller asked for. _build_question treats that as "still too
+    # long" and moves on to its next step, which drops the candidates block
+    # entirely -- so a block landing within ~30 chars of the limit cost the
+    # agent every market it was being offered, silently, rather than costing
+    # it one line. Lengthening a candidate line by 29 characters was enough to
+    # trigger it.
+    marker = "  … (more omitted for space)"
+    reserved = max(0, budget - (len(marker) + 1))
     kept: List[str] = []
     used = 0
     for line in lines:
         add = len(line) + (1 if kept else 0)
-        if used + add > budget:
+        if used + add > reserved:
             break
         kept.append(line)
         used += add
     if len(kept) < len(lines) and kept:
-        kept.append("  … (more omitted for space)")
+        kept.append(marker)
     return "\n".join(kept)
 
 

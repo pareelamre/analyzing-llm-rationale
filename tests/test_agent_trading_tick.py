@@ -306,6 +306,36 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("volume 41,234", line)
         self.assertIn("depth/open interest 8,800", line)
 
+    def test_candidate_line_states_the_edge_needed_to_clear_the_gate(self):
+        # A position only clears when its net edge beats fees plus the
+        # min-net-edge floor, measured against the executable ask rather than
+        # the mid -- so the true hurdle is half-spread + fee + floor. Across
+        # live candidates that runs from 3pp to 49pp: the same 2% floor
+        # demanding 16x more conviction depending on the book, with none of it
+        # visible. An agent saw two quotes and could not tell that one needed
+        # a near-certainty to be tradeable at all.
+        tight = _quote("KXTIGHT")
+        tight.update({"yes_bid": 0.07, "yes_ask": 0.08, "no_bid": 0.92, "no_ask": 0.93})
+        wide = _quote("KXWIDE")
+        wide.update({"yes_bid": 0.0, "yes_ask": 0.93, "no_bid": 0.07, "no_ask": 1.00})
+
+        tight_line = agent_trading_tick._fmt_candidate_line(tight)
+        wide_line = agent_trading_tick._fmt_candidate_line(wide)
+
+        self.assertIn("edge needed vs mid", tight_line)
+        self.assertIn("yes +3.0pp", tight_line)
+        # A one-sided book demands a near-certainty on the side that can pay.
+        self.assertIn("yes +49.0pp", wide_line)
+        # ...and the side quoted at 1.00 is not offered as tradeable at all,
+        # matching the no_executable_price rejection in place_trade.
+        self.assertNotIn("no +", wide_line)
+
+    def test_edge_hurdle_is_omitted_without_a_two_sided_quote(self):
+        quote = _quote("KXNOBOOK")
+        for key in ("yes_bid", "yes_ask", "no_bid", "no_ask"):
+            quote.pop(key, None)
+        self.assertIn("edge hurdle n/a", agent_trading_tick._fmt_candidate_line(quote))
+
     def test_candidate_line_says_so_when_participation_is_unreported(self):
         # Silence must not read as "thin, therefore beatable".
         quote = _quote("KXFOO")
@@ -822,6 +852,34 @@ class BuildQuestionTests(unittest.TestCase):
         for q in held + new:
             self.assertIn(q["ident"], question)
         self.assertNotIn("more omitted for space", question)
+
+    def test_a_block_trimmed_to_the_limit_never_costs_every_candidate(self):
+        # The omission marker used to be appended after the budget was already
+        # spent, so a trimmed block came back LONGER than requested.
+        # _build_question reads that as "still too long" and moves to its next
+        # step, which drops the candidates block outright -- so a block landing
+        # within ~30 chars of the limit cost the agent every market it was
+        # being offered, silently, instead of costing it one line. Lengthening
+        # a candidate line by 29 characters was enough to trigger it.
+        block = chr(10).join(
+            "  - [kalshi] KX%d: filler line of a realistic width" % i
+            for i in range(400))
+        for budget in range(200, 400):
+            trimmed = agent_trading_tick._trim_block_to_lines(block, budget)
+            self.assertLessEqual(
+                len(trimmed), budget,
+                "trimming to %d returned %d chars" % (budget, len(trimmed)))
+
+    def test_candidates_survive_a_block_that_lands_on_the_limit(self):
+        new = [_quote(f"KX{i}", question=f"Candidate market number {i} with a fairly long question")
+               for i in range(1500)]
+        candidates = agent_trading_tick._build_candidates_block([], new)
+        with mock.patch.object(agent_trading_tick, "MAX_QUESTION_CHARS", 200_000):
+            question = agent_trading_tick._build_question("PORTFOLIO", candidates)
+        self.assertLessEqual(len(question), 200_000)
+        # The whole point of the cycle is that markets are visible.
+        self.assertIn("Markets you can act on", question)
+        self.assertIn("(more omitted for space)", question)
 
     def test_trims_the_candidates_block_by_whole_lines_not_mid_line(self):
         # A genuinely pathological number of candidates still has to fit
