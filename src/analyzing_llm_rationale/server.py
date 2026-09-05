@@ -280,12 +280,18 @@ _AGENT_TOOL_PROVIDER_MAX_RETRIES = max(
 _AGENT_TOOL_PROVIDER_TIMEOUT_S = float(
     os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_S", "0")
 )
-# Cap a single cycle's token spend. The provider enforces a shared
-# tokens-per-minute quota (10,000 observed), and a deep cycle measured at
-# 10-21k tokens can spend the whole minute, leaving the next model in the
-# serial lane to collect the 429. 0 disables the cap; raise it when the
-# upstream quota is raised.
-_AGENT_TOOL_TOKEN_BUDGET = int(os.environ.get("AGENT_TOOL_TOKEN_BUDGET", "20000"))
+# Cap a single cycle's token spend, as a runaway guard -- not as the thing
+# that decides how much research a cycle gets to do. That distinction was
+# learned the hard way: at 20,000 this stopped all seven healthy models after
+# 2-3 tool calls out of the 16 allowed (measured 14.3-18.7k tokens each),
+# because the loop resends the whole conversation every turn, so cost grows
+# quadratically and an ordinary prompt exhausts the cap almost immediately.
+# Depth belongs to max_steps and to the quota backoff, which retries a 429
+# rather than pre-emptively truncating every cycle to avoid one. Measured, a
+# full 16-step cycle costs ~52k (observation compaction bounds the growth),
+# so at this ceiling such a cycle behaves exactly as it would with no budget
+# at all, and only a genuine runaway is caught. 0 disables it entirely.
+_AGENT_TOOL_TOKEN_BUDGET = int(os.environ.get("AGENT_TOOL_TOKEN_BUDGET", "100000"))
 _AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES = max(
     0, int(os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES", "1"))
 )

@@ -524,6 +524,43 @@ class ToolLoopTests(unittest.TestCase):
         self.assertGreaterEqual(len(calls), 1)
         self.assertTrue(res["truncated"])
 
+    def test_default_budget_is_a_runaway_guard_not_a_per_cycle_limiter(self):
+        # At 20,000 this stopped every healthy model after 2-3 tool calls of
+        # the 16 allowed, because the loop resends the whole conversation each
+        # turn. The default has to clear the deepest cycle actually observed
+        # (7 tool calls) and still catch a true runaway.
+        from analyzing_llm_rationale.server import _AGENT_TOOL_TOKEN_BUDGET as default
+
+        async def realistic_tool(_args):
+            return "x" * 6000        # ~1.5k tokens of observation, as measured
+
+        async def chat_fn(_messages):
+            return '{"action":"t","args":{}}'
+
+        spec = [{"name": "t", "description": "d"}]
+        capped = asyncio.run(ac.run_tool_loop(
+            "q" * 4000, {"t": realistic_tool}, spec, chat_fn,
+            max_steps=16, token_budget=20000))
+        current = asyncio.run(ac.run_tool_loop(
+            "q" * 4000, {"t": realistic_tool}, spec, chat_fn,
+            max_steps=16, token_budget=default))
+        uncapped = asyncio.run(ac.run_tool_loop(
+            "q" * 4000, {"t": realistic_tool}, spec, chat_fn,
+            max_steps=16, token_budget=None))
+
+        # The regression this guards: the old ceiling truncated an ordinary
+        # deep cycle less than half way through.
+        self.assertEqual(capped["stop_reason"], "token_budget")
+        self.assertLess(len(capped["transcript"]), 16)
+        # At the current default that same cycle is indistinguishable from
+        # having no budget at all -- depth is decided by max_steps, not cost.
+        self.assertEqual(current["stop_reason"], "max_steps")
+        self.assertEqual(len(current["transcript"]), len(uncapped["transcript"]))
+        self.assertEqual(current["tokens_used"], uncapped["tokens_used"])
+        # ...and the guard still sits meaningfully above that cycle's cost,
+        # so a genuine runaway is still caught.
+        self.assertGreater(default, uncapped["tokens_used"])
+
     def test_budget_stop_is_distinguishable_from_running_out_of_steps(self):
         # Both stops report truncated=True and steps=max_steps, so without an
         # explicit reason a budget-capped cycle is indistinguishable from one
