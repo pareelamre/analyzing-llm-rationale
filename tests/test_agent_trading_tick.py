@@ -292,6 +292,48 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("2026-09-02T03:59:00Z", line)
         self.assertIn("resolution window", line)
 
+    def test_candidate_line_shows_participation_depth(self):
+        # Kalshi Research finds Brier falls monotonically with volume within
+        # every horizon, so depth is the agent's best read on whether a price
+        # is worth disputing. It previously saw only whether volume existed,
+        # which cannot separate a market with 40 contracts traded from one
+        # with 40,000 -- the difference between a disputable price and one
+        # that is effectively unbeatable.
+        quote = _quote("KXFOO")
+        quote["volume"] = 41234.0
+        quote["liquidity"] = 8800.0
+        line = agent_trading_tick._fmt_candidate_line(quote)
+        self.assertIn("volume 41,234", line)
+        self.assertIn("depth/open interest 8,800", line)
+
+    def test_candidate_line_says_so_when_participation_is_unreported(self):
+        # Silence must not read as "thin, therefore beatable".
+        quote = _quote("KXFOO")
+        quote.pop("volume", None)
+        quote["liquidity"] = 0
+        line = agent_trading_tick._fmt_candidate_line(quote)
+        self.assertIn("participation unreported", line)
+        self.assertNotIn("volume 0", line)
+
+    def test_candidate_horizon_reaches_the_region_where_edge_survives(self):
+        # The study's sharpest result: long-dated markets never reach a 0.05
+        # Brier at any level of participation, while near-close prices sit at
+        # ~0.02. A 30-day ceiling excluded that region entirely, leaving
+        # agents hunting edge only where prices are closest to efficient.
+        self.assertGreaterEqual(agent_trading_tick.MAX_CLOSE_DAYS, 90)
+
+    def test_discrepancy_discipline_cites_measured_figures_not_an_unsourced_rate(self):
+        # "perceived edges >20pp fail 73.4% of the time" was presented to every
+        # model as measured fact with no traceable source. Claims that steer
+        # every forecast have to be attributable.
+        from analyzing_llm_rationale import agent_capabilities as _ac
+
+        instruction = agent_trading_tick._TRADING_INSTRUCTION
+        note = _ac.build_grounding_note({"n_snapshots_resolved": 5, "overall": {}})
+        for text in (instruction, note):
+            self.assertNotIn("73.4", text)
+            self.assertIn("2,243,741", text)
+
     def test_candidate_line_handles_a_missing_open_date(self):
         quote = _quote("KXBAR")
         del quote["created_time"]

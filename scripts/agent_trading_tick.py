@@ -166,7 +166,15 @@ CANDIDATE_COUNT = max(1, int(os.environ.get("CANDIDATE_COUNT", "3")))
 # a higher ceiling costs nothing on cycles that finish early.
 MAX_TOOL_STEPS = max(1, int(os.environ.get("MAX_TOOL_STEPS", "8")))
 MIN_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MIN_CLOSE_DAYS", "1"))
-MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "30"))
+# Kalshi Research measures Brier at ~0.02 by close but 0.08-0.09 at a 3-month
+# horizon, and finds long-dated markets never cross 0.05 no matter how many
+# traders arrive -- "no amount of additional trading fully substitutes for the
+# passage of time". A 30-day ceiling therefore excluded exactly the region
+# where mispricing survives, leaving agents to hunt edge in the part of the
+# curve that is closest to efficient. Widen to a quarter so the long horizon
+# is at least in the candidate set; the merit gate still decides what is worth
+# trading, and nothing here forces a position.
+MAX_CLOSE_DAYS = float(os.environ.get("AGENT_TRADING_MAX_CLOSE_DAYS", "90"))
 WEATHER_CANDIDATE_QUOTA = max(
     0, min(CANDIDATE_COUNT, int(os.environ.get("AGENT_TRADING_WEATHER_CANDIDATE_QUOTA", "1")))
 )
@@ -836,6 +844,36 @@ def _paper_calibration_context(quote: Dict[str, Any], *, now: Optional[datetime]
             calibration_context_duration.record(time.perf_counter() - started)
 
 
+def _fmt_participation(quote: Dict[str, Any]) -> str:
+    """Volume and resting depth for a candidate, or an explicit unknown.
+
+    Kalshi Research finds Brier score falls monotonically with event volume
+    within every time horizon, which makes participation depth the best
+    available read on how much room is left between the price and the truth.
+    The agent was previously shown only whether volume existed at all, so it
+    could not tell a market with a handful of contracts from one with tens of
+    thousands -- the difference between a price worth disputing and one that
+    is already close to unbeatable. Unique-trader count is the study's other
+    axis but neither venue exposes it, so volume stands in for it.
+    """
+    def _num(key: str) -> Optional[float]:
+        try:
+            value = float(quote.get(key))
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
+    volume, depth = _num("volume"), _num("liquidity")
+    if volume is None and depth is None:
+        return "participation unreported"
+    parts = []
+    if volume is not None:
+        parts.append(f"volume {volume:,.0f}")
+    if depth is not None:
+        parts.append(f"depth/open interest {depth:,.0f}")
+    return ", ".join(parts)
+
+
 def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
     opens = quote.get("created_time") or "unknown"
     close = quote.get("close_time") or "unknown"
@@ -855,6 +893,7 @@ def _fmt_candidate_line(quote: Dict[str, Any]) -> str:
         f"  - [{platform}] {quote.get('ident')}: \"{quote.get('question')}\" "
         f"(yes bid/ask {_fmt_px(yes_bid)}/{_fmt_px(yes_ask)}, "
         f"no bid/ask {_fmt_px(no_bid)}/{_fmt_px(no_ask)}, "
+        f"{_fmt_participation(quote)}, "
         f"resolution window {opens} -> {close})"
     )
     if expected_expiration:
@@ -1126,7 +1165,19 @@ _TRADING_INSTRUCTION = (
     "EVENT MERIT GATE: Trade the event, not the number. A gap between your "
     "probability and the market's is not by itself a reason to trade -- most large "
     "gaps are your own error, not the crowd's, and the crowd has already priced the "
-    "obvious. Before opening a position, state three things: (1) the concrete "
+    "obvious. How much that applies depends on the market in front of you. Kalshi "
+    "prices measure well calibrated overall (Brier about 0.02 at close), and "
+    "calibration improves monotonically with volume within every horizon, so in a "
+    "heavily traded market close to resolution a large gap is almost certainly your "
+    "error -- treat the price as the better estimate and PASS. The same study finds "
+    "long-dated markets never reach a 0.05 Brier no matter how many traders arrive, "
+    "and that time to resolution, not participation, is the binding constraint. So a "
+    "thinly traded market far from resolution is where a defensible edge can still "
+    "exist. Read the volume and depth on each candidate line and weigh your "
+    "disagreement accordingly. This tells you where to look, not what to conclude: "
+    "thin markets are often thin because the event is genuinely ambiguous or hard to "
+    "resolve, and they fill worse, so the burden of proof below is unchanged. "
+    "Before opening a position, state three things: (1) the concrete "
     "mechanism that decides this event and the specific dates or releases that drive "
     "it; (2) why your read is better informed than the market's on THIS event -- a "
     "source the price has not absorbed yet, a rule the crowd is misapplying, a "
@@ -1181,9 +1232,17 @@ _TRADING_INSTRUCTION = (
     "holding and use sizing_mode='close' only to reduce it. If no strategy clears its "
     "gate, choose PASS. A broader menu is not permission to manufacture an edge.\n\n"
     "MANDATORY UNIFIED THESIS TEMPLATE:\n"
-    "DISCREPANCY DISCIPLINE: Empirical backtesting on 2,700+ contracts shows perceived edges >20pp "
-    "against liquid markets fail 73.4% of the time due to adverse selection. When assessing an edge >15pp, "
-    "actively challenge your thesis, verify you are not missing unindexed breaking events, and damp overconfident probabilities (80-95% range).\n\n"
+    "DISCREPANCY DISCIPLINE: Kalshi Research measured every resolved market on the venue "
+    "(2,243,741 markets, 2021 to mid-2026) and found prices behave like genuine probabilities: "
+    "Brier score falls from roughly 0.08-0.09 at a 3-month horizon to about 0.02 at close, naive "
+    "accuracy rises from 88.3% to 97.2%, and reliability curves track the diagonal in nearly every "
+    "category. Calibration also improves monotonically with volume within every horizon. A large "
+    "disagreement with a liquid, near-resolution price is therefore far more likely to be your "
+    "error than the market's. When assessing an edge >15pp, actively challenge your thesis, verify "
+    "you are not missing unindexed breaking events, and damp overconfident probabilities (80-95% "
+    "range). The same study finds long-dated markets never reach a 0.05 Brier at any level of "
+    "participation, so distance from resolution -- not your conviction -- is what leaves room for "
+    "a genuine edge.\n\n"
     "In your final answer, ALL models MUST begin with this research delta, then use the exact 4-section markdown structure:\n\n"
     "### 0. Research Delta\n"
     "- **Strategy**: [EVIDENCE_EDGE / CATALYST_EDGE / ORDERBOOK_ARBITRAGE_RESEARCH / POSITION_RISK_REDUCTION] (never use N/A)\n"
