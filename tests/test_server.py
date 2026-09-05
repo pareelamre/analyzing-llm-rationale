@@ -5378,6 +5378,53 @@ class ServerTests(unittest.TestCase):
     def test_chat_provider_default_keeps_transient_retry_enabled(self):
         self.assertEqual(server_module._CHAT_PROVIDER_MAX_RETRIES, 1)
 
+    def test_agent_fallback_providers_resolves_chain(self):
+        primary = FakeProvider()
+        primary.model_name = "zai-org/GLM-5.3-Flash"
+        fallback_prov = FakeProvider()
+        fallback_prov.model_name = "zai-org/GLM-5.3"
+        req = server_module.AgentAnalyzeRequest(
+            question="Will it rain?",
+            model="glm-5-3-flash",
+        )
+        with (
+            mock.patch.object(server_module, "_SCADS_MODEL_FALLBACKS", {"glm-5-3-flash": ("zai-org/GLM-5.3",)}),
+            mock.patch.object(server_module, "_scads_provider_for_model_name", return_value=fallback_prov),
+        ):
+            providers = server_module._agent_fallback_providers(req, primary)
+
+        self.assertEqual(len(providers), 1)
+        self.assertIs(providers[0], fallback_prov)
+
+    def test_agent_tool_loop_falls_back_when_primary_fails(self):
+        import asyncio
+
+        primary = FailingProvider("primary-model")
+        fallback = FakeProvider()
+        fallback.model_name = "fallback-model"
+        fallback.last_response_model = "fallback-model"
+        fallback.response = "Final Answer: The outlook is favorable for Yes."
+        req = server_module.AgentAnalyzeRequest(
+            question="check it",
+            model="glm-5-3-flash",
+            tool_loop=True,
+            max_tool_steps=2,
+        )
+
+        with (
+            mock.patch.object(server_module, "_select_agent_provider", return_value=(primary, 0.0, 128)),
+            mock.patch.object(server_module, "_agent_fallback_providers", return_value=[fallback]),
+            mock.patch.object(server_module, "_AGENT_TOOL_PROVIDER_MAX_RETRIES", 0),
+            mock.patch.object(server_module, "_AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES", 0),
+        ):
+            report = asyncio.run(
+                server_module._agent_tool_loop(req, None, "check it", None, None)
+            )
+
+        self.assertEqual(primary.calls, 1)
+        self.assertGreaterEqual(len(fallback.calls), 1)
+        self.assertEqual(report.served_model_name, "fallback-model")
+
     def test_stream_chat_fallback_after_first_token_timeout(self):
         import asyncio
 

@@ -135,6 +135,7 @@ jobs:
           # duplicating an already-recorded paper trade.
           AGENT_TRADING_RETRIES: "1"
           AGENT_TOOL_PROVIDER_MAX_RETRIES: "5"
+          AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES: "3"
           AGENT_TOOL_PROVIDER_BACKOFF_BASE_S: "1.5"
           # Consult SCADS' public five-minute status probe first. Explicitly
           # down models are deferred (not marked failed) and resume on the
