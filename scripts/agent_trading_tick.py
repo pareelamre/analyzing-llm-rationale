@@ -1140,14 +1140,14 @@ async def _call_agent_analyze(question: str):
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             # How many attempts this failure is worth depends on what it is,
-            # not on how many are configured overall: a 503 earns a second
-            # try, a 429 (or anything else) stops at the baseline. The 503
-            # allowance is a floor, never a ceiling -- an operator who raises
-            # AGENT_TRADING_RETRIES for manual recovery must not thereby get
-            # *fewer* attempts on the one failure worth retrying.
+            # not on how many are configured overall: a 503 or transient timeout
+            # earns a second try, a 429 (or anything else) stops at the baseline.
+            # The 503/timeout allowance is a floor, never a ceiling -- an operator
+            # who raises AGENT_TRADING_RETRIES for manual recovery must not
+            # thereby get *fewer* attempts on failures worth retrying.
             allowed = (
                 max(AGENT_ANALYZE_RETRIES, AGENT_ANALYZE_UNAVAILABLE_RETRIES)
-                if _failure_kind(exc) == "provider_unavailable"
+                if _failure_kind(exc) in {"provider_unavailable", "provider_timeout"}
                 else AGENT_ANALYZE_RETRIES
             )
             agent_analyze_attempts.add(

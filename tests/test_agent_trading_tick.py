@@ -1470,6 +1470,7 @@ class AgentAnalyzeRetryTests(unittest.TestCase):
             ("503: The model is temporarily unavailable. Please retry.", 2),
             ("503: temporarily unavailable (upstream returned HTTP 429)", 1),
             ("429: rate limit exceeded", 1),
+            ("Request timed out after 120s", 2),
         ]
         for message, expected_calls in cases:
             with self.subTest(message=message):

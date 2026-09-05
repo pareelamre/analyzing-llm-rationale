@@ -13835,6 +13835,36 @@ def _chat_fallback_providers(req: "PredictRequest", primary_provider) -> List[An
     return providers
 
 
+def _agent_fallback_providers(req: "AgentAnalyzeRequest", primary_provider) -> List[Any]:
+    """Concrete fallback providers for agent analyze / tool loop."""
+    if (
+        req.openrouter_model
+        or req.openrouter_api_key
+        or req.provider_base_url
+        or getattr(req, "ollama_base_url", None)
+        or req.model == "council"
+    ):
+        return []
+    label = (req.model or "").strip()
+    if not label:
+        return []
+    chain = _SCADS_MODEL_FALLBACKS.get(label, ())
+    if not chain:
+        return []
+    primary_name = getattr(primary_provider, "model_name", None)
+    providers = []
+    for model_name in chain:
+        if model_name == primary_name:
+            continue
+        prov = _scads_provider_for_model_name(
+            model_name,
+            request_timeout_s=_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
+        )
+        if prov is not None:
+            providers.append(prov)
+    return providers
+
+
 def _chat_timeout_s(req: "PredictRequest") -> Optional[float]:
     if not req.chat_mode:
         return None
@@ -14683,6 +14713,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         )
 
     provider, temperature, max_tokens = _select_agent_provider(req)
+    agent_fallbacks = _agent_fallback_providers(req, provider)
+    active_provider = provider
     loop = asyncio.get_running_loop()
     last: Dict[str, Any] = {}
     agent_id = str(req.model or req.openrouter_model or _state.get("model_key") or "agent")
@@ -15179,20 +15211,43 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             logger.warning("venue MCP discovery failed", exc_info=True)
 
     async def chat_fn(messages):
+        nonlocal active_provider
         # Retrying here is safe: it repeats only the same model turn and does
         # not re-run any completed tool/action. That is materially different
         # from retrying the entire ReAct loop, which could replay a paper trade.
-        return await _provider_chat(
-            provider,
-            messages,
-            temperature,
-            max_tokens,
-            timeout_s=_AGENT_TOOL_PROVIDER_TIMEOUT_S,
-            max_retries=_AGENT_TOOL_PROVIDER_MAX_RETRIES,
-            max_timeout_retries=_AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES,
-            backoff_base_s=_AGENT_TOOL_PROVIDER_BACKOFF_BASE_S,
-            call_site="agent_tool_loop",
-        )
+        candidates = [active_provider]
+        for fb in agent_fallbacks:
+            if fb is not active_provider and getattr(fb, "model_name", None) != getattr(active_provider, "model_name", None):
+                candidates.append(fb)
+        last_exc: Optional[Exception] = None
+        for idx, cand in enumerate(candidates):
+            try:
+                content = await _provider_chat(
+                    cand,
+                    messages,
+                    temperature,
+                    max_tokens,
+                    timeout_s=_AGENT_TOOL_PROVIDER_TIMEOUT_S,
+                    max_retries=_AGENT_TOOL_PROVIDER_MAX_RETRIES,
+                    max_timeout_retries=_AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES,
+                    backoff_base_s=_AGENT_TOOL_PROVIDER_BACKOFF_BASE_S,
+                    call_site="agent_tool_loop" if idx == 0 else "agent_tool_loop_fallback",
+                )
+                active_provider = cand
+                return content
+            except Exception as exc:
+                last_exc = exc
+                if idx == len(candidates) - 1:
+                    break
+                logger.warning(
+                    "agent tool loop model failed; trying fallback requested=%s failed_model=%s fallback_model=%s error=%s",
+                    req.model,
+                    getattr(cand, "model_name", "unknown"),
+                    getattr(candidates[idx + 1], "model_name", "unknown"),
+                    type(exc).__name__,
+                )
+        assert last_exc is not None
+        raise last_exc
 
     q = question
     rule = ("You MUST call the `forecast` tool before your final answer — it produces "
@@ -15362,7 +15417,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         })
     report = AgentReport(
         question=question,
-        served_model_name=_provider_served_model_name(provider),
+        served_model_name=_provider_served_model_name(active_provider),
         pipeline=pipeline,
         platform=market_platform,
         market_url=market_url,
