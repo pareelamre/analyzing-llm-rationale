@@ -501,7 +501,14 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
     ):
         return ""
     if text.upper() in {"PASS", "HOLD", "NO ACTION", "N/A"}:
-        return ""
+        # Say what happened rather than rendering an empty card. A bare verdict
+        # carries no reasoning, but blanking it loses the fact that the model
+        # answered at all -- llama-3.3-70b-instruct produced exactly this five
+        # times in two days and the board showed nothing whatsoever.
+        return (
+            f"**{text.upper()}** — no trade this cycle. The model returned only "
+            "this verdict, without stating the reasoning behind it."
+        )
     # A provider can append a second entire final template after the first
     # one. It is not a second audited decision, so preserve the first complete
     # thesis rather than rendering conflicting actions in one card.
