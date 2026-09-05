@@ -312,6 +312,16 @@ def parse_action(text: str) -> Optional[Dict[str, Any]]:
     return _salvage_action(cleaned)
 
 
+def _estimate_message_tokens(messages: List[Dict[str, str]]) -> int:
+    """Rough token count for a turn's payload, at the usual ~4 chars/token.
+
+    Deliberately an estimate: the point is to keep a cycle inside a provider
+    quota, and an approximate ceiling does that without a tokenizer
+    dependency or a per-provider special case.
+    """
+    return sum(len(str(m.get("content") or "")) for m in messages) // 4
+
+
 def _coerce_answer_text(value: Any) -> str:
     """A model's final answer as text, whatever shape it arrived in.
 
@@ -452,6 +462,7 @@ async def run_tool_loop(
     on_step: Optional[OnStep] = None,
     on_step_start: Optional[OnStep] = None,
     retry_unusable_final: bool = False,
+    token_budget: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Drive the ReAct loop. Returns {answer, transcript, steps, truncated}.
 
@@ -470,6 +481,13 @@ async def run_tool_loop(
         {"role": "system", "content": system},
         {"role": "user", "content": f"Question: {question}"},
     ]
+    # A ReAct turn resends the whole conversation, so cost grows with every
+    # step. Measured on the live fleet, one cycle runs 10-21k tokens against
+    # a 10,000-token-per-minute provider quota -- a single deep cycle can
+    # spend the entire minute and 429 whichever model runs next in the serial
+    # lane. A step count cannot express that; a token budget can, and it lets
+    # a cheap cycle keep every step it wants while stopping a runaway one.
+    tokens_used = 0
     transcript: List[Dict[str, Any]] = []
     reformat_hint = (
         "That reply could not be parsed. Respond with exactly one JSON object: either "
@@ -487,6 +505,13 @@ async def run_tool_loop(
     substantive_retry_used = False
     unusable_retry_used = False
     for step in range(max_steps):
+        turn_tokens = _estimate_message_tokens(messages)
+        # Stop before spending a turn we cannot afford, not after. The step
+        # already completed is worth finalising; the one that would blow the
+        # budget just earns a 429 for this model and the next one in line.
+        if token_budget and step and tokens_used + turn_tokens > token_budget:
+            break
+        tokens_used += turn_tokens
         out = await chat_fn(messages)
         action = parse_action(out)
         if action is not None and "final" in action:
