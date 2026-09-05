@@ -226,6 +226,39 @@ class ForecastLedgerTests(unittest.TestCase):
         self.assertFalse(resolved[0]["ledger_forecast_before_close"])
         self.assertFalse(resolved[0]["ledger_audit_grade"])
 
+    def test_forecast_idempotent_when_enrichment_fields_change(self):
+        # A snapshot initially synced without market-enriched fields (question,
+        # domain, close_time, horizon) must not raise ImmutableEventConflict
+        # when the same snapshot is re-synced after market data fills those in.
+        # The identity (snapshot_key, forecasted_at, probabilities) is unchanged,
+        # so the event_id is the same but the full payload sha256 differs.
+        snapshot = Entity(
+            self.store.key("ForecastSnapshot", "kalshi:RATE-26:council:2026-07-27")
+        )
+        snapshot.update(
+            platform="Kalshi", ident="RATE-26", model="council",
+            snapshot_ts=self.forecasted_at,
+            model_probability=0.7, market_probability=0.5,
+            market_bid=0.49, market_ask=0.51,
+            # no question / close_time / domain / horizon yet
+        )
+        self.store.put(snapshot)
+        r1 = sync_snapshot_ledger(self.store)
+        self.assertEqual(r1["forecast_events_appended"], 1)
+
+        # Market enrichment arrives; update the snapshot in the store
+        snapshot.update(
+            question="Will the rate be cut?",
+            domain="economics",
+            close_time=self.forecasted_at + timedelta(days=30),
+            horizon="14-30d",
+        )
+        self.store.put(snapshot)
+
+        # Must be idempotent — no ImmutableEventConflict, no new event written
+        r2 = sync_snapshot_ledger(self.store)
+        self.assertEqual(r2["forecast_events_appended"], 0)
+
     def test_forecast_rejects_evidence_from_the_future(self):
         snapshot = self._snapshot(resolved=False)
         snapshot["evidence_as_of"] = self.forecasted_at + timedelta(seconds=1)

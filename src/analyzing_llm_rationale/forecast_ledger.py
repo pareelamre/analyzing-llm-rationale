@@ -203,6 +203,9 @@ class ForecastLedger:
             "market_probability": market_probability,
         }
         forecast_id = _digest(identity)
+        event_id = f"forecast:{forecast_id}"
+        if self._events.get(event_id) is not None:
+            return False
         event = {
             "schema_version": SCHEMA_VERSION,
             "event_type": FORECAST_RECORDED,
@@ -228,7 +231,7 @@ class ForecastLedger:
             "source": str(snapshot.get("source") or "track_record_snapshot"),
         }
         return self._append(
-            event_id=f"forecast:{forecast_id}",
+            event_id=event_id,
             event=event,
             ingest_state=(
                 "resolved"
