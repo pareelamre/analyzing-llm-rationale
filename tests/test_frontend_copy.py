@@ -585,6 +585,53 @@ function escHtml(value) {
         )
         self.assertNotIn("\\\\*\\\\*", result.stdout)
 
+    def test_agentic_thesis_cards_linkify_cited_sources_without_trusting_them(self):
+        # Theses cite their sources as bare URLs. Published, those should be
+        # followable -- but the text is model output, so linkifying must not
+        # become an injection route, and must not honour a javascript: scheme.
+        source = self._both()["frontend"]
+        formatter_start = source.index("function _extractThesisJsonField(")
+        formatter_end = source.index("function _toggleAgentPositions", formatter_start)
+        sample = """### Research Delta
+- **New evidence**: analyst commentary. URLs: https://www.cnbc.com/2026/08/07/odds-the-fed-hikes.html and https://example.com/a?x=1&y=2
+- **Markdown form**: [CNBC report](https://www.cnbc.com/markets)
+- **Not a link**: javascript:alert(1)
+- **Injection attempt**: <img src=x onerror=alert(1)>
+- **Sentence end**: see https://example.com/story.
+"""
+        script = """
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+""" + source[formatter_start:formatter_end] + "\nprocess.stdout.write(_formatThesisHtml(" + json.dumps(sample) + "));"
+        result = subprocess.run(
+            ["node", "-e", script], check=True, capture_output=True, text=True, timeout=10,
+        )
+        out = result.stdout
+        attrs = 'target="_blank" rel="noopener noreferrer nofollow"'
+        # Bare URLs become real anchors, query strings intact.
+        self.assertIn(
+            f'<a href="https://www.cnbc.com/2026/08/07/odds-the-fed-hikes.html" {attrs}>', out)
+        self.assertIn(f'<a href="https://example.com/a?x=1&amp;y=2" {attrs}>', out)
+        # Markdown links keep their label rather than showing the raw target.
+        self.assertIn(f'<a href="https://www.cnbc.com/markets" {attrs}>CNBC report</a>', out)
+        # A trailing full stop is sentence punctuation, not part of the URL.
+        self.assertIn(f'<a href="https://example.com/story" {attrs}>https://example.com/story</a>.', out)
+        # Only http(s) is followable, and markup in the thesis stays inert.
+        self.assertNotIn('href="javascript:', out)
+        self.assertNotIn("<img", out)
+        self.assertIn("&lt;img src=x onerror=alert(1)&gt;", out)
+
+    def test_agentic_thesis_cards_wrap_long_unbreakable_urls(self):
+        # A Google News RSS link is one ~200-char token with no break
+        # opportunity; without these the card overflows instead of wrapping.
+        for name, index in self._both().items():
+            with self.subTest(build=name):
+                copy_rule = index.split(".agentic-thesis-copy {", 1)[1].split("}", 1)[0]
+                self.assertIn("overflow-wrap: anywhere", copy_rule)
+                li_rule = index.split(".agentic-thesis-copy li {", 1)[1].split("}", 1)[0]
+                self.assertIn("min-width: 0", li_rule)
+
     def test_agentic_is_a_real_edge_board_tab(self):
         for name, index in self._both().items():
             with self.subTest(file=name):

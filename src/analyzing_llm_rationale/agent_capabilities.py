@@ -504,14 +504,22 @@ async def run_tool_loop(
     )
     substantive_retry_used = False
     unusable_retry_used = False
+    # Why a cycle stopped is not recoverable from `steps`/`truncated` alone:
+    # a budget stop and an out-of-steps stop both report steps=max_steps and
+    # truncated=True, which made a shallow cycle indistinguishable from a
+    # capped one when diagnosing a slow tick. Report the cause explicitly.
+    stop_reason = "max_steps"
+    steps_completed = 0
     for step in range(max_steps):
         turn_tokens = _estimate_message_tokens(messages)
         # Stop before spending a turn we cannot afford, not after. The step
         # already completed is worth finalising; the one that would blow the
         # budget just earns a 429 for this model and the next one in line.
         if token_budget and step and tokens_used + turn_tokens > token_budget:
+            stop_reason = "token_budget"
             break
         tokens_used += turn_tokens
+        steps_completed = step + 1
         out = await chat_fn(messages)
         action = parse_action(out)
         if action is not None and "final" in action:
@@ -620,9 +628,12 @@ async def run_tool_loop(
         messages.append({"role": "assistant", "content": out})
         messages.append({"role": "user", "content": f"Observation: {context_observation}"})
         _compact_observation_context(messages, observation_context_limit)
-    # Out of steps — force one terminal JSON answer. Asking for plain text
-    # contradicted the system contract and let some providers emit a pasted
-    # sequence of prior tool-call envelopes instead of a final thesis.
+    # Out of steps (or out of token budget) — force one terminal JSON answer.
+    # Asking for plain text contradicted the system contract and let some
+    # providers emit a pasted sequence of prior tool-call envelopes instead of
+    # a final thesis.
+    stopped = {"stop_reason": stop_reason, "tokens_used": tokens_used,
+               "steps_completed": steps_completed}
     final = await chat_fn(messages + [{"role": "user", "content": (
         "Stop calling tools. Return exactly one JSON object with a `final` field now: "
         '{"final":"your concise publishable thesis"}. Do not include an action, args, '
@@ -633,12 +644,15 @@ async def run_tool_loop(
     if isinstance(parsed_final, dict) and "final" in parsed_final:
         final_text = str(parsed_final["final"]).strip()
         return {"answer": final_text, "transcript": transcript,
-                "steps": max_steps, "truncated": True, "finalization_failed": False}
+                "steps": max_steps, "truncated": True, "finalization_failed": False,
+                **stopped}
     # Never promote a tool-call envelope (or a repetition of several of them)
     # to the public thesis. The durable transcript preserves that detail for
     # operators; callers can publish a truthful fallback instead.
     if isinstance(parsed_final, dict) and "action" in parsed_final:
         return {"answer": "", "transcript": transcript,
-                "steps": max_steps, "truncated": True, "finalization_failed": True}
+                "steps": max_steps, "truncated": True, "finalization_failed": True,
+                **stopped}
     return {"answer": final_text, "transcript": transcript,
-            "steps": max_steps, "truncated": True, "finalization_failed": False}
+            "steps": max_steps, "truncated": True, "finalization_failed": False,
+            **stopped}

@@ -524,6 +524,40 @@ class ToolLoopTests(unittest.TestCase):
         self.assertGreaterEqual(len(calls), 1)
         self.assertTrue(res["truncated"])
 
+    def test_budget_stop_is_distinguishable_from_running_out_of_steps(self):
+        # Both stops report truncated=True and steps=max_steps, so without an
+        # explicit reason a budget-capped cycle is indistinguishable from one
+        # that simply used every step -- which is how a capped tick went
+        # undiagnosed. The reason has to survive to the caller.
+        async def big_tool(_args):
+            return "x" * 40000
+
+        async def small_tool(_args):
+            return "obs"
+
+        async def chat_fn_big(_messages):
+            return '{"action":"big","args":{}}'
+
+        async def chat_fn_small(_messages):
+            return '{"action":"t","args":{}}'
+
+        capped = asyncio.run(ac.run_tool_loop(
+            "q", {"big": big_tool}, [{"name": "big", "description": "d"}],
+            chat_fn_big, max_steps=16, token_budget=20000))
+        exhausted = asyncio.run(ac.run_tool_loop(
+            "q", {"t": small_tool}, [{"name": "t", "description": "d"}],
+            chat_fn_small, max_steps=3))
+
+        # Same truncated flag, different cause.
+        self.assertTrue(capped["truncated"])
+        self.assertTrue(exhausted["truncated"])
+        self.assertEqual(capped["stop_reason"], "token_budget")
+        self.assertEqual(exhausted["stop_reason"], "max_steps")
+        # And the budget stop reports what it actually managed, not max_steps.
+        self.assertLess(capped["steps_completed"], 16)
+        self.assertGreaterEqual(capped["steps_completed"], 1)
+        self.assertGreater(capped["tokens_used"], 0)
+
     def test_no_budget_means_no_token_cap(self):
         calls = []
 

@@ -176,6 +176,15 @@ WEATHER_CANDIDATE_QUOTA = max(
 # rate-limit incident. Leave whole-cycle retry opt-in for manual recovery; the
 # scheduled workflow uses the safe default of one attempt.
 AGENT_ANALYZE_RETRIES = max(1, int(os.environ.get("AGENT_TRADING_RETRIES", "1")))
+# One exception to that default, for the failure it was never about: a bare
+# upstream 503 is transient -- the same model answers minutes later, and a
+# cycle lost to it is a whole model missing from the board. The rate-limit
+# concern above still holds and still wins, because ``_failure_kind`` tests
+# for 429 before 503: a quota rejection wrapped as "503 ... (upstream returned
+# HTTP 429)" classifies as provider_rate_limited and is never retried here.
+AGENT_ANALYZE_UNAVAILABLE_RETRIES = max(
+    1, int(os.environ.get("AGENT_TRADING_UNAVAILABLE_RETRIES", "2"))
+)
 AGENT_ANALYZE_RETRY_BACKOFF_S = float(os.environ.get("AGENT_TRADING_RETRY_BACKOFF_S", "10"))
 # A provider outage is a completed, safely-persisted agent attempt—not a
 # broken paper ledger.  Workflows use this distinct code to report a degraded
@@ -1048,29 +1057,42 @@ async def _call_agent_analyze(question: str):
         max_tool_steps=MAX_TOOL_STEPS,
     )
     last_exc: Optional[Exception] = None
-    for attempt in range(AGENT_ANALYZE_RETRIES):
+    max_attempts = max(AGENT_ANALYZE_RETRIES, AGENT_ANALYZE_UNAVAILABLE_RETRIES)
+    for attempt in range(max_attempts):
         try:
             report = await agent_analyze(req, request=None)
             agent_analyze_attempts.add(1, {"model": MODEL or "unknown", "outcome": "success"})
             return report
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
+            # How many attempts this failure is worth depends on what it is,
+            # not on how many are configured overall: a 503 earns a second
+            # try, a 429 (or anything else) stops at the baseline. The 503
+            # allowance is a floor, never a ceiling -- an operator who raises
+            # AGENT_TRADING_RETRIES for manual recovery must not thereby get
+            # *fewer* attempts on the one failure worth retrying.
+            allowed = (
+                max(AGENT_ANALYZE_RETRIES, AGENT_ANALYZE_UNAVAILABLE_RETRIES)
+                if _failure_kind(exc) == "provider_unavailable"
+                else AGENT_ANALYZE_RETRIES
+            )
             agent_analyze_attempts.add(
                 1,
                 {
                     "model": MODEL or "unknown",
-                    "outcome": "retry" if attempt + 1 < AGENT_ANALYZE_RETRIES else "failure",
+                    "outcome": "retry" if attempt + 1 < allowed else "failure",
                 },
             )
-            print(f"  agent_analyze attempt {attempt + 1}/{AGENT_ANALYZE_RETRIES} failed: {exc}", file=sys.stderr)
-            if attempt + 1 < AGENT_ANALYZE_RETRIES:
-                delay_s = AGENT_ANALYZE_RETRY_BACKOFF_S * (2 ** attempt)
-                agent_analyze_retry_delay.record(delay_s, {"model": MODEL or "unknown"})
-                logger.warning(
-                    "agent analysis retry model=%s attempt=%s/%s delay_s=%s",
-                    MODEL or "unknown", attempt + 1, AGENT_ANALYZE_RETRIES, delay_s,
-                )
-                await asyncio.sleep(delay_s)
+            print(f"  agent_analyze attempt {attempt + 1}/{allowed} failed: {exc}", file=sys.stderr)
+            if attempt + 1 >= allowed:
+                break
+            delay_s = AGENT_ANALYZE_RETRY_BACKOFF_S * (2 ** attempt)
+            agent_analyze_retry_delay.record(delay_s, {"model": MODEL or "unknown"})
+            logger.warning(
+                "agent analysis retry model=%s attempt=%s/%s delay_s=%s kind=%s",
+                MODEL or "unknown", attempt + 1, allowed, delay_s, _failure_kind(exc),
+            )
+            await asyncio.sleep(delay_s)
     assert last_exc is not None
     raise last_exc
 
