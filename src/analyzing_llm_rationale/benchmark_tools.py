@@ -539,6 +539,7 @@ def _extract_filled_quantity(
     live: bool,
     shadow_marketable: bool = True,
     shadow_unfilled_status: str = "shadow_unfilled_below_market",
+    available_depth: Optional[float] = None,
 ) -> tuple[float, str]:
     requested = _as_float(normalized.get("quantity"))
     if not live:
@@ -550,6 +551,17 @@ def _extract_filled_quantity(
             # distinguishes the two reasons for the caller (see
             # _resolve_shadow_marketability).
             return 0.0, shadow_unfilled_status
+        # A marketable order fills only what the book can actually absorb at
+        # the limit. Assuming the full size regardless flatters every result,
+        # and flatters it most in the thinnest markets -- the ones Kelly
+        # sizing pushes hardest into. `None` means depth could not be
+        # established, which stays a full fill: an orderbook outage must not
+        # masquerade as an empty book.
+        if available_depth is not None and available_depth + 1e-9 < requested:
+            filled = max(0.0, round(available_depth, 4))
+            if filled <= 0.0:
+                return 0.0, "shadow_unfilled_no_depth"
+            return filled, "shadow_filled_partial"
         return requested, "shadow_assumed_full"
     body = ((result.get("venue_response") or {}).get("body") or {})
     filled_keys = (
@@ -618,10 +630,12 @@ def _normalize_fill_for_accounting(
     shadow_marketable: bool = True,
     shadow_unfilled_status: str = "shadow_unfilled_below_market",
     platform: str = "kalshi",
+    available_depth: Optional[float] = None,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
     filled_quantity, fill_status = _extract_filled_quantity(
         result, normalized, live=live, shadow_marketable=shadow_marketable,
         shadow_unfilled_status=shadow_unfilled_status,
+        available_depth=available_depth,
     )
     accounting_order = dict(normalized)
     accounting_order["quantity"] = filled_quantity
@@ -2315,6 +2329,61 @@ def _verified_reduce_only_close(
     return requested_quantity <= closeable + 1e-9
 
 
+def _available_depth(
+    ticker: str, side: str, limit_price: float, *, platform: str = "kalshi"
+) -> Optional[float]:
+    """Contracts actually buyable at or better than ``limit_price``.
+
+    Returns None when depth cannot be established, which the caller treats as
+    "unknown" rather than "none" -- an outage must not silently zero a fill.
+
+    A shadow fill previously returned the full requested quantity whenever the
+    limit crossed the ask, with no reference to the book. That is fine for a
+    paper score and wrong for a simulation meant to stand in for real
+    execution: one live order was Kelly-sized to 6,056 contracts on a market
+    whose best level held 137, and the simulator would have booked all 6,056
+    at the top price. Every strategy is flattered by that, and the flattery is
+    largest exactly where the book is thinnest.
+
+    Kalshi's book lists resting BIDS on each side, and the two sides sum to
+    $1.00: buying YES is matched by a resting NO bid, so YES depth at limit p
+    is the NO quantity resting at 1 - p or better. Verified live:
+    ``1 - best_no_bid`` reproduced ``yes_ask`` exactly, and vice versa.
+    """
+    if platform != "kalshi":
+        return None
+    from analyzing_llm_rationale import market_data
+
+    try:
+        book = market_data.fetch_kalshi_orderbook(ticker) or {}
+    except market_data.MarketDataError:
+        # A venue outage is unknown depth, not zero depth. Anything else is a
+        # bug in this function and must surface rather than silently disable
+        # the check -- a bare `except Exception` here hid a NameError that
+        # made every lookup return "unknown", which reads exactly like a
+        # working fail-open.
+        return None
+    levels = (book.get("orderbook_fp") or book) if isinstance(book, dict) else {}
+    # To buy this side you cross the opposite side's resting bids.
+    key = "no_dollars" if side == "yes" else "yes_dollars"
+    rows = levels.get(key) if isinstance(levels, dict) else None
+    if not isinstance(rows, list) or not rows:
+        return None
+    threshold = 1.0 - limit_price
+    total = 0.0
+    seen = False
+    for row in rows:
+        try:
+            price, quantity = float(row[0]), float(row[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        seen = True
+        # A resting bid at or above the threshold is one this order can hit.
+        if price + 1e-9 >= threshold:
+            total += max(0.0, quantity)
+    return total if seen else None
+
+
 def _resolve_shadow_marketability(
     ticker: str, side: str, requested_price: Optional[float], *, platform: str = "kalshi"
 ) -> Dict[str, Any]:
@@ -2863,6 +2932,13 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 shadow_marketable=shadow_marketable,
                 shadow_unfilled_status=shadow_unfilled_status,
                 platform=platform,
+                # Only worth a book fetch when the order would otherwise fill:
+                # an unmarketable order fills zero regardless of depth.
+                available_depth=(
+                    _available_depth(
+                        ticker, side, float(order["price"]), platform=platform)
+                    if shadow_marketable else None
+                ),
             )
             fill_status = str(accounting_guard.get("fill_status") or "unknown")
             filled_quantity = _as_float(accounting_guard.get("filled_quantity"))
