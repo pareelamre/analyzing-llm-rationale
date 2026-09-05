@@ -858,10 +858,10 @@ def _account_summary(conn: sqlite3.Connection, agent_id: str, starting_cash: flo
             """
             SELECT platform, ticker, side, quantity, cost_basis, avg_entry_price
             FROM agent_positions
-            WHERE agent_id = ? AND quantity > 0
+            WHERE agent_id = ? AND quantity > ?
             ORDER BY platform, ticker, side
             """,
-            (agent_id,),
+            (agent_id, MIN_POSITION_QUANTITY),
         )
     ]
     open_cost_basis = sum(float(p["cost_basis"]) for p in positions)
@@ -885,6 +885,9 @@ def _account_summary(conn: sqlite3.Connection, agent_id: str, starting_cash: flo
     }
 
 
+MIN_POSITION_QUANTITY = 0.1
+
+
 def _upsert_position(
     conn: sqlite3.Connection,
     *,
@@ -896,7 +899,7 @@ def _upsert_position(
     cost_basis: float,
 ) -> None:
     now = _now()
-    if quantity <= 1e-12:
+    if quantity <= MIN_POSITION_QUANTITY:
         conn.execute(
             "DELETE FROM agent_positions WHERE agent_id = ? AND platform = ? AND ticker = ? AND side = ?",
             (agent_id, platform, ticker, side),
@@ -1078,8 +1081,11 @@ def _apply_trade_to_account_tables(
         ).fetchone()
         if opposite is not None:
             opposite_qty = float(opposite["quantity"])
-            if opposite_qty > 1e-12:
-                realized_pairs = min(remaining, opposite_qty)
+            if opposite_qty > MIN_POSITION_QUANTITY:
+                if remaining < opposite_qty and (opposite_qty - remaining) <= MIN_POSITION_QUANTITY:
+                    realized_pairs = opposite_qty
+                else:
+                    realized_pairs = min(remaining, opposite_qty)
                 old_basis = float(opposite["avg_entry_price"]) * realized_pairs
                 new_basis = price * realized_pairs
                 fee_alloc = fee * (realized_pairs / quantity) if quantity else 0.0
@@ -1095,9 +1101,9 @@ def _apply_trade_to_account_tables(
                     quantity=new_opposite_qty,
                     cost_basis=new_opposite_basis,
                 )
-                remaining -= realized_pairs
+                remaining -= min(remaining, realized_pairs)
 
-        if remaining > 1e-12:
+        if remaining > MIN_POSITION_QUANTITY:
             same = conn.execute(
                 """
                 SELECT * FROM agent_positions
@@ -1419,7 +1425,7 @@ def _ds_positions(client: Any, agent_id: str) -> List[Dict[str, Any]]:
     return [
         dict(p)
         for p in client.query(kind=_DS_POSITION_KIND, ancestor=account_key).fetch()
-        if float(p.get("quantity") or 0) > 1e-12
+        if float(p.get("quantity") or 0) > MIN_POSITION_QUANTITY
     ]
 
 
@@ -1465,7 +1471,7 @@ def _ds_upsert_position(
     from google.cloud import datastore as _ds
 
     key = _ds_position_key(client, agent_id, platform, ticker, side)
-    if quantity <= 1e-12:
+    if quantity <= MIN_POSITION_QUANTITY:
         client.delete(key)
         return
     entity = _ds.Entity(key=key)
@@ -1621,8 +1627,11 @@ def _ds_apply_trade(
         opposite = client.get(_ds_position_key(client, agent_id, platform, ticker, opposite_side))
         if opposite is not None:
             opposite_qty = float(opposite["quantity"])
-            if opposite_qty > 1e-12:
-                realized_pairs = min(remaining, opposite_qty)
+            if opposite_qty > MIN_POSITION_QUANTITY:
+                if remaining < opposite_qty and (opposite_qty - remaining) <= MIN_POSITION_QUANTITY:
+                    realized_pairs = opposite_qty
+                else:
+                    realized_pairs = min(remaining, opposite_qty)
                 old_basis = float(opposite["avg_entry_price"]) * realized_pairs
                 new_basis = price * realized_pairs
                 fee_alloc = fee * (realized_pairs / quantity) if quantity else 0.0
@@ -1638,9 +1647,9 @@ def _ds_apply_trade(
                     quantity=new_opposite_qty,
                     cost_basis=new_opposite_basis,
                 )
-                remaining -= realized_pairs
+                remaining -= min(remaining, realized_pairs)
 
-        if remaining > 1e-12:
+        if remaining > MIN_POSITION_QUANTITY:
             same = client.get(_ds_position_key(client, agent_id, platform, ticker, side))
             same_qty = float(same["quantity"]) if same is not None else 0.0
             same_basis = float(same["cost_basis"]) if same is not None else 0.0
@@ -1971,9 +1980,9 @@ def _load_guard_account(
             """
             SELECT platform, ticker, side, quantity, cost_basis
             FROM agent_positions
-            WHERE agent_id = ? AND quantity > 0
+            WHERE agent_id = ? AND quantity > ?
             """,
-            (agent_id,),
+            (agent_id, MIN_POSITION_QUANTITY),
         ):
             loaded = account._position(str(pos["platform"]), str(pos["ticker"]), str(pos["side"]))
             loaded.quantity = float(pos["quantity"])
@@ -2662,6 +2671,23 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                     "submitted": False,
                     "sizing": sizing,
                 }
+
+            if sizing.get("mode") == "close":
+                policy = _risk_guard_policy()
+                close_acct, _ = _load_guard_account(
+                    agent_id, policy, platform=platform, ticker=ticker, side=side,
+                )
+                closeable_qty = sum(
+                    float(position.quantity)
+                    for position in close_acct.open_positions()
+                    if str(position.platform).lower() == platform
+                    and str(position.ident) == ticker
+                    and str(position.side).lower() == _opposite_side(side)
+                )
+                if closeable_qty > 0:
+                    req_qty = args.get("quantity")
+                    if req_qty is None or abs(float(order["quantity"]) - closeable_qty) <= 1.0 or float(order["quantity"]) >= (closeable_qty - MIN_POSITION_QUANTITY):
+                        order["quantity"] = closeable_qty
 
             # A quote-verified close can exceed the generic gross-ticket cap
             # while still returning capital and eliminating risk.  Let it
