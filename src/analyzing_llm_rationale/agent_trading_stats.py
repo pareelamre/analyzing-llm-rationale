@@ -14,7 +14,11 @@ import re
 import sqlite3
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-from analyzing_llm_rationale.accounting import Position, PredictionMarketAccount
+from analyzing_llm_rationale.accounting import (
+    MIN_POSITION_QUANTITY,
+    Position,
+    PredictionMarketAccount,
+)
 from analyzing_llm_rationale.track_record_live import _sharpe_and_max_drawdown
 
 QuoteMap = Mapping[Tuple[str, str], Any]
@@ -76,8 +80,8 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
         agent_id = str(acct_row["agent_id"])
         position_rows = list(conn.execute(
             "SELECT platform, ticker, side, quantity, cost_basis "
-            "FROM agent_positions WHERE agent_id = ? AND quantity > 0",
-            (agent_id,),
+            "FROM agent_positions WHERE agent_id = ? AND quantity > ?",
+            (agent_id, MIN_POSITION_QUANTITY),
         ))
         account = _account_from_rows(acct_row, position_rows)
         snap = account.snapshot(quotes)

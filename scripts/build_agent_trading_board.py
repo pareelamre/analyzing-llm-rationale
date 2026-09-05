@@ -327,7 +327,10 @@ def _operational_health(model_health: Dict[str, Dict[str, Any]]) -> Dict[str, An
 def _held_tickers(conn: sqlite3.Connection) -> Set[tuple]:
     return {
         (str(row["platform"] or "kalshi").lower(), str(row["ticker"]))
-        for row in conn.execute("SELECT DISTINCT platform, ticker FROM agent_positions WHERE quantity > 0")
+        for row in conn.execute(
+            "SELECT DISTINCT platform, ticker FROM agent_positions WHERE quantity > ?",
+            (benchmark_tools.MIN_POSITION_QUANTITY,),
+        )
     }
 
 

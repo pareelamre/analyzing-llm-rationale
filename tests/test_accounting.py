@@ -108,6 +108,18 @@ class PredictionMarketAccountTests(unittest.TestCase):
         self.assertAlmostEqual(account.cash, 101.5)
         self.assertEqual(account.open_positions(), [])
 
+    def test_netting_absorbs_dust_quantity_on_close(self):
+        account = PredictionMarketAccount(starting_cash=100.0)
+        account.buy(platform="Polymarket", ident="poly-fed", side=YES, quantity=258.418027, price=0.54)
+        fill = account.buy(platform="Polymarket", ident="poly-fed", side=NO, quantity=258.4, price=0.46)
+
+        self.assertEqual(fill.settlement_status, "realized")
+        self.assertEqual(account.open_positions(), [])
+        snap = account.snapshot({("Polymarket", "poly-fed"): {"market_bid": 0.49, "market_ask": 0.51}})
+        self.assertEqual(snap["open_positions"], [])
+        self.assertEqual(snap["unrealized_pnl"], 0.0)
+        self.assertEqual(snap["mark_coverage"]["open_positions"], 0)
+
     def test_settlement_records_realized_pnl(self):
         account = PredictionMarketAccount(starting_cash=100.0)
         account.buy(platform="Kalshi", ident="KXTEST", side=YES, quantity=2, price=0.40)

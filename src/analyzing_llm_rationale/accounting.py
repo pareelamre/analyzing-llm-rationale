@@ -182,6 +182,10 @@ class TradeFill:
 # netting profit there reflects a real market move, not bad data.
 MAX_NETTING_ARB_PER_PAIR = 0.15
 
+# Quantities below this threshold are considered dust from floating-point
+# sizing and rounding during netting exits, rather than open economic exposure.
+MIN_POSITION_QUANTITY = 0.1
+
 
 class PredictionMarketAccount:
     """Cash account with reciprocal binary-contract netting."""
@@ -202,7 +206,7 @@ class PredictionMarketAccount:
 
     def _active_position(self, platform: str, ident: str, side: str) -> Optional[Position]:
         pos = self.positions.get((platform, ident, _side(side)))
-        return pos if pos is not None and pos.quantity > 1e-12 else None
+        return pos if pos is not None and pos.quantity > MIN_POSITION_QUANTITY else None
 
     def buy(
         self,
@@ -237,7 +241,10 @@ class PredictionMarketAccount:
         remaining = quantity
         opposite_pos = self._active_position(platform, ident, _opposite(side))
         if opposite_pos is not None:
-            realized_pairs = min(remaining, opposite_pos.quantity)
+            if remaining < opposite_pos.quantity and (opposite_pos.quantity - remaining) <= MIN_POSITION_QUANTITY:
+                realized_pairs = opposite_pos.quantity
+            else:
+                realized_pairs = min(remaining, opposite_pos.quantity)
             if realized_pairs > 0:
                 fee_alloc = fee * (realized_pairs / quantity)
                 old_basis = opposite_pos.avg_entry_price * realized_pairs
@@ -251,12 +258,12 @@ class PredictionMarketAccount:
                 self.realized_pnl += realized_pnl
                 opposite_pos.quantity -= realized_pairs
                 opposite_pos.cost_basis -= old_basis
-                if opposite_pos.quantity <= 1e-12:
+                if opposite_pos.quantity <= MIN_POSITION_QUANTITY:
                     opposite_pos.quantity = 0.0
                     opposite_pos.cost_basis = 0.0
-                remaining -= realized_pairs
+                remaining -= min(remaining, realized_pairs)
 
-        if remaining > 1e-12:
+        if remaining > MIN_POSITION_QUANTITY:
             pos = self._position(platform, ident, side)
             pos.quantity += remaining
             pos.cost_basis += remaining * price
@@ -281,7 +288,7 @@ class PredictionMarketAccount:
         return fill
 
     def open_positions(self) -> List[Position]:
-        return [p for p in self.positions.values() if p.quantity > 1e-12]
+        return [p for p in self.positions.values() if p.quantity > MIN_POSITION_QUANTITY]
 
     def settle_market(self, *, platform: str, ident: str, outcome: int, ts: Any = None) -> Dict[str, Any]:
         """Settle open inventory against a final binary outcome."""

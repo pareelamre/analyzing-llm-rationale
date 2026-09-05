@@ -1529,9 +1529,9 @@ def _close_order_args(
         """
         SELECT side, quantity
         FROM agent_positions
-        WHERE agent_id = ? AND platform = ? AND ticker = ? AND quantity > 0
+        WHERE agent_id = ? AND platform = ? AND ticker = ? AND quantity > ?
         """,
-        (agent_id, platform, ticker),
+        (agent_id, platform, ticker, benchmark_tools.MIN_POSITION_QUANTITY),
     ).fetchall()
     if len(rows) != 1:
         return None, None, "close_requires_exactly_one_open_position"
@@ -1541,7 +1541,7 @@ def _close_order_args(
     if expected_held_side is not None and held_side != expected_held_side:
         return None, None, "close_side_does_not_match_declared_sell"
     quantity = float(rows[0]["quantity"] or 0)
-    if quantity <= 0:
+    if quantity <= benchmark_tools.MIN_POSITION_QUANTITY:
         return None, None, "close_position_quantity_invalid"
     return ("no" if held_side == "yes" else "yes"), quantity, None
 
@@ -2167,8 +2167,8 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         held_positions = [
             (str(row["platform"] or "kalshi").lower(), row["ticker"])
             for row in conn.execute(
-                "SELECT DISTINCT platform, ticker FROM agent_positions WHERE agent_id = ? AND quantity > 0",
-                (agent_id,),
+                "SELECT DISTINCT platform, ticker FROM agent_positions WHERE agent_id = ? AND quantity > ?",
+                (agent_id, benchmark_tools.MIN_POSITION_QUANTITY),
             )
         ]
         last_cycle = conn.execute(
