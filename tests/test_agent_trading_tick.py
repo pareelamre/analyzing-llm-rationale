@@ -396,6 +396,54 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("Expected underlying resolution: 2026-08-21T00:00:00Z", line)
 
 
+class FailureClassificationTests(unittest.TestCase):
+    def test_a_wrapped_read_timeout_is_a_timeout_not_an_outage(self):
+        # The agent path re-raises a read timeout as "503 ... temporarily
+        # unavailable". Classifying on that text filed every timeout as a
+        # provider outage, which is how glm-5-3 was reported down for days
+        # while SCADS listed it up with tools enabled -- it was just slower
+        # than the 120s read timeout. Retrying an "outage" that is really a
+        # timeout also burns a second full timeout window for nothing.
+        import requests
+
+        root = requests.exceptions.ReadTimeout("The read operation timed out")
+        wrapped = RuntimeError(
+            "503: The 'glm-5-3' forecasting model is temporarily unavailable. "
+            "Please retry in a moment, or pass a different `model` in the request."
+        )
+        wrapped.__cause__ = root
+
+        self.assertEqual(agent_trading_tick._failure_kind(wrapped), "provider_timeout")
+
+    def test_a_genuine_outage_is_still_an_outage(self):
+        # The timeout check must not swallow real 503s.
+        exc = RuntimeError("503: upstream service unavailable")
+        self.assertEqual(agent_trading_tick._failure_kind(exc), "provider_unavailable")
+
+    def test_a_wrapped_rate_limit_is_still_a_rate_limit(self):
+        # The safety property that keeps 429s out of the retry path.
+        exc = RuntimeError("503: temporarily unavailable (upstream returned HTTP 429)")
+        self.assertEqual(agent_trading_tick._failure_kind(exc), "provider_rate_limited")
+
+    def test_a_timeout_is_not_retried_as_a_transient_503(self):
+        # provider_unavailable earns a second attempt; a timeout must not,
+        # or a slow model costs two full timeout windows per cycle.
+        import requests
+
+        root = requests.exceptions.ReadTimeout("The read operation timed out")
+        wrapped = RuntimeError("503: The 'glm-5-3' forecasting model is temporarily unavailable.")
+        wrapped.__cause__ = root
+        self.assertNotEqual(agent_trading_tick._failure_kind(wrapped), "provider_unavailable")
+
+    def test_agent_path_gives_a_slow_model_room_to_answer(self):
+        # The asyncio ceiling was already disabled here, but the HTTP client's
+        # own socket read timeout was never set on this path, so "no ceiling"
+        # still meant a hard 120s from the provider dataclass default.
+        from analyzing_llm_rationale import server
+
+        self.assertGreater(server._AGENT_TOOL_PROVIDER_READ_TIMEOUT_S, 120.0)
+
+
 class DecisionQualityInstructionTests(unittest.TestCase):
     def test_requires_fresh_evidence_for_new_risk_and_rule_window_checks(self):
         instruction = agent_trading_tick._TRADING_INSTRUCTION

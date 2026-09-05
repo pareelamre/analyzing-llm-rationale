@@ -280,6 +280,17 @@ _AGENT_TOOL_PROVIDER_MAX_RETRIES = max(
 _AGENT_TOOL_PROVIDER_TIMEOUT_S = float(
     os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_S", "0")
 )
+# The ceiling above governs asyncio; the HTTP client keeps its own socket read
+# timeout, and that one was never set on this path -- so "no wall-clock
+# ceiling" still meant a hard 120s from OpenAICompatibleProvider's default.
+# glm-5-3 (GLM-5.3, 524k context) reliably needs longer on a full trading
+# prompt, so every one of its cycles died at 120s and was reported as an
+# unavailable provider, while SCADS listed the route up with tools enabled.
+# The council path already passes its own value here; the agent path passing
+# nothing was an omission, not a decision.
+_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S = float(
+    os.environ.get("AGENT_TOOL_PROVIDER_READ_TIMEOUT_S", "600")
+)
 # Cap a single cycle's token spend, as a runaway guard -- not as the thing
 # that decides how much research a cycle gets to do. That distinction was
 # learned the hard way: at 20,000 this stopped all seven healthy models after
@@ -14181,7 +14192,11 @@ def _select_agent_provider(req: "AgentAnalyzeRequest"):
     /agent/analyze request without an explicit model benefits from the same
     evolution-loop auto-routing the main forecast already gets, instead of
     always falling straight to the server's static default."""
-    alt_provider = _scads_alt_provider(req.model) if req.model else None
+    alt_provider = (
+        _scads_alt_provider(
+            req.model, request_timeout_s=_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S)
+        if req.model else None
+    )
     if alt_provider is not None:
         return alt_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
     if (req.ollama_base_url and req.openrouter_model) or (req.openrouter_api_key and req.openrouter_model):
@@ -14191,7 +14206,8 @@ def _select_agent_provider(req: "AgentAnalyzeRequest"):
         )
     auto = _auto_selected_model()
     if auto:
-        auto_provider = _scads_alt_provider(auto)
+        auto_provider = _scads_alt_provider(
+            auto, request_timeout_s=_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S)
         if auto_provider is not None:
             return auto_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
     return _select_provider(
