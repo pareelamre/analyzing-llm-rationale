@@ -538,6 +538,27 @@ class ModelBackstopCharsTests(unittest.TestCase):
         self.assertEqual(agent_trading_tick._model_backstop_chars("not-a-real-model"), int(128000 * 4 * 0.5))
 
 
+class EventMeritGateTests(unittest.TestCase):
+    def test_prompt_requires_event_merit_not_just_a_price_gap(self):
+        # llama-3.3-70b-instruct traded 90 times on 19,802 of notional for a
+        # 23% win rate and -793 gross: symptoms of trading numeric gaps rather
+        # than events it understood. The gate asks for the mechanism, the
+        # informational advantage, and the falsifier before opening.
+        question = agent_trading_tick._build_question("PORTFOLIO", "CANDIDATES")
+        for requirement in (
+            "EVENT MERIT GATE",
+            "Trade the event, not the number",
+            "mechanism",
+            "better informed",
+            "prove you wrong",
+        ):
+            self.assertIn(requirement, question)
+
+    def test_prompt_states_a_bare_disagreement_is_not_an_edge(self):
+        question = agent_trading_tick._build_question("PORTFOLIO", "CANDIDATES")
+        self.assertIn("you do not have an edge, you have a disagreement", question)
+
+
 class RecalledNotesTests(unittest.TestCase):
     def _write_notes(self, directory, agent_id, notes):
         path = Path(directory) / "notes.json"
