@@ -61,8 +61,18 @@ def build_grounding_note(aggregate: Optional[Dict[str, Any]]) -> str:
     if cal.get("applied"):
         parts.append(f"- Calibration: raw ECE {cal.get('raw_ece')}, model is miscalibrated; "
                      "adjust extreme probabilities toward the calibrated mapping.")
-    parts.append("- Discrepancy Discipline: In empirical tracking, model-vs-market disagreements >20pp "
-                 "have a 73.4% error rate. When you perceive an extreme edge, heavily challenge your thesis and anchor toward market odds unless you possess verified primary-source proof.")
+    # The figure this replaced -- "disagreements >20pp have a 73.4% error rate"
+    # -- was stated to every model as measured fact but had no traceable source
+    # in this repo or anywhere else. These numbers come from Kalshi Research,
+    # "Calibration in Prediction Markets", which measures the full resolved
+    # history of the venue (2,243,741 markets, 2021 to mid-2026).
+    parts.append("- Discrepancy Discipline: Kalshi's resolved history (2,243,741 markets) shows prices "
+                 "behaving like genuine probabilities -- Brier about 0.02 at close, and calibration improving "
+                 "monotonically with volume at every horizon. A large disagreement with a liquid, "
+                 "near-resolution price is more likely your error than the market's, so challenge your thesis "
+                 "and anchor toward market odds unless you hold verified primary-source proof. Room for a real "
+                 "edge widens with distance from resolution: long-dated markets never reach a 0.05 Brier at "
+                 "any level of participation.")
     parts.append("- Calibration Bias: Historical predictions in the 80-90% range resolve YES only ~68% of the time. "
                  "Account for 11th-hour cancellations, appeals, and procedural delays by damping extreme high-confidence calls.")
     parts.append("- Known tendency: this model has overpriced low-probability/longshot "
