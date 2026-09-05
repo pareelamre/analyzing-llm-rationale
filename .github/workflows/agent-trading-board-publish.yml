@@ -11,9 +11,12 @@ name: Agent trading board publish
 
 on:
   schedule:
-    # Agent cycle, followed by board publication.
-    - cron: "12,42 * * * *"
-    # Aggregation-only refresh between agent cycles.
+    # Aggregation-only refresh. Agent cycles are NOT triggered from here: the
+    # Cloud Scheduler job foresea-tick-agent-trading dispatches those every 30
+    # minutes. GitHub silently drops cron under load (three consecutive slots
+    # were missed on 2026-09-05), and running both triggers together produced
+    # four agent starts an hour, 12-18 minutes apart, against ticks that take
+    # 20-40 -- which is how queued cycles were getting evicted.
     - cron: "27,57 * * * *"
   workflow_dispatch:
     inputs:
@@ -52,9 +55,7 @@ jobs:
     # Use this workflow's proven heartbeat as the agent dispatcher. The other
     # two quarterly-hour publishes stay aggregation-only, keeping the board
     # fresh without starting an extra trading pass.
-    if: >-
-      ${{ (github.event_name == 'schedule' && github.event.schedule == '12,42 * * * *') ||
-          (github.event_name == 'workflow_dispatch' && inputs.run_agent_tick == true) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_agent_tick == true }}
     uses: ./.github/workflows/agent-trading-tick.yml
     secrets: inherit
 
