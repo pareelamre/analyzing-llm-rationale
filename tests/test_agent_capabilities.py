@@ -35,7 +35,51 @@ class GroundingNoteTests(unittest.TestCase):
         note = ac.build_grounding_note(agg)
         self.assertIn("40 resolved", note)
         self.assertIn("skill vs market", note.lower())
-        self.assertIn("longshot", note.lower())
+        # With no resolved bins there is no evidence of a tail bias, so the
+        # note must not assert one. It previously claimed a longshot bias
+        # unconditionally, in a fixed direction, whatever the record said.
+        self.assertNotIn("longshot", note.lower())
+
+    def test_tail_advice_follows_the_record_instead_of_a_fixed_direction(self):
+        # The hardcoded line told every model it had "overpriced" longshots and
+        # to shade tail YES estimates DOWN. The live record said the opposite:
+        # forecasts averaging 6.4% resolved YES 11.9% of the time across 1,486
+        # resolutions, so that advice pushed every tail estimate the wrong way.
+        under = {"n_snapshots_resolved": 2710, "calibration": [
+            {"avg_predicted": 0.035, "observed_yes_rate": 0.082, "n": 1107},
+            {"avg_predicted": 0.149, "observed_yes_rate": 0.227, "n": 379},
+        ]}
+        over = {"n_snapshots_resolved": 2710, "calibration": [
+            {"avg_predicted": 0.035, "observed_yes_rate": 0.010, "n": 1107},
+            {"avg_predicted": 0.149, "observed_yes_rate": 0.090, "n": 379},
+        ]}
+        under_note = ac.build_grounding_note(under).lower()
+        over_note = ac.build_grounding_note(over).lower()
+
+        self.assertIn("under-priced", under_note)
+        self.assertIn("do not reflexively shade tail yes estimates down", under_note)
+        self.assertNotIn("over-priced", under_note)
+        # Same code, opposite record, opposite advice.
+        self.assertIn("over-priced", over_note)
+        self.assertIn("shade tail yes estimates down", over_note)
+
+    def test_high_confidence_bias_is_measured_not_asserted(self):
+        agg = {"n_snapshots_resolved": 2710, "calibration": [
+            {"avg_predicted": 0.846, "observed_yes_rate": 0.681, "n": 94},
+        ]}
+        note = ac.build_grounding_note(agg)
+        # The figure that used to be written in by hand as "~68%".
+        self.assertIn("85%", note)
+        self.assertIn("68%", note)
+        self.assertIn("94 resolved", note)
+
+    def test_a_thin_bin_does_not_become_a_stated_bias(self):
+        agg = {"n_snapshots_resolved": 12, "calibration": [
+            {"avg_predicted": 0.04, "observed_yes_rate": 0.90, "n": 3},
+        ]}
+        note = ac.build_grounding_note(agg).lower()
+        self.assertNotIn("tail bias", note)
+        self.assertNotIn("under-priced", note)
 
 
 class ParseActionTests(unittest.TestCase):
