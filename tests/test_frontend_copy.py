@@ -697,6 +697,16 @@ function escHtml(value) {
                 self.assertIn("loadAgentTradingSection();", error_branch)
                 self.assertIn(">Retry<", error_branch)
 
+    def test_show_landing_cleans_boot_view_and_coordinates_motion(self):
+        for name, index in self._both().items():
+            with self.subTest(file=name):
+                landing_fn = index.split("function showLanding({", 1)[1].split("function launchApp", 1)[0]
+                self.assertIn("document.documentElement?.removeAttribute?.('data-boot-view');", landing_fn)
+                self.assertIn("window.lenisInstance", landing_fn)
+                self.assertIn("Motion.animate(landing", landing_fn)
+                self.assertIn(".brand-home:hover", index)
+                self.assertIn(".brand-home:active", index)
+
 
 if __name__ == "__main__":
     unittest.main()
