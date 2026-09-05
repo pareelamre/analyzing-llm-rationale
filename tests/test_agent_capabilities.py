@@ -40,6 +40,33 @@ class GroundingNoteTests(unittest.TestCase):
         # unconditionally, in a fixed direction, whatever the record said.
         self.assertNotIn("longshot", note.lower())
 
+    def test_disagreement_skill_is_reported_from_the_record(self):
+        # The "73.4% error rate" line removed in #411 as unsourced was in fact
+        # this fleet's own 20pp+ bucket: 26.6% accuracy on n=94 is exactly a
+        # 73.4% error rate. It was dropped after grepping for the literal
+        # string instead of checking the number against by_edge. Derived here
+        # so it stays true as the record grows, and so it cannot be mistaken
+        # for an invented statistic again.
+        agg = {"n_snapshots_resolved": 2710, "by_edge": [
+            {"edge_bucket": "20pp+", "accuracy": 0.266, "n": 94, "skill_vs_market": -0.4149},
+            {"edge_bucket": "10-20pp", "accuracy": 0.4474, "n": 38, "skill_vs_market": -0.1481},
+            {"edge_bucket": "5-10pp", "accuracy": 0.7143, "n": 63, "skill_vs_market": -0.0214},
+            {"edge_bucket": "0-5pp", "accuracy": 0.8402, "n": 2515, "skill_vs_market": -0.0001},
+        ]}
+        note = ac.build_grounding_note(agg)
+        # Widest gap first: that is where an agent thinks it found something.
+        self.assertLess(note.index("20pp+"), note.index("0-5pp"))
+        self.assertIn("27% right (n=94)", note)
+        self.assertIn("84% right (n=2515)", note)
+        self.assertIn("0.415 Brier", note)
+        self.assertIn("you are wrong, not that the crowd is", note)
+
+    def test_a_thin_disagreement_bucket_is_not_reported(self):
+        agg = {"n_snapshots_resolved": 20, "by_edge": [
+            {"edge_bucket": "20pp+", "accuracy": 0.0, "n": 4, "skill_vs_market": -0.9},
+        ]}
+        self.assertNotIn("disagreements, by size", ac.build_grounding_note(agg))
+
     def test_tail_advice_follows_the_record_instead_of_a_fixed_direction(self):
         # The hardcoded line told every model it had "overpriced" longshots and
         # to shade tail YES estimates DOWN. The live record said the opposite:
