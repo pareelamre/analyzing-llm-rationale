@@ -308,6 +308,13 @@ _COUNCIL_MEMBER_TIMEOUT_S = float(os.environ.get("COUNCIL_MEMBER_TIMEOUT_S", "35
 _COUNCIL_MIN_SUCCESSFUL_MEMBERS = max(
     1, int(os.environ.get("COUNCIL_MIN_SUCCESSFUL_MEMBERS", "1"))
 )
+# Restrict default council to top 3 models: Foresea's #1 performer (gemma-4-26b-a4b-it),
+# flagship research model (gpt-oss-120b), and fastest calibrated model (qwen3-8-27b).
+_DEFAULT_COUNCIL_MODELS = (
+    "gemma-4-26b-a4b-it",
+    "gpt-oss-120b",
+    "qwen3-8-27b",
+)
 # Reject oversized request bodies before they reach a handler. Generous enough
 # for PDF uploads on /extract, small enough to blunt memory-exhaustion abuse.
 _MAX_BODY_BYTES = int(os.environ.get("MAX_BODY_BYTES", str(12 * 1024 * 1024)))
@@ -12663,7 +12670,17 @@ async def _council_forecast(
     Final: median of Round-2 probabilities (robust to one outlier)."""
     temperature = _state.get("temperature", 0.0)
     max_tokens = _state.get("max_tokens", 1024)
-    council_models = list(_SCADS_MODEL_ALLOWLIST.keys())
+    configured_models = [
+        m.strip()
+        for m in os.environ.get("COUNCIL_MODELS", "").split(",")
+        if m.strip()
+    ]
+    candidate_models = configured_models or list(_DEFAULT_COUNCIL_MODELS)
+    council_models = [m for m in candidate_models if m in _SCADS_MODEL_ALLOWLIST]
+    if not council_models:
+        council_models = [
+            m for m in _DEFAULT_COUNCIL_MODELS if m in _SCADS_MODEL_ALLOWLIST
+        ] or list(_SCADS_MODEL_ALLOWLIST.keys())[:3]
 
     async def _call(label: str, msgs: List[Dict], round_number: int) -> tuple:
         from opentelemetry.trace import Status, StatusCode
@@ -12720,9 +12737,11 @@ async def _council_forecast(
             return None
         conf = parsed.get("confidence")
         if conf is None:
+            conf = parsed.get("probability") or parsed.get("model_probability")
+        if conf is None:
             return None
-        answer = (parsed.get("predicted_answer") or "").strip().lower()
-        if answer not in ("yes", "y", "no", "n"):
+        answer = str(parsed.get("predicted_answer") or parsed.get("answer") or "").strip().lower()
+        if answer not in ("yes", "y", "no", "n", "true", "1", "false", "0"):
             return None
         try:
             confidence = float(conf)
@@ -12730,10 +12749,11 @@ async def _council_forecast(
             return None
         if not 0.0 <= confidence <= 1.0:
             return None
-        prob = confidence if answer in ("yes", "y") else 1.0 - confidence
+        prob = confidence if answer in ("yes", "y", "true", "1") else 1.0 - confidence
+        rationale = (parsed.get("rationale") or parsed.get("model_rationale") or parsed.get("reasoning") or "")[:500]
         return {
             "probability": max(0.01, min(0.99, prob)),
-            "rationale": (parsed.get("rationale") or "")[:300],
+            "rationale": rationale,
         }
 
     # Round 1: independent forecasts ─────────────────────────────────────────
