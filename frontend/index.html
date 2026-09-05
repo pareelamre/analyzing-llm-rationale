@@ -5724,20 +5724,30 @@ async function loadTrackRecord() {
     _ebLastData = d;
     host.innerHTML = renderTrackRecord(d);
     if (window.Motion && !prefersReduced()) {
-      Motion.animate('#trackBody .tr-stat',
-        { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
-        { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
-      Motion.animate('#trackBody .tr-calib-row',
-        { opacity: [0, 1] }, { delay: Motion.stagger(0.02), duration: 0.4, easing: EASE });
+      const stats = host.querySelectorAll('.tr-stat');
+      if (stats.length) {
+        Motion.animate(stats,
+          { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
+          { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
+      }
+      const calibRows = host.querySelectorAll('.tr-calib-row');
+      if (calibRows.length) {
+        Motion.animate(calibRows,
+          { opacity: [0, 1] }, { delay: Motion.stagger(0.02), duration: 0.4, easing: EASE });
+      }
       // Scroll-reveal the resolved log as it enters view
-      host.querySelectorAll('.tr-log-row').forEach(el => { el.style.opacity = '0'; });
-      Motion.inView('#trackBody .tr-log-row', (entry) => {
-        Motion.animate(entry.target,
-          { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
-          { duration: 0.4, easing: EASE });
-      }, { amount: 0.15 });
+      const logRows = host.querySelectorAll('.tr-log-row');
+      if (logRows.length && Motion.inView) {
+        logRows.forEach(el => { el.style.opacity = '0'; });
+        Motion.inView(logRows, (entry) => {
+          Motion.animate(entry.target,
+            { opacity: [0, 1], transform: ['translateY(8px)', 'translateY(0)'] },
+            { duration: 0.4, easing: EASE });
+        }, { amount: 0.15 });
+      }
     }
   } catch (e) {
+    console.warn('loadTrackRecord failed:', e);
     // See the matching comment in loadEdgeBoard()'s catch block -- same
     // stuck-until-hard-refresh bug, same fix.
     trackLoaded = false;
@@ -6320,11 +6330,15 @@ async function loadEdgeBoard() {
     if (_ebView === 'agentic') loadAgentTradingSection();
     _restoreEdgeBoardScroll();
     if (window.Motion && !prefersReduced()) {
-      Motion.animate('#edgeBody .tr-stat',
-        { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
-        { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
+      const stats = host.querySelectorAll('.tr-stat');
+      if (stats.length) {
+        Motion.animate(stats,
+          { opacity: [0, 1], transform: ['translateY(10px)', 'translateY(0)'] },
+          { delay: Motion.stagger(0.06), duration: 0.5, easing: EASE });
+      }
     }
   } catch (e) {
+    console.warn('loadEdgeBoard failed:', e);
     // Regression: edgeLoaded was set true unconditionally before this fetch
     // even started and never reset on failure, so a single transient error
     // (cold start, network blip) permanently stuck the whole edge board on
@@ -11969,15 +11983,24 @@ document.documentElement?.removeAttribute?.('data-boot-view');
   // Landing reveal (only if the landing is the current view)
   const landingVisible = !document.getElementById('landingPage').classList.contains('hidden-view');
   if (window.Motion && landingVisible) {
-    Motion.animate('.landing-nav',
-      { opacity: [0, 1], transform: ['translateY(-8px)', 'translateY(0)'] },
-      { duration: 0.5, easing: EASE });
-    Motion.animate('.hero-copy > *',
-      { opacity: [0, 1], transform: ['translateY(16px)', 'translateY(0)'] },
-      { delay: Motion.stagger(0.08), duration: 0.6, easing: EASE });
-    Motion.animate('.product-panel',
-      { opacity: [0, 1], transform: ['translateY(20px)', 'translateY(0)'] },
-      { duration: 0.7, delay: 0.22, easing: EASE });
+    const nav = document.querySelectorAll('.landing-nav');
+    if (nav.length) {
+      Motion.animate(nav,
+        { opacity: [0, 1], transform: ['translateY(-8px)', 'translateY(0)'] },
+        { duration: 0.5, easing: EASE });
+    }
+    const hero = document.querySelectorAll('.hero-copy > *');
+    if (hero.length) {
+      Motion.animate(hero,
+        { opacity: [0, 1], transform: ['translateY(16px)', 'translateY(0)'] },
+        { delay: Motion.stagger(0.08), duration: 0.6, easing: EASE });
+    }
+    const panels = document.querySelectorAll('.product-panel');
+    if (panels.length) {
+      Motion.animate(panels,
+        { opacity: [0, 1], transform: ['translateY(20px)', 'translateY(0)'] },
+        { duration: 0.7, delay: 0.22, easing: EASE });
+    }
 
     // Walkthrough: reveal each step in sequence as the panel scrolls into view,
     // then sweep the probability bar up to its real value.
