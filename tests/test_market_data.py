@@ -36,6 +36,45 @@ def _fake_requests(payload, status=200, capture=None):
     return SimpleNamespace(get=fake_get)
 
 
+class KalshiNoSideQuoteTests(unittest.TestCase):
+    def test_no_side_comes_from_the_venue_not_from_one_minus_yes_bid(self):
+        # MarketQuote.ask("no") already preferred a stored no_ask and only
+        # fell back to 1 - yes_bid, but _kalshi_quote never stored one, so the
+        # fallback was always what ran. That derivation cannot tell "nobody is
+        # bidding YES" apart from a stale or placeholder 0.0 -- and it is what
+        # every marketability check and every NO-side close price is computed
+        # from. Kalshi quotes the NO side directly; use it.
+        from analyzing_llm_rationale.accounting import MarketQuote
+
+        market = {
+            "ticker": "KXTEST", "title": "t", "status": "active",
+            "yes_bid_dollars": 0.0, "yes_ask_dollars": 0.93,
+            "no_bid_dollars": 0.07, "no_ask_dollars": 1.00,
+        }
+        from analyzing_llm_rationale.market_data import _kalshi_quote
+
+        quote = _kalshi_quote(market, {})
+        self.assertEqual(quote["no_bid"], 0.07)
+        self.assertEqual(quote["no_ask"], 1.00)
+        mq = MarketQuote.from_mapping(quote)
+        self.assertEqual(mq.ask("NO"), 1.00)
+        self.assertEqual(mq.bid("NO"), 0.07)
+
+    def test_no_side_still_derives_when_the_venue_omits_it(self):
+        from analyzing_llm_rationale.accounting import MarketQuote
+
+        market = {
+            "ticker": "KXTEST", "title": "t", "status": "active",
+            "yes_bid_dollars": 0.40, "yes_ask_dollars": 0.44,
+        }
+        from analyzing_llm_rationale.market_data import _kalshi_quote
+
+        quote = _kalshi_quote(market, {})
+        self.assertIsNone(quote["no_ask"])
+        # Fallback intact: 1 - yes_bid.
+        self.assertAlmostEqual(MarketQuote.from_mapping(quote).ask("NO"), 0.60)
+
+
 class MarketDataTests(unittest.TestCase):
     def setUp(self):
         self._orig = sys.modules.get("requests")
