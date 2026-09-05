@@ -502,6 +502,63 @@ class ToolLoopTests(unittest.TestCase):
         self.assertEqual(res["answer"], "no tools needed")
         self.assertEqual(seen, [])
 
+    def test_token_budget_stops_a_runaway_cycle(self):
+        # Measured live: one cycle runs 10-21k tokens against a shared
+        # 10,000-token-per-minute provider quota, so a deep cycle spends the
+        # whole minute and the next model in the serial lane collects the 429.
+        calls = []
+
+        async def big_tool(args):
+            calls.append(1)
+            return "x" * 40000   # ~10k tokens of observation per step
+
+        async def chat_fn(messages):
+            return '{"action":"big","args":{}}'
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"big": big_tool}, [{"name": "big", "description": "d"}],
+            chat_fn, max_steps=16, token_budget=20000))
+
+        # Far fewer than the 16 steps allowed -- stopped on cost, not count.
+        self.assertLess(len(calls), 16)
+        self.assertGreaterEqual(len(calls), 1)
+        self.assertTrue(res["truncated"])
+
+    def test_no_budget_means_no_token_cap(self):
+        calls = []
+
+        async def tool(args):
+            calls.append(1)
+            return "x" * 40000
+
+        async def chat_fn(messages):
+            return '{"action":"t","args":{}}'
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"t": tool}, [{"name": "t", "description": "d"}],
+            chat_fn, max_steps=4))
+        self.assertEqual(len(calls), 4)
+        self.assertTrue(res["truncated"])
+
+    def test_a_cheap_cycle_keeps_every_step_it_wants(self):
+        # The budget must not penalise a small cycle.
+        calls = []
+
+        async def tool(args):
+            calls.append(1)
+            return "short"
+
+        turns = iter(['{"action":"t","args":{}}'] * 3 + ['{"final":"done, no edge found"}'])
+
+        async def chat_fn(messages):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"t": tool}, [{"name": "t", "description": "d"}],
+            chat_fn, max_steps=16, token_budget=20000))
+        self.assertEqual(len(calls), 3)
+        self.assertIn("no edge", res["answer"])
+
     def test_keyless_json_is_retried_when_the_caller_has_no_backstop(self):
         # Live: gemma-4-26b-a4b-it and gpt-oss-120b both ended at step 0 with
         # valid JSON that was neither an action nor a final, and the board

@@ -280,6 +280,12 @@ _AGENT_TOOL_PROVIDER_MAX_RETRIES = max(
 _AGENT_TOOL_PROVIDER_TIMEOUT_S = float(
     os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_S", "0")
 )
+# Cap a single cycle's token spend. The provider enforces a shared
+# tokens-per-minute quota (10,000 observed), and a deep cycle measured at
+# 10-21k tokens can spend the whole minute, leaving the next model in the
+# serial lane to collect the 429. 0 disables the cap; raise it when the
+# upstream quota is raised.
+_AGENT_TOOL_TOKEN_BUDGET = int(os.environ.get("AGENT_TOOL_TOKEN_BUDGET", "20000"))
 _AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES = max(
     0, int(os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES", "1"))
 )
@@ -15191,7 +15197,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             # backstop below to salvage a keyless JSON answer. On the
             # agent-trading path that shape is a wasted cycle, so ask once
             # for a usable turn instead of accepting it.
-            retry_unusable_final=bool(req.benchmark_tools))
+            retry_unusable_final=bool(req.benchmark_tools),
+            token_budget=_AGENT_TOOL_TOKEN_BUDGET or None)
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
         if not last and not req.benchmark_tools:
