@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from analyzing_llm_rationale.market_data import MarketDataError, MarketDataInputError
+
 logger = logging.getLogger(__name__)
 
 
@@ -375,101 +377,79 @@ class ForeseaClient:
         return await self._arequest("GET", "/openapi.json")
 
     def exchange_status(self) -> Dict[str, Any]:
-        try:
-            from analyzing_llm_rationale import market_data
-            status = market_data.fetch_kalshi_exchange_status()
-            schedule = market_data.fetch_kalshi_exchange_schedule()
-            return {"status": status, "schedule": schedule}
-        except Exception:
-            return {"status": {}, "schedule": {}}
+        from analyzing_llm_rationale import market_data
+        status = market_data.fetch_kalshi_exchange_status()
+        schedule = market_data.fetch_kalshi_exchange_schedule()
+        return {"status": status, "schedule": schedule}
 
     async def aexchange_status(self) -> Dict[str, Any]:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.exchange_status)
 
-    def orderbook(self, ticker_or_token: str) -> Dict[str, Any]:
-        try:
-            from analyzing_llm_rationale import market_data
-            ref = ticker_or_token.strip()
-            if ref.isdigit() or len(ref) > 20:
-                return market_data.fetch_polymarket_orderbook(ref)
-            return market_data.fetch_kalshi_orderbook(ref)
-        except Exception:
-            return {}
+    def orderbook(self, ticker_or_token: str, platform: str = "") -> Dict[str, Any]:
+        from analyzing_llm_rationale import market_data
+        ref = ticker_or_token.strip()
+        if market_data.market_platform(platform, ref) == "polymarket":
+            return market_data.fetch_polymarket_orderbook(ref)
+        return market_data.fetch_kalshi_orderbook(ref)
 
-    async def aorderbook(self, ticker_or_token: str) -> Dict[str, Any]:
+    async def aorderbook(self, ticker_or_token: str, platform: str = "") -> Dict[str, Any]:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: self.orderbook(ticker_or_token))
+        return await loop.run_in_executor(None, lambda: self.orderbook(ticker_or_token, platform))
 
     def market_tags(self) -> List[Dict[str, Any]]:
-        try:
-            from analyzing_llm_rationale import market_data
-            return market_data.fetch_polymarket_tags()
-        except Exception:
-            return []
+        from analyzing_llm_rationale import market_data
+        return market_data.fetch_polymarket_tags()
 
     async def amarket_tags(self) -> List[Dict[str, Any]]:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.market_tags)
 
     def price_history(self, ticker_or_market: str, series_ticker: str = "") -> List[Dict[str, Any]]:
-        try:
-            from analyzing_llm_rationale import market_data
-            ref = ticker_or_market.strip()
-            if "-" in ref and not ref.isdigit():
-                return market_data.fetch_kalshi_candlesticks(ref, series_ticker)
-            return market_data.fetch_polymarket_price_history(ref)
-        except Exception:
-            return []
+        from analyzing_llm_rationale import market_data
+        ref = ticker_or_market.strip()
+        if "-" in ref and not ref.isdigit():
+            return market_data.fetch_kalshi_candlesticks(ref, series_ticker)
+        return market_data.fetch_polymarket_price_history(ref)
 
     async def aprice_history(self, ticker_or_market: str, series_ticker: str = "") -> List[Dict[str, Any]]:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.price_history(ticker_or_market, series_ticker))
 
-    def live_data(self, event_ticker: str = "", data_type: str = "") -> Dict[str, Any]:
-        try:
-            from analyzing_llm_rationale import market_data
-            return market_data.fetch_kalshi_live_data(event_ticker, data_type)
-        except Exception:
-            return {}
+    def live_data(self, event_ticker: str = "", data_type: str = "", milestone_id: str = "") -> Dict[str, Any]:
+        from analyzing_llm_rationale import market_data
+        return market_data.fetch_kalshi_live_data(event_ticker, data_type, milestone_id=milestone_id)
 
-    async def alive_data(self, event_ticker: str = "", data_type: str = "") -> Dict[str, Any]:
+    async def alive_data(self, event_ticker: str = "", data_type: str = "", milestone_id: str = "") -> Dict[str, Any]:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: self.live_data(event_ticker, data_type))
+        return await loop.run_in_executor(None, lambda: self.live_data(event_ticker, data_type, milestone_id))
 
     def polymarket_meta(self, target: str = "series", market_id: str = "") -> List[Dict[str, Any]]:
-        try:
-            from analyzing_llm_rationale import market_data
-            target_l = target.lower()
-            if target_l == "comments":
-                return market_data.fetch_polymarket_comments(market_id)
-            if target_l in ("sports", "teams"):
-                return market_data.fetch_polymarket_sports()
-            return market_data.fetch_polymarket_series()
-        except Exception:
-            return []
+        from analyzing_llm_rationale import market_data
+        target_l = target.lower()
+        if target_l == "comments":
+            return market_data.fetch_polymarket_comments(market_id)
+        if target_l == "teams":
+            return market_data.fetch_polymarket_teams()
+        if target_l == "sports":
+            return market_data.fetch_polymarket_sports()
+        return market_data.fetch_polymarket_series()
 
     async def apolymarket_meta(self, target: str = "series", market_id: str = "") -> List[Dict[str, Any]]:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.polymarket_meta(target, market_id))
 
     def recent_trades(self, platform: str = "kalshi", ticker_or_token: str = "", limit: int = 20) -> List[Dict[str, Any]]:
-        try:
-            from analyzing_llm_rationale import market_data
-            return market_data.fetch_recent_trades(platform, ticker_or_token, limit)
-        except Exception:
-            return []
+        from analyzing_llm_rationale import market_data
+        return market_data.fetch_recent_trades(platform, ticker_or_token, limit)
 
     async def arecent_trades(self, platform: str = "kalshi", ticker_or_token: str = "", limit: int = 20) -> List[Dict[str, Any]]:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.recent_trades(platform, ticker_or_token, limit))
 
     def market_leaderboard(self, limit: int = 20) -> List[Dict[str, Any]]:
-        try:
-            from analyzing_llm_rationale import market_data
-            return market_data.fetch_trader_leaderboard(limit)
-        except Exception:
-            return []
+        from analyzing_llm_rationale import market_data
+        return market_data.fetch_trader_leaderboard(limit)
 
     async def amarket_leaderboard(self, limit: int = 20) -> List[Dict[str, Any]]:
         loop = asyncio.get_running_loop()
@@ -588,6 +568,8 @@ def create_mcp_server(
             return fn(*args, **kwargs)
         except ForeseaApiError as exc:
             raise ToolError(f"Foresea API error ({exc.status_code}): {exc.detail}") from exc
+        except (MarketDataError, MarketDataInputError) as exc:
+            raise ToolError(str(exc)) from exc
 
     async def _call_tool_async(fn, *args, **kwargs) -> Dict[str, Any]:
         fn_name = getattr(fn, "__name__", "")
@@ -596,6 +578,8 @@ def create_mcp_server(
             return await fn(*args, **kwargs)
         except ForeseaApiError as exc:
             raise ToolError(f"Foresea API error ({exc.status_code}): {exc.detail}") from exc
+        except (MarketDataError, MarketDataInputError) as exc:
+            raise ToolError(str(exc)) from exc
 
     @mcp.tool()
     async def foresea_forecast(
@@ -772,11 +756,11 @@ def create_mcp_server(
         return await _call_tool_async(client.aexchange_status)
 
     @mcp.tool()
-    async def foresea_orderbook(ticker_or_token: str) -> Dict[str, Any]:
+    async def foresea_orderbook(ticker_or_token: str, platform: str = "") -> Dict[str, Any]:
         """Call this to fetch the live bids and asks orderbook depth for a Kalshi market
         ticker (e.g. 'KXFED-25JUN-H') or Polymarket YES-token ID."""
 
-        return await _call_tool_async(client.aorderbook, ticker_or_token)
+        return await _call_tool_async(client.aorderbook, ticker_or_token, platform)
 
     @mcp.tool()
     async def foresea_market_tags() -> List[Dict[str, Any]]:
@@ -793,16 +777,17 @@ def create_mcp_server(
         return await _call_tool_async(client.aprice_history, ticker_or_market, series_ticker)
 
     @mcp.tool()
-    async def foresea_live_data(event_ticker: str = "", data_type: str = "") -> Dict[str, Any]:
+    async def foresea_live_data(event_ticker: str = "", data_type: str = "", milestone_id: str = "") -> Dict[str, Any]:
         """Call this to fetch real-time sports game statistics, play-by-play data, and
-        live event feeds from Kalshi."""
+        live event feeds from Kalshi. Provide event_ticker for event charts, or
+        milestone_id with data_type="game_stats" for play-by-play."""
 
-        return await _call_tool_async(client.alive_data, event_ticker, data_type)
+        return await _call_tool_async(client.alive_data, event_ticker, data_type, milestone_id)
 
     @mcp.tool()
     async def foresea_polymarket_meta(target: str = "series", market_id: str = "") -> List[Dict[str, Any]]:
         """Call this to fetch Polymarket metadata: event series listings, community
-        discussion comments for a market, or sports league metadata (target: 'series', 'comments', 'sports')."""
+        discussion comments for a market, or sports league metadata (target: 'series', 'comments', 'sports', 'teams')."""
 
         return await _call_tool_async(client.apolymarket_meta, target, market_id)
 
