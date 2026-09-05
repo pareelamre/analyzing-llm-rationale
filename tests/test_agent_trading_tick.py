@@ -1283,6 +1283,41 @@ class AgentAnalyzeRetryTests(unittest.TestCase):
                     asyncio.run(agent_trading_tick._call_agent_analyze("question text"))
         self.assertEqual(len(calls), 2)
 
+    def test_a_transient_503_earns_a_second_attempt_but_a_429_does_not(self):
+        # A bare 503 is transient -- the same model answers minutes later, and
+        # losing the cycle costs a whole model on the board. A 429 is the
+        # opposite: retrying multiplies requests during the very incident that
+        # caused it. SCADS reports a quota rejection as a 503 whose text names
+        # the 429, so the wrapped form must be treated as a 429, not a 503.
+        import asyncio
+
+        cases = [
+            ("503: The model is temporarily unavailable. Please retry.", 2),
+            ("503: temporarily unavailable (upstream returned HTTP 429)", 1),
+            ("429: rate limit exceeded", 1),
+        ]
+        for message, expected_calls in cases:
+            with self.subTest(message=message):
+                calls = []
+
+                async def _fails(req, request=None, _m=message, _calls=calls):
+                    _calls.append(1)
+                    raise RuntimeError(_m)
+
+                with (
+                    mock.patch.object(agent_trading_tick, "AGENT_ANALYZE_RETRIES", 1),
+                    mock.patch.object(
+                        agent_trading_tick, "AGENT_ANALYZE_UNAVAILABLE_RETRIES", 2),
+                    mock.patch.object(
+                        agent_trading_tick, "AGENT_ANALYZE_RETRY_BACKOFF_S", 0.0),
+                    mock.patch(
+                        "analyzing_llm_rationale.server.agent_analyze", side_effect=_fails),
+                ):
+                    with self.assertRaises(RuntimeError):
+                        asyncio.run(
+                            agent_trading_tick._call_agent_analyze("question text"))
+                self.assertEqual(len(calls), expected_calls)
+
     def test_retries_use_exponential_async_backoff_before_a_recovery(self):
         import asyncio
 

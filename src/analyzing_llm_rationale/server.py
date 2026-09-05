@@ -15199,6 +15199,16 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             # for a usable turn instead of accepting it.
             retry_unusable_final=bool(req.benchmark_tools),
             token_budget=_AGENT_TOOL_TOKEN_BUDGET or None)
+        # A budget stop cuts research short, so say so loudly. Silently it
+        # looks identical to a model that simply finished early, which is
+        # exactly the ambiguity that made a capped tick hard to diagnose.
+        if res.get("stop_reason") == "token_budget":
+            logger.warning(
+                "agent tool loop hit token budget model=%s steps_completed=%s "
+                "tokens_used=%s budget=%s max_steps=%s",
+                req.model, res.get("steps_completed"), res.get("tokens_used"),
+                _AGENT_TOOL_TOKEN_BUDGET, req.max_tool_steps,
+            )
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
         if not last and not req.benchmark_tools:
