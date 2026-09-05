@@ -125,6 +125,11 @@ def read(platform: str, operation: str, parameters: dict | None = None, body: An
             data = client._get(f"{client.host}{path}", headers=client._l2_headers("GET", path), params=query)
         else:
             data = _public_request(spec, path, query, body)
+        # Polymarket's holders endpoint returns JSON null (with HTTP 200) when
+        # a valid market has no holder rows. Normalize that documented empty
+        # result to the list shape clients receive for populated markets.
+        if platform == "polymarket" and operation == "holders" and data is None:
+            data = []
         if not isinstance(data, (dict, list)):
             raise market_data.MarketDataError("Venue response must be an object or list")
         result = {"platform": platform, "operation": operation, "data": data}
