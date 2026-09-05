@@ -54,6 +54,17 @@ class VenueReadTests(unittest.TestCase):
         with self.assertRaises(md.MarketDataInputError):
             api.read("kalshi", "candlesticks", {"market_tickers": "A", "start_ts": 10, "end_ts": 9, "period_interval": 60})
 
+    def test_empty_holders_response_is_a_successful_empty_list(self):
+        condition_id = "0x" + "0" * 64
+        with patch.object(md, "_get_json", return_value=None):
+            result = api.read("polymarket", "holders", {"market": [condition_id], "limit": 1})
+        self.assertEqual(result, {"platform": "polymarket", "operation": "holders", "data": []})
+
+    def test_null_is_not_accepted_for_other_venue_operations(self):
+        with patch.object(md, "_get_json", return_value=None):
+            with self.assertRaises(md.MarketDataError):
+                api.read("polymarket", "oi")
+
     def test_account_address_cannot_be_overridden_and_offset_is_explicit(self):
         address = "0x" + "a" * 40
         with patch.object(trading, "_polymarket_client"), patch.object(trading, "_polymarket_account_address", return_value=address), patch.object(md, "_get_json", return_value=[{}, {}]) as get:
