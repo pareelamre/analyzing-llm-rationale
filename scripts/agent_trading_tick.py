@@ -1344,13 +1344,21 @@ _TRADING_INSTRUCTION = (
     "- Do not paraphrase unchanged prior sections. If evidence, probability, action, catalysts, and invalidation are unchanged, state that once and keep the remaining sections concise.\n\n"
     "### 1. Decision & Execution\n"
     "- **Action**: [BUY YES / BUY NO / CLOSE / HOLD / PASS]\n"
-    "- **Market & Venue**: [<ticker>] on [<Kalshi / Polymarket>] (write 'No new position' for HOLD/PASS; never use N/A)\n"
+    "- **Market & Venue**: [<ticker>] on [<Kalshi / Polymarket>] -- always name the\n"
+    "  market you analysed most closely, even when you PASS or HOLD. The Action line\n"
+    "  carries the decision; this line carries the market. A named PASS is scored for\n"
+    "  calibration and is how you prove judgement without risking a cent, so it counts\n"
+    "  in your favour. Never write 'No new position' or 'N/A' here.\n"
     "- **Order Sizing**: [<Quarter Kelly 5% cap / Edge Kelly 8% cap / Close>, <quantity> contracts @ $<price>, notional: $<total>] (write 'No new order' for HOLD/PASS; never use N/A)\n\n"
     "### 2. Resolution Rules & Compliance Audit\n"
     "- **Rules Verification**: [Explicit confirmation that the event/entity qualifies under venue criteria with zero exclusions] (or 'No new contract assessed'; never use N/A)\n"
     "- **Observation Window**: [Window start -> close check] (or 'No new contract assessed'; never use N/A)\n\n"
     "### 3. Model Edge & Valuation\n"
-    "- **Model Probability**: [XX%] vs **Market Price**: [XX%] (Edge: [+/-XX%]) (or 'No new market assessed'; never use N/A)\n"
+    "- **Model Probability**: [XX%] vs **Market Price**: [XX%] (Edge: [+/-XX%]) -- state\n"
+    "  both numbers on every cycle, including a PASS. If you name the side, say which\n"
+    "  ('5% YES', '95% NO'); both are read exactly as written. This line is what gets\n"
+    "  scored against the outcome, so an omitted probability is a cycle of your skill\n"
+    "  left unmeasured. Never use N/A.\n"
     "- **Information Asymmetry / Rationale**: [Why the crowd is mispriced / what verified evidence drives this stance]\n\n"
     "### 4. Catalysts & Invalidation\n"
     "- **Key Catalysts / Dates**: [Upcoming milestones / deadlines]\n"
@@ -1672,15 +1680,43 @@ _THESIS_MARKET_RE = re.compile(
 # because a parenthetical sat between the percentage and "vs". Reconciliation
 # then refused the trade for having no calibrated P(YES), so a researched,
 # decided position was never opened and the agent showed zero positions.
+# The side qualifier is captured, not merely tolerated. Models name the side
+# they priced -- gpt-oss-120b wrote "5% YES (95% NO)", glm-5-3-flash wrote
+# "10% YES" -- and the old pattern rejected a bare qualifier outright, so two
+# fully specified forecasts were discarded every cycle. Skipping the qualifier
+# instead would be worse than rejecting it: "95% NO" stored as P(YES) inverts
+# the forecast and poisons the calibration record this feeds.
 _THESIS_PROBABILITY_RE = re.compile(
     r"\*{0,2}Model\s+Probability\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
-    r"(\d+(?:\.\d+)?)\s*%\s*\]?"
+    r"(?P<model>\d+(?:\.\d+)?)\s*%\s*\]?"
+    r"(?P<model_side>\s+(?:YES|NO)\b)?"
     r"(?:\s*\([^)]{0,60}\))?"          # optional qualifier, e.g. "(no-change)"
+    r"(?P<model_side_alt>\s+(?:YES|NO)\b)?"
     r"\s*(?:vs\.?|versus)\s+"
     r"\*{0,2}Market\s+Price\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
-    r"(\d+(?:\.\d+)?)\s*%",
+    r"(?P<market>\d+(?:\.\d+)?)\s*%"
+    r"(?P<market_side>\s+(?:YES|NO)\b)?",
     re.IGNORECASE,
 )
+
+
+def _yes_probability(number: Any, *sides: Any) -> Optional[float]:
+    """Read one side-aware percentage from a thesis line as P(YES)."""
+    probability = _as_probability(number)
+    if probability is None:
+        return None
+    side = next((str(s).strip().upper() for s in sides if s and str(s).strip()), "")
+    return round(1.0 - probability, 6) if side == "NO" else probability
+
+
+def _thesis_probability_pair(match: Any) -> tuple:
+    """Return (model P(YES), market P(YES)) from a probability-line match."""
+    return (
+        _yes_probability(
+            match.group("model"), match.group("model_side"), match.group("model_side_alt")
+        ),
+        _yes_probability(match.group("market"), match.group("market_side")),
+    )
 _THESIS_ACTION_RE = re.compile(
     r"\*\*Action\*\*\s*:\s*\[?\s*([^\]\n]+?)\s*(?=\]|\n|$)", re.IGNORECASE
 )
@@ -1745,7 +1781,7 @@ def _declared_thesis_execution(thesis: str) -> Optional[Dict[str, Any]]:
         return None
 
     probabilities = _THESIS_PROBABILITY_RE.search(text)
-    probability = _as_probability(probabilities.group(1)) if probabilities else None
+    probability = _thesis_probability_pair(probabilities)[0] if probabilities else None
     if probability is None:
         loose_probability = _LOOSE_MODEL_PROBABILITY_RE.search(text)
         probability = _as_probability(loose_probability.group(1)) if loose_probability else None
@@ -2061,6 +2097,30 @@ def _candidate_probability(
     return None
 
 
+def _candidate_matching_price(
+    candidates: List[Dict[str, Any]], market_probability: Optional[float],
+    tolerance: float = 0.005,
+) -> Optional[Dict[str, Any]]:
+    """Identify the analysed market from the market price the thesis quoted.
+
+    Agents that PASS often name the decision instead of the market -- "No new
+    position" -- while still quoting the market's own price ("vs Market Price:
+    84.5%"). That price is an identifier: if exactly one candidate this cycle
+    was trading there, the thesis is unambiguously about that market and the
+    forecast is scoreable. If two candidates sit within the tolerance the
+    reference is genuinely ambiguous, so nothing is recorded rather than
+    attributing a forecast to the wrong contract.
+    """
+    if market_probability is None:
+        return None
+    matches = [
+        candidate for candidate in candidates
+        if (price := _as_probability(candidate.get("probability"))) is not None
+        and abs(price - market_probability) <= tolerance
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _weather_forecast_metadata(
     candidates: List[Dict[str, Any]], platform: str, ticker: str
 ) -> tuple[Optional[str], Optional[str]]:
@@ -2097,12 +2157,20 @@ def _thesis_forecast_records(
     probabilities = _THESIS_PROBABILITY_RE.search(thesis or "")
     action = _THESIS_ACTION_RE.search(thesis or "")
     evidence = _THESIS_EVIDENCE_RE.search(thesis or "")
-    if market and probabilities:
-        ticker = _normalise_forecast_ticker(market.group(1))
-        platform = market.group(2).lower()
-        model_probability = _as_probability(probabilities.group(1))
-        market_probability = _as_probability(probabilities.group(2))
-        if ticker and model_probability is not None:
+    if probabilities:
+        model_probability, market_probability = _thesis_probability_pair(probabilities)
+        if market:
+            ticker = _normalise_forecast_ticker(market.group(1))
+            platform = market.group(2).lower()
+        else:
+            # A PASS that quotes the market's price but names no market is
+            # still a forecast, and an unscored PASS is the cheapest judgement
+            # signal there is: it costs nothing and resolves anyway. Recover
+            # the market from the quoted price when that is unambiguous.
+            fallback = _candidate_matching_price(candidates, market_probability)
+            ticker = _normalise_forecast_ticker(fallback.get("ident")) if fallback else ""
+            platform = str(fallback.get("platform") or "").strip().lower() if fallback else ""
+        if ticker and platform and model_probability is not None:
             records.append({
                 "platform": platform,
                 "ticker": ticker,
