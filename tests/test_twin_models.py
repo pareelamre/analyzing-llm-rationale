@@ -192,6 +192,22 @@ class TwinModelTests(unittest.TestCase):
         with self.assertRaises(SchemaValidationError):
             intent(forecast_id="forecast-001", exit_reason="policy-expiry")
 
+    def test_sell_intents_are_valid_but_forecast_proposals_cannot_instruct_exits(self):
+        sell = intent(action=ProposalAction.SELL_YES, forecast_id=None, exit_reason="profit-target")
+        self.assertEqual(sell.action, ProposalAction.SELL_YES)
+        with self.assertRaisesRegex(SchemaValidationError, "cannot directly sell"):
+            Proposal(
+                id="proposal-sell-001",
+                forecast_id="forecast-001",
+                market_snapshot_id="snapshot-001",
+                action=ProposalAction.SELL_YES,
+                reason_codes=(),
+                citation_ids=(),
+                preferred_limit=Decimal("0.50"),
+                pass_decision=None,
+                created_at=CREATED,
+            )
+
     def test_authorization_context_binds_account_epoch_and_versions(self):
         record = intent()
         record.assert_authorization_context(

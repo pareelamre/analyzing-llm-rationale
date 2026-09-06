@@ -35,6 +35,8 @@ class Completeness(str, Enum):
 class ProposalAction(str, Enum):
     BUY_YES = "BUY_YES"
     BUY_NO = "BUY_NO"
+    SELL_YES = "SELL_YES"
+    SELL_NO = "SELL_NO"
     HOLD = "HOLD"
     PASS = "PASS"
 
@@ -447,6 +449,8 @@ class Proposal:
         object.__setattr__(self, "citation_ids", tuple(_required_identifier("citation_id", item) for item in self.citation_ids))
         if self.preferred_limit is not None:
             object.__setattr__(self, "preferred_limit", _decimal("preferred_limit", self.preferred_limit, maximum=Decimal("1")))
+        if action in {ProposalAction.SELL_YES, ProposalAction.SELL_NO}:
+            raise SchemaValidationError("Proposal action cannot directly sell; exits require deterministic code")
         if action is ProposalAction.PASS and self.pass_decision is None:
             raise SchemaValidationError("PASS proposals require a structured pass_decision")
         if action is not ProposalAction.PASS and self.pass_decision is not None:
@@ -507,8 +511,8 @@ class TradeIntent:
         if not isinstance(self.account_epoch, int) or self.account_epoch < 1:
             raise SchemaValidationError("account_epoch must be a positive integer")
         action = _enum(ProposalAction, "action", self.action)
-        if action not in {ProposalAction.BUY_YES, ProposalAction.BUY_NO}:
-            raise SchemaValidationError("TradeIntent action must be BUY_YES or BUY_NO")
+        if action not in {ProposalAction.BUY_YES, ProposalAction.BUY_NO, ProposalAction.SELL_YES, ProposalAction.SELL_NO}:
+            raise SchemaValidationError("TradeIntent action must be a binary buy or sell")
         object.__setattr__(self, "action", action)
         object.__setattr__(self, "quantity", _decimal("quantity", self.quantity, minimum=Decimal("0.00000001")))
         object.__setattr__(self, "limit_price", _decimal("limit_price", self.limit_price, maximum=Decimal("1")))

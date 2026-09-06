@@ -141,6 +141,10 @@ class TwinStore(Protocol):
 
     def register_account(self, scope: AccountScope, *, venue_available_cash: Decimal, loss_limit: Decimal) -> AccountProjection: ...
 
+    def refresh_account_capacity(self, scope_id: str, *, venue_available_cash: Decimal, loss_limit: Decimal) -> AccountProjection: ...
+
+    def projection(self, scope_id: str) -> AccountProjection: ...
+
     def reserve_intent(self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None) -> Reservation: ...
 
     def claim_command(self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30) -> Optional[CommandClaim]: ...
@@ -176,6 +180,23 @@ class InMemoryTwinStore:
             self._projections[scope.id] = projection
             self._events[scope.id] = {}
             return projection
+
+    def refresh_account_capacity(
+        self, scope_id: str, *, venue_available_cash: Decimal, loss_limit: Decimal
+    ) -> AccountProjection:
+        """Replace only venue-observed capacity while retaining local holds."""
+        cash = _decimal("venue_available_cash", venue_available_cash)
+        loss = _decimal("loss_limit", loss_limit)
+        with self._lock:
+            projection = self.projection(scope_id)
+            updated = replace(
+                projection,
+                revision=projection.revision + 1,
+                venue_available_cash=cash,
+                loss_limit=loss,
+            )
+            self._projections[scope_id] = updated
+            return updated
 
     def projection(self, scope_id: str) -> AccountProjection:
         with self._lock:
@@ -455,6 +476,28 @@ class DatastoreTwinStore:
             self._client.put(entity)
             return projection
 
+    def refresh_account_capacity(
+        self, scope_id: str, *, venue_available_cash: Decimal, loss_limit: Decimal
+    ) -> AccountProjection:
+        """Persist a fresh venue balance without discarding local reservations."""
+        cash = _decimal("venue_available_cash", venue_available_cash)
+        loss = _decimal("loss_limit", loss_limit)
+        key = self._key(scope_id)
+        with self._client.transaction():
+            entity = self._client.get(key)
+            if entity is None:
+                raise TwinStoreError("account scope is not registered")
+            current = self._projection(entity)
+            updated = replace(
+                current,
+                revision=current.revision + 1,
+                venue_available_cash=cash,
+                loss_limit=loss,
+            )
+            self._write_projection(entity, updated)
+            self._client.put(entity)
+            return updated
+
     def projection(self, scope_id: str) -> AccountProjection:
         entity = self._client.get(self._key(scope_id))
         if entity is None:
@@ -584,6 +627,87 @@ class DatastoreTwinStore:
             raise TwinStoreError("command was not found")
         claim = CommandClaim(command_id, str(entity["claim_worker_id"]), int(entity["fence"]), entity["lease_expires_at"]) if entity.get("claim_worker_id") else None
         return ExecutionCommand(command_id, scope_id, str(entity["intent_id"]), str(entity["intent_hash"]), CommandState(str(entity["state"])), str(entity["reservation_id"]), str(entity["client_order_id"]), entity["created_at"], claim)
+
+    def release_reservation(self, reservation_id: str, *, confirmed_no_order: bool) -> Reservation:
+        """Release a durable hold only after reconciliation proves no order exists."""
+        # Reservation IDs do not encode a scope, so the caller must use the
+        # command's account-scoped identity in normal runtime paths.  This
+        # method accepts only the canonical `scope_id:reservation_id` form to
+        # avoid a global eventually-consistent lookup.
+        scope_id, separator, local_id = reservation_id.partition(":")
+        if not separator or not scope_id or not local_id:
+            raise TwinStoreError("Datastore reservation release requires an account-scoped reservation id")
+        key = self._key(scope_id, "TwinReservation", local_id)
+        with self._client.transaction():
+            reservation = self._client.get(key)
+            account = self._client.get(self._key(scope_id))
+            if reservation is None or account is None:
+                raise TwinStoreError("reservation or account scope was not found")
+            state = ReservationState(str(reservation["state"]))
+            if state in {ReservationState.SUBMITTING, ReservationState.SUBMISSION_UNKNOWN} and not confirmed_no_order:
+                raise TwinStoreError("submitting or unknown reservation cannot be released by expiry cleanup")
+            if state is ReservationState.RELEASED:
+                return self._reservation_from_entity(scope_id, local_id, reservation)
+            projection = self._projection(account)
+            updated = replace(
+                projection,
+                revision=projection.revision + 1,
+                reserved_cash=projection.reserved_cash - Decimal(str(reservation["cash"])),
+                reserved_max_loss=projection.reserved_max_loss - Decimal(str(reservation["max_loss"])),
+            )
+            self._write_projection(account, updated)
+            reservation["state"] = ReservationState.RELEASED.value
+            self._client.put_multi([account, reservation])
+            return self._reservation_from_entity(scope_id, local_id, reservation)
+
+    @staticmethod
+    def _reservation_from_entity(scope_id: str, reservation_id: str, entity: Any) -> Reservation:
+        return Reservation(
+            id=reservation_id,
+            scope_id=scope_id,
+            intent_id=str(entity["intent_id"]),
+            intent_hash=str(entity["intent_hash"]),
+            cash=Decimal(str(entity["cash"])),
+            max_loss=Decimal(str(entity["max_loss"])),
+            account_revision=int(entity["account_revision"]),
+            state=ReservationState(str(entity["state"])),
+            created_at=entity["created_at"],
+        )
+
+    def receive_inbox(self, scope_id: str, message_id: str) -> bool:
+        """Durably deduplicate a worker delivery under its account root."""
+        from google.cloud import datastore
+
+        key = self._key(scope_id, "TwinInbox", message_id)
+        with self._client.transaction():
+            if self._client.get(key) is not None:
+                return False
+            entity = datastore.Entity(key=key)
+            entity.update({"received_at": _now()})
+            self._client.put(entity)
+            return True
+
+    def mark_outbox_delivered(
+        self, command_id: str, *, delivered_at: Optional[datetime] = None
+    ) -> OutboxMessage:
+        scope_id = self._command_scope(command_id)
+        key = self._key(scope_id, "TwinOutbox", command_id)
+        delivered = delivered_at or _now()
+        with self._client.transaction():
+            entity = self._client.get(key)
+            if entity is None:
+                raise TwinStoreError("outbox message was not found")
+            if entity.get("delivered_at") is None:
+                entity["delivered_at"] = delivered
+                self._client.put(entity)
+            return OutboxMessage(
+                id=entity.key.name,
+                scope_id=scope_id,
+                command_id=str(entity["command_id"]),
+                payload_hash=str(entity["payload_hash"]),
+                created_at=entity["created_at"],
+                delivered_at=entity.get("delivered_at"),
+            )
 
     def _command_scope(self, command_id: str) -> str:
         # Commands are intentionally addressed under their account root. Callers
