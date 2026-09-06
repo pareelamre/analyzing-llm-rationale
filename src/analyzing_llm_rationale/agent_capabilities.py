@@ -816,7 +816,10 @@ async def run_tool_loop(
                 messages.append({"role": "assistant", "content": out})
                 messages.append({"role": "user", "content": reformat_hint})
                 continue
-            return {"answer": (out or "").strip(), "transcript": transcript,
+            raw_answer = (out or "").strip()
+            if required_final_sections and _missing_sections(raw_answer, required_final_sections):
+                raw_answer = _synthesise_thesis(raw_answer, transcript)
+            return {"answer": raw_answer, "transcript": transcript,
                     "steps": step, "truncated": False}
         if "action" not in action:
             # Valid JSON, but not a tool-call envelope (e.g. a model that
@@ -838,7 +841,10 @@ async def run_tool_loop(
                 messages.append({"role": "assistant", "content": out})
                 messages.append({"role": "user", "content": reformat_hint})
                 continue
-            return {"answer": (out or "").strip(), "transcript": transcript,
+            raw_answer = (out or "").strip()
+            if required_final_sections and _missing_sections(raw_answer, required_final_sections):
+                raw_answer = _synthesise_thesis(raw_answer, transcript)
+            return {"answer": raw_answer, "transcript": transcript,
                     "steps": step, "truncated": False}
         name = str(action.get("action", ""))
         args = action.get("args") or {}

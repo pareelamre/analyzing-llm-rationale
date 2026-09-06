@@ -1867,5 +1867,100 @@ class CycleTelemetryTests(unittest.TestCase):
         self.assertIn("status check", row["failure_detail"])
 
 
+    def test_declared_execution_parses_llama_plain_text_thesis(self):
+        thesis = """0. Research Delta
+Strategy: EVIDENCE_EDGE
+New evidence: Checked arena.ai leaderboard (JS-rendered, inaccessible), searched for Gemini 3.8 Flash arena scores (XenoSpectrum: "Arena Scores Tell a Closer Story"), and examined KXAGICO-COMP-26Q3 orderbook. The AGI market's resolution rules require an explicit "achieved AGI" announcement — an extremely high bar no company has met. No new AGI announcement news found this cycle.
+Belief update: P(NO) on AGI market: 97% (unchanged from prior assessment; no company has announced AGI, and the bar is explicitly "achieved/attained/reached/developed AGI" — not "AGI-like" or "near-AGI").
+1. Decision & Execution
+Action: BUY NO
+Market & Venue: KXAGICO-COMP-26Q3 on Kalshi
+Order Sizing: Quarter Kelly 5% cap, ~43 contracts @ $0.92, notional: ~$39.56
+2. Resolution Rules & Compliance Audit
+Rules Verification: Resolution requires a company to "officially announce that it has achieved Artificial General Intelligence (AGI)."
+"""
+        parsed = agent_trading_tick._declared_thesis_execution(thesis)
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["action"], "BUY NO")
+        self.assertEqual(parsed["ticker"], "KXAGICO-COMP-26Q3")
+        self.assertEqual(parsed["platform"], "kalshi")
+        self.assertEqual(parsed["model_probability"], 0.03)
+        self.assertEqual(parsed["sizing_mode"], "quarter_kelly")
+        self.assertEqual(parsed["quantity"], 43.0)
+
+    def test_reconcile_thesis_execution_executes_llama_plain_thesis(self):
+        thesis = """0. Research Delta
+Belief update: P(NO) on AGI market: 97%
+1. Decision & Execution
+Action: BUY NO
+Market & Venue: KXAGICO-COMP-26Q3 on Kalshi
+Order Sizing: Quarter Kelly 5% cap, ~43 contracts @ $0.92, notional: ~$39.56
+"""
+        candidate = _quote("KXAGICO-COMP-26Q3", bid=0.08, ask=0.10)
+        with mock.patch.object(
+            benchmark_tools,
+            "place_trade",
+            return_value={"ok": True, "execution": {"filled_quantity": 43.0, "real_price": 0.92}},
+        ) as place_trade:
+            rendered, result = agent_trading_tick._reconcile_thesis_execution(
+                agent_id="llama-3-3-70b",
+                thesis=thesis,
+                transcript=[],
+                candidates=[candidate],
+            )
+
+        place_trade.assert_called_once()
+        args = place_trade.call_args[0][0]
+        self.assertEqual(args["platform"], "kalshi")
+        self.assertEqual(args["ticker"], "KXAGICO-COMP-26Q3")
+        self.assertEqual(args["side"], "no")
+        self.assertEqual(args["model_probability"], 0.03)
+        self.assertEqual(args["sizing_mode"], "quarter_kelly")
+        self.assertEqual(args["quantity"], 43.0)
+        self.assertEqual(result["outcome"], "filled")
+        self.assertIn("PAPER ORDER FILLED", rendered)
+
+    def test_reconcile_thesis_execution_infers_probability_when_omitted(self):
+        thesis = """1. Decision & Execution
+Action: BUY YES
+Market & Venue: KXINFERRED on Kalshi
+Order Sizing: Quarter Kelly 5% cap
+"""
+        candidate = _quote("KXINFERRED", bid=0.35, ask=0.40)
+        with mock.patch.object(
+            benchmark_tools,
+            "place_trade",
+            return_value={"ok": True, "execution": {"filled_quantity": 10.0, "real_price": 0.40}},
+        ) as place_trade:
+            rendered, result = agent_trading_tick._reconcile_thesis_execution(
+                agent_id="model-inferred-prob",
+                thesis=thesis,
+                transcript=[],
+                candidates=[candidate],
+            )
+
+        place_trade.assert_called_once()
+        args = place_trade.call_args[0][0]
+        self.assertEqual(args["side"], "yes")
+        self.assertEqual(args["sizing_mode"], "quarter_kelly")
+        self.assertIsNotNone(args["model_probability"])
+        self.assertGreater(args["model_probability"], 0.40)
+        self.assertEqual(result["outcome"], "filled")
+        self.assertIn("PAPER ORDER FILLED", rendered)
+
+    def test_thesis_carried_state_retains_plain_headers(self):
+        thesis = """1. Decision & Execution
+Action: BUY NO
+Market & Venue: KXAGICO-COMP-26Q3 on Kalshi
+Order Sizing: Quarter Kelly 5% cap, ~43 contracts @ $0.92
+Belief update: P(NO) on AGI market: 97%
+"""
+        state = agent_trading_tick._prior_thesis_state(thesis)
+        self.assertIn("Action: BUY NO", state)
+        self.assertIn("Market & Venue: KXAGICO-COMP-26Q3 on Kalshi", state)
+        self.assertIn("Order Sizing: Quarter Kelly", state)
+        self.assertIn("Belief update: P(NO)", state)
+
+
 if __name__ == "__main__":
     unittest.main()
