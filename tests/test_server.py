@@ -275,6 +275,11 @@ class EmptyStreamProvider(FakeProvider):
 
 class ServerTests(unittest.TestCase):
     def setUp(self):
+        # Silence the module-level logger so that direct calls to
+        # _provider_http_error (and route handlers that invoke it) do not emit
+        # ERROR records to the production OTLP exporter while tests run.
+        self._logger_patch = mock.patch.object(server_module, "logger")
+        self._logger_patch.start()
         self.provider = FakeProvider()
         self.evidence_pipeline = FakeEvidencePipeline()
         self.analytics_db = Path(tempfile.gettempdir()) / f"foresea_test_analytics_{uuid.uuid4().hex[:8]}.duckdb"
@@ -324,6 +329,7 @@ class ServerTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def tearDown(self):
+        self._logger_patch.stop()
         self._require_auth_patch.stop()
         self._datastore_patch.stop()
         _state.clear()

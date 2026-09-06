@@ -2378,6 +2378,13 @@ _predict_rate_limiter = RateLimiter(calls=int(os.environ.get("PREDICT_RATE_LIMIT
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _ready
+    # Initialise OTel here, not at module level, so that importing server.py
+    # from tests or CI scripts does not install the production OTLP log handler
+    # on the root logger.  TestClient without the context-manager form does not
+    # trigger the lifespan, so test runs remain clean.  The tracers / meters /
+    # metric instruments created at module level use OTel's no-op proxy until
+    # this call wires up the real providers.
+    init_observability(app)
     _ready = True
     # Fail fast at startup rather than on the first form/file request. FastAPI
     # only checks for python-multipart when a matching endpoint is called, so a
@@ -2473,8 +2480,6 @@ def _mount_public_mcp_endpoint() -> None:
 
 
 _mount_public_mcp_endpoint()
-
-init_observability(app)
 
 _tracer = otel_trace.get_tracer("foresea.server")
 _meter = otel_metrics.get_meter("foresea.server")

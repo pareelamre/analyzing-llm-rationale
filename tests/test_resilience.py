@@ -212,11 +212,17 @@ class MiddlewareAndProbeTests(unittest.TestCase):
             return_value={"sub": "test-user", "email": "test@example.com", "name": "Test User"}
         )
         self._require_auth_patch.start()
+        # Silence the logger so route-level _provider_http_error calls (e.g.
+        # test_predict_exhausted_returns_clean_503) do not emit ERROR records
+        # to the production OTLP exporter while tests run.
+        self._logger_patch = mock.patch.object(server, "logger")
+        self._logger_patch.start()
         _configure_state(FlakyProvider(fail_times=0, error=RetryableProviderError("x")))
         self.client = TestClient(app)
 
     def tearDown(self):
         self._require_auth_patch.stop()
+        self._logger_patch.stop()
         _state.clear()
         _local_cache.clear()
         if _ANALYTICS_DB.exists():
