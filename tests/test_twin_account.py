@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from analyzing_llm_rationale.twin.account import (
+    AccountTolerance,
     portfolio_pages_from_complete_read,
     synchronize_account,
 )
@@ -133,6 +135,28 @@ class TwinAccountTests(unittest.TestCase):
         result = self.sync(fills=[page([{"fill_id": "external-fill", "client_order_id": "unmanaged-command", "fee": "0"}])])
         self.assertTrue(result.snapshot.divergence)
         self.assertEqual(result.snapshot.external_activity_ids, ("unmanaged-command",))
+
+    def test_explicit_cash_and_quantity_tolerances_record_drift_and_block_entries(self):
+        result = self.sync(
+            local_available_cash="7.2",
+            local_reserved_cash="2.8",
+            local_holdings={"position-001": "1.7", "unexpected": "0.2"},
+            tolerance=AccountTolerance(currency=Decimal("0.1"), quantity=Decimal("0.1")),
+        )
+        self.assertTrue(result.snapshot.divergence)
+        self.assertTrue(result.snapshot.blocks_new_exposure)
+        self.assertEqual(
+            result.snapshot.drift_reasons,
+            ("available_cash_mismatch", "reserved_cash_mismatch", "holding_mismatch:position-001", "holding_mismatch:unexpected"),
+        )
+        within_precision = self.sync(
+            local_available_cash="7.05",
+            local_reserved_cash="3.05",
+            local_holdings={"position-001": "2.05"},
+            tolerance=AccountTolerance(currency="0.1", quantity="0.1"),
+        )
+        self.assertFalse(within_precision.snapshot.divergence)
+        self.assertEqual(within_precision.snapshot.drift_reasons, ())
 
     def test_portfolio_adapter_refuses_display_limited_reads(self):
         with self.assertRaises(SchemaValidationError):

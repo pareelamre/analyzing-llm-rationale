@@ -25,6 +25,21 @@ class AccountHolding:
 
 
 @dataclass(frozen=True)
+class AccountTolerance:
+    """Venue-declared comparison precision; arbitrary broad epsilons are forbidden."""
+
+    currency: Decimal = Decimal("0")
+    quantity: Decimal = Decimal("0")
+
+    def __post_init__(self) -> None:
+        for field in ("currency", "quantity"):
+            value = Decimal(str(getattr(self, field)))
+            if not value.is_finite() or value < 0:
+                raise SchemaValidationError(f"{field} tolerance must be a non-negative finite decimal")
+            object.__setattr__(self, field, value)
+
+
+@dataclass(frozen=True)
 class AccountSnapshot:
     scope_id: str
     generation: int
@@ -44,6 +59,12 @@ class AccountSnapshot:
     settlements: tuple[Mapping[str, Any], ...]
     external_activity_ids: tuple[str, ...]
     divergence: bool
+    drift_reasons: tuple[str, ...]
+
+    @property
+    def blocks_new_exposure(self) -> bool:
+        """A reconciler must pause entries until any discrepancy is explained."""
+        return self.divergence
 
 
 @dataclass(frozen=True)
@@ -156,6 +177,47 @@ def _settlements_are_final(settlements: Sequence[Mapping[str, Any]]) -> Optional
     return None
 
 
+def _drift_reasons(
+    *,
+    available_cash: Decimal,
+    reserved_cash: Decimal,
+    holdings: Sequence[AccountHolding],
+    local_available_cash: Optional[Any],
+    local_reserved_cash: Optional[Any],
+    local_holdings: Optional[Mapping[str, Any]],
+    tolerance: AccountTolerance,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    for label, observed, expected in (
+        ("available_cash", available_cash, local_available_cash),
+        ("reserved_cash", reserved_cash, local_reserved_cash),
+    ):
+        if expected is None:
+            continue
+        expected_value = _decimal(label, expected)
+        if expected_value is None:
+            reasons.append(f"local_{label}_invalid")
+        elif abs(observed - expected_value) > tolerance.currency:
+            reasons.append(f"{label}_mismatch")
+    if local_holdings is None:
+        return tuple(reasons)
+    if not isinstance(local_holdings, Mapping):
+        return tuple([*reasons, "local_holdings_invalid"])
+    observed_holdings = {holding.instrument_id: holding.quantity for holding in holdings}
+    expected_holdings: dict[str, Decimal] = {}
+    for instrument_id, quantity in local_holdings.items():
+        key = str(instrument_id).strip()
+        value = _signed_decimal("local_holding", quantity)
+        if not key or value is None:
+            reasons.append("local_holdings_invalid")
+            continue
+        expected_holdings[key] = value
+    for instrument_id in sorted(set(observed_holdings) | set(expected_holdings)):
+        if abs(observed_holdings.get(instrument_id, Decimal("0")) - expected_holdings.get(instrument_id, Decimal("0"))) > tolerance.quantity:
+            reasons.append(f"holding_mismatch:{instrument_id}")
+    return tuple(reasons)
+
+
 def _page_rows(label: str, pages: Sequence[Mapping[str, Any]]) -> tuple[Optional[list[Mapping[str, Any]]], Optional[str]]:
     rows: list[Mapping[str, Any]] = []
     if not pages:
@@ -201,6 +263,10 @@ def synchronize_account(
     settlements: Sequence[Mapping[str, Any]],
     local_command_ids: set[str],
     previous: Optional[AccountSnapshot] = None,
+    local_available_cash: Optional[Any] = None,
+    local_reserved_cash: Optional[Any] = None,
+    local_holdings: Optional[Mapping[str, Any]] = None,
+    tolerance: Optional[AccountTolerance] = None,
 ) -> AccountSyncResult:
     """Atomically validate a full venue generation or retain the last one."""
     if not scope_id or generation < 1 or received_at.tzinfo is None:
@@ -263,6 +329,16 @@ def synchronize_account(
             tuple(error for error in (settlement_error, holdings_error, fees_error) if error),
         )
     assert holdings is not None and fees_paid is not None
+    comparison_tolerance = tolerance or AccountTolerance()
+    drift_reasons = _drift_reasons(
+        available_cash=available,
+        reserved_cash=reserved,
+        holdings=holdings,
+        local_available_cash=local_available_cash,
+        local_reserved_cash=local_reserved_cash,
+        local_holdings=local_holdings,
+        tolerance=comparison_tolerance,
+    )
     position_basis = sum((holding.basis for holding in holdings), Decimal("0"))
     conservative_liquidation_value = settled + sum(
         (holding.liquidation_value for holding in holdings), Decimal("0")
@@ -283,6 +359,7 @@ def synchronize_account(
         holdings=holdings, position_basis=position_basis, fees_paid=fees_paid,
         conservative_liquidation_value=conservative_liquidation_value, positions=deduped["positions"],
         orders=deduped["orders"], fills=deduped["fills"], settlements=deduped["settlements"],
-        external_activity_ids=tuple(sorted(set(external))), divergence=bool(external),
+        external_activity_ids=tuple(sorted(set(external))),
+        divergence=bool(external or drift_reasons), drift_reasons=drift_reasons,
     )
     return AccountSyncResult(snapshot, False, ())
