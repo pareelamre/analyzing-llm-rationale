@@ -517,7 +517,7 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(result["reason"], "shadow_quote_unavailable")
         self.assertEqual(result["execution"]["filled_quantity"], 0.0)
 
-    def test_quarter_kelly_sizing_is_applied_and_capped_at_five_percent(self):
+    def test_quarter_kelly_sizing_is_applied_and_capped_at_eight_percent(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-quarter", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:
             env = {
@@ -544,8 +544,8 @@ class BenchmarkToolTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["sizing"]["mode"], "quarter_kelly")
-        self.assertLessEqual(result["sizing"]["target_notional"], 500.0)
-        self.assertAlmostEqual(result["normalized_order"]["quantity"] * 0.50, 500.0, places=4)
+        self.assertLessEqual(result["sizing"]["target_notional"], 800.0)
+        self.assertAlmostEqual(result["normalized_order"]["quantity"] * 0.50, 800.0, places=4)
 
     def test_autonomous_agent_rejects_manual_new_position_sizing(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-sizing", require_kelly_sizing=True)
@@ -1349,7 +1349,7 @@ class BenchmarkToolTests(unittest.TestCase):
                 "FORESEA_AGENT_ACCOUNT_VALUE": "100",
                 "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
                 "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "1.0",
-                "FORESEA_AGENT_DAILY_RISK_LIMIT_PCT": "0.06",
+                "FORESEA_AGENT_DAILY_RISK_LIMIT_PCT": "0.10",
                 "FORESEA_AGENT_DUPLICATE_TRADE_COOLDOWN_SECONDS": "0",
                 "FORESEA_AGENT_CYCLE_ID": "cycle-1",
             }

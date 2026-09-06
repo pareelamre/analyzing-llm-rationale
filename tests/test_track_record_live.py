@@ -1282,7 +1282,7 @@ class EdgeAnalyticsTests(unittest.TestCase):
         strategy = trl.paper_pnl(resolved, trl.edge_calibration(resolved))["quarter_kelly"]
         self.assertEqual(strategy["n_bets"], 3)
         self.assertGreater(strategy["compound_bankroll"], trl._COMPOUND_STARTING_BANKROLL)
-        self.assertLessEqual(strategy["growth_curve"][0], trl._COMPOUND_STARTING_BANKROLL * 1.05)
+        self.assertLessEqual(strategy["growth_curve"][0], trl._COMPOUND_STARTING_BANKROLL * 1.08)
 
     def test_legacy_half_kelly_uses_a_one_percent_bankroll_cap(self):
         resolved = [dict(self._res(1.0, 0.5, 1), platform="P", ident="m1")]
@@ -1785,7 +1785,7 @@ class ValidatedAndFadeKellyStrategyTests(unittest.TestCase):
         self.assertEqual(account["strategy"], "risk_capped_quarter_kelly_ledger")
         self.assertEqual(account["n_trades"], 3)
         self.assertEqual(account["kelly_fraction"], 0.25)
-        self.assertEqual(account["max_concentration"], 0.05)
+        self.assertEqual(account["max_concentration"], 0.08)
         self.assertEqual(account["market_shrinkage"], 0.5)
 
     def test_quarter_kelly_keeps_collecting_models_without_reviving_retired_models(self):

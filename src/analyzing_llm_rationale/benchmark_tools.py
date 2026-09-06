@@ -115,10 +115,10 @@ class AgentSizingPolicy:
 AGENT_SIZING_POLICIES: Dict[str, AgentSizingPolicy] = {
     "quarter_kelly": AgentSizingPolicy(
         key="quarter_kelly",
-        label="Quarter Kelly · 5% cap",
+        label="Quarter Kelly · 8% cap",
         kelly_fraction=0.25,
         market_shrinkage=0.50,
-        max_position_fraction=0.05,
+        max_position_fraction=0.08,
         min_edge=0.0,
     ),
     "edge_kelly": AgentSizingPolicy(
