@@ -1009,6 +1009,92 @@ class ThesisTemplateConformanceTests(unittest.TestCase):
         self.assertIn("### 1. Decision & Execution", res["answer"])
         self.assertNotIn("Let me reconsider", res["answer"])
 
+    def test_an_unformattable_answer_still_yields_a_readable_decision(self):
+        # Live: glm-5-3 published the parser's own hint back as its public
+        # thesis -- "The previous response was cut off and could not be
+        # parsed" -- 7,103 characters with no Action anywhere. It and
+        # glm-5-3-flash have never traded once, because they never emit a
+        # decision anything downstream can act on. After being asked and
+        # still not complying, report the execution record rather than the
+        # prose: what the cycle actually did.
+        ramble = ("Let me reconsider. The previous response was cut off and "
+                  "could not be parsed. I need to respond with exactly one "
+                  "JSON object. Let me synthesize.")
+
+        async def place_trade(_args):
+            return '{"ok": true, "execution": {"fill_status": "shadow_assumed_full"}}'
+
+        turns = iter([
+            '{"thought":"trade","action":"place_trade","args":{"ticker":"KXFOO",'
+            '"side":"no","price":0.42,"quantity":10,"model_probability":0.35}}',
+        ] + ['{"final": %s}' % json.dumps(ramble)] * 6)
+
+        async def chat_fn(_m):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"place_trade": place_trade},
+            [{"name": "place_trade", "description": "d"}], chat_fn, max_steps=8,
+            required_final_sections=("Research Delta", "Decision & Execution",
+                                     "Model Edge")))
+
+        answer = res["answer"]
+        # Every required section is present, so the cycle is scoreable.
+        for section in ("Research Delta", "Decision & Execution", "Model Edge"):
+            self.assertIn(section, answer)
+        # And it reports what actually happened, from the transcript.
+        self.assertIn("BUY NO", answer)
+        self.assertIn("KXFOO", answer)
+        self.assertIn("0.35", answer)
+        # The model is not credited with a structure it did not produce...
+        self.assertIn("did not follow the required template", answer)
+        # ...and its own words are preserved rather than discarded.
+        self.assertIn("Let me reconsider", answer)
+
+    def test_a_cycle_that_placed_no_order_is_reported_as_pass(self):
+        # It must not invent a trade that never happened.
+        async def web_search(_args):
+            return "3 sources"
+
+        turns = iter([
+            '{"thought":"look","action":"web_search","args":{"q":"x"}}',
+        ] + ['{"final": "rambling prose with no template at all"}'] * 6)
+
+        async def chat_fn(_m):
+            return next(turns)
+
+        res = asyncio.run(ac.run_tool_loop(
+            "q", {"web_search": web_search},
+            [{"name": "web_search", "description": "d"}], chat_fn, max_steps=8,
+            required_final_sections=("Research Delta", "Decision & Execution",
+                                     "Model Edge")))
+
+        self.assertIn("**Action**: PASS", res["answer"])
+        self.assertIn("No new position", res["answer"])
+        self.assertIn("web_search", res["answer"])
+
+    def test_it_asks_more_than_once_before_giving_up(self):
+        # One retry is a coin flip for a model that rambles.
+        asked = []
+
+        async def web_search(_args):
+            return "obs"
+
+        turns = iter([
+            '{"thought":"look","action":"web_search","args":{"q":"x"}}',
+        ] + ['{"final": "no template here"}'] * 8)
+
+        async def chat_fn(messages):
+            asked.append(sum(1 for m in messages
+                             if "missing the required section" in str(m.get("content"))))
+            return next(turns)
+
+        asyncio.run(ac.run_tool_loop(
+            "q", {"web_search": web_search},
+            [{"name": "web_search", "description": "d"}], chat_fn, max_steps=8,
+            required_final_sections=("Research Delta",)))
+        self.assertGreaterEqual(max(asked), 2)
+
     def test_a_conforming_thesis_is_accepted_first_time(self):
         good = ("### 0. Research Delta\n- Strategy: EVIDENCE_EDGE\n"
                 "### 1. Decision & Execution\n- Action: PASS\n"
