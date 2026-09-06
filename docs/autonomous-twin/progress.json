@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t06_complete",
+  "implementation_status": "t07_complete",
   "implementation_baseline": "0944bdc83b8c71d639fd09f2b5ad3cfa6d06e15e",
-  "next_task": "T07",
+  "next_task": "T08",
   "live_authorized": false,
   "release_gates": {
     "G0": "not_evaluated",
@@ -200,15 +200,16 @@
       "dependencies": [
         "T04"
       ],
-      "status": "in_progress",
-      "substep": "in-memory atomic worst-case cost/token/request reservations, uncertain timeout handling, and explicit pricing configuration complete; durable Datastore adapter and call boundary remain",
+      "status": "complete",
+      "substep": "durable daily Datastore budgets, atomic worst-case reservations, uncertain timeout handling, explicit pricing configuration, and a pre-call budget boundary are complete",
       "branch": "codex/autonomous-twin",
-      "commit": null,
+      "commit": "174cc3d3",
       "pr_url": null,
       "checks": [
         "PYTHONPATH=src py -m unittest tests.test_twin_budget (pass: 4 tests)",
         "py -m ruff check src/analyzing_llm_rationale/twin/budget.py tests/test_twin_budget.py (pass)",
-        "git diff --check (pass)"
+        "git diff --check (pass)",
+        "DATASTORE_EMULATOR_HOST=127.0.0.1:8765 GOOGLE_CLOUD_PROJECT=foresea-twin-test PYTHONPATH=src py -m unittest tests.test_twin_store_integration (pass: 4 tests)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/budget.py",
@@ -216,7 +217,7 @@
         "tests/test_twin_budget.py"
       ],
       "blockers": [],
-      "handoff": "Persist daily account/strategy budget aggregates and reservations under Datastore before wiring a budgeted provider call into T08."
+      "handoff": "T08 is ready. Generate evidence-backed, non-executing forecasts only through the budget pre-call boundary."
     },
     {
       "id": "T08",

@@ -132,9 +132,18 @@ class InMemoryResearchBudget:
             self._usage[key] = replace(usage, reserved_usd=usage.reserved_usd + estimate, reserved_tokens=usage.reserved_tokens + estimated_tokens, requests=usage.requests + 1)
             return reservation
 
-    def reconcile(self, reservation_id: str, *, actual_usd: Decimal | None, actual_tokens: int | None) -> BudgetUsage:
+    def reconcile(
+        self,
+        reservation_id: str,
+        *,
+        actual_usd: Decimal | None,
+        actual_tokens: int | None,
+        key: str | None = None,
+    ) -> BudgetUsage:
         with self._lock:
             reservation = self._reservations[reservation_id]
+            if key is not None and key != reservation.key:
+                raise ValueError("budget reservation belongs to a different daily key")
             if reservation.state != "reserved":
                 return self._usage[reservation.key]
             usage = self._usage[reservation.key]
