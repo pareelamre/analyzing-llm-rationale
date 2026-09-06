@@ -1,23 +1,16 @@
-"""Foresea Real-Money Quant Execution Bridge.
+"""Foresea edge-board simulation bridge.
 
-An opt-in automated execution runner for quants and algorithmic traders that
-connects Foresea's statistical edge signals to live prediction market venues
-(Polymarket & Kalshi).
-
-Safety & Risk Management:
-- --dry-run is ENABLED BY DEFAULT to simulate and verify order execution safely.
-- Explicit risk limits: max position USD, minimum edge threshold, max total capital cap.
-- Strict price slippage guards against adverse execution.
+This script intentionally never submits an exchange order.  It is retained for
+local scenario simulation while execution is consolidated behind Foresea's
+durable saved-run and guardrail flow.  It has no venue credentials, raw order
+HTTP calls, or authority to turn an HTTP acknowledgement into a fill.
 
 Usage:
     # Dry-run scan & simulate order generation:
     python scripts/live_trader_bridge.py --dry-run --min-edge 0.08
 
-    # Live execution on Kalshi (requires KALSHI_API_KEY & KALSHI_PRIVATE_KEY):
-    python scripts/live_trader_bridge.py --venue kalshi --min-edge 0.10 --max-position-usd 25
-
-    # Live execution on Polymarket (requires POLYMARKET_API_KEY & WALLET_PRIVATE_KEY):
-    python scripts/live_trader_bridge.py --venue polymarket --min-edge 0.08 --max-position-usd 50
+    # The old --live flag is intentionally rejected.  Use Foresea's authenticated
+    # /trading/runs workflow for a human-confirmed manual order.
 """
 from __future__ import annotations
 
@@ -38,7 +31,7 @@ DEFAULT_FORESEA_URL = "https://foresea.ink"
 
 
 class RiskLimits:
-    """Configurable risk parameters guarding live order execution."""
+    """Local simulation limits; they are not capital authority."""
 
     def __init__(
         self,
@@ -61,7 +54,7 @@ class RiskLimits:
 
 
 class LiveTraderBridge:
-    """Execution bridge routing Foresea edge signals to prediction venues."""
+    """Simulation bridge routing Foresea edge signals through no venue writes."""
 
     def __init__(
         self,
@@ -133,7 +126,7 @@ class LiveTraderBridge:
         }
 
     def execute_order(self, order_intent: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute or simulate an order intent on the target venue."""
+        """Simulate an order intent; live execution is permanently disabled here."""
         platform = order_intent["platform"]
         cost = order_intent["cost_usd"]
 
@@ -151,70 +144,12 @@ class LiveTraderBridge:
             self.risk.record_allocation(cost)
             return {"status": "simulated", "order": order_intent}
 
-        # Live Execution
-        if platform == "kalshi":
-            return self._execute_kalshi_order(order_intent)
-        elif platform == "polymarket":
-            return self._execute_polymarket_order(order_intent)
-        else:
-            return {"status": "error", "reason": f"Unsupported platform '{platform}'"}
-
-    def _execute_kalshi_order(self, order_intent: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute order on Kalshi Trade API v2."""
-        api_key = os.getenv("KALSHI_API_KEY", "")
-        if not api_key:
-            logger.error("KALSHI_API_KEY not set. Cannot place live order.")
-            return {"status": "error", "reason": "Missing KALSHI_API_KEY"}
-
-        url = "https://api.elections.kalshi.com/trade-api/v2/portfolio/orders"
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        price_cents = int(round(order_intent["target_price"] * 100))
-        payload = {
-            "ticker": order_intent["ticker"],
-            "action": "buy",
-            "type": "limit",
-            "side": order_intent["side"],
-            "count": order_intent["contracts"],
-            f"{order_intent['side']}_price": price_cents,
-            "time_in_force": "ioc",
+        logger.error("Live execution is disabled in live_trader_bridge; use a saved Foresea trade run.")
+        return {
+            "status": "blocked",
+            "reason": "live_execution_removed_use_trading_runs",
+            "order": order_intent,
         }
-        try:
-            resp = self.session.post(url, json=payload, headers=headers, timeout=10)
-            if resp.status_code in (200, 201):
-                self.risk.record_allocation(order_intent["cost_usd"])
-                logger.info("Kalshi order placed: %s", resp.json())
-                return {"status": "filled", "response": resp.json()}
-            logger.error("Kalshi order failed (%d): %s", resp.status_code, resp.text)
-            return {"status": "rejected", "detail": resp.text}
-        except Exception as exc:
-            return {"status": "error", "reason": str(exc)}
-
-    def _execute_polymarket_order(self, order_intent: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute order on Polymarket CLOB API."""
-        api_key = os.getenv("POLYMARKET_API_KEY", "")
-        if not api_key:
-            logger.error("POLYMARKET_API_KEY not set. Cannot place live order.")
-            return {"status": "error", "reason": "Missing POLYMARKET_API_KEY"}
-
-        url = "https://clob.polymarket.com/order"
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        payload = {
-            "token_id": order_intent["ticker"],
-            "side": "BUY",
-            "price": order_intent["target_price"],
-            "size": order_intent["contracts"],
-            "order_type": "IOC",
-        }
-        try:
-            resp = self.session.post(url, json=payload, headers=headers, timeout=10)
-            if resp.status_code in (200, 201):
-                self.risk.record_allocation(order_intent["cost_usd"])
-                logger.info("Polymarket order placed: %s", resp.json())
-                return {"status": "filled", "response": resp.json()}
-            logger.error("Polymarket order failed (%d): %s", resp.status_code, resp.text)
-            return {"status": "rejected", "detail": resp.text}
-        except Exception as exc:
-            return {"status": "error", "reason": str(exc)}
 
     def run_cycle(self) -> List[Dict[str, Any]]:
         """Run a single scan, evaluation, and execution cycle."""
@@ -231,14 +166,16 @@ class LiveTraderBridge:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Foresea Live Quant Execution Bridge")
+    parser = argparse.ArgumentParser(description="Foresea Edge Board Simulation Bridge")
     parser.add_argument("--foresea-url", default=os.getenv("FORESEA_BASE_URL", DEFAULT_FORESEA_URL))
-    parser.add_argument("--dry-run", action="store_true", default=True, help="Enable dry-run simulation mode")
-    parser.add_argument("--live", action="store_false", dest="dry_run", help="Enable REAL LIVE execution (requires API keys)")
+    parser.add_argument("--dry-run", action="store_true", default=True, help="Run local simulation mode (default)")
+    parser.add_argument("--live", action="store_true", help="Removed: live execution must use Foresea trade runs")
     parser.add_argument("--min-edge", type=float, default=0.08, help="Minimum model-vs-market edge (default: 0.08)")
     parser.add_argument("--max-position-usd", type=float, default=50.0, help="Max position USD per market")
     parser.add_argument("--max-total-allocation", type=float, default=500.0, help="Total allocation USD cap")
     args = parser.parse_args()
+    if args.live:
+        parser.error("--live was removed; use Foresea's authenticated /trading/runs workflow instead.")
 
     risk = RiskLimits(
         max_position_usd=args.max_position_usd,
