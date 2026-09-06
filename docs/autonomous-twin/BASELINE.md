@@ -54,8 +54,20 @@ The plan pack was created in the original checkout before the clean worktree exi
 | `benchmark_tools.place_trade` | Rejects every mode except `shadow`; it never calls `trading.place_order`. | Preserve as benchmark-only paper trading. |
 | `scripts/agent_trading_tick.py` | `_assert_shadow_mode()` independently rejects non-shadow configuration; reusable workflow hard-pins `FORESEA_AGENT_PLACE_TRADE_MODE=shadow`. | Keep scheduled agent work shadow-only. T08 builds a separate proposal-only research path. |
 | Agent analysis | Produces a bounded live-trade *intent* for a human terminal, never a submitted order. | Treat as an input to a future typed proposal, not autonomous authority. |
-| `scripts/live_trader_bridge.py` | Has direct legacy Kalshi/Polymarket HTTP write methods and process-local allocation; its tests cover dry run. | T02 must retire or route its live path through the shared service. It is not a source of authority or live-fill truth. |
+| `scripts/live_trader_bridge.py` | Simulation-only compatibility tool; `--live` and `dry_run=False` return a migration block and contain no venue write methods. | It is not a source of authority, capital allocation or live-fill truth. |
 | `venue_mcp.py` and public venue routes | Documented/read-only discovery interfaces. | Keep all public/MCP tooling unable to submit orders or access private twin state. |
+
+## T02 execution-write audit
+
+The 2026-09-06 source audit found these remaining venue-write capabilities:
+
+| Capability | Code path | Current control | Autonomous status |
+| --- | --- | --- | --- |
+| Create an ordinary Kalshi or Polymarket order | `server.trading_order` or `server.execute_trading_run` -> `trading_control.ConfirmedManualOrderService` -> `trading.place_order` -> private low-level adapter | Session-bound encrypted connection, exact `PLACE REAL ORDER` confirmation, live enablement, fresh quote/balance/exposure/duplicate guards, audit and saved-run claim where applicable | Manual only. T14 replaces the confirmation phrase with a server-validated authority record for autonomous execution. |
+| Amend, decrease, cancel or manage venue order groups | authenticated `/trading/venue/{platform}/actions/{operation}` -> `venue_api.action` | Exact `MANAGE REAL ORDERS` confirmation, live enablement, request audit; amendments also use the normal live guardrails and stored audit identity | Manual only. It does not create a new trade proposal and is excluded from worker capabilities until T14/T15 converge its reservation and recovery controls. |
+| Reconcile and cancel an audited submitted order | private trading reconciliation/cancel routes -> `trading.reconcile_*` / `trading.cancel_order` | Session-bound encrypted connection, stored audit identity and reconciliation merge | Manual maintenance only until T15 provides durable worker recovery. |
+
+`trading._place_kalshi_order` and `trading._place_polymarket_order` remain private functions invoked only by `trading.place_order`. The only ordinary create-order adapters are injected into `ConfirmedManualOrderService`; the two direct `trading.place_order` calls in server routes occur solely on the disabled-live gate and cannot reach a venue write. Benchmark tooling remains shadow-only, and the retired bridge cannot submit an order.
 
 ## Existing focused coverage
 
@@ -63,6 +75,5 @@ The most relevant existing tests are `tests/test_trading.py`, `tests/test_tradin
 
 Important current assertions already protect: enablement and exact confirmation; KMS connection confidentiality; per-user guardrails; duplicate run claim; kill switch before exchange submission; audit/reconcile/cancel flow; scheduled reconciliation token gating; benchmark shadow-only operation; marketable shadow prices and order-book depth; and that an invalid benchmark live mode never calls the real submitter.
 
-The next card, T01, must add current venue fixtures and all four Kalshi BUY/SELL × YES/NO conversion cases before expanding the twin.
-
+T03 can now define typed twin records and state transitions without importing FastAPI or the server's Datastore globals.
 

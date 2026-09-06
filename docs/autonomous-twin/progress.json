@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t01_complete",
+  "implementation_status": "t02_complete",
   "implementation_baseline": "0944bdc83b8c71d639fd09f2b5ad3cfa6d06e15e",
-  "next_task": "T02",
+  "next_task": "T03",
   "live_authorized": false,
   "release_gates": {
     "G0": "not_evaluated",
@@ -44,7 +44,7 @@
       "status": "complete",
       "substep": "Kalshi and Polymarket venue contracts fixture-tested; autonomous-live blockers recorded",
       "branch": "codex/autonomous-twin",
-      "commit": null,
+      "commit": "76c955e6",
       "pr_url": null,
       "checks": [
         "PYTHONPATH=src py -m unittest tests.test_trading tests.test_trading_byo (pass: 20 tests)",
@@ -72,25 +72,29 @@
       "dependencies": [
         "T01"
       ],
-      "status": "in_progress",
-      "substep": "legacy bridge migration complete; shared service extraction remains",
+      "status": "complete",
+      "substep": "shared service/store/policy boundary extracted; bridge retired to simulation",
       "branch": "codex/autonomous-twin",
       "commit": null,
       "pr_url": null,
       "checks": [
         "PYTHONPATH=src py -m unittest tests.test_live_trader_bridge (pass: 5 tests)",
-        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1265 tests in 154.608s)",
-        "py -m ruff check scripts/live_trader_bridge.py tests/test_live_trader_bridge.py (pass)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass after extraction)",
+        "PYTHONPATH=src py -m unittest tests.test_trading_control tests.test_trading tests.test_trading_byo tests.test_live_trader_bridge tests.test_benchmark_tools tests.test_server (pass: 323 tests in 98.215s)",
+        "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
         "py scripts/live_trader_bridge.py --live (expected rejection)",
         "py -m graphify update . (pass)"
       ],
       "evidence": [
         "scripts/live_trader_bridge.py",
-        "tests/test_live_trader_bridge.py"
+        "tests/test_live_trader_bridge.py",
+        "src/analyzing_llm_rationale/trading_control/",
+        "tests/test_trading_control.py",
+        "docs/autonomous-twin/BASELINE.md"
       ],
       "blockers": [],
-      "handoff": "Complete the shared service/store/policy extraction. The bridge is simulation-only and no longer contains direct Kalshi or Polymarket order submission."
+      "handoff": "T03 is ready. Define strict typed twin records and canonical execution identities on top of the framework-independent control boundary."
     },
     {
       "id": "T03",
