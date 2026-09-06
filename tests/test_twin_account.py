@@ -8,6 +8,11 @@ from analyzing_llm_rationale.twin.account import (
     synchronize_account,
 )
 from analyzing_llm_rationale.twin.models import SchemaValidationError
+from analyzing_llm_rationale.twin.reconcile import (
+    AccountReadError,
+    read_complete_collection,
+    synchronize_complete_account,
+)
 
 NOW = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
@@ -91,6 +96,58 @@ class TwinAccountTests(unittest.TestCase):
             "settlements": [{"settlement_id": "settlement-001"}],
         })
         self.assertTrue(pages["balances"][0]["complete"])
+
+    def test_cursor_reader_collects_all_pages_and_rejects_a_repeated_cursor(self):
+        pages = {
+            None: {"items": [{"position_id": "one"}], "cursor": "page-2", "generation_token": "v1"},
+            "page-2": {"items": [{"position_id": "two"}], "cursor": None, "generation_token": "v1"},
+        }
+        collection = read_complete_collection("positions", lambda cursor: pages[cursor])
+        self.assertEqual([row["position_id"] for row in collection.items], ["one", "two"])
+        self.assertEqual(collection.pages_read, 2)
+        with self.assertRaisesRegex(AccountReadError, "cursor_repeated"):
+            read_complete_collection(
+                "orders",
+                lambda _: {"items": [], "cursor": "same"},
+                max_pages=3,
+            )
+        with self.assertRaisesRegex(AccountReadError, "generation_changed"):
+            read_complete_collection(
+                "fills",
+                lambda cursor: (
+                    {"items": [], "cursor": "page-2"}
+                    if cursor is None else {"items": [], "cursor": None, "generation_token": "late-version"}
+                ),
+            )
+
+    def test_failed_second_page_or_changed_generation_keeps_prior_snapshot(self):
+        prior = self.sync().snapshot
+        complete = {
+            "balances": lambda _: {"items": [{"available": "7", "total": "10", "reserved": "3"}], "cursor": None},
+            "positions": lambda _: {"items": [{"position_id": "position-001", "quantity": "2"}], "cursor": None},
+            "orders": lambda cursor: (
+                {"items": [{"order_id": "order-001"}], "cursor": "more", "generation_token": "v1"}
+                if cursor is None else (_ for _ in ()).throw(RuntimeError("timeout"))
+            ),
+            "fills": lambda _: {"items": [{"fill_id": "fill-001"}], "cursor": None},
+            "settlements": lambda _: {"items": [{"settlement_id": "settlement-001"}], "cursor": None},
+        }
+        failed = synchronize_complete_account(
+            "scope-001", generation=2, received_at=NOW, fetchers=complete,
+            local_command_ids={"command-001"}, previous=prior,
+        )
+        self.assertTrue(failed.retained_previous)
+        self.assertEqual(failed.snapshot, prior)
+        complete["orders"] = lambda cursor: (
+            {"items": [{"order_id": "order-001"}], "cursor": "more", "generation_token": "v1"}
+            if cursor is None else {"items": [{"order_id": "order-002"}], "cursor": None, "generation_token": "v2"}
+        )
+        changed = synchronize_complete_account(
+            "scope-001", generation=2, received_at=NOW, fetchers=complete,
+            local_command_ids={"command-001"}, previous=prior,
+        )
+        self.assertTrue(changed.retained_previous)
+        self.assertIn("orders_generation_changed", changed.issues)
 
 
 if __name__ == "__main__":
