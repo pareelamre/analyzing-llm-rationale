@@ -1279,6 +1279,89 @@
     ],
     "gpt-oss-120b": [
       {
+        "action_id": "b18f9cf5-80b0-4114-951f-2e512722463d",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 886.525052
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.83,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.83,
+            "quantity": 1
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 9512.470446,
+            "cash_required": 735.815793,
+            "concentration_cap": 1501.064217,
+            "cycle_id": "30m:993715",
+            "cycle_spend_after": 735.815793,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 1738.697927,
+            "daily_risk_before": 1002.882134,
+            "daily_risk_limit": 3002.128434,
+            "drawdown_after": 0.003125,
+            "fee": 0.0,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 1236.472132,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 735.815793,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 2001.418956,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.1,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 735.815793,
+            "target_quantity": 886.5250515042508
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993715",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -735.8157927485281,
+          "cash_required": 735.8157927485281,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 735.8157927485281,
+          "price": 0.83,
+          "quantity": 886.5250515042508,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "us-announces-end-of-iranian-blockade-by-september-30-2026-20260727171615364-722-649-646-561-213-644-414-831"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "0217cbbc52124ac6c96161c13283589a08ad67e4536643b52f44a84dbc6da0e9",
+        "recorded_at": "2026-09-06T09:43:47.641951+00:00"
+      },
+      {
         "action_id": "e04057cc-94e3-48c2-b3bd-f445cacc34f6",
         "agent_id": "gpt-oss-120b",
         "audit": {
@@ -9651,7 +9734,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-06T09:01:38.521635+00:00",
+  "generated_at": "2026-09-06T09:51:52.014575+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
