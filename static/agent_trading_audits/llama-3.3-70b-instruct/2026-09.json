@@ -982,6 +982,89 @@
       "outcome": "rejected",
       "record_hash": "6cab2ed003e8d92110521ac711fb44a0859202b8e434b7f6ec22d8370a22a116",
       "recorded_at": "2026-09-06T11:59:07.374677+00:00"
+    },
+    {
+      "action_id": "48008584-d829-4f3b-9cac-9140d6c720fc",
+      "agent_id": "llama-3.3-70b-instruct",
+      "audit": {
+        "execution": {
+          "fill_status": "shadow_unfilled_below_market",
+          "filled_quantity": 0.0
+        },
+        "quote": {
+          "marketable": false,
+          "observed_ask": 0.08,
+          "source": "live_venue_quote",
+          "status": "shadow_unfilled_below_market"
+        },
+        "requested_order": {
+          "price": 0.07,
+          "quantity": 1
+        },
+        "risk": {
+          "allowed": true,
+          "cash_before": 8479.215805,
+          "cash_required": 21.473672,
+          "concentration_cap": 1271.882371,
+          "cycle_id": "30m:993729",
+          "cycle_spend_after": 21.473672,
+          "cycle_spend_before": 0.0,
+          "cycle_trade_count_after": 1,
+          "cycle_trade_count_before": 0,
+          "daily_risk_after": 21.473672,
+          "daily_risk_before": 0.0,
+          "daily_risk_limit": 2543.764741,
+          "drawdown_after": 0.15221,
+          "fee": 1.312493,
+          "gross_notional_override": false,
+          "market_cost_basis_after": 20.161179,
+          "max_drawdown_limit": 0.2,
+          "max_open_markets": 10,
+          "max_trades_per_cycle": 6,
+          "notional": 20.161179,
+          "open_markets_after": 1,
+          "per_cycle_spend_limit": 1695.843161,
+          "reasons": [],
+          "risk_reducing": false
+        },
+        "sizing": {
+          "applied": true,
+          "edge": 0.02,
+          "eligible": true,
+          "kelly_fraction": 0.25,
+          "market_shrinkage": 0.5,
+          "max_position_fraction": 0.08,
+          "mode": "quarter_kelly",
+          "reason": null,
+          "target_notional": 23.041347,
+          "target_quantity": 288.0168412024454
+        },
+        "status": "recorded",
+        "version": 1
+      },
+      "cycle_id": "30m:993729",
+      "event_type": "trade",
+      "execution": {
+        "cash_delta": 0.0,
+        "cash_required": 0.0,
+        "fee": 0.0,
+        "netting_payout": 0.0,
+        "notional": 0.0,
+        "price": 0.07,
+        "quantity": 0.0,
+        "realized_pnl": 0.0,
+        "settlement_fee": 0.0,
+        "submitted": false
+      },
+      "market": {
+        "platform": "kalshi",
+        "side": "yes",
+        "ticker": "KXAGICO-COMP-26Q3"
+      },
+      "mode": "shadow",
+      "outcome": "open",
+      "record_hash": "256247939fcaa296635a8d4f7caf53f655b93174df9d0c3ac5d5c0d34e976c2f",
+      "recorded_at": "2026-09-06T16:31:02.911118+00:00"
     }
   ],
   "month": "2026-09",
