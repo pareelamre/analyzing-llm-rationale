@@ -622,6 +622,59 @@ function escHtml(s) {
         self.assertNotIn("<img", out)
         self.assertIn("&lt;img src=x onerror=alert(1)&gt;", out)
 
+    def test_agentic_thesis_cards_linkify_contracts_venues_and_sources(self):
+        attrs = 'target="_blank" rel="noopener noreferrer nofollow"'
+        for name, source in self._both().items():
+            with self.subTest(build=name):
+                self.assertIn(".agentic-contract-link", source)
+                self.assertIn(".agentic-venue-link", source)
+
+                formatter_start = source.index("function _extractThesisJsonField(")
+                formatter_end = source.index("function _toggleAgentPositions", formatter_start)
+                sample = """### 1. Decision & Execution
+- **Market & Venue**: KXAGICO-COMP-26Q3 on Kalshi (DeepSeek V4)
+- **Alt Market**: [russia-x-ukraine-ceasefire-agreement-by-october-31-2026] on [Polymarket]
+- **Direct ticker citation**: KXAGICO-COMP-26Q3 was assessed.
+- **Source citations**: See arena.ai and reports (The Verge) and (Reuters).
+"""
+                script = """
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+""" + source[formatter_start:formatter_end] + "\nprocess.stdout.write(_formatThesisHtml(" + json.dumps(sample) + "));"
+                result = subprocess.run(
+                    ["node", "-e", script], check=True, capture_output=True, text=True, timeout=10,
+                )
+                out = result.stdout
+                self.assertIn(
+                    f'<a href="https://kalshi.com/markets/KXAGICO-COMP-26Q3" {attrs} class="agentic-contract-link" title="Open on Kalshi"><code>KXAGICO-COMP-26Q3</code></a>',
+                    out,
+                )
+                self.assertIn(
+                    f'<a href="https://kalshi.com" {attrs} class="agentic-venue-link">Kalshi</a>',
+                    out,
+                )
+                self.assertIn(
+                    f'<a href="https://polymarket.com/event/russia-x-ukraine-ceasefire-agreement-by-october-31-2026" {attrs} class="agentic-contract-link" title="Open on Polymarket"><code>russia-x-ukraine-ceasefire-agreement-by-october-31-2026</code></a>',
+                    out,
+                )
+                self.assertIn(
+                    f'<a href="https://polymarket.com" {attrs} class="agentic-venue-link">Polymarket</a>',
+                    out,
+                )
+                self.assertIn(
+                    f'<a href="https://arena.ai" {attrs}>arena.ai</a>',
+                    out,
+                )
+                self.assertIn(
+                    f'<a href="https://www.theverge.com" {attrs}>The Verge</a>',
+                    out,
+                )
+                self.assertIn(
+                    f'<a href="https://www.reuters.com" {attrs}>Reuters</a>',
+                    out,
+                )
+
     def test_agentic_thesis_cards_wrap_long_unbreakable_urls(self):
         # A Google News RSS link is one ~200-char token with no break
         # opportunity; without these the card overflows instead of wrapping.
