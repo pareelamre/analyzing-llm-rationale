@@ -132,7 +132,12 @@ class ByoTradingTests(unittest.TestCase):
 
         def fake_post(url, headers=None, json=None, timeout=None):
             captured.update(url=url, headers=headers, json=json)
-            return FakeResponse({"order_id": "ord_byo"})
+            return FakeResponse({
+                "order_id": "ord_byo",
+                "client_order_id": json["client_order_id"],
+                "fill_count": "0.00",
+                "remaining_count": "2.00",
+            })
 
         with mock.patch("requests.post", fake_post):
             result = trading.place_order(
@@ -156,6 +161,7 @@ class ByoTradingTests(unittest.TestCase):
             "https://external-api.demo.kalshi.co/trade-api/v2/portfolio/events/orders",
         )
         self.assertEqual(captured["headers"]["KALSHI-ACCESS-KEY"], "byo-key-id")
+        self.assertEqual(result["venue_response"]["acknowledgement"]["status"], "acknowledged")
         # Response echo must not contain the supplied secret.
         self.assertNotIn(creds["kalshi_private_key"], str(result))
 

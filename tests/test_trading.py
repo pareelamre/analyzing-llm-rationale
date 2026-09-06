@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 import sys
 import unittest
@@ -10,6 +11,12 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from analyzing_llm_rationale import trading  # noqa: E402
+
+_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "twin" / "venues"
+
+
+def _fixture(name: str):
+    return json.loads((_FIXTURE_DIR / name).read_text(encoding="utf-8"))
 
 _TRADING_ENV = [
     "FORESEA_ENABLE_TRADING",
@@ -92,9 +99,52 @@ class TradingTests(unittest.TestCase):
         self.assertEqual(order["ticker"], "KX-TEST")
         self.assertEqual(order["side"], "ask")
         self.assertEqual(order["count"], "3.00")
-        self.assertEqual(order["price"], "0.3100")
+        self.assertEqual(order["price"], "0.6900")
         self.assertEqual(order["time_in_force"], "good_till_canceled")
+        self.assertEqual(order["self_trade_prevention_type"], "taker_at_cross")
         self.assertFalse(preview["would_execute"])
+
+    def test_kalshi_v2_maps_all_selected_outcome_actions_to_yes_book(self):
+        cases = {
+            ("buy", "yes"): ("bid", "0.3000"),
+            ("sell", "yes"): ("ask", "0.3000"),
+            ("buy", "no"): ("ask", "0.7000"),
+            ("sell", "no"): ("bid", "0.7000"),
+        }
+        for (action, outcome), expected in cases.items():
+            with self.subTest(action=action, outcome=outcome):
+                preview = trading.preview_order({
+                    "platform": "kalshi",
+                    "ticker": "KX-TEST",
+                    "action": action,
+                    "outcome": outcome,
+                    "price": "0.30",
+                    "quantity": "3",
+                })
+                self.assertEqual(
+                    (preview["normalized_order"]["exchange_order"]["side"],
+                     preview["normalized_order"]["exchange_order"]["price"]),
+                    expected,
+                )
+                self.assertEqual(
+                    preview["estimated_notional"], 0.9 if action == "buy" else 2.1
+                )
+
+    def test_kalshi_rejects_unsupported_self_trade_prevention_type(self):
+        with self.assertRaises(trading.TradingValidationError):
+            trading.preview_order({
+                "platform": "kalshi",
+                "ticker": "KX-TEST",
+                "price": "0.30",
+                "quantity": "1",
+                "self_trade_prevention_type": "cancel_all",
+            })
+
+    def test_kalshi_requires_contract_fixed_point_price_precision(self):
+        with self.assertRaises(trading.TradingValidationError):
+            trading.preview_order({
+                "platform": "kalshi", "ticker": "KX-TEST", "price": "0.30001", "quantity": "1"
+            })
 
     def test_preview_rejects_order_above_notional_cap(self):
         os.environ["FORESEA_MAX_ORDER_NOTIONAL"] = "5"
@@ -121,6 +171,78 @@ class TradingTests(unittest.TestCase):
         self.assertEqual(order["token_id"], "123")
         self.assertEqual(order["side"], "BUY")
         self.assertEqual(order["size"], 5.0)
+
+    def test_polymarket_preview_requires_price_on_market_tick_and_minimum_size(self):
+        with self.assertRaises(trading.TradingValidationError):
+            trading.preview_order({
+                "platform": "polymarket", "token_id": "123", "price": "0.421",
+                "quantity": "5", "tick_size": "0.01",
+            })
+        with self.assertRaises(trading.TradingValidationError):
+            trading.preview_order({
+                "platform": "polymarket", "token_id": "123", "price": "0.42",
+                "quantity": "4", "min_size": "5",
+            })
+
+    def test_polymarket_market_buy_uses_bounded_usd_and_sell_uses_shares(self):
+        buy = trading.preview_order({
+            "platform": "polymarket", "token_id": "123", "action": "buy",
+            "price": "0.42", "quantity": "10", "order_type": "market", "max_cost": "4.20",
+        })["normalized_order"]["exchange_order"]
+        sell = trading.preview_order({
+            "platform": "polymarket", "token_id": "123", "action": "sell",
+            "price": "0.42", "quantity": "10", "order_type": "market",
+        })["normalized_order"]["exchange_order"]
+        self.assertEqual((buy["amount"], buy["amount_type"]), (4.2, "usd"))
+        self.assertEqual((sell["amount"], sell["amount_type"]), (10.0, "shares"))
+
+    def test_submission_acknowledgements_keep_unfilled_and_partial_states_distinct(self):
+        kalshi = _fixture("kalshi_create_order_v2.json")
+        ack = trading._normalise_kalshi_acknowledgement(
+            kalshi, expected_client_order_id="foresea-fixture-order"
+        )
+        self.assertEqual(ack["status"], "acknowledged")
+        self.assertEqual(ack["fill_quantity"], 0.0)
+        partial = {**kalshi, "fill_count": "1.00", "remaining_count": "2.00"}
+        self.assertEqual(
+            trading._normalise_kalshi_acknowledgement(
+                partial, expected_client_order_id="foresea-fixture-order"
+            )["status"],
+            "partially_filled",
+        )
+        poly = trading._normalise_polymarket_acknowledgement(
+            _fixture("polymarket_market_order_ack.json")
+        )
+        self.assertEqual(poly["status"], "matched")
+        self.assertEqual(poly["trade_ids"], ["trade-001"])
+
+    def test_submission_acknowledgements_fail_closed_on_bad_or_rejected_shapes(self):
+        with self.assertRaises(trading.TradingExecutionError):
+            trading._normalise_kalshi_acknowledgement(
+                {"order_id": "x", "client_order_id": "expected"},
+                expected_client_order_id="expected",
+            )
+        with self.assertRaises(trading.TradingExecutionError):
+            trading._normalise_polymarket_acknowledgement(
+                {"success": False, "errorMsg": "insufficient allowance"}
+            )
+        with self.assertRaises(trading.TradingExecutionError):
+            trading._normalise_polymarket_acknowledgement(
+                {"success": True, "orderID": "x", "status": "mystery"}
+            )
+        with self.assertRaises(trading.TradingExecutionError):
+            trading._normalise_polymarket_acknowledgement({
+                "success": True, "orderID": "x", "status": "matched", "tradeIDs": ["t", "t"],
+            })
+        with self.assertRaises(trading.TradingExecutionError):
+            trading._normalise_polymarket_acknowledgement(
+                {"success": True, "orderID": "x", "status": "matched", "tradeIDs": ["t"]}
+            )
+        with self.assertRaises(trading.TradingExecutionError):
+            trading._normalise_kalshi_acknowledgement(
+                {"order_id": "x", "client_order_id": "expected", "fill_count": "0", "remaining_count": "1", "extra": "x" * 64_001},
+                expected_client_order_id="expected",
+            )
 
     def test_kalshi_auth_headers_sign_path_without_query(self):
         from cryptography.hazmat.primitives import hashes, serialization
@@ -172,7 +294,12 @@ class TradingTests(unittest.TestCase):
 
         def fake_post(url, headers=None, json=None, timeout=None):
             captured.update(url=url, headers=headers, json=json, timeout=timeout)
-            return FakeResponse({"order_id": "ord_123"})
+            return FakeResponse({
+                "order_id": "ord_123",
+                "client_order_id": json["client_order_id"],
+                "fill_count": "0.00",
+                "remaining_count": "2.00",
+            })
 
         with mock.patch("requests.post", fake_post):
             result = trading.place_order(
@@ -194,6 +321,7 @@ class TradingTests(unittest.TestCase):
         self.assertEqual(captured["json"]["side"], "bid")
         self.assertEqual(captured["json"]["price"], "0.5600")
         self.assertIn("KALSHI-ACCESS-SIGNATURE", captured["headers"])
+        self.assertEqual(result["venue_response"]["acknowledgement"]["status"], "acknowledged")
 
 
 if __name__ == "__main__":

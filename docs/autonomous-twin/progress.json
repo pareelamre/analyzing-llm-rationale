@@ -1,0 +1,408 @@
+{
+  "schema_version": 1,
+  "plan_date": "2026-09-06",
+  "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
+  "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
+  "implementation_status": "t01_complete",
+  "implementation_baseline": "0944bdc83b8c71d639fd09f2b5ad3cfa6d06e15e",
+  "next_task": "T02",
+  "live_authorized": false,
+  "release_gates": {
+    "G0": "not_evaluated",
+    "G1": "not_started",
+    "G2": "not_evaluated",
+    "G3": "not_authorized",
+    "G4": "not_evaluated"
+  },
+  "tasks": [
+    {
+      "id": "T00",
+      "dependencies": [],
+      "status": "complete",
+      "substep": "baseline recorded",
+      "branch": "codex/autonomous-twin",
+      "commit": null,
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1257 tests in 152.289s)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py -m graphify query <trading execution map> --budget 5000 (pass)"
+      ],
+      "evidence": [
+        "docs/autonomous-twin/BASELINE.md",
+        "Official Kalshi and Polymarket order contracts retrieved 2026-09-06"
+      ],
+      "blockers": [],
+      "handoff": "T01 is ready. Move the autonomous-twin plan pack into codex/autonomous-twin before its first commit, then fixture-test current Kalshi and Polymarket execution contracts."
+    },
+    {
+      "id": "T01",
+      "dependencies": [
+        "T00"
+      ],
+      "status": "complete",
+      "substep": "Kalshi and Polymarket venue contracts fixture-tested; autonomous-live blockers recorded",
+      "branch": "codex/autonomous-twin",
+      "commit": null,
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_trading tests.test_trading_byo (pass: 20 tests)",
+        "PYTHONPATH=src py -m unittest tests.test_trading tests.test_trading_byo tests.test_benchmark_tools tests.test_agent_trading_tick tests.test_venue_extensions (pass: 212 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1264 tests in 164.900s)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (pass)"
+      ],
+      "evidence": [
+        "docs/autonomous-twin/VENUE_CAPABILITIES.md",
+        "tests/fixtures/twin/venues/kalshi_create_order_v2.json",
+        "tests/fixtures/twin/venues/polymarket_market_order_ack.json",
+        "tests/test_trading.py",
+        "tests/test_trading_byo.py"
+      ],
+      "blockers": [
+        "Polymarket SDK is declared but not installed in the verified environment; signed order identity and recovery lookup remain unverified.",
+        "Neither venue has dedicated-account demo or production contract evidence for autonomous submission."
+      ],
+      "handoff": "T02 is ready. Extract the shared execution boundary without changing manual route contracts, and prevent scripts/live_trader_bridge.py from bypassing it."
+    },
+    {
+      "id": "T02",
+      "dependencies": [
+        "T01"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T03",
+      "dependencies": [
+        "T02"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T04",
+      "dependencies": [
+        "T03"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T05",
+      "dependencies": [
+        "T03"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T06",
+      "dependencies": [
+        "T04",
+        "T05"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T07",
+      "dependencies": [
+        "T04"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T08",
+      "dependencies": [
+        "T05",
+        "T07"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T09",
+      "dependencies": [
+        "T06",
+        "T08"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T10",
+      "dependencies": [
+        "T06",
+        "T09"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T11",
+      "dependencies": [
+        "T08",
+        "T09",
+        "T10"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T12",
+      "dependencies": [
+        "T11"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T13",
+      "dependencies": [
+        "T04",
+        "T09",
+        "T12"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T14",
+      "dependencies": [
+        "T01",
+        "T02",
+        "T04",
+        "T09",
+        "T13"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T15",
+      "dependencies": [
+        "T06",
+        "T14"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T16",
+      "dependencies": [
+        "T07",
+        "T11",
+        "T15"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T17",
+      "dependencies": [
+        "T16"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T18",
+      "dependencies": [
+        "T12",
+        "T13",
+        "T16"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T19",
+      "dependencies": [
+        "T15",
+        "T16"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T20",
+      "dependencies": [
+        "T12",
+        "T17",
+        "T18",
+        "T19"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T21",
+      "dependencies": [
+        "T20"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T22",
+      "dependencies": [
+        "T21"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    }
+  ]
+}
+

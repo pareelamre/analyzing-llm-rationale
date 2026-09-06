@@ -20,6 +20,7 @@ POLYMARKET_GAMMA_URL = "https://gamma-api.polymarket.com/markets"
 CONFIRMATION_PHRASE = "PLACE REAL ORDER"
 DEFAULT_MAX_ORDER_NOTIONAL = Decimal("50")
 DEFAULT_TIMEOUT_S = 15
+MAX_VENUE_ACKNOWLEDGEMENT_BYTES = 64_000
 _USER_AGENT = "foresea-trading/0.1"
 _TRUTHY = {"1", "true", "yes", "y", "on"}
 _KALSHI_HOSTS = {
@@ -158,6 +159,11 @@ def _normalize_quantity(value: Any) -> Decimal:
 def _format_fixed(value: Decimal, places: int) -> str:
     quantum = Decimal("1").scaleb(-places)
     return str(value.quantize(quantum, rounding=ROUND_HALF_UP))
+
+
+def _require_precision(name: str, value: Decimal, places: int) -> None:
+    if -value.as_tuple().exponent > places:
+        raise TradingValidationError(f"{name} must use at most {places} decimal places.")
 
 
 def _money(value: Decimal) -> float:
@@ -444,12 +450,29 @@ def _guard_notional(action: str, price: Decimal, quantity: Decimal) -> Decimal:
     return max(price, Decimal("1") - price) * quantity
 
 
+def _kalshi_book_order(action: str, outcome: str, selected_price: Decimal) -> tuple[str, Decimal]:
+    """Map a selected-outcome order to Kalshi's V2 YES-leg book.
+
+    Kalshi V2 expresses every event-market order as either a bid to buy YES or
+    an ask to sell YES.  A caller selecting NO therefore needs the complement
+    of the selected-outcome price on the exchange payload.  The returned price
+    is intentionally separate from the selected price used for Foresea's
+    local risk accounting.
+    """
+    if outcome == "yes":
+        return ("bid" if action == "buy" else "ask"), selected_price
+    return ("ask" if action == "buy" else "bid"), Decimal("1") - selected_price
+
+
 def _kalshi_side(action: str, outcome: str) -> tuple[str, str]:
-    # Kalshi V2 collapses legacy action/side into directional book_side:
-    # buy-yes and sell-no -> bid/yes; buy-no and sell-yes -> ask/no.
-    if (action == "buy" and outcome == "yes") or (action == "sell" and outcome == "no"):
-        return "bid", "yes"
-    return "ask", "no"
+    """Compatibility helper for callers that need only book direction.
+
+    New code must call :func:`_kalshi_book_order` so the selected-NO price is
+    converted too.  Keeping this helper prevents legacy preview-only callers
+    from silently inventing a different direction mapping.
+    """
+    side, _ = _kalshi_book_order(action, outcome, Decimal("0.5"))
+    return side, outcome
 
 
 def _preview_kalshi(
@@ -465,6 +488,7 @@ def _preview_kalshi(
         raise TradingValidationError("ticker is required for Kalshi orders.")
     price = _normalize_price(req.get("price"))
     quantity = _normalize_quantity(req.get("quantity"))
+    _require_precision("price", price, 4)
     guard_notional = _guard_notional(action, price, quantity)
     max_notional = _max_order_notional()
     if guard_notional > max_notional and not allow_order_notional_override:
@@ -472,7 +496,7 @@ def _preview_kalshi(
             f"Order notional ${_money(guard_notional):.2f} exceeds FORESEA_MAX_ORDER_NOTIONAL "
             f"${_money(max_notional):.2f}."
         )
-    side, outcome_side = _kalshi_side(action, outcome)
+    side, exchange_price = _kalshi_book_order(action, outcome, price)
     time_in_force = str(
         req.get("time_in_force")
         or ("immediate_or_cancel" if order_type == "market" else "good_till_canceled")
@@ -482,6 +506,13 @@ def _preview_kalshi(
         raise TradingValidationError(
             "time_in_force must be one of: good_till_canceled, immediate_or_cancel, fill_or_kill."
         )
+    self_trade_prevention_type = str(
+        req.get("self_trade_prevention_type") or "taker_at_cross"
+    ).strip().lower()
+    if self_trade_prevention_type not in {"taker_at_cross", "maker"}:
+        raise TradingValidationError(
+            "self_trade_prevention_type must be one of: taker_at_cross, maker."
+        )
     client_order_id = str(req.get("client_order_id") or f"foresea-{uuid.uuid4()}").strip()
     if len(client_order_id) > 128:
         raise TradingValidationError("client_order_id must be at most 128 characters.")
@@ -490,8 +521,9 @@ def _preview_kalshi(
         "client_order_id": client_order_id,
         "side": side,
         "count": _format_fixed(quantity, 2),
-        "price": _format_fixed(price, 4),
+        "price": _format_fixed(exchange_price, 4),
         "time_in_force": time_in_force,
+        "self_trade_prevention_type": self_trade_prevention_type,
         "post_only": bool(req.get("post_only", False)),
         "cancel_order_on_pause": bool(req.get("cancel_order_on_pause", False)),
         "reduce_only": bool(req.get("reduce_only", False)),
@@ -504,7 +536,8 @@ def _preview_kalshi(
         "action": action,
         "outcome": outcome,
         "ticker": ticker,
-        "outcome_side": outcome_side,
+        "outcome_side": outcome,
+        "exchange_price": float(exchange_price),
         "order_type": order_type,
         "price": float(price),
         "quantity": float(quantity),
@@ -550,6 +583,14 @@ def _preview_polymarket(
     tick_size = str(req.get("tick_size") or "0.01").strip()
     if tick_size not in {"0.1", "0.01", "0.001", "0.0001"}:
         raise TradingValidationError("tick_size must be one of 0.1, 0.01, 0.001, 0.0001.")
+    tick = Decimal(tick_size)
+    if price % tick != 0:
+        raise TradingValidationError(f"price must align to the {tick_size} Polymarket tick size.")
+    min_size = _as_decimal("min_size", req.get("min_size"), required=False)
+    if min_size is not None and min_size <= 0:
+        raise TradingValidationError("min_size must be greater than 0 when supplied.")
+    if min_size is not None and quantity < min_size:
+        raise TradingValidationError(f"quantity must be at least the market minimum size {min_size}.")
     neg_risk = bool(req.get("neg_risk", False))
     side = "BUY" if action == "buy" else "SELL"
     exchange_order: Dict[str, Any] = {
@@ -563,6 +604,8 @@ def _preview_polymarket(
     }
     if order_type == "market":
         max_cost = _as_decimal("max_cost", req.get("max_cost"), required=False)
+        if max_cost is not None and max_cost <= 0:
+            raise TradingValidationError("max_cost must be greater than 0 when supplied.")
         amount = max_cost if action == "buy" and max_cost is not None else quantity
         exchange_order["amount"] = float(amount)
         exchange_order["amount_type"] = "usd" if action == "buy" else "shares"
@@ -697,6 +740,88 @@ def _kalshi_auth_headers(
     }
 
 
+def _non_negative_decimal(name: str, value: Any) -> Decimal:
+    try:
+        parsed = _as_decimal(name, value)
+        assert parsed is not None
+    except TradingValidationError as exc:
+        raise TradingExecutionError(
+            f"Venue acknowledgement field '{name}' is missing or invalid."
+        ) from exc
+    if parsed < 0:
+        raise TradingExecutionError(f"Venue acknowledgement field '{name}' must not be negative.")
+    return parsed
+
+
+def _require_bounded_acknowledgement(body: Any, *, venue: str) -> Mapping[str, Any]:
+    if not isinstance(body, Mapping):
+        raise TradingExecutionError(f"{venue} returned an invalid order acknowledgement shape.")
+    try:
+        encoded = json.dumps(body, default=str, separators=(",", ":")).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise TradingExecutionError(f"{venue} returned an unserializable order acknowledgement.") from exc
+    if len(encoded) > MAX_VENUE_ACKNOWLEDGEMENT_BYTES:
+        raise TradingExecutionError(f"{venue} returned an oversized order acknowledgement.")
+    return body
+
+
+def _normalise_kalshi_acknowledgement(
+    body: Any, *, expected_client_order_id: str
+) -> Dict[str, Any]:
+    """Validate a V2 acknowledgement without equating acknowledgement to fill."""
+    body = _require_bounded_acknowledgement(body, venue="Kalshi")
+    order_id = _venue_order_id(body)
+    if not order_id:
+        raise TradingExecutionError("Kalshi acknowledgement did not include an order_id.")
+    client_order_id = str(body.get("client_order_id") or "").strip()
+    if client_order_id != expected_client_order_id:
+        raise TradingExecutionError("Kalshi acknowledgement client_order_id did not match the request.")
+    filled = _non_negative_decimal("fill_count", body.get("fill_count"))
+    remaining = _non_negative_decimal("remaining_count", body.get("remaining_count"))
+    return {
+        "venue_order_id": order_id,
+        "acknowledged": True,
+        "fill_quantity": float(filled),
+        "remaining_quantity": float(remaining),
+        "status": "filled" if remaining == 0 else "partially_filled" if filled else "acknowledged",
+    }
+
+
+def _normalise_polymarket_acknowledgement(body: Any) -> Dict[str, Any]:
+    """Validate a Polymarket order receipt and retain fills as non-final facts."""
+    body = _require_bounded_acknowledgement(body, venue="Polymarket")
+    accepted = body.get("success") if "success" in body else body.get("ok")
+    if accepted is not True:
+        message = str(body.get("errorMsg") or body.get("message") or "unknown rejection")
+        raise TradingExecutionError(f"Polymarket rejected the order: {message}")
+    order_id = _venue_order_id(body)
+    if not order_id:
+        raise TradingExecutionError("Polymarket acknowledgement did not include an order ID.")
+    venue_status = str(body.get("status") or "accepted").strip().lower()
+    if venue_status not in {"accepted", "matched", "delayed", "live", "open"}:
+        raise TradingExecutionError(f"Polymarket returned an unsupported acknowledgement status '{venue_status}'.")
+    trade_ids = body.get("tradeIDs", body.get("trade_ids", []))
+    if trade_ids is None:
+        trade_ids = []
+    if not isinstance(trade_ids, list) or not all(str(item).strip() for item in trade_ids):
+        raise TradingExecutionError("Polymarket acknowledgement included invalid trade IDs.")
+    normalized_trade_ids = [str(item) for item in trade_ids]
+    if len(set(normalized_trade_ids)) != len(normalized_trade_ids):
+        raise TradingExecutionError("Polymarket acknowledgement included duplicate trade IDs.")
+    if venue_status == "matched":
+        _non_negative_decimal("makingAmount", body.get("makingAmount", body.get("making_amount")))
+        _non_negative_decimal("takingAmount", body.get("takingAmount", body.get("taking_amount")))
+    if venue_status == "delayed" and normalized_trade_ids:
+        raise TradingExecutionError("Polymarket delayed acknowledgement cannot include trade IDs.")
+    return {
+        "venue_order_id": order_id,
+        "acknowledged": True,
+        "status": "acknowledged" if venue_status in {"accepted", "delayed", "live", "open"} else "matched",
+        "venue_status": venue_status,
+        "trade_ids": normalized_trade_ids,
+    }
+
+
 def _place_kalshi_order(normalized: Mapping[str, Any], creds: Creds = None) -> Dict[str, Any]:
     if not account_status(creds)["venues"]["kalshi"]["configured"]:
         raise TradingNotConfiguredError("Kalshi trading credentials are not configured.")
@@ -725,7 +850,10 @@ def _place_kalshi_order(normalized: Mapping[str, Any], creds: Creds = None) -> D
         body = {"text": resp.text[:1000]}
     if resp.status_code not in (200, 201):
         raise TradingExecutionError(f"Kalshi returned status {resp.status_code}: {body}")
-    return {"status_code": resp.status_code, "body": body}
+    acknowledgement = _normalise_kalshi_acknowledgement(
+        body, expected_client_order_id=str(payload["client_order_id"])
+    )
+    return {"status_code": resp.status_code, "body": body, "acknowledgement": acknowledgement}
 
 
 def _polymarket_client(creds: Creds = None):
@@ -798,7 +926,7 @@ def _place_polymarket_order(normalized: Mapping[str, Any], creds: Creds = None) 
             )
     except Exception as exc:
         raise TradingExecutionError(f"Polymarket order request failed: {exc}") from exc
-    return {"body": result}
+    return {"body": result, "acknowledgement": _normalise_polymarket_acknowledgement(result)}
 
 
 def place_order(req: Mapping[str, Any], *, user_id: str, creds: Creds = None) -> Dict[str, Any]:
