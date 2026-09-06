@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t06_t14_in_progress",
+  "implementation_status": "t06_t17_in_progress",
   "implementation_baseline": "0944bdc83b8c71d639fd09f2b5ad3cfa6d06e15e",
-  "next_task": "T06",
+  "next_task": "T17",
   "live_authorized": false,
   "release_gates": {
     "G0": "not_evaluated",
@@ -380,10 +380,19 @@
       "status": "in_progress",
       "substep": "bounded ID-only job claims, duplicate delivery, lease recovery, startup readiness, and maintenance priority implemented; durable Cloud Tasks/Datastore job persistence and role-isolated deployment remain pending",
       "branch": "codex/autonomous-twin-t16",
-      "commit": null,
-      "pr_url": null,
-      "checks": [],
-      "evidence": [],
+      "commit": "0b525760",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/451",
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_worker (pass: 4 tests)",
+        "py -m ruff check src/analyzing_llm_rationale/twin/worker.py tests/test_twin_worker.py (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (completed; generated graph changes intentionally unstaged)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/worker.py",
+        "tests/test_twin_worker.py",
+        "GitHub Actions run 34038004924 deployed main successfully; /health and /ready returned success"
+      ],
       "blockers": [],
       "handoff": null
     },
@@ -392,13 +401,26 @@
       "dependencies": [
         "T16"
       ],
-      "status": "pending",
-      "substep": null,
-      "branch": null,
+      "status": "in_progress",
+      "substep": "Google OIDC principal validation and a shadow-only private Cloud Run, Tasks, Scheduler, IAM, cost, and cleanup definition implemented; durable Cloud Tasks/Datastore jobs, private handler mounting, and staging IAM evidence remain pending",
+      "branch": "codex/autonomous-twin-t17",
       "commit": null,
       "pr_url": null,
-      "checks": [],
-      "evidence": [],
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_worker tests.test_twin_worker_auth (pass: 9 tests)",
+        "py -m ruff check src/analyzing_llm_rationale/twin/worker.py tests/test_twin_worker.py tests/test_twin_worker_auth.py (pass)",
+        "PowerShell parser and deploy.ps1 dry run (pass; no Google Cloud mutation)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1388 tests in 219.822s; 4 emulator skips)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (completed; generated graph changes intentionally unstaged)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/worker.py",
+        "tests/test_twin_worker_auth.py",
+        "infra/twin/deploy.ps1",
+        "infra/twin/README.md"
+      ],
       "blockers": [],
       "handoff": null
     },

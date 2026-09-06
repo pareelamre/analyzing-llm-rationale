@@ -16,6 +16,98 @@ class WorkerJobError(RuntimeError):
     pass
 
 
+_GOOGLE_OIDC_ISSUERS = frozenset({"accounts.google.com", "https://accounts.google.com"})
+
+
+@dataclass(frozen=True)
+class WorkerOidcPrincipal:
+    """Verified identity for a private Cloud Run worker request.
+
+    Cloud Tasks headers are delivery metadata only.  They never establish this
+    principal: the caller must present a Google-issued ID token for the exact
+    Cloud Run service audience.
+    """
+
+    issuer: str
+    audience: str
+    service_account_email: str
+    expires_at: datetime
+
+
+def require_worker_oidc(
+    principal: WorkerOidcPrincipal | None,
+    *,
+    expected_audience: str,
+    allowed_service_accounts: frozenset[str],
+    now: datetime,
+) -> WorkerOidcPrincipal:
+    """Accept only an unexpired Google OIDC principal for one worker route."""
+    if now.tzinfo is None:
+        raise WorkerAuthenticationError("worker authentication needs an aware time")
+    if not expected_audience.strip() or not allowed_service_accounts:
+        raise WorkerAuthenticationError("worker authentication is not configured")
+    if principal is None:
+        raise WorkerAuthenticationError("private worker requires a Google OIDC identity token")
+    if principal.expires_at.tzinfo is None or principal.expires_at <= now:
+        raise WorkerAuthenticationError("private worker identity token is expired")
+    if principal.issuer not in _GOOGLE_OIDC_ISSUERS:
+        raise WorkerAuthenticationError("private worker identity token has an invalid issuer")
+    if principal.audience != expected_audience:
+        raise WorkerAuthenticationError("private worker identity token has the wrong audience")
+    if principal.service_account_email not in allowed_service_accounts:
+        raise WorkerAuthenticationError("private worker service identity is not authorized")
+    return principal
+
+
+def verify_google_worker_oidc(
+    token: str | None,
+    *,
+    expected_audience: str,
+    allowed_service_accounts: frozenset[str],
+    now: datetime,
+    verifier: Callable[[str, str], Mapping[str, Any]] | None = None,
+) -> WorkerOidcPrincipal:
+    """Verify a Google ID token before applying narrow worker-route identity rules.
+
+    ``verifier`` exists solely for deterministic tests.  Production calls the
+    Google verifier with the exact expected audience; this code never derives
+    authority from task or scheduler headers.
+    """
+    if not token:
+        raise WorkerAuthenticationError("private worker requires a bearer token")
+    if verifier is None:
+        try:
+            from google.auth.transport.requests import Request
+            from google.oauth2.id_token import verify_oauth2_token
+        except ImportError as exc:  # pragma: no cover - covered by serve dependency
+            raise WorkerAuthenticationError("Google OIDC verification is unavailable") from exc
+
+        def verifier(value: str, audience: str) -> Mapping[str, Any]:
+            return verify_oauth2_token(value, Request(), audience=audience)
+
+    try:
+        claims = verifier(token, expected_audience)
+        expires_at = datetime.fromtimestamp(float(claims["exp"]), tz=now.tzinfo)
+        principal = WorkerOidcPrincipal(
+            issuer=str(claims["iss"]),
+            audience=str(claims["aud"]),
+            service_account_email=str(claims["email"]),
+            expires_at=expires_at,
+        )
+        if claims.get("email_verified") is not True:
+            raise WorkerAuthenticationError("private worker identity email is not verified")
+    except WorkerAuthenticationError:
+        raise
+    except Exception as exc:
+        raise WorkerAuthenticationError("private worker identity token has invalid claims") from exc
+    return require_worker_oidc(
+        principal,
+        expected_audience=expected_audience,
+        allowed_service_accounts=allowed_service_accounts,
+        now=now,
+    )
+
+
 class WorkerJobKind(str, Enum):
     RECOVERY = "recovery"
     RECONCILE = "reconcile"
