@@ -579,6 +579,27 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(result["reason"], "kelly_sizing_required")
         self.assertFalse(db_path.exists())
 
+    def test_drawdown_headroom_lets_a_losing_agent_keep_competing(self):
+        """13 of 43 rejections were drawdown_limit: the cap had become the
+        binding constraint, stopping agents on past losses rather than present
+        judgement. Still bounded -- an account at zero stops producing evidence.
+        """
+        self.assertEqual(benchmark_tools.DEFAULT_MAX_DRAWDOWN_LIMIT, 0.50)
+        self.assertLess(benchmark_tools.DEFAULT_MAX_DRAWDOWN_LIMIT, 1.0)
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("FORESEA_AGENT_MAX_DRAWDOWN_LIMIT", None)
+            self.assertEqual(
+                benchmark_tools._risk_guard_policy().max_drawdown_limit, 0.50
+            )
+
+    def test_the_drawdown_limit_stays_operator_overridable(self):
+        with mock.patch.dict(
+            os.environ, {"FORESEA_AGENT_MAX_DRAWDOWN_LIMIT": "0.30"}, clear=False
+        ):
+            self.assertEqual(
+                benchmark_tools._risk_guard_policy().max_drawdown_limit, 0.30
+            )
+
     def test_kelly_sizes_on_the_after_fee_cost_not_the_bare_ask(self):
         """A contract costs the ask plus the fee, so gross odds over-stake."""
         plan = benchmark_tools._sizing_plan(
