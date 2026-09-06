@@ -19,6 +19,7 @@ from .models import (
     canonical_instrument_id,
 )
 from .store import (
+    DatastoreTwinStore,
     InMemoryTwinStore,
     InsufficientReservationCapacity,
     ReservationState,
@@ -31,6 +32,7 @@ __all__ = [
     "CommandState",
     "Completeness",
     "DecisionRecord",
+    "DatastoreTwinStore",
     "Forecast",
     "Instrument",
     "InMemoryTwinStore",

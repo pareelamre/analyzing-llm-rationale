@@ -399,3 +399,118 @@ def require_durable_store(store: TwinStore, *, live: bool) -> TwinStore:
     if live and not store.durable:
         raise TwinStoreError("live twin execution requires a durable account store")
     return store
+
+
+class DatastoreTwinStore:
+    """Datastore-backed account transaction adapter for runtime use.
+
+    Every mutation reads the account root by key in one transaction, then writes
+    child entities below that root.  This avoids eventually-consistent global
+    queries when approving cash/risk and makes the account the serialization
+    point across manual and autonomous callers.
+    """
+
+    durable = True
+    _KIND = "TwinAccount"
+
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def _key(self, scope_id: str, *path: str) -> Any:
+        return self._client.key(self._KIND, scope_id, *path)
+
+    @staticmethod
+    def _projection(entity: Any) -> AccountProjection:
+        return AccountProjection(
+            scope_id=str(entity["scope_id"]), account_epoch=int(entity["account_epoch"]),
+            venue_available_cash=Decimal(str(entity["venue_available_cash"])), loss_limit=Decimal(str(entity["loss_limit"])),
+            revision=int(entity.get("revision", 0)), reserved_cash=Decimal(str(entity.get("reserved_cash", "0"))),
+            reserved_max_loss=Decimal(str(entity.get("reserved_max_loss", "0"))),
+        )
+
+    @staticmethod
+    def _write_projection(entity: Any, projection: AccountProjection) -> None:
+        entity.update({
+            "scope_id": projection.scope_id, "account_epoch": projection.account_epoch,
+            "venue_available_cash": str(projection.venue_available_cash), "loss_limit": str(projection.loss_limit),
+            "revision": projection.revision, "reserved_cash": str(projection.reserved_cash),
+            "reserved_max_loss": str(projection.reserved_max_loss),
+        })
+
+    def register_account(self, scope: AccountScope, *, venue_available_cash: Decimal, loss_limit: Decimal) -> AccountProjection:
+        from google.cloud import datastore
+
+        cash, loss = _decimal("venue_available_cash", venue_available_cash), _decimal("loss_limit", loss_limit)
+        key = self._key(scope.id)
+        with self._client.transaction():
+            entity = self._client.get(key)
+            if entity is not None:
+                projection = self._projection(entity)
+                if projection.account_epoch != scope.account_epoch:
+                    raise TwinStoreError("account epoch changed; pause and reconcile before registering a new scope")
+                return projection
+            entity = datastore.Entity(key=key)
+            projection = AccountProjection(scope.id, scope.account_epoch, cash, loss)
+            self._write_projection(entity, projection)
+            self._client.put(entity)
+            return projection
+
+    def projection(self, scope_id: str) -> AccountProjection:
+        entity = self._client.get(self._key(scope_id))
+        if entity is None:
+            raise TwinStoreError("account scope is not registered")
+        return self._projection(entity)
+
+    def _reserve_intent_once(self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None) -> Reservation:
+        from google.cloud import datastore
+
+        reserved_cash, reserved_loss, now = _decimal("cash", cash), _decimal("max_loss", max_loss), now or _now()
+        root = self._key(intent.account_scope_id)
+        reservation_id = f"reservation-{intent.intent_hash[:24]}"
+        with self._client.transaction():
+            account = self._client.get(root)
+            if account is None:
+                raise TwinStoreError("account scope is not registered")
+            projection = self._projection(account)
+            if intent.account_epoch != projection.account_epoch:
+                raise TwinStoreError("intent account epoch is stale")
+            reservation_key = self._key(intent.account_scope_id, "TwinReservation", reservation_id)
+            existing = self._client.get(reservation_key)
+            if existing is not None:
+                return Reservation(
+                    id=reservation_id, scope_id=intent.account_scope_id, intent_id=str(existing["intent_id"]),
+                    intent_hash=str(existing["intent_hash"]), cash=Decimal(str(existing["cash"])),
+                    max_loss=Decimal(str(existing["max_loss"])), account_revision=int(existing["account_revision"]),
+                    state=ReservationState(str(existing["state"])), created_at=existing["created_at"],
+                )
+            if reserved_cash > projection.available_cash_for_reservation or reserved_loss > projection.available_loss_for_reservation:
+                raise InsufficientReservationCapacity("insufficient account reservation capacity")
+            updated = replace(
+                projection, revision=projection.revision + 1, reserved_cash=projection.reserved_cash + reserved_cash,
+                reserved_max_loss=projection.reserved_max_loss + reserved_loss,
+            )
+            self._write_projection(account, updated)
+            reservation = Reservation(reservation_id, intent.account_scope_id, intent.id, intent.intent_hash, reserved_cash, reserved_loss, updated.revision, ReservationState.RESERVED, now)
+            entity = datastore.Entity(key=reservation_key)
+            entity.update({"intent_id": intent.id, "intent_hash": intent.intent_hash, "cash": str(reserved_cash), "max_loss": str(reserved_loss), "account_revision": updated.revision, "state": reservation.state.value, "created_at": now})
+            command_id = f"command-{intent.intent_hash[:24]}"
+            command = datastore.Entity(key=self._key(intent.account_scope_id, "TwinCommand", command_id))
+            command.update({"intent_id": intent.id, "intent_hash": intent.intent_hash, "reservation_id": reservation_id, "state": CommandState.RESERVED.value, "client_order_id": f"foresea-{intent.intent_hash[:20]}", "created_at": now, "fence": 0})
+            event = datastore.Entity(key=self._key(intent.account_scope_id, "TwinEvent", f"reserve:{intent.intent_hash}"))
+            event.update({"event_type": "reservation_created", "sequence": updated.revision, "occurred_at": now, "observed_at": now, "payload_hash": _payload_hash({"reservation_id": reservation_id})})
+            outbox = datastore.Entity(key=self._key(intent.account_scope_id, "TwinOutbox", command_id))
+            outbox.update({"command_id": command_id, "payload_hash": _payload_hash({"command_id": command_id}), "created_at": now, "delivered_at": None})
+            self._client.put_multi([account, entity, command, event, outbox])
+            return reservation
+
+    def reserve_intent(self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None) -> Reservation:
+        """Retry only Datastore transaction conflicts; never retry venue/model work."""
+        from google.api_core.exceptions import Aborted
+
+        last_error: Optional[Aborted] = None
+        for _ in range(4):
+            try:
+                return self._reserve_intent_once(intent, cash=cash, max_loss=max_loss, now=now)
+            except Aborted as exc:
+                last_error = exc
+        raise TwinStoreError("Datastore contention exceeded the bounded reservation retry budget") from last_error

@@ -127,16 +127,21 @@
         "T03"
       ],
       "status": "in_progress",
-      "substep": "in-memory event, reservation, claim, and outbox/inbox primitives complete; durable Datastore adapter and multi-process evidence remain",
+      "substep": "in-memory primitives and Datastore account-root reservation transaction complete; manual-route convergence and remaining durable command lifecycle methods remain",
       "branch": "codex/autonomous-twin",
       "commit": null,
       "pr_url": null,
       "checks": [
-        "PYTHONPATH=src py -m unittest tests.test_twin_store (pass: 7 tests)"
+        "PYTHONPATH=src py -m unittest tests.test_twin_store (pass: 7 tests)",
+        "DATASTORE_EMULATOR_HOST=127.0.0.1:8765 GOOGLE_CLOUD_PROJECT=foresea-twin-test PYTHONPATH=src py -m unittest tests.test_twin_store_integration (pass: 1 two-process contention test)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass after Datastore adapter)",
+        "py -m ruff check src tests (pass)",
+        "py -m graphify update . (pass)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/store.py",
-        "tests/test_twin_store.py"
+        "tests/test_twin_store.py",
+        "tests/test_twin_store_integration.py"
       ],
       "blockers": [],
       "handoff": "Implement the Datastore transaction adapter and process-level contention test. Do not mark T04 complete until its emulator evidence is recorded."
