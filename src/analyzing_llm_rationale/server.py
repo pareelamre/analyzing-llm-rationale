@@ -15328,6 +15328,52 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
                 rule_parts.append("Use `web_search` for current evidence.")
             if "manage_notes" in active:
                 rule_parts.append("Use `manage_notes` for memory across cycles.")
+            # An agent was being handed two dozen tools and told what four of
+            # them do, so cycles ran on web_search and place_trade alone while
+            # the tools that actually separate a good decision from a guess
+            # went untouched. Say what each one wins, briefly, and only for
+            # the ones offered this turn.
+            _edge_tools = [
+                ("price_history",
+                 "`price_history` shows whether this price has already moved on "
+                 "the news you found. A quote that has not budged since the "
+                 "event is the case worth pressing; one that already re-rated "
+                 "means the crowd got there first."),
+                ("orderbook",
+                 "`orderbook` gives the real depth behind the quote. The top of "
+                 "book is often a handful of contracts, and a fill is capped by "
+                 "what is actually resting there -- check it before sizing."),
+                ("recent_trades",
+                 "`recent_trades` shows whether anyone is transacting at all. A "
+                 "wide quote with no recent prints is a price nobody is "
+                 "defending, not an opportunity."),
+                ("edge_board",
+                 "`edge_board` scans the whole platform for divergences, not "
+                 "just the candidates you were handed."),
+                ("track_record",
+                 "`track_record` is your own resolved history: where your "
+                 "probabilities have been right and where they have been "
+                 "systematically off. Use it to discount your own read before "
+                 "the market does it for you."),
+                ("venue_data",
+                 "`venue_data` reaches settlements, historical candles and "
+                 "fee schedules -- call it with no operation to see what is "
+                 "available."),
+                ("optimize_portfolio",
+                 "`optimize_portfolio` sizes across the whole live opportunity "
+                 "set, which is a useful second opinion on a stake you have "
+                 "already justified."),
+            ]
+            for _name, _blurb in _edge_tools:
+                if _name in active:
+                    rule_parts.append(_blurb)
+            if len([n for n, _ in _edge_tools if n in active]) >= 3:
+                rule_parts.append(
+                    "You are ranked against seven other agents on the same "
+                    "candidates, and the only thing that separates you is what "
+                    "you bothered to check. Two searches and a guess is what "
+                    "the agent below you is doing."
+                )
             if "weather_market_brief" in active:
                 rule_parts.append(
                     "For a weather contract, call `weather_market_brief` before a new position; "

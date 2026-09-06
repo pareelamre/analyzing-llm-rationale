@@ -3795,6 +3795,32 @@ class ServerTests(unittest.TestCase):
         self.assertIn("forecast(", system_prompt)
         self.assertIn("scan_markets(", system_prompt)
 
+    def test_every_edge_tool_offered_is_also_explained(self):
+        # Agents were handed 24 tools and told what 4 of them do, so cycles
+        # ran on web_search and place_trade while the tools that separate a
+        # decision from a guess went untouched. Anything offered that can
+        # change a call should say what it wins.
+        source = Path(server_module.__file__).read_text(encoding="utf-8")
+        for tool in ("price_history", "orderbook", "recent_trades",
+                     "edge_board", "track_record", "venue_data",
+                     "optimize_portfolio"):
+            self.assertIn("`%s`" % tool, source,
+                          "%s is offered but never explained" % tool)
+
+    def test_the_guidance_says_what_each_tool_wins_not_just_that_it_exists(self):
+        source = Path(server_module.__file__).read_text(encoding="utf-8")
+        # price_history is for spotting a quote that has NOT moved yet.
+        self.assertIn("already moved on", source)
+        # orderbook is for sizing against real depth, post depth-aware fills.
+        self.assertIn("capped by", source)
+        # track_record is for discounting your own read.
+        self.assertIn("discount your own read", source)
+
+    def test_tool_guidance_is_tied_to_the_competition(self):
+        source = Path(server_module.__file__).read_text(encoding="utf-8")
+        self.assertIn("ranked against seven other agents", source)
+        self.assertIn("bothered to check", source)
+
     def test_agent_analyze_tool_loop_routes_via_scads_alt_provider_for_model(self):
         # `req.model` (the field every other /agent/analyze and /predict path
         # uses for SCADS model selection) used to be silently ignored by
