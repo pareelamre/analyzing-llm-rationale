@@ -513,12 +513,32 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
             f"**{text.upper()}** — no trade this cycle. The model returned only "
             "this verdict, without stating the reasoning behind it."
         )
+    # Strip any preamble or conversational thoughts appearing before the template.
+    start_match = re.search(
+        r"(?im)^(?:#{1,6}\s*)?(?:0\.\s*Research\s+Delta|1\.\s*Decision\s*&\s*Execution)\b",
+        text,
+    )
+    if start_match and start_match.start() > 0:
+        text = text[start_match.start():].strip()
+
     # A provider can append a second entire final template after the first
     # one. It is not a second audited decision, so preserve the first complete
     # thesis rather than rendering conflicting actions in one card.
     duplicate_template = list(re.finditer(r"(?im)^###\s*0\.\s*research\s+delta\b", text))
     if len(duplicate_template) > 1:
         text = text[:duplicate_template[1].start()].rstrip()
+
+    # If text is unstructured raw deliberation without standard template sections
+    # (e.g. "Let me reconsider my analysis..."), avoid rendering thousands of characters
+    # of raw scratchpad to the user.
+    if not any(k in text.lower() for k in ("research delta", "decision & execution", "model edge")):
+        if re.search(r"(?i)\b(?:let me (?:reconsider|evaluate|think)|scratchpad|candidate markets)\b", text) or len(text) > 500:
+            return (
+                "**Research cycle completed without standard thesis template** — "
+                "The model returned internal deliberation instead of the concise thesis card. "
+                "The private tool record is retained for audit."
+            )
+
     return text
 
 

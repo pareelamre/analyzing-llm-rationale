@@ -794,9 +794,9 @@ async def run_tool_loop(
                         f"{'s' if len(missing) > 1 else ''}: {', '.join(missing)}. "
                         "Reply with the final thesis in the mandated template "
                         "only -- the section headings and their fields, nothing "
-                        "before or after. Keep your deliberation out of it: "
-                        "report the conclusion you reached, not the reasoning "
-                        "that got you there."
+                        "before or after. Strictly keep it concise for human review: "
+                        "1-2 sentences per field, under 200 words total. Keep your "
+                        "deliberation and scratchpad out of it."
                     )})
                     continue
                 # Asked and still unformatted. Publishing the prose would
@@ -899,14 +899,17 @@ async def run_tool_loop(
     stopped = {"stop_reason": stop_reason, "tokens_used": tokens_used,
                "steps_completed": steps_completed}
     final = await chat_fn(messages + [{"role": "user", "content": (
-        "Stop calling tools. Return exactly one JSON object with a `final` field now: "
-        '{"final":"your concise publishable thesis"}. Do not include an action, args, '
-        "tool call, scratch work, or any other JSON object."
+        "Stop calling tools. Return exactly one JSON object with a `final` field containing "
+        "your concise publishable thesis using the mandated 4-section template (under 200 words): "
+        '{"final":"### 0. Research Delta\\n- **Strategy**: ...\\n\\n### 1. Decision & Execution\\n..."}. '
+        "Do not include an action, args, tool call, scratch work, or any other JSON object."
     )}])
     final_text = (final or "").strip()
     parsed_final = parse_action(final_text)
     if isinstance(parsed_final, dict) and "final" in parsed_final:
         final_text = str(parsed_final["final"]).strip()
+        if required_final_sections and _missing_sections(final_text, required_final_sections):
+            final_text = _synthesise_thesis(final_text, transcript)
         return {"answer": final_text, "transcript": transcript,
                 "steps": max_steps, "truncated": True, "finalization_failed": False,
                 **stopped}
@@ -917,6 +920,8 @@ async def run_tool_loop(
         return {"answer": "", "transcript": transcript,
                 "steps": max_steps, "truncated": True, "finalization_failed": True,
                 **stopped}
+    if required_final_sections and _missing_sections(final_text, required_final_sections):
+        final_text = _synthesise_thesis(final_text, transcript)
     return {"answer": final_text, "transcript": transcript,
             "steps": max_steps, "truncated": True, "finalization_failed": False,
             **stopped}

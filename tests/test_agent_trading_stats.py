@@ -582,6 +582,27 @@ class RecentActivityTests(unittest.TestCase):
         self.assertEqual(display, "### 1. Decision & Execution\n- **Action**: HOLD")
         self.assertNotIn("Detailed Analysis", display)
 
+    def test_clean_thesis_display_strips_preamble_before_template(self):
+        thesis = (
+            "Here is my step-by-step thinking about today's market conditions:\n"
+            "I will evaluate Kalshi and Polymarket.\n\n"
+            "### 0. Research Delta\n- **Strategy**: PASS\n"
+            "### 1. Decision & Execution\n- **Action**: HOLD"
+        )
+        display = agent_trading_stats.clean_thesis_display(thesis)
+        self.assertTrue(display.startswith("### 0. Research Delta"))
+        self.assertNotIn("Here is my step-by-step thinking", display)
+
+    def test_clean_thesis_display_handles_unstructured_deliberation(self):
+        raw_deliberation = (
+            "Let me reconsider my analysis. I have three candidate markets:\n"
+            "1. Market A: YES at 0.08\n2. Market B: NO at 0.86\n"
+            + "Repeating internal analysis thoughts. " * 30
+        )
+        display = agent_trading_stats.clean_thesis_display(raw_deliberation)
+        self.assertIn("Research cycle completed without standard thesis template", display)
+        self.assertNotIn("Repeating internal analysis thoughts", display)
+
     def test_merges_trades_theses_and_notes_sorted_newest_first(self):
         with _fixture_conn() as conn:
             _insert_account(conn, "model-a")

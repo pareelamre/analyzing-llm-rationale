@@ -1326,7 +1326,12 @@ _TRADING_INSTRUCTION = (
     "leg risk; never submit a single leg as 'arbitrage'. (4) POSITION_RISK_REDUCTION: reassess an existing "
     "holding and use sizing_mode='close' only to reduce it. If no strategy clears its "
     "gate, choose PASS. A broader menu is not permission to manufacture an edge.\n\n"
-    "MANDATORY UNIFIED THESIS TEMPLATE:\n"
+    "MANDATORY UNIFIED THESIS TEMPLATE (HUMAN-REVIEW FORMAT):\n"
+    "HUMAN-REVIEW READABILITY & STRICT BREVITY: The thesis card is published to a live desk for human review. "
+    "Long, verbose thesis cards defeat the purpose of human review. ALL models MUST strictly follow this "
+    "standard template. Keep each field to 1-2 concise sentences (under 30 words per field). Total thesis "
+    "MUST be under 200 words (~1,000 characters). Do NOT write multi-line paragraphs, numbered lists of news "
+    "articles, or stream-of-consciousness deliberation. State conclusions directly.\n\n"
     "DISCREPANCY DISCIPLINE: Kalshi Research measured every resolved market on the venue "
     "(2,243,741 markets, 2021 to mid-2026) and found prices behave like genuine probabilities: "
     "Brier score falls from roughly 0.08-0.09 at a 3-month horizon to about 0.02 at close, naive "
@@ -1338,12 +1343,11 @@ _TRADING_INSTRUCTION = (
     "range). The same study finds long-dated markets never reach a 0.05 Brier at any level of "
     "participation, so distance from resolution -- not your conviction -- is what leaves room for "
     "a genuine edge.\n\n"
-    "In your final answer, ALL models MUST begin with this research delta, then use the exact 4-section markdown structure:\n\n"
+    "In your final answer, ALL models MUST begin immediately with '### 0. Research Delta' and use this exact structure:\n\n"
     "### 0. Research Delta\n"
-    "- **Strategy**: [EVIDENCE_EDGE / CATALYST_EDGE / ORDERBOOK_ARBITRAGE_RESEARCH / POSITION_RISK_REDUCTION] (never use N/A)\n"
-    "- **New evidence**: [new, dated sources checked this cycle, including URL/domain and why they change or do not change the view; write 'No material new evidence' when none]\n"
-    "- **Belief update**: [previous probability -> current probability, or 'No material change']\n"
-    "- Do not paraphrase unchanged prior sections. If evidence, probability, action, catalysts, and invalidation are unchanged, state that once and keep the remaining sections concise.\n\n"
+    "- **Strategy**: [EVIDENCE_EDGE / CATALYST_EDGE / ORDERBOOK_ARBITRAGE_RESEARCH / POSITION_RISK_REDUCTION / PASS] (never use N/A)\n"
+    "- **New evidence**: [1-2 concise sentences citing the single most material dated source & finding, or 'No material new evidence']\n"
+    "- **Belief update**: [previous probability -> current probability, or 'No material change']\n\n"
     "### 1. Decision & Execution\n"
     "- **Action**: [BUY YES / BUY NO / CLOSE / HOLD / PASS]\n"
     "- **Market & Venue**: [<ticker>] on [<Kalshi / Polymarket>] -- always name the\n"
@@ -1353,18 +1357,18 @@ _TRADING_INSTRUCTION = (
     "  in your favour. Never write 'No new position' or 'N/A' here.\n"
     "- **Order Sizing**: [<Quarter Kelly 5% cap / Edge Kelly 8% cap / Close>, <quantity> contracts @ $<price>, notional: $<total>] (write 'No new order' for HOLD/PASS; never use N/A)\n\n"
     "### 2. Resolution Rules & Compliance Audit\n"
-    "- **Rules Verification**: [Explicit confirmation that the event/entity qualifies under venue criteria with zero exclusions] (or 'No new contract assessed'; never use N/A)\n"
-    "- **Observation Window**: [Window start -> close check] (or 'No new contract assessed'; never use N/A)\n\n"
+    "- **Rules Verification**: [1 concise sentence confirming event criteria and zero exclusions, or 'No new contract assessed']\n"
+    "- **Observation Window**: [Window start -> close check, or 'No new contract assessed']\n\n"
     "### 3. Model Edge & Valuation\n"
     "- **Model Probability**: [XX%] vs **Market Price**: [XX%] (Edge: [+/-XX%]) -- state\n"
     "  both numbers on every cycle, including a PASS. If you name the side, say which\n"
     "  ('5% YES', '95% NO'); both are read exactly as written. This line is what gets\n"
     "  scored against the outcome, so an omitted probability is a cycle of your skill\n"
     "  left unmeasured. Never use N/A.\n"
-    "- **Information Asymmetry / Rationale**: [Why the crowd is mispriced / what verified evidence drives this stance]\n\n"
+    "- **Information Asymmetry / Rationale**: [1-2 concise sentences on why the edge exists or why passing]\n\n"
     "### 4. Catalysts & Invalidation\n"
-    "- **Key Catalysts / Dates**: [Upcoming milestones / deadlines]\n"
-    "- **Invalidation Trigger**: [Exact condition or evidence that invalidates this thesis]"
+    "- **Key Catalysts / Dates**: [1 concise line with next key milestone/deadline date]\n"
+    "- **Invalidation Trigger**: [1 concise sentence with exact condition or event that invalidates this thesis]"
 )
 
 
@@ -2759,6 +2763,9 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
     # final copy in the cycle field so tool envelopes cannot masquerade as a
     # model thesis on the public board.
     report.thesis = agent_trading_stats.clean_thesis_display(report.thesis)
+    if not report.thesis:
+        from analyzing_llm_rationale.agent_capabilities import _synthesise_thesis
+        report.thesis = _synthesise_thesis("", report.tool_transcript)
     all_candidates = [*held_quotes, *new_quotes]
     report.thesis, thesis_execution = _reconcile_thesis_execution(
         agent_id=agent_id,
