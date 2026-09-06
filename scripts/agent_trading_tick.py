@@ -1242,6 +1242,19 @@ _TRADING_INSTRUCTION = (
     "Do not re-open or add risk solely because a previous thesis, search result, or "
     "market candidate is still visible. If there is no material evidence delta, HOLD "
     "or PASS; a fresh quote alone is not research.\n\n"
+    "YOU ARE COMPETING. Eight agents trade this board against the same "
+    "candidates, the same starting bankroll and the same guards, and the "
+    "standings above are live. The objective is to finish top by return, and "
+    "you are ranked against the others every cycle whether or not you act. "
+    "Standing still is a position: an agent that never trades cannot climb, "
+    "and one that trades badly falls. The board is public and permanent -- "
+    "every cycle you run is recorded under your name.\n\n"
+    "What actually moves you up is return, not activity. Look at the "
+    "standings before drawing the obvious conclusion: the most active agent "
+    "on this board is last, and the leader got there on fewer trades with "
+    "better ones. A losing trade does not just cost money, it hands places to "
+    "everyone who declined it. Beat the others by picking better, not by "
+    "picking more.\n\n"
     "EVENT MERIT GATE: Trade the event, not the number. A gap between your "
     "probability and the market's is not by itself a reason to trade -- most large "
     "gaps are your own error, not the crowd's, and the crowd has already priced the "
@@ -1386,6 +1399,84 @@ def _recalled_notes_block(agent_id: str, limit: int = 20) -> str:
     )
 
 
+LEADERBOARD_URL = os.environ.get(
+    "AGENT_TRADING_LEADERBOARD_URL", "https://foresea.ink/agent-trading/board")
+LEADERBOARD_TIMEOUT_S = float(os.environ.get("AGENT_TRADING_LEADERBOARD_TIMEOUT_S", "10"))
+
+
+def _leaderboard_block(agent_id: str) -> str:
+    """Standings for every agent, with this one's own position marked.
+
+    Each model runs its cycle with only its own shadow account downloaded, so
+    it has never had any way to know how it is doing relative to anyone else.
+    The published board is the one place the whole field is visible.
+
+    Returns "" on any failure. A cycle must not be lost because the
+    scoreboard was unreachable.
+    """
+    try:
+        response = requests.get(LEADERBOARD_URL, timeout=LEADERBOARD_TIMEOUT_S)
+        if response.status_code != 200:
+            return ""
+        rows = (response.json() or {}).get("leaderboard") or []
+    except Exception:
+        return ""
+    ranked = sorted(
+        (r for r in rows if isinstance(r, dict) and r.get("agent_id")),
+        key=lambda r: -(r.get("return_pct") if isinstance(r.get("return_pct"), (int, float)) else -999),
+    )
+    if not ranked:
+        return ""
+    lines = ["=== Standings: every agent trading this board ==="]
+    mine = None
+    for position, row in enumerate(ranked, start=1):
+        name = str(row.get("agent_id"))
+        is_me = name == agent_id
+        if is_me:
+            mine = position
+        ret = row.get("return_pct")
+        ret_s = f"{ret:+.2f}%" if isinstance(ret, (int, float)) else "n/a"
+        trades = row.get("trade_count") or 0
+        win = row.get("win_rate")
+        win_s = f"{win:.0%} of {row.get('realized_count') or 0} closed" if isinstance(win, (int, float)) else "no closed trades"
+        lines.append(
+            "  %2d. %-24s %9s  %3s trades, won %s%s"
+            % (position, name[:24], ret_s, trades, win_s, "   <-- YOU" if is_me else "")
+        )
+    if mine is not None:
+        leader = ranked[0]
+        gap = None
+        if isinstance(leader.get("return_pct"), (int, float)) and isinstance(
+            ranked[mine - 1].get("return_pct"), (int, float)
+        ):
+            gap = leader["return_pct"] - ranked[mine - 1]["return_pct"]
+        lines.append("")
+        if mine == 1:
+            lines.append(
+                "You are top of the board. Holding it is a matter of not giving "
+                "the lead back: the agent below you is closer than the gap looks.")
+        else:
+            gap_s = f" -- {gap:.2f} percentage points behind" if gap is not None else ""
+            lines.append(
+                f"You are ranked {mine} of {len(ranked)}{gap_s}. Get to the top."
+            )
+        # The standings are also evidence, and the evidence is blunt: on this
+        # board the most active agent is last. Say so, because "trade more to
+        # climb" is the obvious inference and it is the wrong one -- llama is
+        # bottom on 25 trades while the leader got there on 14.
+        traded = [r for r in ranked if (r.get("trade_count") or 0) > 0]
+        if len(traded) >= 3:
+            busiest = max(traded, key=lambda r: r.get("trade_count") or 0)
+            lines.append(
+                "Read the column before you act on it: %s has traded the most "
+                "(%s) and sits %d of %d. Rank comes from being right, not from "
+                "being busy -- a losing trade costs you places."
+                % (str(busiest.get("agent_id"))[:24], busiest.get("trade_count"),
+                   ranked.index(busiest) + 1, len(ranked))
+            )
+    return "\n".join(lines)
+
+
 def _assemble_question(portfolio_block: str, candidates_block: str,
                        agent_id: Optional[str] = None) -> str:
     as_of = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -1395,8 +1486,10 @@ def _assemble_question(portfolio_block: str, candidates_block: str,
         "Use a catalyst only when it is still ahead and inside the selected contract's resolution window."
     )
     notes_block = _recalled_notes_block(agent_id or MODEL)
+    standings_block = _leaderboard_block(agent_id or MODEL)
     return "\n\n".join(filter(None, [
-        time_anchor, portfolio_block, notes_block, candidates_block, _TRADING_INSTRUCTION,
+        time_anchor, portfolio_block, notes_block, standings_block,
+        candidates_block, _TRADING_INSTRUCTION,
     ]))
 
 

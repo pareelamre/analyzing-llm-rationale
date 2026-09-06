@@ -306,6 +306,54 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("volume 41,234", line)
         self.assertIn("depth/open interest 8,800", line)
 
+    def _board(self, payload=None):
+        resp = mock.Mock(status_code=200)
+        resp.json.return_value = json.loads(payload or '{"leaderboard": [{"agent_id": "winner", "return_pct": 5.05, "trade_count": 14, "realized_count": 6, "win_rate": 0.33},{"agent_id": "middle", "return_pct": 0.45, "trade_count": 17, "realized_count": 12, "win_rate": 0.25},{"agent_id": "loser", "return_pct": -15.21, "trade_count": 25, "realized_count": 15, "win_rate": 0.27}]}')
+        return mock.patch.object(agent_trading_tick.requests, "get", return_value=resp)
+
+    def test_standings_rank_every_agent_and_mark_the_reader(self):
+        # Each model runs its cycle with only its own shadow account, so it
+        # has never had any way to know where it stands. The published board
+        # is the one place the whole field is visible.
+        with self._board():
+            block = agent_trading_tick._leaderboard_block("loser")
+        self.assertIn("1. winner", block)
+        self.assertIn("3. loser", block)
+        self.assertIn("<-- YOU", block)
+        self.assertIn("ranked 3 of 3", block)
+        self.assertIn("20.26 percentage points behind", block)
+
+    def test_the_leader_is_told_it_is_defending_not_chasing(self):
+        with self._board():
+            block = agent_trading_tick._leaderboard_block("winner")
+        self.assertIn("top of the board", block)
+        self.assertNotIn("Get to the top", block)
+
+    def test_standings_say_plainly_that_activity_is_not_rank(self):
+        # "Trade more to climb" is the obvious inference from a leaderboard
+        # and it is the wrong one here: the most active agent is last, and
+        # the leader got there on fewer trades.
+        with self._board():
+            block = agent_trading_tick._leaderboard_block("middle")
+        self.assertIn("traded the most (25)", block)
+        self.assertIn("being right, not from being busy", block)
+
+    def test_an_unreachable_board_does_not_cost_the_cycle(self):
+        # A scoreboard outage must never take a trading cycle with it.
+        with mock.patch.object(agent_trading_tick.requests, "get",
+                               side_effect=RuntimeError("board down")):
+            self.assertEqual(agent_trading_tick._leaderboard_block("loser"), "")
+        resp = mock.Mock(status_code=503)
+        with mock.patch.object(agent_trading_tick.requests, "get", return_value=resp):
+            self.assertEqual(agent_trading_tick._leaderboard_block("loser"), "")
+
+    def test_the_instruction_states_the_competition_and_its_trap(self):
+        text = agent_trading_tick._TRADING_INSTRUCTION
+        self.assertIn("YOU ARE COMPETING", text)
+        self.assertIn("finish top by return", text)
+        # ...and immediately guards the inference it invites.
+        self.assertIn("picking better, not by picking more", text)
+
     def test_candidates_are_ranked_by_the_edge_they_require(self):
         # The menu, not the gate, was the binding constraint on trade rate.
         # A trade needs its edge to beat half-spread + fee + floor; measured
