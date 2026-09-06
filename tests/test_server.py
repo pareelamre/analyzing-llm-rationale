@@ -5425,23 +5425,49 @@ class ServerTests(unittest.TestCase):
     def test_chat_provider_default_keeps_transient_retry_enabled(self):
         self.assertEqual(server_module._CHAT_PROVIDER_MAX_RETRIES, 1)
 
-    def test_agent_fallback_providers_resolves_chain(self):
+    def test_agent_fallback_providers_resolves_a_non_competing_chain(self):
         primary = FakeProvider()
         primary.model_name = "zai-org/GLM-5.3-Flash"
         fallback_prov = FakeProvider()
-        fallback_prov.model_name = "zai-org/GLM-5.3"
+        fallback_prov.model_name = "some/neutral-model"
         req = server_module.AgentAnalyzeRequest(
             question="Will it rain?",
             model="glm-5-3-flash",
         )
         with (
-            mock.patch.object(server_module, "_SCADS_MODEL_FALLBACKS", {"glm-5-3-flash": ("zai-org/GLM-5.3",)}),
+            mock.patch.object(server_module, "_SCADS_MODEL_FALLBACKS", {"glm-5-3-flash": ("some/neutral-model",)}),
+            mock.patch.object(server_module, "_AGENT_TRADING_IDENTITIES", frozenset({"zai-org/GLM-5.3"})),
             mock.patch.object(server_module, "_scads_provider_for_model_name", return_value=fallback_prov),
         ):
             providers = server_module._agent_fallback_providers(req, primary)
 
         self.assertEqual(len(providers), 1)
         self.assertIs(providers[0], fallback_prov)
+
+    def test_agent_fallback_refuses_a_rival_that_trades_the_same_board(self):
+        """This previously resolved: glm-5-3-flash would be answered by GLM-5.3.
+
+        A cycle is a claim about one model's judgement, and the trades it places
+        land in that agent's account during the tool loop -- before any
+        post-hoc identity check can run. So the substitution has to be refused
+        up front, not detected afterwards.
+        """
+        primary = FakeProvider()
+        primary.model_name = "zai-org/GLM-5.3-Flash"
+        rival = FakeProvider()
+        rival.model_name = "zai-org/GLM-5.3"
+        req = server_module.AgentAnalyzeRequest(
+            question="Will it rain?",
+            model="glm-5-3-flash",
+        )
+        with (
+            mock.patch.object(server_module, "_SCADS_MODEL_FALLBACKS", {"glm-5-3-flash": ("zai-org/GLM-5.3",)}),
+            mock.patch.object(server_module, "_AGENT_TRADING_IDENTITIES", frozenset({"zai-org/GLM-5.3"})),
+            mock.patch.object(server_module, "_scads_provider_for_model_name", return_value=rival),
+        ):
+            providers = server_module._agent_fallback_providers(req, primary)
+
+        self.assertEqual(providers, [])
 
     def test_agent_tool_loop_falls_back_when_primary_fails(self):
         import asyncio
