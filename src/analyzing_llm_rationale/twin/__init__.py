@@ -1,6 +1,7 @@
 """Typed, framework-independent records for the autonomous Foresea twin."""
 
 from .market import MarketAssessment, normalize_market
+from .account import AccountSnapshot, AccountSyncResult, synchronize_account
 from .models import (
     AccountScope,
     CommandState,
@@ -30,6 +31,8 @@ from .store import (
 
 __all__ = [
     "AccountScope",
+    "AccountSnapshot",
+    "AccountSyncResult",
     "CommandState",
     "Completeness",
     "DecisionRecord",
@@ -52,5 +55,6 @@ __all__ = [
     "can_transition_command",
     "canonical_instrument_id",
     "require_durable_store",
+    "synchronize_account",
     "normalize_market",
 ]
