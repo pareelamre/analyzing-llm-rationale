@@ -5446,6 +5446,12 @@ class AgentAnalyzeRequest(BaseModel):
                     "If your own request times out waiting for a response, the run may still be progressing "
                     "server-side -- look it up with GET /agent/runs?client_run_key=... instead of restarting.",
     )
+    max_tokens: Optional[int] = Field(
+        None,
+        ge=1,
+        le=16384,
+        description="Max output tokens for the agent tool loop and skills.",
+    )
 
 
 class LiveTradeIntent(BaseModel):
@@ -14302,28 +14308,41 @@ def _select_agent_provider(req: "AgentAnalyzeRequest"):
     /agent/analyze request without an explicit model benefits from the same
     evolution-loop auto-routing the main forecast already gets, instead of
     always falling straight to the server's static default."""
+    effective_max_tokens = int(
+        getattr(req, "max_tokens", None)
+        or os.environ.get("AGENT_MAX_TOKENS")
+        or os.environ.get("MAX_TOKENS")
+        or 4096
+    )
     alt_provider = (
         _scads_alt_provider(
-            req.model, request_timeout_s=_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S)
+            req.model,
+            request_timeout_s=_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
+        )
         if req.model else None
     )
     if alt_provider is not None:
-        return alt_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
+        return alt_provider, _state.get("temperature", 0.0), effective_max_tokens
     if (req.ollama_base_url and req.openrouter_model) or (req.openrouter_api_key and req.openrouter_model):
-        return _select_provider(
+        provider, temp, _ = _select_provider(
             req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
             getattr(req, "ollama_base_url", None),
         )
-    auto = _auto_selected_model()
-    if auto:
-        auto_provider = _scads_alt_provider(
-            auto, request_timeout_s=_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S)
-        if auto_provider is not None:
-            return auto_provider, _state.get("temperature", 0.0), _state.get("max_tokens", 1024)
-    return _select_provider(
+        return provider, temp, effective_max_tokens
+    if not req.model:
+        auto = _auto_selected_model()
+        if auto:
+            auto_provider = _scads_alt_provider(
+                auto,
+                request_timeout_s=_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
+            )
+            if auto_provider is not None:
+                return auto_provider, _state.get("temperature", 0.0), effective_max_tokens
+    provider, temp, _ = _select_provider(
         req.openrouter_api_key, req.openrouter_model, req.provider_base_url,
         getattr(req, "ollama_base_url", None),
     )
+    return provider, temp, effective_max_tokens
 
 
 def _should_reduce_builtin_skills(req: "AgentAnalyzeRequest", result: "PredictResponse") -> bool:

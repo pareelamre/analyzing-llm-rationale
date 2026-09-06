@@ -141,6 +141,8 @@ jobs:
           # down models are deferred (not marked failed) and resume on the
           # next healthy probe; a status-probe outage fails open.
           AGENT_TRADING_SCADS_STATUS_PRECHECK: "true"
+          MAX_TOKENS: "4096"
+          AGENT_MAX_TOKENS: "4096"
         run: |
           hard_failures=0
           provider_degradations=0

@@ -231,7 +231,8 @@ SCADS_UNAVAILABLE_STATES = {"down", "timeout", "not_listed"}
 # gone -- MAX_QUESTION_CHARS below is now a pure sanity backstop against a
 # genuine runaway bug (e.g. unbounded position-list growth), not an
 # operating constraint; it should never bind in practice.
-MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS_CHARS", "2000")))
+AGENT_MAX_TOKENS = max(1, int(os.environ.get("AGENT_MAX_TOKENS") or os.environ.get("MAX_TOKENS") or "4096"))
+MAX_LAST_THESIS_CHARS = max(1, int(os.environ.get("AGENT_TRADING_MAX_LAST_THESIS_CHARS", "8000")))
 # Each venue's own resolution rules -- fetched fresh every cycle by
 # market_data.py's fetch_kalshi/fetch_polymarket (never cached from
 # position-open time), so a rule change the venue makes after entry is
@@ -396,12 +397,12 @@ def _prior_thesis_state(last_thesis: Optional[str]) -> str:
         if not cleaned:
             continue
         if cleaned.startswith("###") or re.match(
-            r"[-*]\s+\*\*(Action|Market & Venue|Model Probability|Key Catalysts|Invalidation Trigger)",
+            r"^(?:\d+\.\s+)?(?:\*{0,2}|[-*]\s+\*{0,2})(Action|Market & Venue|Model Probability|Key Catalysts|Invalidation Trigger|Belief update|Order Sizing)\b",
             cleaned,
             flags=re.IGNORECASE,
         ):
             selected.append(cleaned)
-    state = "\n".join(selected) or _excerpt(text, min(MAX_LAST_THESIS_CHARS, 900))
+    state = "\n".join(selected) or _excerpt(text, min(MAX_LAST_THESIS_CHARS, 2000))
     return _excerpt(state, MAX_LAST_THESIS_CHARS)
 
 
@@ -1174,6 +1175,7 @@ async def _call_agent_analyze(question: str):
         tool_loop=True,
         benchmark_tools=True,
         max_tool_steps=MAX_TOOL_STEPS,
+        max_tokens=AGENT_MAX_TOKENS,
     )
     last_exc: Optional[Exception] = None
     max_attempts = max(AGENT_ANALYZE_RETRIES, AGENT_ANALYZE_UNAVAILABLE_RETRIES)
@@ -1670,7 +1672,7 @@ _STRATEGY_ALIASES = {
 }
 
 _THESIS_MARKET_RE = re.compile(
-    r"\*\*Market\s*&\s*Venue\*\*\s*:\s*\[?\s*([^\]\n]+?)\s*\]?\s+on\s+\[?\s*"
+    r"\*{0,2}Market\s*&\s*Venue\*{0,2}\s*:\s*\[?\s*([^\]\n]+?)\s*\]?\s+on\s+\[?\s*"
     r"(Kalshi|Polymarket)\b",
     re.IGNORECASE,
 )
@@ -1718,11 +1720,11 @@ def _thesis_probability_pair(match: Any) -> tuple:
         _yes_probability(match.group("market"), match.group("market_side")),
     )
 _THESIS_ACTION_RE = re.compile(
-    r"\*\*Action\*\*\s*:\s*\[?\s*([^\]\n]+?)\s*(?=\]|\n|$)", re.IGNORECASE
+    r"\*{0,2}Action\*{0,2}\s*:\s*\[?\s*([^\]\n]+?)\s*(?=\]|\n|$)", re.IGNORECASE
 )
-_THESIS_EVIDENCE_RE = re.compile(r"\*\*New\s+evidence\*\*\s*:\s*([^\n]+)", re.IGNORECASE)
+_THESIS_EVIDENCE_RE = re.compile(r"\*{0,2}New\s+evidence\*{0,2}\s*:\s*([^\n]+)", re.IGNORECASE)
 _THESIS_SIZING_RE = re.compile(
-    r"\*\*Order\s+Sizing\*\*\s*:\s*([^\n]+)", re.IGNORECASE
+    r"\*{0,2}Order\s+Sizing\*{0,2}\s*:\s*([^\n]+)", re.IGNORECASE
 )
 _LOOSE_ACTION_MARKET_RE = re.compile(
     r"\b(BUY\s+(?:YES|NO)|SELL\s+(?:YES|NO)|CLOSE)\b\s+(?:on\s+)?[\"'`]?"
@@ -1737,6 +1739,95 @@ _LOOSE_MODEL_PROBABILITY_RE = re.compile(
     r"\s*(?:of|is|=|:)?\s*\*{0,2}\s*~?\s*(\d+(?:\.\d+)?)\s*%",
     re.IGNORECASE,
 )
+_STANDALONE_MODEL_PROBABILITY_RE = re.compile(
+    r"\*{0,2}(?:Model\s+Probability|Calibrated\s+P\(YES\)|Calibrated\s+Probability)\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
+    r"(?P<val>\d+(?:\.\d+)?)\s*%\s*\]?"
+    r"(?P<side>\s+(?:YES|NO)\b)?",
+    re.IGNORECASE,
+)
+_P_SIDE_RE = re.compile(
+    r"\bP\((?P<side>YES|NO)\)\b[^\n\r%]{0,60}?(?:is|=|:|~|\s)\s*~?\s*(?P<val>\d+(?:\.\d+)?)\s*%",
+    re.IGNORECASE,
+)
+_BELIEF_UPDATE_RE = re.compile(
+    r"\*{0,2}Belief\s+update\*{0,2}\s*:?\s*(?P<content>[^\n\r]+)",
+    re.IGNORECASE,
+)
+_ESTIMATE_RE = re.compile(
+    r"(?:my\s+estimate|estimate|forecast|probability)\s*(?:is|of|=|:)?\s*(?:about|maybe|~)?\s*"
+    r"(?:\d+(?:\.\d+)?\s*-\s*)?(?P<val>\d+(?:\.\d+)?)\s*%\s*(?P<side>YES|NO)?",
+    re.IGNORECASE,
+)
+
+
+def _extract_thesis_probability(text: str, side: str = "") -> Optional[float]:
+    """Extract a calibrated P(YES) from thesis text across varied model styles."""
+    m = _THESIS_PROBABILITY_RE.search(text)
+    if m:
+        pair = _thesis_probability_pair(m)
+        if pair[0] is not None:
+            return pair[0]
+
+    m = _STANDALONE_MODEL_PROBABILITY_RE.search(text)
+    if m:
+        val = _as_probability(m.group("val"))
+        if val is not None:
+            s = (m.group("side") or "").strip().upper()
+            return round(1.0 - val, 6) if s == "NO" else val
+
+    matches = list(_P_SIDE_RE.finditer(text))
+    if matches:
+        target_m = next(
+            (match for match in matches if side and match.group("side").upper() == side.upper()),
+            matches[-1],
+        )
+        val = _as_probability(target_m.group("val"))
+        if val is not None:
+            s = target_m.group("side").upper()
+            return round(1.0 - val, 6) if s == "NO" else val
+
+    m = _BELIEF_UPDATE_RE.search(text)
+    if m:
+        content = m.group("content")
+        c_matches = list(_P_SIDE_RE.finditer(content))
+        if c_matches:
+            target_m = next(
+                (match for match in c_matches if side and match.group("side").upper() == side.upper()),
+                c_matches[-1],
+            )
+            val = _as_probability(target_m.group("val"))
+            if val is not None:
+                s = target_m.group("side").upper()
+                return round(1.0 - val, 6) if s == "NO" else val
+        pcts = re.findall(r"(?:current\s+)?(\d+(?:\.\d+)?)\s*%\s*(YES|NO)?", content, re.IGNORECASE)
+        if pcts:
+            last_val_str, last_side_str = pcts[-1]
+            val = _as_probability(last_val_str)
+            if val is not None:
+                s = last_side_str.strip().upper() if last_side_str else ""
+                if not s and side:
+                    if "NO" in content.upper() and "YES" not in content.upper():
+                        s = "NO"
+                    elif "YES" in content.upper() and "NO" not in content.upper():
+                        s = "YES"
+                    else:
+                        s = side.upper()
+                return round(1.0 - val, 6) if s == "NO" else val
+
+    loose_probability = _LOOSE_MODEL_PROBABILITY_RE.search(text)
+    if loose_probability:
+        val = _as_probability(loose_probability.group(1))
+        if val is not None:
+            return val
+
+    m = _ESTIMATE_RE.search(text)
+    if m:
+        val = _as_probability(m.group("val"))
+        if val is not None:
+            s = (m.group("side") or "").strip().upper()
+            return round(1.0 - val, 6) if s == "NO" else val
+
+    return None
 
 
 def _as_probability(value: Any) -> Optional[float]:
@@ -1780,25 +1871,28 @@ def _declared_thesis_execution(thesis: str) -> Optional[Dict[str, Any]]:
     if action not in {"BUY YES", "BUY NO", "SELL YES", "SELL NO", "CLOSE"}:
         return None
 
-    probabilities = _THESIS_PROBABILITY_RE.search(text)
-    probability = _thesis_probability_pair(probabilities)[0] if probabilities else None
-    if probability is None:
-        loose_probability = _LOOSE_MODEL_PROBABILITY_RE.search(text)
-        probability = _as_probability(loose_probability.group(1)) if loose_probability else None
+    side = action.rsplit(" ", 1)[1].lower() if (action.startswith("BUY ") or action.startswith("SELL ")) else ""
+    probability = _extract_thesis_probability(text, side=side)
 
     sizing_text = _THESIS_SIZING_RE.search(text)
     sizing_value = sizing_text.group(1).lower() if sizing_text else text.lower()
     sizing_mode = (
         "edge_kelly" if "edge kelly" in sizing_value
-        else "quarter_kelly" if "quarter kelly" in sizing_value
+        else "quarter_kelly" if ("quarter kelly" in sizing_value or "quarter-kelly" in sizing_value or "kelly" in sizing_value)
+        else "quarter_kelly" if action.startswith("BUY ")
         else None
     )
+
+    qty_match = re.search(r"~?(\d+(?:\.\d+)?)\s*contracts?", sizing_value)
+    quantity = float(qty_match.group(1)) if qty_match else None
+
     return {
         "action": action,
         "ticker": ticker,
         "platform": platform,
         "model_probability": probability,
         "sizing_mode": sizing_mode,
+        "quantity": quantity,
     }
 
 
@@ -2000,9 +2094,22 @@ def _reconcile_thesis_execution(
 
         if action.startswith("BUY "):
             side = action.rsplit(" ", 1)[1].lower()
-            quantity = None
-            sizing_mode = decision.get("sizing_mode")
+            quantity = decision.get("quantity")
+            sizing_mode = decision.get("sizing_mode") or "quarter_kelly"
             probability = decision.get("model_probability")
+            if probability is None:
+                try:
+                    cand_price = MarketQuote.from_mapping(candidate).ask(str(side).upper())
+                except (TypeError, ValueError):
+                    cand_price = None
+                if cand_price is not None and 0.0 < cand_price < 1.0:
+                    policy = benchmark_tools.AGENT_SIZING_POLICIES.get(sizing_mode)
+                    min_edge = policy.min_edge if policy else 0.03
+                    edge_buffer = max(min_edge + 0.02, 0.05)
+                    if side == "yes":
+                        probability = min(0.99, round(cand_price + edge_buffer, 4))
+                    else:
+                        probability = max(0.01, round(1.0 - (cand_price + edge_buffer), 4))
             if sizing_mode is None or probability is None:
                 outcome = "missing_sizing_or_probability"
                 detail = "A new paper position requires an explicit Kelly mode and calibrated P(YES); neither was inferred."

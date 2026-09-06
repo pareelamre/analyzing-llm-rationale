@@ -3921,6 +3921,13 @@ class ServerTests(unittest.TestCase):
         auto_mock.assert_not_called()
         self.assertEqual(provider.model_name, "user/custom-model")
 
+    def test_select_agent_provider_uses_request_max_tokens(self):
+        alt_provider = FakeProvider()
+        with mock.patch.object(server_module, "_scads_alt_provider", return_value=alt_provider):
+            req = server_module.AgentAnalyzeRequest(question="Will X happen?", model="glm-5-3", max_tokens=8192)
+            provider, temperature, max_tokens = server_module._select_agent_provider(req)
+        self.assertEqual(max_tokens, 8192)
+
     def test_agent_analyze_fetches_market_and_recommends(self):
         import analyzing_llm_rationale.market_data as md
 
