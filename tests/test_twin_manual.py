@@ -51,6 +51,8 @@ class ManualTwinBoundaryTests(unittest.TestCase):
             now=NOW,
         )
         scope_id = claim.command.scope_id
+        self.assertEqual(claim.command.client_order_id, "manual-001")
+        self.assertTrue(claim.command.request_fingerprint)
         autonomous = TradeIntent(
             id="autonomous-001",
             account_scope_id=scope_id,

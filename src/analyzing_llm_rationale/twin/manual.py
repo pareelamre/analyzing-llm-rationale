@@ -23,6 +23,8 @@ class ManualReservationConflict(TwinStoreError):
 @dataclass(frozen=True)
 class ManualCommandClaim:
     command: ExecutionCommand
+    intent: TradeIntent
+    scope: AccountScope
     fence: int
     worker_id: str
 
@@ -111,10 +113,13 @@ def reserve_confirmed_manual_order(
     if estimated <= 0:
         estimated = Decimal(str(payload.get("max_cost") or normalized.get("price", "0"))) * Decimal(str(normalized["quantity"]))
     is_buy = action in {ProposalAction.BUY_YES, ProposalAction.BUY_NO}
-    store.reserve_intent(intent, cash=estimated if is_buy else Decimal("0"), max_loss=estimated if is_buy else Decimal("0"), now=now)
+    store.reserve_intent(
+        intent, cash=estimated if is_buy else Decimal("0"), max_loss=estimated if is_buy else Decimal("0"),
+        now=now, client_order_id=client_order_id,
+    )
     command = store.command_for_intent(intent)
     worker_id = f"manual-worker-{_digest(authority_ref)[:24]}"
     claim = store.claim_command(command.id, worker_id=worker_id, now=now)
     if claim is None:
         raise ManualReservationConflict("manual order already has an active execution claim")
-    return ManualCommandClaim(command=command, fence=claim.fence, worker_id=worker_id)
+    return ManualCommandClaim(command=command, intent=intent, scope=scope, fence=claim.fence, worker_id=worker_id)
