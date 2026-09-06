@@ -179,14 +179,14 @@
         "T05"
       ],
       "status": "in_progress",
-      "substep": "complete-generation retention, cursor completeness, external fill/order divergence, explicit complete-read conversion, fail-closed cursor/generation capture, and venue cursor/offset continuation adapters are implemented; dedicated balance/settlement normalization, durable snapshot storage, and full account economics remain pending",
-      "branch": "codex/autonomous-twin-t06-adapters",
-      "commit": "5314bac0",
+      "substep": "complete-generation retention, cursor completeness, external fill/order divergence, explicit complete-read conversion, fail-closed cursor/generation capture, venue cursor/offset continuation adapters, and strict holdings/basis/settled-cash/fee/conservative-liquidation normalization are implemented; dedicated balance/settlement adapter normalization and durable snapshot storage remain pending",
+      "branch": "codex/autonomous-twin-t06-economics",
+      "commit": "43b4dbd6",
       "pr_url": null,
       "checks": [
-        "PYTHONPATH=src py -m unittest tests.test_twin_account (pass: 12 tests)",
-        "py -m ruff check src/analyzing_llm_rationale/twin/account.py src/analyzing_llm_rationale/twin/reconcile.py tests/test_twin_account.py (pass)",
-        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1392 tests in 151.601s; 4 emulator skips)",
+        "PYTHONPATH=src py -m unittest tests.test_twin_account (pass: 15 tests)",
+        "py -m ruff check src/analyzing_llm_rationale/twin/account.py tests/test_twin_account.py (pass)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass; 4 emulator skips)",
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
         "py -m graphify update . (completed; generated graph changes intentionally unstaged)"
