@@ -6724,6 +6724,9 @@ function _cleanThesisText(raw) {
   // 3. Clean replacement character artifacts
   str = str.replace(/\uFFFD/g, '—');
 
+  // Strip trailing raw model dump appended by fallback synthesis
+  str = str.replace(/(?:\r?\n)?---\s*(?:\r?\n)?(?:\*?)The model's own answer, unmodified:?[\s\S]*$/i, '');
+
   // 4. Preprocess compressed single-line formatting into real multi-line markdown
   // Normalize section headers (e.g. "### 1. Decision & Execution - **Action**:" -> "\n\n### 1. Decision & Execution\n")
   str = str.replace(/(?:^|\s*-\s*|\s+)#{2,6}\s*([0-9]+\.\s*[^#\n\-]+?)(?=\s*-\s*\*\*|\s*#{2,6}|\s*$)/g, '\n\n### $1\n');

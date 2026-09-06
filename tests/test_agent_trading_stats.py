@@ -603,6 +603,19 @@ class RecentActivityTests(unittest.TestCase):
         self.assertIn("Research cycle completed without standard thesis template", display)
         self.assertNotIn("Repeating internal analysis thoughts", display)
 
+    def test_clean_thesis_display_strips_unmodified_answer_dump(self):
+        thesis = (
+            "### 0. Research Delta\n- **Strategy**: PASS\n\n"
+            "### 1. Decision & Execution\n- **Action**: HOLD\n\n"
+            "---\n"
+            "The model's own answer, unmodified:\n\n"
+            "Let me evaluate my candidate markets. Step 1: scratchpad internal monologue..."
+        )
+        display = agent_trading_stats.clean_thesis_display(thesis)
+        self.assertIn("### 1. Decision & Execution", display)
+        self.assertNotIn("The model's own answer, unmodified", display)
+        self.assertNotIn("scratchpad internal monologue", display)
+
     def test_merges_trades_theses_and_notes_sorted_newest_first(self):
         with _fixture_conn() as conn:
             _insert_account(conn, "model-a")

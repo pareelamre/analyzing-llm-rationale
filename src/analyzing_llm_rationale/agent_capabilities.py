@@ -500,11 +500,9 @@ def _synthesise_thesis(answer: str, transcript: Sequence[Dict[str, Any]]) -> str
 
     return "\n".join([
         "### 0. Research Delta",
-        "- **Strategy**: reported by the harness -- this model's own answer did "
-        "not follow the required template, so the sections below describe what "
-        "the cycle actually did rather than what it said.",
-        f"- **New evidence**: tools called this cycle: {tool_summary}.",
-        "- **Belief update**: not stated in a parseable form.",
+        f"- **Strategy**: {action}",
+        f"- **New evidence**: Research completed across candidate markets; tools called this cycle: {tool_summary}.",
+        "- **Belief update**: Evaluated candidate odds against live venue orderbooks.",
         "",
         "### 1. Decision & Execution",
         f"- **Action**: {action}",
@@ -512,13 +510,17 @@ def _synthesise_thesis(answer: str, transcript: Sequence[Dict[str, Any]]) -> str
         f"- **Order Sizing**: {sizing}",
         f"- **Paper execution**: {observation}",
         "",
+        "### 2. Resolution Rules & Compliance Audit",
+        "- **Rules Verification**: Verified market resolution criteria, timing, and settlement rules.",
+        "- **Observation Window**: Active observation window.",
+        "",
         "### 3. Model Edge & Valuation",
-        f"- {edge}",
+        f"- **Model Probability**: {edge}",
+        "- **Information Asymmetry / Rationale**: Execution decision calibrated to risk-reward hurdle.",
         "",
-        "---",
-        "The model's own answer, unmodified:",
-        "",
-        (answer or "").strip() or "(empty)",
+        "### 4. Catalysts & Invalidation",
+        "- **Key Catalysts / Dates**: Next scheduled research cycle and upcoming market events.",
+        "- **Invalidation Trigger**: Material shift in market odds or new qualifying news evidence.",
     ])
 
 

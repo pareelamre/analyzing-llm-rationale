@@ -528,6 +528,11 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
     if len(duplicate_template) > 1:
         text = text[:duplicate_template[1].start()].rstrip()
 
+    # Strip any appended raw answer dumps from legacy fallback synthesis
+    unmodified_marker = re.search(r"(?im)(?:\r?\n)?(?:---\s*)?(?:\*?)The model's own answer, unmodified:?", text)
+    if unmodified_marker:
+        text = text[:unmodified_marker.start()].rstrip()
+
     # If text is unstructured raw deliberation without standard template sections
     # (e.g. "Let me reconsider my analysis..."), avoid rendering thousands of characters
     # of raw scratchpad to the user.
