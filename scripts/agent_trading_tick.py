@@ -20,7 +20,7 @@ Env:
   FORESEA_AGENT_ACCOUNT_DB_PATH    local SQLite path (GCS-synced by the workflow)
   FORESEA_AGENT_NOTES_PATH         local notes JSON path (GCS-synced by the workflow)
   FORESEA_AGENT_PLACE_TRADE_MODE   must be "shadow" (the default) -- hard-checked
-  CANDIDATE_COUNT                  new markets to consider per cycle (default 3)
+  CANDIDATE_COUNT                  new markets to consider per cycle (default 8)
   MAX_TOOL_STEPS                   tool-loop step cap per cycle (default 4)
   AGENT_TRADING_MIN_CLOSE_DAYS     candidate discovery window, days (default 1)
   AGENT_TRADING_MAX_CLOSE_DAYS     candidate discovery window, days (default 30)
@@ -2324,6 +2324,34 @@ def _thesis_forecast_records(
     return records
 
 
+def _expected_provider_identity(model: str) -> str:
+    """The provider model this agent is supposed to be, per configs/models.yaml."""
+    try:
+        config = load_model_configs(ROOT / "configs" / "models.yaml").get(model)
+    except Exception:  # noqa: BLE001 - a config read must never fail a cycle.
+        return ""
+    if config is None:
+        return ""
+    identity = getattr(config, "agent_model_identity", None) or getattr(
+        config, "router_model_name", ""
+    )
+    return str(identity or "").strip()
+
+
+def _served_model_matches(expected: str, served: str) -> bool:
+    """Whether the provider answered with the model this agent asked for.
+
+    Providers legitimately return a revision or an org-qualified form of the
+    same model, so those still match. Either side being unknown is not evidence
+    of a swap -- an absent name must never manufacture a mismatch.
+    """
+    exp = (expected or "").strip().lower().split(":", 1)[0]
+    got = (served or "").strip().lower().split(":", 1)[0]
+    if not exp or not got:
+        return True
+    return exp == got or exp.rsplit("/", 1)[-1] == got.rsplit("/", 1)[-1]
+
+
 def _persist_thesis_forecasts(
     conn: Any,
     agent_id: str,
@@ -2676,7 +2704,8 @@ def _finish_cycle_telemetry(
             SET finished_at = ?, outcome = ?, failure_kind = ?, failure_detail = ?,
                 candidate_count = ?, tool_steps = ?, settled_count = ?,
                 thesis_published = ?, forecast_records = ?, paper_execution_outcome = ?, duration_ms = ?,
-                weather_candidates_offered = ?, weather_candidates_researched = ?, provider_model = ?
+                weather_candidates_offered = ?, weather_candidates_researched = ?, provider_model = ?,
+                provider_substituted = ?
             WHERE run_id = ?
             """,
             (
@@ -2694,6 +2723,7 @@ def _finish_cycle_telemetry(
                 int(summary.get("weather_candidates_offered") or 0),
                 int(summary.get("weather_candidates_researched") or 0),
                 summary.get("provider_model"),
+                1 if summary.get("provider_substituted") else 0,
                 run_id,
             ),
         )
@@ -2785,6 +2815,9 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         strategy_selections.add(1, {"strategy": selected_strategy, "outcome": outcome})
 
     candidates_offered = [q.get("ident") for q in (*held_quotes, *new_quotes)]
+    expected_identity = _expected_provider_identity(model)
+    served_identity = str(getattr(report, "served_model_name", "") or "")
+    provider_substituted = not _served_model_matches(expected_identity, served_identity)
     with benchmark_tools._account_transaction() as conn:
         cycle_ts = datetime.now(timezone.utc).isoformat()
         conn.execute(
@@ -2807,16 +2840,32 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
                 1 if len(report.tool_transcript) >= MAX_TOOL_STEPS else 0,
             ),
         )
-        forecast_records = _persist_thesis_forecasts(
-            conn,
-            agent_id,
-            cycle_id,
-            report.thesis,
-            report.tool_transcript,
-            all_candidates,
-            selected_strategy,
-            forecast_ts=cycle_ts,
-        )
+        # A gateway can answer with a different model than the one requested.
+        # On 2026-09-06 every one of the eight agents was served
+        # Qwen/Qwen3.8-27B for two consecutive cycles while the board credited
+        # each result to its own branded name. A calibration record is a claim
+        # about a specific model's judgement, so it is not written when we
+        # cannot say which model produced it -- an unmeasured cycle is
+        # recoverable, a leaderboard crediting one model's work to another is
+        # not.
+        if provider_substituted:
+            logger.warning(
+                "provider substitution model=%s cycle=%s expected=%s served=%s "
+                "-- forecasts not credited to this agent",
+                model, cycle_id, expected_identity, served_identity,
+            )
+            forecast_records = 0
+        else:
+            forecast_records = _persist_thesis_forecasts(
+                conn,
+                agent_id,
+                cycle_id,
+                report.thesis,
+                report.tool_transcript,
+                all_candidates,
+                selected_strategy,
+                forecast_ts=cycle_ts,
+            )
         # A close placed during this cycle now becomes a durable learning
         # record for the next cycle. New entries are keyed to source action
         # IDs, so this is idempotent if a workflow retries.
@@ -2842,6 +2891,7 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
         # The provider may return a concrete revision/alias.  Preserve it for
         # audit and maintenance; do not infer it when the upstream omits it.
         "provider_model": getattr(report, "served_model_name", None),
+        "provider_substituted": provider_substituted,
     }
 
 
@@ -2952,6 +3002,8 @@ def main() -> int:
             })
             if summary.get("provider_model"):
                 span.set_attribute("gen_ai.response.model", str(summary["provider_model"]))
+            if summary.get("provider_substituted"):
+                span.set_attribute("provider.substituted", True)
             cycle_runs.add(1, {"model": MODEL, "outcome": "success"})
             cycle_duration.record(duration_seconds, {"model": MODEL, "outcome": "success"})
             logger.info(

@@ -129,7 +129,6 @@ jobs:
           # never got to place. The loop exits as soon as the model answers,
           # so a high ceiling costs nothing on cycles that finish early.
           MAX_TOOL_STEPS: "16"
-          CANDIDATE_COUNT: "3"
           # Retry one provider turn (never a completed tool loop) with a
           # slightly longer bounded budget. This recovers short 503s without
           # duplicating an already-recorded paper trade.
