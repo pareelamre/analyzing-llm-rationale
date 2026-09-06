@@ -46,6 +46,13 @@ class VenueReadTests(unittest.TestCase):
             self.assertEqual(result["next_cursor"], "page2")
             self.assertEqual(get.call_args.kwargs["params"]["cursor"], "page1")
 
+    def test_kalshi_account_balance_is_an_authenticated_catalog_operation(self):
+        with patch.object(trading, "_kalshi_request", return_value={"balance": 12_345}) as get:
+            result = api.read("kalshi", "balance", access="account", creds={"key": "test"})
+        self.assertEqual(result["data"], {"balance": 12_345})
+        self.assertEqual(get.call_args.args, ("GET", "/portfolio/balance"))
+        self.assertEqual(get.call_args.kwargs["params"], {})
+
     def test_input_bounds_and_required_identifiers(self):
         for operation, params in [("holders", {}), ("holders", {"market": ["bad"]}),
                                    ("live_volume", {"id": 0})]:
