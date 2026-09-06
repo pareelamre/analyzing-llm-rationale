@@ -1279,6 +1279,81 @@
     ],
     "gpt-oss-120b": [
       {
+        "action_id": "65067941-b72e-41cf-9a97-27cc416e94fc",
+        "agent_id": "gpt-oss-120b",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 1489.72546
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.17,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.17,
+            "quantity": 1489.7254602391906
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 8776.654653,
+            "cash_required": 0.0,
+            "concentration_cap": 1501.969018,
+            "cycle_id": "30m:993719",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 1738.697927,
+            "daily_risk_before": 1738.697927,
+            "daily_risk_limit": 3003.938035,
+            "drawdown_after": 0.003125,
+            "fee": 0.0,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 253.253328,
+            "open_markets_after": 0,
+            "per_cycle_spend_limit": 2002.625357,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993719",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 1236.4721319985283,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 1489.7254602391906,
+          "notional": 253.25332824066243,
+          "price": 0.17,
+          "quantity": 1489.7254602391906,
+          "realized_pnl": 1.1368683772161603e-13,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "us-announces-end-of-iranian-blockade-by-september-30-2026-20260727171615364-722-649-646-561-213-644-414-831"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "48be478b599efbdf353e6da7d828024e9457a954d308fb57ec2a874c595e0bf3",
+        "recorded_at": "2026-09-06T11:55:30.235176+00:00"
+      },
+      {
         "action_id": "b18f9cf5-80b0-4114-951f-2e512722463d",
         "agent_id": "gpt-oss-120b",
         "audit": {
@@ -3795,6 +3870,36 @@
       }
     ],
     "llama-3.3-70b-instruct": [
+      {
+        "action_id": "0e3fd8a0-1bc8-4ce7-9064-a72ca3fed39c",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:993719",
+        "event_type": "rejected_trade",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": 1.0,
+          "quantity": 0.0,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "kalshi",
+          "side": "no",
+          "ticker": "KXNFLRETIRE-MSTAFFORD9-2627"
+        },
+        "mode": "shadow",
+        "outcome": "rejected",
+        "record_hash": "6cab2ed003e8d92110521ac711fb44a0859202b8e434b7f6ec22d8370a22a116",
+        "recorded_at": "2026-09-06T11:59:07.374677+00:00"
+      },
       {
         "action_id": "92c0ffcf-3066-46c8-ae69-bdba17a67e8a",
         "agent_id": "llama-3.3-70b-instruct",
@@ -9734,7 +9839,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-06T11:10:59.753104+00:00",
+  "generated_at": "2026-09-06T12:03:20.829581+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
