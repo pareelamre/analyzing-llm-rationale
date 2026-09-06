@@ -1,0 +1,14 @@
+# Autonomous-twin defaults. A missing model price blocks paid research whenever
+# a USD ceiling is enabled; zero-cost capacity must be declared explicitly.
+research:
+  model: gpt-oss-120b
+  candidates_per_cycle: 3
+  tool_calls_per_candidate: 8
+  schema_repairs_per_candidate: 1
+  usd_limit_per_account_day: "0"
+  token_limit_per_account_day: 30000
+  request_limit_per_account_day: 30
+  model_prices_usd_per_million:
+    gpt-oss-120b:
+      input: null
+      output: null

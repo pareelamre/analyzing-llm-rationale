@@ -1,0 +1,468 @@
+{
+  "schema_version": 1,
+  "plan_date": "2026-09-06",
+  "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
+  "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
+  "implementation_status": "t07_complete",
+  "implementation_baseline": "0944bdc83b8c71d639fd09f2b5ad3cfa6d06e15e",
+  "next_task": "T08",
+  "live_authorized": false,
+  "release_gates": {
+    "G0": "not_evaluated",
+    "G1": "not_started",
+    "G2": "not_evaluated",
+    "G3": "not_authorized",
+    "G4": "not_evaluated"
+  },
+  "tasks": [
+    {
+      "id": "T00",
+      "dependencies": [],
+      "status": "complete",
+      "substep": "baseline recorded",
+      "branch": "codex/autonomous-twin",
+      "commit": null,
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1257 tests in 152.289s)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py -m graphify query <trading execution map> --budget 5000 (pass)"
+      ],
+      "evidence": [
+        "docs/autonomous-twin/BASELINE.md",
+        "Official Kalshi and Polymarket order contracts retrieved 2026-09-06"
+      ],
+      "blockers": [],
+      "handoff": "T01 is ready. Move the autonomous-twin plan pack into codex/autonomous-twin before its first commit, then fixture-test current Kalshi and Polymarket execution contracts."
+    },
+    {
+      "id": "T01",
+      "dependencies": [
+        "T00"
+      ],
+      "status": "complete",
+      "substep": "Kalshi and Polymarket venue contracts fixture-tested; autonomous-live blockers recorded",
+      "branch": "codex/autonomous-twin",
+      "commit": "76c955e6",
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_trading tests.test_trading_byo (pass: 20 tests)",
+        "PYTHONPATH=src py -m unittest tests.test_trading tests.test_trading_byo tests.test_benchmark_tools tests.test_agent_trading_tick tests.test_venue_extensions (pass: 212 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1264 tests in 164.900s)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (pass)"
+      ],
+      "evidence": [
+        "docs/autonomous-twin/VENUE_CAPABILITIES.md",
+        "tests/fixtures/twin/venues/kalshi_create_order_v2.json",
+        "tests/fixtures/twin/venues/polymarket_market_order_ack.json",
+        "tests/test_trading.py",
+        "tests/test_trading_byo.py"
+      ],
+      "blockers": [
+        "Polymarket SDK is declared but not installed in the verified environment; signed order identity and recovery lookup remain unverified.",
+        "Neither venue has dedicated-account demo or production contract evidence for autonomous submission."
+      ],
+      "handoff": "T02 is ready. Extract the shared execution boundary without changing manual route contracts, and prevent scripts/live_trader_bridge.py from bypassing it."
+    },
+    {
+      "id": "T02",
+      "dependencies": [
+        "T01"
+      ],
+      "status": "complete",
+      "substep": "shared service/store/policy boundary extracted; bridge retired to simulation",
+      "branch": "codex/autonomous-twin",
+      "commit": "c61ad861",
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_live_trader_bridge (pass: 5 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass after extraction)",
+        "PYTHONPATH=src py -m unittest tests.test_trading_control tests.test_trading tests.test_trading_byo tests.test_live_trader_bridge tests.test_benchmark_tools tests.test_server (pass: 323 tests in 98.215s)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py scripts/live_trader_bridge.py --live (expected rejection)",
+        "py -m graphify update . (pass)"
+      ],
+      "evidence": [
+        "scripts/live_trader_bridge.py",
+        "tests/test_live_trader_bridge.py",
+        "src/analyzing_llm_rationale/trading_control/",
+        "tests/test_trading_control.py",
+        "docs/autonomous-twin/BASELINE.md"
+      ],
+      "blockers": [],
+      "handoff": "T03 is ready. Define strict typed twin records and canonical execution identities on top of the framework-independent control boundary."
+    },
+    {
+      "id": "T03",
+      "dependencies": [
+        "T02"
+      ],
+      "status": "complete",
+      "substep": "strict typed twin records, canonical identities, immutable intent hashes, and command transitions",
+      "branch": "codex/autonomous-twin",
+      "commit": "40f5e7c1",
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_models (pass: 15 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass after T03)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (pass)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/models.py",
+        "tests/test_twin_models.py",
+        "tests/fixtures/twin/records/trade_intent_v1.json"
+      ],
+      "blockers": [],
+      "handoff": "T04 is ready. Use these immutable account, instrument and intent identities in the durable transaction and reservation store."
+    },
+    {
+      "id": "T04",
+      "dependencies": [
+        "T03"
+      ],
+      "status": "complete",
+      "substep": "account-root reservations, fenced command claims, durable inbox/outbox, safe release semantics, and shared manual/twin account contention are complete",
+      "branch": "codex/autonomous-twin",
+      "commit": "0d31cfe3",
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_store (pass: 7 tests)",
+        "DATASTORE_EMULATOR_HOST=127.0.0.1:8765 GOOGLE_CLOUD_PROJECT=foresea-twin-test PYTHONPATH=src py -m unittest tests.test_twin_store_integration (pass: 3 tests including process contention and manual/autonomous shared capacity)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass after Datastore adapter)",
+        "py -m ruff check src tests (pass)",
+        "py -m graphify update . (pass)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/store.py",
+        "tests/test_twin_store.py",
+        "tests/test_twin_store_integration.py",
+        "tests/test_twin_manual.py",
+        "docs/autonomous-twin/DATASTORE_EMULATOR.md"
+      ],
+      "blockers": [],
+      "handoff": "T05 is ready. Build an immutable executable market twin from complete venue snapshots and reject stale or incomplete state."
+    },
+    {
+      "id": "T05",
+      "dependencies": [
+        "T03"
+      ],
+      "status": "complete",
+      "substep": "raw venue markets and both outcome books normalize into immutable instruments and precise complete snapshots; unsupported state is an explicit PASS",
+      "branch": "codex/autonomous-twin",
+      "commit": null,
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_market tests.test_market_data (pass: 29 tests)",
+        "py -m ruff check src/analyzing_llm_rationale/twin src/analyzing_llm_rationale/market_data.py tests/test_twin_market.py tests/test_market_data.py (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (pass)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/market.py",
+        "src/analyzing_llm_rationale/market_data.py",
+        "tests/test_twin_market.py"
+      ],
+      "blockers": [],
+      "handoff": "T06 is ready. Use complete immutable market snapshots while synchronizing dedicated-account balances, positions, orders, fills and settlements."
+    },
+    {
+      "id": "T06",
+      "dependencies": [
+        "T04",
+        "T05"
+      ],
+      "status": "complete",
+      "substep": "complete paged account generations deduplicate immutable rows, retain prior complete state on failed reads, and surface external order drift",
+      "branch": "codex/autonomous-twin",
+      "commit": null,
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_account (pass: 5 tests)",
+        "py -m ruff check src/analyzing_llm_rationale/twin/account.py tests/test_twin_account.py (pass)",
+        "git diff --check (pass)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/account.py",
+        "tests/test_twin_account.py"
+      ],
+      "blockers": [],
+      "handoff": "T07 is ready. Add durable atomic research budgets before any provider or tool call."
+    },
+    {
+      "id": "T07",
+      "dependencies": [
+        "T04"
+      ],
+      "status": "complete",
+      "substep": "durable daily Datastore budgets, atomic worst-case reservations, uncertain timeout handling, explicit pricing configuration, and a pre-call budget boundary are complete",
+      "branch": "codex/autonomous-twin",
+      "commit": "174cc3d3",
+      "pr_url": null,
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_budget (pass: 4 tests)",
+        "py -m ruff check src/analyzing_llm_rationale/twin/budget.py tests/test_twin_budget.py (pass)",
+        "git diff --check (pass)",
+        "DATASTORE_EMULATOR_HOST=127.0.0.1:8765 GOOGLE_CLOUD_PROJECT=foresea-twin-test PYTHONPATH=src py -m unittest tests.test_twin_store_integration (pass: 4 tests)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/budget.py",
+        "configs/twin.yaml",
+        "tests/test_twin_budget.py"
+      ],
+      "blockers": [],
+      "handoff": "T08 is ready. Generate evidence-backed, non-executing forecasts only through the budget pre-call boundary."
+    },
+    {
+      "id": "T08",
+      "dependencies": [
+        "T05",
+        "T07"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T09",
+      "dependencies": [
+        "T06",
+        "T08"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T10",
+      "dependencies": [
+        "T06",
+        "T09"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T11",
+      "dependencies": [
+        "T08",
+        "T09",
+        "T10"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T12",
+      "dependencies": [
+        "T11"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T13",
+      "dependencies": [
+        "T04",
+        "T09",
+        "T12"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T14",
+      "dependencies": [
+        "T01",
+        "T02",
+        "T04",
+        "T09",
+        "T13"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T15",
+      "dependencies": [
+        "T06",
+        "T14"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T16",
+      "dependencies": [
+        "T07",
+        "T11",
+        "T15"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T17",
+      "dependencies": [
+        "T16"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T18",
+      "dependencies": [
+        "T12",
+        "T13",
+        "T16"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T19",
+      "dependencies": [
+        "T15",
+        "T16"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T20",
+      "dependencies": [
+        "T12",
+        "T17",
+        "T18",
+        "T19"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T21",
+      "dependencies": [
+        "T20"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    },
+    {
+      "id": "T22",
+      "dependencies": [
+        "T21"
+      ],
+      "status": "pending",
+      "substep": null,
+      "branch": null,
+      "commit": null,
+      "pr_url": null,
+      "checks": [],
+      "evidence": [],
+      "blockers": [],
+      "handoff": null
+    }
+  ]
+}

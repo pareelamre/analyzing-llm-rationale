@@ -82,6 +82,21 @@ class LiveTraderBridgeTests(unittest.TestCase):
         self.assertFalse(self.risk.can_allocate(25.0))
         self.assertTrue(self.risk.can_allocate(10.0))
 
+    def test_live_mode_is_blocked_without_any_venue_post(self):
+        bridge = LiveTraderBridge(
+            risk=self.risk,
+            foresea_url="https://foresea.test",
+            dry_run=False,
+            session=self.mock_session,
+        )
+        result = bridge.execute_order({
+            "platform": "kalshi", "ticker": "KXTEST", "side": "yes",
+            "target_price": 0.4, "contracts": 2, "cost_usd": 0.8, "edge": 0.1,
+        })
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["reason"], "live_execution_removed_use_trading_runs")
+        self.mock_session.post.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
