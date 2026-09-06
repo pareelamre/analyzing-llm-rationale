@@ -455,13 +455,25 @@
         "T15",
         "T16"
       ],
-      "status": "pending",
-      "substep": null,
-      "branch": null,
-      "commit": null,
-      "pr_url": null,
-      "checks": [],
-      "evidence": [],
+      "status": "in_progress",
+      "substep": "paid Superlog OTLP exporter, token, log bridge, and dependency installs removed; provider-neutral spans and ordinary decision logs remain, while twin-specific metrics and incident runbooks are pending",
+      "branch": "codex/remove-superlog-otel",
+      "commit": "a83850fe",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/458",
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_observability (pass: 8 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (completed; generated graph changes intentionally unstaged)",
+        "repository search for Superlog endpoint/token in source, config, and workflows (no matches)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/observability.py",
+        "tests/test_observability.py",
+        "pyproject.toml",
+        ".github/workflows/"
+      ],
       "blockers": [],
       "handoff": null
     },
