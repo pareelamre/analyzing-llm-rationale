@@ -179,26 +179,28 @@
         "T05"
       ],
       "status": "in_progress",
-      "substep": "complete-generation retention, cursor completeness, external fill/order divergence, explicit complete-read conversion, fail-closed cursor/generation capture, venue cursor/offset continuation adapters, strict holdings/basis/settled-cash/fee/conservative-liquidation normalization, explicit venue/local drift comparison using supplied currency and quantity precision, an authenticated Kalshi balance contract, and generation-fenced durable complete-snapshot persistence are implemented; dedicated balance/settlement adapter normalization remains pending",
-      "branch": "codex/autonomous-twin-t06-storage",
-      "commit": "3ef83f4a",
-      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/457",
+      "substep": "complete-generation retention, cursor completeness, external fill/order divergence, explicit complete-read conversion, fail-closed cursor/generation capture, venue cursor/offset continuation adapters, strict holdings/basis/settled-cash/fee/conservative-liquidation normalization, explicit venue/local drift comparison using supplied currency and quantity precision, authenticated Kalshi balance contract, generation-fenced durable complete-snapshot persistence, and native Kalshi/Polymarket adapter boundaries are implemented; provider cash/settlement data remains explicitly unsupported for capital authority until documented complete ledgers are available",
+      "branch": "codex/autonomous-twin-t06-venue-normalization",
+      "commit": null,
+      "pr_url": null,
       "checks": [
-        "PYTHONPATH=src py -m unittest tests.test_twin_account (pass: 16 tests)",
+        "PYTHONPATH=src py -m unittest tests.test_twin_account (pass: 20 tests; native adapter boundaries)",
         "PYTHONPATH=src py -m unittest tests.test_twin_account tests.test_twin_account_store (pass: 20 tests)",
         "PYTHONPATH=src py -m unittest tests.test_venue_extensions tests.test_twin_account (pass: 42 tests)",
         "py -m ruff check src/analyzing_llm_rationale/twin/account.py tests/test_twin_account.py (pass)",
         "PYTHONPATH=src py -m unittest discover -s tests (pass; 4 emulator skips)",
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
-        "py -m graphify update . (completed; generated graph changes intentionally unstaged)"
+        "py -m graphify update . (completed; generated graph changes intentionally unstaged)",
+        "PYTHONPATH=src py -m unittest tests.test_twin_account (pass: 20 tests)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/account.py",
         "src/analyzing_llm_rationale/twin/account_store.py",
         "src/analyzing_llm_rationale/twin/reconcile.py",
         "tests/test_twin_account.py",
-        "tests/test_twin_account_store.py"
+        "tests/test_twin_account_store.py",
+        "src/analyzing_llm_rationale/twin/venue_account.py"
       ],
       "blockers": [],
       "handoff": "T07 is ready. Add durable atomic research budgets before any provider or tool call."
