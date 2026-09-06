@@ -91,8 +91,6 @@ jobs:
           pip install --quiet -e ".[serve,pipeline]"
           requests duckdb pyyaml
           opentelemetry-sdk
-          opentelemetry-exporter-otlp-proto-http
-          opentelemetry-instrumentation-logging
           opentelemetry-instrumentation-requests
 
       - name: Verify forecast secrets
