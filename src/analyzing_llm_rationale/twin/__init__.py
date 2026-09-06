@@ -7,6 +7,11 @@ from .account import (
     AccountTolerance,
     synchronize_account,
 )
+from .account_store import (
+    AccountSnapshotStoreError,
+    DatastoreAccountSnapshotStore,
+    InMemoryAccountSnapshotStore,
+)
 from .budget import (
     BudgetExceeded,
     BudgetPolicy,
@@ -48,6 +53,7 @@ __all__ = [
     "AccountScope",
     "AccountHolding",
     "AccountSnapshot",
+    "AccountSnapshotStoreError",
     "AccountSyncResult",
     "AccountTolerance",
     "BudgetExceeded",
@@ -57,9 +63,11 @@ __all__ = [
     "Completeness",
     "DecisionRecord",
     "DatastoreTwinStore",
+    "DatastoreAccountSnapshotStore",
     "Forecast",
     "Instrument",
     "InMemoryTwinStore",
+    "InMemoryAccountSnapshotStore",
     "InMemoryResearchBudget",
     "InsufficientReservationCapacity",
     "MarketCursor",

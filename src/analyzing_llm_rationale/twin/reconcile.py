@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any, Callable, Mapping, Optional
 
 from .account import AccountSnapshot, AccountSyncResult, synchronize_account
+from .account_store import AccountSnapshotRepository
 from .models import SchemaValidationError
 
 
@@ -197,3 +198,38 @@ def synchronize_complete_account(
         local_command_ids=local_command_ids,
         previous=previous,
     )
+
+
+def synchronize_and_persist_complete_account(
+    scope_id: str,
+    *,
+    generation: int,
+    received_at: datetime,
+    fetchers: Mapping[str, PageFetcher],
+    local_command_ids: set[str],
+    snapshot_store: AccountSnapshotRepository,
+    previous: Optional[AccountSnapshot] = None,
+) -> AccountSyncResult:
+    """Persist a validated account generation before it becomes the new authority.
+
+    A storage failure retains the prior complete generation. If another worker
+    stored a newer generation first, its durable snapshot wins and the caller
+    must re-read rather than use the stale local result.
+    """
+    result = synchronize_complete_account(
+        scope_id,
+        generation=generation,
+        received_at=received_at,
+        fetchers=fetchers,
+        local_command_ids=local_command_ids,
+        previous=previous,
+    )
+    if result.snapshot is None or result.retained_previous:
+        return result
+    try:
+        persisted = snapshot_store.save(result.snapshot)
+    except Exception:
+        return AccountSyncResult(previous, previous is not None, ("account_snapshot_persist_failed",))
+    if persisted.generation != result.snapshot.generation:
+        return AccountSyncResult(persisted, True, ("account_snapshot_generation_superseded",))
+    return AccountSyncResult(persisted, False, ())

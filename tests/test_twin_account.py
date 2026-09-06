@@ -9,12 +9,17 @@ from analyzing_llm_rationale.twin.account import (
     portfolio_pages_from_complete_read,
     synchronize_account,
 )
+from analyzing_llm_rationale.twin.account_store import (
+    AccountSnapshotStoreError,
+    InMemoryAccountSnapshotStore,
+)
 from analyzing_llm_rationale.twin.models import SchemaValidationError
 from analyzing_llm_rationale.twin.reconcile import (
     AccountReadError,
     cursor_page_fetcher,
     offset_page_fetcher,
     read_complete_collection,
+    synchronize_and_persist_complete_account,
     synchronize_complete_account,
 )
 
@@ -222,6 +227,36 @@ class TwinAccountTests(unittest.TestCase):
         )
         self.assertTrue(changed.retained_previous)
         self.assertIn("orders_generation_changed", changed.issues)
+
+    def test_complete_snapshot_is_persisted_before_becoming_authoritative(self):
+        source = inputs()
+        fetchers = {
+            name: (lambda _cursor, rows=pages: {"items": rows[0]["items"], "cursor": None})
+            for name, pages in source.items()
+            if name != "local_command_ids"
+        }
+        snapshots = InMemoryAccountSnapshotStore()
+        persisted = synchronize_and_persist_complete_account(
+            "scope-001", generation=1, received_at=NOW, fetchers=fetchers,
+            local_command_ids=source["local_command_ids"], snapshot_store=snapshots,
+        )
+        self.assertFalse(persisted.retained_previous)
+        self.assertEqual(snapshots.load("scope-001"), persisted.snapshot)
+
+        class FailingStore:
+            durable = True
+
+            def save(self, _snapshot):
+                raise AccountSnapshotStoreError("disk unavailable")
+
+        failed = synchronize_and_persist_complete_account(
+            "scope-001", generation=2, received_at=NOW, fetchers=fetchers,
+            local_command_ids=source["local_command_ids"], snapshot_store=FailingStore(),
+            previous=persisted.snapshot,
+        )
+        self.assertTrue(failed.retained_previous)
+        self.assertEqual(failed.snapshot, persisted.snapshot)
+        self.assertEqual(failed.issues, ("account_snapshot_persist_failed",))
 
     def test_venue_cursor_and_offset_adapters_preserve_continuations(self):
         calls = []
