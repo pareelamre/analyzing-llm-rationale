@@ -98,9 +98,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -19.4084,
+      "return_pct": -20.1085,
       "settled_count": 8,
-      "sharpe": -0.0809
+      "sharpe": -0.0839
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
@@ -161,7 +161,7 @@
         {
           "account_value": 9944.870256,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T22:25:46.295151+00:00"
+          "ts": "2026-09-06T23:23:47.113072+00:00"
         }
       ]
     },
@@ -293,7 +293,7 @@
         {
           "account_value": 10435.177266,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T22:25:46.295151+00:00"
+          "ts": "2026-09-06T23:23:47.113072+00:00"
         }
       ]
     },
@@ -310,7 +310,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T22:25:46.295151+00:00"
+          "ts": "2026-09-06T23:23:47.113072+00:00"
         }
       ]
     },
@@ -337,7 +337,7 @@
         {
           "account_value": 9968.75,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T22:25:46.295151+00:00"
+          "ts": "2026-09-06T23:23:47.113072+00:00"
         }
       ]
     },
@@ -534,14 +534,14 @@
         {
           "account_value": 10013.126785,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T22:25:46.295151+00:00"
+          "ts": "2026-09-06T23:23:47.113072+00:00"
         }
       ]
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
       "max_drawdown": 0.2967,
-      "sharpe": -0.0809,
+      "sharpe": -0.0839,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -954,9 +954,9 @@
           "ts": "2026-09-06T18:24:17.684406+00:00"
         },
         {
-          "account_value": 8059.162487,
+          "account_value": 7989.153601,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T22:25:46.295151+00:00"
+          "ts": "2026-09-06T23:23:47.113072+00:00"
         }
       ]
     },
@@ -1073,7 +1073,7 @@
         {
           "account_value": 8468.327435,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T22:25:46.295151+00:00"
+          "ts": "2026-09-06T23:23:47.113072+00:00"
         }
       ]
     },
@@ -1110,7 +1110,7 @@
         {
           "account_value": 10091.372214,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T22:25:46.295151+00:00"
+          "ts": "2026-09-06T23:23:47.113072+00:00"
         }
       ]
     }
@@ -1274,7 +1274,7 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-09-06T22:25:46.453174+00:00",
+  "generated_at": "2026-09-06T23:23:47.272417+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
@@ -1541,39 +1541,47 @@
       "won_count": 0
     },
     {
-      "account_value": 8059.162487,
+      "account_value": 7989.153601,
       "agent_id": "llama-3.3-70b-instruct",
       "cash": 7989.153601,
       "fees_paid": 72.478,
-      "illiquid_positions": [],
+      "illiquid_positions": [
+        {
+          "ident": "will-daniil-medvedev-win-the-2026-mens-us-open",
+          "platform": "polymarket",
+          "quantity": 7000.888625,
+          "reason": "zero_or_missing_bid",
+          "side": "YES"
+        }
+      ],
       "mark_coverage": {
         "open_positions": 1,
-        "priced_cost_basis": 490.062204,
-        "priced_positions": 1,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
+        "priced_cost_basis": 0.0,
+        "priced_positions": 0,
+        "unpriced_cost_basis": 490.062204,
+        "unpriced_positions": 1
       },
       "open_positions": [
         {
           "avg_entry_price": 0.07,
           "cost_basis": 490.062204,
-          "current_price": 0.01,
+          "current_price": null,
           "ident": "will-daniil-medvedev-win-the-2026-mens-us-open",
           "platform": "polymarket",
           "quantity": 7000.888625,
           "side": "YES",
-          "unrealized_pnl": -420.053318,
-          "valuation_status": "bid_liquidation"
+          "unrealized_pnl": null,
+          "valuation_status": "unpriced_no_executable_bid"
         }
       ],
       "realized_count": 15,
       "realized_pnl": -1481.682195,
-      "return_pct": -19.4084,
+      "return_pct": -20.1085,
       "settled_count": 8,
       "starting_cash": 10000.0,
-      "total_pnl": -1940.837513,
+      "total_pnl": -2010.846399,
       "trade_count": 26,
-      "unrealized_pnl": -420.053318,
+      "unrealized_pnl": -490.062204,
       "updated_at": "2026-09-06T18:24:17.683442+00:00",
       "win_rate": 0.2667,
       "won_count": 4
@@ -1582,7 +1590,7 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 1221,
+      "cycle_age_seconds": 4702,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1608,7 +1616,7 @@
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 1132,
+      "cycle_age_seconds": 4612,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1634,7 +1642,7 @@
       "store_present": true
     },
     "glm-5-3": {
-      "cycle_age_seconds": 585,
+      "cycle_age_seconds": 4066,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1660,7 +1668,7 @@
       "store_present": true
     },
     "glm-5-3-flash": {
-      "cycle_age_seconds": 496,
+      "cycle_age_seconds": 3977,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1686,7 +1694,7 @@
       "store_present": true
     },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 449,
+      "cycle_age_seconds": 3930,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1712,7 +1720,7 @@
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 422,
+      "cycle_age_seconds": 3903,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1738,7 +1746,7 @@
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 245,
+      "cycle_age_seconds": 3725,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1764,7 +1772,7 @@
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 75,
+      "cycle_age_seconds": 3556,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
