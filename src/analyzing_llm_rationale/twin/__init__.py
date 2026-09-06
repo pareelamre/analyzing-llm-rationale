@@ -1,5 +1,6 @@
 """Typed, framework-independent records for the autonomous Foresea twin."""
 
+from .market import MarketAssessment, normalize_market
 from .models import (
     AccountScope,
     CommandState,
@@ -38,6 +39,7 @@ __all__ = [
     "InMemoryTwinStore",
     "InsufficientReservationCapacity",
     "MarketCursor",
+    "MarketAssessment",
     "MarketSnapshot",
     "PassDecision",
     "Proposal",
@@ -50,4 +52,5 @@ __all__ = [
     "can_transition_command",
     "canonical_instrument_id",
     "require_durable_store",
+    "normalize_market",
 ]

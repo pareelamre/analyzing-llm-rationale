@@ -731,6 +731,33 @@ def fetch_polymarket_orderbook(token_id: str) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def fetch_twin_market_payload(
+    platform: str, identifier: str
+) -> tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
+    """Fetch only the raw market and exact outcome books required by the twin.
+
+    The caller normalizes and rejects incomplete data in ``twin.market``. This
+    intentionally does not broaden the public endpoint inventory or derive an
+    executable price from display-market data.
+    """
+    venue = market_platform(platform, identifier)
+    market_id = str(identifier or "").strip()
+    if not market_id:
+        raise MarketDataInputError("market identifier is required")
+    if venue == "kalshi":
+        data = _kalshi_market_detail(market_id.upper())
+        market = data.get("market") if isinstance(data, dict) else None
+        if not isinstance(market, dict):
+            raise MarketDataNotFound("Kalshi market not found")
+        return market, {}
+    data = _get_json(POLYMARKET_GAMMA_URL, params={"id": market_id})
+    market = data[0] if isinstance(data, list) and data else data if isinstance(data, dict) else None
+    if not isinstance(market, dict):
+        raise MarketDataNotFound("Polymarket market not found")
+    token_ids = [str(token).strip() for token in _as_list(market.get("clobTokenIds")) if str(token).strip()]
+    return market, {token_id: fetch_polymarket_orderbook(token_id) for token_id in token_ids}
+
+
 def fetch_polymarket_price_history(market: str, interval: str = "1d") -> List[Dict[str, Any]]:
     """Fetch historical prices for a Polymarket market condition or token."""
     data = _get_json(POLYMARKET_HISTORY_URL, params={"market": market, "interval": interval})
