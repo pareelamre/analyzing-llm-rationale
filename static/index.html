@@ -398,12 +398,12 @@
       transform: scale(0.98);
     }
 
-    /* Logo mark — curvy boat with lowercase f mast */
+    /* Logo mark — curvy boat with lowercase f mast on a white circle */
     .logo-dot {
       width: 20px; height: 20px;
-      background-color: var(--ink);
-      -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M3 13c0 0 2 1.5 9 1.5s9-1.5 9-1.5c0 0-.5 5-8.5 5S3 13 3 13z'/><path d='M11 13.5V8H9.5V6.5H11V5c0-1.7 1.3-3 3-3h1.5v1.5H14c-.8 0-1.5.7-1.5 1.5v1.5H15V8h-2.5v5.5H11z'/></svg>") no-repeat center / contain;
-      mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M3 13c0 0 2 1.5 9 1.5s9-1.5 9-1.5c0 0-.5 5-8.5 5S3 13 3 13z'/><path d='M11 13.5V8H9.5V6.5H11V5c0-1.7 1.3-3 3-3h1.5v1.5H14c-.8 0-1.5.7-1.5 1.5v1.5H15V8h-2.5v5.5H11z'/></svg>") no-repeat center / contain;
+      border-radius: 50%;
+      background: #ffffff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='12' fill='%23ffffff'/><path fill='%23111111' d='M3 13c0 0 2 1.5 9 1.5s9-1.5 9-1.5c0 0-.5 5-8.5 5S3 13 3 13z'/><path fill='%23111111' d='M11 13.5V8H9.5V6.5H11V5c0-1.7 1.3-3 3-3h1.5v1.5H14c-.8 0-1.5.7-1.5 1.5v1.5H15V8h-2.5v5.5H11z'/></svg>") no-repeat center / contain;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
       display: inline-block; flex-shrink: 0;
     }
 
@@ -1426,7 +1426,7 @@
     .sidebar .logo-dot {
       width: 22px;
       height: 22px;
-      border-radius: 7px;
+      border-radius: 50%;
     }
     .new-chat-btn {
       background: transparent;
@@ -2326,7 +2326,7 @@
     <symbol id="logo-minimax" viewBox="0 0 24 24"><defs><linearGradient id="lobe-icons-minimax-_R_0_" x1="0%" x2="100.182%" y1="50.057%" y2="50.057%"><stop offset="0%" stop-color="#E2167E"/><stop offset="100%" stop-color="#FE603C"/></linearGradient></defs><path d="M16.278 2c1.156 0 2.093.927 2.093 2.07v12.501a.74.74 0 00.744.709.74.74 0 00.743-.709V9.099a2.06 2.06 0 012.071-2.049A2.06 2.06 0 0124 9.1v6.561a.649.649 0 01-.652.645.649.649 0 01-.653-.645V9.1a.762.762 0 00-.766-.758.762.762 0 00-.766.758v7.472a2.037 2.037 0 01-2.048 2.026 2.037 2.037 0 01-2.048-2.026v-12.5a.785.785 0 00-.788-.753.785.785 0 00-.789.752l-.001 15.904A2.037 2.037 0 0113.441 22a2.037 2.037 0 01-2.048-2.026V18.04c0-.356.292-.645.652-.645.36 0 .652.289.652.645v1.934c0 .263.142.506.372.638.23.131.514.131.744 0a.734.734 0 00.372-.638V4.07c0-1.143.937-2.07 2.093-2.07zm-5.674 0c1.156 0 2.093.927 2.093 2.07v11.523a.648.648 0 01-.652.645.648.648 0 01-.652-.645V4.07a.785.785 0 00-.789-.78.785.785 0 00-.789.78v14.013a2.06 2.06 0 01-2.07 2.048 2.06 2.06 0 01-2.071-2.048V9.1a.762.762 0 00-.766-.758.762.762 0 00-.766.758v3.8a2.06 2.06 0 01-2.071 2.049A2.06 2.06 0 010 12.9v-1.378c0-.357.292-.646.652-.646.36 0 .653.29.653.646V12.9c0 .418.343.757.766.757s.766-.339.766-.757V9.099a2.06 2.06 0 012.07-2.048 2.06 2.06 0 012.071 2.048v8.984c0 .419.343.758.767.758.423 0 .766-.339.766-.758V4.07c0-1.143.937-2.07 2.093-2.07z" fill="url(#lobe-icons-minimax-_R_0_)" fill-rule="nonzero"/></symbol>
     <symbol id="logo-glm" viewBox="0 0 24 24"><path fill="#3859FF" fill-rule="evenodd" d="M12.105 2L9.927 4.953H.653L2.83 2h9.276zM23.254 19.048L21.078 22h-9.242l2.174-2.952h9.244zM24 2L9.264 22H0L14.736 2H24z"/></symbol>
     <symbol id="logo-zai" viewBox="0 0 24 24"><path fill="#3859FF" fill-rule="evenodd" d="M12.105 2L9.927 4.953H.653L2.83 2h9.276zM23.254 19.048L21.078 22h-9.242l2.174-2.952h9.244zM24 2L9.264 22H0L14.736 2H24z"/></symbol>
-    <symbol id="logo-foresea" viewBox="0 0 24 24"><path fill="#10B981" d="M3 14c0 0 3 4.5 9 4.5s9-4.5 9-4.5c0 0-1.5 5.5-9 5.5S3 14 3 14zm8.5-10v8h-3l4.5-8zm2 3v5h2.5L13.5 7z"/></symbol>
+    <symbol id="logo-foresea" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#FFFFFF"/><path fill="#111111" d="M3 13c0 0 2 1.5 9 1.5s9-1.5 9-1.5c0 0-.5 5-8.5 5S3 13 3 13z"/><path fill="#111111" d="M11 13.5V8H9.5V6.5H11V5c0-1.7 1.3-3 3-3h1.5v1.5H14c-.8 0-1.5.7-1.5 1.5v1.5H15V8h-2.5v5.5H11z"/></symbol>
     <symbol id="logo-market" viewBox="0 0 24 24"><circle cx="12" cy="7" r="3.5" fill="#94A3B8"/><path fill="#94A3B8" d="M4 19c0-3.5 3.5-5.5 8-5.5s8 2 8 5.5v1H4v-1z"/></symbol>
     <symbol id="logo-code" viewBox="0 0 24 24"><path stroke="#DB2777" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" d="M8 6L2 12l6 6M16 6l6 6-6 6M14 4l-4 16"/></symbol>
     <symbol id="logo-ha" viewBox="0 0 24 24"><path fill="#0F766E" d="M13 2L3 14h8l-2 8 12-12h-8l2-8z"/></symbol>
