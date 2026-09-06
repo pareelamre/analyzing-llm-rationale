@@ -320,14 +320,32 @@ class CandidateLineFormattingTests(unittest.TestCase):
         self.assertIn("1. winner", block)
         self.assertIn("3. loser", block)
         self.assertIn("<-- YOU", block)
-        self.assertIn("ranked 3 of 3", block)
-        self.assertIn("20.26 percentage points behind", block)
+        self.assertIn("You are 3 of 3", block)
+        self.assertIn("20.26pp off the lead", block)
+
+    def test_the_agent_directly_above_is_named_as_the_target(self):
+        # "Eighth of eight, 20pp off the lead" is abstract and unreachable.
+        # "0.69pp behind minimax, pass them first" is a target. Rank is taken
+        # one place at a time.
+        with self._board():
+            block = agent_trading_tick._leaderboard_block("loser")
+        self.assertIn("Directly above you is middle", block)
+        self.assertIn("15.66pp", block)   # loser -15.21 vs middle +0.45
+        self.assertIn("pass them first", block)
+
+    def test_the_leader_is_told_who_is_chasing(self):
+        with self._board():
+            block = agent_trading_tick._leaderboard_block("winner")
+        self.assertIn("You are first", block)
+        self.assertIn("middle", block)
+        self.assertIn("reading this same board", block)
 
     def test_the_leader_is_told_it_is_defending_not_chasing(self):
         with self._board():
             block = agent_trading_tick._leaderboard_block("winner")
-        self.assertIn("top of the board", block)
-        self.assertNotIn("Get to the top", block)
+        self.assertIn("You are first", block)
+        self.assertIn("hands it over", block)
+        self.assertNotIn("pass them first", block)
 
     def test_standings_say_plainly_that_activity_is_not_rank(self):
         # "Trade more to climb" is the obvious inference from a leaderboard
@@ -337,6 +355,28 @@ class CandidateLineFormattingTests(unittest.TestCase):
             block = agent_trading_tick._leaderboard_block("middle")
         self.assertIn("traded the most (25)", block)
         self.assertIn("being right, not from being busy", block)
+
+    def test_each_model_is_told_the_hand_it_actually_holds(self):
+        # Context windows run 65k to 1,048,576 across the eight agents -- a
+        # sixteenfold spread. A model with a million tokens should read more
+        # than the field can; one with 65k is wasting a cycle imitating it.
+        # Telling each what it has is how a particular model's best shows up
+        # instead of eight models converging on the same shallow pass.
+        biggest = agent_trading_tick._own_capability_line("glm-5-3-flash")
+        smallest = agent_trading_tick._own_capability_line("llama-3.3-70b-instruct")
+        middle = agent_trading_tick._own_capability_line("gemma-4-26b-a4b-it")
+
+        self.assertIn("largest of any agent", biggest)
+        self.assertIn("1,048,576", biggest)
+        self.assertIn("smallest here", smallest)
+        self.assertIn("cannot out-read this field", smallest)
+        self.assertIn("65,536", smallest)
+        # The middle of the field gets neither claim.
+        self.assertNotIn("largest of any agent", middle)
+        self.assertNotIn("smallest here", middle)
+
+    def test_an_unknown_model_gets_no_capability_claim(self):
+        self.assertEqual(agent_trading_tick._own_capability_line("not-a-model"), "")
 
     def test_an_unreachable_board_does_not_cost_the_cycle(self):
         # A scoreboard outage must never take a trading cycle with it.

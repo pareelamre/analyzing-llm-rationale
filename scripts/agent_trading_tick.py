@@ -1452,13 +1452,33 @@ def _leaderboard_block(agent_id: str) -> str:
             gap = leader["return_pct"] - ranked[mine - 1]["return_pct"]
         lines.append("")
         if mine == 1:
+            chaser = ranked[1] if len(ranked) > 1 else None
+            behind = ""
+            if chaser and isinstance(chaser.get("return_pct"), (int, float)):
+                margin = ranked[0]["return_pct"] - chaser["return_pct"]
+                behind = (" %s is %.2fpp behind you on %s trades and is reading "
+                          "this same board." % (str(chaser.get("agent_id"))[:24],
+                                                margin, chaser.get("trade_count") or 0))
             lines.append(
-                "You are top of the board. Holding it is a matter of not giving "
-                "the lead back: the agent below you is closer than the gap looks.")
+                "You are first. One bad cycle hands it over --" + (behind or
+                " the agent below you is closer than the gap looks."))
         else:
-            gap_s = f" -- {gap:.2f} percentage points behind" if gap is not None else ""
+            # Name the agent immediately above. "Eighth of eight" is abstract;
+            # "0.47pp behind qwen, who got there on three trades" is a target.
+            rival = ranked[mine - 2]
+            rival_gap = None
+            if isinstance(rival.get("return_pct"), (int, float)) and isinstance(
+                ranked[mine - 1].get("return_pct"), (int, float)
+            ):
+                rival_gap = rival["return_pct"] - ranked[mine - 1]["return_pct"]
+            gap_s = f", {gap:.2f}pp off the lead" if gap is not None else ""
             lines.append(
-                f"You are ranked {mine} of {len(ranked)}{gap_s}. Get to the top."
+                "You are %d of %d%s. Directly above you is %s%s -- pass them "
+                "first. Every place is taken from somebody: they do not fall "
+                "because you traded, they fall because you were right and they "
+                "were not."
+                % (mine, len(ranked), gap_s, str(rival.get("agent_id"))[:24],
+                   f" by {rival_gap:.2f}pp" if rival_gap is not None else "")
             )
         # The standings are also evidence, and the evidence is blunt: on this
         # board the most active agent is last. Say so, because "trade more to
@@ -1474,7 +1494,61 @@ def _leaderboard_block(agent_id: str) -> str:
                 % (str(busiest.get("agent_id"))[:24], busiest.get("trade_count"),
                    ranked.index(busiest) + 1, len(ranked))
             )
+        hand = _own_capability_line(agent_id)
+        if hand:
+            lines.append(hand)
     return "\n".join(lines)
+
+
+def _own_capability_line(agent_id: str) -> str:
+    """What this model has more of than the field, so it can play to it.
+
+    The eight agents are not interchangeable: context windows run from 65k to
+    1,048,576, a sixteenfold spread. A model with a million tokens can hold
+    every source it finds and reason across all of them at once; one with 65k
+    has to choose what to read and is wasting its cycle imitating the others.
+    Telling each what it actually has is how the best of a particular model
+    shows up, rather than eight models converging on the same shallow pass.
+    """
+    try:
+        from analyzing_llm_rationale.config import load_model_configs
+
+        configs = load_model_configs(Path("configs/models.yaml"))
+    except Exception:
+        return ""
+    windows: Dict[str, int] = {}
+    for name, cfg in (configs or {}).items():
+        value = getattr(cfg, "context_window_tokens", None)
+        if value is None and isinstance(cfg, dict):
+            value = cfg.get("context_window_tokens")
+        if isinstance(value, int) and value > 0:
+            windows[name] = value
+    mine = windows.get(agent_id)
+    if not mine or len(windows) < 3:
+        return ""
+    ordered = sorted(windows.values(), reverse=True)
+    rank = ordered.index(mine) + 1
+    largest, smallest = ordered[0], ordered[-1]
+    if mine >= largest:
+        return (
+            "Your hand: %s tokens of context, the largest of any agent here. "
+            "You can hold every source you pull and weigh them together in one "
+            "pass -- read more than the others can and let that be the edge."
+            % format(mine, ",")
+        )
+    if mine <= smallest:
+        return (
+            "Your hand: %s tokens of context, the smallest here against %s at "
+            "the top. You cannot out-read this field, so do not try -- pick the "
+            "one market you can genuinely settle and be right about it."
+            % (format(mine, ","), format(largest, ","))
+        )
+    return (
+        "Your hand: %s tokens of context, %d of %d in this field. Enough to "
+        "read deeply on a couple of markets, not enough to cover them all -- "
+        "spend it where the edge hurdle is lowest."
+        % (format(mine, ","), rank, len(windows))
+    )
 
 
 def _assemble_question(portfolio_block: str, candidates_block: str,
