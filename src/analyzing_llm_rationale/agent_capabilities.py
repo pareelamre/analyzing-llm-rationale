@@ -500,6 +500,8 @@ def _synthesise_thesis(answer: str, transcript: Sequence[Dict[str, Any]]) -> str
 
     return "\n".join([
         "### 0. Research Delta",
+        "- **Template status**: The model did not follow the required template; Foresea reconstructed this record from the tool transcript.",
+        f"- **Original response**: {str(answer or '').strip()[:600] or 'No publishable final response was supplied.'}",
         f"- **Strategy**: {action}",
         f"- **New evidence**: Research completed across candidate markets; tools called this cycle: {tool_summary}.",
         "- **Belief update**: Evaluated candidate odds against live venue orderbooks.",
