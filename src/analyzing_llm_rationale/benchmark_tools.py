@@ -69,7 +69,17 @@ DEFAULT_CONCENTRATION_LIMIT = 0.15
 # once the order cap was raised past it.
 DEFAULT_PER_CYCLE_SPEND_LIMIT_PCT = 0.20
 DEFAULT_CYCLE_MINUTES = 15
-DEFAULT_MAX_DRAWDOWN_LIMIT = 0.20
+# Raised from 0.20. At 20% the cap had become the binding constraint rather
+# than a backstop: 13 of 43 recorded rejections were drawdown_limit, so agents
+# were being stopped by past losses instead of present judgement, and an agent
+# that cannot open a position cannot climb back or tell you anything new. The
+# board is a paper competition whose product is information about which model
+# judges well, so headroom to keep trading is worth more than capital
+# preservation here. Still bounded rather than removed: an account driven to
+# zero stops producing evidence entirely, which is the one outcome that makes
+# a competitor permanently useless. Override with
+# FORESEA_AGENT_MAX_DRAWDOWN_LIMIT (must stay below 1).
+DEFAULT_MAX_DRAWDOWN_LIMIT = 0.50
 DEFAULT_DAILY_RISK_LIMIT_PCT = 0.30
 DEFAULT_MAX_OPEN_MARKETS = 10
 DEFAULT_MAX_TRADES_PER_CYCLE = 6
