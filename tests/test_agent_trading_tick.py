@@ -1263,6 +1263,42 @@ class ThesisForecastLearningTests(unittest.TestCase):
         self.assertAlmostEqual(records[0]["model_probability"], 0.63)
         self.assertAlmostEqual(records[0]["market_probability"], 0.55)
 
+    def test_a_provider_serving_another_model_is_a_substitution(self):
+        """Every agent was served Qwen for two cycles on 2026-09-06."""
+        self.assertFalse(
+            agent_trading_tick._served_model_matches(
+                "google/gemma-4-26B-A4B-it", "Qwen/Qwen3.8-27B"
+            )
+        )
+
+    def test_a_revision_or_org_prefix_is_the_same_model_not_a_substitution(self):
+        """Providers legitimately qualify or version the model we asked for."""
+        self.assertTrue(
+            agent_trading_tick._served_model_matches(
+                "openai/gpt-oss-120b", "openai/gpt-oss-120b:v2"
+            )
+        )
+        self.assertTrue(
+            agent_trading_tick._served_model_matches("openai/gpt-oss-120b", "gpt-oss-120b")
+        )
+        self.assertTrue(
+            agent_trading_tick._served_model_matches("gpt-oss-120b", "openai/gpt-oss-120b")
+        )
+
+    def test_an_unknown_model_name_is_never_treated_as_a_substitution(self):
+        """An absent name is no evidence; it must not manufacture a mismatch."""
+        self.assertTrue(agent_trading_tick._served_model_matches("openai/gpt-oss-120b", ""))
+        self.assertTrue(agent_trading_tick._served_model_matches("", "Qwen/Qwen3.8-27B"))
+        self.assertTrue(agent_trading_tick._served_model_matches("", ""))
+
+    def test_the_workflow_no_longer_pins_the_candidate_menu_to_three(self):
+        """The env pin overrode the widened menu, so it never reached production."""
+        workflow = Path(".github/workflows/_agent-trading-tick-reusable.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("CANDIDATE_COUNT", workflow)
+        self.assertEqual(agent_trading_tick.CANDIDATE_COUNT, 8)
+
     def test_a_no_side_probability_is_stored_as_p_yes_not_inverted(self):
         """A "95% NO" is a 5% P(YES); storing 0.95 would invert calibration."""
         records = agent_trading_tick._thesis_forecast_records(
