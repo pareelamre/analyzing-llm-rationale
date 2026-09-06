@@ -545,7 +545,13 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["sizing"]["mode"], "quarter_kelly")
         self.assertLessEqual(result["sizing"]["target_notional"], 800.0)
-        self.assertAlmostEqual(result["normalized_order"]["quantity"] * 0.50, 800.0, places=4)
+        # The cap bounds cash actually committed, so the fee is inside it: a
+        # contract costs the ask plus the taker fee, and sizing to the bare ask
+        # would commit more than the 8% the cap promises.
+        quantity = result["normalized_order"]["quantity"]
+        fee_per_contract = benchmark_tools._kalshi_fee(0.50, 1.0)
+        self.assertAlmostEqual(quantity * (0.50 + fee_per_contract), 800.0, places=4)
+        self.assertLess(quantity * 0.50, 800.0)
 
     def test_autonomous_agent_rejects_manual_new_position_sizing(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-sizing", require_kelly_sizing=True)
@@ -572,6 +578,62 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertTrue(result["rejected"])
         self.assertEqual(result["reason"], "kelly_sizing_required")
         self.assertFalse(db_path.exists())
+
+    def test_kelly_sizes_on_the_after_fee_cost_not_the_bare_ask(self):
+        """A contract costs the ask plus the fee, so gross odds over-stake."""
+        plan = benchmark_tools._sizing_plan(
+            {"sizing_mode": "quarter_kelly", "model_probability": 0.55},
+            price=0.50, side="yes", account_value=10_000.0, platform="kalshi",
+        )
+        fee_per_contract = benchmark_tools._kalshi_fee(0.50, 1.0)
+        self.assertGreater(fee_per_contract, 0.0)
+        self.assertAlmostEqual(plan["fee_per_contract"], round(fee_per_contract, 6))
+
+        effective = 0.50 + fee_per_contract
+        odds = (1.0 - effective) / effective
+        p_win = 0.55 + 0.50 * (0.50 - 0.55)
+        expected = max(0.0, (p_win * odds - (1.0 - p_win)) / odds)
+        self.assertAlmostEqual(plan["raw_kelly"], round(expected, 6))
+
+        # The old gross-odds stake at this point was 3.2x the correct one.
+        gross_odds = (1.0 - 0.50) / 0.50
+        gross_kelly = max(0.0, (p_win * gross_odds - (1.0 - p_win)) / gross_odds)
+        self.assertLess(plan["raw_kelly"], gross_kelly / 2.0)
+
+    def test_polymarket_sizing_is_not_haircut_for_a_fee_it_never_pays(self):
+        """Polymarket's CLOB charges no taker fee, so cost is the ask."""
+        plan = benchmark_tools._sizing_plan(
+            {"sizing_mode": "quarter_kelly", "model_probability": 0.55},
+            price=0.50, side="yes", account_value=10_000.0, platform="polymarket",
+        )
+        self.assertEqual(plan["fee_per_contract"], 0.0)
+        gross_odds = (1.0 - 0.50) / 0.50
+        p_win = 0.55 + 0.50 * (0.50 - 0.55)
+        expected = max(0.0, (p_win * gross_odds - (1.0 - p_win)) / gross_odds)
+        self.assertAlmostEqual(plan["raw_kelly"], round(expected, 6))
+
+    def test_a_fill_is_priced_at_the_levels_it_actually_consumes(self):
+        """Deep-book size booked at the touch is a fill no real order gets."""
+        book = {"orderbook_fp": {"no_dollars": [[0.50, 100.0], [0.45, 900.0]]}}
+        with mock.patch.object(
+            market_data, "fetch_kalshi_orderbook", return_value=book
+        ):
+            depth, vwap = benchmark_tools._depth_fill("KXT", "yes", 0.60, 600.0)
+        # Both levels are inside a 0.60 limit: 1000 contracts available.
+        self.assertAlmostEqual(depth, 1000.0)
+        # 100 at 0.50 then 500 at 0.55 -> 0.5417 average, worse than the touch.
+        self.assertAlmostEqual(vwap, (100 * 0.50 + 500 * 0.55) / 600.0, places=6)
+        self.assertGreater(vwap, 0.50)
+
+    def test_depth_that_cannot_be_established_stays_unknown(self):
+        """An outage is unknown depth, never an empty book."""
+        with mock.patch.object(
+            market_data, "fetch_kalshi_orderbook",
+            side_effect=market_data.MarketDataError("down"),
+        ):
+            self.assertEqual(
+                benchmark_tools._depth_fill("KXT", "yes", 0.60, 10.0), (None, None)
+            )
 
     def test_edge_kelly_requires_ten_point_edge_and_caps_at_eight_percent(self):
         no_edge = benchmark_tools._sizing_plan(

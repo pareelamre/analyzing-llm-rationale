@@ -142,6 +142,17 @@ def _audit_context(metadata_json: Any) -> Dict[str, Any]:
         return {"status": "metadata_unreadable"}
     audit = metadata.get("audit")
     if not isinstance(audit, dict) or int(audit.get("version") or 0) != 1:
+        # Rows written before the versioned block still recorded why the order
+        # was refused, under risk_guard. Reporting those as a bare
+        # "legacy_record" threw away the only answer to "why did it not
+        # trade?" -- 41 of 43 published rejections carried no cause at all.
+        guard = metadata.get("risk_guard")
+        reasons = guard.get("reasons") if isinstance(guard, dict) else None
+        if isinstance(reasons, list) and reasons:
+            return {
+                "status": "legacy_record",
+                "risk": _bounded_value({"reasons": reasons}),
+            }
         return {"status": "legacy_record"}
     return {"status": "recorded", **_bounded_value(audit)}
 

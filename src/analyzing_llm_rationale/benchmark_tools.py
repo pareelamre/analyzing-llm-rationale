@@ -334,6 +334,7 @@ def _clean_probability(value: Any, *, name: str) -> float:
 
 def _sizing_plan(
     args: Mapping[str, Any], *, price: float, side: str, account_value: float,
+    platform: str = "kalshi",
 ) -> Dict[str, Any]:
     """Derive an executable stake from the agent's declared sizing choice.
 
@@ -372,7 +373,27 @@ def _sizing_plan(
     # Match the published Mark-to-Market definitions: Quarter Kelly shrinks
     # halfway to market; Edge Kelly uses 25% shrinkage and half Kelly.
     p_win = model_side_probability + policy.market_shrinkage * (price - model_side_probability)
-    odds = (1.0 - price) / price
+    # Kelly must price the bet actually on offer. A contract costs the ask
+    # *plus* the taker fee, so gross odds overstate the payoff and overstate
+    # the stake with it -- by 3.2x at a 5pp edge on a 50c contract, and worst
+    # exactly where the fleet trades most. The Kalshi fee is linear in
+    # quantity, so fee-per-contract is a closed form and there is no
+    # circularity between size and fee. Polymarket charges no taker fee.
+    fee_per_contract = _kalshi_fee(price, 1.0) if platform == "kalshi" else 0.0
+    effective_cost = price + fee_per_contract
+    if not 0.0 < effective_cost < 1.0:
+        # A fee that swallows the whole contract leaves nothing to win.
+        return {
+            "mode": policy.key,
+            "label": policy.label,
+            "applied": True,
+            "eligible": False,
+            "edge": round(edge, 6),
+            "min_edge": policy.min_edge,
+            "max_position_fraction": policy.max_position_fraction,
+            "reason": "fee_exceeds_payoff",
+        }
+    odds = (1.0 - effective_cost) / effective_cost
     raw_kelly = max(0.0, (p_win * odds - (1.0 - p_win)) / odds)
     target_fraction = min(policy.kelly_fraction * raw_kelly, policy.max_position_fraction)
     target_notional = account_value * target_fraction
@@ -389,7 +410,8 @@ def _sizing_plan(
         "target_fraction": round(target_fraction, 6),
         "max_position_fraction": policy.max_position_fraction,
         "target_notional": round(target_notional, 6),
-        "target_quantity": target_notional / price if price else 0.0,
+        "fee_per_contract": round(fee_per_contract, 6),
+        "target_quantity": target_notional / effective_cost if effective_cost else 0.0,
         "reason": "no_positive_kelly" if target_notional <= 1e-9 else None,
     }
 
@@ -1055,6 +1077,16 @@ def _record_pre_sizing_rejection(
                 "cycle_id": _current_cycle_id(),
                 "reasons": [reason],
                 "rejected_before_sizing": True,
+            },
+            # The published audit only surfaces a versioned ``audit`` block, so
+            # a reason recorded solely under risk_guard survived in the store
+            # and was dropped on the way to the board -- every pre-sizing
+            # rejection rendered as "legacy_record" with no cause.
+            audit={
+                "version": 1,
+                "status": "rejected_before_sizing",
+                "risk": {"reasons": [reason], "rejected_before_sizing": True},
+                "execution": {"fill_status": "rejected_before_sizing", "filled_quantity": 0.0},
             },
         )
     except Exception:
@@ -2438,6 +2470,61 @@ def _available_depth(
     return total if seen else None
 
 
+def _depth_fill(
+    ticker: str, side: str, limit_price: float, requested: float,
+    *, platform: str = "kalshi",
+) -> tuple[Optional[float], Optional[float]]:
+    """Fillable quantity and the average price actually paid for it.
+
+    ``_available_depth`` sums every level at or better than the limit, but the
+    fill was booked entirely at the best ask. An order whose limit sits above
+    the touch therefore took deep-book size at top-of-book price -- a fill no
+    real order gets, since a real one walks the book and pays the average.
+    Returns ``(None, None)`` when depth cannot be established, which the caller
+    still treats as unknown rather than empty.
+    """
+    if platform != "kalshi":
+        return None, None
+    from analyzing_llm_rationale import market_data
+
+    try:
+        book = market_data.fetch_kalshi_orderbook(ticker) or {}
+    except market_data.MarketDataError:
+        return None, None
+    levels = (book.get("orderbook_fp") or book) if isinstance(book, dict) else {}
+    key = "no_dollars" if side == "yes" else "yes_dollars"
+    rows = levels.get(key) if isinstance(levels, dict) else None
+    if not isinstance(rows, list) or not rows:
+        return None, None
+    threshold = 1.0 - limit_price
+    # A resting bid at ``b`` on the opposite side buys this side at ``1 - b``,
+    # so the highest bid is the cheapest fill. Consume best-price-first.
+    book_levels: list[tuple[float, float]] = []
+    seen = False
+    for row in rows:
+        try:
+            bid, quantity = float(row[0]), float(row[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        seen = True
+        if bid + 1e-9 >= threshold and quantity > 0:
+            book_levels.append((1.0 - bid, quantity))
+    if not seen:
+        return None, None
+    book_levels.sort(key=lambda level: level[0])
+    total = sum(quantity for _cost, quantity in book_levels)
+    remaining, spend, taken = max(0.0, requested), 0.0, 0.0
+    for cost, quantity in book_levels:
+        if remaining <= 0:
+            break
+        use = min(quantity, remaining)
+        spend += use * cost
+        taken += use
+        remaining -= use
+    vwap = (spend / taken) if taken > 0 else None
+    return total, vwap
+
+
 def _resolve_shadow_marketability(
     ticker: str, side: str, requested_price: Optional[float], *, platform: str = "kalshi"
 ) -> Dict[str, Any]:
@@ -2777,6 +2864,7 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 price=executable_price,
                 side=side,
                 account_value=_risk_guard_policy().account_value,
+                platform=platform,
             )
             if sizing.get("applied") and not sizing.get("eligible"):
                 sizing_actions.add(1, {"mode": str(sizing["mode"]), "outcome": "skipped"})
@@ -2995,6 +3083,13 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             result = preview
             submitted = False
             live = False
+            book_depth, book_vwap = (
+                _depth_fill(
+                    ticker, side, float(order["price"]),
+                    _as_float(normalized.get("quantity")), platform=platform,
+                )
+                if shadow_marketable else (None, None)
+            )
             accounting_normalized, accounting_guard = _normalize_fill_for_accounting(
                 args=args,
                 result=result,
@@ -3006,14 +3101,20 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
                 platform=platform,
                 # Only worth a book fetch when the order would otherwise fill:
                 # an unmarketable order fills zero regardless of depth.
-                available_depth=(
-                    _available_depth(
-                        ticker, side, float(order["price"]), platform=platform)
-                    if shadow_marketable else None
-                ),
+                available_depth=book_depth,
             )
             fill_status = str(accounting_guard.get("fill_status") or "unknown")
             filled_quantity = _as_float(accounting_guard.get("filled_quantity"))
+            # Price the fill at what the consumed levels actually cost. Booking
+            # deep-book size at the touch is a fill no real order receives, and
+            # it flatters thin markets most -- exactly where Kelly sizing
+            # pushes hardest.
+            if (
+                filled_quantity > 1e-12
+                and book_vwap is not None
+                and book_vwap > _as_float(accounting_normalized.get("price")) + 1e-9
+            ):
+                accounting_normalized = {**dict(accounting_normalized), "price": book_vwap}
             fill_outcome = (
                 "none" if filled_quantity <= 1e-12
                 else "full" if abs(filled_quantity - _as_float(normalized.get("quantity"))) <= 1e-12

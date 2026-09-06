@@ -2334,7 +2334,15 @@ def _read_edge_board_record() -> Dict[str, Any]:
     )
 
 
-_AUTO_SELECT_MODEL = os.environ.get("AUTO_SELECT_MODEL", "1").lower() not in {"0", "false", "no"}
+# Off by default. This switch chose the production forecasting model by
+# comparing paper_roi_smart, a hypothetical return whose own disclaimer says it
+# "excludes slippage/liquidity" -- it prices at mid and so omits the half
+# spread, the dominant cost of actually trading. The switch margin is 2pp
+# against a measured live edge hurdle with a 6.4pp median, so the threshold sat
+# well inside the friction the metric leaves out: it could swap the model on a
+# difference that does not survive contact with a real book. Re-enable with
+# AUTO_SELECT_MODEL=1 once the comparison is friction-aware.
+_AUTO_SELECT_MODEL = os.environ.get("AUTO_SELECT_MODEL", "0").lower() not in {"0", "false", "no"}
 _MODEL_SWITCH_MARGIN = float(os.environ.get("MODEL_SWITCH_MARGIN", "0.02"))
 
 

@@ -12,6 +12,19 @@ from analyzing_llm_rationale import benchmark_tools
 
 
 class AgentTradingAuditTests(unittest.TestCase):
+    def test_a_rejection_reason_survives_into_the_published_audit(self):
+        """41 of 43 published rejections carried no cause at all."""
+        payload = build_agent_trading_audit._audit_context(
+            json.dumps({"risk_guard": {"reasons": ["no_executable_price"]}})
+        )
+        self.assertEqual(payload["status"], "legacy_record")
+        self.assertEqual(payload["risk"]["reasons"], ["no_executable_price"])
+
+    def test_a_record_with_no_reason_anywhere_stays_a_bare_legacy_record(self):
+        """Recovering a reason must not invent one that was never recorded."""
+        payload = build_agent_trading_audit._audit_context(json.dumps({"risk_guard": {}}))
+        self.assertEqual(payload, {"status": "legacy_record"})
+
     def test_trade_audit_context_is_persisted_with_the_action(self):
         with tempfile.TemporaryDirectory() as td:
             db_path = Path(td) / "store.sqlite"
