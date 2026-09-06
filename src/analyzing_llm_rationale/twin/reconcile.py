@@ -20,6 +20,7 @@ class AccountReadError(RuntimeError):
 
 
 PageFetcher = Callable[[Optional[str]], Mapping[str, Any]]
+VenueReader = Callable[..., Mapping[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,74 @@ class CompleteCollection:
     def account_pages(self) -> tuple[Mapping[str, Any], ...]:
         """Return the normalized single complete page consumed by account.py."""
         return ({"complete": True, "has_more": False, "items": list(self.items)},)
+
+
+def cursor_page_fetcher(
+    venue: str,
+    operation: str,
+    *,
+    item_key: str,
+    reader: VenueReader,
+    creds: Mapping[str, Any],
+    cursor_parameter: str = "cursor",
+    parameters: Optional[Mapping[str, Any]] = None,
+) -> PageFetcher:
+    """Adapt a cursor-preserving ``venue_api.read`` operation to account pages.
+
+    The venue API returns a sanitized envelope with ``data`` and
+    ``next_cursor``.  This adapter keeps the opaque continuation value intact;
+    it never infers completion from a short page.
+    """
+    base_parameters = dict(parameters or {})
+
+    def fetch(cursor: Optional[str]) -> Mapping[str, Any]:
+        query = dict(base_parameters)
+        if cursor is not None:
+            query[cursor_parameter] = cursor
+        result = reader(venue, operation, query, access="account", creds=dict(creds))
+        if not isinstance(result, Mapping) or not isinstance(result.get("data"), Mapping):
+            raise AccountReadError(f"{operation}_response_malformed")
+        data = result["data"]
+        return {
+            "items": data.get(item_key),
+            "cursor": result.get("next_cursor"),
+            "generation_token": data.get("generation_token"),
+            "pagination_limit_reached": result.get("pagination_limit_reached") is True,
+        }
+
+    return fetch
+
+
+def offset_page_fetcher(
+    venue: str,
+    operation: str,
+    *,
+    reader: VenueReader,
+    creds: Mapping[str, Any],
+    limit: int,
+    parameters: Optional[Mapping[str, Any]] = None,
+) -> PageFetcher:
+    """Adapt an offset-preserving Data API operation to cursor-reader shape."""
+    if limit < 1:
+        raise SchemaValidationError("account offset page limit must be positive")
+    base_parameters = dict(parameters or {})
+
+    def fetch(cursor: Optional[str]) -> Mapping[str, Any]:
+        offset = 0 if cursor is None else int(cursor)
+        if offset < 0:
+            raise AccountReadError(f"{operation}_offset_invalid")
+        query = {**base_parameters, "limit": limit, "offset": offset}
+        result = reader(venue, operation, query, access="account", creds=dict(creds))
+        if not isinstance(result, Mapping) or not isinstance(result.get("data"), list):
+            raise AccountReadError(f"{operation}_response_malformed")
+        return {
+            "items": result["data"],
+            "cursor": result.get("next_offset"),
+            "generation_token": None,
+            "pagination_limit_reached": result.get("pagination_limit_reached") is True,
+        }
+
+    return fetch
 
 
 def read_complete_collection(
@@ -66,6 +135,8 @@ def read_complete_collection(
             raise AccountReadError(f"{name}_page_{page_number}_failed") from exc
         if not isinstance(response, Mapping):
             raise AccountReadError(f"{name}_page_{page_number}_malformed")
+        if response.get("pagination_limit_reached") is True:
+            raise AccountReadError(f"{name}_pagination_limit_reached")
         value = response.get(item_key)
         if not isinstance(value, list) or any(not isinstance(row, Mapping) for row in value):
             raise AccountReadError(f"{name}_page_{page_number}_malformed")

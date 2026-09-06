@@ -10,6 +10,8 @@ from analyzing_llm_rationale.twin.account import (
 from analyzing_llm_rationale.twin.models import SchemaValidationError
 from analyzing_llm_rationale.twin.reconcile import (
     AccountReadError,
+    cursor_page_fetcher,
+    offset_page_fetcher,
     read_complete_collection,
     synchronize_complete_account,
 )
@@ -148,6 +150,45 @@ class TwinAccountTests(unittest.TestCase):
         )
         self.assertTrue(changed.retained_previous)
         self.assertIn("orders_generation_changed", changed.issues)
+
+    def test_venue_cursor_and_offset_adapters_preserve_continuations(self):
+        calls = []
+
+        def reader(venue, operation, parameters, **kwargs):
+            calls.append((venue, operation, dict(parameters), kwargs))
+            if operation == "orders":
+                if parameters.get("next_cursor") == "page-2":
+                    return {"data": {"orders": [{"order_id": "two"}]}, "next_cursor": None}
+                return {"data": {"orders": [{"order_id": "one"}]}, "next_cursor": "page-2"}
+            if parameters["offset"] == 0:
+                return {"data": [{"token_id": "one"}], "next_offset": 2}
+            return {"data": [{"token_id": "two"}], "next_offset": None}
+
+        orders = read_complete_collection(
+            "orders",
+            cursor_page_fetcher(
+                "polymarket", "orders", item_key="orders", reader=reader, creds={"api": "x"},
+                cursor_parameter="next_cursor",
+            ),
+        )
+        positions = read_complete_collection(
+            "positions",
+            offset_page_fetcher("polymarket", "positions", reader=reader, creds={"api": "x"}, limit=2),
+        )
+        self.assertEqual([row["order_id"] for row in orders.items], ["one", "two"])
+        self.assertEqual([row["token_id"] for row in positions.items], ["one", "two"])
+        self.assertEqual(calls[1][2]["next_cursor"], "page-2")
+        self.assertEqual(calls[3][2]["offset"], 2)
+        self.assertEqual(calls[0][3]["access"], "account")
+
+    def test_adapter_refuses_a_venue_pagination_cap_as_complete_inventory(self):
+        fetch = offset_page_fetcher(
+            "polymarket", "positions", reader=lambda *_args, **_kwargs: {
+                "data": [], "next_offset": None, "pagination_limit_reached": True,
+            }, creds={"api": "x"}, limit=500,
+        )
+        with self.assertRaisesRegex(AccountReadError, "pagination_limit_reached"):
+            read_complete_collection("positions", fetch)
 
 
 if __name__ == "__main__":
