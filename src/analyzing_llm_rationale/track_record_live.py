@@ -1685,11 +1685,11 @@ def paper_pnl(resolved: List[Dict[str, Any]],
         return min(_half_kelly_fraction(b), 0.01) * max(0.0, bk)
 
     def _quarter_kelly(b, bk=_COMPOUND_STARTING_BANKROLL):
-        """Conservative Kelly: quarter-Kelly, market shrinkage, 5% cap."""
+        """Conservative Kelly: quarter-Kelly, market shrinkage, 8% cap."""
         return _conservative_kelly(b, bk)
 
     def _conservative_kelly(b, bk=_COMPOUND_STARTING_BANKROLL):
-        """Quarter-Kelly with 50% market shrinkage and a 5% risk cap."""
+        """Quarter-Kelly with 50% market shrinkage and an 8% risk cap."""
         market_p = b["market_probability"]
         model_p = b["calibrated_model_probability"]
         if b["side"] == "NO":
@@ -1699,7 +1699,7 @@ def paper_pnl(resolved: List[Dict[str, Any]],
             return 0.0
         odds = (1.0 - market_p) / market_p
         full_kelly = (p_win * odds - (1.0 - p_win)) / odds
-        return min(max(0.0, 0.25 * full_kelly), 0.05) * max(0.0, bk)
+        return min(max(0.0, 0.25 * full_kelly), 0.08) * max(0.0, bk)
 
     def _growth_1pct(b, bk=_COMPOUND_STARTING_BANKROLL):
         """Dynamic 1% bankroll sizing per trade for capital growth."""
@@ -2178,7 +2178,7 @@ def build_quarter_kelly_accounts(
 
     This is the MTM counterpart to the historical growth views: it starts from
     the same June forecast history, books each market once at settlement, and
-    sizes at 25% Kelly, caps every position at 5% of the current account, shrinks model
+    sizes at 25% Kelly, caps every position at 8% of the current account, shrinks model
     probabilities 50% toward market pricing, and reserves a 30% maximum
     high-watermark loss budget. Unlike the guarded
     deployable strategy, it does not require a significance-approved edge
@@ -2191,7 +2191,7 @@ def build_quarter_kelly_accounts(
         tracked_models=tracked_models,
         kelly_fraction=0.25,
         strategy_name="risk_capped_quarter_kelly_ledger",
-        max_concentration=0.05,
+        max_concentration=0.08,
         market_shrinkage=0.5,
         max_drawdown=0.30,
         require_validated=False,
