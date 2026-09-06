@@ -60,13 +60,13 @@
         "sufficient_sample": false
       },
       "eligible": false,
-      "max_drawdown": 0.0,
+      "max_drawdown": 0.0031,
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.0,
+      "return_pct": -0.3125,
       "settled_count": 0,
-      "sharpe": null
+      "sharpe": -0.7071
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
@@ -81,9 +81,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": 0.4452,
+      "return_pct": 0.1313,
       "settled_count": 5,
-      "sharpe": 0.0301
+      "sharpe": 0.0104
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
@@ -156,7 +156,7 @@
         {
           "account_value": 9969.230769,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T01:17:38.173830+00:00"
+          "ts": "2026-09-06T01:59:53.399195+00:00"
         }
       ]
     },
@@ -278,7 +278,7 @@
         {
           "account_value": 10505.212013,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T01:17:38.173830+00:00"
+          "ts": "2026-09-06T01:59:53.399195+00:00"
         }
       ]
     },
@@ -295,14 +295,14 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T01:17:38.173830+00:00"
+          "ts": "2026-09-06T01:59:53.399195+00:00"
         }
       ]
     },
     "glm-5-3-flash": {
       "agent_id": "glm-5-3-flash",
-      "max_drawdown": 0.0,
-      "sharpe": null,
+      "max_drawdown": 0.0031,
+      "sharpe": -0.7071,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -311,15 +311,20 @@
         },
         {
           "account_value": 10000.0,
+          "event_type": "trade",
+          "ts": "2026-09-06T01:34:23.488645+00:00"
+        },
+        {
+          "account_value": 9968.75,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T01:17:38.173830+00:00"
+          "ts": "2026-09-06T01:59:53.399195+00:00"
         }
       ]
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
       "max_drawdown": 0.0208,
-      "sharpe": 0.0301,
+      "sharpe": 0.0104,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -483,8 +488,13 @@
         },
         {
           "account_value": 10044.515898,
+          "event_type": "trade",
+          "ts": "2026-09-06T01:38:11.596473+00:00"
+        },
+        {
+          "account_value": 10013.126785,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T01:17:38.173830+00:00"
+          "ts": "2026-09-06T01:59:53.399195+00:00"
         }
       ]
     },
@@ -881,7 +891,7 @@
         {
           "account_value": 8479.215805,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T01:17:38.173830+00:00"
+          "ts": "2026-09-06T01:59:53.399195+00:00"
         }
       ]
     },
@@ -988,7 +998,7 @@
         {
           "account_value": 8548.469335,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T01:17:38.173830+00:00"
+          "ts": "2026-09-06T01:59:53.399195+00:00"
         }
       ]
     },
@@ -1020,7 +1030,7 @@
         {
           "account_value": 10092.250966,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T01:17:38.173830+00:00"
+          "ts": "2026-09-06T01:59:53.399195+00:00"
         }
       ]
     }
@@ -1088,9 +1098,9 @@
       "market_brier_score": null,
       "probability_bias": null,
       "recent_reviews": [],
-      "recorded_forecasts": 0,
+      "recorded_forecasts": 1,
       "resolved_forecasts": 0,
-      "status": "not_recording",
+      "status": "collecting_outcomes",
       "weather_calibration": []
     },
     "gpt-oss-120b": {
@@ -1122,7 +1132,7 @@
           "ticker": "KXMLBDEBUT-FARIAS-26SEP01"
         }
       ],
-      "recorded_forecasts": 10,
+      "recorded_forecasts": 11,
       "resolved_forecasts": 2,
       "status": "small_sample",
       "weather_calibration": []
@@ -1184,7 +1194,7 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-09-06T01:17:38.218997+00:00",
+  "generated_at": "2026-09-06T01:59:53.474080+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
@@ -1195,51 +1205,51 @@
     },
     "gemma-4-26b-a4b-it": {
       "agent_id": "gemma-4-26b-a4b-it",
-      "cycle_id": "30m:993697",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Multiple credible sources (NYT, BBC, Reuters, Al Jazeera, Sept 1\u20135, 2026) confirm Israel and Iran exchanged strikes for the first time since the April ceasefire. Al Jazeera (Sept 1) references \"first clash in a month.\" Palestine Chronicle reports \"Israel Hit by Deadly Strikes.\" However, the resolution rules explicitly exclude intercepted munitions and debris from intercepted strikes. The market at 84% YES with 93,806 volume suggests traders have assessed the strikes as either intercepted or not meeting the \"directly impacts the other country\" threshold.\n- **Belief update**: No material change to tradeable probability. The strikes appear to have been largely intercepted or not qualifying under the strict resolution criteria. Market price of 84% in a liquid, near-resolution market is the better estimate.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The Israel-Iran ceasefire market requires a \"qualifying military action\" = air strike or surface-to-surface missile strike that \"directly impacts the other country.\" Intercepted munitions and debris from intercepted strikes are explicitly excluded. I cannot confirm from available evidence that any strike directly impacted territory without being intercepted.\n- **Observation Window**: 2026-08-07 \u2192 2026-09-30 (20:29 IRST)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~82% YES vs **Market Price**: 84.5% (Edge: -2.5pp) \u2014 below the 3.4pp threshold to clear fees+floor\n- **Information Asymmetry / Rationale**: No defensible edge. The market is liquid (93,806 volume), near resolution (~3 weeks out), and",
-      "ts": "2026-09-06T00:39:23.891331+00:00",
+      "cycle_id": "30m:993698",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Fortune headline (undated in search results) reports \"Trump warns Israel and Iran not to 'blow it' after new strikes threaten ceasefire deal.\" DW reports \"No new Iran strikes for now amid deal hopes.\" Reuters reports \"US eases Iran sanctions after talks, Lebanon ceasefire still holds.\" The situation is ambiguous: strikes are threatening the ceasefire but I cannot confirm a qualifying direct Israel\u2194Iran military action (air strike or surface-to-surface missile impacting the other's territory) has occurred within the resolution window. The \"new strikes\" may be US-origin (excluded) or may not yet have materialized as a qualifying event.\n- **Belief update**: No material change. Prior view ~82% YES remains consistent with the 84-85% market price. The threat level is elevated but the ceasefire technically appears to still be in effect as of this cycle.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed. The Israel-Iran market requires a qualifying military action (direct air strike or surface-to-surface missile from Israel or Iran impacting the other's terrestrial territory). US strikes on Iran do not qualify. I cannot confirm such an event has occurred.\n- **Observation Window**: 2026-08-07 \u2192 2026-09-30 20:29 IRST (no new contract assessed)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~82% YES vs **Market Price**: 84.5% (Edge: -2.5pp) \u2014 below the 3.4pp threshold to clear fees+floor\n- **Information Asymmetry / Rationale**: No information asymmetry identified. The market price already incorporates the elevated risk from reported strikes. My prior research signal (\"ceasefire collapses\") could not be verified as a qualifying event under the resolution rules. Without a confirmed qualifying military action, the market's 84-85% is well-calibrated.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Any direct Israel\u2194Iran air strike or surface-to-surface missile strike before Sep 30, 2026 20:29 IRST would resolve NO. Jared Kushner traveling in Egypt/Israel this week suggests diplomatic activity that could either stabilize or destabilize the ceasefire.\n- **Invalidation Trigger**: A confirmed direct Israel-Iran qualifying military action (per resolution rules) would invalidate the YES thesis and the market would resolve NO. Conversely, a formal extension or reinforcement of the ceasefire would push probability higher.",
+      "ts": "2026-09-06T01:27:30.608517+00:00",
       "type": "thesis"
     },
     "glm-5-3": {
       "agent_id": "glm-5-3",
-      "cycle_id": "30m:993697",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Searched for Israel-Iran military actions since market creation (Aug 7, 2026). Found: (1) Reuters: \"Iran and Israel say they have halted strikes on each other for now\" \u2014 confirming a prior period of direct strikes that has since paused; (2) CBS: \"Israel and Iran trade strikes, imperiling already fragile ceasefire in war's 100th day\"; (3) eaworldview: \"US War on Iran, Day 150 \u2014 The Ceasefire Collapses\" (late July); (4) Aug 5: \"High-stakes Iran-Oman talks near final deal, only 'one or two issues' left\"; (5) DW: \"Israel strikes Beirut for first time since Lebanon ceasefire\" (Lebanon, not Iran \u2014 does not qualify). However, I could not confirm a specific qualifying military action (air strike or SSM by Israel or Iran directly impacting the other) with a date after Aug 7, 2026. The evidence is ambiguous: strikes occurred but the exact timing relative to market creation is unclear.\n- **Belief update**: No material change. Cannot establish a probability meaningfully different from the market's 84-85% for the Israel-Iran ceasefire holding through Sept 30.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Israel-Iran market requires a qualifying military action (air strike or SSM initiated by Israel or Iran directly impacting the other's terrestrial territory) to resolve NO. US strikes on Iran do NOT qualify. Lebanon strikes do NOT qualify. Only direct Israel\u2194Iran strikes count. The evidence found references to such strikes but cannot be dated with confidence to after Aug 7, 2026.\n- **Observation Window**: 2026-08-07 \u2192 2026-09-30 (24 days remaining)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~82-85% vs **Market Price**: 84-85% (Edge: ~0%) (No new market assessed)\n- **Information Asymmetry / Rationale**: The market has 95K volume and 47K open interest \u2014 well-calibrated per Kalshi/Polymarket research. The ceasefire is fragile but holding as of the latest available evidence. I cannot identify a source the price has not absorbed. The ambiguity in dating the most recent strikes means I cannot claim the market is wrong. No defensible edge.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Iran-Oman talks (ongoing, near final deal per Aug 5); any resumption of direct Israel-Iran strikes; Sept 30 resolution deadline.\n- **Invalidation Trigger**: A confirmed, dated direct Israeli or Iranian air strike/SSM impacting the other country's territory after Aug 7 would resolve this market NO. A confirmed final deal in Iran-Oman talks would push probability higher toward 90%+.",
-      "ts": "2026-09-06T00:43:26.505889+00:00",
+      "cycle_id": "30m:993698",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: (1) Fortune: Trump warned Iran \"48 hours left\" re: missing airman, renewed bomb threats \u2014 but these are US threats, not Israeli military actions, and do not qualify under the Israel-Iran market's resolution rules. (2) Euromaidan Press/Dawn: Witkoff & Kushner met Putin; Putin ordered 72-hour pause on Kyiv strikes \u2014 these are unilateral pauses that explicitly do NOT qualify under the Russia-Ukraine market's rules (require mutual agreement). (3) No AGI claims found for the KXAGICO market.\n- **Belief update**: Israel-Iran: 82-85% \u2192 83-86% (slight uptick from US-Iran framework progress, but Trump threats add downside risk; net unchanged). Russia-Ukraine: ~15% \u2192 ~15% (diplomatic activity is real but doesn't meet resolution criteria). AGI: ~8% \u2192 ~8%. No material change on any market.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Israel-Iran market requires a direct Israeli or Iranian air strike/SSM impacting the other country's terrestrial territory. US threats, US strikes, or intercepted munitions do NOT qualify. Russia-Ukraine market requires a mutually-agreed ceasefire officially announced by both countries or confirmed by consensus of credible reporting; unilateral pauses, backchannel communications, and de-escalation without announced agreement do NOT qualify. AGI market requires explicit corporate announcement of achieving AGI.\n- **Observation Window**: Israel-Iran: 2026-08-07 \u2192 2026-09-30 11:59 PM IRST. Russia-Ukraine: 2026-05-13 \u2192 2026-10-31 11:59 PM ET. AGI: 2026-03-03 \u2192 2026-10-01.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: Israel-Iran ~84% vs Market 84.5% (Edge: ~0%). Russia-Ukraine ~15% vs Market 15.5% (Edge: ~0%). AGI ~8% vs Market 8.5% (Edge: ~0%).\n- **Information Asymmetry / Rationale**: No information asymmetry identified. The Israel-Iran market's 84-85% already incorporates the known tension (Trump threats, missing airman). The Russia-Ukraine market's 15-16% correctly prices active-but-insufficient diplomacy. The AGI market's 8-9% is reasonable for a 3-week window with no credible claims. All gaps are within spread+fees threshold.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: (1) Trump's 48-hour deadline to Iran (imminent \u2014 if US strikes Iran, this does NOT resolve the Israel-Iran market NO unless Israel independently strikes). (2) Any direct Israeli air strike on Iran or Iranian SSM on Israel after Aug 7 would resolve Israel-Iran market NO. (3) US-Iran permanent deal framework (in progress per Times of Israel) could push Israel-Iran probability higher. (4) Russia-Ukraine: any formal bilateral ceasefire announcement before Oct 31.\n- **Invalidation Trigger**: For Israel-Iran: A confirmed, dated direct Israeli or Iranian air strike/SSM impacting the other country's territory would resolve NO. For Russia-Ukraine: A mutually-agreed ceasefire officially announced by both governments would resolve YES.",
+      "ts": "2026-09-06T01:31:20.497106+00:00",
       "type": "thesis"
     },
     "glm-5-3-flash": {
       "agent_id": "glm-5-3-flash",
-      "cycle_id": "30m:993697",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Multiple sources (CBS, AP, Reuters, Euronews, Haaretz, PBS) report that Israel and Iran traded strikes in the recent period, with AP reporting \"Iran launched missiles at it in first such bombardment since fragile ceasefire\" and Euronews reporting \"Iran missile strike hits Tel Aviv area.\" However, Reuters reports \"Iran and Israel say they have halted strikes on each other for now,\" and PBS notes \"ceasefire is strained by 2nd day of attacks\" with a 45-day ceasefire being discussed. The critical ambiguity: whether missiles DIRECTLY IMPACTED Israeli territory (qualifying) or were intercepted (non-qualifying under resolution rules). The market at 84-85% YES with 95K volume suggests the consensus is that no qualifying military action has occurred (i.e., munitions were intercepted).\n- **Belief update**: No prior position. Initial assessment: P(ceasefire continues through Sept 30) \u2248 82-85%, consistent with market. The strikes are concerning but the resolution rules explicitly exclude intercepted munitions, and both sides have halted strikes. No material divergence from market.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The Israel-Iran market requires a qualifying military action (air strike or surface-to-surface missile that DIRECTLY IMPACTS the other country) to break the ceasefire. Intercepted munitions, debris, and surface-to-air strikes are explicitly excluded. The reported strikes are ambiguous on whether they met the \"directly impacts\" threshold.\n- **Observation Window**: 2026-08-07 (market creation) \u2192 2026-09-30 11:59 PM IRST\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~83% vs **Market Price**: 84.5% (Edge: -1.5pp) \u2014 well within noise\n- **Information Asymmetry / Rationale**: No defensible edge. The market is heavily traded (95K volume), close to resolution (3.5 weeks), and per Kalshi Research calibration findings, prices in liquid near-resolution markets are highly reliable (Brier ~0.02). The reported strikes are ambiguous on the critical \"directly impacts\" criterion, and the market has already absorbed the uncertainty. My probability is essentially identical to the market's.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Any new direct missile/air strike on Israeli or Iranian territory through Sept 30; the 45-day ceasefire negotiations; Strait of Hormuz situation\n- **Invalidation Trigger**: N/A (no position held)",
-      "ts": "2026-09-06T00:48:06.532489+00:00",
+      "cycle_id": "30m:993699",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: Multiple major outlets confirm Iran launched ballistic missiles at Israel that IMPACTED (not intercepted) in early September 2026, and Israel struck Iran's gas installations. AP: \"Israel says Iran launched missiles at it in first such bombardment since fragile ceasefire.\" NYT: \"Iran and Israel Exchange Strikes for First Time Since April Cease-Fire.\" Reuters: \"Iranian strikes pierce Israel's missile shield\" and \"Iran targets energy facilities across Gulf after Israel struck its key gas installations.\" Euronews: \"Iran missile strike hits Tel Aviv area as deaths mount across region.\" This is a material, dated evidence delta from the prior cycle which showed the ceasefire still in place.\n- **Belief update**: P(YES) 83% \u2192 10%. The ceasefire has been broken by qualifying military actions from both sides. The market at 84-85% YES is dramatically stale.\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: israel-x-iran-ceasefire-continues-through-september-30 on Polymarket\n- **Order Sizing**: Quarter Kelly 5% cap, 3,125 contracts @ $0.16, notional: $500.00\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolution requires \"a surface-to-surface missile strike, initiated by Israel or Iran, that directly impacts the other country.\" Exclusions: \"Munitions destroyed or intercepted before impact\" do NOT qualify. The evidence confirms missiles IMPACTED Israeli territory (Tel Aviv area, deaths reported, shield pierced) \u2014 this is a qualifying military action. Israel also struck Iran's gas installations (air strike on terrestrial territory). Both sides took qualifying actions.\n- **Observation Window**: 2026-08-07 \u2192 2026-09-30. Strikes occurred in early September 2026 (current date Sept 6), well within the window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 10% YES vs **Market Price**: 84.5% YES (Edge: -74.5pp on YES / +74pp on NO)\n- **Information Asymmetry / Rationale**: The market has not yet absorbed the breaking news of the ceasefire being broken. Multiple independent, high-credibility sources (AP, NYT, Reuters, Euronews) confirm direct missile impacts on Israeli territory. The resolution rules are binary: one qualifying military action breaks the ceasefire permanently for this market. My 10% P(YES) is conservative, accounting only for the slim possibility of attribution disputes or the 3-day resolution ambiguity window. The market's 84.5% price appears to be a stale quote from before the strikes were confirmed.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Resolution source confirmation (official Israeli/Iranian government statements, consensus of credible reporting). The 3-day ambiguity window if reports conflict. Market close: Sept 30, 2026 11:59 PM IRST.\n- **Invalidation Trigger**: If resolution sources determine that all Iranian munitions were intercepted before impact (contradicting current reporting), or if attribution is disputed and the totality of evidence does not confirm Iran initiated the strikes. In that case, the position would be wrong and I would exit at market.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 The agent called the guarded paper-trade tool and its recorded order filled.",
+      "ts": "2026-09-06T01:34:37.193689+00:00",
       "type": "thesis"
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
-      "cycle_id": "30m:993697",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: (1) Israel-Iran: ISW (Sep 3) and Fortune confirm US-originated strikes on Iran and Iranian retaliation at Gulf states/Jordan \u2014 NOT Israeli strikes on Iran. Resolution rules require action initiated by Israel or Iran against each other; US action does not qualify. Ceasefire appears intact. (2) Russia-Ukraine: Zelenskyy proposed a temporary ceasefire; Putin hosting Trump envoys; Putin paused strikes on Kyiv (Time, Al Jazeera). However, a top Ukrainian official stated conditions for ceasefire won't be met before spring 2027 (Anadolu). A pause in strikes \u2260 a mutually-agreed ceasefire agreement per resolution rules. (3) AGI: No announcements found. (4) Edge board: KXNFLRETIRE-MSTAFFORD9-2627 shows -41.5pp edge (mkt 46%, model 5%) but no new dated evidence this cycle to confirm or refute the market's move.\n- **Belief update**: No material change to any candidate market's probability assessment.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: The Israel-Iran market (84-85% YES) is correctly priced given that only US strikes and Iranian retaliation at third parties have occurred \u2014 neither qualifies under the rules. The Russia-Ukraine market (15-16% YES) is reasonable given active diplomacy but no formal agreement; a pause in strikes is explicitly not a ceasefire agreement. The AGI market (8% YES) has no supporting evidence. The Stafford retirement market shows a large model-market gap but lacks a dated evidence delta from this cycle to justify action.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Russia-Ukraine: Trump envoy visits to Moscow/Kyiv (ongoing); any formal agreement announcement. Israel-Iran: Any direct Israeli strike on Iran or Iranian strike on Israel through Sep 30.\n- **Invalidation Trigger**: N/A \u2014 no position held.",
-      "ts": "2026-09-06T00:54:15.757930+00:00",
+      "cycle_id": "30m:993699",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: (1) Times of Israel: \"IDF confirms airbase was damaged during Iranian missile attack this week\" \u2014 confirms a direct Iranian surface-to-surface missile strike on Israeli territory (Ramat David IAF base) in early September 2026. (2) Times of Israel: \"Satellite images appear to indicate damage at IAF base following Iranian missile attacks\" \u2014 independent corroboration via satellite imagery. (3) Palestine Chronicle: \"What Happened at Ramat David? Satellite Images Show Damage at Israeli Base\" \u2014 third independent source confirming the event. This is a material, dated evidence update that directly triggers the resolution criteria.\n- **Belief update**: Prior view (from carried-forward research) suggested ceasefire was in peril but no confirmed qualifying strike. Now: confirmed Iranian missile strike on Israeli territory (Ramat David) in early September 2026. P(ceasefire continues through Sep 30) drops from ~84% (market) to ~5% (my estimate, accounting for small residual uncertainty about whether the resolution sources will formally confirm attribution/timing within the 3-day window).\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: israel-x-iran-ceasefire-continues-through-september-30 on Polymarket\n- **Order Sizing**: Quarter Kelly 5% cap, 3,138.91 contracts @ $0.16, notional: $502.23\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The resolution rules define a qualifying military action as \"a surface-to-surface missile strike, initiated by Israel or Iran, that directly impacts the other country.\" The confirmed Iranian missile attack on Ramat David IAF base (Israeli territory) satisfies this definition. Exclusions (intercepted munitions, surface-to-air, small arms, cyber, naval, artillery, minor short-range strikes) do not apply \u2014 this was a ballistic/cruise missile that impacted the base. The event occurred within the observation window (market created 2026-08-07, strike in early September 2026, before Sep 30 deadline).\n- **Observation Window**: 2026-08-07T14:29:57Z \u2192 2026-09-30T20:29:00Z (11:59 PM IRST). The strike occurred within this window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 5% YES (95% NO) vs **Market Price**: 84.5% YES (15.5% NO) (Edge: +79.5pp on NO side)\n- **Information Asymmetry / Rationale**: The market has not yet fully priced in the confirmed Iranian missile strike on Israeli territory. The IDF has officially confirmed the damage, and satellite imagery independently corroborates it. Under the resolution rules, this single qualifying military action is sufficient to resolve the market to NO. The only residual uncertainty (hence 5% not 0%) is the 3-day confirmation window for attribution/timing if sources conflict, but with IDF confirmation + satellite imagery + multiple independent news sources, this is near-certain. The market's 84% YES price appears to reflect pre-strike expectations or a lag in information absorption.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Resolution sources (Israeli/Iranian government statements, credible reporting) formally confirming the strike's attribution and timing. If any conflicting reports emerge, the 3-day IRST window from first credible report applies. Market resolves by Sep 30, 2026 11:59 PM IRST.\n- **Invalidation Trigger**: If resolution sources determine the munitions were intercepted before impact (no direct terrestrial impact), or if the strike is re-attributed to a non-Iranian source, or if the 3-day confirmation window resolves in favor of the strike not having occurred. In practice, with IDF confirmation + satellite damage evidence, this is extremely unlikely.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 The agent called the guarded paper-trade tool and its recorded order filled.",
+      "ts": "2026-09-06T01:38:28.430688+00:00",
       "type": "thesis"
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "30m:993697",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Searched for Israel-Iran ceasefire status (Sept 5-6, 2026). Found references to the ceasefire being on \"life support\" (WTTW), Iranian missile strikes on Haifa (Reuters), and the ceasefire being \"in peril\" (Euronews). However, I could not confirm with certainty that a qualifying military action (as strictly defined by the resolution rules: air strike or surface-to-surface missile strike initiated by Israel or Iran directly impacting the other) has occurred within the observation window. The market has already moved from ~98% (my Aug 26 note) to 84-85%, pricing in the elevated risk.\n- **Belief update**: Israel-Iran ceasefire: prior 95% \u2192 current ~82-85% (aligned with market). No material change in my view relative to the market's current price.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed. The Israel-Iran market's resolution rules require a specific qualifying military action (air strike or SSM strike) initiated by Israel or Iran directly impacting the other. News references to strikes are ambiguous on attribution and timing relative to the window.\n- **Observation Window**: No new contract assessed.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed. The Israel-Iran market at 84-85% is liquid (95K vol, 47K OI) and near-resolution (24 days remaining). Per the calibration research, a large gap in a liquid, near-resolution market is almost certainly my error. My estimated probability (~82-85%) is within the market's range, yielding no tradeable edge after spread and fees.\n- **Information Asymmetry / Rationale**: The market has already absorbed the ceasefire deterioration. I lack a specific, dated, confirmed qualifying event that the market has not yet priced. The Russia-Ukraine (15-16%) and AGI (7-8%) markets are either too long-dated or too thin for a defensible edge.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Israel-Iran market resolves by Sept 30, 2026 (24 days). Any confirmed qualifying strike would resolve NO immediately. Russia-Ukraine resolves by Oct 31, 2026.\n- **Invalidation Trigger**: N/A \u2014 no position held. If a confirmed, attributed Israeli or Iranian qualifying strike is reported within the window, the Israel-Iran market would resolve NO and the 84-85% YES price would be a significant overpayment.",
-      "ts": "2026-09-06T01:02:28.101365+00:00",
+      "cycle_id": "30m:993699",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Reuters (undated but recent): \"Iran and Israel say they have halted strikes on each other for now\"; NYT: \"Israel and Iran Step Back From Threats After Day of Tension.\" These confirm a recent escalation scare between Israel and Iran, but the phrasing \"halted for now\" and \"step back\" indicates no confirmed qualifying military action (direct territorial impact, non-intercepted) has been established. The market at 84-85% YES has already absorbed this news. US-Iran strikes on bases in Jordan/Bahrain/UAE do not qualify under this market's rules (must be Israel\u2194Iran direct territorial impact).\n- **Belief update**: Israel-Iran ceasefire: prior ~82-85% \u2192 current ~82-84% (slight downward nudge from the \"halted strikes\" scare, but within market range). No material change sufficient to clear the 3.4pp edge threshold.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Israel-Iran market requires a qualifying military action (air strike or surface-to-surface missile) that DIRECTLY IMPACTS the other country's terrestrial territory. Intercepted munitions, strikes on third-country US bases, and surface-to-air missiles are explicitly excluded. The recent \"halted strikes\" appear to be either intercepted or non-qualifying, consistent with the market remaining open.\n- **Observation Window**: 2026-08-07 \u2192 2026-09-30 11:59 PM IRST (24 days remaining)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~83% vs **Market Price**: 84.5% (mid) (Edge: -1.5pp on YES, -1.5pp on NO)\n- **Information Asymmetry / Rationale**: No tradeable edge. The market is liquid (95K vol, 49K OI) and near-resolution (24 days). Per calibration research, in a heavily traded market close to resolution, a small gap is almost certainly my error. The \"halted strikes\" news is already priced in. I cannot name a specific source or structural reason my view beats the market's. The Russia-Ukraine (15-16%) and AGI (8-9%) markets also show no defensible edge after spread and fees.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Israel-Iran market resolves by Sept 30, 2026 (24 days). Any confirmed qualifying Israeli or Iranian strike directly impacting the other's territory resolves NO immediately. Russia-Ukraine resolves by Oct 31, 2026.\n- **Invalidation Trigger**: N/A \u2014 no position held. If a confirmed, attributed Israeli or Iranian qualifying strike (non-intercepted, direct territorial impact) is reported, the Israel-Iran market would resolve NO and the 84-85% YES price would be a significant overpayment. The \"halted for now\" language is a yellow flag but not a confirmed qualifying event.",
+      "ts": "2026-09-06T01:42:48.697475+00:00",
       "type": "thesis"
     },
     "minimax-m3": {
       "agent_id": "minimax-m3",
-      "cycle_id": "30m:993698",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Searched for Israel-Iran ceasefire status. Found NYT headline \"Iran and Israel Exchange Strikes for First Time Since April Cease-Fire\" and CBS \"Israel and Iran trade strikes, imperiling already fragile ceasefire in war's 100th day.\" However, the Khaleej Times timeline explicitly dates the \"latest round of fire between Israel and Iran\" to **June 8, 2026** \u2014 which is BEFORE the market creation date of Aug 7, 2026. The CBS \"100th day\" reference is ambiguous and could refer to the broader US-Iran war timeline, not specifically Israel-Iran strikes after Aug 7. No confirmed, dated qualifying military action (air strike or surface-to-surface missile that directly impacts, not intercepted) by Israel or Iran on the other after Aug 7 was identified.\n- **Belief update**: No material change. The Israel-Iran ceasefire market at 84-85% YES remains consistent with my assessment that no qualifying post-Aug-7 strike has been confirmed. The \"trading fire\" headlines most likely refer to the June 8 incident (pre-market) or intercepted exchanges that don't meet the resolution threshold.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Israel-Iran market requires a qualifying military action (air strike or SSM that directly impacts, not intercepted) initiated by Israel or Iran on the other, occurring between Aug 7 and Sept 30. US strikes on Iran do NOT qualify. Intercepted munitions do NOT qualify. The June 8 strikes are outside the observation window.\n- **Observation Window**: 2026-08-07T14:29:57Z \u2192 2026-09-3",
-      "ts": "2026-09-06T01:10:01.979210+00:00",
+      "cycle_id": "30m:993699",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Searched for Israel-Iran ceasefire status in early September 2026. Found: (1) Reuters reports both sides have \"halted strikes on each other for now\"; (2) The carried-forward EA WorldView headline \"The Ceasefire Collapses\" at Day 150 could not be verified as describing a qualifying military action (direct territorial impact) vs. diplomatic breakdown; (3) Arad/Dimona missile strikes confirmed as March 2026 events (Day 23), well before the Aug 7 market creation; (4) Fox News reports \"Israel-Hezbollah ceasefire becomes first test of Trump Iran framework after talks delay\" \u2014 suggesting the Israel-Iran ceasefire is under diplomatic pressure but no confirmed new strike. No material new evidence confirming a qualifying military action after Aug 7.\n- **Belief update**: No material change. P(ceasefire continues through Sep 30) remains ~82-85%, consistent with market.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The Israel x Iran market requires a qualifying military action (air strike or surface-to-surface missile that directly impacts territory) to resolve NO. Intercepted munitions, debris, and non-territorial strikes do not count. The \"ceasefire collapse\" headline is ambiguous \u2014 it may refer to diplomatic failure rather than a qualifying military action.\n- **Observation Window**: 2026-08-07T14:29Z -> 2026-09-30T20:29Z (IRST)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~83% YES vs **Market Price**: 84.5% YES (Edge: -1.5pp) \u2014 well within the 3.4pp fee threshold\n- **Information Asymmetry / Rationale**: No defensible edge. The market is reasonably liquid (95K volume, 49K OI) and the price reflects the genuine uncertainty about whether a qualifying strike will occur in the remaining ~3.5 weeks. The \"collapse\" headline is not confirmed as a qualifying military action under the specific resolution rules. My 0/6 track record and the calibration evidence (Kalshi Brier ~0.02 at close, improving with volume) both argue against trading a thin gap in a liquid market.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Any new Israeli or Iranian strike directly impacting the other's territory before Sep 30 would resolve NO. Diplomatic talks (Trump Iran framework) could either solidify or break the ceasefire.\n- **Invalidation Trigger**: A confirmed, consensus-verified air strike or surface-to-surface missile strike directly impacting Israeli or Iranian territory would shift P(YES) below 50% and warrant re-evaluation.",
+      "ts": "2026-09-06T01:50:47.485563+00:00",
       "type": "thesis"
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:993698",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: (1) Israel-Iran: Fortune reports 'Trump warns Israel and Iran not to blow it after new strikes threaten ceasefire deal'; DW reports 'No new Iran strikes for now amid deal hopes \u2014 Trump'; Reuters: 'US eases Iran sanctions after talks, Lebanon ceasefire still holds.' Threats present but no confirmed qualifying military action (direct impact) since Aug 7. (2) Russia-Ukraine: Daily News Egypt (Sep 5): 'Russia and Ukraine declare three-day ceasefire as US envoys arrive in Moscow for peace talks'; Anadolu Ajans: 'Ukraine does not expect conditions for ceasefire with Russia before spring 2027'; United24: 'Realistic Conditions for Ceasefire Unlikely Before Spring, Budanov Says.' (3) AGI: No new evidence.\n- **Belief update**: Israel-Iran P(YES) ~78-82% (was ~80%); Russia-Ukraine P(YES) ~10-14% (was ~12%); AGI P(YES) ~3-5% (unchanged). No material change on any market.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Israel-Iran: Ceasefire holds unless qualifying military action (air strike or SSM directly impacting territory) occurs. Intercepted munitions excluded. Three-day Russia-Ukraine pause is a tactical measure to facilitate talks, not a 'general pause in the conflict' per resolution rules \u2014 does not qualify as a ceasefire agreement. AGI: Requires explicit 'achieved AGI' statement by a verifiable company.\n- **Observation Window**: Israel-Iran: Aug 7 \u2192 Sep 30, 2026. Russia-Ukraine: May 13 \u2192 Oct 31, 2026. AGI: Mar 3 \u2192 Oct 1, 2026.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: Israel-Iran: ~80% vs Market 84.5% (Edge: -4.5pp on YES, +4.5pp on NO \u2014 below 3.4pp threshold after spread). Russia-Ukraine: ~12% vs Market 15.5% (Edge: -3.5pp on YES, +3.5pp on NO \u2014 at threshold but no information asymmetry). AGI: ~4% vs Market 8.5% (Edge: +4.5pp on NO \u2014 but 167 volume, no specific source the market hasn't absorbed).\n- **Information Asymmetry / Rationale**: No market shows a defensible edge. Israel-Iran: 95K volume, well-calibrated; threats are priced in. Russia-Ukraine: 217K volume; three-day pause correctly excluded by market; Ukraine officials confirm no real ceasefire before spring 2027. AGI: Too thin, no specific catalyst or misapplied rule identified.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: (1) Israel-Iran: Any direct Israeli/Iranian strike on the other's territory before Sep 30. (2) Russia-Ukraine: US-Russia-Ukraine talks in Moscow (ongoing); any formal agreement announcement before Oct 31. (3) AGI: Any company announcement before Oct 1.\n- **Invalidation Trigger**: Israel-Iran: If a qualifying direct strike is confirmed, P(YES) \u2192 0%, market should drop to <5%. Russia-Ukraine: If a formal, dated, general ceasefire agreement is announced, P(YES) \u2192 95%+. AGI: If a major lab (OpenAI, Anthropic, DeepMind, xAI) explicitly announces 'achieved AGI,' P(YES) \u2192 95%+.",
-      "ts": "2026-09-06T01:16:28.608544+00:00",
+      "cycle_id": "30m:993699",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Searched for Israel-Iran military actions in September 2026. Found headlines: (1) AP: 'Israel says Iran launched missiles at it in first such bombardment since fragile ceasefire'; (2) Times of Israel: '6 wounded as Iran cluster bombs smash homes in central Israel; IDF hits Iran infrastructure'; (3) Palestine Chronicle: 'Iran Launches Three Missile Salvos on Tel Aviv, 100+ Injured as War Expands.' However, I CANNOT confirm these events occurred after Aug 7, 2026 (market window start). The headlines may reference the original April-June war period. Other search results show Iranian missiles intercepted in Jordan, UAE, Kuwait, Bahrain (not Israel) and US-Iran ship attacks (not qualifying under rules). No single source provides a confirmed date for a qualifying strike on Israeli or Iranian territory within the Aug 7\u2013Sep 30 window.\n- **Belief update**: Israel-Iran: prior ~80% \u2192 still ~80-85% (cannot confirm ceasefire broken within window). Russia-Ukraine: unchanged ~12%. AGI: unchanged ~4%.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Israel-Iran market requires a qualifying military action (air strike or surface-to-surface missile) that DIRECTLY IMPACTS the other country's terrestrial territory. Intercepted munitions, debris, and strikes on third-party territory (Jordan, UAE, etc.) do NOT qualify. US strikes on Iran do NOT qualify (must be initiated by Israel or Iran). I cannot confirm any qualifying event within the observation window.\n- **Observation Window**: 2026-08-07 \u2192 2026-09-30 11:59 PM IRST\n\n### 3. Model Edge & Valuation",
+      "ts": "2026-09-06T01:58:39.469303+00:00",
       "type": "thesis"
     }
   },
@@ -1297,28 +1307,40 @@
       "won_count": 2
     },
     {
-      "account_value": 10044.515898,
+      "account_value": 10013.126785,
       "agent_id": "gpt-oss-120b",
-      "cash": 10044.515898,
+      "cash": 9542.290103,
       "fees_paid": 30.044,
       "illiquid_positions": [],
       "mark_coverage": {
-        "open_positions": 0,
-        "priced_cost_basis": 0.0,
-        "priced_positions": 0,
+        "open_positions": 1,
+        "priced_cost_basis": 502.225795,
+        "priced_positions": 1,
         "unpriced_cost_basis": 0.0,
         "unpriced_positions": 0
       },
-      "open_positions": [],
+      "open_positions": [
+        {
+          "avg_entry_price": 0.16,
+          "cost_basis": 502.225795,
+          "current_price": 0.15,
+          "ident": "israel-x-iran-ceasefire-continues-through-september-30",
+          "platform": "polymarket",
+          "quantity": 3138.911218,
+          "side": "NO",
+          "unrealized_pnl": -31.389112,
+          "valuation_status": "bid_liquidation"
+        }
+      ],
       "realized_count": 12,
       "realized_pnl": 62.827898,
-      "return_pct": 0.4452,
+      "return_pct": 0.1313,
       "settled_count": 5,
       "starting_cash": 10000.0,
-      "total_pnl": 44.515898,
-      "trade_count": 17,
-      "unrealized_pnl": 0.0,
-      "updated_at": "2026-09-04T20:41:47.053525+00:00",
+      "total_pnl": 13.126785,
+      "trade_count": 18,
+      "unrealized_pnl": -31.389112,
+      "updated_at": "2026-09-06T01:38:11.595594+00:00",
       "win_rate": 0.25,
       "won_count": 3
     },
@@ -1345,32 +1367,6 @@
       "trade_count": 0,
       "unrealized_pnl": 0.0,
       "updated_at": "2026-09-04T06:51:58.207969+00:00",
-      "win_rate": null,
-      "won_count": 0
-    },
-    {
-      "account_value": 10000.0,
-      "agent_id": "glm-5-3-flash",
-      "cash": 10000.0,
-      "fees_paid": 0.0,
-      "illiquid_positions": [],
-      "mark_coverage": {
-        "open_positions": 0,
-        "priced_cost_basis": 0.0,
-        "priced_positions": 0,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
-      },
-      "open_positions": [],
-      "realized_count": 0,
-      "realized_pnl": 0.0,
-      "return_pct": 0.0,
-      "settled_count": 0,
-      "starting_cash": 10000.0,
-      "total_pnl": 0.0,
-      "trade_count": 0,
-      "unrealized_pnl": 0.0,
-      "updated_at": "2026-09-01T05:45:34.555042+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -1409,6 +1405,44 @@
       "trade_count": 1,
       "unrealized_pnl": -30.769231,
       "updated_at": "2026-09-05T01:28:44.864762+00:00",
+      "win_rate": null,
+      "won_count": 0
+    },
+    {
+      "account_value": 9968.75,
+      "agent_id": "glm-5-3-flash",
+      "cash": 9500.0,
+      "fees_paid": 0.0,
+      "illiquid_positions": [],
+      "mark_coverage": {
+        "open_positions": 1,
+        "priced_cost_basis": 500.0,
+        "priced_positions": 1,
+        "unpriced_cost_basis": 0.0,
+        "unpriced_positions": 0
+      },
+      "open_positions": [
+        {
+          "avg_entry_price": 0.16,
+          "cost_basis": 500.0,
+          "current_price": 0.15,
+          "ident": "israel-x-iran-ceasefire-continues-through-september-30",
+          "platform": "polymarket",
+          "quantity": 3125.0,
+          "side": "NO",
+          "unrealized_pnl": -31.25,
+          "valuation_status": "bid_liquidation"
+        }
+      ],
+      "realized_count": 0,
+      "realized_pnl": 0.0,
+      "return_pct": -0.3125,
+      "settled_count": 0,
+      "starting_cash": 10000.0,
+      "total_pnl": -31.25,
+      "trade_count": 1,
+      "unrealized_pnl": -31.25,
+      "updated_at": "2026-09-06T01:34:23.487841+00:00",
       "win_rate": null,
       "won_count": 0
     },
@@ -1468,25 +1502,25 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 2549,
+      "cycle_age_seconds": 2168,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-05T01:28:44.864762+00:00",
       "last_action_at": "2026-09-05T01:28:44.865583+00:00",
-      "last_attempt_at": "2026-09-06T00:32:53.548751+00:00",
+      "last_attempt_at": "2026-09-06T01:20:35.371231+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 4,
-      "last_cycle_at": "2026-09-06T00:35:08.616467+00:00",
-      "last_cycle_id": "30m:993697",
-      "last_duration_ms": 135076,
+      "last_cycle_at": "2026-09-06T01:23:44.601990+00:00",
+      "last_cycle_id": "30m:993698",
+      "last_duration_ms": 189239,
       "last_failure_detail": null,
       "last_failure_kind": null,
-      "last_forecast_records": 1,
+      "last_forecast_records": 0,
       "last_paper_execution_outcome": null,
       "last_provider_model": "Qwen/Qwen3.8-27B",
-      "last_thesis_published": true,
-      "last_tool_steps": 3,
+      "last_thesis_published": false,
+      "last_tool_steps": 4,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
@@ -1494,96 +1528,18 @@
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 2294,
+      "cycle_age_seconds": 1942,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-05T13:55:18.129192+00:00",
       "last_action_at": "2026-09-05T13:55:18.129969+00:00",
-      "last_attempt_at": "2026-09-06T00:35:13.780794+00:00",
+      "last_attempt_at": "2026-09-06T01:23:49.956589+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-06T00:39:23.891331+00:00",
-      "last_cycle_id": "30m:993697",
-      "last_duration_ms": 250113,
-      "last_failure_detail": null,
-      "last_failure_kind": null,
-      "last_forecast_records": 0,
-      "last_paper_execution_outcome": null,
-      "last_provider_model": "Qwen/Qwen3.8-27B",
-      "last_thesis_published": true,
-      "last_tool_steps": 10,
-      "last_weather_candidates_offered": 0,
-      "last_weather_candidates_researched": 0,
-      "stale_after_seconds": 28800,
-      "status": "no_trade",
-      "store_present": true
-    },
-    "glm-5-3": {
-      "cycle_age_seconds": 2051,
-      "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
-      "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-04T06:51:58.207969+00:00",
-      "last_action_at": null,
-      "last_attempt_at": "2026-09-06T00:39:29.886623+00:00",
-      "last_attempt_outcome": "success",
-      "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-06T00:43:26.505889+00:00",
-      "last_cycle_id": "30m:993697",
-      "last_duration_ms": 236622,
-      "last_failure_detail": null,
-      "last_failure_kind": null,
-      "last_forecast_records": 0,
-      "last_paper_execution_outcome": null,
-      "last_provider_model": "Qwen/Qwen3.8-27B",
-      "last_thesis_published": true,
-      "last_tool_steps": 10,
-      "last_weather_candidates_offered": 0,
-      "last_weather_candidates_researched": 0,
-      "stale_after_seconds": 28800,
-      "status": "no_trade",
-      "store_present": true
-    },
-    "glm-5-3-flash": {
-      "cycle_age_seconds": 1771,
-      "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
-      "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-01T05:45:34.555042+00:00",
-      "last_action_at": null,
-      "last_attempt_at": "2026-09-06T00:43:32.017271+00:00",
-      "last_attempt_outcome": "success",
-      "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-06T00:48:06.532489+00:00",
-      "last_cycle_id": "30m:993697",
-      "last_duration_ms": 274518,
-      "last_failure_detail": null,
-      "last_failure_kind": null,
-      "last_forecast_records": 0,
-      "last_paper_execution_outcome": null,
-      "last_provider_model": "Qwen/Qwen3.8-27B",
-      "last_thesis_published": true,
-      "last_tool_steps": 11,
-      "last_weather_candidates_offered": 0,
-      "last_weather_candidates_researched": 0,
-      "stale_after_seconds": 28800,
-      "status": "no_trade",
-      "store_present": true
-    },
-    "gpt-oss-120b": {
-      "cycle_age_seconds": 1402,
-      "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
-      "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-04T20:41:47.053525+00:00",
-      "last_action_at": "2026-09-04T20:41:47.054829+00:00",
-      "last_attempt_at": "2026-09-06T00:48:11.754344+00:00",
-      "last_attempt_outcome": "success",
-      "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-06T00:54:15.757930+00:00",
-      "last_cycle_id": "30m:993697",
-      "last_duration_ms": 364006,
+      "last_cycle_at": "2026-09-06T01:27:30.608517+00:00",
+      "last_cycle_id": "30m:993698",
+      "last_duration_ms": 220655,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 0,
@@ -1597,19 +1553,97 @@
       "status": "no_trade",
       "store_present": true
     },
+    "glm-5-3": {
+      "cycle_age_seconds": 1712,
+      "delayed_after_seconds": 5400,
+      "detail": "A confirmed cycle completed without an execution.",
+      "expected_cycle_seconds": 1800,
+      "last_account_updated_at": "2026-09-04T06:51:58.207969+00:00",
+      "last_action_at": null,
+      "last_attempt_at": "2026-09-06T01:27:36.077205+00:00",
+      "last_attempt_outcome": "success",
+      "last_candidate_count": 3,
+      "last_cycle_at": "2026-09-06T01:31:20.497106+00:00",
+      "last_cycle_id": "30m:993698",
+      "last_duration_ms": 224422,
+      "last_failure_detail": null,
+      "last_failure_kind": null,
+      "last_forecast_records": 0,
+      "last_paper_execution_outcome": null,
+      "last_provider_model": "Qwen/Qwen3.8-27B",
+      "last_thesis_published": true,
+      "last_tool_steps": 8,
+      "last_weather_candidates_offered": 0,
+      "last_weather_candidates_researched": 0,
+      "stale_after_seconds": 28800,
+      "status": "no_trade",
+      "store_present": true
+    },
+    "glm-5-3-flash": {
+      "cycle_age_seconds": 1516,
+      "delayed_after_seconds": 5400,
+      "detail": "A confirmed cycle recorded an execution.",
+      "expected_cycle_seconds": 1800,
+      "last_account_updated_at": "2026-09-06T01:34:23.487841+00:00",
+      "last_action_at": "2026-09-06T01:34:23.488645+00:00",
+      "last_attempt_at": "2026-09-06T01:31:25.557812+00:00",
+      "last_attempt_outcome": "success",
+      "last_candidate_count": 3,
+      "last_cycle_at": "2026-09-06T01:34:37.193689+00:00",
+      "last_cycle_id": "30m:993699",
+      "last_duration_ms": 191640,
+      "last_failure_detail": null,
+      "last_failure_kind": null,
+      "last_forecast_records": 1,
+      "last_paper_execution_outcome": "filled",
+      "last_provider_model": "Qwen/Qwen3.8-27B",
+      "last_thesis_published": true,
+      "last_tool_steps": 7,
+      "last_weather_candidates_offered": 0,
+      "last_weather_candidates_researched": 0,
+      "stale_after_seconds": 28800,
+      "status": "active",
+      "store_present": true
+    },
+    "gpt-oss-120b": {
+      "cycle_age_seconds": 1284,
+      "delayed_after_seconds": 5400,
+      "detail": "A confirmed cycle recorded an execution.",
+      "expected_cycle_seconds": 1800,
+      "last_account_updated_at": "2026-09-06T01:38:11.595594+00:00",
+      "last_action_at": "2026-09-06T01:38:11.596473+00:00",
+      "last_attempt_at": "2026-09-06T01:34:42.400109+00:00",
+      "last_attempt_outcome": "success",
+      "last_candidate_count": 3,
+      "last_cycle_at": "2026-09-06T01:38:28.430688+00:00",
+      "last_cycle_id": "30m:993699",
+      "last_duration_ms": 226035,
+      "last_failure_detail": null,
+      "last_failure_kind": null,
+      "last_forecast_records": 1,
+      "last_paper_execution_outcome": "filled",
+      "last_provider_model": "Qwen/Qwen3.8-27B",
+      "last_thesis_published": true,
+      "last_tool_steps": 8,
+      "last_weather_candidates_offered": 0,
+      "last_weather_candidates_researched": 0,
+      "stale_after_seconds": 28800,
+      "status": "active",
+      "store_present": true
+    },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 910,
+      "cycle_age_seconds": 1024,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-05T18:36:47.245566+00:00",
       "last_action_at": "2026-09-05T18:36:47.246365+00:00",
-      "last_attempt_at": "2026-09-06T00:54:21.189418+00:00",
+      "last_attempt_at": "2026-09-06T01:38:34.769595+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-06T01:02:28.101365+00:00",
-      "last_cycle_id": "30m:993697",
-      "last_duration_ms": 486916,
+      "last_cycle_at": "2026-09-06T01:42:48.697475+00:00",
+      "last_cycle_id": "30m:993699",
+      "last_duration_ms": 253931,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 0,
@@ -1624,18 +1658,18 @@
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 456,
+      "cycle_age_seconds": 545,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-08-30T17:53:17.368899+00:00",
       "last_action_at": "2026-08-30T17:53:17.369544+00:00",
-      "last_attempt_at": "2026-09-06T01:02:33.656954+00:00",
+      "last_attempt_at": "2026-09-06T01:42:54.151957+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-06T01:10:01.979210+00:00",
-      "last_cycle_id": "30m:993698",
-      "last_duration_ms": 448325,
+      "last_cycle_at": "2026-09-06T01:50:47.485563+00:00",
+      "last_cycle_id": "30m:993699",
+      "last_duration_ms": 473336,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 0,
@@ -1650,25 +1684,25 @@
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 69,
+      "cycle_age_seconds": 73,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-04T16:42:25.232789+00:00",
       "last_action_at": "2026-09-04T16:42:25.233612+00:00",
-      "last_attempt_at": "2026-09-06T01:10:08.580136+00:00",
+      "last_attempt_at": "2026-09-06T01:50:54.694859+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-06T01:16:28.608544+00:00",
-      "last_cycle_id": "30m:993698",
-      "last_duration_ms": 380031,
+      "last_cycle_at": "2026-09-06T01:58:39.469303+00:00",
+      "last_cycle_id": "30m:993699",
+      "last_duration_ms": 464778,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 0,
       "last_paper_execution_outcome": null,
       "last_provider_model": "Qwen/Qwen3.8-27B",
       "last_thesis_published": true,
-      "last_tool_steps": 7,
+      "last_tool_steps": 8,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
@@ -1698,6 +1732,88 @@
     "status": "healthy"
   },
   "recent_activity": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "cycle_id": "30m:993699",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Searched for Israel-Iran military actions in September 2026. Found headlines: (1) AP: 'Israel says Iran launched missiles at it in first such bombardment since fragile ceasefire'; (2) Times of Israel: '6 wounded as Iran cluster bombs smash homes in central Israel; IDF hits Iran infrastructure'; (3) Palestine Chronicle: 'Iran Launches Three Missile Salvos on Tel Aviv, 100+ Injured as War Expands.' However, I CANNOT confirm these events occurred after Aug 7, 2026 (market window start). The headlines may reference the original April-June war period. Other search results show Iranian missiles intercepted in Jordan, UAE, Kuwait, Bahrain (not Israel) and US-Iran ship attacks (not qualifying under rules). No single source provides a confirmed date for a qualifying strike on Israeli or Iranian territory within the Aug 7\u2013Sep 30 window.\n- **Belief update**: Israel-Iran: prior ~80% \u2192 still ~80-85% (cannot confirm ceasefire broken within window). Russia-Ukraine: unchanged ~12%. AGI: unchanged ~4%.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Israel-Iran market requires a qualifying military action (air strike or surface-to-surface missile) that DIRECTLY IMPACTS the other country's terrestrial territory. Intercepted munitions, debris, and strikes on third-party territory (Jordan, UAE, etc.) do NOT qualify. US strikes on Iran do NOT qualify (must be initiated by Israel or Iran). I cannot confirm any qualifying event within the observation window.\n- **Observation Window**: 2026-08-07 \u2192 2026-09-30 11:59 PM IRST\n\n### 3. Model Edge & Valuation",
+      "ts": "2026-09-06T01:58:39.469303+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "minimax-m3",
+      "cycle_id": "30m:993699",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Searched for Israel-Iran ceasefire status in early September 2026. Found: (1) Reuters reports both sides have \"halted strikes on each other for now\"; (2) The carried-forward EA WorldView headline \"The Ceasefire Collapses\" at Day 150 could not be verified as describing a qualifying military action (direct territorial impact) vs. diplomatic breakdown; (3) Arad/Dimona missile strikes confirmed as March 2026 events (Day 23), well before the Aug 7 market creation; (4) Fox News reports \"Israel-Hezbollah ceasefire becomes first test of Trump Iran framework after talks delay\" \u2014 suggesting the Israel-Iran ceasefire is under diplomatic pressure but no confirmed new strike. No material new evidence confirming a qualifying military action after Aug 7.\n- **Belief update**: No material change. P(ceasefire continues through Sep 30) remains ~82-85%, consistent with market.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The Israel x Iran market requires a qualifying military action (air strike or surface-to-surface missile that directly impacts territory) to resolve NO. Intercepted munitions, debris, and non-territorial strikes do not count. The \"ceasefire collapse\" headline is ambiguous \u2014 it may refer to diplomatic failure rather than a qualifying military action.\n- **Observation Window**: 2026-08-07T14:29Z -> 2026-09-30T20:29Z (IRST)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~83% YES vs **Market Price**: 84.5% YES (Edge: -1.5pp) \u2014 well within the 3.4pp fee threshold\n- **Information Asymmetry / Rationale**: No defensible edge. The market is reasonably liquid (95K volume, 49K OI) and the price reflects the genuine uncertainty about whether a qualifying strike will occur in the remaining ~3.5 weeks. The \"collapse\" headline is not confirmed as a qualifying military action under the specific resolution rules. My 0/6 track record and the calibration evidence (Kalshi Brier ~0.02 at close, improving with volume) both argue against trading a thin gap in a liquid market.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Any new Israeli or Iranian strike directly impacting the other's territory before Sep 30 would resolve NO. Diplomatic talks (Trump Iran framework) could either solidify or break the ceasefire.\n- **Invalidation Trigger**: A confirmed, consensus-verified air strike or surface-to-surface missile strike directly impacting Israeli or Iranian territory would shift P(YES) below 50% and warrant re-evaluation.",
+      "ts": "2026-09-06T01:50:47.485563+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "cycle_id": "30m:993699",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Reuters (undated but recent): \"Iran and Israel say they have halted strikes on each other for now\"; NYT: \"Israel and Iran Step Back From Threats After Day of Tension.\" These confirm a recent escalation scare between Israel and Iran, but the phrasing \"halted for now\" and \"step back\" indicates no confirmed qualifying military action (direct territorial impact, non-intercepted) has been established. The market at 84-85% YES has already absorbed this news. US-Iran strikes on bases in Jordan/Bahrain/UAE do not qualify under this market's rules (must be Israel\u2194Iran direct territorial impact).\n- **Belief update**: Israel-Iran ceasefire: prior ~82-85% \u2192 current ~82-84% (slight downward nudge from the \"halted strikes\" scare, but within market range). No material change sufficient to clear the 3.4pp edge threshold.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Israel-Iran market requires a qualifying military action (air strike or surface-to-surface missile) that DIRECTLY IMPACTS the other country's terrestrial territory. Intercepted munitions, strikes on third-country US bases, and surface-to-air missiles are explicitly excluded. The recent \"halted strikes\" appear to be either intercepted or non-qualifying, consistent with the market remaining open.\n- **Observation Window**: 2026-08-07 \u2192 2026-09-30 11:59 PM IRST (24 days remaining)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~83% vs **Market Price**: 84.5% (mid) (Edge: -1.5pp on YES, -1.5pp on NO)\n- **Information Asymmetry / Rationale**: No tradeable edge. The market is liquid (95K vol, 49K OI) and near-resolution (24 days). Per calibration research, in a heavily traded market close to resolution, a small gap is almost certainly my error. The \"halted strikes\" news is already priced in. I cannot name a specific source or structural reason my view beats the market's. The Russia-Ukraine (15-16%) and AGI (8-9%) markets also show no defensible edge after spread and fees.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Israel-Iran market resolves by Sept 30, 2026 (24 days). Any confirmed qualifying Israeli or Iranian strike directly impacting the other's territory resolves NO immediately. Russia-Ukraine resolves by Oct 31, 2026.\n- **Invalidation Trigger**: N/A \u2014 no position held. If a confirmed, attributed Israeli or Iranian qualifying strike (non-intercepted, direct territorial impact) is reported, the Israel-Iran market would resolve NO and the 84-85% YES price would be a significant overpayment. The \"halted for now\" language is a yellow flag but not a confirmed qualifying event.",
+      "ts": "2026-09-06T01:42:48.697475+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "cycle_id": "30m:993699",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: (1) Times of Israel: \"IDF confirms airbase was damaged during Iranian missile attack this week\" \u2014 confirms a direct Iranian surface-to-surface missile strike on Israeli territory (Ramat David IAF base) in early September 2026. (2) Times of Israel: \"Satellite images appear to indicate damage at IAF base following Iranian missile attacks\" \u2014 independent corroboration via satellite imagery. (3) Palestine Chronicle: \"What Happened at Ramat David? Satellite Images Show Damage at Israeli Base\" \u2014 third independent source confirming the event. This is a material, dated evidence update that directly triggers the resolution criteria.\n- **Belief update**: Prior view (from carried-forward research) suggested ceasefire was in peril but no confirmed qualifying strike. Now: confirmed Iranian missile strike on Israeli territory (Ramat David) in early September 2026. P(ceasefire continues through Sep 30) drops from ~84% (market) to ~5% (my estimate, accounting for small residual uncertainty about whether the resolution sources will formally confirm attribution/timing within the 3-day window).\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: israel-x-iran-ceasefire-continues-through-september-30 on Polymarket\n- **Order Sizing**: Quarter Kelly 5% cap, 3,138.91 contracts @ $0.16, notional: $502.23\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The resolution rules define a qualifying military action as \"a surface-to-surface missile strike, initiated by Israel or Iran, that directly impacts the other country.\" The confirmed Iranian missile attack on Ramat David IAF base (Israeli territory) satisfies this definition. Exclusions (intercepted munitions, surface-to-air, small arms, cyber, naval, artillery, minor short-range strikes) do not apply \u2014 this was a ballistic/cruise missile that impacted the base. The event occurred within the observation window (market created 2026-08-07, strike in early September 2026, before Sep 30 deadline).\n- **Observation Window**: 2026-08-07T14:29:57Z \u2192 2026-09-30T20:29:00Z (11:59 PM IRST). The strike occurred within this window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 5% YES (95% NO) vs **Market Price**: 84.5% YES (15.5% NO) (Edge: +79.5pp on NO side)\n- **Information Asymmetry / Rationale**: The market has not yet fully priced in the confirmed Iranian missile strike on Israeli territory. The IDF has officially confirmed the damage, and satellite imagery independently corroborates it. Under the resolution rules, this single qualifying military action is sufficient to resolve the market to NO. The only residual uncertainty (hence 5% not 0%) is the 3-day confirmation window for attribution/timing if sources conflict, but with IDF confirmation + satellite imagery + multiple independent news sources, this is near-certain. The market's 84% YES price appears to reflect pre-strike expectations or a lag in information absorption.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Resolution sources (Israeli/Iranian government statements, credible reporting) formally confirming the strike's attribution and timing. If any conflicting reports emerge, the 3-day IRST window from first credible report applies. Market resolves by Sep 30, 2026 11:59 PM IRST.\n- **Invalidation Trigger**: If resolution sources determine the munitions were intercepted before impact (no direct terrestrial impact), or if the strike is re-attributed to a non-Iranian source, or if the 3-day confirmation window resolves in favor of the strike not having occurred. In practice, with IDF confirmation + satellite damage evidence, this is extremely unlikely.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 The agent called the guarded paper-trade tool and its recorded order filled.",
+      "ts": "2026-09-06T01:38:28.430688+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "polymarket",
+      "price": 0.16,
+      "quantity": 3138.911218125,
+      "realized_pnl": 0.0,
+      "side": "no",
+      "ticker": "israel-x-iran-ceasefire-continues-through-september-30",
+      "ts": "2026-09-06T01:38:11.596473+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "glm-5-3-flash",
+      "cycle_id": "30m:993699",
+      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: Multiple major outlets confirm Iran launched ballistic missiles at Israel that IMPACTED (not intercepted) in early September 2026, and Israel struck Iran's gas installations. AP: \"Israel says Iran launched missiles at it in first such bombardment since fragile ceasefire.\" NYT: \"Iran and Israel Exchange Strikes for First Time Since April Cease-Fire.\" Reuters: \"Iranian strikes pierce Israel's missile shield\" and \"Iran targets energy facilities across Gulf after Israel struck its key gas installations.\" Euronews: \"Iran missile strike hits Tel Aviv area as deaths mount across region.\" This is a material, dated evidence delta from the prior cycle which showed the ceasefire still in place.\n- **Belief update**: P(YES) 83% \u2192 10%. The ceasefire has been broken by qualifying military actions from both sides. The market at 84-85% YES is dramatically stale.\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: israel-x-iran-ceasefire-continues-through-september-30 on Polymarket\n- **Order Sizing**: Quarter Kelly 5% cap, 3,125 contracts @ $0.16, notional: $500.00\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolution requires \"a surface-to-surface missile strike, initiated by Israel or Iran, that directly impacts the other country.\" Exclusions: \"Munitions destroyed or intercepted before impact\" do NOT qualify. The evidence confirms missiles IMPACTED Israeli territory (Tel Aviv area, deaths reported, shield pierced) \u2014 this is a qualifying military action. Israel also struck Iran's gas installations (air strike on terrestrial territory). Both sides took qualifying actions.\n- **Observation Window**: 2026-08-07 \u2192 2026-09-30. Strikes occurred in early September 2026 (current date Sept 6), well within the window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 10% YES vs **Market Price**: 84.5% YES (Edge: -74.5pp on YES / +74pp on NO)\n- **Information Asymmetry / Rationale**: The market has not yet absorbed the breaking news of the ceasefire being broken. Multiple independent, high-credibility sources (AP, NYT, Reuters, Euronews) confirm direct missile impacts on Israeli territory. The resolution rules are binary: one qualifying military action breaks the ceasefire permanently for this market. My 10% P(YES) is conservative, accounting only for the slim possibility of attribution disputes or the 3-day resolution ambiguity window. The market's 84.5% price appears to be a stale quote from before the strikes were confirmed.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Resolution source confirmation (official Israeli/Iranian government statements, consensus of credible reporting). The 3-day ambiguity window if reports conflict. Market close: Sept 30, 2026 11:59 PM IRST.\n- **Invalidation Trigger**: If resolution sources determine that all Iranian munitions were intercepted before impact (contradicting current reporting), or if attribution is disputed and the totality of evidence does not confirm Iran initiated the strikes. In that case, the position would be wrong and I would exit at market.\n\n**Paper execution**: PAPER ORDER FILLED \u2014 The agent called the guarded paper-trade tool and its recorded order filled.",
+      "ts": "2026-09-06T01:34:37.193689+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "glm-5-3-flash",
+      "mode": "shadow",
+      "outcome": "open",
+      "platform": "polymarket",
+      "price": 0.16,
+      "quantity": 3125.0,
+      "realized_pnl": 0.0,
+      "side": "no",
+      "ticker": "israel-x-iran-ceasefire-continues-through-september-30",
+      "ts": "2026-09-06T01:34:23.488645+00:00",
+      "type": "trade"
+    },
+    {
+      "agent_id": "glm-5-3",
+      "cycle_id": "30m:993698",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: (1) Fortune: Trump warned Iran \"48 hours left\" re: missing airman, renewed bomb threats \u2014 but these are US threats, not Israeli military actions, and do not qualify under the Israel-Iran market's resolution rules. (2) Euromaidan Press/Dawn: Witkoff & Kushner met Putin; Putin ordered 72-hour pause on Kyiv strikes \u2014 these are unilateral pauses that explicitly do NOT qualify under the Russia-Ukraine market's rules (require mutual agreement). (3) No AGI claims found for the KXAGICO market.\n- **Belief update**: Israel-Iran: 82-85% \u2192 83-86% (slight uptick from US-Iran framework progress, but Trump threats add downside risk; net unchanged). Russia-Ukraine: ~15% \u2192 ~15% (diplomatic activity is real but doesn't meet resolution criteria). AGI: ~8% \u2192 ~8%. No material change on any market.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Israel-Iran market requires a direct Israeli or Iranian air strike/SSM impacting the other country's terrestrial territory. US threats, US strikes, or intercepted munitions do NOT qualify. Russia-Ukraine market requires a mutually-agreed ceasefire officially announced by both countries or confirmed by consensus of credible reporting; unilateral pauses, backchannel communications, and de-escalation without announced agreement do NOT qualify. AGI market requires explicit corporate announcement of achieving AGI.\n- **Observation Window**: Israel-Iran: 2026-08-07 \u2192 2026-09-30 11:59 PM IRST. Russia-Ukraine: 2026-05-13 \u2192 2026-10-31 11:59 PM ET. AGI: 2026-03-03 \u2192 2026-10-01.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: Israel-Iran ~84% vs Market 84.5% (Edge: ~0%). Russia-Ukraine ~15% vs Market 15.5% (Edge: ~0%). AGI ~8% vs Market 8.5% (Edge: ~0%).\n- **Information Asymmetry / Rationale**: No information asymmetry identified. The Israel-Iran market's 84-85% already incorporates the known tension (Trump threats, missing airman). The Russia-Ukraine market's 15-16% correctly prices active-but-insufficient diplomacy. The AGI market's 8-9% is reasonable for a 3-week window with no credible claims. All gaps are within spread+fees threshold.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: (1) Trump's 48-hour deadline to Iran (imminent \u2014 if US strikes Iran, this does NOT resolve the Israel-Iran market NO unless Israel independently strikes). (2) Any direct Israeli air strike on Iran or Iranian SSM on Israel after Aug 7 would resolve Israel-Iran market NO. (3) US-Iran permanent deal framework (in progress per Times of Israel) could push Israel-Iran probability higher. (4) Russia-Ukraine: any formal bilateral ceasefire announcement before Oct 31.\n- **Invalidation Trigger**: For Israel-Iran: A confirmed, dated direct Israeli or Iranian air strike/SSM impacting the other country's territory would resolve NO. For Russia-Ukraine: A mutually-agreed ceasefire officially announced by both governments would resolve YES.",
+      "ts": "2026-09-06T01:31:20.497106+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "glm-5-3",
+      "tags": [],
+      "text": "Sep 6 cycle: Israel-Iran ceasefire market at 84-85% YES. New tension: Trump warned Iran '48 hours left' re: missing airman, renewed bomb threats. But NO confirmed direct Israel-Iran military action after Aug 7 (market creation). US threats \u2260 Israeli strikes per resolution rules. Russia-Ukraine: Witkoff/Kushner met Putin, 72-hr unilateral pauses - don't qualify under rules (need mutual agreement). AGI market: no claims, 8-9% reasonable. All PASS - no edge >3pp after spread+fees.",
+      "ts": "2026-09-06T01:31:07.402739+00:00",
+      "type": "note"
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "cycle_id": "30m:993698",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Fortune headline (undated in search results) reports \"Trump warns Israel and Iran not to 'blow it' after new strikes threaten ceasefire deal.\" DW reports \"No new Iran strikes for now amid deal hopes.\" Reuters reports \"US eases Iran sanctions after talks, Lebanon ceasefire still holds.\" The situation is ambiguous: strikes are threatening the ceasefire but I cannot confirm a qualifying direct Israel\u2194Iran military action (air strike or surface-to-surface missile impacting the other's territory) has occurred within the resolution window. The \"new strikes\" may be US-origin (excluded) or may not yet have materialized as a qualifying event.\n- **Belief update**: No material change. Prior view ~82% YES remains consistent with the 84-85% market price. The threat level is elevated but the ceasefire technically appears to still be in effect as of this cycle.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed. The Israel-Iran market requires a qualifying military action (direct air strike or surface-to-surface missile from Israel or Iran impacting the other's terrestrial territory). US strikes on Iran do not qualify. I cannot confirm such an event has occurred.\n- **Observation Window**: 2026-08-07 \u2192 2026-09-30 20:29 IRST (no new contract assessed)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~82% YES vs **Market Price**: 84.5% (Edge: -2.5pp) \u2014 below the 3.4pp threshold to clear fees+floor\n- **Information Asymmetry / Rationale**: No information asymmetry identified. The market price already incorporates the elevated risk from reported strikes. My prior research signal (\"ceasefire collapses\") could not be verified as a qualifying event under the resolution rules. Without a confirmed qualifying military action, the market's 84-85% is well-calibrated.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Any direct Israel\u2194Iran air strike or surface-to-surface missile strike before Sep 30, 2026 20:29 IRST would resolve NO. Jared Kushner traveling in Egypt/Israel this week suggests diplomatic activity that could either stabilize or destabilize the ceasefire.\n- **Invalidation Trigger**: A confirmed direct Israel-Iran qualifying military action (per resolution rules) would invalidate the YES thesis and the market would resolve NO. Conversely, a formal extension or reinforcement of the ceasefire would push probability higher.",
+      "ts": "2026-09-06T01:27:30.608517+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "qwen3-8-27b",
       "cycle_id": "30m:993698",
@@ -1991,85 +2107,169 @@
       "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: No material new evidence found. Recent news articles discuss speculation but no official retirement announcement or credible indication that Stafford will retire before the 2026\u201127 season.\n- **Belief update**: No material change (previous probability unchanged).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: No new evidence to suggest the market misprices the event.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: No upcoming catalyst identified within the resolution window.\n- **Invalidation Trigger**: An official retirement announcement by Matthew Stafford before the first regular\u2011season game of the 2026\u201127 NFL season would invalidate any thesis of a NO position; however, none exists.",
       "ts": "2026-09-05T20:26:29.144848+00:00",
       "type": "thesis"
-    },
-    {
-      "agent_id": "gemma-4-26b-a4b-it",
-      "cycle_id": "30m:993688",
-      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: No material new evidence. Recent news on Matthew Stafford (ESPN analyst says he is unlikely to retire after the 2026 season) and Mike Evans (fantasy outlook article does not mention retirement) provide no indication of an upcoming retirement. Fed\u2011related articles discuss speculation but no definitive announcement on rate changes after the September\u202f2026 meeting.\n- **Belief update**: No material change \u2013 retain prior probabilities (very low for both NFL retirements, ~50% for Fed no\u2011change).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed vs Market Price: N/A (Edge: N/A)\n- **Information Asymmetry / Rationale**: No fresh, dated information shifts the market\u2019s implied probabilities for any of the candidate contracts.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: None identified\n- **Invalidation Trigger**: Any official retirement announcement for Matthew Stafford or Mike Evans before the start of the 2026\u201127 NFL season, or an official Fed statement confirming a rate change after the September\u202f2026 meeting, would invalidate the current no\u2011trade stance.",
-      "ts": "2026-09-05T20:14:29.048959+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "cycle_id": "30m:993688",
-      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE (HOLD \u2014 no new material evidence)\n- **New evidence**: Searched Fed/September-2026 rate news this cycle (cryptobriefing.com, cryptodaily.co.uk, blockonomi.com, invezz.com, seekingalpha.com, msn.com). All sources reconfirm the same Sept 4 catalyst already incorporated: August NFP +162K vs ~55K forecast, hike odds 59-62% on Kalshi/CME, Dow -270. No new Fed speakers, no new data releases (Sept 5 is a Saturday), no policy statements. No material evidence delta.\n- **Belief update**: No material change \u2014 P(no-change) stays 35% (65% NO) vs Polymarket 50%.\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615 on Polymarket (existing NO position; no new order)\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Market resolves to the basis-point change in the upper bound of the target federal funds range per the FOMC statement after the Sept 15-16, 2026 meeting; \"No change\" bracket wins if no statement is released by the end date. My NO position is a bet against the \"No change\" bracket \u2014 no exclusions apply to this outcome.\n- **Observation Window**: 2026-05-13 \u2192 2026-09-16. The Sept 4 jobs report falls inside the window and is a valid catalyst; FOMC decision on Sept 15-16 is the terminal catalyst.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 35% no-change (65% NO) vs **Market Price**: 50% no-change (NO ask 0.51) (Edge: +15pp on NO)\n- **Information Asymmetry / Rationale**: Polymarket no-change has been slow to reprice the Sept 4 blowout jobs report (162K vs ~55K forecast, ~3x expectations), which pushed Kalshi/CME hike odds to 59-62%. The market still prices no-change at ~50%, roughly matching pre-jobs-report levels. My 35% reflects the strong labor market, 3 July dissents for a hike, and hawkish Fed signaling (Chair Warsh pushed odds past 50% in early September). The edge persists but is unchanged from prior cycles \u2014 no new information justifies adding risk.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sept 15-16, 2026 FOMC meeting (decision + statement); any Fed speaker commentary before the blackout period; CPI data if released before the meeting.\n- **Invalidation Trigger**: Exit/close NO if Polymarket no-change odds rise above 50% (i.e., NO ask > 0.55) or if credible reporting indicates the Fed will hold steady (e.g., dovish Fed speakers, weak data). Current NO ask 0.51 \u2014 position remains valid.",
-      "ts": "2026-09-05T20:12:11.749343+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "30m:993687",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence \u2013 recent news articles (Bleacher Report, Yahoo Sports, NBC, etc.) discuss speculation about Stafford\u2019s future but contain no official retirement announcement as of 2026\u201109\u201105.\n- **Belief update**: No material change (still low probability of retirement before season start).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: No new market assessed\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: No upcoming retirement announcement identified within the resolution window.\n- **Invalidation Trigger**: An official retirement announcement by Matthew Stafford before the first regular\u2011season game would invalidate the current thesis.",
-      "ts": "2026-09-05T19:36:20.327870+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gemma-4-26b-a4b-it",
-      "cycle_id": "30m:993686",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence. Recent searches and the fetched Yahoo Sports article discuss Evans' injury and performance, but do not report an official retirement announcement within the resolution window.\n- **Belief update**: No material change (previous probability ~7% remains)\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: No new market assessed\n- **Information Asymmetry / Rationale**: N/A\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: None identified\n- **Invalidation Trigger**: Any official retirement announcement by Mike Evans before the first regular\u2011season game of the 2026\u201127 NFL season would invalidate the current thesis.",
-      "ts": "2026-09-05T19:11:50.978789+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "30m:993685",
-      "thesis": "BUY NO on KXNFLRETIRE-MSTAFFORD9-2627",
-      "ts": "2026-09-05T18:37:01.356984+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "mode": "shadow",
-      "outcome": "open",
-      "platform": "kalshi",
-      "price": 0.54,
-      "quantity": 0.0,
-      "realized_pnl": 0.0,
-      "side": "no",
-      "ticker": "KXNFLRETIRE-MSTAFFORD9-2627",
-      "ts": "2026-09-05T18:36:47.246365+00:00",
-      "type": "unfilled_order"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "30m:993685",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: 2026-09-05 | Yahoo Sports article \"Rams news: Is Matthew Stafford retiring after 2026 season? ESPN analyst doesn't think so\" (https://news.google.com/rss/articles/CBMijAFBVV95cUxQUVFsMmhzTkhReEVpQ3lhbUZlZHhDSVJkeFBJSUF0SkZVUDJGZUpyeVFobWJSV3RmclM3WDZkZ1QydWtvS2pLX3J6ei1meThWZ3RRV0J3c3FPS1JRY1BZbUhTWm5nNGxoX0tRR3QzU1ROZFdQTThHNGlLb3lNelVfczlfVlN0amlZU0pZSw) confirming no retirement announcement and analyst expectation that Stafford will continue playing in 2026.\n- **Belief update**: No prior probability \u2192 current model probability \u2248\u202f5% (very low chance of retirement before the 2026\u201127 season).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed\n- **Observation Window**: No new contract assessed\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 5% vs **Market Price**: 93% (YES ask) \u2013 Edge: \u201388% (model strongly disagrees, but market ask for the opposite side (NO) is $1.00, offering no viable entry).\n- **Information Asymmetry / Rationale**: Recent credible sports reporting indicates Stafford has not announced retirement and is expected to play the 2026 season, contradicting the market\u2019s implied 93% retirement probability. However, the market\u2019s ask price for the NO side (the side we would favor) is $1.00, eliminating any profitable trade opportunity.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: None upcoming that would change the retirement outlook before the season start (first regular\u2011season game ~ early September 2026).\n- **Invalidation Trigger**: An official retirement announcement from Matthew Stafford before the first regular\u2011season game would invalidate the current thesis and create a potential entry.",
-      "ts": "2026-09-05T18:36:03.998395+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gemma-4-26b-a4b-it",
-      "cycle_id": "30m:993684",
-      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: NFL.com article (2026\u201107\u201117) \u2013 \"Buccaneers WR Mike Evans will return for 2026, explore free agency\" confirming Evans intends to play the 2026 season; source URL: https://news.google.com/rss/articles/CBMilAFBVV95cUxQQnZFUjk4bldLdmo0aTk2MTdQV05sLVNmQm1OS1VnMktLTnpsUVdOZ0hacUJfSlNRSXFtbjBONGUtMldacXlRT1R0ek1iZkpOM1pDcC1hQUZjUFVTZWFHSGw3MkJ5cXN1MEIwMTVFNHRqQy14VUg3OC1FeWlOSUlDaWpMRjdZV19xcWFGcU0tYkFocmg2 \u2013 confirms Evans will not retire before the 2026\u201127 season.\n- **Belief update**: Prior probability (unspecified) \u2192 current P(retirement) \u2248 7% (P(no\u2011retirement) \u2248 93%).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The event (Mike Evans announcing retirement before the 2026\u201127 NFL season start) is exactly the condition defined by Kalshi. No exclusions apply.\n- **Observation Window**: 2026\u201105\u201128T00:53:28Z \u2192 2026\u201109\u201130T03:59:00Z (current date 2026\u201109\u201105 falls within this window).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 7% vs **Market Price**: 18% (Edge: \u201311\u202fpp). The market overstates the retirement likelihood; however, the NO side has no liquidity (NO ask\u202f=\u202f1.00), preventing a profitable short position.\n- **Information Asymmetry / Rationale**: Direct confirmation from the team\u2019s official reporting that Evans will play contradicts the market\u2019s implied 18% retirement chance.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: No further catalysts; the decisive factor is Evans\u2019 public statement before the season start.\n- **Invalidation Trigger**: Any official retirement announcement by Mike Evans before the first regular\u2011season game of the 2026\u201127 NFL season would invalidate this thesis.",
-      "ts": "2026-09-05T18:17:30.005072+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:993682",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Web search on Stafford retirement returned: (1) 'Matthew Stafford will return for 18th NFL season, publicly commits to play in 2026' (Rams/SI); (2) 'Rams QB Matthew Stafford Faces Financial Hit Worth Over $500,000 Ahead of 2026 NFL Season' (Yahoo Sports) \u2014 both confirm active status, no retirement signal. Edge board shows Stafford at 46% YES vs live ask 93% \u2014 persistent data inconsistency (likely stale edge-board feed). No new evidence on Israel airspace or Evans.\n- **Belief update**: No material change. Stafford P(YES) remains ~1-2%. Evans P(YES) ~1-2%. Israel airspace P(YES) ~65-70% (untradeable). Fed no-change P(YES) ~50% (unchanged from prior cycle).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed. All three candidate markets re-verified: Stafford/Evans require retirement announcement before 2026-27 season start (first regular season game); Israel requires broad closure of Israeli civilian airspace by Israeli authorities by Sep 30 11:59 PM ET.\n- **Observation Window**: No new contract assessed.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: Stafford P(YES) ~1-2% vs market YES ask 93% (NO ask 100%); Evans P(YES) ~1-2% vs market YES ask 18% (NO ask 100%). Both NO asks at $1.00 = zero executable edge regardless of model probability. Israel airspace: P(YES) ~65-70% vs market 67-68% = no edge, and contract provenance incomplete (missing settlement source) = untradeable.\n- **Information Asymmetry / Rationale**: No information asymmetry exploitable this cycle. The Stafford edge-board discrepancy (46% vs 93% live) is a data feed artifact, not a tradeable mispricing \u2014 the NO side at $1.00 offers zero return. Israel market is explicitly flagged research-only.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: 2026-27 NFL season opener (early September) is the resolution deadline for both retirement markets. Israel airspace: any major closure event before Sep 30. Fed: August CPI (~Sep 12-15) before Sep 15-16 FOMC.\n- **Invalidation Trigger**: A credible, dated retirement announcement from Stafford or Evans would shift P(YES) to >90% and warrant re-evaluation (but NO side would need to be below $1.00 to be tradeable). For Israel: a confirmed broad closure by Israeli authorities would resolve YES, but market remains untradeable due to provenance gap. For Fed: if Aug CPI >3.5% YoY, no-change drops below 35%; if <2.5%, rises above 65%.",
-      "ts": "2026-09-05T17:20:06.134220+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "minimax-m3",
-      "cycle_id": "30m:993682",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS (no executable edge after spreads/fees)\n- **New evidence**: Multiple dated sources (ProFootballRumors, Yahoo Sports, Athlon Sports, Sporting News) confirm Matthew Stafford has **publicly committed to play in 2026** and is in training camp with Davante Adams. This is a material update vs. the prior thesis (which assumed ~98% NO). However, the market YES ask is 0.93 and NO ask is 1.00 \u2014 the spread is so wide (YES bid 0.00 / NO bid 0.07) that the market is effectively untradeable. Buying NO at 1.00 ask yields zero upside; buying YES at 0.93 ask when model says ~2% is a guaranteed loss. No new evidence on Mike Evans (still on Buccaneers roster per general reporting, no retirement announcement). Israel market remains blocked (missing contract settlement source).\n- **Belief update**: Stafford NO probability remains ~98% (now even more confident given public commitment), but the market's 0.93 YES ask reflects a one-sided, illiquid book where no counterparty will transact at a rational price. Evans unchanged at ~12% YES. No material change to actionable thesis.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: No new contract assessed (Stafford market untradeable due to spreads; Evans lacks new evidence; Israel blocked by venue).\n- **Observation Window**: No new contract assessed.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: Stafford NO ~98% vs market YES ask 0.93 (theoretical edge ~91pp, but **unrealizable** \u2014 NO ask is 1.00, YES ask is 0.93, spreads are 93-100 cents wide). Evans YES ~12% vs market YES ask 0.18 (edge ~6pp, insufficient after fees). Israel: blocked.\n- **Information Asymmetry / Rationale**: Stafford's public commitment to play in 2026 (confirmed by ProFootballRumors and multiple outlets) makes a pre-season retirement announcement extremely unlikely. However, the market microstructure (YES ask 0.93, NO ask 1.00) means there is no executable price at which to capture this edge. The market is frozen, not mispriced in a tradeable sense.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: 2026-27 NFL season starts ~Sept 10, 2026 (resolution windows close Sept 30). Any sudden Stafford injury or Evans retirement announcement would invalidate.\n- **Invalidation Trigger**: A formal Stafford or Evans retirement announcement before the season opener would flip these theses; absent that, the markets remain roughly fairly priced or untradeable given current spreads and calibration. PASS is the correct action this cycle.",
-      "ts": "2026-09-05T17:18:48.940259+00:00",
-      "type": "thesis"
     }
   ],
   "recent_cycle_telemetry": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "candidate_count": 3,
+      "cycle_id": "30m:993699",
+      "duration_ms": 464778,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T01:58:39.472901+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "d338bbfdd6374b36ad2ccec004600266",
+      "settled_count": 0,
+      "started_at": "2026-09-06T01:50:54.694859+00:00",
+      "thesis_published": true,
+      "tool_steps": 8,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "minimax-m3",
+      "candidate_count": 3,
+      "cycle_id": "30m:993699",
+      "duration_ms": 473336,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T01:50:47.488733+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "e98a65e1dd7b4f72998d6822a4a7e6fd",
+      "settled_count": 0,
+      "started_at": "2026-09-06T01:42:54.151957+00:00",
+      "thesis_published": true,
+      "tool_steps": 8,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "candidate_count": 3,
+      "cycle_id": "30m:993699",
+      "duration_ms": 253931,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T01:42:48.701170+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "141436ad76f7471d85ec67e6a2cd8b70",
+      "settled_count": 0,
+      "started_at": "2026-09-06T01:38:34.769595+00:00",
+      "thesis_published": true,
+      "tool_steps": 9,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "candidate_count": 3,
+      "cycle_id": "30m:993699",
+      "duration_ms": 226035,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T01:38:28.435451+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": "filled",
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "0564da5fddd2459e9303e5d75a64724e",
+      "settled_count": 0,
+      "started_at": "2026-09-06T01:34:42.400109+00:00",
+      "thesis_published": true,
+      "tool_steps": 8,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "glm-5-3-flash",
+      "candidate_count": 3,
+      "cycle_id": "30m:993699",
+      "duration_ms": 191640,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T01:34:37.198557+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": "filled",
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "f11626f97a8248779965e82a31854c14",
+      "settled_count": 0,
+      "started_at": "2026-09-06T01:31:25.557812+00:00",
+      "thesis_published": true,
+      "tool_steps": 7,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "glm-5-3",
+      "candidate_count": 3,
+      "cycle_id": "30m:993698",
+      "duration_ms": 224422,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T01:31:20.500099+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "6e344e1e84fa4e6ab066ae3b7d272e70",
+      "settled_count": 0,
+      "started_at": "2026-09-06T01:27:36.077205+00:00",
+      "thesis_published": true,
+      "tool_steps": 8,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "candidate_count": 3,
+      "cycle_id": "30m:993698",
+      "duration_ms": 220655,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T01:27:30.612459+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "61a46a60d1104b69a893dba9d843f792",
+      "settled_count": 0,
+      "started_at": "2026-09-06T01:23:49.956589+00:00",
+      "thesis_published": true,
+      "tool_steps": 9,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "deepseek-v4-flash",
+      "candidate_count": 4,
+      "cycle_id": "30m:993698",
+      "duration_ms": 189239,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T01:23:44.610350+00:00",
+      "forecast_records": 0,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "dd81ff6b0ac74821b241a4a5cc054d5c",
+      "settled_count": 0,
+      "started_at": "2026-09-06T01:20:35.371231+00:00",
+      "thesis_published": false,
+      "tool_steps": 4,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
     {
       "agent_id": "qwen3-8-27b",
       "candidate_count": 3,
@@ -2651,86 +2851,6 @@
       "weather_candidates_researched": 0
     },
     {
-      "agent_id": "glm-5-3-flash",
-      "candidate_count": null,
-      "cycle_id": "30m:993691",
-      "duration_ms": 393653,
-      "failure_detail": "Upstream provider returned HTTP 503.",
-      "failure_kind": "provider_timeout",
-      "finished_at": "2026-09-05T21:38:00.215724+00:00",
-      "forecast_records": 0,
-      "outcome": "failure",
-      "paper_execution_outcome": null,
-      "provider_model": null,
-      "run_id": "d0846e7669054d9b8ea88aacbe9d9f07",
-      "settled_count": null,
-      "started_at": "2026-09-05T21:31:26.561929+00:00",
-      "thesis_published": false,
-      "tool_steps": null,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "glm-5-3",
-      "candidate_count": 3,
-      "cycle_id": "30m:993690",
-      "duration_ms": 91511,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-05T21:31:20.316137+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "zai-org/GLM-5.3",
-      "run_id": "aed5e307775b4ddb8c1635e5f68bc419",
-      "settled_count": 0,
-      "started_at": "2026-09-05T21:29:48.804041+00:00",
-      "thesis_published": true,
-      "tool_steps": 1,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "gemma-4-26b-a4b-it",
-      "candidate_count": 3,
-      "cycle_id": "30m:993690",
-      "duration_ms": 684818,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-05T21:29:42.335723+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "openai/gpt-oss-120b",
-      "run_id": "2196c00b91644ea689330f2e353dd953",
-      "settled_count": 0,
-      "started_at": "2026-09-05T21:18:17.517157+00:00",
-      "thesis_published": true,
-      "tool_steps": 7,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "candidate_count": 4,
-      "cycle_id": "30m:993690",
-      "duration_ms": 393995,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-05T21:18:11.394003+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "deepseek-ai/DeepSeek-V4-Flash",
-      "run_id": "fa7dc22f64f644d399db5d54eaa0d7b6",
-      "settled_count": 0,
-      "started_at": "2026-09-05T21:11:37.397822+00:00",
-      "thesis_published": true,
-      "tool_steps": 1,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
       "agent_id": "qwen3-8-27b",
       "candidate_count": 3,
       "cycle_id": "30m:993688",
@@ -2771,26 +2891,6 @@
       "weather_candidates_researched": 0
     },
     {
-      "agent_id": "llama-3.3-70b-instruct",
-      "candidate_count": 3,
-      "cycle_id": "30m:993688",
-      "duration_ms": 88244,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-05T20:28:02.167035+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "meta-llama/Llama-3.3-70B-Instruct",
-      "run_id": "737316fd230d465781bb971413080552",
-      "settled_count": 0,
-      "started_at": "2026-09-05T20:26:33.922785+00:00",
-      "thesis_published": true,
-      "tool_steps": 5,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
       "agent_id": "gpt-oss-120b",
       "candidate_count": 3,
       "cycle_id": "30m:993688",
@@ -2805,66 +2905,6 @@
       "run_id": "2cc09afb5af8489289c4505fae601b47",
       "settled_count": 0,
       "started_at": "2026-09-05T20:25:08.874071+00:00",
-      "thesis_published": true,
-      "tool_steps": 2,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "candidate_count": 3,
-      "cycle_id": "30m:993687",
-      "duration_ms": 30343,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-05T19:36:20.330710+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "openai/gpt-oss-120b",
-      "run_id": "e093214b4d184897bbd8264ee27c35a6",
-      "settled_count": 0,
-      "started_at": "2026-09-05T19:35:49.987277+00:00",
-      "thesis_published": true,
-      "tool_steps": 1,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "candidate_count": 3,
-      "cycle_id": "30m:993682",
-      "duration_ms": 71660,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-05T17:20:06.137080+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "4f29fb20a1244e80b3127e4b234b1a2a",
-      "settled_count": 0,
-      "started_at": "2026-09-05T17:18:54.476732+00:00",
-      "thesis_published": true,
-      "tool_steps": 2,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "minimax-m3",
-      "candidate_count": 3,
-      "cycle_id": "30m:993682",
-      "duration_ms": 70909,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-05T17:18:48.943454+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "MiniMaxAI/MiniMax-M3",
-      "run_id": "9bf9f062445d456b8e6368e783ea2d0c",
-      "settled_count": 0,
-      "started_at": "2026-09-05T17:17:38.033897+00:00",
       "thesis_published": true,
       "tool_steps": 2,
       "weather_candidates_offered": 0,
