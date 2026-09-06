@@ -335,7 +335,7 @@
         "py -m ruff check src tests (pass)",
         "git diff --check (pass)",
         "py -m graphify update . (completed; generated graph changes intentionally unstaged)",
-        "PYTHONPATH=src py -m unittest discover -s tests (running locally; PR CI remains required before merge)"
+        "PYTHONPATH=src py -m unittest discover -s tests (pass: 1372 tests in 240.453s; 4 emulator skips)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/execution.py",
@@ -352,13 +352,21 @@
         "T06",
         "T14"
       ],
-      "status": "pending",
-      "substep": null,
-      "branch": null,
-      "commit": null,
+      "status": "in_progress",
+      "substep": "identity-bound recovery requires complete matching order/fill evidence and two distinct absence observations before release; lifecycle fill/cancel/settlement integration remains pending",
+      "branch": "codex/autonomous-twin-t15",
+      "commit": "cc256855",
       "pr_url": null,
-      "checks": [],
-      "evidence": [],
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_recovery (pass: 5 tests)",
+        "py -m ruff check src/analyzing_llm_rationale/twin/recovery.py tests/test_twin_recovery.py (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (completed; generated graph changes intentionally unstaged)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/recovery.py",
+        "tests/test_twin_recovery.py"
+      ],
       "blockers": [],
       "handoff": null
     },
