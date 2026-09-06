@@ -2455,6 +2455,10 @@ class ServerTests(unittest.TestCase):
             "analyzing_llm_rationale.trading.place_order", return_value=fake_result
         ), mock.patch.object(
             server_module, "_validate_live_trade_guardrails", new=mock.AsyncMock(return_value={})
+        ), mock.patch.object(
+            server_module, "_reserve_confirmed_manual_order", return_value=mock.Mock()
+        ), mock.patch.object(
+            server_module, "_record_manual_command_submission"
         ):
             submitted = self.client.post(
                 "/trading/orders",
