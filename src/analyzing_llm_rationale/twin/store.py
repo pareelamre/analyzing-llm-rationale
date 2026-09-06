@@ -493,7 +493,7 @@ class DatastoreTwinStore:
             reservation = Reservation(reservation_id, intent.account_scope_id, intent.id, intent.intent_hash, reserved_cash, reserved_loss, updated.revision, ReservationState.RESERVED, now)
             entity = datastore.Entity(key=reservation_key)
             entity.update({"intent_id": intent.id, "intent_hash": intent.intent_hash, "cash": str(reserved_cash), "max_loss": str(reserved_loss), "account_revision": updated.revision, "state": reservation.state.value, "created_at": now})
-            command_id = f"command-{intent.intent_hash[:24]}"
+            command_id = f"{intent.account_scope_id}:command-{intent.intent_hash[:24]}"
             command = datastore.Entity(key=self._key(intent.account_scope_id, "TwinCommand", command_id))
             command.update({"intent_id": intent.id, "intent_hash": intent.intent_hash, "reservation_id": reservation_id, "state": CommandState.RESERVED.value, "client_order_id": f"foresea-{intent.intent_hash[:20]}", "created_at": now, "fence": 0})
             event = datastore.Entity(key=self._key(intent.account_scope_id, "TwinEvent", f"reserve:{intent.intent_hash}"))
@@ -514,3 +514,81 @@ class DatastoreTwinStore:
             except Aborted as exc:
                 last_error = exc
         raise TwinStoreError("Datastore contention exceeded the bounded reservation retry budget") from last_error
+
+    def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand:
+        command_id = f"{intent.account_scope_id}:command-{intent.intent_hash[:24]}"
+        entity = self._client.get(self._key(intent.account_scope_id, "TwinCommand", command_id))
+        if entity is None:
+            raise TwinStoreError("intent has no reservation command")
+        claim = None
+        if entity.get("claim_worker_id"):
+            claim = CommandClaim(
+                command_id=entity.key.name, worker_id=str(entity["claim_worker_id"]), fence=int(entity["fence"]),
+                lease_expires_at=entity["lease_expires_at"],
+            )
+        return ExecutionCommand(
+            id=entity.key.name, scope_id=intent.account_scope_id, intent_id=str(entity["intent_id"]),
+            intent_hash=str(entity["intent_hash"]), state=CommandState(str(entity["state"])),
+            reservation_id=str(entity["reservation_id"]), client_order_id=str(entity["client_order_id"]),
+            created_at=entity["created_at"], claim=claim,
+        )
+
+    def claim_command(self, command_id: str, *, worker_id: str, now: Optional[datetime] = None, lease_seconds: int = 30) -> Optional[CommandClaim]:
+        if lease_seconds <= 0:
+            raise TwinStoreError("lease_seconds must be positive")
+        now = now or _now()
+        scope_id = self._command_scope(command_id)
+        key = self._key(scope_id, "TwinCommand", command_id)
+        with self._client.transaction():
+            entity = self._client.get(key)
+            if entity is None:
+                raise TwinStoreError("command was not found")
+            old_expiry = entity.get("lease_expires_at")
+            if old_expiry is not None and old_expiry > now:
+                return None
+            old_fence = int(entity.get("fence", 0))
+            state = CommandState(str(entity["state"]))
+            if state is CommandState.RESERVED:
+                state = CommandState.SUBMITTING
+            elif state not in {CommandState.SUBMITTING, CommandState.SUBMISSION_UNKNOWN}:
+                return None
+            claim = CommandClaim(command_id, worker_id, old_fence + 1, now + timedelta(seconds=lease_seconds))
+            entity.update({"state": state.value, "claim_worker_id": worker_id, "fence": claim.fence, "lease_expires_at": claim.lease_expires_at})
+            self._client.put(entity)
+            return claim
+
+    def transition_command(self, command_id: str, *, target: CommandState, fence: int, worker_id: str) -> ExecutionCommand:
+        scope_id = self._command_scope(command_id)
+        command_key = self._key(scope_id, "TwinCommand", command_id)
+        with self._client.transaction():
+            entity = self._client.get(command_key)
+            if entity is None:
+                raise TwinStoreError("command was not found")
+            current = CommandState(str(entity["state"]))
+            if str(entity.get("claim_worker_id") or "") != worker_id or int(entity.get("fence", 0)) != fence:
+                raise TwinStoreError("stale worker fence cannot progress command")
+            if not can_transition_command(current, target):
+                raise TwinStoreError(f"invalid command transition {current.value}->{target.value}")
+            entity["state"] = target.value
+            reservation_key = self._key(scope_id, "TwinReservation", str(entity["reservation_id"]))
+            reservation = self._client.get(reservation_key)
+            if reservation is not None and target is CommandState.SUBMISSION_UNKNOWN:
+                reservation["state"] = ReservationState.SUBMISSION_UNKNOWN.value
+                self._client.put(reservation)
+            self._client.put(entity)
+        return self.command_for_intent_by_id(scope_id, command_id)
+
+    def command_for_intent_by_id(self, scope_id: str, command_id: str) -> ExecutionCommand:
+        entity = self._client.get(self._key(scope_id, "TwinCommand", command_id))
+        if entity is None:
+            raise TwinStoreError("command was not found")
+        claim = CommandClaim(command_id, str(entity["claim_worker_id"]), int(entity["fence"]), entity["lease_expires_at"]) if entity.get("claim_worker_id") else None
+        return ExecutionCommand(command_id, scope_id, str(entity["intent_id"]), str(entity["intent_hash"]), CommandState(str(entity["state"])), str(entity["reservation_id"]), str(entity["client_order_id"]), entity["created_at"], claim)
+
+    def _command_scope(self, command_id: str) -> str:
+        # Commands are intentionally addressed under their account root. Callers
+        # retain scope context rather than using eventually consistent global lookup.
+        parts = command_id.split(":", 1)
+        if len(parts) == 2:
+            return parts[0]
+        raise TwinStoreError("Datastore command operations require an account-scoped command id")

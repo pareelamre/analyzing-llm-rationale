@@ -38,6 +38,32 @@ def _reserve_in_process(scope_id: str, intent_id: str, instrument_id: str, resul
 
 @unittest.skipUnless(os.environ.get("DATASTORE_EMULATOR_HOST"), "requires DATASTORE_EMULATOR_HOST")
 class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
+    def test_fenced_datastore_claim_retains_account_scope(self):
+        from google.cloud import datastore
+
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "foresea-twin-test")
+        scope_id = f"claim-{uuid4().hex}"
+        now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        store = DatastoreTwinStore(datastore.Client(project=project))
+        store.register_account(
+            AccountScope(scope_id, "owner-001", "kalshi", "account-ref", "demo", "USD", "connection-001", 1, now),
+            venue_available_cash=Decimal("10"), loss_limit=Decimal("6"),
+        )
+        order = TradeIntent(
+            id="claim-intent", account_scope_id=scope_id, account_epoch=1, instrument_id="kalshi:demo:KXCLAIM",
+            action="BUY_YES", quantity=Decimal("1"), limit_price=Decimal("0.4"), time_in_force="IOC",
+            forecast_id="forecast-001", exit_reason=None, policy_version="policy-v1", strategy_version="strategy-v1",
+            market_version="market-v1", fee_allowance=Decimal("0.01"), slippage_allowance=Decimal("0.01"),
+            expires_at=now + timedelta(days=1), created_at=now,
+        )
+        store.reserve_intent(order, cash=Decimal("2"), max_loss=Decimal("1"), now=now)
+        command = store.command_for_intent(order)
+        first = store.claim_command(command.id, worker_id="worker-a", now=now, lease_seconds=5)
+        self.assertIsNotNone(first)
+        self.assertIsNone(store.claim_command(command.id, worker_id="worker-b", now=now, lease_seconds=5))
+        second = store.claim_command(command.id, worker_id="worker-b", now=now + timedelta(seconds=6), lease_seconds=5)
+        self.assertEqual(second.fence, first.fence + 1)
+
     def test_two_processes_compete_for_last_account_capacity(self):
         from google.cloud import datastore
 
