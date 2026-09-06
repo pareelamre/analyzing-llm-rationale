@@ -1,5 +1,4 @@
-"""The decision-span log mirror that keeps trade diagnostics readable when
-the OTLP exporter is unavailable."""
+"""The decision-span log mirror that keeps trade diagnostics readable."""
 from __future__ import annotations
 
 import sys
@@ -28,10 +27,8 @@ class DecisionSpanLoggerTests(unittest.TestCase):
         return captured.output
 
     def test_a_trade_decision_reaches_the_log(self):
-        # The OTLP exporter has been returning 402, discarding every
-        # outcome / fill_status / risk_guard.reason the trading path sets --
-        # the fields that answer "why did it not trade?". Spans still record,
-        # so a second processor recovers them without the backend being paid.
+        # The ordinary log retains the fields that answer "why did it not
+        # trade?" without requiring a remote telemetry subscription.
         lines = self._export(_span(
             "benchmark_tools.place_trade",
             outcome="rejected",
@@ -75,8 +72,7 @@ class DecisionSpanLoggerTests(unittest.TestCase):
 
 class DecisionSpanLoggerWiringTests(unittest.TestCase):
     def test_the_mirror_can_be_switched_off(self):
-        # On by default -- the exporter being down is the normal case today --
-        # but an operator with working traces should be able to silence it.
+        # On by default, but an operator can silence local decision mirroring.
         self.assertIn("FORESEA_LOG_DECISION_SPANS", Path(
             observability.__file__).read_text(encoding="utf-8"))
 
@@ -85,6 +81,12 @@ class DecisionSpanLoggerWiringTests(unittest.TestCase):
         # and drop the last decision of a cycle, usually the interesting one.
         source = Path(observability.__file__).read_text(encoding="utf-8")
         self.assertIn("SimpleSpanProcessor(_DecisionSpanLogger())", source)
+
+    def test_no_paid_superlog_connector_or_public_token_remains(self):
+        source = Path(observability.__file__).read_text(encoding="utf-8").lower()
+        self.assertNotIn("superlog", source)
+        self.assertNotIn("intake.", source)
+        self.assertNotIn("sl_public_", source)
 
 
 if __name__ == "__main__":
