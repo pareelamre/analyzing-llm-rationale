@@ -87,6 +87,81 @@
     ],
     "gemma-4-26b-a4b-it": [
       {
+        "action_id": "e8dd97b4-3ee5-41d0-b0ff-f3697b156c7a",
+        "agent_id": "gemma-4-26b-a4b-it",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 7003.474675
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.89,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.89,
+            "quantity": 7003.5
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 9664.795052,
+            "cash_required": 0.0,
+            "concentration_cap": 1565.27659,
+            "cycle_id": "30m:993710",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 840.416961,
+            "daily_risk_before": 840.416961,
+            "daily_risk_limit": 3130.55318,
+            "drawdown_after": 0.0081,
+            "fee": 0.0,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 6233.092461,
+            "open_markets_after": 0,
+            "per_cycle_spend_limit": 2087.035453,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993710",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 770.3822142866666,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 7003.474675333334,
+          "notional": 6233.092461046667,
+          "price": 0.89,
+          "quantity": 7003.474675333334,
+          "realized_pnl": -70.03474675333382,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "russia-x-ukraine-ceasefire-agreement-by-october-31-2026"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "1247ccaaf021acf071d61c71ba70706ea44d7795c33117e5647dcf66c792cfb1",
+        "recorded_at": "2026-09-06T07:07:06.069681+00:00"
+      },
+      {
         "action_id": "a3a4dc67-a1d0-4b53-a578-2e801b8ef89e",
         "agent_id": "gemma-4-26b-a4b-it",
         "audit": {
@@ -9576,7 +9651,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-06T06:37:11.786636+00:00",
+  "generated_at": "2026-09-06T07:54:12.493168+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
