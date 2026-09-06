@@ -174,6 +174,22 @@ class AgentTradingPerModelWorkflowTests(unittest.TestCase):
 
 
 class TrackRecordForecastWorkflowTests(unittest.TestCase):
+    def test_one_model_timing_out_does_not_discard_the_others_forecasts(self):
+        # `!cancelled()` threw away a whole run whenever a single model's job
+        # exceeded timeout-minutes, which GitHub reports as cancelled.
+        # Observed on run 33995463449: nine of ten model forecasts succeeded,
+        # minimax-m3 timed out, and all nine were discarded unpublished. About
+        # half of all runs ended that way, which is why models added to the
+        # roster accumulate no resolved record and so cannot be judged worth
+        # trading. The agent board publish already guards this correctly.
+        import yaml
+
+        parsed = yaml.safe_load(
+            (_WORKFLOWS_DIR / "track-record-forecast.yml").read_text(encoding="utf-8"))
+        publish = " ".join(str(parsed["jobs"]["publish"]["if"]).split())
+        self.assertIn("always()", publish)
+        self.assertNotIn("!cancelled()", publish)
+
     def test_forecast_jobs_use_the_second_reserved_provider_slot(self):
         text = (_WORKFLOWS_DIR / "track-record-forecast.yml").read_text(encoding="utf-8")
         self.assertIn("group: track-record-forecast-provider-slot", text)
