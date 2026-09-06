@@ -30,6 +30,11 @@ ledger_syncs = meter.create_counter(
 ledger_events = meter.create_counter(
     "forecast_ledger.events", unit="1", description="Immutable forecast ledger events appended"
 )
+ledger_temporal_rejections = meter.create_counter(
+    "forecast_ledger.temporal_rejections",
+    unit="1",
+    description="Forecast ledger rows excluded because their timestamp is after resolution",
+)
 ledger_sync_duration = meter.create_histogram(
     "forecast_ledger.sync.duration",
     unit="s",
@@ -171,6 +176,17 @@ class ForecastLedger:
             raise ImmutableEventConflict(f"immutable ledger event conflicts: {event_id}")
         return False
 
+    def _resolution_for_market(
+        self, *, platform: str, ident: str
+    ) -> Mapping[str, Any] | None:
+        """Return the immutable resolution already recorded for a market."""
+        resolution_id = _digest({"platform": platform, "ident": ident})
+        event = self._events.get(f"resolution:{resolution_id}")
+        if event is None:
+            return None
+        payload = event.get("payload") or {}
+        return payload if isinstance(payload, Mapping) else None
+
     def record_forecast(self, snapshot: Mapping[str, Any], *, snapshot_key: str) -> bool:
         platform, ident = _market_key(snapshot.get("platform"), snapshot.get("ident"))
         forecasted_at = _iso_utc(snapshot.get("snapshot_ts"), field="snapshot_ts")
@@ -206,6 +222,17 @@ class ForecastLedger:
         event_id = f"forecast:{forecast_id}"
         if self._events.get(event_id) is not None:
             return False
+        resolution = self._resolution_for_market(platform=platform, ident=ident)
+        if resolution is not None:
+            resolved_at = _iso_utc(resolution.get("resolved_at"), field="resolved_at")
+            if forecasted_dt > datetime.fromisoformat(resolved_at):
+                logger.warning(
+                    "skipping forecast recorded after market resolution: %s:%s",
+                    platform,
+                    ident,
+                )
+                ledger_temporal_rejections.add(1, {"reason": "forecast_after_resolution"})
+                return False
         event = {
             "schema_version": SCHEMA_VERSION,
             "event_type": FORECAST_RECORDED,
@@ -304,6 +331,14 @@ class ForecastLedger:
             resolution, resolution_entity = resolution_item
             ingested_at = _event_timestamp(forecast_entity.get("ingested_at"))
             forecasted_at = _iso_utc(forecast["forecasted_at"], field="forecasted_at")
+            resolved_at = _iso_utc(resolution["resolved_at"], field="resolved_at")
+            if datetime.fromisoformat(forecasted_at) > datetime.fromisoformat(resolved_at):
+                logger.warning(
+                    "excluding historical forecast recorded after market resolution: %s",
+                    forecast.get("forecast_id"),
+                )
+                ledger_temporal_rejections.add(1, {"reason": "forecast_after_resolution"})
+                continue
             close_time = forecast.get("close_time")
             forecast_before_close = False
             if close_time is not None:
@@ -317,9 +352,7 @@ class ForecastLedger:
             audit_grade = False
             if ingested_at is not None:
                 ingested_dt = datetime.fromisoformat(ingested_at)
-                resolved_dt = datetime.fromisoformat(
-                    _iso_utc(resolution["resolved_at"], field="resolved_at")
-                )
+                resolved_dt = datetime.fromisoformat(resolved_at)
                 delay = (
                     ingested_dt - datetime.fromisoformat(forecasted_at)
                 ).total_seconds()
@@ -334,7 +367,7 @@ class ForecastLedger:
                 {
                     **forecast,
                     "outcome": int(resolution["outcome"]),
-                    "resolved_at": resolution["resolved_at"],
+                    "resolved_at": resolved_at,
                     "resolution_source": resolution.get("source"),
                     "ledger_ingested_at": ingested_at,
                     "resolution_ledger_ingested_at": _event_timestamp(
@@ -370,16 +403,8 @@ def sync_snapshot_ledger(store: LedgerStore) -> Dict[str, int]:
             transaction = getattr(store, "transaction", None)
 
             with transaction() if transaction is not None else nullcontext():
-                for snapshot in sorted(
-                    snapshots,
-                    key=lambda row: (
-                        str(row.get("snapshot_ts") or ""),
-                        str(getattr(row, "key", None)),
-                    ),
-                ):
-                    if ledger.record_forecast(snapshot, snapshot_key=str(snapshot.key.id)):
-                        forecast_events += 1
-
+                # Record resolutions first so a snapshot already known to be
+                # post-resolution cannot become an immutable forecast event.
                 resolved_snapshots = sorted(
                     (snapshot for snapshot in snapshots if snapshot.get("resolved")),
                     key=lambda row: str(row.get("resolved_ts") or ""),
@@ -393,6 +418,16 @@ def sync_snapshot_ledger(store: LedgerStore) -> Dict[str, int]:
                         source="track_record_resolution",
                     ):
                         resolution_events += 1
+
+                for snapshot in sorted(
+                    snapshots,
+                    key=lambda row: (
+                        str(row.get("snapshot_ts") or ""),
+                        str(getattr(row, "key", None)),
+                    ),
+                ):
+                    if ledger.record_forecast(snapshot, snapshot_key=str(snapshot.key.id)):
+                        forecast_events += 1
 
             total = forecast_events + resolution_events
             span.set_attributes(

@@ -172,6 +172,38 @@ class ForecastLedgerTests(unittest.TestCase):
                 resolved_at=resolved_at,
             )
 
+    def test_sync_does_not_record_a_snapshot_after_its_resolution(self):
+        snapshot = self._snapshot(
+            snapshot_ts=self.forecasted_at + timedelta(hours=1),
+            resolved=True,
+        )
+        snapshot["resolved_ts"] = self.forecasted_at
+        self.store.put(snapshot)
+
+        result = sync_snapshot_ledger(self.store)
+
+        self.assertEqual(result["resolution_events_appended"], 1)
+        self.assertEqual(result["forecast_events_appended"], 0)
+        self.assertEqual(ForecastLedger(self.store).resolved_forecasts(), [])
+
+    def test_resolved_forecasts_excludes_a_legacy_post_resolution_event(self):
+        ledger = ForecastLedger(self.store)
+        snapshot = self._snapshot(
+            snapshot_ts=self.forecasted_at + timedelta(hours=1),
+            resolved=False,
+        )
+        self.assertTrue(ledger.record_forecast(snapshot, snapshot_key=str(snapshot.key.id)))
+        self.assertTrue(
+            ledger.record_resolution(
+                platform="Kalshi",
+                ident="RATE-26",
+                outcome=1,
+                resolved_at=self.forecasted_at,
+            )
+        )
+
+        self.assertEqual(ForecastLedger(self.store).resolved_forecasts(), [])
+
     def test_promptly_ingested_forecast_is_in_prospective_audit_cohort(self):
         snapshot = self._snapshot(resolved=False)
         self.store.put(snapshot)
