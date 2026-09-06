@@ -3954,6 +3954,89 @@
     ],
     "llama-3.3-70b-instruct": [
       {
+        "action_id": "c63e96d4-edc3-44d7-984f-b603a7c9cd73",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 7000.888625
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.07,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.07,
+            "quantity": "null"
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 8479.215805,
+            "cash_required": 490.062204,
+            "concentration_cap": 1271.882371,
+            "cycle_id": "30m:993732",
+            "cycle_spend_after": 490.062204,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 490.062204,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2543.764741,
+            "drawdown_after": 0.152078,
+            "fee": 0.0,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 490.062204,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 490.062204,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1695.843161,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.43,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.08,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 490.062204,
+            "target_quantity": 7000.88862548003
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993732",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -490.0622037836022,
+          "cash_required": 490.0622037836022,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 490.0622037836022,
+          "price": 0.07,
+          "quantity": 7000.88862548003,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "will-daniil-medvedev-win-the-2026-mens-us-open"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "6410e53a6360cc107fc8996bc7eac1d6e5e46e8e5437455d26d2f5da10daada5",
+        "recorded_at": "2026-09-06T18:24:17.684406+00:00"
+      },
+      {
         "action_id": "48008584-d829-4f3b-9cac-9140d6c720fc",
         "agent_id": "llama-3.3-70b-instruct",
         "audit": {
@@ -10293,7 +10376,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-06T17:12:36.837863+00:00",
+  "generated_at": "2026-09-06T18:36:11.672189+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
