@@ -22,6 +22,7 @@ class AccountReadError(RuntimeError):
 
 PageFetcher = Callable[[Optional[str]], Mapping[str, Any]]
 VenueReader = Callable[..., Mapping[str, Any]]
+RowNormalizer = Callable[[Mapping[str, Any]], Mapping[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ def cursor_page_fetcher(
     creds: Mapping[str, Any],
     cursor_parameter: str = "cursor",
     parameters: Optional[Mapping[str, Any]] = None,
+    item_normalizer: Optional[RowNormalizer] = None,
 ) -> PageFetcher:
     """Adapt a cursor-preserving ``venue_api.read`` operation to account pages.
 
@@ -64,8 +66,14 @@ def cursor_page_fetcher(
         if not isinstance(result, Mapping) or not isinstance(result.get("data"), Mapping):
             raise AccountReadError(f"{operation}_response_malformed")
         data = result["data"]
+        items = data.get(item_key)
+        if item_normalizer is not None and isinstance(items, list):
+            try:
+                items = [item_normalizer(item) for item in items]
+            except Exception as exc:
+                raise AccountReadError(f"{operation}_normalization_failed") from exc
         return {
-            "items": data.get(item_key),
+            "items": items,
             "cursor": result.get("next_cursor"),
             "generation_token": data.get("generation_token"),
             "pagination_limit_reached": result.get("pagination_limit_reached") is True,
@@ -82,6 +90,7 @@ def offset_page_fetcher(
     creds: Mapping[str, Any],
     limit: int,
     parameters: Optional[Mapping[str, Any]] = None,
+    item_normalizer: Optional[RowNormalizer] = None,
 ) -> PageFetcher:
     """Adapt an offset-preserving Data API operation to cursor-reader shape."""
     if limit < 1:
@@ -96,8 +105,14 @@ def offset_page_fetcher(
         result = reader(venue, operation, query, access="account", creds=dict(creds))
         if not isinstance(result, Mapping) or not isinstance(result.get("data"), list):
             raise AccountReadError(f"{operation}_response_malformed")
+        items = result["data"]
+        if item_normalizer is not None:
+            try:
+                items = [item_normalizer(item) for item in items]
+            except Exception as exc:
+                raise AccountReadError(f"{operation}_normalization_failed") from exc
         return {
-            "items": result["data"],
+            "items": items,
             "cursor": result.get("next_offset"),
             "generation_token": None,
             "pagination_limit_reached": result.get("pagination_limit_reached") is True,
@@ -132,6 +147,8 @@ def read_complete_collection(
     for page_number in range(1, max_pages + 1):
         try:
             response = fetch_page(cursor)
+        except AccountReadError:
+            raise
         except Exception as exc:
             raise AccountReadError(f"{name}_page_{page_number}_failed") from exc
         if not isinstance(response, Mapping):

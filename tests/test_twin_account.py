@@ -22,6 +22,12 @@ from analyzing_llm_rationale.twin.reconcile import (
     synchronize_and_persist_complete_account,
     synchronize_complete_account,
 )
+from analyzing_llm_rationale.twin.venue_account import (
+    KALSHI_ACCOUNT_CAPABILITY,
+    POLYMARKET_ACCOUNT_CAPABILITY,
+    account_capability,
+    complete_account_fetchers,
+)
 
 NOW = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
@@ -296,6 +302,74 @@ class TwinAccountTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AccountReadError, "pagination_limit_reached"):
             read_complete_collection("positions", fetch)
+
+    def test_native_kalshi_adapter_retains_prior_snapshot_when_cash_is_only_available_balance(self):
+        prior = self.sync().snapshot
+        calls = []
+
+        def reader(venue, operation, parameters, **kwargs):
+            calls.append((venue, operation, dict(parameters), kwargs["access"]))
+            if operation == "balance":
+                # Portfolio value deliberately differs from available cash.
+                return {"data": {"balance": 700, "balance_dollars": "7.00", "portfolio_value": 999}}
+            keys = {"positions": "market_positions", "orders": "orders", "fills": "fills"}
+            return {"data": {keys[operation]: []}, "next_cursor": None}
+
+        result = synchronize_complete_account(
+            "scope-001", generation=2, received_at=NOW,
+            fetchers=complete_account_fetchers("kalshi", reader=reader, creds={"key": "secret"}),
+            local_command_ids={"command-001"}, previous=prior,
+        )
+        self.assertTrue(result.retained_previous)
+        self.assertEqual(result.snapshot, prior)
+        self.assertEqual(
+            result.issues,
+            ("kalshi_balance_cash_breakdown_unavailable", "kalshi_settlement_immutable_id_unavailable"),
+        )
+        self.assertEqual([call[1] for call in calls], ["balance", "positions", "orders", "fills"])
+        self.assertTrue(all(call[3] == "account" for call in calls))
+
+    def test_native_polymarket_adapter_keeps_marks_out_of_conservative_liquidation(self):
+        calls = []
+
+        def reader(venue, operation, parameters, **kwargs):
+            calls.append((venue, operation, dict(parameters), kwargs["access"]))
+            if operation == "positions":
+                return {"data": [{
+                    "asset": "token-1", "size": "2", "initialValue": "0.6", "currentValue": "1.9",
+                }], "next_offset": None}
+            key = "orders" if operation == "orders" else "trades"
+            return {"data": {key: []}, "next_cursor": None}
+
+        fetchers = complete_account_fetchers("polymarket", reader=reader, creds={"api": "secret"})
+        positions = read_complete_collection("positions", fetchers["positions"])
+        self.assertEqual(
+            positions.items,
+            ({"position_id": "token-1", "token_id": "token-1", "quantity": "2", "basis": "0.6"},),
+        )
+        self.assertNotIn("liquidation_value", positions.items[0])
+
+        prior = self.sync().snapshot
+        result = synchronize_complete_account(
+            "scope-001", generation=2, received_at=NOW, fetchers=fetchers,
+            local_command_ids={"command-001"}, previous=prior,
+        )
+        self.assertTrue(result.retained_previous)
+        self.assertEqual(
+            result.issues,
+            ("polymarket_cash_authority_unavailable", "polymarket_settlement_authority_unavailable"),
+        )
+        self.assertTrue(all(call[3] == "account" for call in calls))
+
+    def test_documented_venue_capabilities_do_not_claim_live_cash_authority(self):
+        self.assertEqual(account_capability("kalshi"), KALSHI_ACCOUNT_CAPABILITY)
+        self.assertEqual(account_capability("polymarket"), POLYMARKET_ACCOUNT_CAPABILITY)
+        for capability in (KALSHI_ACCOUNT_CAPABILITY, POLYMARKET_ACCOUNT_CAPABILITY):
+            self.assertFalse(capability.cash_ledger_supported)
+            self.assertFalse(capability.settlement_identity_supported)
+            self.assertTrue(capability.blockers)
+        with self.assertRaisesRegex(SchemaValidationError, "unsupported venue"):
+            account_capability("unsupported")
 
 
 if __name__ == "__main__":
