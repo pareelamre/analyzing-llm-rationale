@@ -11,6 +11,10 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+class PriceUnavailable(BudgetExceeded):
+    """A paid research request has no configured, auditable price."""
+
+
 @dataclass(frozen=True)
 class BudgetPolicy:
     usd_limit: Decimal
@@ -38,8 +42,31 @@ class BudgetReservation:
     state: str = "reserved"
 
 
+@dataclass(frozen=True)
+class ModelPrice:
+    """USD price per one million tokens; zero-cost is explicit, never inferred."""
+
+    input_per_million: Decimal | None
+    output_per_million: Decimal | None
+
+
+def estimate_request_cost(
+    *, input_tokens: int, output_tokens: int, price: ModelPrice, require_usd_ceiling: bool
+) -> Decimal:
+    if input_tokens < 0 or output_tokens < 0:
+        raise ValueError("token estimates must be non-negative")
+    if price.input_per_million is None or price.output_per_million is None:
+        if require_usd_ceiling:
+            raise PriceUnavailable("paid research is blocked until model token prices are configured")
+        return Decimal("0")
+    return (
+        Decimal(input_tokens) * price.input_per_million
+        + Decimal(output_tokens) * price.output_per_million
+    ) / Decimal("1000000")
+
+
 class InMemoryResearchBudget:
-    """Thread-safe contract used by workers; durable adapter follows in T16."""
+    """Thread-safe test implementation; live workers must use a durable adapter."""
 
     def __init__(self) -> None:
         self._lock = threading.RLock()

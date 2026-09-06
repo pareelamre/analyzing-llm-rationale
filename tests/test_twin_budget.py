@@ -5,7 +5,14 @@ import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from analyzing_llm_rationale.twin.budget import BudgetExceeded, BudgetPolicy, InMemoryResearchBudget
+from analyzing_llm_rationale.twin.budget import (
+    BudgetExceeded,
+    BudgetPolicy,
+    InMemoryResearchBudget,
+    ModelPrice,
+    PriceUnavailable,
+    estimate_request_cost,
+)
 
 
 class TwinBudgetTests(unittest.TestCase):
@@ -44,6 +51,20 @@ class TwinBudgetTests(unittest.TestCase):
         next_key = self.store.key("strategy-v1", "scope-001", datetime(2025, 1, 2, tzinfo=timezone.utc))
         self.store.reserve("next-day", key=next_key, estimated_usd=Decimal("1"), estimated_tokens=100, policy=self.policy)
         self.assertNotEqual(self.key, next_key)
+
+    def test_missing_price_blocks_paid_research_but_explicit_zero_cost_is_limited_by_tokens(self):
+        with self.assertRaises(PriceUnavailable):
+            estimate_request_cost(
+                input_tokens=10, output_tokens=10,
+                price=ModelPrice(None, None), require_usd_ceiling=True,
+            )
+        self.assertEqual(
+            estimate_request_cost(
+                input_tokens=10, output_tokens=10,
+                price=ModelPrice(Decimal("0"), Decimal("0")), require_usd_ceiling=True,
+            ),
+            Decimal("0"),
+        )
 
 
 if __name__ == "__main__":

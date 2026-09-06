@@ -200,15 +200,23 @@
       "dependencies": [
         "T04"
       ],
-      "status": "pending",
-      "substep": null,
-      "branch": null,
+      "status": "in_progress",
+      "substep": "in-memory atomic worst-case cost/token/request reservations, uncertain timeout handling, and explicit pricing configuration complete; durable Datastore adapter and call boundary remain",
+      "branch": "codex/autonomous-twin",
       "commit": null,
       "pr_url": null,
-      "checks": [],
-      "evidence": [],
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_budget (pass: 4 tests)",
+        "py -m ruff check src/analyzing_llm_rationale/twin/budget.py tests/test_twin_budget.py (pass)",
+        "git diff --check (pass)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/budget.py",
+        "configs/twin.yaml",
+        "tests/test_twin_budget.py"
+      ],
       "blockers": [],
-      "handoff": null
+      "handoff": "Persist daily account/strategy budget aggregates and reservations under Datastore before wiring a budgeted provider call into T08."
     },
     {
       "id": "T08",
