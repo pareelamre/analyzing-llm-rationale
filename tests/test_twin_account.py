@@ -3,7 +3,11 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 
-from analyzing_llm_rationale.twin.account import synchronize_account
+from analyzing_llm_rationale.twin.account import (
+    portfolio_pages_from_complete_read,
+    synchronize_account,
+)
+from analyzing_llm_rationale.twin.models import SchemaValidationError
 
 NOW = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
@@ -61,6 +65,32 @@ class TwinAccountTests(unittest.TestCase):
         concurrent = self.sync(orders=[page([{"order_id": "order-001"}]), page([{"order_id": "order-002"}])])
         self.assertEqual(len(corrected.snapshot.settlements), 2)
         self.assertEqual([row["order_id"] for row in concurrent.snapshot.orders], ["order-001", "order-002"])
+
+    def test_incomplete_cursor_and_replayed_generation_retain_prior_complete_snapshot(self):
+        good = self.sync().snapshot
+        cursor_incomplete = self.sync(orders=[{"complete": True, "has_more": True, "items": []}], previous=good)
+        replayed = synchronize_account("scope-001", generation=1, received_at=NOW, previous=good, **inputs())
+        self.assertTrue(cursor_incomplete.retained_previous)
+        self.assertEqual(cursor_incomplete.snapshot.generation, good.generation)
+        self.assertEqual(replayed.issues, ("stale_or_replayed_generation",))
+
+    def test_unknown_fill_marks_account_drift(self):
+        result = self.sync(fills=[page([{"fill_id": "external-fill", "client_order_id": "unmanaged-command"}])])
+        self.assertTrue(result.snapshot.divergence)
+        self.assertEqual(result.snapshot.external_activity_ids, ("unmanaged-command",))
+
+    def test_portfolio_adapter_refuses_display_limited_reads(self):
+        with self.assertRaises(SchemaValidationError):
+            portfolio_pages_from_complete_read({"balance": {"available": "1"}})
+        pages = portfolio_pages_from_complete_read({
+            "complete": True,
+            "balance": {"available": "7", "total": "10", "reserved": "3"},
+            "positions": [{"position_id": "position-001"}],
+            "orders": [{"order_id": "order-001"}],
+            "fills": [{"fill_id": "fill-001"}],
+            "settlements": [{"settlement_id": "settlement-001"}],
+        })
+        self.assertTrue(pages["balances"][0]["complete"])
 
 
 if __name__ == "__main__":

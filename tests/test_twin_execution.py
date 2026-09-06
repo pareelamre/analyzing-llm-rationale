@@ -10,7 +10,7 @@ class TwinExecutionTests(unittest.TestCase):
         now, writes = datetime(2025, 1, 1, tzinfo=timezone.utc), []
         active = approve(Mandate("mandate-001", "owner", "scope", "strategy", now + timedelta(days=1)), owner_id="owner")
         self.assertEqual(submit_authorized_command(active, now=now, live_enabled=False, submit=lambda: writes.append("shadow")), None)
-        live = approve(Mandate("mandate-002", "owner", "scope", "strategy", now + timedelta(days=1), live=True), owner_id="owner", readiness_hash="ready")
+        live = approve(Mandate("mandate-002", "owner", "scope", "strategy", now + timedelta(days=1), live=True, readiness_hash="ready"), owner_id="owner", readiness_hash="ready")
         with self.assertRaises(ExecutionBlocked):
             submit_authorized_command(live, now=now, live_enabled=False, submit=lambda: writes.append("live"))
         with self.assertRaises(ExecutionBlocked):
