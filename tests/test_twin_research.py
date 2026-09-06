@@ -52,6 +52,7 @@ class TwinResearchTests(unittest.TestCase):
         self.assertEqual(proposal.action, ProposalAction.HOLD)
         self.assertEqual(len(calls), 1)
         self.assertIn("untrusted", calls[0]["instruction"])
+        self.assertEqual(calls[0]["invalid_response"], "not-json")
         self.assertEqual(budget.usage(budget.key("strategy-v1", "scope-001", now)).requests, 2)
 
     def test_accepted_forecast_is_recorded_before_returning(self):
