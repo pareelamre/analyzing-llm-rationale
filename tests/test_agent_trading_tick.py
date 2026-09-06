@@ -1263,6 +1263,73 @@ class ThesisForecastLearningTests(unittest.TestCase):
         self.assertAlmostEqual(records[0]["model_probability"], 0.63)
         self.assertAlmostEqual(records[0]["market_probability"], 0.55)
 
+    def test_a_no_side_probability_is_stored_as_p_yes_not_inverted(self):
+        """A "95% NO" is a 5% P(YES); storing 0.95 would invert calibration."""
+        records = agent_trading_tick._thesis_forecast_records(
+            "- **Market & Venue**: [KXNO-26] on [Kalshi]\n"
+            "- **Model Probability**: 95% NO vs **Market Price**: 15.5% NO",
+            [],
+            [],
+            "news_research",
+        )
+        self.assertEqual(len(records), 1)
+        self.assertAlmostEqual(records[0]["model_probability"], 0.05)
+        self.assertAlmostEqual(records[0]["market_probability"], 0.845)
+
+    def test_a_bare_side_qualifier_no_longer_discards_the_forecast(self):
+        """gpt-oss-120b and glm-5-3-flash both write the side without brackets."""
+        records = agent_trading_tick._thesis_forecast_records(
+            "- **Market & Venue**: [KXSIDE-26] on [Kalshi]\n"
+            "- **Model Probability**: 5% YES (95% NO) vs **Market Price**: 84.5% YES",
+            [],
+            [],
+            "news_research",
+        )
+        self.assertEqual(len(records), 1)
+        self.assertAlmostEqual(records[0]["model_probability"], 0.05)
+        self.assertAlmostEqual(records[0]["market_probability"], 0.845)
+
+    def test_a_pass_that_names_no_market_is_recovered_from_the_quoted_price(self):
+        """A PASS is a free calibration point, so do not discard it."""
+        records = agent_trading_tick._thesis_forecast_records(
+            "- **Action**: PASS\n"
+            "- **Market & Venue**: No new position\n"
+            "- **Model Probability**: ~83% YES vs **Market Price**: 84.5% (Edge: -1.5pp)",
+            [],
+            [
+                {"platform": "polymarket", "ident": "ceasefire-26", "probability": 0.845},
+                {"platform": "kalshi", "ident": "KXOTHER-26", "probability": 0.155},
+            ],
+            "news_research",
+        )
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["ticker"], "ceasefire-26")
+        self.assertEqual(records[0]["platform"], "polymarket")
+        self.assertEqual(records[0]["action"], "PASS")
+        self.assertAlmostEqual(records[0]["model_probability"], 0.83)
+
+    def test_an_ambiguous_quoted_price_records_nothing_rather_than_guessing(self):
+        """Two candidates at one price make the reference unresolvable."""
+        records = agent_trading_tick._thesis_forecast_records(
+            "- **Action**: PASS\n"
+            "- **Market & Venue**: No new position\n"
+            "- **Model Probability**: ~83% vs **Market Price**: 84.5%",
+            [],
+            [
+                {"platform": "polymarket", "ident": "ceasefire-26", "probability": 0.845},
+                {"platform": "kalshi", "ident": "KXTWIN-26", "probability": 0.845},
+            ],
+            "news_research",
+        )
+        self.assertEqual(records, [])
+
+    def test_the_prompt_no_longer_tells_agents_to_erase_the_market_on_a_pass(self):
+        """The old wording cost five of every eight scoreable forecasts."""
+        template = agent_trading_tick._TRADING_INSTRUCTION
+        self.assertNotIn("write 'No new position' for HOLD/PASS", template)
+        self.assertIn("Never write 'No new position' or 'N/A' here", template)
+        self.assertIn("even when you PASS or HOLD", template)
+
     def test_scores_a_pass_forecast_from_a_bounded_venue_resolution_lookup(self):
         thesis = (
             "- **Market & Venue**: [KXPASS-26] on [Kalshi]\n"
