@@ -3,7 +3,11 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 
-from analyzing_llm_rationale.twin.account import synchronize_account
+from analyzing_llm_rationale.twin.account import (
+    portfolio_pages_from_complete_read,
+    synchronize_account,
+)
+from analyzing_llm_rationale.twin.models import SchemaValidationError
 
 NOW = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
@@ -74,6 +78,19 @@ class TwinAccountTests(unittest.TestCase):
         result = self.sync(fills=[page([{"fill_id": "external-fill", "client_order_id": "unmanaged-command"}])])
         self.assertTrue(result.snapshot.divergence)
         self.assertEqual(result.snapshot.external_activity_ids, ("unmanaged-command",))
+
+    def test_portfolio_adapter_refuses_display_limited_reads(self):
+        with self.assertRaises(SchemaValidationError):
+            portfolio_pages_from_complete_read({"balance": {"available": "1"}})
+        pages = portfolio_pages_from_complete_read({
+            "complete": True,
+            "balance": {"available": "7", "total": "10", "reserved": "3"},
+            "positions": [{"position_id": "position-001"}],
+            "orders": [{"order_id": "order-001"}],
+            "fills": [{"fill_id": "fill-001"}],
+            "settlements": [{"settlement_id": "settlement-001"}],
+        })
+        self.assertTrue(pages["balances"][0]["complete"])
 
 
 if __name__ == "__main__":

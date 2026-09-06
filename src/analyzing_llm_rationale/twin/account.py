@@ -38,6 +38,32 @@ class AccountSyncResult:
     issues: tuple[str, ...]
 
 
+def portfolio_pages_from_complete_read(payload: Mapping[str, Any]) -> dict[str, tuple[Mapping[str, Any], ...]]:
+    """Adapt a venue read only when its pagination contract is explicit.
+
+    Existing UI reconciliation payloads are deliberately not accepted: their
+    first-page limits are display bounds, not a proof that account inventory is
+    complete.  A venue adapter must attest to a completed read before it can
+    become capital authority for the autonomous twin.
+    """
+    if not isinstance(payload, Mapping) or payload.get("complete") is not True:
+        raise SchemaValidationError("account portfolio read is not pagination-complete")
+    required = ("balance", "positions", "orders", "fills", "settlements")
+    if any(key not in payload for key in required):
+        raise SchemaValidationError("complete portfolio read omitted an account collection")
+    collections: dict[str, tuple[Mapping[str, Any], ...]] = {}
+    for key in required:
+        value = payload[key]
+        if key == "balance":
+            rows = [value] if isinstance(value, Mapping) else []
+        else:
+            rows = list(value) if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) else []
+        if (key == "balance" and not rows) or any(not isinstance(row, Mapping) for row in rows):
+            raise SchemaValidationError(f"complete portfolio {key} collection is malformed")
+        collections[f"{key}s" if key == "balance" else key] = ({"complete": True, "items": rows},)
+    return collections
+
+
 def _decimal(name: str, value: Any) -> Optional[Decimal]:
     if value in (None, ""):
         return None
