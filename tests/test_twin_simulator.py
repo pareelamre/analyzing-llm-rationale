@@ -1,5 +1,5 @@
-from decimal import Decimal
 import unittest
+from decimal import Decimal
 
 from analyzing_llm_rationale.twin.simulator import ShadowVenue
 
