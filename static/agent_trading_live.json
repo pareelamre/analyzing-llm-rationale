@@ -72,7 +72,7 @@
       "agent_id": "gpt-oss-120b",
       "checks": {
         "drawdown_within_cap": true,
-        "positive_return": false,
+        "positive_return": true,
         "sharpe_above_floor": false,
         "sufficient_sample": false
       },
@@ -81,9 +81,9 @@
       "max_drawdown_allowed": 0.25,
       "min_settled_trades_required": 30,
       "min_sharpe_required": 0.5,
-      "return_pct": -0.0177,
+      "return_pct": 0.1313,
       "settled_count": 5,
-      "sharpe": 0.0013
+      "sharpe": 0.01
     },
     "llama-3.3-70b-instruct": {
       "agent_id": "llama-3.3-70b-instruct",
@@ -156,7 +156,7 @@
         {
           "account_value": 9969.230769,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T09:51:51.816543+00:00"
+          "ts": "2026-09-06T11:01:35.528691+00:00"
         }
       ]
     },
@@ -288,7 +288,7 @@
         {
           "account_value": 10435.177266,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T09:51:51.816543+00:00"
+          "ts": "2026-09-06T11:01:35.528691+00:00"
         }
       ]
     },
@@ -305,7 +305,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T09:51:51.816543+00:00"
+          "ts": "2026-09-06T11:01:35.528691+00:00"
         }
       ]
     },
@@ -332,14 +332,14 @@
         {
           "account_value": 9968.75,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T09:51:51.816543+00:00"
+          "ts": "2026-09-06T11:01:35.528691+00:00"
         }
       ]
     },
     "gpt-oss-120b": {
       "agent_id": "gpt-oss-120b",
       "max_drawdown": 0.0208,
-      "sharpe": 0.0013,
+      "sharpe": 0.01,
       "value_curve": [
         {
           "account_value": 10000.0,
@@ -522,9 +522,9 @@
           "ts": "2026-09-06T09:43:47.641951+00:00"
         },
         {
-          "account_value": 9998.229531,
+          "account_value": 10013.126785,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T09:51:51.816543+00:00"
+          "ts": "2026-09-06T11:01:35.528691+00:00"
         }
       ]
     },
@@ -931,7 +931,7 @@
         {
           "account_value": 8479.215805,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T09:51:51.816543+00:00"
+          "ts": "2026-09-06T11:01:35.528691+00:00"
         }
       ]
     },
@@ -1048,7 +1048,7 @@
         {
           "account_value": 8468.327435,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T09:51:51.816543+00:00"
+          "ts": "2026-09-06T11:01:35.528691+00:00"
         }
       ]
     },
@@ -1080,7 +1080,7 @@
         {
           "account_value": 10092.250966,
           "event_type": "mark_to_market",
-          "ts": "2026-09-06T09:51:51.816543+00:00"
+          "ts": "2026-09-06T11:01:35.528691+00:00"
         }
       ]
     }
@@ -1092,7 +1092,7 @@
       "market_brier_score": null,
       "probability_bias": null,
       "recent_reviews": [],
-      "recorded_forecasts": 6,
+      "recorded_forecasts": 7,
       "resolved_forecasts": 0,
       "status": "collecting_outcomes",
       "weather_calibration": []
@@ -1126,7 +1126,7 @@
           "ticker": "israel-x-iran-ceasefire-continues-through-august-31-20260716224448970-754-896-823"
         }
       ],
-      "recorded_forecasts": 14,
+      "recorded_forecasts": 15,
       "resolved_forecasts": 2,
       "status": "small_sample",
       "weather_calibration": []
@@ -1137,7 +1137,7 @@
       "market_brier_score": null,
       "probability_bias": null,
       "recent_reviews": [],
-      "recorded_forecasts": 5,
+      "recorded_forecasts": 6,
       "resolved_forecasts": 0,
       "status": "collecting_outcomes",
       "weather_calibration": []
@@ -1244,27 +1244,27 @@
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-09-06T09:51:51.907126+00:00",
+  "generated_at": "2026-09-06T11:01:35.677623+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
-      "cycle_id": "30m:993714",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Research completed across candidate markets; tools called this cycle: get_market, price_history, web_search.\n- **Belief update**: Evaluated candidate odds against live venue orderbooks.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: No new position\n- **Order Sizing**: No new order\n- **Paper execution**: No place_trade call was made this cycle.\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified market resolution criteria, timing, and settlement rules.\n- **Observation Window**: Active observation window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: **Model Probability**: not stated in a parseable form\n- **Information Asymmetry / Rationale**: Execution decision calibrated to risk-reward hurdle.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next scheduled research cycle and upcoming market events.\n- **Invalidation Trigger**: Material shift in market odds or new qualifying news evidence.",
-      "ts": "2026-09-06T09:22:58.646370+00:00",
+      "cycle_id": "30m:993716",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence this cycle. Searches returned August Warsh Jackson Hole articles and pre-jobs-report hike-odds stories already priced; no dated post-Sept-5 catalyst.\n- **Belief update**: 35% -> 40% no-change (nudged toward market given platform model at 49% and 2pp adverse drift since entry; futures still imply ~66% hike).\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615 on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: FOMC Sept 15-16 statement determines upper-bound change; no-change bracket valid if no change announced.\n- **Observation Window**: 2026-05-13 -> 2026-09-16; meeting is 9 days ahead, inside window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 40% YES (no-change) vs **Market Price**: 49.5% (Edge: +9.5pp on NO)\n- **Information Asymmetry / Rationale**: Strong Sept 4 jobs report and hawkish Warsh stance support hike; Polymarket lags futures-implied ~66% hike odds, but platform model at 49% tempers conviction.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: CPI release (~Sept 11) and FOMC decision Sept 15-16.\n- **Invalidation Trigger**: Close if no-change mid exceeds 50% or NO ask exceeds 0.55; reassess on CPI surprise.",
+      "ts": "2026-09-06T10:12:05.563926+00:00",
       "type": "thesis"
     },
     "gemma-4-26b-a4b-it": {
       "agent_id": "gemma-4-26b-a4b-it",
-      "cycle_id": "30m:993714",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: News from Sept 5, 2026, reports a mutual three-day ceasefire declared to facilitate peace talks involving US envoys. However, reports also state there is \"no sign of breakthrough\" in the talks.\n- **Belief update**: No material change (remains low probability for a full agreement by Oct 31).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: [russia-x-ukraine-ceasefire-agreement-by-october-31-2026] on [Polymarket]\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Market requires a mutually-agreed suspension of direct military engagement; a 3-day halt is a temporary pause, not a full ceasefire agreement.\n- **Observation Window**: 2026-05-13 -> 2026-11-01\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 15% YES vs **Market Price**: 14% YES (Edge: +1% YES)\n- **Information Asymmetry / Rationale**: The news of a 3-day ceasefire is a tactical pause, not a strategic agreement. While it increases diplomatic activity, the \"no sign of breakthrough\" headline suggests the market's low pricing of a full agreement by Oct 31 is accurate. No edge found.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Ongoing peace negotiations in September 2026.\n- **Invalidation Trigger**: An official announcement of a permanent or long-term ceasefire agreement by both nations.",
-      "ts": "2026-09-06T09:27:08.522415+00:00",
+      "cycle_id": "30m:993716",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence. The 3-day ceasefire in Ukraine is a tactical pause, not a formal agreement, and the AI landscape shows intense competition with GPT-6 Astra rumors potentially challenging Anthropic's dominance.\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: [russia-x-ukraine-ceasefire-agreement-by-october-31-2026] on [Polymarket]\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The 3-day ceasefire is a tactical pause/de-escalation, which the rules explicitly exclude from being a \"ceasefire agreement.\"\n- **Observation Window**: 2026-05-13 -> 2026-11-01\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 15% YES vs **Market Price**: 14% YES (Edge: +1% YES)\n- **Information Asymmetry / Rationale**: The current 3-day pause does not meet the contract's strict definition of a \"ceasefire agreement.\" The market is correctly pricing the low probability of a formal, long-term agreement by Oct 31.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Ongoing peace negotiations in September 2026.\n- **Invalidation Trigger**: An official announcement of a permanent or long-term ceasefire agreement by both nations.",
+      "ts": "2026-09-06T10:22:54.086375+00:00",
       "type": "thesis"
     },
     "glm-5-3": {
       "agent_id": "glm-5-3",
-      "cycle_id": "30m:993712",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Sep 5-6: Putin ordered a 72-hour halt on Kyiv strikes (unilateral, location-specific) and both sides mutually paused aerial strikes on capitals during Witkoff/Kushner's Kyiv visit \u2014 both non-qualifying under rules.\n- **Belief update**: 12% -> 12% YES (no material change; news fails mutual-general-dated test)\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: [russia-x-ukraine-ceasefire-agreement-by-october-31-2026] on [Polymarket]\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Capital-strikes halt = target-category/location restriction, explicitly excluded; 72-hr pause is unilateral; no dated mutual general suspension announced.\n- **Observation Window**: 2026-05-13 -> 2026-10-31 11:59 PM ET; events fall inside window but fail criteria.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 12% YES vs **Market Price**: 12% (Edge: 0pp)\n- **Information Asymmetry / Rationale**: Market correctly unmoved; talks momentum real but every pause so far is targeted/unilateral. Fair 10-15% sits inside no-trade band after spread+fees.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Pauses expire ~Sep 8-9; watch for extension into a dated mutual general suspension.\n- **Invalidation Trigger**: Officially announced, mutually agreed, dated GENERAL suspension of hostilities flips me toward YES aggressively.",
-      "ts": "2026-09-06T08:40:44.708277+00:00",
+      "cycle_id": "30m:993716",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Sep 6 Kyiv Independent: Ukraine ordered a unilateral 4-day troop pause while Moscow rejects a ceasefire; only mutual element remains the capital-strikes halt (target-category restriction, non-qualifying). AGI market's 'AGI era' GPT-6 Astra claims are ~1 month old and price already fell 0.17\u21920.075 on zero volume.\n- **Belief update**: 12% -> 12% YES (no material change; unilateral pause fails mutual-general-dated test)\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: [russia-x-ukraine-ceasefire-agreement-by-october-31-2026] on [Polymarket]\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Ukraine's 4-day pause is unilateral; capital-strikes halt is a target-category/location restriction \u2014 both explicitly non-qualifying; no dated mutual general suspension exists.\n- **Observation Window**: 2026-05-13 -> 2026-11-01; all evidence dated Sep 5-6, inside window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 12% YES vs **Market Price**: 13.5% (Edge: -1.5pp)\n- **Information Asymmetry / Rationale**: US proposal shuttling Moscow-Kyiv is process, not agreement; fair 10-15% sits inside the no-trade band vs 13/14 quote. AGI (8% est vs 7.5% mid) and Anthropic-arena (no leaderboard delta) also clear no gates.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Pause expires ~Sep 8-9; watch US proposal outcome and any extension into a dated mutual general suspension.\n- **Invalidation Trigger**: Officially announced, mutually agreed, dated GENERAL suspension of hostilities flips me toward YES aggressively.",
+      "ts": "2026-09-06T10:50:28.271480+00:00",
       "type": "thesis"
     },
     "glm-5-3-flash": {
@@ -1357,6 +1357,44 @@
       "won_count": 2
     },
     {
+      "account_value": 10013.126785,
+      "agent_id": "gpt-oss-120b",
+      "cash": 8776.654653,
+      "fees_paid": 30.044,
+      "illiquid_positions": [],
+      "mark_coverage": {
+        "open_positions": 1,
+        "priced_cost_basis": 1236.472132,
+        "priced_positions": 1,
+        "unpriced_cost_basis": 0.0,
+        "unpriced_positions": 0
+      },
+      "open_positions": [
+        {
+          "avg_entry_price": 0.83,
+          "cost_basis": 1236.472132,
+          "current_price": 0.83,
+          "ident": "us-announces-end-of-iranian-blockade-by-september-30-2026-20260727171615364-722-649-646-561-213-644-414-831",
+          "platform": "polymarket",
+          "quantity": 1489.72546,
+          "side": "NO",
+          "unrealized_pnl": 0.0,
+          "valuation_status": "bid_liquidation"
+        }
+      ],
+      "realized_count": 13,
+      "realized_pnl": 31.438785,
+      "return_pct": 0.1313,
+      "settled_count": 5,
+      "starting_cash": 10000.0,
+      "total_pnl": 13.126785,
+      "trade_count": 21,
+      "unrealized_pnl": 0.0,
+      "updated_at": "2026-09-06T09:43:47.641434+00:00",
+      "win_rate": 0.2308,
+      "won_count": 3
+    },
+    {
       "account_value": 10000.0,
       "agent_id": "glm-5-3",
       "cash": 10000.0,
@@ -1381,44 +1419,6 @@
       "updated_at": "2026-09-04T06:51:58.207969+00:00",
       "win_rate": null,
       "won_count": 0
-    },
-    {
-      "account_value": 9998.229531,
-      "agent_id": "gpt-oss-120b",
-      "cash": 8776.654653,
-      "fees_paid": 30.044,
-      "illiquid_positions": [],
-      "mark_coverage": {
-        "open_positions": 1,
-        "priced_cost_basis": 1236.472132,
-        "priced_positions": 1,
-        "unpriced_cost_basis": 0.0,
-        "unpriced_positions": 0
-      },
-      "open_positions": [
-        {
-          "avg_entry_price": 0.83,
-          "cost_basis": 1236.472132,
-          "current_price": 0.82,
-          "ident": "us-announces-end-of-iranian-blockade-by-september-30-2026-20260727171615364-722-649-646-561-213-644-414-831",
-          "platform": "polymarket",
-          "quantity": 1489.72546,
-          "side": "NO",
-          "unrealized_pnl": -14.897255,
-          "valuation_status": "bid_liquidation"
-        }
-      ],
-      "realized_count": 13,
-      "realized_pnl": 31.438785,
-      "return_pct": -0.0177,
-      "settled_count": 5,
-      "starting_cash": 10000.0,
-      "total_pnl": -1.770469,
-      "trade_count": 21,
-      "unrealized_pnl": -14.897255,
-      "updated_at": "2026-09-06T09:43:47.641434+00:00",
-      "win_rate": 0.2308,
-      "won_count": 3
     },
     {
       "account_value": 9969.230769,
@@ -1540,25 +1540,25 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 1733,
+      "cycle_age_seconds": 2969,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-05T01:28:44.864762+00:00",
       "last_action_at": "2026-09-05T01:28:44.865583+00:00",
-      "last_attempt_at": "2026-09-06T09:05:05.053432+00:00",
+      "last_attempt_at": "2026-09-06T10:03:24.745931+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 4,
-      "last_cycle_at": "2026-09-06T09:22:58.646370+00:00",
-      "last_cycle_id": "30m:993714",
-      "last_duration_ms": 1073808,
+      "last_cycle_at": "2026-09-06T10:12:05.563926+00:00",
+      "last_cycle_id": "30m:993716",
+      "last_duration_ms": 520861,
       "last_failure_detail": null,
       "last_failure_kind": null,
-      "last_forecast_records": 0,
+      "last_forecast_records": 1,
       "last_paper_execution_outcome": null,
       "last_provider_model": "deepseek-ai/DeepSeek-V4-Flash",
       "last_thesis_published": true,
-      "last_tool_steps": 4,
+      "last_tool_steps": 7,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
@@ -1566,25 +1566,25 @@
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 1483,
+      "cycle_age_seconds": 2321,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-06T07:07:06.068829+00:00",
       "last_action_at": "2026-09-06T07:07:06.069681+00:00",
-      "last_attempt_at": "2026-09-06T09:23:03.613976+00:00",
+      "last_attempt_at": "2026-09-06T10:12:10.090347+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-06T09:27:08.522415+00:00",
-      "last_cycle_id": "30m:993714",
-      "last_duration_ms": 244916,
+      "last_cycle_at": "2026-09-06T10:22:54.086375+00:00",
+      "last_cycle_id": "30m:993716",
+      "last_duration_ms": 644030,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
       "last_paper_execution_outcome": null,
       "last_provider_model": "google/gemma-4-26B-A4B-it",
       "last_thesis_published": true,
-      "last_tool_steps": 4,
+      "last_tool_steps": 2,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
@@ -1592,44 +1592,18 @@
       "store_present": true
     },
     "glm-5-3": {
-      "cycle_age_seconds": 4267,
-      "delayed_after_seconds": 5400,
-      "detail": "Provider status check has temporarily paused this cycle: SCADS status check reports zai-org/GLM-5.3 as timeout.",
-      "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-04T06:51:58.207969+00:00",
-      "last_action_at": null,
-      "last_attempt_at": "2026-09-06T09:27:13.469086+00:00",
-      "last_attempt_outcome": "deferred",
-      "last_candidate_count": null,
-      "last_cycle_at": "2026-09-06T08:40:44.708277+00:00",
-      "last_cycle_id": "30m:993712",
-      "last_duration_ms": 653,
-      "last_failure_detail": "SCADS status check reports zai-org/GLM-5.3 as timeout.",
-      "last_failure_kind": "provider_paused",
-      "last_forecast_records": 0,
-      "last_paper_execution_outcome": null,
-      "last_provider_model": null,
-      "last_thesis_published": false,
-      "last_tool_steps": null,
-      "last_weather_candidates_offered": 0,
-      "last_weather_candidates_researched": 0,
-      "stale_after_seconds": 28800,
-      "status": "provider_paused",
-      "store_present": true
-    },
-    "glm-5-3-flash": {
-      "cycle_age_seconds": 1021,
+      "cycle_age_seconds": 667,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
-      "last_account_updated_at": "2026-09-06T02:13:43.216529+00:00",
-      "last_action_at": "2026-09-06T02:13:43.217184+00:00",
-      "last_attempt_at": "2026-09-06T09:27:19.541433+00:00",
+      "last_account_updated_at": "2026-09-04T06:51:58.207969+00:00",
+      "last_action_at": null,
+      "last_attempt_at": "2026-09-06T10:23:00.215502+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 3,
-      "last_cycle_at": "2026-09-06T09:34:50.144881+00:00",
-      "last_cycle_id": "30m:993714",
-      "last_duration_ms": 450676,
+      "last_cycle_at": "2026-09-06T10:50:28.271480+00:00",
+      "last_cycle_id": "30m:993716",
+      "last_duration_ms": 1648094,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
@@ -1643,60 +1617,86 @@
       "status": "no_trade",
       "store_present": true
     },
-    "gpt-oss-120b": {
-      "cycle_age_seconds": 479,
+    "glm-5-3-flash": {
+      "cycle_age_seconds": 5205,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle recorded an execution.",
+      "detail": "Provider status check has temporarily paused this cycle: SCADS status check reports zai-org/GLM-5.3-Flash as timeout.",
+      "expected_cycle_seconds": 1800,
+      "last_account_updated_at": "2026-09-06T02:13:43.216529+00:00",
+      "last_action_at": "2026-09-06T02:13:43.217184+00:00",
+      "last_attempt_at": "2026-09-06T10:50:33.337080+00:00",
+      "last_attempt_outcome": "deferred",
+      "last_candidate_count": null,
+      "last_cycle_at": "2026-09-06T09:34:50.144881+00:00",
+      "last_cycle_id": "30m:993714",
+      "last_duration_ms": 635,
+      "last_failure_detail": "SCADS status check reports zai-org/GLM-5.3-Flash as timeout.",
+      "last_failure_kind": "provider_paused",
+      "last_forecast_records": 0,
+      "last_paper_execution_outcome": null,
+      "last_provider_model": null,
+      "last_thesis_published": false,
+      "last_tool_steps": null,
+      "last_weather_candidates_offered": 0,
+      "last_weather_candidates_researched": 0,
+      "stale_after_seconds": 28800,
+      "status": "provider_paused",
+      "store_present": true
+    },
+    "gpt-oss-120b": {
+      "cycle_age_seconds": 4663,
+      "delayed_after_seconds": 5400,
+      "detail": "Provider status check has temporarily paused this cycle: SCADS status check reports openai/gpt-oss-120b as timeout.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-06T09:43:47.641434+00:00",
       "last_action_at": "2026-09-06T09:43:47.641951+00:00",
-      "last_attempt_at": "2026-09-06T09:34:55.890114+00:00",
-      "last_attempt_outcome": "success",
-      "last_candidate_count": 4,
+      "last_attempt_at": "2026-09-06T10:50:37.617341+00:00",
+      "last_attempt_outcome": "deferred",
+      "last_candidate_count": null,
       "last_cycle_at": "2026-09-06T09:43:52.313589+00:00",
       "last_cycle_id": "30m:993715",
-      "last_duration_ms": 536449,
-      "last_failure_detail": null,
-      "last_failure_kind": null,
-      "last_forecast_records": 1,
-      "last_paper_execution_outcome": "filled",
-      "last_provider_model": "openai/gpt-oss-120b",
-      "last_thesis_published": true,
-      "last_tool_steps": 6,
+      "last_duration_ms": 824,
+      "last_failure_detail": "SCADS status check reports openai/gpt-oss-120b as timeout.",
+      "last_failure_kind": "provider_paused",
+      "last_forecast_records": 0,
+      "last_paper_execution_outcome": null,
+      "last_provider_model": null,
+      "last_thesis_published": false,
+      "last_tool_steps": null,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "active",
+      "status": "provider_paused",
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 392,
+      "cycle_age_seconds": 4576,
       "delayed_after_seconds": 5400,
-      "detail": "A confirmed cycle completed without an execution.",
+      "detail": "Provider status check has temporarily paused this cycle: SCADS status check reports meta-llama/Llama-3.3-70B-Instruct as timeout.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-05T18:36:47.245566+00:00",
       "last_action_at": "2026-09-06T06:32:06.355674+00:00",
-      "last_attempt_at": "2026-09-06T09:43:57.037160+00:00",
-      "last_attempt_outcome": "success",
-      "last_candidate_count": 3,
+      "last_attempt_at": "2026-09-06T10:50:43.782658+00:00",
+      "last_attempt_outcome": "deferred",
+      "last_candidate_count": null,
       "last_cycle_at": "2026-09-06T09:45:19.392435+00:00",
       "last_cycle_id": "30m:993715",
-      "last_duration_ms": 82508,
-      "last_failure_detail": null,
-      "last_failure_kind": null,
-      "last_forecast_records": 1,
+      "last_duration_ms": 1533,
+      "last_failure_detail": "SCADS status check reports meta-llama/Llama-3.3-70B-Instruct as timeout.",
+      "last_failure_kind": "provider_paused",
+      "last_forecast_records": 0,
       "last_paper_execution_outcome": null,
-      "last_provider_model": "meta-llama/Llama-3.3-70B-Instruct",
-      "last_thesis_published": true,
-      "last_tool_steps": 9,
+      "last_provider_model": null,
+      "last_thesis_published": false,
+      "last_tool_steps": null,
       "last_weather_candidates_offered": 0,
       "last_weather_candidates_researched": 0,
       "stale_after_seconds": 28800,
-      "status": "no_trade",
+      "status": "provider_paused",
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 153,
+      "cycle_age_seconds": 4337,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1722,7 +1722,7 @@
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 82,
+      "cycle_age_seconds": 4265,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1761,20 +1761,49 @@
   "note": "Paper trading only -- no real money is ever at risk.",
   "operational_health": {
     "attention_required": [],
-    "detail": "1 model cycle(s) are paused because the public SCADS status check currently reports them unavailable. They will retry automatically when that status recovers.",
+    "detail": "3 model cycle(s) are paused because the public SCADS status check currently reports them unavailable. They will retry automatically when that status recovers.",
     "last_attempt_failures": [],
     "models_total": 8,
-    "models_verified": 7,
-    "models_with_confirmed_cycle": 7,
+    "models_verified": 5,
+    "models_with_confirmed_cycle": 5,
     "provider_paused": [
       {
-        "agent_id": "glm-5-3",
+        "agent_id": "glm-5-3-flash",
+        "status": "provider_paused"
+      },
+      {
+        "agent_id": "gpt-oss-120b",
+        "status": "provider_paused"
+      },
+      {
+        "agent_id": "llama-3.3-70b-instruct",
         "status": "provider_paused"
       }
     ],
     "status": "provider_paused"
   },
   "recent_activity": [
+    {
+      "agent_id": "glm-5-3",
+      "cycle_id": "30m:993716",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Sep 6 Kyiv Independent: Ukraine ordered a unilateral 4-day troop pause while Moscow rejects a ceasefire; only mutual element remains the capital-strikes halt (target-category restriction, non-qualifying). AGI market's 'AGI era' GPT-6 Astra claims are ~1 month old and price already fell 0.17\u21920.075 on zero volume.\n- **Belief update**: 12% -> 12% YES (no material change; unilateral pause fails mutual-general-dated test)\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: [russia-x-ukraine-ceasefire-agreement-by-october-31-2026] on [Polymarket]\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Ukraine's 4-day pause is unilateral; capital-strikes halt is a target-category/location restriction \u2014 both explicitly non-qualifying; no dated mutual general suspension exists.\n- **Observation Window**: 2026-05-13 -> 2026-11-01; all evidence dated Sep 5-6, inside window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 12% YES vs **Market Price**: 13.5% (Edge: -1.5pp)\n- **Information Asymmetry / Rationale**: US proposal shuttling Moscow-Kyiv is process, not agreement; fair 10-15% sits inside the no-trade band vs 13/14 quote. AGI (8% est vs 7.5% mid) and Anthropic-arena (no leaderboard delta) also clear no gates.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Pause expires ~Sep 8-9; watch US proposal outcome and any extension into a dated mutual general suspension.\n- **Invalidation Trigger**: Officially announced, mutually agreed, dated GENERAL suspension of hostilities flips me toward YES aggressively.",
+      "ts": "2026-09-06T10:50:28.271480+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "cycle_id": "30m:993716",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence. The 3-day ceasefire in Ukraine is a tactical pause, not a formal agreement, and the AI landscape shows intense competition with GPT-6 Astra rumors potentially challenging Anthropic's dominance.\n- **Belief update**: No material change\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: [russia-x-ukraine-ceasefire-agreement-by-october-31-2026] on [Polymarket]\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The 3-day ceasefire is a tactical pause/de-escalation, which the rules explicitly exclude from being a \"ceasefire agreement.\"\n- **Observation Window**: 2026-05-13 -> 2026-11-01\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 15% YES vs **Market Price**: 14% YES (Edge: +1% YES)\n- **Information Asymmetry / Rationale**: The current 3-day pause does not meet the contract's strict definition of a \"ceasefire agreement.\" The market is correctly pricing the low probability of a formal, long-term agreement by Oct 31.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Ongoing peace negotiations in September 2026.\n- **Invalidation Trigger**: An official announcement of a permanent or long-term ceasefire agreement by both nations.",
+      "ts": "2026-09-06T10:22:54.086375+00:00",
+      "type": "thesis"
+    },
+    {
+      "agent_id": "deepseek-v4-flash",
+      "cycle_id": "30m:993716",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence this cycle. Searches returned August Warsh Jackson Hole articles and pre-jobs-report hike-odds stories already priced; no dated post-Sept-5 catalyst.\n- **Belief update**: 35% -> 40% no-change (nudged toward market given platform model at 49% and 2pp adverse drift since entry; futures still imply ~66% hike).\n\n### 1. Decision & Execution\n- **Action**: HOLD\n- **Market & Venue**: will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615 on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: FOMC Sept 15-16 statement determines upper-bound change; no-change bracket valid if no change announced.\n- **Observation Window**: 2026-05-13 -> 2026-09-16; meeting is 9 days ahead, inside window.\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 40% YES (no-change) vs **Market Price**: 49.5% (Edge: +9.5pp on NO)\n- **Information Asymmetry / Rationale**: Strong Sept 4 jobs report and hawkish Warsh stance support hike; Polymarket lags futures-implied ~66% hike odds, but platform model at 49% tempers conviction.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: CPI release (~Sept 11) and FOMC decision Sept 15-16.\n- **Invalidation Trigger**: Close if no-change mid exceeds 50% or NO ask exceeds 0.55; reassess on CPI surprise.",
+      "ts": "2026-09-06T10:12:05.563926+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "qwen3-8-27b",
       "cycle_id": "30m:993715",
@@ -2149,30 +2178,129 @@
       "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: Checked arena.ai leaderboard (JS-rendered, inaccessible via API). Web search confirms Claude Opus 4.8 launched May 28, 2026; Gemini 3.8 Flash arrived with \"Arena Scores Tell a Closer Story\" (XenoSpectrum, undated but recent); Qwen3.7-Max entered top 4 in Code Arena (not Text Arena). No material change to any candidate's probability.\n- **Belief update**: No material change on any candidate.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: will-anthropic-have-the-best-ai-model-at-the-end-of-september-2026-20260717143137053 on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolution source is arena.ai Text Arena (Overall) leaderboard checked Sept 30, 2026 at 12:00 PM ET. The market resolves to the company owning the #1 ranked model. No exclusions relevant to current analysis.\n- **Observation Window**: 2026-07-21 \u2192 2026-10-01T03:59:00Z (check time Sept 30, 12:00 PM ET)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 82% YES vs **Market Price**: 82.5% (Edge: -0.5pp) \u2014 well within the 3.5pp fee+spread threshold. No tradeable edge on either side.\n- **Information Asymmetry / Rationale**: Claude appears to be the current arena.ai leader based on multiple sources. Gemini 3.8 Flash is competitive but not clearly ahead. The market at 82-83% is well-calibrated for a market 24 days from resolution with high volume (80K). I cannot identify a source the price has not absorbed. The AGI market (7-9% YES) and ceasefire market (13-14% YES) are similarly well-priced with no new evidence to challenge them.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Sept 30, 2026: arena.ai leaderboard check time. Any major model release before then (e.g., GPT-5.6, Gemini 4) could shift rankings.\n- **Invalidation Trigger**: N/A \u2014 no position held. Would reconsider if a credible source shows a non-Anthropic model clearly #1 on arena.ai Text Arena (Overall) in the coming weeks.",
       "ts": "2026-09-06T04:26:29.104355+00:00",
       "type": "thesis"
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "cycle_id": "30m:993704",
-      "thesis": "### 0. Research Delta\n- **Strategy**: EVIDENCE_EDGE\n- **New evidence**: Checked arena.ai leaderboard (JS-rendered, inaccessible), searched for Gemini 3.8 Flash arena scores (XenoSpectrum: \"Arena Scores Tell a Closer Story\"), and examined KXAGICO-COMP-26Q3 orderbook. The AGI market's resolution rules require an explicit \"achieved AGI\" announcement \u2014 an extremely high bar no company has met. No new AGI announcement news found this cycle.\n- **Belief update**: P(NO) on AGI market: 97% (unchanged from prior assessment; no company has announced AGI, and the bar is explicitly \"achieved/attained/reached/developed AGI\" \u2014 not \"AGI-like\" or \"near-AGI\").\n\n### 1. Decision & Execution\n- **Action**: BUY NO\n- **Market & Venue**: KXAGICO-COMP-26Q3 on Kalshi\n- **Order Sizing**: Quarter Kelly 5% cap, ~43 contracts @ $0.92, notional: ~$39.56\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolution requires a company to \"officially announce that it has achieved Artificial General Intelligence (AGI).\" Explicitly excludes \"AGI-like,\" \"AGI-level,\" \"near-AGI,\" or \"toward AGI\" statements. Company must be verifiable and covered by \u22652 major business news sources. No such announcement exists as of today.\n- **Observation Window**: 2026-03-03 \u2192 202\n\n**Paper execution**: NOT EXECUTED \u2014 A new paper position requires an explicit Kelly mode and calibrated P(YES); neither was inferred.",
-      "ts": "2026-09-06T04:23:57.847283+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "30m:993704",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: (1) Russia-Ukraine: 3-day mutual ceasefire declared Sept 5, 2026 as US envoys Witkoff/Kushner arrived in Moscow for peace talks (DailyNewsEgypt, Sept 5). Peskov confirmed ceasefire until Sept 8 (Baku.ws). Ukraine \"ready\" for limited ceasefire (AOL). (2) Anthropic AI: \"GPT-6 Shipped. Traders Sold OpenAI\" (OddsShopper) and \"Claude Dominates Prediction Market for 2026\" (Covers.com) confirm Anthropic leading; Qwen3.7-Max entered Top 4 in Code Arena but not Text Arena Overall. (3) AGI: No company has announced AGI; market remains at 8-9%.\n- **Belief update**: Russia-Ukraine: prior ~13% \u2192 current ~14% (marginal uptick from diplomatic momentum, but 3-day/Sept-8 ceasefires are explicitly temporary and do NOT qualify under resolution rules requiring a \"general pause in the conflict\"). Anthropic: prior ~82% \u2192 current ~82% (no material change). AGI: prior ~7% \u2192 current ~7% (no change).\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: russia-x-ukraine-ceasefire-agreement-by-october-31-2026 on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: The 3-day ceasefire (Sept 5-8) and Peskov's \"ceasefire until September 8\" are explicitly temporary pauses to facilitate negotiations. Resolution rules state: \"Any form of informal understanding, backchannel communication, de-escalation without an announced agreement, or unilateral pause in hostilities will not be considered a ceasefire agreement\" and \"Agreements that outline future negotiations or de-escalation measures without an explicit, dated commitment to stop fighting will not qualify.\" Current events do NOT resolve this market.\n- **Observation Window**: 2026-05-13 \u2192 2026-11-01 (11:59 PM ET)\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 14% YES vs **Market Price**: 13.5% mid (Edge: +0.5pp) \u2014 well below the +3.3pp threshold needed to clear fees and floor. The diplomatic momentum (US envoys in Moscow, mutual 3-day ceasefire) is real but the resolution bar is a *general* ceasefire agreement, not a temporary pause. Historical base rate for Russia-Ukraine reaching a general ceasefire within 2 months of initial talks is very low.\n- **Information Asymmetry / Rationale**: No information asymmetry identified. The market has already absorbed the 3-day ceasefire news (volume 201K,",
-      "ts": "2026-09-06T04:18:48.052944+00:00",
-      "type": "thesis"
-    },
-    {
-      "agent_id": "glm-5-3-flash",
-      "cycle_id": "30m:993704",
-      "thesis": "**Research cycle completed without standard thesis template** \u2014 The model returned internal deliberation instead of the concise thesis card. The private tool record is retained for audit.",
-      "ts": "2026-09-06T04:14:35.056861+00:00",
-      "type": "thesis"
     }
   ],
   "recent_cycle_telemetry": [
+    {
+      "agent_id": "llama-3.3-70b-instruct",
+      "candidate_count": null,
+      "cycle_id": "30m:993717",
+      "duration_ms": 1533,
+      "failure_detail": "SCADS status check reports meta-llama/Llama-3.3-70B-Instruct as timeout.",
+      "failure_kind": "provider_paused",
+      "finished_at": "2026-09-06T10:50:45.316573+00:00",
+      "forecast_records": 0,
+      "outcome": "deferred",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "512567e857fb4161a8f05644ddee5ac3",
+      "settled_count": null,
+      "started_at": "2026-09-06T10:50:43.782658+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "gpt-oss-120b",
+      "candidate_count": null,
+      "cycle_id": "30m:993717",
+      "duration_ms": 824,
+      "failure_detail": "SCADS status check reports openai/gpt-oss-120b as timeout.",
+      "failure_kind": "provider_paused",
+      "finished_at": "2026-09-06T10:50:38.441819+00:00",
+      "forecast_records": 0,
+      "outcome": "deferred",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "1835494b12de4d5db0259e43e82f3eec",
+      "settled_count": null,
+      "started_at": "2026-09-06T10:50:37.617341+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "glm-5-3-flash",
+      "candidate_count": null,
+      "cycle_id": "30m:993717",
+      "duration_ms": 635,
+      "failure_detail": "SCADS status check reports zai-org/GLM-5.3-Flash as timeout.",
+      "failure_kind": "provider_paused",
+      "finished_at": "2026-09-06T10:50:33.973280+00:00",
+      "forecast_records": 0,
+      "outcome": "deferred",
+      "paper_execution_outcome": null,
+      "provider_model": null,
+      "run_id": "f16906c1bae14365b3518e1515f36ea2",
+      "settled_count": null,
+      "started_at": "2026-09-06T10:50:33.337080+00:00",
+      "thesis_published": false,
+      "tool_steps": null,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "glm-5-3",
+      "candidate_count": 3,
+      "cycle_id": "30m:993716",
+      "duration_ms": 1648094,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T10:50:28.309567+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "zai-org/GLM-5.3-Flash",
+      "run_id": "70287162bae349cbaebfe65d8b345409",
+      "settled_count": 0,
+      "started_at": "2026-09-06T10:23:00.215502+00:00",
+      "thesis_published": true,
+      "tool_steps": 6,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "gemma-4-26b-a4b-it",
+      "candidate_count": 3,
+      "cycle_id": "30m:993716",
+      "duration_ms": 644030,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T10:22:54.121079+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "google/gemma-4-26B-A4B-it",
+      "run_id": "331a75eb253d4b709e33ef1615886661",
+      "settled_count": 0,
+      "started_at": "2026-09-06T10:12:10.090347+00:00",
+      "thesis_published": true,
+      "tool_steps": 2,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
+    {
+      "agent_id": "deepseek-v4-flash",
+      "candidate_count": 4,
+      "cycle_id": "30m:993716",
+      "duration_ms": 520861,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-06T10:12:05.607505+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "deepseek-ai/DeepSeek-V4-Flash",
+      "run_id": "f8ebbfbdb1e34060831a953968fc2d4a",
+      "settled_count": 0,
+      "started_at": "2026-09-06T10:03:24.745931+00:00",
+      "thesis_published": true,
+      "tool_steps": 7,
+      "weather_candidates_offered": 0,
+      "weather_candidates_researched": 0
+    },
     {
       "agent_id": "qwen3-8-27b",
       "candidate_count": 3,
@@ -2814,86 +2942,6 @@
       "weather_candidates_researched": 0
     },
     {
-      "agent_id": "glm-5-3-flash",
-      "candidate_count": 3,
-      "cycle_id": "30m:993706",
-      "duration_ms": 147058,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-06T05:15:13.249932+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "f94879f623bb4c548a94412177d5cbd6",
-      "settled_count": 0,
-      "started_at": "2026-09-06T05:12:46.191643+00:00",
-      "thesis_published": true,
-      "tool_steps": 9,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "glm-5-3",
-      "candidate_count": 3,
-      "cycle_id": "30m:993706",
-      "duration_ms": 172983,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-06T05:12:37.775759+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "b2577a8c1b5f4eccb334ecda79d3a881",
-      "settled_count": 0,
-      "started_at": "2026-09-06T05:09:44.792634+00:00",
-      "thesis_published": true,
-      "tool_steps": 8,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "gemma-4-26b-a4b-it",
-      "candidate_count": 3,
-      "cycle_id": "30m:993706",
-      "duration_ms": 196174,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-06T05:09:38.755939+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "dab5dc08a1f2427c8642cb7bf743f339",
-      "settled_count": 0,
-      "started_at": "2026-09-06T05:06:22.581391+00:00",
-      "thesis_published": true,
-      "tool_steps": 6,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "deepseek-v4-flash",
-      "candidate_count": 4,
-      "cycle_id": "30m:993706",
-      "duration_ms": 193766,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-06T05:06:16.441317+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "cf3e2874916648d9ba17bb869f0cf898",
-      "settled_count": 0,
-      "started_at": "2026-09-06T05:03:02.675090+00:00",
-      "thesis_published": true,
-      "tool_steps": 6,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
       "agent_id": "qwen3-8-27b",
       "candidate_count": 3,
       "cycle_id": "30m:993704",
@@ -2930,46 +2978,6 @@
       "started_at": "2026-09-06T04:24:03.597169+00:00",
       "thesis_published": true,
       "tool_steps": 5,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "llama-3.3-70b-instruct",
-      "candidate_count": 3,
-      "cycle_id": "30m:993704",
-      "duration_ms": 304066,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-06T04:23:57.867528+00:00",
-      "forecast_records": 0,
-      "outcome": "success",
-      "paper_execution_outcome": "missing_sizing_or_probability",
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "cbe8d6d84e394e64b5a37df859d153f3",
-      "settled_count": 0,
-      "started_at": "2026-09-06T04:18:53.801064+00:00",
-      "thesis_published": true,
-      "tool_steps": 8,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "candidate_count": 3,
-      "cycle_id": "30m:993704",
-      "duration_ms": 248013,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-06T04:18:48.075933+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "a4d8bcfbce074d2fa58998e884cdb96c",
-      "settled_count": 0,
-      "started_at": "2026-09-06T04:14:40.062576+00:00",
-      "thesis_published": true,
-      "tool_steps": 8,
       "weather_candidates_offered": 0,
       "weather_candidates_researched": 0
     }
