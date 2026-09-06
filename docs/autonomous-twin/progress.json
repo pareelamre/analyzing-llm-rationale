@@ -126,15 +126,20 @@
       "dependencies": [
         "T03"
       ],
-      "status": "pending",
-      "substep": null,
-      "branch": null,
+      "status": "in_progress",
+      "substep": "in-memory event, reservation, claim, and outbox/inbox primitives complete; durable Datastore adapter and multi-process evidence remain",
+      "branch": "codex/autonomous-twin",
       "commit": null,
       "pr_url": null,
-      "checks": [],
-      "evidence": [],
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_store (pass: 7 tests)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/store.py",
+        "tests/test_twin_store.py"
+      ],
       "blockers": [],
-      "handoff": null
+      "handoff": "Implement the Datastore transaction adapter and process-level contention test. Do not mark T04 complete until its emulator evidence is recorded."
     },
     {
       "id": "T05",

@@ -18,6 +18,13 @@ from .models import (
     can_transition_command,
     canonical_instrument_id,
 )
+from .store import (
+    InMemoryTwinStore,
+    InsufficientReservationCapacity,
+    ReservationState,
+    TwinStoreError,
+    require_durable_store,
+)
 
 __all__ = [
     "AccountScope",
@@ -26,14 +33,19 @@ __all__ = [
     "DecisionRecord",
     "Forecast",
     "Instrument",
+    "InMemoryTwinStore",
+    "InsufficientReservationCapacity",
     "MarketCursor",
     "MarketSnapshot",
     "PassDecision",
     "Proposal",
     "ProposalAction",
     "RejectionReason",
+    "ReservationState",
     "SchemaValidationError",
     "TradeIntent",
+    "TwinStoreError",
     "can_transition_command",
     "canonical_instrument_id",
+    "require_durable_store",
 ]
