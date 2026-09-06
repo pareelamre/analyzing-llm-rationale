@@ -11,6 +11,7 @@ from analyzing_llm_rationale.twin.budget import (
     InMemoryResearchBudget,
     ModelPrice,
     PriceUnavailable,
+    call_with_budget,
     estimate_request_cost,
 )
 
@@ -65,6 +66,14 @@ class TwinBudgetTests(unittest.TestCase):
             ),
             Decimal("0"),
         )
+
+    def test_provider_failure_or_missing_usage_remains_uncertain(self):
+        with self.assertRaises(RuntimeError):
+            call_with_budget(
+                self.store, "failed", key=self.key, estimated_usd=Decimal("0.2"), estimated_tokens=10,
+                policy=self.policy, operation=lambda: (_ for _ in ()).throw(RuntimeError("timeout")),
+            )
+        self.assertEqual(self.store.usage(self.key).uncertain_usd, Decimal("0.2"))
 
 
 if __name__ == "__main__":

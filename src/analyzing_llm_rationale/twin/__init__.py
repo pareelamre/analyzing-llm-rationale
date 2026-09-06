@@ -1,7 +1,16 @@
 """Typed, framework-independent records for the autonomous Foresea twin."""
 
-from .market import MarketAssessment, normalize_market
 from .account import AccountSnapshot, AccountSyncResult, synchronize_account
+from .budget import (
+    BudgetExceeded,
+    BudgetPolicy,
+    DatastoreResearchBudget,
+    InMemoryResearchBudget,
+    ModelPrice,
+    PriceUnavailable,
+    estimate_request_cost,
+)
+from .market import MarketAssessment, normalize_market
 from .models import (
     AccountScope,
     CommandState,
@@ -33,6 +42,9 @@ __all__ = [
     "AccountScope",
     "AccountSnapshot",
     "AccountSyncResult",
+    "BudgetExceeded",
+    "BudgetPolicy",
+    "DatastoreResearchBudget",
     "CommandState",
     "Completeness",
     "DecisionRecord",
@@ -40,10 +52,13 @@ __all__ = [
     "Forecast",
     "Instrument",
     "InMemoryTwinStore",
+    "InMemoryResearchBudget",
     "InsufficientReservationCapacity",
     "MarketCursor",
     "MarketAssessment",
     "MarketSnapshot",
+    "ModelPrice",
+    "PriceUnavailable",
     "PassDecision",
     "Proposal",
     "ProposalAction",
@@ -56,5 +71,6 @@ __all__ = [
     "canonical_instrument_id",
     "require_durable_store",
     "synchronize_account",
+    "estimate_request_cost",
     "normalize_market",
 ]

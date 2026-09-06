@@ -14,6 +14,11 @@ from decimal import Decimal
 from uuid import uuid4
 
 from analyzing_llm_rationale.twin import AccountScope, TradeIntent
+from analyzing_llm_rationale.twin.budget import (
+    BudgetExceeded,
+    BudgetPolicy,
+    DatastoreResearchBudget,
+)
 from analyzing_llm_rationale.twin.manual import reserve_confirmed_manual_order
 from analyzing_llm_rationale.twin.store import DatastoreTwinStore, InsufficientReservationCapacity
 
@@ -39,6 +44,18 @@ def _reserve_in_process(scope_id: str, intent_id: str, instrument_id: str, resul
 
 @unittest.skipUnless(os.environ.get("DATASTORE_EMULATOR_HOST"), "requires DATASTORE_EMULATOR_HOST")
 class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
+    def test_datastore_budget_reservation_is_idempotent_and_unknown_spend_stays_reserved(self):
+        from google.cloud import datastore
+
+        budget = DatastoreResearchBudget(datastore.Client(project=os.environ.get("GOOGLE_CLOUD_PROJECT", "foresea-twin-test")))
+        key = f"budget-{uuid4().hex}"
+        policy = BudgetPolicy(Decimal("1"), 100, 1)
+        budget.reserve("call-001", key=key, estimated_usd=Decimal("0.8"), estimated_tokens=50, policy=policy)
+        self.assertEqual(budget.reserve("call-001", key=key, estimated_usd=Decimal("0.9"), estimated_tokens=90, policy=policy).estimated_usd, Decimal("0.8"))
+        budget.reconcile("call-001", key=key, actual_usd=None, actual_tokens=None)
+        with self.assertRaises(BudgetExceeded):
+            budget.reserve("call-002", key=key, estimated_usd=Decimal("0.3"), estimated_tokens=10, policy=policy)
+
     def test_manual_and_autonomous_commands_share_datastore_capacity(self):
         from google.cloud import datastore
 
