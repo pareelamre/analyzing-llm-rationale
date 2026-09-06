@@ -72,6 +72,7 @@ from analyzing_llm_rationale import (
     live_track_record as live_track_record_support,
 )
 from analyzing_llm_rationale.config import (
+    scads_agent_trading_identities,
     scads_chat_model_options,
     scads_hosted_model_allowlist,
     scads_hosted_model_fallbacks,
@@ -13609,6 +13610,7 @@ try:
     _SCADS_MODEL_ALLOWLIST = scads_hosted_model_allowlist(_REPO_ROOT / "configs" / "models.yaml")
     _SCADS_CHAT_MODEL_OPTIONS = scads_chat_model_options(_REPO_ROOT / "configs" / "models.yaml")
     _SCADS_MODEL_FALLBACKS = scads_hosted_model_fallbacks(_REPO_ROOT / "configs" / "models.yaml")
+    _AGENT_TRADING_IDENTITIES = scads_agent_trading_identities(_REPO_ROOT / "configs" / "models.yaml")
 except Exception as exc:  # pragma: no cover - defensive production fallback.
     logger.warning("failed to load SCADS model allowlist from config: %s", exc)
     _SCADS_MODEL_ALLOWLIST = {
@@ -13622,6 +13624,7 @@ except Exception as exc:  # pragma: no cover - defensive production fallback.
     }
     _SCADS_CHAT_MODEL_OPTIONS = ()
     _SCADS_MODEL_FALLBACKS = {"gpt-oss-120b": ("google/gemma-4-26B-A4B-it",)}
+    _AGENT_TRADING_IDENTITIES = frozenset()
 
 
 def _scads_alt_provider(
@@ -14012,6 +14015,18 @@ def _agent_fallback_providers(req: "AgentAnalyzeRequest", primary_provider) -> L
     providers = []
     for model_name in chain:
         if model_name == primary_name:
+            continue
+        # Never answer for one competitor with another's model. glm-5-3's chain
+        # began with zai-org/GLM-5.3-Flash, a model trading on the same board,
+        # so three of four glm-5-3 cycles were produced by Flash. The identity
+        # guard caught them and refused the credit, which turned a corrupt
+        # cycle into a wasted one -- but the waste is avoidable, and a cycle
+        # that simply fails is retried next tick as itself.
+        if model_name in _AGENT_TRADING_IDENTITIES:
+            logger.warning(
+                "agent fallback skipped: %s would answer for %s, and both "
+                "compete on the board", model_name, label,
+            )
             continue
         prov = _scads_provider_for_model_name(
             model_name,

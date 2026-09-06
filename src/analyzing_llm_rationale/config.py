@@ -225,6 +225,24 @@ def scads_agent_trading_model_labels(path: Path) -> Tuple[str, ...]:
     return tuple(sorted(selected))
 
 
+def scads_agent_trading_identities(path: Path) -> frozenset:
+    """Provider model names that compete on the agent-trading board.
+
+    A cycle is a claim about one model's judgement, so no agent may ever be
+    served by another agent's model: falling back to a rival produces work
+    credited to whoever asked for it. These identities are what an
+    agent-trading fallback chain must refuse.
+    """
+    identities = set()
+    for cfg in load_model_configs(path).values():
+        if not getattr(cfg, "agent_trading_enabled", False):
+            continue
+        identity = getattr(cfg, "agent_model_identity", None) or cfg.router_model_name
+        if identity:
+            identities.add(str(identity).strip())
+    return frozenset(identities)
+
+
 def scads_hosted_model_fallbacks(path: Path) -> Dict[str, Tuple[str, ...]]:
     """Configured SCADS-hosted model labels mapped to provider fallback chains."""
     return {

@@ -20,9 +20,11 @@ from analyzing_llm_rationale.cli import main as cli_main
 from analyzing_llm_rationale.config import (  # noqa: E402
     load_model_configs,
     load_variant_configs,
+    scads_agent_trading_identities,
     scads_agent_trading_model_labels,
     scads_chat_model_options,
     scads_hosted_model_allowlist,
+    scads_hosted_model_fallbacks,
     scads_track_model_labels,
     temperature_to_tag,
 )
@@ -539,6 +541,39 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(parsed["predicted_answer"], "No")
         self.assertEqual(parsed["confidence"], 0.85)
         self.assertEqual(parsed["rationale"], "Recovered explanation.")
+
+    def test_no_agent_may_be_answered_by_a_rival_on_the_same_board(self):
+        """glm-5-3's chain began with GLM-5.3-Flash, a board competitor, so
+        three of four glm-5-3 cycles were produced by Flash. A cycle is a claim
+        about one model's judgement; a rival answering for it is not that claim.
+        """
+        repo_root = Path(__file__).resolve().parents[1]
+        config = repo_root / "configs" / "models.yaml"
+        identities = scads_agent_trading_identities(config)
+        fallbacks = scads_hosted_model_fallbacks(config)
+
+        self.assertIn("zai-org/GLM-5.3", identities)
+        self.assertIn("zai-org/GLM-5.3-Flash", identities)
+
+        # The condition the agent path must enforce: every entry in a
+        # competitor's chain that is itself a competitor has to be refused.
+        glm_chain = fallbacks.get("glm-5-3", ())
+        self.assertTrue(glm_chain, "glm-5-3 should still declare a chain")
+        self.assertTrue(
+            all(entry in identities for entry in glm_chain),
+            "this test is meaningless if glm-5-3's chain stops being competitors",
+        )
+
+    def test_agent_trading_identities_are_drawn_from_enabled_models_only(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        config = repo_root / "configs" / "models.yaml"
+        identities = scads_agent_trading_identities(config)
+        models = load_model_configs(config)
+        for name, cfg in models.items():
+            identity = getattr(cfg, "agent_model_identity", None) or cfg.router_model_name
+            if not getattr(cfg, "agent_trading_enabled", False):
+                continue
+            self.assertIn(identity, identities, f"{name} competes but is not listed")
 
     def test_config_loaders_expose_variant_and_model_metadata(self):
         repo_root = Path(__file__).resolve().parents[1]
