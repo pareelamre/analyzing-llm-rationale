@@ -15,6 +15,31 @@ from .models import Completeness, SchemaValidationError
 
 
 @dataclass(frozen=True)
+class AccountHolding:
+    """A reconciled holding with only conservative, venue-observed economics."""
+
+    instrument_id: str
+    quantity: Decimal
+    basis: Decimal
+    liquidation_value: Decimal
+
+
+@dataclass(frozen=True)
+class AccountTolerance:
+    """Venue-declared comparison precision; arbitrary broad epsilons are forbidden."""
+
+    currency: Decimal = Decimal("0")
+    quantity: Decimal = Decimal("0")
+
+    def __post_init__(self) -> None:
+        for field in ("currency", "quantity"):
+            value = Decimal(str(getattr(self, field)))
+            if not value.is_finite() or value < 0:
+                raise SchemaValidationError(f"{field} tolerance must be a non-negative finite decimal")
+            object.__setattr__(self, field, value)
+
+
+@dataclass(frozen=True)
 class AccountSnapshot:
     scope_id: str
     generation: int
@@ -23,12 +48,23 @@ class AccountSnapshot:
     available_cash: Decimal
     total_cash: Decimal
     reserved_cash: Decimal
+    settled_cash: Decimal
+    holdings: tuple[AccountHolding, ...]
+    position_basis: Decimal
+    fees_paid: Decimal
+    conservative_liquidation_value: Decimal
     positions: tuple[Mapping[str, Any], ...]
     orders: tuple[Mapping[str, Any], ...]
     fills: tuple[Mapping[str, Any], ...]
     settlements: tuple[Mapping[str, Any], ...]
     external_activity_ids: tuple[str, ...]
     divergence: bool
+    drift_reasons: tuple[str, ...]
+
+    @property
+    def blocks_new_exposure(self) -> bool:
+        """A reconciler must pause entries until any discrepancy is explained."""
+        return self.divergence
 
 
 @dataclass(frozen=True)
@@ -72,6 +108,114 @@ def _decimal(name: str, value: Any) -> Optional[Decimal]:
     except (InvalidOperation, TypeError, ValueError):
         return None
     return amount if amount.is_finite() and amount >= 0 else None
+
+
+def _signed_decimal(name: str, value: Any) -> Optional[Decimal]:
+    """Parse a finite signed quantity without making missing data look like zero."""
+    if value in (None, ""):
+        return None
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return amount if amount.is_finite() else None
+
+
+def _first_decimal(row: Mapping[str, Any], fields: tuple[str, ...]) -> Optional[Decimal]:
+    for field in fields:
+        if field in row:
+            return _decimal(field, row[field])
+    return None
+
+
+def _position_holdings(
+    positions: Sequence[Mapping[str, Any]],
+) -> tuple[Optional[tuple[AccountHolding, ...]], Optional[str]]:
+    holdings: list[AccountHolding] = []
+    for row in positions:
+        instrument_id = next(
+            (str(row[field]).strip() for field in ("position_id", "token_id", "ticker") if row.get(field) not in (None, "")),
+            "",
+        )
+        quantity = _signed_decimal("quantity", row.get("quantity", row.get("position")))
+        basis = _first_decimal(row, ("basis", "cost_basis", "cost_basis_dollars"))
+        if basis is None and quantity is not None:
+            price = _first_decimal(row, ("average_price", "avg_price", "avgPrice"))
+            basis = abs(quantity) * price if price is not None else None
+        liquidation = _first_decimal(
+            row,
+            ("conservative_liquidation_value", "liquidation_value", "bid_value"),
+        )
+        if not instrument_id or quantity is None or basis is None or liquidation is None:
+            return None, "position_economics_unavailable"
+        holdings.append(AccountHolding(instrument_id, quantity, basis, liquidation))
+    return tuple(sorted(holdings, key=lambda holding: holding.instrument_id)), None
+
+
+def _fees_paid(
+    fills: Sequence[Mapping[str, Any]], settlements: Sequence[Mapping[str, Any]]
+) -> tuple[Optional[Decimal], Optional[str]]:
+    fees = Decimal("0")
+    for label, rows in (("fill", fills), ("settlement", settlements)):
+        for row in rows:
+            fee = _first_decimal(row, ("fee", "fee_cost", "fee_cost_dollars", "fees_paid"))
+            if fee is None:
+                return None, f"{label}_fee_unavailable"
+            fees += fee
+    return fees, None
+
+
+def _settlements_are_final(settlements: Sequence[Mapping[str, Any]]) -> Optional[str]:
+    """Require an explicit final state before settlement cash can be authoritative."""
+    final_statuses = {"final", "settled", "completed", "confirmed"}
+    for settlement in settlements:
+        if settlement.get("final") is True:
+            continue
+        if str(settlement.get("status", "")).strip().lower() in final_statuses:
+            continue
+        return "settlement_not_final"
+    return None
+
+
+def _drift_reasons(
+    *,
+    available_cash: Decimal,
+    reserved_cash: Decimal,
+    holdings: Sequence[AccountHolding],
+    local_available_cash: Optional[Any],
+    local_reserved_cash: Optional[Any],
+    local_holdings: Optional[Mapping[str, Any]],
+    tolerance: AccountTolerance,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    for label, observed, expected in (
+        ("available_cash", available_cash, local_available_cash),
+        ("reserved_cash", reserved_cash, local_reserved_cash),
+    ):
+        if expected is None:
+            continue
+        expected_value = _decimal(label, expected)
+        if expected_value is None:
+            reasons.append(f"local_{label}_invalid")
+        elif abs(observed - expected_value) > tolerance.currency:
+            reasons.append(f"{label}_mismatch")
+    if local_holdings is None:
+        return tuple(reasons)
+    if not isinstance(local_holdings, Mapping):
+        return tuple([*reasons, "local_holdings_invalid"])
+    observed_holdings = {holding.instrument_id: holding.quantity for holding in holdings}
+    expected_holdings: dict[str, Decimal] = {}
+    for instrument_id, quantity in local_holdings.items():
+        key = str(instrument_id).strip()
+        value = _signed_decimal("local_holding", quantity)
+        if not key or value is None:
+            reasons.append("local_holdings_invalid")
+            continue
+        expected_holdings[key] = value
+    for instrument_id in sorted(set(observed_holdings) | set(expected_holdings)):
+        if abs(observed_holdings.get(instrument_id, Decimal("0")) - expected_holdings.get(instrument_id, Decimal("0"))) > tolerance.quantity:
+            reasons.append(f"holding_mismatch:{instrument_id}")
+    return tuple(reasons)
 
 
 def _page_rows(label: str, pages: Sequence[Mapping[str, Any]]) -> tuple[Optional[list[Mapping[str, Any]]], Optional[str]]:
@@ -119,6 +263,10 @@ def synchronize_account(
     settlements: Sequence[Mapping[str, Any]],
     local_command_ids: set[str],
     previous: Optional[AccountSnapshot] = None,
+    local_available_cash: Optional[Any] = None,
+    local_reserved_cash: Optional[Any] = None,
+    local_holdings: Optional[Mapping[str, Any]] = None,
+    tolerance: Optional[AccountTolerance] = None,
 ) -> AccountSyncResult:
     """Atomically validate a full venue generation or retain the last one."""
     if not scope_id or generation < 1 or received_at.tzinfo is None:
@@ -144,12 +292,24 @@ def synchronize_account(
     if len(balance_rows) != 1:
         return AccountSyncResult(previous, previous is not None, ("balance_ambiguous",))
     balance = balance_rows[0]
-    available, total, reserved = (_decimal("available", balance.get("available")), _decimal("total", balance.get("total")), _decimal("reserved", balance.get("reserved", "0")))
-    if available is None or total is None or reserved is None or available + reserved > total:
+    available, total, reserved, settled = (
+        _decimal("available", balance.get("available")),
+        _decimal("total", balance.get("total")),
+        _decimal("reserved", balance.get("reserved")),
+        _decimal("settled_cash", balance.get("settled_cash")),
+    )
+    if (
+        available is None
+        or total is None
+        or reserved is None
+        or settled is None
+        or available + reserved > total
+        or settled > total
+    ):
         return AccountSyncResult(previous, previous is not None, ("balance_unavailable_or_inconsistent",))
 
     deduped: dict[str, tuple[Mapping[str, Any], ...]] = {}
-    field_map = {"positions": ("position_id", "token_id", "ticker"), "orders": ("order_id", "id"), "fills": ("fill_id", "trade_id", "id"), "settlements": ("settlement_id", "id", "ticker")}
+    field_map = {"positions": ("position_id", "token_id", "ticker"), "orders": ("order_id", "id"), "fills": ("fill_id", "trade_id", "id"), "settlements": ("settlement_id", "id")}
     for label, fields in field_map.items():
         rows, error = _dedupe(label, flat[label], id_fields=fields)
         if error:
@@ -158,6 +318,31 @@ def synchronize_account(
             deduped[label] = rows or ()
     if issues:
         return AccountSyncResult(previous, previous is not None, tuple(issues))
+
+    settlement_error = _settlements_are_final(deduped["settlements"])
+    holdings, holdings_error = _position_holdings(deduped["positions"])
+    fees_paid, fees_error = _fees_paid(deduped["fills"], deduped["settlements"])
+    if settlement_error or holdings_error or fees_error:
+        return AccountSyncResult(
+            previous,
+            previous is not None,
+            tuple(error for error in (settlement_error, holdings_error, fees_error) if error),
+        )
+    assert holdings is not None and fees_paid is not None
+    comparison_tolerance = tolerance or AccountTolerance()
+    drift_reasons = _drift_reasons(
+        available_cash=available,
+        reserved_cash=reserved,
+        holdings=holdings,
+        local_available_cash=local_available_cash,
+        local_reserved_cash=local_reserved_cash,
+        local_holdings=local_holdings,
+        tolerance=comparison_tolerance,
+    )
+    position_basis = sum((holding.basis for holding in holdings), Decimal("0"))
+    conservative_liquidation_value = settled + sum(
+        (holding.liquidation_value for holding in holdings), Decimal("0")
+    )
 
     external: list[str] = []
     for order in deduped["orders"]:
@@ -170,8 +355,11 @@ def synchronize_account(
             external.append(command_id)
     snapshot = AccountSnapshot(
         scope_id=scope_id, generation=generation, received_at=received_at, completeness=Completeness.COMPLETE,
-        available_cash=available, total_cash=total, reserved_cash=reserved, positions=deduped["positions"],
+        available_cash=available, total_cash=total, reserved_cash=reserved, settled_cash=settled,
+        holdings=holdings, position_basis=position_basis, fees_paid=fees_paid,
+        conservative_liquidation_value=conservative_liquidation_value, positions=deduped["positions"],
         orders=deduped["orders"], fills=deduped["fills"], settlements=deduped["settlements"],
-        external_activity_ids=tuple(sorted(set(external))), divergence=bool(external),
+        external_activity_ids=tuple(sorted(set(external))),
+        divergence=bool(external or drift_reasons), drift_reasons=drift_reasons,
     )
     return AccountSyncResult(snapshot, False, ())

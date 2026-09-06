@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from analyzing_llm_rationale.twin.account import (
+    AccountTolerance,
     portfolio_pages_from_complete_read,
     synchronize_account,
 )
@@ -25,11 +27,11 @@ def page(items, complete=True):
 
 def inputs(**updates):
     result = {
-        "balances": [page([{"available": "7", "total": "10", "reserved": "3"}])],
-        "positions": [page([{"position_id": "position-001", "quantity": "2"}])],
+        "balances": [page([{"available": "7", "total": "10", "reserved": "3", "settled_cash": "10"}])],
+        "positions": [page([{"position_id": "position-001", "quantity": "2", "average_price": "0.4", "liquidation_value": "0.6"}])],
         "orders": [page([{"order_id": "order-001", "client_order_id": "command-001"}])],
-        "fills": [page([{"fill_id": "fill-001", "order_id": "order-001"}])],
-        "settlements": [page([{"settlement_id": "settlement-001", "amount": "1"}])],
+        "fills": [page([{"fill_id": "fill-001", "order_id": "order-001", "fee": "0.1"}])],
+        "settlements": [page([{"settlement_id": "settlement-001", "amount": "1", "fee": "0", "status": "settled"}])],
         "local_command_ids": {"command-001"},
     }
     result.update(updates)
@@ -37,19 +39,21 @@ def inputs(**updates):
 
 
 class TwinAccountTests(unittest.TestCase):
-    def sync(self, **updates):
-        return synchronize_account("scope-001", generation=1, received_at=NOW, **inputs(**updates))
+    def sync(self, generation=1, **updates):
+        return synchronize_account("scope-001", generation=generation, received_at=NOW, **inputs(**updates))
 
     def test_multi_page_snapshot_deduplicates_immutable_ids_and_is_complete(self):
-        result = self.sync(positions=[page([{"position_id": "position-001", "quantity": "2"}]), page([{"position_id": "position-002", "quantity": "1"}])])
+        result = self.sync(positions=[page([{"position_id": "position-001", "quantity": "2", "average_price": "0.4", "liquidation_value": "0.6"}]), page([{"position_id": "position-002", "quantity": "1", "basis": "0.2", "liquidation_value": "0.1"}])])
         self.assertFalse(result.retained_previous)
         self.assertEqual(len(result.snapshot.positions), 2)
         self.assertEqual(str(result.snapshot.available_cash), "7")
+        self.assertEqual(str(result.snapshot.position_basis), "1.0")
+        self.assertEqual(str(result.snapshot.conservative_liquidation_value), "10.7")
 
     def test_repeated_fill_conflicting_duplicate_and_partial_page_retain_previous(self):
         good = self.sync().snapshot
-        repeated = self.sync(fills=[page([{"fill_id": "fill-001"}, {"fill_id": "fill-001"}])])
-        conflict = self.sync(fills=[page([{"fill_id": "fill-001", "quantity": "1"}, {"fill_id": "fill-001", "quantity": "2"}])], previous=good)
+        repeated = self.sync(fills=[page([{"fill_id": "fill-001", "fee": "0.1"}, {"fill_id": "fill-001", "fee": "0.1"}])])
+        conflict = self.sync(fills=[page([{"fill_id": "fill-001", "quantity": "1", "fee": "0.1"}, {"fill_id": "fill-001", "quantity": "2", "fee": "0.1"}])], previous=good)
         partial = self.sync(orders=[page([], complete=False)], previous=good)
         self.assertEqual(len(repeated.snapshot.fills), 1)
         self.assertTrue(conflict.retained_previous)
@@ -62,16 +66,62 @@ class TwinAccountTests(unittest.TestCase):
 
     def test_unavailable_or_inconsistent_balance_never_increases_spending(self):
         good = self.sync().snapshot
-        unavailable = self.sync(balances=[page([{"available": None, "total": "10"}])], previous=good)
-        inconsistent = self.sync(balances=[page([{"available": "9", "total": "10", "reserved": "2"}])], previous=good)
+        unavailable = self.sync(balances=[page([{"available": None, "total": "10", "reserved": "3", "settled_cash": "10"}])], previous=good)
+        inconsistent = self.sync(balances=[page([{"available": "9", "total": "10", "reserved": "2", "settled_cash": "10"}])], previous=good)
         self.assertEqual(unavailable.snapshot.available_cash, good.available_cash)
         self.assertEqual(inconsistent.snapshot.available_cash, good.available_cash)
 
     def test_settlement_correction_and_concurrent_snapshot_activity_are_deterministic(self):
-        corrected = self.sync(settlements=[page([{"settlement_id": "settlement-001", "amount": "1"}, {"settlement_id": "settlement-002", "amount": "-0.1"}])])
+        corrected = self.sync(settlements=[page([{"settlement_id": "settlement-001", "amount": "1", "fee": "0", "status": "settled"}, {"settlement_id": "settlement-002", "amount": "-0.1", "fee": "0.02", "status": "final"}])])
         concurrent = self.sync(orders=[page([{"order_id": "order-001"}]), page([{"order_id": "order-002"}])])
         self.assertEqual(len(corrected.snapshot.settlements), 2)
+        self.assertEqual(str(corrected.snapshot.fees_paid), "0.12")
         self.assertEqual([row["order_id"] for row in concurrent.snapshot.orders], ["order-001", "order-002"])
+
+    def test_economics_are_stable_on_a_new_complete_generation(self):
+        original = self.sync().snapshot
+        reimported = synchronize_account(
+            "scope-001", generation=2, received_at=NOW, previous=original, **inputs()
+        )
+        self.assertFalse(reimported.retained_previous)
+        self.assertEqual(reimported.snapshot.holdings, original.holdings)
+        self.assertEqual(reimported.snapshot.position_basis, original.position_basis)
+        self.assertEqual(reimported.snapshot.fees_paid, original.fees_paid)
+        self.assertEqual(
+            reimported.snapshot.conservative_liquidation_value,
+            original.conservative_liquidation_value,
+        )
+
+    def test_unknown_position_economics_or_nonimmutable_settlement_retain_prior(self):
+        good = self.sync().snapshot
+        missing_liquidation = self.sync(
+            generation=2,
+            positions=[page([{"position_id": "position-001", "quantity": "2", "average_price": "0.4"}])],
+            previous=good,
+        )
+        anonymous_settlement = self.sync(
+            generation=2,
+            settlements=[page([{"ticker": "TICKER", "fee": "0"}])], previous=good
+        )
+        self.assertTrue(missing_liquidation.retained_previous)
+        self.assertEqual(missing_liquidation.issues, ("position_economics_unavailable",))
+        self.assertTrue(anonymous_settlement.retained_previous)
+        self.assertEqual(anonymous_settlement.issues, ("settlements_missing_immutable_id",))
+
+    def test_missing_reserved_cash_or_provisional_settlement_retain_prior(self):
+        good = self.sync().snapshot
+        missing_reserved = self.sync(
+            generation=2,
+            balances=[page([{"available": "7", "total": "10", "settled_cash": "10"}])],
+            previous=good,
+        )
+        provisional = self.sync(
+            generation=2,
+            settlements=[page([{"settlement_id": "settlement-001", "fee": "0", "status": "pending"}])],
+            previous=good,
+        )
+        self.assertEqual(missing_reserved.issues, ("balance_unavailable_or_inconsistent",))
+        self.assertEqual(provisional.issues, ("settlement_not_final",))
 
     def test_incomplete_cursor_and_replayed_generation_retain_prior_complete_snapshot(self):
         good = self.sync().snapshot
@@ -82,20 +132,42 @@ class TwinAccountTests(unittest.TestCase):
         self.assertEqual(replayed.issues, ("stale_or_replayed_generation",))
 
     def test_unknown_fill_marks_account_drift(self):
-        result = self.sync(fills=[page([{"fill_id": "external-fill", "client_order_id": "unmanaged-command"}])])
+        result = self.sync(fills=[page([{"fill_id": "external-fill", "client_order_id": "unmanaged-command", "fee": "0"}])])
         self.assertTrue(result.snapshot.divergence)
         self.assertEqual(result.snapshot.external_activity_ids, ("unmanaged-command",))
+
+    def test_explicit_cash_and_quantity_tolerances_record_drift_and_block_entries(self):
+        result = self.sync(
+            local_available_cash="7.2",
+            local_reserved_cash="2.8",
+            local_holdings={"position-001": "1.7", "unexpected": "0.2"},
+            tolerance=AccountTolerance(currency=Decimal("0.1"), quantity=Decimal("0.1")),
+        )
+        self.assertTrue(result.snapshot.divergence)
+        self.assertTrue(result.snapshot.blocks_new_exposure)
+        self.assertEqual(
+            result.snapshot.drift_reasons,
+            ("available_cash_mismatch", "reserved_cash_mismatch", "holding_mismatch:position-001", "holding_mismatch:unexpected"),
+        )
+        within_precision = self.sync(
+            local_available_cash="7.05",
+            local_reserved_cash="3.05",
+            local_holdings={"position-001": "2.05"},
+            tolerance=AccountTolerance(currency="0.1", quantity="0.1"),
+        )
+        self.assertFalse(within_precision.snapshot.divergence)
+        self.assertEqual(within_precision.snapshot.drift_reasons, ())
 
     def test_portfolio_adapter_refuses_display_limited_reads(self):
         with self.assertRaises(SchemaValidationError):
             portfolio_pages_from_complete_read({"balance": {"available": "1"}})
         pages = portfolio_pages_from_complete_read({
             "complete": True,
-            "balance": {"available": "7", "total": "10", "reserved": "3"},
-            "positions": [{"position_id": "position-001"}],
+            "balance": {"available": "7", "total": "10", "reserved": "3", "settled_cash": "10"},
+            "positions": [{"position_id": "position-001", "quantity": "2", "average_price": "0.4", "liquidation_value": "0.6"}],
             "orders": [{"order_id": "order-001"}],
-            "fills": [{"fill_id": "fill-001"}],
-            "settlements": [{"settlement_id": "settlement-001"}],
+            "fills": [{"fill_id": "fill-001", "fee": "0"}],
+            "settlements": [{"settlement_id": "settlement-001", "fee": "0", "status": "settled"}],
         })
         self.assertTrue(pages["balances"][0]["complete"])
 
