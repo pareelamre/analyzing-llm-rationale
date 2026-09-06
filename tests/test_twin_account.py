@@ -62,6 +62,19 @@ class TwinAccountTests(unittest.TestCase):
         self.assertEqual(len(corrected.snapshot.settlements), 2)
         self.assertEqual([row["order_id"] for row in concurrent.snapshot.orders], ["order-001", "order-002"])
 
+    def test_incomplete_cursor_and_replayed_generation_retain_prior_complete_snapshot(self):
+        good = self.sync().snapshot
+        cursor_incomplete = self.sync(orders=[{"complete": True, "has_more": True, "items": []}], previous=good)
+        replayed = synchronize_account("scope-001", generation=1, received_at=NOW, previous=good, **inputs())
+        self.assertTrue(cursor_incomplete.retained_previous)
+        self.assertEqual(cursor_incomplete.snapshot.generation, good.generation)
+        self.assertEqual(replayed.issues, ("stale_or_replayed_generation",))
+
+    def test_unknown_fill_marks_account_drift(self):
+        result = self.sync(fills=[page([{"fill_id": "external-fill", "client_order_id": "unmanaged-command"}])])
+        self.assertTrue(result.snapshot.divergence)
+        self.assertEqual(result.snapshot.external_activity_ids, ("unmanaged-command",))
+
 
 if __name__ == "__main__":
     unittest.main()

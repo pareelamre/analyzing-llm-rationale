@@ -53,7 +53,11 @@ def _page_rows(label: str, pages: Sequence[Mapping[str, Any]]) -> tuple[Optional
     if not pages:
         return None, f"{label}_pages_missing"
     for page in pages:
-        if not isinstance(page, Mapping) or page.get("complete") is not True:
+        if (
+            not isinstance(page, Mapping)
+            or page.get("complete") is not True
+            or page.get("has_more") is True
+        ):
             return None, f"{label}_pagination_incomplete"
         value = page.get("items")
         if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
@@ -93,6 +97,11 @@ def synchronize_account(
     """Atomically validate a full venue generation or retain the last one."""
     if not scope_id or generation < 1 or received_at.tzinfo is None:
         raise SchemaValidationError("scope_id, positive generation, and UTC-aware received_at are required")
+    if previous is not None:
+        if previous.scope_id != scope_id:
+            raise SchemaValidationError("previous snapshot belongs to a different account scope")
+        if generation <= previous.generation:
+            return AccountSyncResult(previous, True, ("stale_or_replayed_generation",))
     pages = {"balances": balances, "positions": positions, "orders": orders, "fills": fills, "settlements": settlements}
     flat: dict[str, list[Mapping[str, Any]]] = {}
     issues: list[str] = []
@@ -127,6 +136,10 @@ def synchronize_account(
     external: list[str] = []
     for order in deduped["orders"]:
         command_id = str(order.get("client_order_id") or order.get("command_id") or "").strip()
+        if command_id and command_id not in local_command_ids:
+            external.append(command_id)
+    for fill in deduped["fills"]:
+        command_id = str(fill.get("client_order_id") or fill.get("command_id") or "").strip()
         if command_id and command_id not in local_command_ids:
             external.append(command_id)
     snapshot = AccountSnapshot(
