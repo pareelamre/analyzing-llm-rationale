@@ -961,6 +961,81 @@
     "glm-5-3": [],
     "glm-5-3-flash": [
       {
+        "action_id": "6b88543d-53e2-4b25-ac82-1791880f5e00",
+        "agent_id": "glm-5-3-flash",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 3125.0
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.85,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.85,
+            "quantity": 1
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 9500.0,
+            "cash_required": 0.0,
+            "concentration_cap": 1495.3125,
+            "cycle_id": "30m:993700",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 500.0,
+            "daily_risk_before": 500.0,
+            "daily_risk_limit": 2990.625,
+            "drawdown_after": 0.003125,
+            "fee": 0.0,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 2656.25,
+            "open_markets_after": 0,
+            "per_cycle_spend_limit": 1993.75,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993700",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 468.75,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 3125.0,
+          "notional": 2656.25,
+          "price": 0.85,
+          "quantity": 3125.0,
+          "realized_pnl": -31.25,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "israel-x-iran-ceasefire-continues-through-september-30"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "702286ce3d6b34b7cade14b874625e1acac045ecc4ab621759775627d9200bd9",
+        "recorded_at": "2026-09-06T02:13:43.217184+00:00"
+      },
+      {
         "action_id": "e0ffc820-b74f-459c-bb70-39b62aeeb1c5",
         "agent_id": "glm-5-3-flash",
         "audit": {
@@ -7756,6 +7831,89 @@
     ],
     "minimax-m3": [
       {
+        "action_id": "7c7b4203-3700-4640-9a87-41f6953b6d0b",
+        "agent_id": "minimax-m3",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 2671.396667
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.16,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.16,
+            "quantity": 1
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 8548.469335,
+            "cash_required": 427.423467,
+            "concentration_cap": 1282.2704,
+            "cycle_id": "30m:993700",
+            "cycle_spend_after": 427.423467,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 427.423467,
+            "daily_risk_before": 0.0,
+            "daily_risk_limit": 2564.5408,
+            "drawdown_after": 0.145153,
+            "fee": 0.0,
+            "gross_notional_override": false,
+            "market_cost_basis_after": 427.423467,
+            "max_drawdown_limit": 0.2,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 427.423467,
+            "open_markets_after": 1,
+            "per_cycle_spend_limit": 1709.693867,
+            "reasons": [],
+            "risk_reducing": false
+          },
+          "sizing": {
+            "applied": true,
+            "edge": 0.54,
+            "eligible": true,
+            "kelly_fraction": 0.25,
+            "market_shrinkage": 0.5,
+            "max_position_fraction": 0.05,
+            "mode": "quarter_kelly",
+            "reason": null,
+            "target_notional": 427.423467,
+            "target_quantity": 2671.3966671875
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993700",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": -427.42346675,
+          "cash_required": 427.42346675,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 427.42346675,
+          "price": 0.16,
+          "quantity": 2671.3966671875,
+          "realized_pnl": 0.0,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "russia-x-ukraine-ceasefire-agreement-by-october-31-2026"
+        },
+        "mode": "shadow",
+        "outcome": "open",
+        "record_hash": "a4e5ec077228289866a9690eedf0a34a7caded3e39cfbbd9f35db9d74dbb8e8f",
+        "recorded_at": "2026-09-06T02:21:14.609259+00:00"
+      },
+      {
         "action_id": "f9986ece-7d49-40e3-b67f-379f5579616c",
         "agent_id": "minimax-m3",
         "audit": {
@@ -9042,7 +9200,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-06T01:59:53.632135+00:00",
+  "generated_at": "2026-09-06T02:25:48.058257+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
