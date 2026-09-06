@@ -61,7 +61,17 @@ jobs:
     needs: roster
     name: forecast (${{ matrix.model }})
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # 35 minutes cut off models that were up on SCADS but slow, leaving them
+    # with no resolved record -- the very evidence needed to judge whether
+    # they are worth trading. Sized from the work: 8 targets per model, and
+    # SCADS' observed worst-case latency is ~180s per call, so a realistic
+    # slow run is ~24 minutes. 60 gives that 2.5x headroom.
+    #
+    # 90 covers even the pathological case: the provider read timeout is 600s,
+    # so a model hitting it on all 8 targets needs ~80 minutes. Above that a
+    # model is not answering at all and stopping is correct. Chosen so no
+    # model that is genuinely up on SCADS is ever truncated by this ceiling.
+    timeout-minutes: 90
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -163,7 +173,15 @@ jobs:
   publish:
     name: publish forecast snapshots
     needs: forecast
-    if: ${{ always() && !cancelled() }}
+    # `!cancelled()` discarded the whole run whenever a single model's job
+    # timed out. Observed: 9 of 10 model forecasts succeeded, minimax-m3 hit
+    # the 35-minute job timeout (which GitHub reports as cancelled), and the
+    # nine completed forecasts were then thrown away unpublished. Roughly half
+    # of all runs ended that way, which is why models added to the roster
+    # accumulate no resolved record and cannot be judged worth trading. The
+    # agent board publish already learned this: "Publishing must still occur
+    # after a skipped, cancelled, or failed cycle."
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:

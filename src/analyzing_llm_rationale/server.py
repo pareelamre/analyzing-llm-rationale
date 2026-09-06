@@ -7019,7 +7019,24 @@ def _select_predict_provider(req: "PredictRequest"):
     # when provider_base_url is set, otherwise OpenRouter. Falls back to the
     # server default model when no key/model is given.
     server_hosted_model = req.model or _interactive_default_model_for_request(req)
-    alt_provider = _scads_alt_provider(server_hosted_model) if server_hosted_model else None
+    # A batch forecast has nobody waiting on it, so it gets the room a
+    # slow-but-healthy model needs; interactive chat keeps the lower provider
+    # default, because a person watching a spinner does not.
+    #
+    # This is why the track record could not accumulate one for the current
+    # roster: its jobs failed at 6-20 minutes with "provider request timed out
+    # ... (read timeout=120.0)" while SCADS was taking up to 180s to answer a
+    # trivial probe. No resolutions means no evidence on which models are
+    # worth trading, which is the entire point of keeping the record.
+    if not server_hosted_model:
+        alt_provider = None
+    elif req.chat_mode:
+        alt_provider = _scads_alt_provider(server_hosted_model)
+    else:
+        alt_provider = _scads_alt_provider(
+            server_hosted_model,
+            request_timeout_s=_AGENT_TOOL_PROVIDER_READ_TIMEOUT_S,
+        )
     if alt_provider is not None:
         # Server-hosted alternate model (allowlisted SCADS), server's own key.
         return alt_provider, _state.get("temperature", 0.0), _max_tokens_for_request(req)
