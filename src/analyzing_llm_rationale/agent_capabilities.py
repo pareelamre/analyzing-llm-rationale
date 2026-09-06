@@ -448,6 +448,80 @@ def _estimate_message_tokens(messages: List[Dict[str, str]]) -> int:
     return sum(len(str(m.get("content") or "")) for m in messages) // 4
 
 
+def _trade_call_from_transcript(transcript: Sequence[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The last place_trade attempt in a cycle, if there was one."""
+    for entry in reversed(list(transcript or [])):
+        if isinstance(entry, dict) and str(entry.get("action") or "") == "place_trade":
+            return entry
+    return None
+
+
+def _synthesise_thesis(answer: str, transcript: Sequence[Dict[str, Any]]) -> str:
+    """Build a parseable thesis from what the cycle actually did.
+
+    A model that will not produce the template after being asked leaves its
+    decision unreadable: the action, market and probabilities are pulled out
+    of those headings by regex, so a wall of prose is worth nothing
+    downstream and the cycle records no forecast. Live, five of eight agents
+    published unparseable output in one tick -- glm-5-3 echoed the parser's
+    own "could not be parsed" hint back as its public thesis, and glm-5-3 and
+    glm-5-3-flash have never traded once because they never emit a decision
+    anything can act on.
+
+    Rather than publish that, report the execution record. This describes
+    only what happened -- whether place_trade was called, with what, and what
+    came back -- and never invents a view the model did not state. An
+    unstated probability is reported as unstated. The model's own prose is
+    preserved verbatim underneath, so nothing is lost, and the header says
+    plainly that the harness wrote the structure.
+    """
+    call = _trade_call_from_transcript(transcript)
+    tools = [str(e.get("action")) for e in (transcript or []) if isinstance(e, dict)]
+    tool_summary = ", ".join(sorted(set(tools))) if tools else "none"
+
+    if call is not None:
+        args = call.get("args") if isinstance(call.get("args"), dict) else {}
+        side = str(args.get("side") or "").strip().upper()
+        ticker = str(args.get("ticker") or "unknown")
+        platform = str(args.get("platform") or "kalshi")
+        price, quantity = args.get("price"), args.get("quantity")
+        model_p = args.get("model_probability")
+        action = f"BUY {side}" if side in ("YES", "NO") else "BUY"
+        market = f"{ticker} on {platform}"
+        sizing = f"{quantity if quantity is not None else 'tool-sized'} contracts @ {price}"
+        observation = str(call.get("observation") or "")[:200].replace("\n", " ")
+        edge = (f"**Model Probability**: {model_p} vs **Market Price**: {price}"
+                if model_p is not None else
+                "**Model Probability**: not stated in a parseable form")
+    else:
+        action, market, sizing = "PASS", "No new position", "No new order"
+        observation = "No place_trade call was made this cycle."
+        edge = "**Model Probability**: not stated in a parseable form"
+
+    return "\n".join([
+        "### 0. Research Delta",
+        "- **Strategy**: reported by the harness -- this model's own answer did "
+        "not follow the required template, so the sections below describe what "
+        "the cycle actually did rather than what it said.",
+        f"- **New evidence**: tools called this cycle: {tool_summary}.",
+        "- **Belief update**: not stated in a parseable form.",
+        "",
+        "### 1. Decision & Execution",
+        f"- **Action**: {action}",
+        f"- **Market & Venue**: {market}",
+        f"- **Order Sizing**: {sizing}",
+        f"- **Paper execution**: {observation}",
+        "",
+        "### 3. Model Edge & Valuation",
+        f"- {edge}",
+        "",
+        "---",
+        "The model's own answer, unmodified:",
+        "",
+        (answer or "").strip() or "(empty)",
+    ])
+
+
 def _missing_sections(answer: str, required: Sequence[str]) -> List[str]:
     """Which required section headings a final thesis failed to include.
 
@@ -601,6 +675,7 @@ async def run_tool_loop(
     on_step_start: Optional[OnStep] = None,
     retry_unusable_final: bool = False,
     required_final_sections: Optional[Sequence[str]] = None,
+    max_structure_retries: int = 2,
     token_budget: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Drive the ReAct loop. Returns {answer, transcript, steps, truncated}.
@@ -643,7 +718,7 @@ async def run_tool_loop(
     )
     substantive_retry_used = False
     unusable_retry_used = False
-    structure_retry_used = False
+    structure_retries_used = 0
     # Why a cycle stopped is not recoverable from `steps`/`truncated` alone:
     # a budget stop and an out-of-steps stop both report steps=max_steps and
     # truncated=True, which made a shallow cycle indistinguishable from a
@@ -705,23 +780,30 @@ async def run_tool_loop(
             # had reported one. Ask once for the structure it was given.
             if (
                 required_final_sections
-                and not structure_retry_used
                 and _missing_sections(answer, required_final_sections)
-                and step < max_steps - 1
             ):
-                structure_retry_used = True
                 missing = _missing_sections(answer, required_final_sections)
-                messages.append({"role": "assistant", "content": out})
-                messages.append({"role": "user", "content": (
-                    "That answer is missing the required section"
-                    f"{'s' if len(missing) > 1 else ''}: {', '.join(missing)}. "
-                    "Reply with the final thesis in the mandated template only -- "
-                    "the section headings and their fields, nothing before or "
-                    "after. Keep your deliberation out of it: report the "
-                    "conclusion you reached, not the reasoning that got you "
-                    "there."
-                )})
-                continue
+                if (
+                    structure_retries_used < max_structure_retries
+                    and step < max_steps - 1
+                ):
+                    structure_retries_used += 1
+                    messages.append({"role": "assistant", "content": out})
+                    messages.append({"role": "user", "content": (
+                        "That answer is missing the required section"
+                        f"{'s' if len(missing) > 1 else ''}: {', '.join(missing)}. "
+                        "Reply with the final thesis in the mandated template "
+                        "only -- the section headings and their fields, nothing "
+                        "before or after. Keep your deliberation out of it: "
+                        "report the conclusion you reached, not the reasoning "
+                        "that got you there."
+                    )})
+                    continue
+                # Asked and still unformatted. Publishing the prose would
+                # record no decision at all, so report the execution record
+                # instead -- what the cycle did, with the model's own answer
+                # preserved underneath.
+                answer = _synthesise_thesis(answer, transcript)
             return {"answer": answer, "transcript": transcript,
                     "steps": step, "truncated": False}
         if action is None:
