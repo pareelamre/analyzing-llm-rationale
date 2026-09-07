@@ -115,6 +115,12 @@ _TRACK_RECORD_LIVE_URL = os.environ.get(
 )
 _TRACK_RECORD_LIVE_TTL = int(os.environ.get("TRACK_RECORD_LIVE_TTL", "30"))
 _TRACK_RECORD_LIVE_TIMEOUT = int(os.environ.get("TRACK_RECORD_LIVE_TIMEOUT", "20"))
+# 1800s assumes a half-hourly publish. Measured delivery is ~22% of a
+# half-hourly or hourly cron (docs/SCHEDULED_WORKFLOW_DELIVERY.md), so the
+# surfaces using this threshold report stale routinely rather than
+# exceptionally -- track_record_live.json was 20,059s old against it when
+# that was measured. Left as-is: what the flag should mean is a product
+# decision, not something the measurement settles.
 _EDGE_BOARD_STALE_AFTER_S = int(os.environ.get("EDGE_BOARD_STALE_AFTER_S", "1800"))
 _EDGE_BOARD_CURVE_MAX_POINTS = int(os.environ.get("EDGE_BOARD_CURVE_MAX_POINTS", "160"))
 # The Agentic board is a live transparency surface, not an archive export. Keep
