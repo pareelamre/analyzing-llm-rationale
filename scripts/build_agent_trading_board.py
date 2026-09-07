@@ -28,7 +28,7 @@ import sqlite3
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Mapping, Set
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -270,6 +270,20 @@ def _recent_cycle_telemetry(conn: sqlite3.Connection, model: str, *, limit: int 
     ]
 
 
+def _is_beyond_stale_window(health: Mapping[str, Any]) -> bool:
+    """True when the last confirmed cycle is older than the stale window.
+
+    Read from cycle_age_seconds rather than inferred from ``status``: the
+    status chain resolves latest_attempt_failed first, so a failing agent
+    never carries the "stale" label no matter how long it has been dead.
+    """
+    age = health.get("cycle_age_seconds")
+    try:
+        return float(age) > MODEL_HEALTH_STALE_AFTER_SECONDS
+    except (TypeError, ValueError):
+        return False
+
+
 def _operational_health(model_health: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     """Summarise recent execution outcomes without claiming live availability."""
     last_attempt_failures = [
@@ -282,10 +296,19 @@ def _operational_health(model_health: Dict[str, Dict[str, Any]]) -> Dict[str, An
         for model, health in sorted(model_health.items())
         if health.get("status") == "provider_paused"
     ]
+    # A model whose last cycle is beyond the stale window needs attention
+    # whether or not its most recent attempt also failed. The status chain
+    # reports latest_attempt_failed before it looks at age, so an agent that
+    # is both failing and long dead was labelled with the softer of the two
+    # and never escalated -- gemma-4-26b-a4b-it sat 15308s past a 14400s
+    # window, top of the leaderboard on day-old numbers, while
+    # attention_required stayed empty. Age is checked here directly rather
+    # than through the label so the two cannot mask each other again.
     cycle_failed = [
         {"agent_id": model, "status": health["status"]}
         for model, health in sorted(model_health.items())
         if health.get("status") in {"cycle_error", "unverified", "stale"}
+        or _is_beyond_stale_window(health)
     ]
     confirmed_cycles = sum(
         health.get("status") in {"active", "no_trade"}
