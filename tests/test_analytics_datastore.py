@@ -74,6 +74,10 @@ class _FakeQuery:
 
 class DatastoreAnalyticsTests(unittest.TestCase):
     def setUp(self):
+        # A prior test process may be interrupted before tearDown. Start each
+        # Datastore-only assertion from its declared filesystem precondition.
+        if _ANALYTICS_DB.exists():
+            _ANALYTICS_DB.unlink()
         self.fake = FakeClient()
         fake_module = types.ModuleType("google.cloud.datastore")
         fake_module.Entity = FakeEntity
