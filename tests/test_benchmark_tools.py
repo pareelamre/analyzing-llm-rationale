@@ -1881,8 +1881,12 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertEqual(after_settlement["risk_guard"]["settlements_before_trade"][0]["ticker"], "poly-settle")
         self.assertIsNotNone(settlement)
         self.assertAlmostEqual(settlement[0], 10.0)
-        self.assertAlmostEqual(settlement[1], 0.14)
-        self.assertAlmostEqual(settlement[2], 5.86)
+        # No settlement fee: this is Polymarket, whose resolution is free.
+        # This asserted 0.14 -- 10.0 * the Kalshi rate -- which is how the
+        # venue-blind _settlement_fee_rate survived. The two Kalshi
+        # settlement tests still assert 0.14 and guard the other direction.
+        self.assertAlmostEqual(settlement[1], 0.0)
+        self.assertAlmostEqual(settlement[2], 6.0)
         self.assertEqual(remaining, 0)
 
     def test_agent_cycles_table_round_trips(self):

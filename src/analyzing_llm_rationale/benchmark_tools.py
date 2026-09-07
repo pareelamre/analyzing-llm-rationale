@@ -509,7 +509,17 @@ def _kalshi_fee(price: float, quantity: float) -> float:
     return max(0.0, KALSHI_FEE_COEFFICIENT * quantity * price * (1.0 - price))
 
 
-def _settlement_fee_rate() -> float:
+def _settlement_fee_rate(platform: str = "kalshi") -> float:
+    """Kalshi charges a fee on settlement payout. Polymarket does not.
+
+    _order_fee already takes a platform and zeroes the per-trade fee off
+    Kalshi; this did not, so every Polymarket settlement was charged a
+    Kalshi-shaped 1.4% of payout. Two settlements in the published audit
+    window carried 15.40 between them -- 1.40 on 100 contracts and 14.00 on
+    1000 -- against a venue whose resolution is free.
+    """
+    if str(platform or "").strip().lower() != "kalshi":
+        return 0.0
     return _env_float("FORESEA_AGENT_SETTLEMENT_FEE_RATE", DEFAULT_SETTLEMENT_FEE_RATE)
 
 
@@ -1370,7 +1380,7 @@ def _settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> List
                     payout = sum(
                         float(p["quantity"]) for p in positions if str(p["side"]) == winning_side
                     )
-                    settlement_fee = payout * _settlement_fee_rate()
+                    settlement_fee = payout * _settlement_fee_rate(platform)
                     cash_delta = payout - settlement_fee
                     realized_pnl = cash_delta - settled_basis
                     row = _account_row(conn, agent_id, policy.account_value)
@@ -1873,7 +1883,7 @@ def _ds_settle_agent_open_positions(agent_id: str, policy: RiskGuardPolicy) -> L
             settled_contracts = sum(float(p["quantity"]) for p in market_positions)
             settled_basis = sum(float(p["cost_basis"]) for p in market_positions)
             payout = sum(float(p["quantity"]) for p in market_positions if str(p["side"]) == winning_side)
-            settlement_fee = payout * _settlement_fee_rate()
+            settlement_fee = payout * _settlement_fee_rate(plat)
             cash_delta = payout - settlement_fee
             realized_pnl = cash_delta - settled_basis
 
