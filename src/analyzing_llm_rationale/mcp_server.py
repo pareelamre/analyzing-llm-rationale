@@ -228,8 +228,10 @@ def _edge_board_rows(board: Any) -> List[Dict[str, Any]]:
 #
 #   series  746,932 chars -- 99.0% of it the nested ``events`` array
 #   sports  147,844 chars -- 38.5% image URLs, 13.7% createdAt, 10.5% a tag CSV
-#   teams     ~9,000 chars -- returns
-#   comments               -- per-market, not measured here
+#   comments  32,333 chars at Gamma's default, but 150,808 for the 182
+#             comments on one series -- 74.7% of it `reactions` and
+#             `profile` (avatars, bios) against 5.9% comment body
+#   teams      ~9,000 chars -- fits, left alone
 #
 # Series carries every event in the series inline, each with its own markets.
 # A caller asking for a series listing is asking which series exist, not for
@@ -240,6 +242,32 @@ _SERIES_BULK_KEYS = ("events", "image", "icon")
 # ordering and createdAt -- only the identity and the ids that cross-reference
 # other tools survive. 465 leagues at once is a listing, not a dossier.
 _SPORTS_IDENTITY_KEYS = ("id", "sport", "name", "series", "primaryTagId")
+
+
+# A comment is who said what, when. The avatar, bio and per-reaction rows of
+# everyone involved are not that. This one fits at Gamma's default page size,
+# so it was not rejected -- but the default is not a contract and 182 comments
+# already exceed the limit, which is a normal number for a busy series.
+_COMMENT_IDENTITY_KEYS = (
+    "id",
+    "body",
+    "createdAt",
+    "parentEntityType",
+    "parentEntityID",
+    "userAddress",
+    "reactionCount",
+)
+
+
+def _summarise_comments(rows: Any) -> List[Dict[str, Any]]:
+    """Keep the comment and who wrote it; drop the social furniture."""
+    if not isinstance(rows, list):
+        return []
+    return [
+        {k: row[k] for k in _COMMENT_IDENTITY_KEYS if k in row}
+        for row in rows
+        if isinstance(row, dict)
+    ]
 
 
 def _summarise_series(rows: Any) -> List[Dict[str, Any]]:
@@ -580,7 +608,7 @@ class ForeseaClient:
         from analyzing_llm_rationale import market_data
         target_l = target.lower()
         if target_l == "comments":
-            return market_data.fetch_polymarket_comments(market_id)
+            return _summarise_comments(market_data.fetch_polymarket_comments(market_id))
         if target_l == "teams":
             return market_data.fetch_polymarket_teams()
         if target_l == "sports":
@@ -998,7 +1026,9 @@ def create_mcp_server(
 
         'series' lists the series and how many events each holds, not the events
         themselves -- fetch a series by slug for those. 'sports' lists every league
-        with the ids that link it to other tools, not league artwork or homepages."""
+        with the ids that link it to other tools, not league artwork or homepages.
+        'comments' gives the comment, its author address and its reaction count,
+        not the commenters' profiles or individual reactions."""
 
         return await _call_tool_async(client.apolymarket_meta, target, market_id)
 

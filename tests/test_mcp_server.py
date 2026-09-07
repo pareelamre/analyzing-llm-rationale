@@ -290,6 +290,7 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
             (client.alive_data, ("KXBTC-TEST",), "fetch_kalshi_live_data", {"live_data": {}}, {"live_data": {}}),
             (client.apolymarket_meta, ("series",), "fetch_polymarket_series", [{"id": 2}], [{"id": 2, "event_count": 0}]),
             (client.apolymarket_meta, ("sports",), "fetch_polymarket_sports", [{"id": 3, "image": "x"}], [{"id": 3}]),
+            (client.apolymarket_meta, ("comments", "m1"), "fetch_polymarket_comments", [{"id": "c1", "profile": {}}], [{"id": "c1"}]),
             (client.arecent_trades, ("kalshi", "KXFED-25JUN-H"), "fetch_recent_trades", [{"ticker": "KXFED-25JUN-H"}], [{"ticker": "KXFED-25JUN-H"}]),
             (client.amarket_leaderboard, (5,), "fetch_trader_leaderboard", [{"rank": "1"}], [{"rank": "1"}]),
         ]
@@ -717,8 +718,39 @@ class PolymarketMetaSizeTests(unittest.TestCase):
                      "series": "12553", "primaryTagId": 105925},
         )
 
+    _COMMENTS = [
+        {
+            "id": "3199521",
+            "body": "Working on market analytics and automation tools.",
+            "createdAt": "2026-08-03T16:44:13.372149Z",
+            "parentEntityType": "Series",
+            "parentEntityID": 1,
+            "userAddress": "0x73ecb3d59aa08263f895604bb224b0a5b3db5787",
+            "reactionCount": 2,
+            "reportCount": 0,
+            "updatedAt": "2026-08-03T16:44:13.372149Z",
+            "profile": {"name": "trader", "bio": "x" * 300, "profileImage": "https://s3/x.png"},
+            "reactions": [{"id": "r1", "profile": {"bio": "y" * 300}}],
+        },
+    ]
+
+    def test_comments_keep_the_comment_and_drop_the_social_furniture(self):
+        [comment] = mcp._summarise_comments(self._COMMENTS)
+        self.assertEqual(comment["body"], "Working on market analytics and automation tools.")
+        self.assertEqual(comment["reactionCount"], 2)
+        for key in ("profile", "reactions", "reportCount", "updatedAt"):
+            self.assertNotIn(key, comment)
+
+    def test_comments_shrink_by_most_of_the_payload(self):
+        """profile and reactions measured at 74.7% of a live response."""
+        import json
+
+        size = lambda obj: len(json.dumps(obj, separators=(",", ":")))
+        rows = [dict(self._COMMENTS[0], id=str(n)) for n in range(182)]
+        self.assertLess(size(mcp._summarise_comments(rows)), size(rows) // 4)
+
     def test_both_shapers_survive_junk(self):
-        for shaper in (mcp._summarise_series, mcp._summarise_sports):
+        for shaper in (mcp._summarise_series, mcp._summarise_sports, mcp._summarise_comments):
             with self.subTest(shaper=shaper.__name__):
                 self.assertEqual(shaper(None), [])
                 self.assertEqual(shaper("text"), [])
