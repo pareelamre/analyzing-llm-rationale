@@ -21,14 +21,49 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 
+def _first_present(mapping: Dict[str, Any], *keys: str) -> Any:
+    """First key that is present and not None -- `or` would skip a real 0.
+
+    market_volume is 0.0 on a market nobody is quoting, which is exactly the
+    case the liquidity penalty exists for. An `or` chain treats that as
+    absent and falls through.
+    """
+    for key in keys:
+        value = mapping.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _evidence_count(opp: Dict[str, Any]) -> int:
+    """How many evidence items back this opportunity.
+
+    The edge board publishes a count, not the items. Reading only `evidence`
+    meant every board row looked unevidenced.
+    """
+    evidence = opp.get("evidence")
+    if isinstance(evidence, list):
+        return len(evidence)
+    raw = opp.get("evidence_count")
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 0
+
+
 def audit_edge_opportunity(opp: Dict[str, Any]) -> Dict[str, Any]:
     """Audit a single market edge opportunity and return credibility metadata."""
     question = str(opp.get("question") or opp.get("title") or "").strip()
     model_p = opp.get("model_probability")
     mkt_p = opp.get("market_probability")
     resolution_criteria = str(opp.get("resolution_criteria") or opp.get("description") or "").strip()
-    volume = opp.get("volume") or opp.get("volume_usd") or opp.get("open_interest")
-    evidence = opp.get("evidence") or []
+    # market_volume / market_liquidity are what the edge board actually
+    # publishes; the three names below appear on none of its rows, so the
+    # liquidity assessment never ran on real data.
+    volume = _first_present(
+        opp, "volume", "volume_usd", "open_interest", "market_volume", "market_liquidity"
+    )
+    evidence_items = _evidence_count(opp)
     horizon = str(opp.get("horizon") or opp.get("lead_bucket") or "").lower()
 
     flags: List[str] = []
@@ -60,7 +95,7 @@ def audit_edge_opportunity(opp: Dict[str, Any]) -> Dict[str, Any]:
 
     # Edge sanity: Extreme edge (> 50%) without multiple sources is penalized
     if edge > 0.50:
-        if len(evidence) < 2:
+        if evidence_items < 2:
             score -= 0.25
             flags.append("extreme_edge_sparse_evidence")
         else:
@@ -71,9 +106,9 @@ def audit_edge_opportunity(opp: Dict[str, Any]) -> Dict[str, Any]:
         flags.append("narrow_edge")
 
     # 2. Evidence Grounding Audit
-    if isinstance(evidence, list) and len(evidence) > 0:
+    if evidence_items > 0:
         score += 0.10
-        flags.append(f"grounded_{len(evidence)}_evidence_items")
+        flags.append(f"grounded_{evidence_items}_evidence_items")
     else:
         # Absence of explicit evidence in payload
         score -= 0.15
