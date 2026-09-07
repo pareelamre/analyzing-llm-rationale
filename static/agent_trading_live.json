@@ -166,7 +166,7 @@
         {
           "account_value": 9944.870256,
           "event_type": "mark_to_market",
-          "ts": "2026-09-07T06:19:53.852697+00:00"
+          "ts": "2026-09-07T06:22:24.319770+00:00"
         }
       ]
     },
@@ -298,7 +298,7 @@
         {
           "account_value": 10435.177266,
           "event_type": "mark_to_market",
-          "ts": "2026-09-07T06:19:53.852697+00:00"
+          "ts": "2026-09-07T06:22:24.319770+00:00"
         }
       ]
     },
@@ -315,7 +315,7 @@
         {
           "account_value": 10000.0,
           "event_type": "mark_to_market",
-          "ts": "2026-09-07T06:19:53.852697+00:00"
+          "ts": "2026-09-07T06:22:24.319770+00:00"
         }
       ]
     },
@@ -342,7 +342,7 @@
         {
           "account_value": 9968.75,
           "event_type": "mark_to_market",
-          "ts": "2026-09-07T06:19:53.852697+00:00"
+          "ts": "2026-09-07T06:22:24.319770+00:00"
         }
       ]
     },
@@ -549,7 +549,7 @@
         {
           "account_value": 10011.325222,
           "event_type": "mark_to_market",
-          "ts": "2026-09-07T06:19:53.852697+00:00"
+          "ts": "2026-09-07T06:22:24.319770+00:00"
         }
       ]
     },
@@ -986,7 +986,7 @@
         {
           "account_value": 7986.638401,
           "event_type": "mark_to_market",
-          "ts": "2026-09-07T06:19:53.852697+00:00"
+          "ts": "2026-09-07T06:22:24.319770+00:00"
         }
       ]
     },
@@ -1108,7 +1108,7 @@
         {
           "account_value": 8468.242268,
           "event_type": "mark_to_market",
-          "ts": "2026-09-07T06:19:53.852697+00:00"
+          "ts": "2026-09-07T06:22:24.319770+00:00"
         }
       ]
     },
@@ -1145,7 +1145,7 @@
         {
           "account_value": 10091.792214,
           "event_type": "mark_to_market",
-          "ts": "2026-09-07T06:19:53.852697+00:00"
+          "ts": "2026-09-07T06:22:24.319770+00:00"
         }
       ]
     }
@@ -1314,13 +1314,13 @@
       "market_brier_score": null,
       "probability_bias": null,
       "recent_reviews": [],
-      "recorded_forecasts": 16,
+      "recorded_forecasts": 17,
       "resolved_forecasts": 0,
       "status": "collecting_outcomes",
       "weather_calibration": []
     }
   },
-  "generated_at": "2026-09-07T06:19:54.018751+00:00",
+  "generated_at": "2026-09-07T06:22:24.489794+00:00",
   "latest_theses": {
     "deepseek-v4-flash": {
       "agent_id": "deepseek-v4-flash",
@@ -1373,9 +1373,9 @@
     },
     "qwen3-8-27b": {
       "agent_id": "qwen3-8-27b",
-      "cycle_id": "30m:993752",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: NWS KNYC observation 67\u00b0F at 00:51 ET Sep 7, sunny forecast; no afternoon high forecast available to resolve the 77-78\u00b0F bracket. XTracker is client-rendered, no tweet count accessible.\n- **Belief update**: No material change on any candidate.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: KXHIGHNY-26SEP07-B77.5 on [Kalshi]\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: NWS Daily Climate Report, station KNYC, max temp 77-78\u00b0F for Sep 7. Rules clear.\n- **Observation Window**: 2026-09-06T09:32Z \u2192 2026-09-08T05:00Z\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~25% YES vs **Market Price**: 27.5% (Edge: -2.5pp) \u2014 below 3.9pp fee+spread threshold. Without an afternoon high forecast, cannot distinguish 77-78 from adjacent brackets.\n- **Information Asymmetry / Rationale**: Weather bracket too narrow (2\u00b0F) to resolve from current data; tweet tracker inaccessible; edge board shows no positive edge clearing thresholds.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: NYC afternoon high (today); Elon tweet count (Sep 8 12PM ET); Aug CPI (~Sep 12-15) for Fed market.\n- **Invalidation Trigger**: If NWS afternoon forecast shows high clearly in 77-78 range, re-evaluate weather market; if tweet count accessible and near 180, re-evaluate Musk market.",
-      "ts": "2026-09-07T04:22:21.875432+00:00",
+      "cycle_id": "30m:993756",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: XTracker API confirms Elon Musk tracking period (Sep 1\u20138) is active with recent posts visible, but no aggregate count endpoint available to establish exact current total vs. 180\u2013199 bracket.\n- **Belief update**: No material change on any candidate.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: elon-musk-of-tweets-september-1-september-8-2026-180-199 on [Polymarket]\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolution source is xtracker.polymarket.com Post Counter; only main feed posts, quote posts, and reposts count; replies excluded.\n- **Observation Window**: Sep 1 12PM ET \u2192 Sep 8 12PM ET (resolves tomorrow).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~25% YES vs **Market Price**: 26.5% (Edge: -1.5pp) \u2014 below 2.3pp fee+spread threshold. Without exact current count, cannot distinguish 170s from 180s bracket.\n- **Information Asymmetry / Rationale**: 55K volume and 11.7K OI indicate well-calibrated pricing; no source the market hasn't already absorbed.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Final 12 hours of tracking window (Sep 8 12PM ET); NYC afternoon high (today).\n- **Invalidation Trigger**: If xtracker count is confirmed below 170 or above 200, re-evaluate; if NYC high forecast locks into 77\u201378, re-evaluate weather market.",
+      "ts": "2026-09-07T06:21:14.796891+00:00",
       "type": "thesis"
     }
   },
@@ -1661,7 +1661,7 @@
   "mode": "shadow",
   "model_health": {
     "deepseek-v4-flash": {
-      "cycle_age_seconds": 881,
+      "cycle_age_seconds": 1032,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1687,7 +1687,7 @@
       "store_present": true
     },
     "gemma-4-26b-a4b-it": {
-      "cycle_age_seconds": 15158,
+      "cycle_age_seconds": 15308,
       "delayed_after_seconds": 5400,
       "detail": "Latest worker attempt failed: Upstream provider returned HTTP 503.",
       "expected_cycle_seconds": 1800,
@@ -1713,7 +1713,7 @@
       "store_present": true
     },
     "glm-5-3": {
-      "cycle_age_seconds": 279,
+      "cycle_age_seconds": 429,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1739,7 +1739,7 @@
       "store_present": true
     },
     "glm-5-3-flash": {
-      "cycle_age_seconds": 212,
+      "cycle_age_seconds": 362,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1765,7 +1765,7 @@
       "store_present": true
     },
     "gpt-oss-120b": {
-      "cycle_age_seconds": 165,
+      "cycle_age_seconds": 316,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle recorded an execution.",
       "expected_cycle_seconds": 1800,
@@ -1791,7 +1791,7 @@
       "store_present": true
     },
     "llama-3.3-70b-instruct": {
-      "cycle_age_seconds": 101,
+      "cycle_age_seconds": 251,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1817,7 +1817,7 @@
       "store_present": true
     },
     "minimax-m3": {
-      "cycle_age_seconds": 28,
+      "cycle_age_seconds": 179,
       "delayed_after_seconds": 5400,
       "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
@@ -1843,29 +1843,29 @@
       "store_present": true
     },
     "qwen3-8-27b": {
-      "cycle_age_seconds": 7051,
+      "cycle_age_seconds": 69,
       "delayed_after_seconds": 5400,
-      "detail": "The most recent confirmed cycle is later than the expected cadence.",
+      "detail": "A confirmed cycle completed without an execution.",
       "expected_cycle_seconds": 1800,
       "last_account_updated_at": "2026-09-06T14:22:03.340024+00:00",
       "last_action_at": "2026-09-06T14:22:03.341034+00:00",
-      "last_attempt_at": "2026-09-07T04:20:46.669911+00:00",
+      "last_attempt_at": "2026-09-07T06:19:28.514838+00:00",
       "last_attempt_outcome": "success",
       "last_candidate_count": 9,
-      "last_cycle_at": "2026-09-07T04:22:21.875432+00:00",
-      "last_cycle_id": "30m:993752",
-      "last_duration_ms": 95209,
+      "last_cycle_at": "2026-09-07T06:21:14.796891+00:00",
+      "last_cycle_id": "30m:993756",
+      "last_duration_ms": 106308,
       "last_failure_detail": null,
       "last_failure_kind": null,
       "last_forecast_records": 1,
       "last_paper_execution_outcome": null,
       "last_provider_model": "Qwen/Qwen3.8-27B",
       "last_thesis_published": true,
-      "last_tool_steps": 7,
+      "last_tool_steps": 6,
       "last_weather_candidates_offered": 1,
       "last_weather_candidates_researched": 1,
       "stale_after_seconds": 28800,
-      "status": "delayed",
+      "status": "no_trade",
       "store_present": true
     }
   },
@@ -1890,12 +1890,19 @@
       }
     ],
     "models_total": 8,
-    "models_verified": 6,
-    "models_with_confirmed_cycle": 6,
+    "models_verified": 7,
+    "models_with_confirmed_cycle": 7,
     "provider_paused": [],
     "status": "attempts_failed"
   },
   "recent_activity": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "cycle_id": "30m:993756",
+      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: XTracker API confirms Elon Musk tracking period (Sep 1\u20138) is active with recent posts visible, but no aggregate count endpoint available to establish exact current total vs. 180\u2013199 bracket.\n- **Belief update**: No material change on any candidate.\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: elon-musk-of-tweets-september-1-september-8-2026-180-199 on [Polymarket]\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Resolution source is xtracker.polymarket.com Post Counter; only main feed posts, quote posts, and reposts count; replies excluded.\n- **Observation Window**: Sep 1 12PM ET \u2192 Sep 8 12PM ET (resolves tomorrow).\n\n### 3. Model Edge & Valuation\n- **Model Probability**: ~25% YES vs **Market Price**: 26.5% (Edge: -1.5pp) \u2014 below 2.3pp fee+spread threshold. Without exact current count, cannot distinguish 170s from 180s bracket.\n- **Information Asymmetry / Rationale**: 55K volume and 11.7K OI indicate well-calibrated pricing; no source the market hasn't already absorbed.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Final 12 hours of tracking window (Sep 8 12PM ET); NYC afternoon high (today).\n- **Invalidation Trigger**: If xtracker count is confirmed below 170 or above 200, re-evaluate; if NYC high forecast locks into 77\u201378, re-evaluate weather market.",
+      "ts": "2026-09-07T06:21:14.796891+00:00",
+      "type": "thesis"
+    },
     {
       "agent_id": "minimax-m3",
       "cycle_id": "30m:993756",
@@ -2297,16 +2304,29 @@
       "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence\n- **Belief update**: No material change\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: [polymarket] will-daniil-medvedev-win-the-2026-mens-us-open on Polymarket\n- **Order Sizing**: No new order\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Verified the resolution rules for the 2026 Men's US Open\n- **Observation Window**: 2026-01-02T20:36:59.144255Z -> 2026-09-13T00:00:00Z\n### 3. Model Edge & Valuation\n- **Model Probability**: 50% vs **Market Price**: 7% (Edge: +43%)\n- **Information Asymmetry / Rationale**: The edge exists due to potential underestimation of Medvedev's chances by the market\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: Next scheduled match in the 2026 Men's US Open\n- **Invalidation Trigger**: Material shift in Medvedev's performance or new information affecting his chances of winning the tournament",
       "ts": "2026-09-06T20:17:37.597960+00:00",
       "type": "thesis"
-    },
-    {
-      "agent_id": "gpt-oss-120b",
-      "cycle_id": "30m:993736",
-      "thesis": "### 0. Research Delta\n- **Strategy**: PASS\n- **New evidence**: No material new evidence on Medvedev's health or participation after July\u202f2026.\n- **Belief update**: No material change (7% \u2192 7%)\n\n### 1. Decision & Execution\n- **Action**: PASS\n- **Market & Venue**: will-daniil-medvedev-win-the-2026-mens-us-open on Polymarket\n- **Order Sizing**: No new order\n\n### 2. Resolution Rules & Compliance Audit\n- **Rules Verification**: Event resolves to the player who wins the 2026 US Open Men\u2019s Singles; no exclusions identified.\n- **Observation Window**: 2026\u201101\u201102\u202f20:36:59\u202fUTC \u2192 2026\u201109\u201113\u202f00:00:00\u202fUTC\n\n### 3. Model Edge & Valuation\n- **Model Probability**: 7% vs **Market Price**: 7% (Edge: 0%)\n- **Information Asymmetry / Rationale**: No new information to improve on market pricing.\n\n### 4. Catalysts & Invalidation\n- **Key Catalysts / Dates**: US Open runs Aug\u202f23\u202f\u2013\u202fSep\u202f13\u202f2026; no new catalyst identified.\n- **Invalidation Trigger**: Any credible injury report or withdrawal announcement for Medvedev before Sep\u202f13\u202f2026 would invalidate the thesis.",
-      "ts": "2026-09-06T20:16:49.282455+00:00",
-      "type": "thesis"
     }
   ],
   "recent_cycle_telemetry": [
+    {
+      "agent_id": "qwen3-8-27b",
+      "candidate_count": 9,
+      "cycle_id": "30m:993756",
+      "duration_ms": 106308,
+      "failure_detail": null,
+      "failure_kind": null,
+      "finished_at": "2026-09-07T06:21:14.823882+00:00",
+      "forecast_records": 1,
+      "outcome": "success",
+      "paper_execution_outcome": null,
+      "provider_model": "Qwen/Qwen3.8-27B",
+      "run_id": "312708d6eb04472c82d6cd9537be1467",
+      "settled_count": 0,
+      "started_at": "2026-09-07T06:19:28.514838+00:00",
+      "thesis_published": true,
+      "tool_steps": 6,
+      "weather_candidates_offered": 1,
+      "weather_candidates_researched": 1
+    },
     {
       "agent_id": "minimax-m3",
       "candidate_count": 9,
@@ -3086,32 +3106,12 @@
       "tool_steps": 7,
       "weather_candidates_offered": 0,
       "weather_candidates_researched": 0
-    },
-    {
-      "agent_id": "qwen3-8-27b",
-      "candidate_count": 9,
-      "cycle_id": "30m:993736",
-      "duration_ms": 219053,
-      "failure_detail": null,
-      "failure_kind": null,
-      "finished_at": "2026-09-06T20:23:56.588759+00:00",
-      "forecast_records": 1,
-      "outcome": "success",
-      "paper_execution_outcome": null,
-      "provider_model": "Qwen/Qwen3.8-27B",
-      "run_id": "e5b06fa6a69a42ddaf519ad66f86ee55",
-      "settled_count": 0,
-      "started_at": "2026-09-06T20:20:17.535485+00:00",
-      "thesis_published": true,
-      "tool_steps": 6,
-      "weather_candidates_offered": 0,
-      "weather_candidates_researched": 0
     }
   ],
   "weather_operations": {
-    "candidates_offered": 13,
+    "candidates_offered": 14,
     "forecasted": 6,
-    "researched": 10,
+    "researched": 11,
     "resolved": 0,
     "traded": 3,
     "window_hours": 24
