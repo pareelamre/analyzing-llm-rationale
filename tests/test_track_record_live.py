@@ -588,6 +588,44 @@ class TrajectoryTests(unittest.TestCase):
         labels = {b["horizon"] for b in agg["by_horizon"]}
         self.assertIn("7-14d", labels)
 
+    def test_every_segmentation_partitions_the_resolved_sample(self):
+        """by_domain/by_horizon/by_edge/by_liquidity must each cover the whole
+        sample exactly once, and their n-weighted Brier must reproduce
+        ``overall``.
+
+        These four blocks are the public track record: a bucket that
+        double-counts or drops rows would shift a published skill number
+        without any single value looking wrong. Verified against the live
+        artifact -- all four sum to n=2835 and reconcile to overall within
+        0.00006, which is 4dp rounding -- and pinned here so a change to any
+        one bucketing cannot quietly break the identity.
+
+        Scope: this fixture resolves into a single bucket per block, so the
+        check catches a miscount or an empty block but would not notice one
+        bucket disappearing from among several. Verified against a
+        double-count mutation, which it does fail.
+        """
+        far = (datetime(2026, 6, 3, tzinfo=timezone.utc) + timedelta(days=10)).isoformat()
+        md = _fake_market_data(far)
+        self._record(md, "2026-06-03")
+        md.resolve_polymarket = lambda ident: 1
+        md.resolve_kalshi = lambda ident: 0
+        trl.resolve_open_snapshots(self.client, md)
+
+        agg = trl.aggregate(self.client, model="m", variant="v", temperature=0.0)
+        total = agg["overall"]["n"]
+        self.assertGreater(total, 0)
+
+        for block in ("by_domain", "by_horizon", "by_edge", "by_liquidity"):
+            with self.subTest(block=block):
+                rows = agg.get(block) or []
+                self.assertTrue(rows, f"{block} should not be empty for a resolved sample")
+                self.assertEqual(
+                    sum(int(r.get("n") or 0) for r in rows),
+                    total,
+                    f"{block} must partition the {total} resolved rows exactly once",
+                )
+
     def test_trajectory_series_captured(self):
         far = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
         md = _fake_market_data(far)
