@@ -190,3 +190,52 @@ class ExecutabilityIsVisibleTests(unittest.TestCase):
         self.assertEqual(
             a["allocations"][0]["allocated_pct"], b["allocations"][0]["allocated_pct"]
         )
+
+
+class AllocationsAreIdentifiableTests(unittest.TestCase):
+    """Every allocation came back with ticker "".
+
+    The resolver read `ticker`, `slug`, `id`. A live 26-row edge board
+    carries none of them; it carries `ident` on all 26. So a tool telling
+    you to place 1,499.90 named no instrument -- only a URL.
+    """
+
+    def _opp(self, **over):
+        row = {
+            "question": "Will X happen?",
+            "platform": "Kalshi",
+            "ident": "KXNFLRETIRE-MSTAFFORD9-2627",
+            "model_probability": 0.70,
+            "market_probability": 0.50,
+        }
+        row.update(over)
+        return row
+
+    def test_ident_is_used_when_ticker_is_absent(self):
+        res = optimize_portfolio_allocation([self._opp()], bankroll_usd=1000.0)
+        self.assertEqual(res["allocations"][0]["ticker"], "KXNFLRETIRE-MSTAFFORD9-2627")
+
+    def test_an_explicit_ticker_still_wins(self):
+        res = optimize_portfolio_allocation(
+            [self._opp(ticker="KXEXPLICIT-1")], bankroll_usd=1000.0
+        )
+        self.assertEqual(res["allocations"][0]["ticker"], "KXEXPLICIT-1")
+
+    def test_slug_and_id_remain_fallbacks(self):
+        for key, value in (("slug", "some-slug"), ("id", "12345")):
+            with self.subTest(key=key):
+                opp = self._opp(**{key: value})
+                opp.pop("ident")
+                res = optimize_portfolio_allocation([opp], bankroll_usd=1000.0)
+                self.assertEqual(res["allocations"][0]["ticker"], value)
+
+    def test_nothing_identifying_is_still_empty_not_invented(self):
+        opp = self._opp()
+        opp.pop("ident")
+        res = optimize_portfolio_allocation([opp], bankroll_usd=1000.0)
+        self.assertEqual(res["allocations"][0]["ticker"], "")
+
+    def test_no_allocation_is_anonymous_on_board_shaped_rows(self):
+        rows = [self._opp(ident=f"KX-{n}", question=f"Q{n}") for n in range(4)]
+        res = optimize_portfolio_allocation(rows, bankroll_usd=10_000.0)
+        self.assertTrue(all(a["ticker"] for a in res["allocations"]))

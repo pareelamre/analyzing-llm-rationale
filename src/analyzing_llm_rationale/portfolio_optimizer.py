@@ -87,7 +87,16 @@ class KellyPortfolioOptimizer:
 
             question = opp.get("question") or opp.get("title") or "Market"
             platform = opp.get("platform", "Venue")
-            ticker = opp.get("ticker") or opp.get("slug") or opp.get("id") or ""
+            # `ident` first among the board's own names: the edge board
+            # publishes ident on every row and ticker/slug/id on none, so
+            # this resolved to "" for every allocation it has ever returned.
+            ticker = (
+                opp.get("ticker")
+                or opp.get("ident")
+                or opp.get("slug")
+                or opp.get("id")
+                or ""
+            )
             link = opp.get("market_url") or ""
 
             allocations.append({
