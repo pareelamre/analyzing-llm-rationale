@@ -33,12 +33,47 @@ class InsufficientReservationCapacity(TwinStoreError):
     """A reservation would exceed account cash or worst-case-loss limits."""
 
 
+class StaleReservationPrecondition(TwinStoreError):
+    """Risk was evaluated against an account projection that has since changed."""
+
+
 class ReservationState(str, Enum):
     RESERVED = "reserved"
     SUBMITTING = "submitting"
     SUBMISSION_UNKNOWN = "submission_unknown"
     RELEASED = "released"
     SETTLED = "settled"
+
+
+@dataclass(frozen=True)
+class ReservationPreconditions:
+    """Captured risk inputs that must still be valid during reservation."""
+
+    account_revision: int
+    market_version: str
+    market_received_at: datetime
+    market_stale_after_seconds: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.account_revision, int) or self.account_revision < 0:
+            raise TwinStoreError("account revision precondition must be non-negative")
+        if not str(self.market_version).strip():
+            raise TwinStoreError("market version precondition is required")
+        if self.market_received_at.tzinfo is None:
+            raise TwinStoreError("market freshness precondition must be timezone-aware")
+        if not isinstance(self.market_stale_after_seconds, int) or self.market_stale_after_seconds <= 0:
+            raise TwinStoreError("market freshness window must be positive")
+
+    def assert_current(self, intent: TradeIntent, projection: "AccountProjection", now: datetime) -> None:
+        if projection.revision != self.account_revision:
+            raise StaleReservationPrecondition("account projection changed after risk validation")
+        if intent.market_version != self.market_version:
+            raise StaleReservationPrecondition("trade intent does not match the validated market version")
+        if now.tzinfo is None:
+            raise StaleReservationPrecondition("reservation timestamp must be timezone-aware")
+        age = (now.astimezone(timezone.utc) - self.market_received_at.astimezone(timezone.utc)).total_seconds()
+        if age < 0 or age > self.market_stale_after_seconds:
+            raise StaleReservationPrecondition("market snapshot expired before reservation")
 
 
 @dataclass(frozen=True)
@@ -148,7 +183,7 @@ class TwinStore(Protocol):
 
     def reserve_intent(
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
-        client_order_id: Optional[str] = None,
+        client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
     ) -> Reservation: ...
 
     def command_for_intent(self, intent: TradeIntent) -> ExecutionCommand: ...
@@ -257,6 +292,7 @@ class InMemoryTwinStore:
         max_loss: Decimal,
         now: Optional[datetime] = None,
         client_order_id: Optional[str] = None,
+        preconditions: Optional[ReservationPreconditions] = None,
     ) -> Reservation:
         """Reserve cash and incremental max loss in one account-scoped transition."""
         reserved_cash = _decimal("cash", cash)
@@ -273,6 +309,8 @@ class InMemoryTwinStore:
                 if client_order_id is not None and existing_command.client_order_id != str(client_order_id):
                     raise TwinStoreError("intent already has a different prepared client order identity")
                 return self._reservations[existing_id]
+            if preconditions is not None:
+                preconditions.assert_current(intent, projection, now)
             if reserved_cash > projection.available_cash_for_reservation:
                 raise InsufficientReservationCapacity("insufficient account cash after existing local reservations")
             if reserved_loss > projection.available_loss_for_reservation:
@@ -526,7 +564,7 @@ class DatastoreTwinStore:
 
     def _reserve_intent_once(
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
-        client_order_id: Optional[str] = None,
+        client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
     ) -> Reservation:
         from google.cloud import datastore
 
@@ -552,6 +590,8 @@ class DatastoreTwinStore:
                     max_loss=Decimal(str(existing["max_loss"])), account_revision=int(existing["account_revision"]),
                     state=ReservationState(str(existing["state"])), created_at=existing["created_at"],
                 )
+            if preconditions is not None:
+                preconditions.assert_current(intent, projection, now)
             if reserved_cash > projection.available_cash_for_reservation or reserved_loss > projection.available_loss_for_reservation:
                 raise InsufficientReservationCapacity("insufficient account reservation capacity")
             updated = replace(
@@ -582,7 +622,7 @@ class DatastoreTwinStore:
 
     def reserve_intent(
         self, intent: TradeIntent, *, cash: Decimal, max_loss: Decimal, now: Optional[datetime] = None,
-        client_order_id: Optional[str] = None,
+        client_order_id: Optional[str] = None, preconditions: Optional[ReservationPreconditions] = None,
     ) -> Reservation:
         """Retry only Datastore transaction conflicts; never retry venue/model work."""
         from google.api_core.exceptions import Aborted
@@ -591,7 +631,8 @@ class DatastoreTwinStore:
         for _ in range(4):
             try:
                 return self._reserve_intent_once(
-                    intent, cash=cash, max_loss=max_loss, now=now, client_order_id=client_order_id
+                    intent, cash=cash, max_loss=max_loss, now=now, client_order_id=client_order_id,
+                    preconditions=preconditions,
                 )
             except Aborted as exc:
                 last_error = exc
