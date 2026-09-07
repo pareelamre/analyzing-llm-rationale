@@ -3,9 +3,9 @@
   "plan_date": "2026-09-06",
   "planning_baseline": "d6b7a162ffca05649ba8246932a7c7f6ccc9d9a7",
   "objective": "Autonomous Foresea prediction-market trading agent with a persistent market/account twin; no user personality imitation",
-  "implementation_status": "t06_t07_and_t13_t20_in_progress",
+  "implementation_status": "t06_t07_t14_t17_t19_in_progress",
   "implementation_baseline": "0944bdc83b8c71d639fd09f2b5ad3cfa6d06e15e",
-  "next_task": "T13",
+  "next_task": "T14",
   "live_authorized": false,
   "release_gates": {
     "G0": "not_evaluated",
@@ -348,7 +348,7 @@
       "status": "complete",
       "substep": "versioned causal dataset validation, capture-time and occurred-time filtering, event-disjoint time splits, existing forecast metrics, execution-cost portfolio evaluation, baselines, stress tests, deterministic CLI, and integrity-bound readiness artifact implemented",
       "branch": "codex/autonomous-causal-replay",
-      "commit": "0dff2226",
+      "commit": "1e9c1d83",
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/538",
       "checks": [
         "PYTHONPATH=src;. py -m unittest tests.test_twin_replay tests.test_twin_evaluation tests.test_forecast_evaluation_report (pass: 23 tests)",
@@ -378,15 +378,28 @@
         "T09",
         "T12"
       ],
-      "status": "in_progress",
-      "substep": "mandate approval binds immutable scope, budget, and readiness details; durable owner routes, storage, and pause semantics remain pending",
-      "branch": "codex/autonomous-twin-next",
-      "commit": null,
-      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/447",
-      "checks": [],
-      "evidence": [],
+      "status": "complete",
+      "substep": "immutable owner-scoped draft/revise/approve/revoke API, exact authority hashes, server-derived account and release bindings, durable versioned storage, expiry/revocation and four-scope execution pauses implemented",
+      "branch": "codex/autonomous-mandates",
+      "commit": "919a9937",
+      "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/542",
+      "checks": [
+        "PYTHONPATH=src py -m unittest tests.test_twin_mandates tests.test_twin_execution tests.test_twin_store (pass: 24 tests)",
+        "PYTHONPATH=src py -m unittest discover -s tests (pass)",
+        "py -m ruff check src tests (pass)",
+        "git diff --check (pass)",
+        "py -m graphify update . (pass; generated graph changes intentionally unstaged)"
+      ],
+      "evidence": [
+        "src/analyzing_llm_rationale/twin/mandates.py",
+        "src/analyzing_llm_rationale/twin/routes.py",
+        "src/analyzing_llm_rationale/twin/execution.py",
+        "src/analyzing_llm_rationale/twin/store.py",
+        "tests/test_twin_mandates.py",
+        "docs/autonomous-twin/MANDATES.md"
+      ],
       "blockers": [],
-      "handoff": null
+      "handoff": "T14 can enforce mandate budgets and authority at the existing fenced single-dispatch execution boundary; live remains disabled until later readiness gates."
     },
     {
       "id": "T14",

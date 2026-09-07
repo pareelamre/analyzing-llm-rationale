@@ -16,6 +16,9 @@ from analyzing_llm_rationale.twin.mandates import Mandate, approve, revoke
 from analyzing_llm_rationale.twin.models import ProposalAction
 
 NOW = datetime(2025, 1, 1, tzinfo=timezone.utc)
+MODEL_HASH = "a" * 64
+CONFIG_HASH = "b" * 64
+READINESS_HASH = "c" * 64
 
 
 class DurableMemoryStore(InMemoryTwinStore):
@@ -52,18 +55,21 @@ def reserved(*, environment="shadow", autonomous=True):
     command = store.command_for_intent(trade_intent)
     claim = store.claim_command(command.id, worker_id="worker-001", now=NOW, lease_seconds=30)
     assert claim is not None
-    mandate = approve(
-        Mandate(
+    draft = Mandate(
             "mandate-001", "owner-001", active_scope.id, "strategy-v1", NOW + timedelta(days=1),
             live=environment == "live", account_epoch=active_scope.account_epoch, venue="kalshi",
-            max_capital="20", max_loss="20", model_hash="model-v1", config_hash="config-v1",
-            readiness_hash="ready-v1",
-        ), owner_id="owner-001", readiness_hash="ready-v1" if environment == "live" else None,
+            max_capital="20", max_loss="20", model_hash=MODEL_HASH, config_hash=CONFIG_HASH,
+            readiness_hash=READINESS_HASH,
+        )
+    mandate = (
+        replace(draft, approved_hash=draft.digest(), approved_at=NOW)
+        if environment == "live"
+        else approve(draft, owner_id="owner-001", now=NOW)
     )
     context = ExecutionContext(
         scope=active_scope, policy_version="policy-v1", strategy_version="strategy-v1", market_version="market-v1",
         runtime_live_enabled=True, autonomous=autonomous, mandate=mandate if autonomous else None,
-        readiness_hash="ready-v1" if autonomous else None,
+        readiness_hash=READINESS_HASH if autonomous else None,
     )
     return store, active_scope, trade_intent, store.command_for_intent(trade_intent), claim, context
 
@@ -160,7 +166,10 @@ class TwinExecutionTests(unittest.TestCase):
         self.assertEqual(result.command.state, CommandState.ACKNOWLEDGED)
 
     def test_legacy_shadow_wrapper_keeps_existing_callers_safe(self):
-        active = approve(Mandate("mandate-legacy", "owner", "scope", "strategy", NOW + timedelta(days=1)), owner_id="owner")
+        active = approve(
+            Mandate("mandate-legacy", "owner", "scope", "strategy", NOW + timedelta(days=1)),
+            owner_id="owner", now=NOW,
+        )
         self.assertEqual(submit_authorized_command(active, now=NOW, live_enabled=False, submit=lambda: None), None)
         with self.assertRaises(ExecutionBlocked):
             submit_authorized_command(revoke(active, owner_id="owner"), now=NOW, live_enabled=False, submit=lambda: None)

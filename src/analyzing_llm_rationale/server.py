@@ -16073,4 +16073,74 @@ async def agent_scan(
 # batch work runs on Cloud Run, which is what kept OOM/timeout-failing.
 
 
+class _LazyTwinMandateStore:
+    """Resolve Datastore per request without an unsafe process-local fallback."""
+
+    durable = True
+
+    @staticmethod
+    def _store():
+        client = _get_datastore()
+        if client is None:
+            raise RuntimeError("durable mandate storage is unavailable")
+        from analyzing_llm_rationale.twin.mandates import DatastoreMandateStore
+
+        return DatastoreMandateStore(client)
+
+    def create(self, mandate):
+        return self._store().create(mandate)
+
+    def get(self, owner_id, mandate_id, version=None):
+        return self._store().get(owner_id, mandate_id, version)
+
+    def save_transition(self, before, after, *, idempotency_key):
+        return self._store().save_transition(before, after, idempotency_key=idempotency_key)
+
+    def versions(self, owner_id, mandate_id):
+        return self._store().versions(owner_id, mandate_id)
+
+
+def _twin_mandate_owner(request: Request) -> str:
+    return str(_require_session(request)["sub"])
+
+
+def _twin_mandate_scope(scope_id: str):
+    return _confirmed_manual_twin_store().account_scope(scope_id)
+
+
+def _twin_mandate_runtime(owner_id: str, scope):
+    from analyzing_llm_rationale.twin.routes import MandateRuntime
+
+    def file_hash(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    artifact = None
+    artifact_path = _REPO_ROOT / "docs" / "autonomous-twin" / "REPLAY_BASELINE.json"
+    try:
+        candidate = json.loads(artifact_path.read_text(encoding="utf-8"))
+        if isinstance(candidate, dict):
+            artifact = candidate
+    except (OSError, ValueError):
+        artifact = None
+    identity = hashlib.sha256(
+        f"{owner_id}:{scope.id}:{scope.connection_ref}:{scope.account_epoch}".encode()
+    ).hexdigest()
+    release = hashlib.sha256(
+        os.environ.get("K_REVISION", os.environ.get("GITHUB_SHA", "development")).encode()
+    ).hexdigest()
+    return MandateRuntime(
+        identity, release, file_hash(_REPO_ROOT / "configs" / "twin.yaml"),
+        file_hash(_REPO_ROOT / "configs" / "models.yaml"),
+        str(artifact.get("artifact_hash")) if artifact else None, artifact,
+    )
+
+
+from analyzing_llm_rationale.twin import routes as _twin_routes  # noqa: E402
+
+_twin_mandate_service = _twin_routes.MandateService(
+    _LazyTwinMandateStore(), resolve_scope=_twin_mandate_scope,
+    resolve_runtime=_twin_mandate_runtime, clock=lambda: datetime.now(timezone.utc),
+)
+
+app.include_router(_twin_routes.create_mandate_router(_twin_mandate_service, resolve_owner=_twin_mandate_owner))
 app.include_router(venue_router)
