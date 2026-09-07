@@ -563,6 +563,51 @@ def _same_thesis_content(left: str, right: str) -> bool:
     return len(shorter) >= 80 and shorter in longer
 
 
+def _metadata_dict(metadata_json: Any) -> Dict[str, Any]:
+    try:
+        metadata = json.loads(metadata_json) if metadata_json else {}
+    except (TypeError, ValueError):
+        return {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def fill_context(metadata_json: Any, filled_quantity: Any) -> Dict[str, Any]:
+    """What the sizing policy asked for, when the book could not supply it.
+
+    The feed publishes the filled quantity alone, which reads as the size the
+    agent chose. Often it is not: on the 04:17-04:20 tick llama's quarter-Kelly
+    target was 6533.99 contracts and the fill was 100 -- 1.5% -- while minimax
+    and gpt-oss both landed on exactly 22.43 from targets of 402.20 and 475.57,
+    the signature of a shared depth limit rather than of their own sizing.
+
+    Reporting the target next to the fill is what separates "this agent sized
+    small" from "this agent could not get filled", which are different claims
+    about a model and currently indistinguishable on the board.
+    """
+    audit = _metadata_dict(metadata_json).get("audit")
+    if not isinstance(audit, dict):
+        return {}
+
+    context: Dict[str, Any] = {}
+    execution = audit.get("execution")
+    status = execution.get("fill_status") if isinstance(execution, dict) else None
+    if status and str(status) not in {"shadow_filled_full", "filled"}:
+        context["fill_status"] = str(status)[:60]
+
+    sizing = audit.get("sizing")
+    target = sizing.get("target_quantity") if isinstance(sizing, dict) else None
+    try:
+        target_f = float(target)
+        filled_f = float(filled_quantity)
+    except (TypeError, ValueError):
+        return context
+    # A hair under target is rounding, not a liquidity story.
+    if target_f > 0 and 0 <= filled_f < target_f * 0.99:
+        context["target_quantity"] = round(target_f, 6)
+        context["filled_fraction"] = round(filled_f / target_f, 6)
+    return context
+
+
 def rejection_context(metadata_json: Any) -> Dict[str, Any]:
     """Why an order was refused, for the public activity feed.
 
@@ -576,11 +621,8 @@ def rejection_context(metadata_json: Any) -> Dict[str, Any]:
     Handles both metadata shapes, matching build_agent_trading_audit:
     versioned rows carry audit.risk, older ones only risk_guard.
     """
-    try:
-        metadata = json.loads(metadata_json) if metadata_json else {}
-    except (TypeError, ValueError):
-        return {}
-    if not isinstance(metadata, dict):
+    metadata = _metadata_dict(metadata_json)
+    if not metadata:
         return {}
 
     reasons: Any = None
@@ -666,6 +708,8 @@ def recent_activity(
         }
         if action_type == "rejected_trade":
             item.update(rejection_context(row["metadata_json"]))
+        elif action_type in {"trade", "unfilled_order"}:
+            item.update(fill_context(row["metadata_json"], row["quantity"]))
         items.append(item)
 
     for row in conn.execute(
