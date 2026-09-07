@@ -2066,6 +2066,83 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertAlmostEqual(settlement["realized_pnl"], 5.86)
 
 
+class DatastorePolymarketSettlementTests(unittest.TestCase):
+    """The Datastore settle path is the one that runs in production.
+
+    Its sibling test settles a Kalshi position, where `plat` and the literal
+    "kalshi" are the same string -- so hardcoding the venue back into
+    _settlement_fee_rate(plat) changed nothing it asserts. The full suite,
+    1,695 tests, passed with the production path charging every venue the
+    Kalshi rate again, which is the bug #529 fixed.
+
+    Settling a Polymarket position is what tells the two apart.
+    """
+
+    def test_a_polymarket_settlement_is_free_on_the_datastore_path(self):
+        _install_fake_datastore(self)
+        ctx = benchmark_tools.ToolContext(agent_id="model-poly")
+
+        with tempfile.TemporaryDirectory() as td:
+            base_env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "10",
+                # Set deliberately: if the venue were ignored this would be
+                # the rate charged, so a zero fee cannot come from the rate
+                # happening to be zero.
+                "FORESEA_AGENT_SETTLEMENT_FEE_RATE": "0.014",
+                "FORESEA_MAX_ORDER_NOTIONAL": "1000",
+            }
+
+            def resolve(slug):
+                return 1 if slug == "poly-ds-settle" else None
+
+            with (
+                mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-1"}, clear=False),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_polymarket",
+                    return_value={"yes_ask": 0.40, "no_ask": 0.40},
+                ),
+            ):
+                opened = benchmark_tools.place_trade(
+                    {
+                        "platform": "polymarket", "ticker": "poly-ds-settle", "side": "yes",
+                        "price": 0.40, "quantity": 10, "token_id": "12345",
+                    },
+                    ctx,
+                )
+
+            with (
+                mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-2"}, clear=False),
+                mock.patch("analyzing_llm_rationale.market_data.resolve_polymarket", side_effect=resolve),
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_polymarket",
+                    return_value={"yes_ask": 0.10, "no_ask": 0.10},
+                ),
+            ):
+                after_settlement = benchmark_tools.place_trade(
+                    {
+                        "platform": "polymarket", "ticker": "poly-ds-other", "side": "yes",
+                        "price": 0.10, "quantity": 1, "token_id": "67890",
+                    },
+                    ctx,
+                )
+
+        self.assertTrue(opened["ok"])
+        self.assertTrue(after_settlement["ok"])
+        settlements = after_settlement["risk_guard"]["settlements_before_trade"]
+        self.assertEqual([s["ticker"] for s in settlements], ["poly-ds-settle"])
+        settlement = settlements[0]
+
+        self.assertAlmostEqual(settlement["payout"], 10.0)
+        # 0.014 * 10.0 = 0.14 if the venue is ignored.
+        self.assertAlmostEqual(settlement["settlement_fee"], 0.0)
+        # Payout minus basis, with nothing taken out for a fee Polymarket
+        # does not charge.
+        self.assertAlmostEqual(settlement["realized_pnl"], 6.0)
+
+
 class KalshiTakerFeeRateTests(unittest.TestCase):
     """place_trade only ever takes liquidity (immediate-or-cancel, no
     resting orders), so _kalshi_fee should prefer Kalshi's own live taker
