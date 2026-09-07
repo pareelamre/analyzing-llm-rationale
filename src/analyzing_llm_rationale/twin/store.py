@@ -177,6 +177,8 @@ class TwinStore(Protocol):
 
     def register_account(self, scope: AccountScope, *, venue_available_cash: Decimal, loss_limit: Decimal) -> AccountProjection: ...
 
+    def account_scope(self, scope_id: str) -> AccountScope: ...
+
     def refresh_account_capacity(self, scope_id: str, *, venue_available_cash: Decimal, loss_limit: Decimal) -> AccountProjection: ...
 
     def projection(self, scope_id: str) -> AccountProjection: ...
@@ -200,6 +202,7 @@ class InMemoryTwinStore:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
+        self._scopes: dict[str, AccountScope] = {}
         self._projections: dict[str, AccountProjection] = {}
         self._events: dict[str, dict[str, TwinEvent]] = {}
         self._reservations: dict[str, Reservation] = {}
@@ -220,9 +223,17 @@ class InMemoryTwinStore:
                     raise TwinStoreError("account epoch changed; pause and reconcile before registering a new scope")
                 return existing
             projection = AccountProjection(scope.id, scope.account_epoch, cash, loss)
+            self._scopes[scope.id] = scope
             self._projections[scope.id] = projection
             self._events[scope.id] = {}
             return projection
+
+    def account_scope(self, scope_id: str) -> AccountScope:
+        with self._lock:
+            try:
+                return self._scopes[scope_id]
+            except KeyError as exc:
+                raise TwinStoreError("account scope is not registered") from exc
 
     def refresh_account_capacity(
         self, scope_id: str, *, venue_available_cash: Decimal, loss_limit: Decimal
@@ -527,12 +538,44 @@ class DatastoreTwinStore:
                 projection = self._projection(entity)
                 if projection.account_epoch != scope.account_epoch:
                     raise TwinStoreError("account epoch changed; pause and reconcile before registering a new scope")
+                metadata = {
+                    "owner_id": scope.owner_id, "venue": scope.venue,
+                    "venue_account_ref": scope.venue_account_ref, "environment": scope.environment,
+                    "collateral_asset": scope.collateral_asset, "connection_ref": scope.connection_ref,
+                    "scope_created_at": scope.created_at,
+                }
+                for name, value in metadata.items():
+                    if name in entity and entity[name] != value:
+                        raise TwinStoreError("account scope metadata changed without an epoch transition")
+                if any(name not in entity for name in metadata):
+                    entity.update(metadata)
+                    self._client.put(entity)
                 return projection
             entity = datastore.Entity(key=key)
             projection = AccountProjection(scope.id, scope.account_epoch, cash, loss)
             self._write_projection(entity, projection)
+            entity.update({
+                "owner_id": scope.owner_id, "venue": scope.venue,
+                "venue_account_ref": scope.venue_account_ref, "environment": scope.environment,
+                "collateral_asset": scope.collateral_asset, "connection_ref": scope.connection_ref,
+                "scope_created_at": scope.created_at,
+            })
             self._client.put(entity)
             return projection
+
+    def account_scope(self, scope_id: str) -> AccountScope:
+        entity = self._client.get(self._key(scope_id))
+        required = {
+            "owner_id", "venue", "venue_account_ref", "environment",
+            "collateral_asset", "connection_ref", "scope_created_at",
+        }
+        if entity is None or not required.issubset(entity):
+            raise TwinStoreError("account scope metadata is unavailable; re-register before granting authority")
+        return AccountScope(
+            scope_id, str(entity["owner_id"]), str(entity["venue"]), str(entity["venue_account_ref"]),
+            str(entity["environment"]), str(entity["collateral_asset"]), str(entity["connection_ref"]),
+            int(entity["account_epoch"]), entity["scope_created_at"],
+        )
 
     def refresh_account_capacity(
         self, scope_id: str, *, venue_available_cash: Decimal, loss_limit: Decimal

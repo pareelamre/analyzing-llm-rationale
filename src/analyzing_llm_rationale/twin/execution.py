@@ -13,7 +13,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Mapping, Optional
 
-from .mandates import Mandate
+from .mandates import Mandate, PauseState, authorize_mandate
 from .models import AccountScope, CommandState, TradeIntent
 from .store import CommandClaim, ExecutionCommand, TwinStore, TwinStoreError, require_durable_store
 
@@ -51,6 +51,7 @@ class ExecutionContext:
     autonomous: bool = False
     mandate: Optional[Mandate] = None
     readiness_hash: Optional[str] = None
+    pause_state: PauseState = PauseState()
 
 
 @dataclass(frozen=True)
@@ -97,8 +98,15 @@ def _assert_authorized(
 
     mandate = context.mandate
     if context.autonomous:
-        if mandate is None or not mandate.active(now=now):
+        if mandate is None:
             raise ExecutionBlocked("autonomous mandate is inactive")
+        try:
+            authorize_mandate(
+                mandate, now=now, pause=context.pause_state,
+                account_epoch=context.scope.account_epoch, action=intent.action.value,
+            )
+        except (PermissionError, ValueError) as exc:
+            raise ExecutionBlocked(str(exc)) from exc
         if mandate.account_scope_id != context.scope.id or mandate.account_epoch != context.scope.account_epoch:
             raise ExecutionBlocked("mandate account binding is stale")
         if mandate.strategy_version != intent.strategy_version:
