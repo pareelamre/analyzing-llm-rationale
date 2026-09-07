@@ -72,6 +72,13 @@ _TOOL_NAMES = {
     "feed_latest": "foresea_feed_latest", "afeed_latest": "foresea_feed_latest",
     "weather_radar": "foresea_weather_radar", "aweather_radar": "foresea_weather_radar",
     "weather_forecast": "foresea_weather_forecast", "aweather_forecast": "foresea_weather_forecast",
+    # Absent until now, so these logged their internal method name -- the
+    # `a`-prefixed coroutine -- into jsonPayload.tool, while every other tool
+    # logged its public name. Any usage query grouped by tool misfiled them.
+    "recent_trades": "foresea_recent_trades", "arecent_trades": "foresea_recent_trades",
+    "optimize_portfolio": "foresea_optimize_portfolio", "aoptimize_portfolio": "foresea_optimize_portfolio",
+    "debate_market": "foresea_debate_market", "adebate_market": "foresea_debate_market",
+    "openapi": "foresea_openapi", "aopenapi": "foresea_openapi",
 }
 
 
