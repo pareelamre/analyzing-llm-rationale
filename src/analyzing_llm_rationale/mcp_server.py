@@ -536,6 +536,7 @@ class ForeseaClient:
             from analyzing_llm_rationale.debate_engine import conduct_market_debate
             return conduct_market_debate(question=question, platform=platform, market_prob=market_probability, resolution_criteria=resolution_criteria)
         except Exception as exc:
+            logger.warning("debate_market failed", exc_info=True)
             return {"error": str(exc)}
 
     async def adebate_market(self, question: str, platform: str = "Market", market_probability: Optional[float] = None, resolution_criteria: str = "") -> Dict[str, Any]:
@@ -549,6 +550,12 @@ class ForeseaClient:
             opps = audit_edge_board(_edge_board_rows(self.edge_board()))
             return optimize_portfolio_allocation(opportunities=opps, bankroll_usd=bankroll_usd, kelly_fraction=kelly_fraction, min_edge=min_edge)
         except Exception as exc:
+            # Returning {"error": ...} keeps the tool answering, but the
+            # caller sees only a message. This handler turned a total
+            # failure -- the aggregate passed where a list was expected --
+            # into something an agent read as "no allocation available",
+            # with nothing server-side to diagnose from.
+            logger.warning("optimize_portfolio failed", exc_info=True)
             return {"error": str(exc)}
 
     async def aoptimize_portfolio(self, bankroll_usd: float = 1000.0, kelly_fraction: float = 0.25, min_edge: float = 0.05) -> Dict[str, Any]:
