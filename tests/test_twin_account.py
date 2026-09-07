@@ -259,6 +259,50 @@ class TwinAccountTests(unittest.TestCase):
         self.assertTrue(changed.retained_previous)
         self.assertIn("orders_generation_changed", changed.issues)
 
+    def test_cross_collection_generation_fence_rejects_mixed_snapshots(self):
+        prior = self.sync().snapshot
+        source = inputs()
+
+        def fetchers(tokens):
+            return {
+                name: (
+                    lambda _cursor, rows=pages, token=tokens[name]: {
+                        "items": rows[0]["items"], "cursor": None,
+                        "generation_token": token,
+                    }
+                )
+                for name, pages in source.items()
+                if name != "local_command_ids"
+            }
+
+        mixed = synchronize_complete_account(
+            "scope-001", generation=2, received_at=NOW,
+            fetchers=fetchers({name: f"v-{name}" for name in (
+                "balances", "positions", "orders", "fills", "settlements"
+            )}),
+            local_command_ids=source["local_command_ids"], previous=prior,
+        )
+        incomplete = synchronize_complete_account(
+            "scope-001", generation=2, received_at=NOW,
+            fetchers=fetchers({
+                "balances": "v1", "positions": "v1", "orders": "v1",
+                "fills": "v1", "settlements": None,
+            }),
+            local_command_ids=source["local_command_ids"], previous=prior,
+        )
+        coherent = synchronize_complete_account(
+            "scope-001", generation=2, received_at=NOW,
+            fetchers=fetchers({name: "v1" for name in (
+                "balances", "positions", "orders", "fills", "settlements"
+            )}),
+            local_command_ids=source["local_command_ids"], previous=prior,
+        )
+        self.assertEqual(mixed.issues, ("account_generation_changed",))
+        self.assertEqual(incomplete.issues, ("account_generation_fence_incomplete",))
+        self.assertTrue(mixed.retained_previous)
+        self.assertTrue(incomplete.retained_previous)
+        self.assertFalse(coherent.retained_previous)
+
     def test_complete_snapshot_is_persisted_before_becoming_authoritative(self):
         source = inputs()
         fetchers = {
