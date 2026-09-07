@@ -13,7 +13,13 @@ from typing import Any, Mapping, Optional, Protocol
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
 
-from .account import AccountHolding, AccountSnapshot
+from .account import (
+    AccountHolding,
+    AccountSnapshot,
+    _fees_paid,
+    _position_holdings,
+    _settlements_are_final,
+)
 from .models import Completeness, SchemaValidationError
 
 logger = logging.getLogger(__name__)
@@ -41,7 +47,39 @@ def _json_default(value: Any) -> str:
     raise TypeError(f"unsupported account snapshot value: {type(value).__name__}")
 
 
+def _validate_snapshot(snapshot: AccountSnapshot) -> None:
+    """Recheck persisted financial invariants before accepting account authority."""
+    if snapshot.completeness is not Completeness.COMPLETE:
+        raise AccountSnapshotStoreError("only complete account snapshots may be persisted")
+    if (
+        not isinstance(snapshot.scope_id, str) or not snapshot.scope_id.strip()
+        or type(snapshot.generation) is not int or snapshot.generation < 1
+        or snapshot.received_at.tzinfo is None
+        or type(snapshot.divergence) is not bool
+    ):
+        raise AccountSnapshotStoreError("account snapshot identity is invalid")
+    for name in ("available_cash", "total_cash", "reserved_cash", "settled_cash",
+                 "position_basis", "fees_paid", "conservative_liquidation_value"):
+        value = getattr(snapshot, name)
+        if not isinstance(value, Decimal) or not value.is_finite() or value < 0:
+            raise AccountSnapshotStoreError("account snapshot monetary value is invalid")
+    if (snapshot.available_cash + snapshot.reserved_cash > snapshot.total_cash
+            or snapshot.settled_cash > snapshot.total_cash):
+        raise AccountSnapshotStoreError("account snapshot cash is inconsistent")
+    holdings, error = _position_holdings(snapshot.positions)
+    fees, fee_error = _fees_paid(snapshot.fills, snapshot.settlements)
+    if error or fee_error or _settlements_are_final(snapshot.settlements):
+        raise AccountSnapshotStoreError("account snapshot source economics are invalid")
+    if (holdings != snapshot.holdings or fees != snapshot.fees_paid
+            or sum((h.basis for h in holdings), Decimal("0")) != snapshot.position_basis
+            or snapshot.settled_cash + sum((h.liquidation_value for h in holdings), Decimal("0"))
+            != snapshot.conservative_liquidation_value
+            or bool(snapshot.external_activity_ids or snapshot.drift_reasons) != snapshot.divergence):
+        raise AccountSnapshotStoreError("account snapshot derived economics are inconsistent")
+
+
 def _payload(snapshot: AccountSnapshot) -> dict[str, Any]:
+    _validate_snapshot(snapshot)
     if snapshot.completeness is not Completeness.COMPLETE:
         raise AccountSnapshotStoreError("only complete account snapshots may be persisted")
     return {
@@ -107,7 +145,9 @@ def _restore(payload: Mapping[str, Any]) -> AccountSnapshot:
         collections = {name: tuple(payload[name]) for name in ("positions", "orders", "fills", "settlements")}
         if any(any(not isinstance(row, Mapping) for row in rows) for rows in collections.values()):
             raise ValueError
-        return AccountSnapshot(
+        if type(payload["generation"]) is not int or type(payload["divergence"]) is not bool:
+            raise ValueError
+        snapshot = AccountSnapshot(
             scope_id=str(payload["scope_id"]), generation=int(payload["generation"]), received_at=received_at,
             completeness=Completeness.COMPLETE, available_cash=_decimal("available_cash", payload["available_cash"]),
             total_cash=_decimal("total_cash", payload["total_cash"]), reserved_cash=_decimal("reserved_cash", payload["reserved_cash"]),
@@ -119,6 +159,8 @@ def _restore(payload: Mapping[str, Any]) -> AccountSnapshot:
             settlements=collections["settlements"], external_activity_ids=tuple(str(item) for item in payload["external_activity_ids"]),
             divergence=bool(payload["divergence"]), drift_reasons=tuple(str(item) for item in payload["drift_reasons"]),
         )
+        _validate_snapshot(snapshot)
+        return snapshot
     except (KeyError, TypeError, ValueError, AccountSnapshotStoreError) as exc:
         raise AccountSnapshotStoreError("persisted account snapshot is malformed") from exc
 
@@ -137,6 +179,7 @@ class InMemoryAccountSnapshotStore:
             return self._snapshots.get(scope_id)
 
     def save(self, snapshot: AccountSnapshot) -> AccountSnapshot:
+        _validate_snapshot(snapshot)
         with self._lock:
             prior = self._snapshots.get(snapshot.scope_id)
             if prior is not None:
@@ -169,7 +212,12 @@ class DatastoreAccountSnapshotStore:
         if entity is None:
             return None
         try:
-            return _restore(json.loads(str(entity["payload_json"])))
+            snapshot = _restore(json.loads(str(entity["payload_json"])))
+            if snapshot.scope_id != scope_id or entity.get("fingerprint") != _fingerprint(snapshot):
+                raise AccountSnapshotStoreError("stored snapshot identity or fingerprint mismatch")
+            if entity.get("generation") != snapshot.generation:
+                raise AccountSnapshotStoreError("stored snapshot generation mismatch")
+            return snapshot
         except (KeyError, TypeError, ValueError, AccountSnapshotStoreError) as exc:
             raise AccountSnapshotStoreError("stored account snapshot cannot be read") from exc
 
@@ -187,6 +235,10 @@ class DatastoreAccountSnapshotStore:
                 existing = self._client.get(key)
                 if existing is not None:
                     existing_snapshot = _restore(json.loads(str(existing["payload_json"])))
+                    if (existing_snapshot.scope_id != snapshot.scope_id
+                            or existing.get("fingerprint") != _fingerprint(existing_snapshot)
+                            or existing.get("generation") != existing_snapshot.generation):
+                        raise AccountSnapshotStoreError("stored snapshot integrity mismatch")
                     if existing_snapshot.generation > snapshot.generation:
                         snapshot_events.add(1, {"outcome": "stale"})
                         span.set_attribute("outcome", "stale")

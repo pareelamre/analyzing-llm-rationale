@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import json
 import unittest
 from dataclasses import replace
 from datetime import datetime, timezone
+from unittest.mock import Mock
 
 from analyzing_llm_rationale.twin.account import synchronize_account
 from analyzing_llm_rationale.twin.account_store import (
     AccountSnapshotStoreError,
+    DatastoreAccountSnapshotStore,
     InMemoryAccountSnapshotStore,
     _canonical_json,
+    _fingerprint,
     _restore,
 )
 from analyzing_llm_rationale.twin.models import Completeness
@@ -34,6 +38,40 @@ def snapshot(*, generation=1, received_at=NOW):
 
 
 class AccountSnapshotStoreTests(unittest.TestCase):
+    def test_restore_rejects_corrupted_authority(self):
+        for updates in (
+            {"available_cash": "999"}, {"generation": -1}, {"generation": True},
+            {"reserved_cash": "-1"}, {"position_basis": "999"},
+            {"fees_paid": "0"}, {"conservative_liquidation_value": "999"},
+            {"divergence": "false"}, {"scope_id": ""},
+        ):
+            with self.subTest(updates=updates):
+                payload = json.loads(_canonical_json(snapshot()))
+                payload.update(updates)
+                with self.assertRaises(AccountSnapshotStoreError):
+                    _restore(payload)
+
+    def test_datastore_load_checks_scope_and_integrity(self):
+        original = snapshot()
+        entity = {"payload_json": _canonical_json(original),
+                  "fingerprint": _fingerprint(original), "generation": original.generation}
+        client = Mock()
+        client.get.return_value = entity
+        store = DatastoreAccountSnapshotStore(client)
+        self.assertEqual(store.load(original.scope_id), original)
+        with self.assertRaises(AccountSnapshotStoreError):
+            store.load("another-scope")
+        for updates in ({"fingerprint": "corrupted"}, {"generation": 99}):
+            client.get.return_value = {**entity, **updates}
+            with self.assertRaises(AccountSnapshotStoreError):
+                store.load(original.scope_id)
+
+    def test_new_invalid_snapshot_is_never_saved(self):
+        store = InMemoryAccountSnapshotStore()
+        with self.assertRaises(AccountSnapshotStoreError):
+            store.save(replace(snapshot(), generation=-1))
+        self.assertIsNone(store.load("scope-001"))
+
     def test_round_trip_preserves_complete_economics(self):
         original = snapshot()
         restored = _restore(__import__("json").loads(_canonical_json(original)))
@@ -46,7 +84,7 @@ class AccountSnapshotStoreTests(unittest.TestCase):
         same_generation = snapshot(received_at=datetime(2025, 1, 2, tzinfo=timezone.utc))
         self.assertEqual(store.save(same_generation), original)
         with self.assertRaisesRegex(AccountSnapshotStoreError, "conflicting economics"):
-            store.save(replace(same_generation, available_cash=same_generation.available_cash + 1))
+            store.save(replace(same_generation, available_cash=same_generation.available_cash - 1))
 
     def test_stale_generation_cannot_replace_inventory_and_incomplete_is_rejected(self):
         store = InMemoryAccountSnapshotStore()
