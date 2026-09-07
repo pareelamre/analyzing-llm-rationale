@@ -38,3 +38,19 @@ strategy:
     max_trailing_additions: "0"
     max_daily_realized_loss: "0"
     max_drawdown: "0.10"
+
+# A replay run freezes these timestamps into its config hash. Move them only
+# when intentionally producing a new out-of-sample evaluation cohort.
+replay:
+  split_at: "2026-08-01T00:00:00+00:00"
+  evaluation_as_of: "2026-09-07T00:00:00+00:00"
+  min_calibration_records: 30
+  min_test_records: 30
+  min_edge: 0.05
+  requested_fraction: 0.02
+  fee_fraction: 0.01
+  slippage: 0.01
+  max_total_exposure: 0.25
+  max_drawdown: 0.20
+  fixed_probability: 0.50
+  max_artifact_age_seconds: 604800
