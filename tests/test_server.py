@@ -5469,6 +5469,40 @@ class ServerTests(unittest.TestCase):
 
         self.assertEqual(providers, [])
 
+    def test_agent_fallback_exclusion_is_not_logged_as_a_failure(self):
+        """The chain is built at cycle start, before any fallback is needed.
+
+        On the 00:00Z tick, deepseek, gpt-oss, llama and minimax each logged a
+        refusal and then completed normally on their primary -- a warning that
+        described a failure which had not happened. The exclusion is a fact
+        about the configured chain, so it belongs at debug.
+        """
+        primary = FakeProvider()
+        primary.model_name = "zai-org/GLM-5.3-Flash"
+        rival = FakeProvider()
+        rival.model_name = "zai-org/GLM-5.3"
+        req = server_module.AgentAnalyzeRequest(
+            question="Will it rain?",
+            model="glm-5-3-flash",
+        )
+        with (
+            mock.patch.object(server_module, "_SCADS_MODEL_FALLBACKS", {"glm-5-3-flash": ("zai-org/GLM-5.3",)}),
+            mock.patch.object(server_module, "_AGENT_TRADING_IDENTITIES", frozenset({"zai-org/GLM-5.3"})),
+            mock.patch.object(server_module, "_scads_provider_for_model_name", return_value=rival),
+        ):
+            server_module.logger.reset_mock()
+            providers = server_module._agent_fallback_providers(req, primary)
+
+        self.assertEqual(providers, [])
+        server_module.logger.warning.assert_not_called()
+        self.assertTrue(
+            any(
+                "both compete on the board" in str(call.args[0])
+                for call in server_module.logger.debug.call_args_list
+            ),
+            server_module.logger.debug.call_args_list,
+        )
+
     def test_agent_tool_loop_falls_back_when_primary_fails(self):
         import asyncio
 
