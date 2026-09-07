@@ -106,6 +106,11 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
             params.append(since_ts)
 
         trade_count = conn.execute(trade_sql, params).fetchone()[0]
+        fill_rows = conn.execute(
+            "SELECT metadata_json, quantity FROM agent_actions WHERE agent_id = ? "
+            "AND action_type = 'trade' AND quantity > 0",
+            (agent_id,),
+        ).fetchall()
         settlement_pnls = [float(r[0]) for r in conn.execute(settlement_sql, params)]
         realized_pnls = [float(r[0]) for r in conn.execute(realized_sql, params)]
         settled_count = len(settlement_pnls)
@@ -133,6 +138,7 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
             "illiquid_positions": snap["illiquid_positions"],
             "mark_coverage": snap["mark_coverage"],
             "trade_count": trade_count,
+            **fill_efficiency(fill_rows),
             "settled_count": settled_count,
             "realized_count": realized_count,
             "won_count": won_count,
@@ -606,6 +612,54 @@ def fill_context(metadata_json: Any, filled_quantity: Any) -> Dict[str, Any]:
         context["target_quantity"] = round(target_f, 6)
         context["filled_fraction"] = round(filled_f / target_f, 6)
     return context
+
+
+def fill_efficiency(rows: Any) -> Dict[str, Any]:
+    """How much of what this agent asked for it actually got.
+
+    Per-event shortfall is visible via fill_context, but the constraint is
+    only legible in aggregate: an agent receiving a few percent of every
+    target is not expressing a view, it is being rationed by the book. That
+    changes how a leaderboard position should be read, and nothing on the
+    board currently says it.
+
+    Returns nothing when no trade carried a sizing target -- manual-sizing
+    eras and close orders have nothing to compare against, and a fabricated
+    100% would be worse than silence.
+    """
+    fractions: List[float] = []
+    partial = 0
+    for metadata_json, quantity in rows:
+        audit = _metadata_dict(metadata_json).get("audit")
+        if not isinstance(audit, dict):
+            continue
+        sizing = audit.get("sizing")
+        target = sizing.get("target_quantity") if isinstance(sizing, dict) else None
+        try:
+            target_f = float(target)
+            filled_f = float(quantity)
+        except (TypeError, ValueError):
+            continue
+        if target_f <= 0 or filled_f < 0:
+            continue
+        fraction = min(1.0, filled_f / target_f)
+        fractions.append(fraction)
+        if fraction < 0.99:
+            partial += 1
+    if not fractions:
+        return {}
+    fractions.sort()
+    mid = len(fractions) // 2
+    median = (
+        fractions[mid]
+        if len(fractions) % 2
+        else (fractions[mid - 1] + fractions[mid]) / 2.0
+    )
+    return {
+        "median_fill_fraction": round(median, 6),
+        "partially_filled_count": partial,
+        "sized_trade_count": len(fractions),
+    }
 
 
 def rejection_context(metadata_json: Any) -> Dict[str, Any]:
