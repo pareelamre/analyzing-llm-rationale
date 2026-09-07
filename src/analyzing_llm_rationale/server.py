@@ -3867,6 +3867,10 @@ async def agent_trading_board():
             "weather_operations": compact["weather_operations"],
             "model_health": compact["model_health"],
             "operational_health": compact["operational_health"],
+            # The thresholds the trade guard rejects against. Published so a
+            # rejection reason on the activity feed can be read against the
+            # limit it refers to, rather than taken on faith.
+            "risk_limits": live.get("risk_limits") or {},
             # Historical records remain inspectable but do not participate in
             # live ranking, balances, health, or trading decisions.
             "retired_artifacts": retired_artifacts,

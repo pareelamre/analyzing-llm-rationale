@@ -394,6 +394,32 @@ def _weather_operations(conns: Dict[str, sqlite3.Connection], now: datetime) -> 
     return {"window_hours": WEATHER_OPERATIONS_WINDOW_HOURS, **counts}
 
 
+def _risk_limits() -> Dict[str, Any]:
+    """The fractions the trade guard actually rejects against.
+
+    The board published rejection reasons (concentration_limit,
+    drawdown_limit) without the thresholds they refer to, so a reader could
+    see that an agent was refused but not how close it was, nor how much
+    room the others had. Paired with a curve's current_drawdown these say
+    whether an agent is near being frozen.
+
+    Read through benchmark_tools rather than restated here, so they cannot
+    drift from the values place_trade enforces. Both are process-wide
+    constants with env overrides that no workflow sets, so the publisher and
+    the tick necessarily agree.
+    """
+    return {
+        "concentration_limit": benchmark_tools._env_float(
+            "FORESEA_AGENT_CONCENTRATION_LIMIT",
+            benchmark_tools.DEFAULT_CONCENTRATION_LIMIT,
+        ),
+        "max_drawdown_limit": benchmark_tools._env_float(
+            "FORESEA_AGENT_MAX_DRAWDOWN_LIMIT",
+            benchmark_tools.DEFAULT_MAX_DRAWDOWN_LIMIT,
+        ),
+    }
+
+
 def build_board() -> Dict[str, Any]:
     models = _agent_trading_models()
     store_presence = {model: (STORE_DIR / model / "store.sqlite").exists() for model in models}
@@ -454,6 +480,7 @@ def build_board() -> Dict[str, Any]:
         "weather_operations": weather_operations,
         "model_health": model_health,
         "operational_health": _operational_health(model_health),
+        "risk_limits": _risk_limits(),
         "recent_cycle_telemetry": cycle_telemetry[:RECENT_ACTIVITY_LIMIT],
         "latest_theses": latest_theses,
         "recent_activity": activity[:RECENT_ACTIVITY_LIMIT],
