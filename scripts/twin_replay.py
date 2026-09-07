@@ -23,7 +23,10 @@ def _code_hash() -> str:
         "src/analyzing_llm_rationale/forecast_evaluation.py",
     ):
         digest.update(relative.encode("utf-8"))
-        digest.update((ROOT / relative).read_bytes())
+        # Git may materialize the same source with LF or CRLF. Hash its logical
+        # text so a readiness artifact is reproducible on Windows and Linux.
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        digest.update(source.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8"))
     return digest.hexdigest()
 
 
