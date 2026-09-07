@@ -173,9 +173,22 @@ _AGENT_TRADING_BOARD_TIMEOUT = int(
     os.environ.get("AGENT_TRADING_BOARD_TIMEOUT", str(_TRACK_RECORD_LIVE_TIMEOUT))
 )
 _AGENT_TRADING_BOARD_STALE_AFTER_S = int(
-    # The board publishes far less often than the MTM ledgers (every ~15 min,
-    # best-effort under GitHub's scheduler) -- default staleness threshold is
-    # correspondingly looser so a normal publish gap isn't flagged as stale.
+    # The board publishes far less often than the MTM ledgers, so the default
+    # staleness threshold is looser than theirs.
+    #
+    # "~15 min" -- what this comment used to claim -- is the cron's intent,
+    # not its delivery. Measured over 2026-09-06/07, scheduled runs of
+    # agent-trading-board-publish (cron "27,57 * * * *", so four per two
+    # hours) actually fired at 19:21, 21:29, 23:22 and 01:10Z: roughly one in
+    # four slots. What keeps the board alive between them is a separate
+    # even-hour workflow_dispatch, and that path runs a full agent tick
+    # (20-40 min) before publishing.
+    #
+    # Effective gap is therefore ~1 hour and frequently over it, so the board
+    # reports stale for part of most hours. If that flag is meant to mean
+    # something, this number wants raising to match the delivered cadence
+    # rather than the intended one -- left alone here because it is a
+    # product decision, not a measurement.
     os.environ.get("AGENT_TRADING_BOARD_STALE_AFTER_S", "3600")
 )
 # A separate, bounded artifact for on-demand paper-trade auditing. Keeping it
