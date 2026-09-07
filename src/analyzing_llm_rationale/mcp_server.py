@@ -223,8 +223,15 @@ def _edge_board_rows(board: Any) -> List[Dict[str, Any]]:
     return rows if isinstance(rows, list) else []
 
 
-def _summarise_track_record(payload: Any) -> Any:
-    """Drop the bulk blocks so the result fits an MCP client's response limit."""
+def _summarise_track_record(payload: Any, source: str = "/track-record") -> Any:
+    """Drop the bulk blocks so the result fits an MCP client's response limit.
+
+    ``source`` names the endpoint the payload came from, because the caller
+    is told where to fetch the omitted keys and the two callers differ:
+    edge_board's per-model ledger blocks are not in /track-record's payload,
+    so pointing an edge-board consumer there sends them somewhere the data
+    is not.
+    """
     if not isinstance(payload, dict):
         return payload
     omitted = [k for k in _TRACK_RECORD_BULK_KEYS if k in payload]
@@ -233,9 +240,10 @@ def _summarise_track_record(payload: Any) -> Any:
     summary = {k: v for k, v in payload.items() if k not in _TRACK_RECORD_BULK_KEYS}
     summary["omitted_for_size"] = {
         "keys": omitted,
+        "source": source,
         "detail": (
             "Per-model comparisons and paper-PnL ledgers are omitted here because "
-            "they exceed an MCP response limit. Fetch GET /track-record for them."
+            f"they exceed an MCP response limit. Fetch GET {source} for them."
         ),
     }
     return summary
@@ -858,7 +866,9 @@ def create_mcp_server(
         model-vs-market disagreement, each with Buy YES/NO direction, implied odds,
         whether the edge is historically significant, and a multi-model comparison."""
 
-        return _summarise_track_record(await _call_tool_async(client.aedge_board))
+        return _summarise_track_record(
+            await _call_tool_async(client.aedge_board), source="/edge-board"
+        )
 
     @mcp.tool()
     async def foresea_venue_data(platform: str = "", operation: str = "",

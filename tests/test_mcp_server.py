@@ -516,3 +516,28 @@ class EdgeBoardRowsTests(unittest.TestCase):
         self.assertEqual(
             audit_edge_board(mcp._edge_board_rows(aggregate))[0]["ticker"], "M1"
         )
+
+
+class OmissionPointsAtTheRightEndpointTests(unittest.TestCase):
+    """The two callers omit different keys from different endpoints.
+
+    edge_board's per-model ledger blocks (mark_to_market_by_model,
+    quarter_kelly_by_model, growth_*_by_model) are not in /track-record's
+    payload, so telling an edge-board consumer to fetch them there sends
+    them somewhere the data is not.
+    """
+
+    def _payload(self):
+        return {"overall": {"n": 1}, "paper_pnl": {"rows": []},
+                "mark_to_market_by_model": {"m": []}}
+
+    def test_track_record_points_at_track_record(self):
+        out = mcp._summarise_track_record(self._payload())
+        self.assertEqual(out["omitted_for_size"]["source"], "/track-record")
+        self.assertIn("GET /track-record", out["omitted_for_size"]["detail"])
+
+    def test_edge_board_points_at_edge_board(self):
+        out = mcp._summarise_track_record(self._payload(), source="/edge-board")
+        self.assertEqual(out["omitted_for_size"]["source"], "/edge-board")
+        self.assertIn("GET /edge-board", out["omitted_for_size"]["detail"])
+        self.assertNotIn("/track-record", out["omitted_for_size"]["detail"])
