@@ -5936,6 +5936,8 @@ class RadarMarket(BaseModel):
     credibility_grade: Optional[str] = None
     credibility_flags: List[str] = Field(default_factory=list)
     is_credible: Optional[bool] = None
+    weather_brief: Optional[Dict[str, Any]] = None
+    bracket_probability: Optional[Dict[str, Any]] = None
 
 
 class RadarResponse(BaseModel):
@@ -7685,6 +7687,21 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
         from analyzing_llm_rationale.edge_credibility import audit_edge_opportunity
         audit = audit_edge_opportunity(row)
 
+        weather_brief_dict = None
+        bracket_prob_dict = row.get("bracket_probability")
+        try:
+            from analyzing_llm_rationale.weather_markets import classify_weather_market
+            brief = classify_weather_market(row)
+            if brief.is_weather:
+                weather_brief_dict = brief.as_dict()
+                if not bracket_prob_dict:
+                    from analyzing_llm_rationale.weather_research import parse_market_strike
+                    strike_spec = parse_market_strike(row)
+                    if strike_spec:
+                        bracket_prob_dict = {"strike_spec": strike_spec}
+        except Exception:
+            pass
+
         markets.append(RadarMarket(
             id=ident,
             ident=row.get("ident"),
@@ -7706,6 +7723,8 @@ def _radar_from_track_record(limit: int = 12) -> "RadarResponse":
             credibility_grade=audit.get("credibility_grade"),
             credibility_flags=audit.get("credibility_flags") or [],
             is_credible=audit.get("is_credible"),
+            weather_brief=weather_brief_dict,
+            bracket_probability=bracket_prob_dict,
         ))
         if len(markets) >= limit:
             break
@@ -9244,6 +9263,96 @@ async def agent_debate(req: DebateRequest) -> Dict[str, Any]:
         ),
     )
     return res
+
+
+@app.get(
+    "/market/weather-radar",
+    tags=["Markets"],
+    summary="Live prediction-market weather radar evaluated against neural weather models",
+)
+async def market_weather_radar(
+    limit: int = Query(15, ge=1, le=50, description="Max weather opportunities to return"),
+    min_edge: float = Query(0.0, ge=0.0, le=1.0, description="Filter by minimum absolute model edge"),
+) -> Dict[str, Any]:
+    """Scan active Kalshi daily temperature contracts, compute real-time calibrated
+    neural weather model forecasts (Google DeepMind WeatherNext / MetNet or Open-Meteo),
+    apply microclimate station bias offsets, and evaluate strike bracket probabilities and edges.
+    """
+    from analyzing_llm_rationale import market_data as _md
+    from analyzing_llm_rationale.weather_markets import classify_weather_market
+    from analyzing_llm_rationale.weather_research import (
+        _STATION_BIAS_PROFILES,
+        research_weather_market,
+    )
+
+    loop = asyncio.get_running_loop()
+
+    def _collect_weather_radar():
+        series_list = (
+            "KXHIGHNY", "KXHIGHCHI", "KXHIGHMIA", "KXHIGHAUS",
+            "KXHIGHDEN", "KXHIGHPHIL", "KXLOWNY", "KXLOWCHI",
+        )
+        candidates = []
+        for s in series_list:
+            try:
+                batch = _md.list_kalshi(limit=4, series_ticker=s, min_close_days=0.0)
+                candidates.extend(batch)
+            except Exception:
+                continue
+
+        results = []
+        for quote in candidates:
+            ident = quote.get("ident") or quote.get("ticker")
+            if not ident:
+                continue
+            brief = classify_weather_market(quote)
+            if not brief.is_weather or not brief.station:
+                continue
+
+            try:
+                research = research_weather_market(quote)
+            except Exception:
+                continue
+
+            mf = research.get("model_forecast")
+            bp = research.get("bracket_probability")
+            edge = bp.get("model_edge") if bp else None
+            if min_edge > 0.0:
+                if edge is None or abs(float(edge)) < min_edge:
+                    continue
+
+            obs = (research.get("observations") or [{}])[0]
+            profile = _STATION_BIAS_PROFILES.get(brief.station.upper(), {})
+            results.append({
+                "ident": ident,
+                "platform": quote.get("platform") or "kalshi",
+                "title": quote.get("title") or quote.get("question"),
+                "subtitle": quote.get("subtitle"),
+                "market_url": quote.get("market_url") or f"https://kalshi.com/markets/{ident}",
+                "market_price": quote.get("price") or quote.get("yes_ask") or quote.get("last_price"),
+                "station": brief.station,
+                "station_name": (mf.get("station_name") if mf else None) or profile.get("name") or brief.station,
+                "settlement_source": brief.settlement_source_label,
+                "latest_observation_f": obs.get("temperature_f"),
+                "model_forecast": mf,
+                "bracket_probability": bp,
+                "edge": edge,
+                "notice": research.get("notice"),
+            })
+
+        results.sort(key=lambda r: abs(float(r.get("edge") or 0.0)), reverse=True)
+        return results[:limit]
+
+    opportunities = await loop.run_in_executor(None, _collect_weather_radar)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "total_opportunities": len(opportunities),
+        "opportunities": opportunities,
+        "notice": (
+            "Calibrated neural weather model forecasts (Google DeepMind WeatherNext / MetNet). "
+            "Final settlement is governed strictly by the contract's named authority (e.g. NWS Daily Climate Report)."
+        ),
+    }
 
 
 # ── Feature #2: Quantitative Kelly Portfolio Optimizer & Position Sizer ───────

@@ -1179,6 +1179,11 @@ class ThesisTemplateConformanceTests(unittest.TestCase):
         # Check that substantive hint was sent after turn 0
         self.assertTrue(any("That is a verdict with no analysis behind it" in p for p in seen_prompts))
 
+    def test_weather_tool_aliases_normalized(self):
+        for alias in ("weather", "weather_research", "research_weather", "research_weather_market", "weather_forecast"):
+            norm = ac._normalize_action({"action": alias, "args": {"ticker": "KXHIGHNY"}})
+            self.assertEqual(norm["action"], "weather_market_research")
+
 
 if __name__ == "__main__":
     unittest.main()

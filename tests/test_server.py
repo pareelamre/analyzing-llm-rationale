@@ -1502,6 +1502,48 @@ class ServerTests(unittest.TestCase):
         self.assertGreaterEqual(len(payload["markets"]), 1)
         self.assertIn("question", payload["markets"][0])
 
+    def test_market_weather_radar_endpoint(self):
+        fake_kalshi = [{
+            "ident": "KXHIGHNY-26SEP07-B77.5",
+            "ticker": "KXHIGHNY-26SEP07-B77.5",
+            "title": "Will the daily high temperature in NYC be below 77.5° on Sep 7?",
+            "question": "Will the daily high temperature in NYC be below 77.5° on Sep 7?",
+            "category": "Weather",
+            "subtitle": "Below 77.5°",
+            "resolution_criteria": "NWS Daily Climate Report, station KNYC.",
+            "price": 0.45,
+            "platform": "kalshi",
+        }]
+        fake_research = {
+            "source_status": "nws_observation_available",
+            "observations": [{"temperature_f": 68.0}],
+            "model_forecast": {
+                "provider": "google_maps_weather",
+                "model": "google_deepmind_weathernext_metnet",
+                "projected_high_f": 79.8,
+                "station_name": "New York Central Park",
+            },
+            "bracket_probability": {
+                "strike_spec": {"strike_type": "less_than", "strike_f": 77.5},
+                "model_probability": 0.10,
+                "model_edge": -0.35,
+            },
+            "notice": "test notice",
+        }
+        with (
+            mock.patch("analyzing_llm_rationale.market_data.list_kalshi", return_value=fake_kalshi),
+            mock.patch("analyzing_llm_rationale.weather_research.research_weather_market", return_value=fake_research),
+        ):
+            response = self.client.get("/market/weather-radar?limit=5")
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertIn("opportunities", data)
+            self.assertGreaterEqual(len(data["opportunities"]), 1)
+            opp = data["opportunities"][0]
+            self.assertEqual(opp["station"], "KNYC")
+            self.assertEqual(opp["edge"], -0.35)
+            self.assertEqual(opp["model_forecast"]["provider"], "google_maps_weather")
+
     def test_radar_endpoint_schedules_evidence_prefetch(self):
         live = {
             "generated_at": "2026-06-28T23:51:20+00:00",
