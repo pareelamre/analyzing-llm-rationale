@@ -44,6 +44,10 @@ def _mcp_tool_context(fn_name: str, args: tuple, kwargs: dict) -> Dict[str, Any]
         return {"ref_count": len(refs)}
     if fn_name == "acheck_run":
         return {"client_run_key": args[0] if args else kwargs.get("client_run_key")}
+    if fn_name in ("aweather_radar", "weather_radar"):
+        return {"target_date": kwargs.get("target_date")}
+    if fn_name in ("aweather_forecast", "weather_forecast"):
+        return {"station_or_query": kwargs.get("station_or_query") or (args[0] if args else None)}
     return {}
 
 
@@ -66,6 +70,8 @@ _TOOL_NAMES = {
     "polymarket_meta": "foresea_polymarket_meta", "apolymarket_meta": "foresea_polymarket_meta",
     "market_leaderboard": "foresea_market_leaderboard", "amarket_leaderboard": "foresea_market_leaderboard",
     "feed_latest": "foresea_feed_latest", "afeed_latest": "foresea_feed_latest",
+    "weather_radar": "foresea_weather_radar", "aweather_radar": "foresea_weather_radar",
+    "weather_forecast": "foresea_weather_forecast", "aweather_forecast": "foresea_weather_forecast",
 }
 
 
@@ -510,6 +516,26 @@ class ForeseaClient:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.feed_latest(limit, min_edge))
 
+    def weather_radar(self, target_date: Optional[str] = None) -> Dict[str, Any]:
+        params = {"target_date": target_date} if target_date else None
+        return self._request("GET", "/market/weather-radar", params=params)
+
+    async def aweather_radar(self, target_date: Optional[str] = None) -> Dict[str, Any]:
+        params = {"target_date": target_date} if target_date else None
+        return await self._arequest("GET", "/market/weather-radar", params=params)
+
+    def weather_forecast(self, station_or_query: str, target_date: Optional[str] = None) -> Dict[str, Any]:
+        from analyzing_llm_rationale import weather_research
+        return weather_research.research_weather_market(
+            f"What will the temperature be at {station_or_query}?",
+            event_ticker=station_or_query,
+            target_date=target_date,
+        )
+
+    async def aweather_forecast(self, station_or_query: str, target_date: Optional[str] = None) -> Dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.weather_forecast(station_or_query, target_date))
+
 
 def _response_detail(response: Any) -> str:
     try:
@@ -848,6 +874,38 @@ def create_mcp_server(
         """Fetch the real-time unified Foresea Alpha & Agent Feed, combining live prediction market edge signals, autonomous agent trades & theses, and leaderboard standings."""
 
         return await _call_tool_async(client.afeed_latest, limit, min_edge)
+
+    @mcp.tool()
+    async def foresea_weather_radar(target_date: Optional[str] = None) -> Dict[str, Any]:
+        """Scan live temperature and weather prediction markets (Kalshi KXHIGHNY, KXHIGHCHI,
+        KXHIGHMIA, KXHIGHAUS, KXHIGHDEN, KXHIGHPHIL, etc.) against neural weather models
+        (Google DeepMind WeatherNext 3 / MetNet) and high-resolution multi-model ensembles,
+        calibrated with station microclimate bias profiles. Returns ranked mispricings,
+        strike bracket probabilities, and model-vs-market edge."""
+
+        return await _call_tool_async(client.aweather_radar, target_date)
+
+    @mcp.tool()
+    async def foresea_weather_forecast(
+        station_or_query: str,
+        target_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Retrieve neural model weather forecasts (Google Maps Weather API / WeatherNext 3 /
+        MetNet, ECMWF, GFS, GraphCast) with empirical station bias correction (e.g. KNYC
+        Central Park, KMDW Chicago Midway, KDEN Denver) and strike bracket probability
+        calculations for weather prediction markets."""
+
+        return await _call_tool_async(client.aweather_forecast, station_or_query, target_date)
+
+    @mcp.resource(
+        "foresea://weather/radar",
+        name="Foresea live weather radar",
+        mime_type="application/json",
+    )
+    async def weather_radar_resource() -> str:
+        """Live weather prediction market radar with neural model mispricings."""
+
+        return json.dumps(await _call_tool_async(client.aweather_radar), sort_keys=True)
 
     @mcp.resource(
         "foresea://track-record",

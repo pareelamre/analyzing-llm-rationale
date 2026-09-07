@@ -297,6 +297,36 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
         ):
             self.assertEqual(await client.aexchange_status(), {"status": {"exchange_active": True}, "schedule": {"schedule": []}})
 
+    def test_weather_radar_queries_market_weather_radar(self):
+        session = FakeSession(FakeResponse(payload={"opportunities": []}))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", session=session)
+        res = client.weather_radar(target_date="2026-09-07")
+        self.assertEqual(res, {"opportunities": []})
+        call = session.calls[0]
+        self.assertEqual(call["method"], "GET")
+        self.assertEqual(call["url"], "https://foresea.test/market/weather-radar")
+        self.assertEqual(call["params"], {"target_date": "2026-09-07"})
+
+    async def test_async_weather_radar_queries_market_weather_radar(self):
+        session = FakeAsyncSession(FakeResponse(payload={"opportunities": [{"ident": "KXHIGHNY"}]}))
+        client = mcp.ForeseaClient(base_url="https://foresea.test", async_session=session)
+        res = await client.aweather_radar()
+        self.assertEqual(res, {"opportunities": [{"ident": "KXHIGHNY"}]})
+        call = session.calls[0]
+        self.assertEqual(call["method"], "GET")
+        self.assertEqual(call["url"], "https://foresea.test/market/weather-radar")
+
+    def test_weather_forecast_calls_weather_research(self):
+        from unittest.mock import patch
+
+        from analyzing_llm_rationale import weather_research
+        client = mcp.ForeseaClient(base_url="https://foresea.test")
+        fake_research = {"station": "KNYC", "projected_high_f": 75.0}
+        with patch.object(weather_research, "research_weather_market", return_value=fake_research) as mock_res:
+            res = client.weather_forecast("KNYC", target_date="2026-09-07")
+            self.assertEqual(res, fake_research)
+            mock_res.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
