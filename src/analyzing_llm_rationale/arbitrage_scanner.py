@@ -16,8 +16,11 @@ Arbitrage Mechanics:
 """
 from __future__ import annotations
 
+import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_title(text: str) -> str:
@@ -39,6 +42,39 @@ def _compute_keyword_overlap(text_a: str, text_b: str) -> float:
     return len(intersection) / len(union)
 
 
+def fetch_markets_to_scan(
+    polymarket_markets: Optional[List[Dict[str, Any]]] = None,
+    kalshi_markets: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool]:
+    """The two venues' markets, and whether both were actually reached.
+
+    This used to be inline, and the failure was silent: an unreachable venue
+    became an empty list, the scan found nothing in it, and the endpoint
+    answered `{"n_opportunities": 0}`. That is the same answer it gives when
+    both venues were read fine and simply disagree about nothing -- so a
+    caller could not tell "no arbitrage" from "nothing was scanned".
+
+    Returning the flag lets the caller say which. It still degrades to empty
+    lists rather than raising, because a scanner that returns nothing is more
+    useful than one that 500s.
+    """
+    try:
+        from analyzing_llm_rationale import market_data
+
+        poly = (
+            market_data.list_polymarket(limit=30)
+            if polymarket_markets is None else polymarket_markets
+        )
+        kalshi = (
+            market_data.list_kalshi(limit=30)
+            if kalshi_markets is None else kalshi_markets
+        )
+        return poly, kalshi, True
+    except Exception:
+        logger.warning("cross-venue arbitrage market fetch failed", exc_info=True)
+        return (polymarket_markets or []), (kalshi_markets or []), False
+
+
 def scan_cross_venue_arbitrage(
     polymarket_markets: Optional[List[Dict[str, Any]]] = None,
     kalshi_markets: Optional[List[Dict[str, Any]]] = None,
@@ -47,13 +83,9 @@ def scan_cross_venue_arbitrage(
 ) -> List[Dict[str, Any]]:
     """Scan and match overlapping markets across Polymarket and Kalshi."""
     if polymarket_markets is None or kalshi_markets is None:
-        try:
-            from analyzing_llm_rationale import market_data
-            poly = market_data.list_polymarket(limit=30) if polymarket_markets is None else polymarket_markets
-            kalshi = market_data.list_kalshi(limit=30) if kalshi_markets is None else kalshi_markets
-        except Exception:
-            poly = polymarket_markets or []
-            kalshi = kalshi_markets or []
+        poly, kalshi, _reachable = fetch_markets_to_scan(
+            polymarket_markets, kalshi_markets,
+        )
     else:
         poly = polymarket_markets
         kalshi = kalshi_markets
