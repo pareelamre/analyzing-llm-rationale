@@ -2100,13 +2100,33 @@ class KalshiTakerFeeRateTests(unittest.TestCase):
             self._fresh_cache(),
             mock.patch(
                 "analyzing_llm_rationale.trading.get_kalshi_fee_tiers",
-                side_effect=RuntimeError("KALSHI_API_KEY_ID is not configured."),
+                side_effect=RuntimeError("Generic failure"),
             ),
         ):
             fee = benchmark_tools._kalshi_fee(0.40, 10)
         self.assertAlmostEqual(
             fee, benchmark_tools.KALSHI_FEE_COEFFICIENT * 10 * 0.40 * (1.0 - 0.40)
         )
+
+    def test_kalshi_fee_unconfigured_error_is_logged_at_debug_not_warning(self):
+        from analyzing_llm_rationale import trading
+
+        with (
+            self._fresh_cache(),
+            mock.patch(
+                "analyzing_llm_rationale.trading.get_kalshi_fee_tiers",
+                side_effect=trading.TradingNotConfiguredError("KALSHI_API_KEY_ID is not configured."),
+            ),
+            mock.patch.object(benchmark_tools.logger, "warning") as mock_warning,
+            mock.patch.object(benchmark_tools.logger, "debug") as mock_debug,
+        ):
+            fee = benchmark_tools._kalshi_fee(0.40, 10)
+        self.assertAlmostEqual(
+            fee, benchmark_tools.KALSHI_FEE_COEFFICIENT * 10 * 0.40 * (1.0 - 0.40)
+        )
+        mock_warning.assert_not_called()
+        mock_debug.assert_called_once()
+        self.assertIn("not configured", mock_debug.call_args[0][0])
 
     def test_kalshi_fee_falls_back_when_the_response_has_no_usable_rate(self):
         with (
