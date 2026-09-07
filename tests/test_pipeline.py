@@ -25,6 +25,7 @@ from analyzing_llm_rationale.config import (  # noqa: E402
     scads_chat_model_options,
     scads_hosted_model_allowlist,
     scads_hosted_model_fallbacks,
+    scads_model_output_tpm_limits,
     scads_track_model_labels,
     temperature_to_tag,
 )
@@ -669,6 +670,12 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(chat_models, set(agent_models))
         self.assertNotIn("scads-alias-code", agent_models)
         self.assertFalse(models["scads-alias-code"].agent_trading_enabled)
+        output_tpm_limits = scads_model_output_tpm_limits(repo_root / "configs" / "models.yaml")
+        self.assertEqual(output_tpm_limits["minimax-m3"], 30000)
+        self.assertEqual(output_tpm_limits["glm-5-3-flash"], 30000)
+        self.assertEqual(output_tpm_limits["deepseek-v4-flash"], 30000)
+        self.assertEqual(output_tpm_limits["gpt-oss-120b"], 6000)
+        self.assertEqual(output_tpm_limits["glm-5-3"], 6000)
         self.assertEqual(temperature_to_tag(0.7), "temperature_07")
 
     def test_agent_trading_model_identity_duplicate_fails_closed(self):
@@ -698,6 +705,35 @@ models:
             path.write_text(config, encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "identity is duplicated"):
                 scads_agent_trading_model_labels(path)
+
+    def test_load_model_configs_validates_output_tpm_limit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "models.yaml"
+            invalid_non_int = """\
+models:
+  m1:
+    result_label: M1
+    provider: openai-compatible
+    local_model_name: m1
+    router_model_name: m1
+    output_tpm_limit: "not-an-int"
+"""
+            path.write_text(invalid_non_int, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "output_tpm_limit must be an integer"):
+                load_model_configs(path)
+
+            invalid_negative = """\
+models:
+  m1:
+    result_label: M1
+    provider: openai-compatible
+    local_model_name: m1
+    router_model_name: m1
+    output_tpm_limit: -100
+"""
+            path.write_text(invalid_negative, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "output_tpm_limit must be positive"):
+                load_model_configs(path)
 
     def test_resolve_run_config_builds_output_path_from_variant_model_and_temperature(self):
         repo_root = Path(__file__).resolve().parents[1]

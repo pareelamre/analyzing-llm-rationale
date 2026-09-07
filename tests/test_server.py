@@ -3527,6 +3527,24 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("high", self.provider.reasoning_efforts)
 
+    def test_apply_effort_tier_scales_max_tool_steps(self):
+        req_simple = server_module.AgentAnalyzeRequest(question="Will it rain?", effort_tier="simple")
+        server_module._apply_effort_tier(req_simple, req_simple.question)
+        self.assertEqual(req_simple.max_tool_steps, 3)
+
+        req_standard = server_module.AgentAnalyzeRequest(question="Will it rain tomorrow in Paris?", effort_tier="standard")
+        server_module._apply_effort_tier(req_standard, req_standard.question)
+        self.assertEqual(req_standard.max_tool_steps, 8)
+
+        req_deep = server_module.AgentAnalyzeRequest(question="Will the Fed cut rates before July 31, 2026?", effort_tier="deep")
+        server_module._apply_effort_tier(req_deep, req_deep.question)
+        self.assertEqual(req_deep.max_tool_steps, 20)
+
+        # Explicit max_tool_steps is preserved
+        req_explicit = server_module.AgentAnalyzeRequest(question="Will it rain?", effort_tier="deep", max_tool_steps=4)
+        server_module._apply_effort_tier(req_explicit, req_explicit.question)
+        self.assertEqual(req_explicit.max_tool_steps, 4)
+
     def test_agent_analyze_escalates_skills_when_self_report_says_high_complexity(self):
         self.provider.response = {
             "predicted_answer": "Yes",

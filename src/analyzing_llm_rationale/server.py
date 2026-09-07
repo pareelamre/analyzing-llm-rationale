@@ -76,6 +76,7 @@ from analyzing_llm_rationale.config import (
     scads_chat_model_options,
     scads_hosted_model_allowlist,
     scads_hosted_model_fallbacks,
+    scads_model_output_tpm_limits,
 )
 from analyzing_llm_rationale.forecast_evaluation_report import (
     EvaluationArtifactValidationError,
@@ -340,7 +341,8 @@ _AGENT_TOOL_PROVIDER_READ_TIMEOUT_S = float(
 # full 16-step cycle costs ~52k (observation compaction bounds the growth),
 # so at this ceiling such a cycle behaves exactly as it would with no budget
 # at all, and only a genuine runaway is caught. 0 disables it entirely.
-_AGENT_TOOL_TOKEN_BUDGET = int(os.environ.get("AGENT_TOOL_TOKEN_BUDGET", "100000"))
+_AGENT_TOOL_TOKEN_BUDGET = int(os.environ.get("AGENT_TOOL_TOKEN_BUDGET", "200000"))
+_AGENT_TOOL_OUTPUT_TOKEN_BUDGET = int(os.environ.get("AGENT_TOOL_OUTPUT_TOKEN_BUDGET", "0"))
 _AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES = max(
     0, int(os.environ.get("AGENT_TOOL_PROVIDER_TIMEOUT_RETRIES", "1"))
 )
@@ -536,7 +538,7 @@ def _estimate_question_effort(question: str, history_len: int = 0) -> str:
 
 
 _EFFORT_EVIDENCE_TOP_K = {"simple": 8, "standard": 20, "deep": 40}
-_EFFORT_MAX_TOOL_STEPS = {"simple": 2, "standard": 6, "deep": 16}
+_EFFORT_MAX_TOOL_STEPS = {"simple": 3, "standard": 8, "deep": 20}
 
 
 def _apply_effort_tier(req: "AgentAnalyzeRequest", question: str) -> None:
@@ -549,7 +551,7 @@ def _apply_effort_tier(req: "AgentAnalyzeRequest", question: str) -> None:
     if "evidence_top_k" not in fields_set:
         req.evidence_top_k = _EFFORT_EVIDENCE_TOP_K[tier]
     if "max_tool_steps" not in fields_set:
-        req.max_tool_steps = min(req.max_tool_steps, _EFFORT_MAX_TOOL_STEPS[tier])
+        req.max_tool_steps = _EFFORT_MAX_TOOL_STEPS[tier]
 
 
 def _strategy_filter_edge_entry(entry: dict, strategy: str) -> bool:
@@ -5526,7 +5528,7 @@ class AgentAnalyzeRequest(BaseModel):
     # cycles. Live, 489 agent cycles hit the ceiling and 38 of them described
     # a BUY the model never got to place -- the decision existed only in prose.
     # The loop still terminates on the model's own final answer.
-    max_tool_steps: int = Field(5, ge=1, description="Max tool calls in the loop.")
+    max_tool_steps: int = Field(8, ge=1, description="Max tool calls in the loop.")
     effort_tier: Optional[Literal["simple", "standard", "deep"]] = Field(
         None,
         description=(
@@ -5614,6 +5616,8 @@ class AgentReport(BaseModel):
     tool_transcript: List[Dict[str, Any]] = Field(default_factory=list, description="Tool calls + observations when the tool loop ran.")
     tool_loop_steps: Optional[int] = Field(None, description="Tool-call steps the loop actually ran, when tool_loop=true.")
     tool_loop_truncated: Optional[bool] = Field(None, description="True if the loop hit max_tool_steps without the model giving a final answer.")
+    tool_loop_tokens_used: Optional[int] = Field(None, description="Total estimated tokens consumed across turns.")
+    tool_loop_output_tokens_used: Optional[int] = Field(None, description="Estimated completion/output tokens consumed in the tool loop.")
     agent_profile: Optional[AgentProfileReference] = Field(
         None,
         description="Immutable private research recipe used for this report, when one was selected.",
@@ -13804,6 +13808,7 @@ try:
     _SCADS_CHAT_MODEL_OPTIONS = scads_chat_model_options(_REPO_ROOT / "configs" / "models.yaml")
     _SCADS_MODEL_FALLBACKS = scads_hosted_model_fallbacks(_REPO_ROOT / "configs" / "models.yaml")
     _AGENT_TRADING_IDENTITIES = scads_agent_trading_identities(_REPO_ROOT / "configs" / "models.yaml")
+    _SCADS_MODEL_OUTPUT_TPM_LIMITS = scads_model_output_tpm_limits(_REPO_ROOT / "configs" / "models.yaml")
 except Exception as exc:  # pragma: no cover - defensive production fallback.
     logger.warning("failed to load SCADS model allowlist from config: %s", exc)
     _SCADS_MODEL_ALLOWLIST = {
@@ -13818,6 +13823,16 @@ except Exception as exc:  # pragma: no cover - defensive production fallback.
     _SCADS_CHAT_MODEL_OPTIONS = ()
     _SCADS_MODEL_FALLBACKS = {"gpt-oss-120b": ("google/gemma-4-26B-A4B-it",)}
     _AGENT_TRADING_IDENTITIES = frozenset()
+    _SCADS_MODEL_OUTPUT_TPM_LIMITS = {
+        "minimax-m3": 30000,
+        "glm-5-3-flash": 30000,
+        "deepseek-v4-flash": 30000,
+        "gpt-oss-120b": 6000,
+        "gemma-4-26b-a4b-it": 6000,
+        "qwen3-8-27b": 6000,
+        "glm-5-3": 6000,
+        "llama-3.3-70b-instruct": 6000,
+    }
 
 
 def _scads_alt_provider(
@@ -15802,6 +15817,11 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         _AGENT_TOOL_PROVIDER_BACKOFF_BASE_S,
     ))
     try:
+        output_token_budget = (
+            _AGENT_TOOL_OUTPUT_TOKEN_BUDGET
+            or _SCADS_MODEL_OUTPUT_TPM_LIMITS.get(req.model)
+            or None
+        )
         res = await agent_capabilities.run_tool_loop(
             q, tools, specs, chat_fn, max_steps=req.max_tool_steps, extra_rules=rule,
             on_step=_on_step, on_step_start=_on_step_start,
@@ -15816,16 +15836,19 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             # all read back out of these headings by regex.
             required_final_sections=(
                 _AGENT_THESIS_SECTIONS if req.benchmark_tools else None),
-            token_budget=_AGENT_TOOL_TOKEN_BUDGET or None)
+            token_budget=_AGENT_TOOL_TOKEN_BUDGET or None,
+            output_token_budget=output_token_budget,
+        )
         # A budget stop cuts research short, so say so loudly. Silently it
         # looks identical to a model that simply finished early, which is
         # exactly the ambiguity that made a capped tick hard to diagnose.
-        if res.get("stop_reason") == "token_budget":
+        if res.get("stop_reason") in {"token_budget", "output_token_budget"}:
             logger.warning(
-                "agent tool loop hit token budget model=%s steps_completed=%s "
-                "tokens_used=%s budget=%s max_steps=%s",
-                req.model, res.get("steps_completed"), res.get("tokens_used"),
-                _AGENT_TOOL_TOKEN_BUDGET, req.max_tool_steps,
+                "agent tool loop hit token budget stop_reason=%s model=%s steps_completed=%s "
+                "tokens_used=%s output_tokens_used=%s budget=%s output_budget=%s max_steps=%s",
+                res.get("stop_reason"), req.model, res.get("steps_completed"),
+                res.get("tokens_used"), res.get("output_tokens_used"),
+                _AGENT_TOOL_TOKEN_BUDGET, output_token_budget, req.max_tool_steps,
             )
         # Deterministic backstop: if the model answered without ever calling
         # `forecast`, run it ourselves so edge/recommendation always populate.
@@ -15909,6 +15932,8 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
         evidence_error=last.get("evidence_error"),
         grounding=grounding_note, tool_transcript=tool_transcript,
         tool_loop_steps=res.get("steps"), tool_loop_truncated=res.get("truncated"),
+        tool_loop_tokens_used=res.get("tokens_used"),
+        tool_loop_output_tokens_used=res.get("output_tokens_used"),
         effort_tier=req.effort_tier,
         live_trade_intent=live_trade_intent,
     )
