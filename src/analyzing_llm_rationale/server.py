@@ -13995,8 +13995,12 @@ def _chat_fallback_providers(req: "PredictRequest", primary_provider) -> List[An
     return providers
 
 
-def _agent_fallback_providers(req: "AgentAnalyzeRequest", primary_provider) -> List[Any]:
-    """Concrete fallback providers for agent analyze / tool loop."""
+def _agent_fallback_chain(req: "AgentAnalyzeRequest") -> tuple:
+    """The configured fallback chain for this request, before any filtering.
+
+    Split out so the competitor exclusions can be reported at the point a
+    cycle runs out of candidates, without re-deriving the request guards.
+    """
     if (
         req.openrouter_model
         or req.openrouter_api_key
@@ -14004,11 +14008,27 @@ def _agent_fallback_providers(req: "AgentAnalyzeRequest", primary_provider) -> L
         or getattr(req, "ollama_base_url", None)
         or req.model == "council"
     ):
-        return []
+        return ()
     label = (req.model or "").strip()
     if not label:
-        return []
-    chain = _SCADS_MODEL_FALLBACKS.get(label, ())
+        return ()
+    return tuple(_SCADS_MODEL_FALLBACKS.get(label, ()))
+
+
+def _agent_fallback_competitor_exclusions(req: "AgentAnalyzeRequest") -> List[str]:
+    """Chain entries refused because they trade the same board as this agent.
+
+    A non-empty result means the agent cannot retry on anything: its whole
+    configured chain was rivals. That is the difference between a model that
+    is merely failing and one that structurally has nowhere to fall back to.
+    """
+    return [m for m in _agent_fallback_chain(req) if m in _AGENT_TRADING_IDENTITIES]
+
+
+def _agent_fallback_providers(req: "AgentAnalyzeRequest", primary_provider) -> List[Any]:
+    """Concrete fallback providers for agent analyze / tool loop."""
+    label = (req.model or "").strip()
+    chain = _agent_fallback_chain(req)
     if not chain:
         return []
     primary_name = getattr(primary_provider, "model_name", None)
@@ -14904,6 +14924,7 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
 
     provider, temperature, max_tokens = _select_agent_provider(req)
     agent_fallbacks = _agent_fallback_providers(req, provider)
+    agent_fallback_exclusions = _agent_fallback_competitor_exclusions(req)
     active_provider = provider
     loop = asyncio.get_running_loop()
     last: Dict[str, Any] = {}
@@ -15428,6 +15449,22 @@ async def _agent_tool_loop(req: "AgentAnalyzeRequest", request, question: str,
             except Exception as exc:
                 last_exc = exc
                 if idx == len(candidates) - 1:
+                    # Nothing left to try. Previously this broke silently and
+                    # surfaced only as a generic "agent run failed" traceback,
+                    # so a cycle that had no usable fallback looked identical
+                    # to one that simply errored. Name the competitor
+                    # exclusions: when they account for the whole chain, the
+                    # agent could not have retried as itself under any
+                    # circumstances.
+                    logger.warning(
+                        "agent tool loop exhausted requested=%s failed_model=%s "
+                        "candidates_tried=%d competitors_excluded=%s error=%s",
+                        req.model,
+                        getattr(cand, "model_name", "unknown"),
+                        len(candidates),
+                        ",".join(agent_fallback_exclusions) or "none",
+                        type(exc).__name__,
+                    )
                     break
                 logger.warning(
                     "agent tool loop model failed; trying fallback requested=%s failed_model=%s fallback_model=%s error=%s",
