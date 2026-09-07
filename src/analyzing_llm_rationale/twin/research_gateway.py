@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta, timezone
@@ -213,6 +214,24 @@ class ResearchProvenance:
     supporting_evidence_ids: tuple[str, ...]
     contrary_evidence_ids: tuple[str, ...]
 
+    def __post_init__(self) -> None:
+        for name in ("input_hash", "config_hash", "prompt_hash", "model_hash"):
+            value = str(getattr(self, name))
+            if len(value) != 64:
+                raise ValueError(f"{name} must be a SHA-256 digest")
+            try:
+                int(value, 16)
+            except ValueError as exc:
+                raise ValueError(f"{name} must be a SHA-256 digest") from exc
+        if not isinstance(self.uncertainty_provenance, str) or not self.uncertainty_provenance.strip():
+            raise ValueError("uncertainty provenance is required")
+        supporting = tuple(self.supporting_evidence_ids)
+        contrary = tuple(self.contrary_evidence_ids)
+        if len(supporting + contrary) != len(set(supporting + contrary)):
+            raise ValueError("research provenance citations must be distinct")
+        object.__setattr__(self, "supporting_evidence_ids", supporting)
+        object.__setattr__(self, "contrary_evidence_ids", contrary)
+
 
 @dataclass(frozen=True)
 class ResearchResult:
@@ -221,6 +240,27 @@ class ResearchResult:
     provenance: ResearchProvenance | None
     request_hash: str = ""
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.proposal, Proposal):
+            raise ValueError("research result requires a validated proposal")
+        if self.request_hash:
+            if len(self.request_hash) != 64:
+                raise ValueError("research request hash must be a SHA-256 digest")
+            try:
+                int(self.request_hash, 16)
+            except ValueError as exc:
+                raise ValueError("research request hash must be a SHA-256 digest") from exc
+        if self.forecast is None:
+            if self.provenance is not None or self.proposal.action is not ProposalAction.PASS:
+                raise ValueError("research PASS cannot carry forecast provenance")
+        elif (
+            not isinstance(self.forecast, Forecast)
+            or not isinstance(self.provenance, ResearchProvenance)
+            or self.proposal.forecast_id != self.forecast.id
+            or self.proposal.action is not ProposalAction.HOLD
+        ):
+            raise ValueError("research forecast and proposal are inconsistent")
+
 
 class ResearchResultStore(Protocol):
     """Must reject conflicting writes for an existing reservation identity."""
@@ -228,6 +268,144 @@ class ResearchResultStore(Protocol):
     def get_result(self, reservation_id: str) -> ResearchResult | None: ...
 
     def record_result(self, reservation_id: str, result: ResearchResult) -> bool: ...
+
+
+class ResearchResultStoreError(RuntimeError):
+    """A research decision cannot be proven durable and intact."""
+
+
+def _result_payload(result: ResearchResult) -> dict[str, Any]:
+    if not isinstance(result, ResearchResult) or not result.request_hash:
+        raise ResearchResultStoreError("only finalized research decisions can be stored")
+    provenance = asdict(result.provenance) if result.provenance is not None else None
+    return {
+        "schema_version": 1,
+        "request_hash": result.request_hash,
+        "forecast": result.forecast.to_storage() if result.forecast is not None else None,
+        "proposal": result.proposal.to_storage(),
+        "provenance": provenance,
+    }
+
+
+def _result_json(result: ResearchResult) -> str:
+    return _json(_result_payload(result))
+
+
+def _restore_result(payload: Any) -> ResearchResult:
+    try:
+        if not isinstance(payload, dict) or set(payload) != {
+            "schema_version", "request_hash", "forecast", "proposal", "provenance"
+        } or payload["schema_version"] != 1:
+            raise ValueError("research result payload schema is invalid")
+        forecast_data = payload["forecast"]
+        forecast = None if forecast_data is None else Forecast(**dict(forecast_data))
+        proposal = Proposal.from_storage(payload["proposal"])
+        provenance_data = payload["provenance"]
+        if provenance_data is None:
+            provenance = None
+        else:
+            if not isinstance(provenance_data, dict) or set(provenance_data) != {
+                "input_hash", "config_hash", "prompt_hash", "model_hash",
+                "uncertainty_provenance", "supporting_evidence_ids", "contrary_evidence_ids",
+            }:
+                raise ValueError("research provenance schema is invalid")
+            provenance = ResearchProvenance(**provenance_data)
+        return ResearchResult(forecast, proposal, provenance, str(payload["request_hash"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ResearchResultStoreError("stored research result cannot be read") from exc
+
+
+class InMemoryResearchResultStore:
+    """Thread-safe fixture store with the same conflict behavior as Datastore."""
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._records: dict[str, tuple[str, str]] = {}
+
+    def get_result(self, reservation_id: str) -> ResearchResult | None:
+        with self._lock:
+            record = self._records.get(str(reservation_id))
+            if record is None:
+                return None
+            fingerprint, encoded = record
+            if _hash(json.loads(encoded)) != fingerprint:
+                raise ResearchResultStoreError("stored research result fingerprint mismatch")
+            return _restore_result(json.loads(encoded))
+
+    def record_result(self, reservation_id: str, result: ResearchResult) -> bool:
+        key = str(reservation_id).strip()
+        if not key:
+            raise ResearchResultStoreError("research reservation identity is required")
+        encoded = _result_json(result)
+        fingerprint = _hash(json.loads(encoded))
+        with self._lock:
+            existing = self._records.get(key)
+            if existing is not None:
+                if existing != (fingerprint, encoded):
+                    raise ResearchResultStoreError("research reservation has a conflicting decision")
+                return True
+            self._records[key] = (fingerprint, encoded)
+            return True
+
+
+class DatastoreResearchResultStore:
+    """Create-once research decisions keyed by a hashed reservation identity."""
+
+    durable = True
+
+    def __init__(self, client: Any, *, max_payload_bytes: int = 900_000) -> None:
+        if max_payload_bytes < 1:
+            raise ResearchResultStoreError("research result payload limit must be positive")
+        self._client = client
+        self._max_payload_bytes = max_payload_bytes
+
+    def _key(self, reservation_id: str) -> Any:
+        return self._client.key("TwinResearchResult", sha256(reservation_id.encode("utf-8")).hexdigest())
+
+    def _decode(self, reservation_id: str, entity: Any) -> ResearchResult:
+        try:
+            encoded = str(entity["payload_json"])
+            payload = json.loads(encoded)
+            if entity.get("reservation_id") != reservation_id or entity.get("fingerprint") != _hash(payload):
+                raise ResearchResultStoreError("stored research result identity or fingerprint mismatch")
+            return _restore_result(payload)
+        except (KeyError, TypeError, ValueError, ResearchResultStoreError) as exc:
+            raise ResearchResultStoreError("stored research result cannot be read") from exc
+
+    def get_result(self, reservation_id: str) -> ResearchResult | None:
+        key = str(reservation_id).strip()
+        if not key:
+            raise ResearchResultStoreError("research reservation identity is required")
+        entity = self._client.get(self._key(key))
+        return None if entity is None else self._decode(key, entity)
+
+    @tracer.start_as_current_span("twin.research_result.persist")
+    def record_result(self, reservation_id: str, result: ResearchResult) -> bool:
+        key = str(reservation_id).strip()
+        if not key:
+            raise ResearchResultStoreError("research reservation identity is required")
+        encoded = _result_json(result)
+        if len(encoded.encode("utf-8")) > self._max_payload_bytes:
+            raise ResearchResultStoreError("research result exceeds durable payload limit")
+        payload = json.loads(encoded)
+        fingerprint = _hash(payload)
+        datastore_key = self._key(key)
+        with self._client.transaction():
+            existing = self._client.get(datastore_key)
+            if existing is not None:
+                stored = self._decode(key, existing)
+                if _result_json(stored) != encoded:
+                    raise ResearchResultStoreError("research reservation has a conflicting decision")
+                return True
+            from google.cloud import datastore
+
+            entity = datastore.Entity(key=datastore_key, exclude_from_indexes=("payload_json",))
+            entity.update({
+                "reservation_id": key, "request_hash": result.request_hash,
+                "fingerprint": fingerprint, "payload_json": encoded,
+            })
+            self._client.put(entity)
+        return True
 
 
 def _parse(raw: str, capture: PublicResearchCapture, config: ResearchModelConfig, input_hash: str) -> ResearchResult:

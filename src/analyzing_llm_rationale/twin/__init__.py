@@ -43,7 +43,9 @@ from .models import (
     canonical_instrument_id,
 )
 from .research_gateway import (
+    DatastoreResearchResultStore,
     HistoricalCalibration,
+    InMemoryResearchResultStore,
     PublicEvidence,
     PublicResearchCapture,
     PublicResearchTools,
@@ -51,6 +53,7 @@ from .research_gateway import (
     ResearchProvenance,
     ResearchResult,
     ResearchResultStore,
+    ResearchResultStoreError,
     generate_research,
 )
 from .store import (
@@ -73,6 +76,7 @@ __all__ = [
     "BudgetExceeded",
     "BudgetPolicy",
     "DatastoreResearchBudget",
+    "DatastoreResearchResultStore",
     "CommandState",
     "Completeness",
     "DecisionRecord",
@@ -83,6 +87,7 @@ __all__ = [
     "InMemoryTwinStore",
     "InMemoryAccountSnapshotStore",
     "InMemoryResearchBudget",
+    "InMemoryResearchResultStore",
     "HistoricalCalibration",
     "InsufficientReservationCapacity",
     "MarketCursor",
@@ -102,6 +107,7 @@ __all__ = [
     "ResearchProvenance",
     "ResearchResult",
     "ResearchResultStore",
+    "ResearchResultStoreError",
     "SchemaValidationError",
     "TradeIntent",
     "TwinStoreError",

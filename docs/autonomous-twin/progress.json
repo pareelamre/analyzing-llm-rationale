@@ -242,8 +242,8 @@
         "T05",
         "T07"
       ],
-      "status": "in_progress",
-      "substep": "strict closed public-capture gateway, bounded ChatProvider dispatch, exact forecast schema, one separately budgeted repair, prompt/model/config/input hashes, prospective ledger acceptance, durable-result protocol, and persisted PASS behavior are implemented; production capture acquisition and durable result-store/worker wiring remain",
+      "status": "complete",
+      "substep": "closed public-capture research gateway with bounded provider calls, exact forecast schema, one separately budgeted repair, prompt/model/config/input hashes, prospective ledger acceptance, and create-once durable PASS/forecast persistence is complete",
       "branch": "codex/research-budget-integrity",
       "commit": null,
       "pr_url": "https://github.com/pareelamre/analyzing-llm-rationale/pull/445",
@@ -251,17 +251,15 @@
         "PYTHONPATH=src py -m unittest tests.test_twin_research_gateway tests.test_twin_budget tests.test_twin_research tests.test_forecast_ledger (pass: 43 tests)",
         "PYTHONPATH=src py -m unittest discover -s tests (pass: 1571 tests; 6 Datastore emulator tests skipped)",
         "py -m ruff check src tests (pass)",
-        "git diff --check (pass)"
+        "git diff --check (pass)",
+        "PYTHONPATH=src py -m unittest tests.test_twin_research_gateway (pass: 18 tests including durable result round trips and corruption rejection)"
       ],
       "evidence": [
         "src/analyzing_llm_rationale/twin/research_gateway.py",
         "tests/test_twin_research_gateway.py"
       ],
-      "blockers": [
-        "Production public capture acquisition is not wired to the private research worker.",
-        "A durable ResearchResultStore implementation is still required before worker deployment."
-      ],
-      "handoff": "Implement durable research-result persistence and construct validated PublicResearchCapture records from frozen market/evidence artifacts in the private worker."
+      "blockers": [],
+      "handoff": "T09 is ready. Fit calibration only from prospective forecasts whose outcomes were unavailable at forecast time."
     },
     {
       "id": "T09",
