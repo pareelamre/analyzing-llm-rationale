@@ -9557,24 +9557,45 @@ async def portfolio_optimize_post(req: PortfolioOptimizeRequest) -> Dict[str, An
 # ── Feature #3: Real-Time SSE & WebSocket Alpha Streams ───────────────────────
 
 
+#: How often the radar streams look for a change.
+_RADAR_STREAM_INTERVAL_S = 3
+
+
+def _radar_markets_fingerprint(radar_data: "RadarResponse") -> str:
+    """The markets, without the timestamp that changes on every tick."""
+    return json.dumps(
+        [m.model_dump(mode="json") for m in radar_data.markets],
+        sort_keys=True, separators=(",", ":"), default=str,
+    )
+
+
 @app.get("/stream/radar", tags=["System"], summary="Live Server-Sent Events (SSE) feed for Market Radar Desk")
 async def stream_radar(request: Request) -> StreamingResponse:
     """Stream live market radar updates, price movements, and edge detections via SSE."""
     async def event_generator():
+        last_fingerprint: Optional[str] = None
         while True:
             if await request.is_disconnected():
                 break
             try:
                 loop = asyncio.get_running_loop()
                 radar_data = await loop.run_in_executor(None, _radar_from_track_record, 10)
-                payload = json.dumps({
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "markets": [m.model_dump() for m in radar_data.markets],
-                })
-                yield f"event: radar_tick\ndata: {payload}\n\n"
+                fingerprint = _radar_markets_fingerprint(radar_data)
+                if fingerprint != last_fingerprint:
+                    last_fingerprint = fingerprint
+                    payload = json.dumps({
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "markets": [m.model_dump(mode="json") for m in radar_data.markets],
+                    })
+                    yield f"event: radar_tick\ndata: {payload}\n\n"
+                else:
+                    # Small, but not silent: an idle SSE connection through
+                    # a proxy gets closed, and a client cannot tell a quiet
+                    # market from a dead stream.
+                    yield f"event: heartbeat\ndata: {{\"status\": \"ok\", \"ts\": \"{datetime.now(timezone.utc).isoformat()}\"}}\n\n"
             except Exception:
                 yield f"event: heartbeat\ndata: {{\"status\": \"ok\", \"ts\": \"{datetime.now(timezone.utc).isoformat()}\"}}\n\n"
-            await asyncio.sleep(3)
+            await asyncio.sleep(_RADAR_STREAM_INTERVAL_S)
 
     return StreamingResponse(
         event_generator(),
@@ -9590,19 +9611,33 @@ async def stream_radar(request: Request) -> StreamingResponse:
 
 @app.websocket("/ws/radar")
 async def websocket_radar(websocket: WebSocket) -> None:
-    """WebSocket streaming endpoint for real-time market radar ticks and prints."""
+    """WebSocket streaming endpoint for real-time market radar ticks and prints.
+
+    Sends a radar_tick on connect and thereafter only when the markets
+    change; the rest are heartbeats. See the SSE stream above for the
+    measurement behind it.
+    """
     await websocket.accept()
     try:
+        last_fingerprint: Optional[str] = None
         while True:
             loop = asyncio.get_running_loop()
             radar_data = await loop.run_in_executor(None, _radar_from_track_record, 10)
-            payload = {
-                "type": "radar_tick",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "markets": [m.model_dump() for m in radar_data.markets],
-            }
+            fingerprint = _radar_markets_fingerprint(radar_data)
+            if fingerprint != last_fingerprint:
+                last_fingerprint = fingerprint
+                payload = {
+                    "type": "radar_tick",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "markets": [m.model_dump(mode="json") for m in radar_data.markets],
+                }
+            else:
+                payload = {
+                    "type": "heartbeat",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
             await websocket.send_json(payload)
-            await asyncio.sleep(3)
+            await asyncio.sleep(_RADAR_STREAM_INTERVAL_S)
     except WebSocketDisconnect:
         pass
     except Exception:
