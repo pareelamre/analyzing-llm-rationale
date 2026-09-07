@@ -2474,6 +2474,35 @@ _rate_limiter = RateLimiter(calls=int(os.environ.get("RATE_LIMIT_PER_MIN", "60")
 _predict_rate_limiter = RateLimiter(calls=int(os.environ.get("PREDICT_RATE_LIMIT_PER_MIN", "10")), period=60)
 
 
+#: Salts the visitor hashes. Published, so it pseudonymises nothing until it
+#: is replaced -- see _warn_if_the_analytics_salt_is_the_published_one.
+_DEFAULT_ANALYTICS_SALT = "foresea-analytics"
+
+
+def _warn_if_the_analytics_salt_is_the_published_one() -> None:
+    """Say so when the visitor hashes are reversible.
+
+    _visitor_id and _visitor_hash store sha256("{ip}:{ua}:{salt}") so that no
+    raw IP is kept. That holds only while the salt is secret. With this one,
+    which is in the source, asking "did this address visit?" costs a single
+    hash, and recovering an unknown address costs a scan of the IPv4 space --
+    measured at 2.4 hours on one CPU core and about half a second on a
+    commodity GPU.
+
+    Not fatal, and not fixed here: setting ANALYTICS_SALT changes every hash,
+    so cumulative unique-visitor counts restart from zero. That is a product
+    decision about a metric, not something to change underneath one.
+    """
+    if os.environ.get("ANALYTICS_SALT"):
+        return
+    logger.warning(
+        "ANALYTICS_SALT is unset, so visitor hashes use the salt published in "
+        "the source and do not pseudonymise the IP addresses they are derived "
+        "from. Setting it fixes that, and resets cumulative unique-visitor "
+        "counts, because every hash changes."
+    )
+
+
 def _refuse_to_serve_with_the_default_session_secret() -> None:
     """Stop, on Cloud Run, if session tokens are signed with the placeholder.
 
@@ -2570,6 +2599,7 @@ async def lifespan(app: FastAPI):
             'Install the serve extras: pip install "analyzing-llm-rationale[serve]"'
         ) from None
     _refuse_to_serve_with_the_default_session_secret()
+    _warn_if_the_analytics_salt_is_the_published_one()
     _warn_if_api_key_guard_is_inert()
     logger.info("foresea server starting up")
     async with AsyncExitStack() as stack:
@@ -7401,7 +7431,7 @@ def _visitor_hash(request: Request) -> str:
     """Per-day salted visitor hash (used by the DuckDB fallback's daily uniques)."""
     ip, user_agent = _visitor_ip_ua(request)
     day = time.strftime("%Y-%m-%d", time.gmtime())
-    salt = os.environ.get("ANALYTICS_SALT", "foresea-analytics")
+    salt = os.environ.get("ANALYTICS_SALT", _DEFAULT_ANALYTICS_SALT)
     raw = f"{day}:{ip}:{user_agent}:{salt}".encode("utf-8", errors="ignore")
     return hashlib.sha256(raw).hexdigest()
 
@@ -7410,7 +7440,7 @@ def _visitor_id(request: Request) -> str:
     """Stable, day-independent visitor id (no raw IP stored) so cumulative
     unique-visitor counts mean *distinct people over all time*, not per-day."""
     ip, user_agent = _visitor_ip_ua(request)
-    salt = os.environ.get("ANALYTICS_SALT", "foresea-analytics")
+    salt = os.environ.get("ANALYTICS_SALT", _DEFAULT_ANALYTICS_SALT)
     raw = f"{ip}:{user_agent}:{salt}".encode("utf-8", errors="ignore")
     return hashlib.sha256(raw).hexdigest()
 
