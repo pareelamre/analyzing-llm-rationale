@@ -4078,11 +4078,24 @@ async def feed_latest_route(
     agent_data = agent_live if isinstance(agent_live, dict) else {}
 
     raw_board = edge_data.get("edge_board", [])
+    credibility_audited = True
     try:
         from analyzing_llm_rationale.edge_credibility import audit_edge_board
         audited_board = audit_edge_board(raw_board)
     except Exception:
+        # Serving unaudited rows beats serving nothing, but it silently
+        # disables min_credibility: an unaudited row carries no
+        # credibility_score, so the check below falls through to
+        # `is_credible` defaulting True and every row passes. The caller
+        # asked to filter and got no filtering. Say so, in the log and in
+        # the response.
+        credibility_audited = False
         audited_board = raw_board
+        logger.warning(
+            "edge-board credibility audit failed; serving unaudited rows, so "
+            "min_credibility=%s will not filter anything this call",
+            min_credibility, exc_info=True,
+        )
 
     filtered_opps = []
     for item in audited_board:
@@ -4115,6 +4128,7 @@ async def feed_latest_route(
             "mcp_endpoint": "https://foresea.ink/mcp/",
         },
         "market_edge_signals": filtered_opps,
+        "credibility_audited": credibility_audited,
         "agent_trades": recent_trades,
         "leaderboard_summary": agent_data.get("leaderboard", [])[:5],
     }
