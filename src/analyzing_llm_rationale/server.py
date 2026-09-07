@@ -10792,16 +10792,46 @@ def _reserve_confirmed_manual_order(
         raise TradingGuardrailError("durable_account_state", str(exc)) from exc
 
 
-def _record_manual_command_submission(command_claim: Any, *, submission_unknown: bool) -> None:
-    """Advance only the current fenced command after the external call ends."""
-    from analyzing_llm_rationale.twin import CommandState
-
-    _confirmed_manual_twin_store().transition_command(
-        command_claim.command.id,
-        target=CommandState.SUBMISSION_UNKNOWN if submission_unknown else CommandState.ACKNOWLEDGED,
-        fence=command_claim.fence,
-        worker_id=command_claim.worker_id,
+def _submit_confirmed_manual_command(
+    command_claim: Any, *, execution_service: Any, payload: Dict[str, Any],
+    user_id: str, credentials: Dict[str, Any], confirmation: str,
+) -> Dict[str, Any]:
+    """Route a confirmed manual order through the shared fenced dispatcher."""
+    from analyzing_llm_rationale import trading
+    from analyzing_llm_rationale.twin.execution import (
+        ExecutionContext,
+        SubmissionDisposition,
+        SubmissionUnknown,
+        submit_claimed_command,
     )
+
+    context = ExecutionContext(
+        scope=command_claim.scope,
+        policy_version=command_claim.intent.policy_version,
+        strategy_version=command_claim.intent.strategy_version,
+        market_version=command_claim.intent.market_version,
+        runtime_live_enabled=True,
+    )
+    try:
+        outcome = submit_claimed_command(
+            _confirmed_manual_twin_store(),
+            command=command_claim.command,
+            intent=command_claim.intent,
+            claim=command_claim.claim,
+            context=context,
+            now=datetime.now(timezone.utc),
+            submit=lambda _command: execution_service.submit(
+                payload,
+                user_id=user_id,
+                credentials=credentials,
+                confirmation=confirmation,
+            ),
+        )
+    except SubmissionUnknown as exc:
+        raise trading.TradingExecutionError(str(exc)) from exc
+    if outcome.disposition is SubmissionDisposition.UNKNOWN or outcome.venue_response is None:
+        raise trading.TradingExecutionError("Venue submission was not conclusively acknowledged; reconcile before retrying.")
+    return dict(outcome.venue_response)
 
 
 def _new_trading_run(
@@ -11547,12 +11577,7 @@ async def execute_trading_run(
             # second browser tab or Cloud Run instance will receive a conflict
             # rather than submitting a duplicate venue order.
             preview = trading.preview_order(payload, credentials)
-            if not preview.get("trading_enabled"):
-                trading.place_order(
-                    {**payload, "execute": True, "confirmation": req.confirmation},
-                    user_id=claims["sub"],
-                    creds=credentials,
-                )
+            trading.require_execution_enabled(preview, credentials)
             guardrail_snapshot = await _validate_live_trade_guardrails(
                 claims["sub"],
                 payload=payload,
@@ -11580,17 +11605,14 @@ async def execute_trading_run(
                 guardrails=guardrail_snapshot,
                 authority_ref=f"saved-run-{run_id}",
             )
-            try:
-                result = execution_service.submit(
-                    payload,
-                    user_id=claims["sub"],
-                    credentials=credentials,
-                    confirmation=req.confirmation,
-                )
-            except trading.TradingExecutionError:
-                _record_manual_command_submission(command_claim, submission_unknown=True)
-                raise
-            _record_manual_command_submission(command_claim, submission_unknown=False)
+            result = _submit_confirmed_manual_command(
+                command_claim,
+                execution_service=execution_service,
+                payload=payload,
+                user_id=claims["sub"],
+                credentials=credentials,
+                confirmation=req.confirmation,
+            )
             audit = _put_trading_order(
                 claims["sub"], _submitted_trading_order(result, trade_run_id=run_id)
             )
@@ -11708,10 +11730,7 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
             # this request receives a unique server-generated identity.
             payload.setdefault("client_order_id", f"foresea-manual-{uuid.uuid4()}")
             preview = trading.preview_order(payload, creds)
-            if not preview.get("trading_enabled"):
-                # Preserve the explicit server-side live-trading gate before
-                # reporting account-specific readiness details.
-                trading.place_order(payload, user_id=claims["sub"], creds=creds)
+            trading.require_execution_enabled(preview, creds)
             if creds is None:
                 raise HTTPException(status_code=409, detail=f"Connect a {venue} account before submitting an order.")
             guardrail_snapshot = await _validate_live_trade_guardrails(
@@ -11725,17 +11744,14 @@ async def trading_order(req: TradeOrderRequest, request: Request) -> TradeOrderR
                 guardrails=guardrail_snapshot,
                 authority_ref=f"direct-{payload['client_order_id']}",
             )
-            try:
-                result = execution_service.submit(
-                    payload,
-                    user_id=claims["sub"],
-                    credentials=creds,
-                    confirmation=str(payload.get("confirmation") or ""),
-                )
-            except trading.TradingExecutionError:
-                _record_manual_command_submission(command_claim, submission_unknown=True)
-                raise
-            _record_manual_command_submission(command_claim, submission_unknown=False)
+            result = _submit_confirmed_manual_command(
+                command_claim,
+                execution_service=execution_service,
+                payload=payload,
+                user_id=claims["sub"],
+                credentials=creds,
+                confirmation=str(payload.get("confirmation") or ""),
+            )
             audit = _put_trading_order(claims["sub"], _submitted_trading_order(result))
             _record_terminal_trading_order_event(
                 claims["sub"], venue=venue, record=audit, previous_status="submitted"
