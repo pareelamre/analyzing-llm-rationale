@@ -15,12 +15,30 @@ from uuid import uuid4
 
 from analyzing_llm_rationale.twin import AccountScope, TradeIntent
 from analyzing_llm_rationale.twin.budget import (
+    BudgetAlreadyClaimed,
     BudgetExceeded,
     BudgetPolicy,
     DatastoreResearchBudget,
+    call_with_budget,
 )
 from analyzing_llm_rationale.twin.manual import reserve_confirmed_manual_order
 from analyzing_llm_rationale.twin.store import DatastoreTwinStore, InsufficientReservationCapacity
+
+
+def _research_in_process(key, reservation_id, result_queue):
+    from google.api_core.exceptions import Aborted, Conflict
+    from google.cloud import datastore
+
+    store = DatastoreResearchBudget(datastore.Client(project=os.environ["GOOGLE_CLOUD_PROJECT"]))
+
+    def provider():
+        result_queue.put("provider-called")
+        return {"usage": {"cost_usd": "0", "total_tokens": 100}}
+
+    try:
+        call_with_budget(store, reservation_id, key=key, estimated_usd=Decimal("0"), estimated_tokens=100, policy=BudgetPolicy(Decimal("0"), 100, 10), operation=provider)
+    except (BudgetAlreadyClaimed, BudgetExceeded, Aborted, Conflict):
+        result_queue.put("blocked")
 
 
 def _reserve_in_process(scope_id: str, intent_id: str, instrument_id: str, result_queue: multiprocessing.Queue) -> None:
@@ -51,10 +69,57 @@ class DatastoreTwinStoreIntegrationTests(unittest.TestCase):
         key = f"budget-{uuid4().hex}"
         policy = BudgetPolicy(Decimal("1"), 100, 1)
         budget.reserve("call-001", key=key, estimated_usd=Decimal("0.8"), estimated_tokens=50, policy=policy)
-        self.assertEqual(budget.reserve("call-001", key=key, estimated_usd=Decimal("0.9"), estimated_tokens=90, policy=policy).estimated_usd, Decimal("0.8"))
+        self.assertEqual(budget.reserve("call-001", key=key, estimated_usd=Decimal("0.8"), estimated_tokens=50, policy=policy).estimated_usd, Decimal("0.8"))
+        with self.assertRaises(ValueError):
+            budget.reserve("call-001", key=key, estimated_usd=Decimal("0.9"), estimated_tokens=90, policy=policy)
         budget.reconcile("call-001", key=key, actual_usd=None, actual_tokens=None)
         with self.assertRaises(BudgetExceeded):
             budget.reserve("call-002", key=key, estimated_usd=Decimal("0.3"), estimated_tokens=10, policy=policy)
+
+    def test_research_processes_cannot_reuse_a_claim_or_final_tokens(self):
+        from google.cloud import datastore
+
+        context = multiprocessing.get_context("spawn")
+        for duplicate in (True, False):
+            with self.subTest(duplicate=duplicate):
+                key = f"research-race-{uuid4().hex}"
+                queue = context.Queue()
+                processes = [context.Process(target=_research_in_process, args=(key, "same" if duplicate else f"request-{i}", queue)) for i in range(2)]
+                for process in processes:
+                    process.start()
+                for process in processes:
+                    process.join(timeout=30)
+                    self.assertEqual(process.exitcode, 0)
+                self.assertCountEqual([queue.get(timeout=5) for _ in processes], ["provider-called", "blocked"])
+                store = DatastoreResearchBudget(datastore.Client(project=os.environ["GOOGLE_CLOUD_PROJECT"]))
+                self.assertEqual(store.usage(key).actual_tokens, 100)
+
+    def test_uncertain_tokens_and_legacy_usage_fail_closed(self):
+        from google.cloud import datastore
+
+        client = datastore.Client(project=os.environ["GOOGLE_CLOUD_PROJECT"])
+        store = DatastoreResearchBudget(client)
+        key = f"unknown-{uuid4().hex}"
+        policy = BudgetPolicy(Decimal("0"), 100, 10)
+        store.reserve("unknown", key=key, estimated_usd=Decimal("0"), estimated_tokens=100, policy=policy)
+        store.claim("unknown", key=key)
+        store.reconcile("unknown", key=key, actual_usd=None, actual_tokens=None)
+        self.assertEqual(store.usage(key).uncertain_tokens, 100)
+        with self.assertRaises(BudgetExceeded):
+            store.reserve("again", key=key, estimated_usd=Decimal("0"), estimated_tokens=1, policy=policy)
+        with self.assertRaises(BudgetAlreadyClaimed):
+            store.claim("unknown", key=key)
+        actual = store.reconcile("unknown", key=key, actual_usd=Decimal("0"), actual_tokens=80)
+        self.assertEqual(actual.uncertain_tokens, 0)
+        self.assertEqual(actual.actual_tokens, 80)
+        self.assertEqual(store.reconcile("unknown", key=key, actual_usd=Decimal("0"), actual_tokens=80), actual)
+        store.reserve("remaining", key=key, estimated_usd=Decimal("0"), estimated_tokens=20, policy=policy)
+        legacy_key = f"legacy-{uuid4().hex}"
+        legacy = datastore.Entity(key=client.key("TwinResearchBudget", legacy_key))
+        legacy.update({"requests": 1, "uncertain_usd": "0"})
+        client.put(legacy)
+        with self.assertRaisesRegex(BudgetExceeded, "legacy budget"):
+            store.reserve("new", key=legacy_key, estimated_usd=Decimal("0"), estimated_tokens=1, policy=policy)
 
     def test_manual_and_autonomous_commands_share_datastore_capacity(self):
         from google.cloud import datastore
