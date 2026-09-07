@@ -330,3 +330,55 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FeedLatestFallbackTests(unittest.TestCase):
+    """The fallback crashed every time it ran.
+
+        "market_edge_signals": self.edge_board()[:limit]
+
+    edge_board() returns the aggregate mapping, and slicing a dict raises
+    TypeError: unhashable type: 'slice'. So whenever /feed/latest was
+    unavailable -- the only case this branch exists for -- the tool raised
+    instead of degrading. Calling foresea_feed_latest reproduced it exactly.
+    """
+
+    class _GetSession(FakeSession):
+        """feed_latest is the only client method that calls session.get()
+        directly rather than going through _request(), so the shared
+        FakeSession -- which implements request() only -- cannot drive it."""
+
+        def get(self, url, params=None, timeout=None):
+            self.calls.append({"method": "GET", "url": url, "params": params})
+            return self.responses.pop(0)
+
+    def _client(self, *responses):
+        return mcp.ForeseaClient(
+            base_url="https://foresea.test", session=self._GetSession(*responses)
+        )
+
+    def test_the_fallback_returns_ranked_markets_instead_of_raising(self):
+        board = {"edge_board": [{"ticker": f"M{i}"} for i in range(5)], "paper_pnl": {}}
+        client = self._client(FakeResponse(status_code=503), FakeResponse(payload=board))
+
+        out = client.feed_latest(limit=3)
+
+        self.assertEqual(len(out["market_edge_signals"]), 3)
+        self.assertEqual(out["market_edge_signals"][0]["ticker"], "M0")
+        self.assertIn("channels", out)
+
+    def test_a_board_without_the_key_degrades_to_empty_not_an_error(self):
+        client = self._client(FakeResponse(status_code=503), FakeResponse(payload={"other": 1}))
+        self.assertEqual(client.feed_latest(limit=3)["market_edge_signals"], [])
+
+    def test_a_non_object_board_response_surfaces_as_an_api_error(self):
+        """_request rejects non-object JSON, so edge_board() cannot return a
+        list. The isinstance guard in the fallback is belt-and-braces; the
+        real contract is that this raises rather than degrading silently."""
+        client = self._client(FakeResponse(status_code=503), FakeResponse(payload=["a"]))
+        with self.assertRaises(mcp.ForeseaApiError):
+            client.feed_latest(limit=2)
+
+    def test_the_primary_path_is_still_preferred(self):
+        client = self._client(FakeResponse(payload={"timestamp": "t", "signals": []}))
+        self.assertEqual(client.feed_latest()["timestamp"], "t")

@@ -498,17 +498,29 @@ class ForeseaClient:
     def feed_latest(self, limit: int = 10, min_edge: float = 0.05) -> Dict[str, Any]:
         """Fetch unified alpha and agent feed from Foresea API."""
         try:
-            resp = self._session.get(f"{self._base_url}/feed/latest", params={"limit": limit, "min_edge": min_edge}, timeout=15)
+            resp = self._session.get(f"{self.base_url}/feed/latest", params={"limit": limit, "min_edge": min_edge}, timeout=15)
             if resp.status_code == 200:
                 return resp.json()
+            logger.warning("feed/latest returned HTTP %s; using the edge-board fallback", resp.status_code)
         except Exception:
-            pass
+            # Swallowing kept the tool answering when the feed is down, but
+            # swallowing silently meant the fallback's own failure surfaced as
+            # an unexplained error with no trace of what went wrong first.
+            logger.warning("feed/latest request failed; using the edge-board fallback", exc_info=True)
+        # edge_board() returns the aggregate mapping, not a list. Slicing it
+        # raised "unhashable type: 'slice'" -- so every time this fallback ran,
+        # the tool crashed instead of degrading. The ranked markets live under
+        # the "edge_board" key.
+        board = self.edge_board()
+        signals = board.get("edge_board") if isinstance(board, dict) else board
+        if not isinstance(signals, list):
+            signals = []
         return {
             "channels": {
                 "discord": "https://discord.com/channels/1539674155228860527/1539674155799289991",
                 "telegram": "https://t.me/+QIVxIyqCc-w4NzQ9",
             },
-            "market_edge_signals": self.edge_board()[:limit],
+            "market_edge_signals": signals[:limit],
             "agent_trades": [],
         }
 
