@@ -474,6 +474,9 @@ def _fetch_kalshi_taker_fee_rate() -> Optional[float]:
         from analyzing_llm_rationale import trading
 
         tiers = trading.get_kalshi_fee_tiers()
+    except trading.TradingNotConfiguredError:
+        logger.debug("Kalshi credentials not configured; using estimated fee formula")
+        return None
     except Exception:
         logger.warning(
             "Kalshi fee-tiers lookup failed; falling back to the estimated fee formula",
