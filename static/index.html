@@ -6743,11 +6743,16 @@ function _cleanThesisText(raw) {
   // Normalize inline bullet items (e.g. " - **Action**:" or " - **Rules Verification**:" -> "\n- **Action**:")
   str = str.replace(/(?:\s*-\s*|\n\s*|\s{2,})(\*\*[A-Za-z0-9\s/&—\-\.,]+?\*\*:\s*)/g, '\n- $1');
 
+  // Deduplicate repeated Model Probability prefixes
+  str = str.replace(/(?:[-*]\s*)?(?:\*{0,2}model\s+probability\*{0,2}\s*:?\s*){2,}/gi, '- **Model Probability**: ');
+  str = str.replace(/\bmodel\s+probability\s*:\s*model\s+probability\s*:\s*/gi, 'Model Probability: ');
+
   return str.trim();
 }
 
 function _thesisBulletForDisplay(rawBullet) {
-  const value = String(rawBullet || '').trim();
+  let value = String(rawBullet || '').trim();
+  value = value.replace(/^(?:[-*]\s*)?(?:\*{0,2}model\s+probability\*{0,2}\s*:?\s*){2,}/i, '**Model Probability**: ');
   const unavailable = '(?:\\[?\\s*N\\s*\\/\\s*A\\s*\\]?)';
   const labeledUnavailable = new RegExp(`^\\*\\*[^*]+\\*\\*:\\s*${unavailable}\\s*$`, 'i');
   const unavailableComparison = new RegExp(

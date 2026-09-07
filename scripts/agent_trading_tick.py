@@ -406,6 +406,11 @@ def _prior_thesis_state(last_thesis: Optional[str]) -> str:
         ):
             selected.append(cleaned)
     state = "\n".join(selected) or _excerpt(text, min(MAX_LAST_THESIS_CHARS, 2000))
+    state = re.sub(
+        r"(?im)^\s*[-*]?\s*(?:\*{0,2}model\s+probability\*{0,2}\s*:?\s*){2,}",
+        "- **Model Probability**: ",
+        state,
+    )
     return _excerpt(state, MAX_LAST_THESIS_CHARS)
 
 
@@ -1823,7 +1828,7 @@ _THESIS_MARKET_RE = re.compile(
 # instead would be worse than rejecting it: "95% NO" stored as P(YES) inverts
 # the forecast and poisons the calibration record this feeds.
 _THESIS_PROBABILITY_RE = re.compile(
-    r"\*{0,2}Model\s+Probability\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
+    r"(?:\*{0,2}Model\s+Probability\*{0,2}\s*:?\s*)*\*{0,2}Model\s+Probability\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
     r"(?P<model>\d+(?:\.\d+)?)\s*%\s*\]?"
     r"(?P<model_side>\s+(?:YES|NO)\b)?"
     r"(?:\s*\([^)]{0,60}\))?"          # optional qualifier, e.g. "(no-change)"
@@ -1869,12 +1874,12 @@ _LOOSE_ACTION_MARKET_RE = re.compile(
 # approximation marker all appear in real theses between the label and the
 # number, and each one used to defeat this pattern.
 _LOOSE_MODEL_PROBABILITY_RE = re.compile(
-    r"(?:\*{0,2}model\s+probability\*{0,2}|\*{0,2}p\(yes\)\*{0,2}|calibrated\s+p\(yes\))"
+    r"(?:(?:\*{0,2}model\s+probability\*{0,2}\s*:?\s*)*\*{0,2}model\s+probability\*{0,2}|\*{0,2}p\(yes\)\*{0,2}|calibrated\s+p\(yes\))"
     r"\s*(?:of|is|=|:)?\s*\*{0,2}\s*~?\s*(\d+(?:\.\d+)?)\s*%",
     re.IGNORECASE,
 )
 _STANDALONE_MODEL_PROBABILITY_RE = re.compile(
-    r"\*{0,2}(?:Model\s+Probability|Calibrated\s+P\(YES\)|Calibrated\s+Probability)\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
+    r"(?:\*{0,2}Model\s+Probability\*{0,2}\s*:?\s*)*\*{0,2}(?:Model\s+Probability|Calibrated\s+P\(YES\)|Calibrated\s+Probability)\*{0,2}\s*:?\s*\*{0,2}\s*\[?\s*~?\s*"
     r"(?P<val>\d+(?:\.\d+)?)\s*%\s*\]?"
     r"(?P<side>\s+(?:YES|NO)\b)?",
     re.IGNORECASE,

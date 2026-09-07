@@ -579,6 +579,18 @@ def clean_thesis_display(raw_thesis: Optional[str]) -> str:
     if unmodified_marker:
         text = text[:unmodified_marker.start()].rstrip()
 
+    # Deduplicate repeated "Model Probability" labels (e.g. "**Model Probability**: **Model Probability**:")
+    text = re.sub(
+        r"(?im)^\s*[-*]?\s*(?:\*{0,2}model\s+probability\*{0,2}\s*:?\s*){2,}",
+        "- **Model Probability**: ",
+        text,
+    )
+    text = re.sub(
+        r"(?i)\bmodel\s+probability\s*:\s*model\s+probability\s*:\s*",
+        "Model Probability: ",
+        text,
+    )
+
     # If text is unstructured raw deliberation without standard template sections
     # (e.g. "Let me reconsider my analysis..."), avoid rendering thousands of characters
     # of raw scratchpad to the user.
