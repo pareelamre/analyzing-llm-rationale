@@ -1425,7 +1425,7 @@ _TRADING_INSTRUCTION = (
     "range). The same study finds long-dated markets never reach a 0.05 Brier at any level of "
     "participation, so distance from resolution -- not your conviction -- is what leaves room for "
     "a genuine edge.\n\n"
-    "In your final answer, ALL models MUST begin immediately with '### 0. Research Delta' and use this exact structure:\n\n"
+    "In your final answer, when done calling tools, emit your thesis either directly as markdown or inside {\"final\": \"...\"}. ALL models MUST begin immediately with '### 0. Research Delta' and use this exact structure:\n\n"
     "### 0. Research Delta\n"
     "- **Strategy**: [EVIDENCE_EDGE / CATALYST_EDGE / ORDERBOOK_ARBITRAGE_RESEARCH / POSITION_RISK_REDUCTION / PASS] (never use N/A)\n"
     "- **New evidence**: [1-2 concise sentences citing the single most material dated source & finding, or 'No material new evidence']\n"
