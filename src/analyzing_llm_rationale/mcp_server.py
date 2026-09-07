@@ -223,6 +223,29 @@ def _edge_board_rows(board: Any) -> List[Dict[str, Any]]:
     return rows if isinstance(rows, list) else []
 
 
+_TAG_IDENTITY_KEYS = ("id", "label", "slug")
+
+
+def _summarise_tags(rows: Any) -> List[Dict[str, Any]]:
+    """Keep what identifies a tag and drop the upstream bookkeeping.
+
+    Gamma sends createdAt/updatedAt/requiresTranslation on every row and
+    publishedAt/forceShow/isCarousel/updatedBy on some. None of it tells a
+    caller anything about the tag, and it is 68% of each row.
+
+    Sorted by label because Gamma's own order is neither alphabetical nor by
+    activity -- an unsorted slice reads as a ranking when it is not one.
+    """
+    if not isinstance(rows, list):
+        return []
+    tags = [
+        {k: row[k] for k in _TAG_IDENTITY_KEYS if k in row}
+        for row in rows
+        if isinstance(row, dict)
+    ]
+    return sorted(tags, key=lambda tag: str(tag.get("label", "")).lower())
+
+
 def _summarise_track_record(payload: Any, source: str = "/track-record") -> Any:
     """Drop the bulk blocks so the result fits an MCP client's response limit.
 
@@ -483,7 +506,7 @@ class ForeseaClient:
 
     def market_tags(self) -> List[Dict[str, Any]]:
         from analyzing_llm_rationale import market_data
-        return market_data.fetch_polymarket_tags()
+        return _summarise_tags(market_data.fetch_polymarket_tags())
 
     async def amarket_tags(self) -> List[Dict[str, Any]]:
         loop = asyncio.get_running_loop()
@@ -895,8 +918,15 @@ def create_mcp_server(
 
     @mcp.tool()
     async def foresea_market_tags() -> List[Dict[str, Any]]:
-        """Call this to list active categories, tags, and classification taxonomy
-        across Polymarket prediction markets."""
+        """Call this to sample Polymarket's category vocabulary. Each entry is a
+        label and the slug that identifies it.
+
+        This is one page of at most 100 tags, not the full taxonomy: Polymarket
+        has tens of thousands, and the endpoint returns a fixed slice that is
+        ordered neither alphabetically nor by market activity. So absence here
+        does not mean a tag is unused, presence does not mean it is active, and
+        some entries are one-off or misspelled. Treat it as a vocabulary sample,
+        not a classification the markets are organised by."""
 
         return await _call_tool_async(client.amarket_tags)
 

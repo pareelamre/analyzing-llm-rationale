@@ -541,3 +541,105 @@ class OmissionPointsAtTheRightEndpointTests(unittest.TestCase):
         self.assertEqual(out["omitted_for_size"]["source"], "/edge-board")
         self.assertIn("GET /edge-board", out["omitted_for_size"]["detail"])
         self.assertNotIn("/track-record", out["omitted_for_size"]["detail"])
+
+
+class MarketTagsShapeTests(unittest.TestCase):
+    """market_tags returned raw Gamma rows: 68% of each one was bookkeeping.
+
+    A real response carried createdAt/updatedAt/requiresTranslation on every
+    row plus publishedAt/forceShow/isCarousel/updatedBy on some -- none of it
+    describing the tag. Projecting to id/label/slug and taking the full
+    100-row page is 36% fewer bytes than the old 50-row payload.
+    """
+
+    #: A row of each shape Gamma actually sends, keys and all.
+    _ROWS = [
+        {
+            "id": "537",
+            "label": "OpenAI",
+            "slug": "openai",
+            "publishedAt": "2023-11-17 23:46:12.865+00",
+            "updatedBy": 15,
+            "createdAt": "2023-11-17T23:46:12.878Z",
+            "updatedAt": "2026-04-17T17:23:11.703691Z",
+            "requiresTranslation": False,
+        },
+        {
+            "id": "101655",
+            "label": "wildfire",
+            "slug": "wildfire",
+            "forceShow": False,
+            "isCarousel": False,
+            "createdAt": "2025-01-08T13:49:59.932998Z",
+            "updatedAt": "2026-04-17T17:23:11.682475Z",
+            "requiresTranslation": False,
+        },
+        {
+            "id": "1512",
+            "label": "Caitlin Clark",
+            "slug": "caitlin-clark",
+            "updatedAt": "2026-04-17T17:23:11.676843Z",
+            "requiresTranslation": False,
+        },
+    ]
+
+    def test_only_the_identifying_keys_survive(self):
+        for tag in mcp._summarise_tags(self._ROWS):
+            with self.subTest(tag=tag["slug"]):
+                self.assertEqual(set(tag), {"id", "label", "slug"})
+
+    def test_no_bookkeeping_key_leaks_through(self):
+        seen = {key for tag in mcp._summarise_tags(self._ROWS) for key in tag}
+        for key in ("createdAt", "updatedAt", "requiresTranslation",
+                    "publishedAt", "forceShow", "isCarousel", "updatedBy"):
+            self.assertNotIn(key, seen)
+
+    def test_sorted_by_label_ignoring_case(self):
+        """Gamma's order is neither alphabetical nor by activity."""
+        labels = [tag["label"] for tag in mcp._summarise_tags(self._ROWS)]
+        self.assertEqual(labels, ["Caitlin Clark", "OpenAI", "wildfire"])
+
+    def test_junk_rows_do_not_raise(self):
+        self.assertEqual(mcp._summarise_tags(None), [])
+        self.assertEqual(mcp._summarise_tags({"tags": []}), [])
+        self.assertEqual(mcp._summarise_tags(["text", 7, None]), [])
+        self.assertEqual(mcp._summarise_tags([{"label": "x"}]), [{"label": "x"}])
+
+    def test_market_tags_applies_the_projection(self):
+        """The wiring, so the projection cannot be dropped without a failure."""
+        from analyzing_llm_rationale import market_data
+
+        original = market_data.fetch_polymarket_tags
+        market_data.fetch_polymarket_tags = lambda *a, **k: list(self._ROWS)
+        try:
+            tags = mcp.ForeseaClient().market_tags()
+        finally:
+            market_data.fetch_polymarket_tags = original
+        self.assertEqual([set(tag) for tag in tags], [{"id", "label", "slug"}] * 3)
+
+
+class TagsPageLimitTests(unittest.TestCase):
+    """The page size was whatever Gamma defaulted to, which is not a contract."""
+
+    def test_the_limit_is_sent_explicitly(self):
+        from analyzing_llm_rationale import market_data
+
+        sent = {}
+
+        def fake_get_json(url, params=None):
+            sent["url"], sent["params"] = url, params
+            return []
+
+        original = market_data._get_json
+        market_data._get_json = fake_get_json
+        try:
+            market_data.fetch_polymarket_tags()
+        finally:
+            market_data._get_json = original
+        self.assertEqual(sent["params"], {"limit": 100})
+
+    def test_the_limit_stays_within_what_gamma_honours(self):
+        """Gamma caps /tags at 100 and silently truncates anything larger."""
+        from analyzing_llm_rationale import market_data
+
+        self.assertLessEqual(market_data.POLYMARKET_TAGS_PAGE_LIMIT, 100)

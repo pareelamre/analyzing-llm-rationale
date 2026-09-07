@@ -29,6 +29,8 @@ venue_requests = metrics.get_meter(__name__).create_counter("market_data.request
 
 POLYMARKET_GAMMA_URL = "https://gamma-api.polymarket.com/markets"
 POLYMARKET_TAGS_URL = "https://gamma-api.polymarket.com/tags"
+# Gamma caps /tags at 100 rows per page and defaults to 50.
+POLYMARKET_TAGS_PAGE_LIMIT = 100
 POLYMARKET_CLOB_BOOK_URL = "https://clob.polymarket.com/book"
 POLYMARKET_HISTORY_URL = "https://clob.polymarket.com/prices-history"
 POLYMARKET_SPORTS_URL = "https://gamma-api.polymarket.com/sports"
@@ -723,9 +725,15 @@ def fetch_kalshi_orderbook(ticker: str) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def fetch_polymarket_tags() -> List[Dict[str, Any]]:
-    """Fetch active categories/tags from Polymarket Gamma API."""
-    data = _get_json(POLYMARKET_TAGS_URL)
+def fetch_polymarket_tags(limit: int = POLYMARKET_TAGS_PAGE_LIMIT) -> List[Dict[str, Any]]:
+    """Fetch one page of categories/tags from Polymarket Gamma API.
+
+    The page size is sent explicitly rather than left to the upstream default.
+    That default is 50 and is not part of any published contract, so leaving it
+    implicit makes the size of every response ours to discover rather than ours
+    to choose. Gamma caps the page at 100 and ignores anything larger.
+    """
+    data = _get_json(POLYMARKET_TAGS_URL, params={"limit": limit})
     return _object_rows(data, "tags")
 
 
