@@ -57,7 +57,7 @@ def _insert_position(conn, agent_id, *, platform="kalshi", ticker="KXFOO-26",
 def _insert_action(conn, agent_id, *, action_type="trade", ts="2026-08-11T00:00:00+00:00",
                     cash_delta=0.0, realized_pnl=0.0, mode="shadow", platform="kalshi",
                     ticker="KXFOO-26", side="yes", quantity=None, price=None, outcome=None,
-                    notional=0.0, payout=0.0, cycle_id="15m:1"):
+                    notional=0.0, payout=0.0, cycle_id="15m:1", metadata_json="{}"):
     conn.execute(
         """
         INSERT INTO agent_actions
@@ -67,13 +67,14 @@ def _insert_action(conn, agent_id, *, action_type="trade", ts="2026-08-11T00:00:
          metadata_json)
         VALUES (lower(hex(randomblob(16))), :ts, :agent_id, :action_type, :mode, 0,
                 :platform, :ticker, :side, :price, :quantity, :notional, 0, 0, :payout, 0, 0,
-                :cash_delta, :realized_pnl, 0, :cycle_id, NULL, :outcome, '{}')
+                :cash_delta, :realized_pnl, 0, :cycle_id, NULL, :outcome, :metadata_json)
         """,
         {
             "ts": ts, "agent_id": agent_id, "action_type": action_type, "mode": mode,
             "platform": platform, "ticker": ticker, "side": side, "price": price,
             "quantity": quantity, "cash_delta": cash_delta, "realized_pnl": realized_pnl,
             "notional": notional, "payout": payout, "cycle_id": cycle_id, "outcome": outcome,
+            "metadata_json": metadata_json,
         },
     )
 
@@ -846,3 +847,47 @@ class FillEfficiencyTests(unittest.TestCase):
             (json.dumps({"audit": {"version": 1, "sizing": {"target_quantity": 0}}}), 10.0),
         ]
         self.assertEqual(agent_trading_stats.fill_efficiency(rows), {})
+
+
+class FillEfficiencyResetTests(unittest.TestCase):
+    """Fill stats must start where trade_count starts.
+
+    Every other leaderboard query filters on the latest admin_reset. The
+    fill query did not, so a reset account reported fill stats over trades
+    trade_count had already dropped -- and sized_trade_count could come out
+    larger than trade_count, which cannot be true.
+    """
+
+    def _sized(self, target):
+        return json.dumps(
+            {"audit": {"version": 1, "sizing": {"target_quantity": target}}}
+        )
+
+    def test_trades_before_the_reset_are_excluded(self):
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-r")
+            # Before the reset: a badly rationed fill that must not count.
+            _insert_action(
+                conn, "model-r", ts="2026-08-01T00:00:00+00:00",
+                quantity=1.0, metadata_json=self._sized(1000.0),
+            )
+            _insert_action(
+                conn, "model-r", action_type="admin_reset",
+                ts="2026-08-05T00:00:00+00:00",
+            )
+            # After the reset: a full fill.
+            _insert_action(
+                conn, "model-r", ts="2026-08-10T00:00:00+00:00",
+                quantity=50.0, metadata_json=self._sized(50.0),
+            )
+            conn.commit()
+
+            row = next(
+                r for r in agent_trading_stats.compute_agent_leaderboard(conn, {})
+                if r["agent_id"] == "model-r"
+            )
+
+        self.assertEqual(row["sized_trade_count"], 1)
+        self.assertEqual(row["median_fill_fraction"], 1.0)
+        self.assertEqual(row["partially_filled_count"], 0)
+        self.assertLessEqual(row["sized_trade_count"], row["trade_count"])

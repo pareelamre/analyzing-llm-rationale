@@ -105,12 +105,18 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
             realized_sql += " AND ts >= ?"
             params.append(since_ts)
 
-        trade_count = conn.execute(trade_sql, params).fetchone()[0]
-        fill_rows = conn.execute(
+        fill_sql = (
             "SELECT metadata_json, quantity FROM agent_actions WHERE agent_id = ? "
-            "AND action_type = 'trade' AND quantity > 0",
-            (agent_id,),
-        ).fetchall()
+            "AND action_type = 'trade' AND quantity > 0"
+        )
+        if since_ts is not None:
+            # Same reset boundary as every sibling query: without it a reset
+            # account reports fill stats over trades that trade_count has
+            # already dropped, so sized_trade_count could exceed trade_count.
+            fill_sql += " AND ts >= ?"
+
+        trade_count = conn.execute(trade_sql, params).fetchone()[0]
+        fill_rows = conn.execute(fill_sql, params).fetchall()
         settlement_pnls = [float(r[0]) for r in conn.execute(settlement_sql, params)]
         realized_pnls = [float(r[0]) for r in conn.execute(realized_sql, params)]
         settled_count = len(settlement_pnls)
