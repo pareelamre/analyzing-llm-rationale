@@ -1501,6 +1501,66 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertTrue(duplicate["risk_guard"]["duplicate_active"])
         self.assertEqual(rate_limited["reason"], "trade_rate_limit")
 
+    def test_place_trade_allows_different_cycle_and_retry_after_zero_fill(self):
+        ctx = benchmark_tools.ToolContext(agent_id="model-cycle-diff", require_kelly_sizing=True)
+        with tempfile.TemporaryDirectory() as td:
+            base_env = {
+                "FORESEA_AGENT_TOOL_LEDGER_PATH": str(Path(td) / "ledger.jsonl"),
+                "FORESEA_AGENT_ACCOUNT_DB_PATH": str(Path(td) / "accounts.sqlite"),
+                "FORESEA_AGENT_ACCOUNT_VALUE": "100",
+                "FORESEA_AGENT_CONCENTRATION_LIMIT": "1.0",
+                "FORESEA_AGENT_PER_CYCLE_SPEND_LIMIT_PCT": "1.0",
+                "FORESEA_AGENT_DAILY_RISK_LIMIT_PCT": "1.0",
+                "FORESEA_AGENT_MAX_TRADES_PER_CYCLE": "10",
+                "FORESEA_AGENT_DUPLICATE_TRADE_COOLDOWN_SECONDS": "900",
+            }
+            with (
+                mock.patch(
+                    "analyzing_llm_rationale.market_data.fetch_kalshi",
+                    side_effect=_fetch_kalshi_quotes({"KXRATE": 0.10, "KXZERO": 0.20}),
+                ),
+                mock.patch("analyzing_llm_rationale.market_data.resolve_kalshi", return_value=None),
+            ):
+                with mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-1"}, clear=False):
+                    first = benchmark_tools.place_trade(
+                        {"ticker": "KXRATE", "side": "yes", "price": 0.10, "fee": 0,
+                         "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                        ctx,
+                    )
+                    intra_cycle_dup = benchmark_tools.place_trade(
+                        {"ticker": "KXRATE", "side": "yes", "price": 0.10, "fee": 0,
+                         "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                        ctx,
+                    )
+
+                with mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-2"}, clear=False):
+                    next_cycle_trade = benchmark_tools.place_trade(
+                        {"ticker": "KXRATE", "side": "yes", "price": 0.10, "fee": 0,
+                         "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                        ctx,
+                    )
+
+                with mock.patch.dict(os.environ, {**base_env, "FORESEA_AGENT_CYCLE_ID": "cycle-3"}, clear=False):
+                    zero_fill = benchmark_tools.place_trade(
+                        {"ticker": "KXZERO", "side": "yes", "price": 0.10, "fee": 0,
+                         "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                        ctx,
+                    )
+                    marketable_retry = benchmark_tools.place_trade(
+                        {"ticker": "KXZERO", "side": "yes", "price": 0.20, "fee": 0,
+                         "sizing_mode": "quarter_kelly", "model_probability": 0.90},
+                        ctx,
+                    )
+
+        self.assertTrue(first["ok"])
+        self.assertEqual(intra_cycle_dup["reason"], "duplicate_cooldown")
+        self.assertTrue(next_cycle_trade["ok"])
+        self.assertFalse(next_cycle_trade.get("rejected", False))
+        self.assertTrue(zero_fill["ok"])
+        self.assertEqual(zero_fill["execution"]["filled_quantity"], 0.0)
+        self.assertTrue(marketable_retry["ok"])
+        self.assertGreater(marketable_retry["execution"]["filled_quantity"], 0.0)
+
     def test_place_trade_enforces_open_market_and_drawdown_circuit_breakers(self):
         ctx = benchmark_tools.ToolContext(agent_id="model-circuit", require_kelly_sizing=True)
         with tempfile.TemporaryDirectory() as td:

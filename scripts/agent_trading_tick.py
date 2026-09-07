@@ -2865,6 +2865,7 @@ def run_cycle(model: str, *, cycle_id: Optional[str] = None) -> Dict[str, Any]:
 
     agent_id = model
     cycle_id = cycle_id or benchmark_tools._current_cycle_id()
+    os.environ["FORESEA_AGENT_CYCLE_ID"] = cycle_id
 
     # Settlement used to run only if a model tried to place another trade.
     # Run it before every decision instead, so a resolved result is available

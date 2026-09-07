@@ -2062,20 +2062,39 @@ def _risk_usage(
             continue
         ts = _parse_risk_timestamp(action.get("ts"))
         cash_required = max(0.0, _as_float(action.get("cash_required")))
-        if str(action.get("cycle_id") or "") == policy.cycle_id:
+        action_cycle = str(action.get("cycle_id") or "").strip()
+        is_same_cycle = bool(policy.cycle_id and action_cycle == policy.cycle_id)
+
+        # A zero-fill IOC simulation attempt spent $0 and acquired 0 contracts.
+        # It must not count toward the per-cycle trade quota or lock the ticker
+        # into duplicate cooldown against subsequent attempts to place a fillable order.
+        filled_qty = action.get("quantity")
+        is_zero_fill = (
+            filled_qty is not None
+            and _as_float(filled_qty) <= 1e-12
+            and cash_required <= 1e-12
+        )
+
+        if is_same_cycle:
             cycle_spend += cash_required
-            cycle_trade_count += 1
+            if not is_zero_fill:
+                cycle_trade_count += 1
         if ts is not None and ts >= risk_window_start:
             daily_risk += cash_required
         if (
             policy.duplicate_trade_cooldown_seconds > 0
+            and not is_zero_fill
             and ts is not None
             and ts >= duplicate_after
             and str(action.get("platform") or "").lower() == platform
             and str(action.get("ticker") or "") == ticker
             and str(action.get("side") or "").lower() == side
         ):
-            duplicate_active = True
+            # Duplicate cooldown protects against intra-cycle double-execution or
+            # loop spinning on the same market. A new, separate trading cycle operates
+            # on fresh candidates and forecasts with its own spend and trade budget.
+            if not policy.cycle_id or not action_cycle or is_same_cycle:
+                duplicate_active = True
     return {
         "cycle_spend": cycle_spend,
         "cycle_trade_count": cycle_trade_count,
@@ -2119,7 +2138,7 @@ def _load_guard_account(
             dict(event)
             for event in conn.execute(
                 """
-                SELECT action_type, cycle_id, ts, platform, ticker, side, cash_required
+                SELECT action_type, cycle_id, ts, platform, ticker, side, cash_required, quantity
                 FROM agent_actions
                 WHERE agent_id = ?
                 """,
