@@ -246,6 +246,31 @@ class CandidateSelectionTests(unittest.TestCase):
 
         self.assertEqual([quote["ident"] for quote in found], ["KXWEATHER", "KXGENERAL"])
 
+    def test_discover_weather_candidates_queries_series_ticker(self):
+        weather = _quote(
+            "KXHIGHNY-26SEP07-B77.5",
+            question="Will the maximum temperature in New York City be 77-78° on Sep 7, 2026?",
+            resolution_criteria="Daily Climate Report (CLINYC) issued by the National Weather Service.",
+        )
+        called_series = []
+
+        def list_kalshi(**kwargs):
+            if "series_ticker" in kwargs:
+                called_series.append(kwargs["series_ticker"])
+                if kwargs["series_ticker"] == "KXHIGHNY":
+                    return [weather]
+            return []
+
+        with (
+            mock.patch.object(market_data, "list_kalshi", side_effect=list_kalshi),
+            mock.patch.object(market_data, "list_polymarket", return_value=[]),
+        ):
+            candidates = agent_trading_tick._discover_weather_candidates(set(), limit=1)
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["ident"], "KXHIGHNY-26SEP07-B77.5")
+        self.assertIn("KXHIGHNY", called_series)
+
     def test_polymarket_edge_hurdle_has_no_taker_fee(self):
         k_quote = _quote("KXTEST", bid=0.40, ask=0.45)
         p_quote = _poly_quote("poly-test", bid=0.40, ask=0.45)

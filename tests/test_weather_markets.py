@@ -80,6 +80,32 @@ class WeatherMarketClassificationTests(unittest.TestCase):
         self.assertFalse(brief.trade_permitted)
         self.assertEqual(brief.blocker, "missing_contract_settlement_source")
 
+    def test_daily_temperature_with_nws_cli_product_code_maps_station(self):
+        quote = {
+            "question": "Will the maximum temperature in New York City be 77-78° on Sep 7, 2026?",
+            "category": "Weather",
+            "resolution_criteria": "The market resolves based on the Daily Climate Report (CLINYC) issued by the National Weather Service.",
+        }
+        brief = classify_weather_market(quote)
+        self.assertTrue(brief.is_weather)
+        self.assertEqual(brief.market_type, "daily_temperature")
+        self.assertEqual(brief.settlement_source, "nws_daily_climate_report")
+        self.assertEqual(brief.station, "KNYC")
+        self.assertTrue(brief.trade_permitted)
+
+    def test_daily_temperature_with_chicago_midway_climdw(self):
+        quote = {
+            "question": "Highest temperature in Chicago on Sep 7, 2026? – 78° to 79°",
+            "category": "Weather",
+            "settlement_sources": ["National Weather Service — https://www.weather.gov/wrh/Climate?wfo=lot — (CLIMDW)"],
+        }
+        brief = classify_weather_market(quote)
+        self.assertTrue(brief.is_weather)
+        self.assertEqual(brief.market_type, "daily_temperature")
+        self.assertEqual(brief.settlement_source, "nws_daily_climate_report")
+        self.assertEqual(brief.station, "KMDW")
+        self.assertTrue(brief.trade_permitted)
+
 
 if __name__ == "__main__":
     unittest.main()
