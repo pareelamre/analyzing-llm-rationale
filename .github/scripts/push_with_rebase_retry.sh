@@ -70,6 +70,14 @@ publish_through_pr() {
   git push --force-with-lease "$remote" "HEAD:refs/heads/${update_branch}"
   if ! pr_url="$(gh pr create --base "$branch" --head "$update_branch" --title "$title" --body "$body")"; then
     echo "Could not create fallback publish pull request." >&2
+    # Without a PR the branch is inert: this function has already failed and
+    # nothing else will ever merge it. Leaving it behind is what accumulated
+    # 1211 automation/* branches on the remote, none of which has a PR, each
+    # holding one unmerged commit and the payload blobs in its tree alive
+    # against garbage collection.
+    if ! git push "$remote" --delete "${update_branch}" >/dev/null 2>&1; then
+      echo "Also could not delete ${update_branch}; it will need removing by hand." >&2
+    fi
     return 1
   fi
   echo "Created ${pr_url}." >&2
