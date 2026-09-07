@@ -1,0 +1,697 @@
+{
+  "artifact_hash": "67880700417e286b99f463cde993f9b37ac6872c883617217443438c8fb7c0e0",
+  "calibration_report": {
+    "calibration": [
+      {
+        "bucket": "0.3-0.4",
+        "calibration_gap": -0.3,
+        "lower": 0.3,
+        "mean_probability": 0.3,
+        "n": 1,
+        "outcome_rate": 0.0,
+        "upper": 0.4
+      },
+      {
+        "bucket": "0.7-0.8",
+        "calibration_gap": 0.30000000000000004,
+        "lower": 0.7,
+        "mean_probability": 0.7,
+        "n": 1,
+        "outcome_rate": 1.0,
+        "upper": 0.8
+      }
+    ],
+    "domain_probability_buckets": [
+      {
+        "bucket": "0.3-0.4",
+        "domain": "fixture",
+        "domain_n": 2,
+        "eligible_for_domain_model": false,
+        "global_outcome_rate": 0.0,
+        "mean_probability": 0.3,
+        "n": 1,
+        "prior_strength": 20.0,
+        "raw_outcome_rate": 0.0,
+        "shrunk_outcome_rate": 0.0
+      },
+      {
+        "bucket": "0.7-0.8",
+        "domain": "fixture",
+        "domain_n": 2,
+        "eligible_for_domain_model": false,
+        "global_outcome_rate": 1.0,
+        "mean_probability": 0.7,
+        "n": 1,
+        "prior_strength": 20.0,
+        "raw_outcome_rate": 1.0,
+        "shrunk_outcome_rate": 1.0
+      }
+    ],
+    "log_loss": 0.35667494393873245,
+    "market_brier": 0.25,
+    "market_clustered_skill_interval": {
+      "confidence_level": 0.95,
+      "lower": 0.15999999999999995,
+      "mean_skill": 0.15999999999999998,
+      "method": "normal_interval_over_market_mean_brier_differences",
+      "n_forecasts": 2,
+      "n_markets": 2,
+      "standard_error": 1.962615573354719e-17,
+      "upper": 0.16,
+      "z_score": 1.96
+    },
+    "model_brier": 0.09000000000000001,
+    "n": 2,
+    "skill_vs_market": 0.15999999999999998
+  },
+  "code_hash": "a80b20cabbbbeebae2c4faec81900c4198ad63640b8a3f88be353ee5e4fac461",
+  "config_hash": "b0d14a2d90d89803204d0036acf3a2f84212ed646f41f0e2c9b8d1d41f60080e",
+  "dataset_hash": "8fa32e407051dc8e40c8532afb0e1ac656dbb8efa9bf00de46cc1e253df6e8e2",
+  "evidence": {
+    "calibration_records": 2,
+    "captured_at": "2026-09-07T00:00:00+00:00",
+    "evaluation_as_of": "2026-09-07T00:00:00+00:00",
+    "excluded": {
+      "cross_split_unresolved": 0,
+      "duplicate_cluster": 0,
+      "future_forecast": 0,
+      "future_outcome": 0,
+      "leaked_outcome": 0,
+      "training_cluster": 0
+    },
+    "split_at": "2026-08-01T00:00:00+00:00",
+    "test_records": 2
+  },
+  "gates": {
+    "calibration_depth": {
+      "actual": 2,
+      "required": 30,
+      "status": "insufficient"
+    },
+    "drawdown": {
+      "actual": 0.0003999599999998793,
+      "required": 0.2,
+      "status": "pass"
+    },
+    "event_disjoint": {
+      "actual": true,
+      "required": true,
+      "status": "pass"
+    },
+    "positive_net_pnl": {
+      "actual": 3.651942461538468,
+      "required": "> 0",
+      "status": "pass"
+    },
+    "test_depth": {
+      "actual": 2,
+      "required": 30,
+      "status": "insufficient"
+    }
+  },
+  "generated_at": "2026-09-07T00:00:00+00:00",
+  "live_eligible": false,
+  "out_of_sample": {
+    "fixed_policy": {
+      "abstention": 1.0,
+      "forecast_metrics": {
+        "calibration": [
+          {
+            "bucket": "0.5-0.6",
+            "calibration_gap": 0.0,
+            "lower": 0.5,
+            "mean_probability": 0.5,
+            "n": 2,
+            "outcome_rate": 0.5,
+            "upper": 0.6
+          }
+        ],
+        "domain_probability_buckets": [
+          {
+            "bucket": "0.5-0.6",
+            "domain": "fixture",
+            "domain_n": 2,
+            "eligible_for_domain_model": false,
+            "global_outcome_rate": 0.5,
+            "mean_probability": 0.5,
+            "n": 2,
+            "prior_strength": 20.0,
+            "raw_outcome_rate": 0.5,
+            "shrunk_outcome_rate": 0.5
+          }
+        ],
+        "log_loss": 0.6931471805599453,
+        "market_brier": 0.25,
+        "market_clustered_skill_interval": {
+          "confidence_level": 0.95,
+          "lower": 0.0,
+          "mean_skill": 0.0,
+          "method": "normal_interval_over_market_mean_brier_differences",
+          "n_forecasts": 2,
+          "n_markets": 2,
+          "standard_error": 0.0,
+          "upper": 0.0,
+          "z_score": 1.96
+        },
+        "model_brier": 0.25,
+        "n": 2,
+        "skill_vs_market": 0.0
+      },
+      "modeled_fee_fraction": 0.01,
+      "modeled_slippage": 0.01,
+      "net_pnl_after_costs": 0.0,
+      "portfolio": {
+        "compound_return": 0.0,
+        "equity_curve": [],
+        "final_bankroll": 100.0,
+        "initial_bankroll": 100.0,
+        "max_drawdown": 0.0,
+        "n_opened": 0,
+        "n_skipped_for_exposure": 0,
+        "n_trades": 0,
+        "open_positions": 0,
+        "total_fees": 0.0
+      },
+      "turnover": 0.0
+    },
+    "market_baseline_brier": 0.25,
+    "strategy": {
+      "abstention": 0.0,
+      "forecast_metrics": {
+        "calibration": [
+          {
+            "bucket": "0.3-0.4",
+            "calibration_gap": -0.3,
+            "lower": 0.3,
+            "mean_probability": 0.3,
+            "n": 1,
+            "outcome_rate": 0.0,
+            "upper": 0.4
+          },
+          {
+            "bucket": "0.7-0.8",
+            "calibration_gap": 0.30000000000000004,
+            "lower": 0.7,
+            "mean_probability": 0.7,
+            "n": 1,
+            "outcome_rate": 1.0,
+            "upper": 0.8
+          }
+        ],
+        "domain_probability_buckets": [
+          {
+            "bucket": "0.3-0.4",
+            "domain": "fixture",
+            "domain_n": 2,
+            "eligible_for_domain_model": false,
+            "global_outcome_rate": 0.0,
+            "mean_probability": 0.3,
+            "n": 1,
+            "prior_strength": 20.0,
+            "raw_outcome_rate": 0.0,
+            "shrunk_outcome_rate": 0.0
+          },
+          {
+            "bucket": "0.7-0.8",
+            "domain": "fixture",
+            "domain_n": 2,
+            "eligible_for_domain_model": false,
+            "global_outcome_rate": 1.0,
+            "mean_probability": 0.7,
+            "n": 1,
+            "prior_strength": 20.0,
+            "raw_outcome_rate": 1.0,
+            "shrunk_outcome_rate": 1.0
+          }
+        ],
+        "log_loss": 0.35667494393873245,
+        "market_brier": 0.25,
+        "market_clustered_skill_interval": {
+          "confidence_level": 0.95,
+          "lower": 0.15999999999999995,
+          "mean_skill": 0.15999999999999998,
+          "method": "normal_interval_over_market_mean_brier_differences",
+          "n_forecasts": 2,
+          "n_markets": 2,
+          "standard_error": 1.962615573354719e-17,
+          "upper": 0.16,
+          "z_score": 1.96
+        },
+        "model_brier": 0.09000000000000001,
+        "n": 2,
+        "skill_vs_market": 0.15999999999999998
+      },
+      "modeled_fee_fraction": 0.01,
+      "modeled_slippage": 0.01,
+      "net_pnl_after_costs": 3.651942461538468,
+      "portfolio": {
+        "compound_return": 0.0365194246153846,
+        "equity_curve": [
+          {
+            "cash": 97.98,
+            "equity": 99.98,
+            "event": "entry",
+            "open_exposure": 2.0,
+            "trade_id": "baseline-test-a",
+            "ts": "2026-08-06T00:00:00+00:00"
+          },
+          {
+            "cash": 95.960404,
+            "equity": 99.960004,
+            "event": "entry",
+            "open_exposure": 3.9996,
+            "trade_id": "baseline-test-b",
+            "ts": "2026-08-11T00:00:00+00:00"
+          },
+          {
+            "cash": 99.80655785,
+            "equity": 101.80615785,
+            "event": "settlement",
+            "open_exposure": 1.9996,
+            "trade_id": "baseline-test-a",
+            "ts": "2026-08-27T23:59:00+00:00"
+          },
+          {
+            "cash": 103.65194246,
+            "equity": 103.65194246,
+            "event": "settlement",
+            "open_exposure": 0.0,
+            "trade_id": "baseline-test-b",
+            "ts": "2026-09-01T23:59:00+00:00"
+          }
+        ],
+        "final_bankroll": 103.65194246153847,
+        "initial_bankroll": 100.0,
+        "max_drawdown": 0.0003999599999998793,
+        "n_opened": 2,
+        "n_skipped_for_exposure": 0,
+        "n_trades": 2,
+        "open_positions": 0,
+        "total_fees": 0.039996000000000004
+      },
+      "turnover": 1.0
+    }
+  },
+  "schema_version": 1,
+  "status": "insufficient_evidence",
+  "stress": {
+    "correlated_losses": {
+      "compound_return": -0.0403959599999999,
+      "equity_curve": [
+        {
+          "cash": 97.98,
+          "equity": 99.98,
+          "event": "entry",
+          "open_exposure": 2.0,
+          "trade_id": "baseline-test-a",
+          "ts": "2026-08-06T00:00:00+00:00"
+        },
+        {
+          "cash": 95.960404,
+          "equity": 99.960004,
+          "event": "entry",
+          "open_exposure": 3.9996,
+          "trade_id": "baseline-test-b",
+          "ts": "2026-08-11T00:00:00+00:00"
+        },
+        {
+          "cash": 95.960404,
+          "equity": 97.960004,
+          "event": "settlement",
+          "open_exposure": 1.9996,
+          "trade_id": "baseline-test-a",
+          "ts": "2026-08-27T23:59:00+00:00"
+        },
+        {
+          "cash": 95.960404,
+          "equity": 95.960404,
+          "event": "settlement",
+          "open_exposure": 0.0,
+          "trade_id": "baseline-test-b",
+          "ts": "2026-09-01T23:59:00+00:00"
+        }
+      ],
+      "final_bankroll": 95.96040400000001,
+      "initial_bankroll": 100.0,
+      "max_drawdown": 0.04039595999999989,
+      "n_opened": 2,
+      "n_skipped_for_exposure": 0,
+      "n_trades": 2,
+      "open_positions": 0,
+      "total_fees": 0.039996000000000004
+    },
+    "double_fees": {
+      "abstention": 0.0,
+      "forecast_metrics": {
+        "calibration": [
+          {
+            "bucket": "0.3-0.4",
+            "calibration_gap": -0.3,
+            "lower": 0.3,
+            "mean_probability": 0.3,
+            "n": 1,
+            "outcome_rate": 0.0,
+            "upper": 0.4
+          },
+          {
+            "bucket": "0.7-0.8",
+            "calibration_gap": 0.30000000000000004,
+            "lower": 0.7,
+            "mean_probability": 0.7,
+            "n": 1,
+            "outcome_rate": 1.0,
+            "upper": 0.8
+          }
+        ],
+        "domain_probability_buckets": [
+          {
+            "bucket": "0.3-0.4",
+            "domain": "fixture",
+            "domain_n": 2,
+            "eligible_for_domain_model": false,
+            "global_outcome_rate": 0.0,
+            "mean_probability": 0.3,
+            "n": 1,
+            "prior_strength": 20.0,
+            "raw_outcome_rate": 0.0,
+            "shrunk_outcome_rate": 0.0
+          },
+          {
+            "bucket": "0.7-0.8",
+            "domain": "fixture",
+            "domain_n": 2,
+            "eligible_for_domain_model": false,
+            "global_outcome_rate": 1.0,
+            "mean_probability": 0.7,
+            "n": 1,
+            "prior_strength": 20.0,
+            "raw_outcome_rate": 1.0,
+            "shrunk_outcome_rate": 1.0
+          }
+        ],
+        "log_loss": 0.35667494393873245,
+        "market_brier": 0.25,
+        "market_clustered_skill_interval": {
+          "confidence_level": 0.95,
+          "lower": 0.15999999999999995,
+          "mean_skill": 0.15999999999999998,
+          "method": "normal_interval_over_market_mean_brier_differences",
+          "n_forecasts": 2,
+          "n_markets": 2,
+          "standard_error": 1.962615573354719e-17,
+          "upper": 0.16,
+          "z_score": 1.96
+        },
+        "model_brier": 0.09000000000000001,
+        "n": 2,
+        "skill_vs_market": 0.15999999999999998
+      },
+      "modeled_fee_fraction": 0.02,
+      "modeled_slippage": 0.01,
+      "net_pnl_after_costs": 3.611585230769208,
+      "portfolio": {
+        "compound_return": 0.0361158523076921,
+        "equity_curve": [
+          {
+            "cash": 97.96,
+            "equity": 99.96,
+            "event": "entry",
+            "open_exposure": 2.0,
+            "trade_id": "baseline-test-a",
+            "ts": "2026-08-06T00:00:00+00:00"
+          },
+          {
+            "cash": 95.920816,
+            "equity": 99.920016,
+            "event": "entry",
+            "open_exposure": 3.9992,
+            "trade_id": "baseline-test-b",
+            "ts": "2026-08-11T00:00:00+00:00"
+          },
+          {
+            "cash": 99.76696985,
+            "equity": 101.76616985,
+            "event": "settlement",
+            "open_exposure": 1.9992,
+            "trade_id": "baseline-test-a",
+            "ts": "2026-08-27T23:59:00+00:00"
+          },
+          {
+            "cash": 103.61158523,
+            "equity": 103.61158523,
+            "event": "settlement",
+            "open_exposure": 0.0,
+            "trade_id": "baseline-test-b",
+            "ts": "2026-09-01T23:59:00+00:00"
+          }
+        ],
+        "final_bankroll": 103.61158523076921,
+        "initial_bankroll": 100.0,
+        "max_drawdown": 0.0007998400000001027,
+        "n_opened": 2,
+        "n_skipped_for_exposure": 0,
+        "n_trades": 2,
+        "open_positions": 0,
+        "total_fees": 0.079984
+      },
+      "turnover": 1.0
+    },
+    "double_slippage": {
+      "abstention": 0.0,
+      "forecast_metrics": {
+        "calibration": [
+          {
+            "bucket": "0.3-0.4",
+            "calibration_gap": -0.3,
+            "lower": 0.3,
+            "mean_probability": 0.3,
+            "n": 1,
+            "outcome_rate": 0.0,
+            "upper": 0.4
+          },
+          {
+            "bucket": "0.7-0.8",
+            "calibration_gap": 0.30000000000000004,
+            "lower": 0.7,
+            "mean_probability": 0.7,
+            "n": 1,
+            "outcome_rate": 1.0,
+            "upper": 0.8
+          }
+        ],
+        "domain_probability_buckets": [
+          {
+            "bucket": "0.3-0.4",
+            "domain": "fixture",
+            "domain_n": 2,
+            "eligible_for_domain_model": false,
+            "global_outcome_rate": 0.0,
+            "mean_probability": 0.3,
+            "n": 1,
+            "prior_strength": 20.0,
+            "raw_outcome_rate": 0.0,
+            "shrunk_outcome_rate": 0.0
+          },
+          {
+            "bucket": "0.7-0.8",
+            "domain": "fixture",
+            "domain_n": 2,
+            "eligible_for_domain_model": false,
+            "global_outcome_rate": 1.0,
+            "mean_probability": 0.7,
+            "n": 1,
+            "prior_strength": 20.0,
+            "raw_outcome_rate": 1.0,
+            "shrunk_outcome_rate": 1.0
+          }
+        ],
+        "log_loss": 0.35667494393873245,
+        "market_brier": 0.25,
+        "market_clustered_skill_interval": {
+          "confidence_level": 0.95,
+          "lower": 0.15999999999999995,
+          "mean_skill": 0.15999999999999998,
+          "method": "normal_interval_over_market_mean_brier_differences",
+          "n_forecasts": 2,
+          "n_markets": 2,
+          "standard_error": 1.962615573354719e-17,
+          "upper": 0.16,
+          "z_score": 1.96
+        },
+        "model_brier": 0.09000000000000001,
+        "n": 2,
+        "skill_vs_market": 0.15999999999999998
+      },
+      "modeled_fee_fraction": 0.01,
+      "modeled_slippage": 0.02,
+      "net_pnl_after_costs": 3.506819094339633,
+      "portfolio": {
+        "compound_return": 0.035068190943396305,
+        "equity_curve": [
+          {
+            "cash": 97.98,
+            "equity": 99.98,
+            "event": "entry",
+            "open_exposure": 2.0,
+            "trade_id": "baseline-test-a",
+            "ts": "2026-08-06T00:00:00+00:00"
+          },
+          {
+            "cash": 95.960404,
+            "equity": 99.960004,
+            "event": "entry",
+            "open_exposure": 3.9996,
+            "trade_id": "baseline-test-b",
+            "ts": "2026-08-11T00:00:00+00:00"
+          },
+          {
+            "cash": 99.73398891,
+            "equity": 101.73358891,
+            "event": "settlement",
+            "open_exposure": 1.9996,
+            "trade_id": "baseline-test-a",
+            "ts": "2026-08-27T23:59:00+00:00"
+          },
+          {
+            "cash": 103.50681909,
+            "equity": 103.50681909,
+            "event": "settlement",
+            "open_exposure": 0.0,
+            "trade_id": "baseline-test-b",
+            "ts": "2026-09-01T23:59:00+00:00"
+          }
+        ],
+        "final_bankroll": 103.50681909433963,
+        "initial_bankroll": 100.0,
+        "max_drawdown": 0.0003999599999998793,
+        "n_opened": 2,
+        "n_skipped_for_exposure": 0,
+        "n_trades": 2,
+        "open_positions": 0,
+        "total_fees": 0.039996000000000004
+      },
+      "turnover": 1.0
+    },
+    "missing_quotes": {
+      "abstention": 0.0,
+      "forecast_metrics": {
+        "calibration": [
+          {
+            "bucket": "0.3-0.4",
+            "calibration_gap": -0.3,
+            "lower": 0.3,
+            "mean_probability": 0.3,
+            "n": 1,
+            "outcome_rate": 0.0,
+            "upper": 0.4
+          },
+          {
+            "bucket": "0.7-0.8",
+            "calibration_gap": 0.30000000000000004,
+            "lower": 0.7,
+            "mean_probability": 0.7,
+            "n": 1,
+            "outcome_rate": 1.0,
+            "upper": 0.8
+          }
+        ],
+        "domain_probability_buckets": [
+          {
+            "bucket": "0.3-0.4",
+            "domain": "fixture",
+            "domain_n": 2,
+            "eligible_for_domain_model": false,
+            "global_outcome_rate": 0.0,
+            "mean_probability": 0.3,
+            "n": 1,
+            "prior_strength": 20.0,
+            "raw_outcome_rate": 0.0,
+            "shrunk_outcome_rate": 0.0
+          },
+          {
+            "bucket": "0.7-0.8",
+            "domain": "fixture",
+            "domain_n": 2,
+            "eligible_for_domain_model": false,
+            "global_outcome_rate": 1.0,
+            "mean_probability": 0.7,
+            "n": 1,
+            "prior_strength": 20.0,
+            "raw_outcome_rate": 1.0,
+            "shrunk_outcome_rate": 1.0
+          }
+        ],
+        "log_loss": 0.35667494393873245,
+        "market_brier": 0.25,
+        "market_clustered_skill_interval": {
+          "confidence_level": 0.95,
+          "lower": 0.15999999999999995,
+          "mean_skill": 0.15999999999999998,
+          "method": "normal_interval_over_market_mean_brier_differences",
+          "n_forecasts": 2,
+          "n_markets": 2,
+          "standard_error": 1.962615573354719e-17,
+          "upper": 0.16,
+          "z_score": 1.96
+        },
+        "model_brier": 0.09000000000000001,
+        "n": 2,
+        "skill_vs_market": 0.15999999999999998
+      },
+      "modeled_fee_fraction": 0.01,
+      "modeled_slippage": 0.01,
+      "net_pnl_after_costs": 3.651942461538468,
+      "portfolio": {
+        "compound_return": 0.0365194246153846,
+        "equity_curve": [
+          {
+            "cash": 97.98,
+            "equity": 99.98,
+            "event": "entry",
+            "open_exposure": 2.0,
+            "trade_id": "baseline-test-a",
+            "ts": "2026-08-06T00:00:00+00:00"
+          },
+          {
+            "cash": 95.960404,
+            "equity": 99.960004,
+            "event": "entry",
+            "open_exposure": 3.9996,
+            "trade_id": "baseline-test-b",
+            "ts": "2026-08-11T00:00:00+00:00"
+          },
+          {
+            "cash": 99.80655785,
+            "equity": 101.80615785,
+            "event": "settlement",
+            "open_exposure": 1.9996,
+            "trade_id": "baseline-test-a",
+            "ts": "2026-08-27T23:59:00+00:00"
+          },
+          {
+            "cash": 103.65194246,
+            "equity": 103.65194246,
+            "event": "settlement",
+            "open_exposure": 0.0,
+            "trade_id": "baseline-test-b",
+            "ts": "2026-09-01T23:59:00+00:00"
+          }
+        ],
+        "final_bankroll": 103.65194246153847,
+        "initial_bankroll": 100.0,
+        "max_drawdown": 0.0003999599999998793,
+        "n_opened": 2,
+        "n_skipped_for_exposure": 0,
+        "n_trades": 2,
+        "open_positions": 0,
+        "total_fees": 0.039996000000000004
+      },
+      "turnover": 1.0
+    }
+  },
+  "unsupported_assumptions": [
+    "captured REST quotes do not prove queue position",
+    "modeled fees and slippage may differ from venue execution",
+    "historical availability does not prove future provider availability"
+  ]
+}

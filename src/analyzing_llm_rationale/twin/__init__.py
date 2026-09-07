@@ -23,6 +23,13 @@ from .budget import (
     call_with_budget,
     estimate_request_cost,
 )
+from .evaluation import (
+    ReadinessArtifactError,
+    ReplayPolicy,
+    evaluate_dataset,
+    evaluate_replay,
+    validate_readiness_artifact,
+)
 from .market import MarketAssessment, normalize_market
 from .models import (
     AccountScope,
@@ -41,6 +48,14 @@ from .models import (
     TradeIntent,
     can_transition_command,
     canonical_instrument_id,
+)
+from .replay import (
+    FrozenReplay,
+    ReplayRecord,
+    ReplayValidationError,
+    canonical_hash,
+    causal_events,
+    split_replay_dataset,
 )
 from .research_gateway import (
     DatastoreResearchResultStore,
@@ -126,6 +141,7 @@ __all__ = [
     "DatastoreAccountSnapshotStore",
     "Forecast",
     "ForeseaEdgeStrategy",
+    "FrozenReplay",
     "HeldPosition",
     "Instrument",
     "InMemoryTwinStore",
@@ -147,11 +163,15 @@ __all__ = [
     "Proposal",
     "ProposalAction",
     "RejectionReason",
+    "ReplayPolicy",
+    "ReplayRecord",
+    "ReplayValidationError",
     "ReservationState",
     "ReservationPreconditions",
     "RiskExposure",
     "RiskLimits",
     "RiskResult",
+    "ReadinessArtifactError",
     "StaleReservationPrecondition",
     "StrategyAccountState",
     "StrategyCandidate",
@@ -175,16 +195,22 @@ __all__ = [
     "can_transition_command",
     "call_with_budget",
     "calibrate_probability",
+    "canonical_hash",
     "canonical_instrument_id",
+    "causal_events",
     "require_durable_store",
     "synchronize_account",
     "estimate_request_cost",
     "evaluate_binary_candidate",
+    "evaluate_dataset",
+    "evaluate_replay",
     "generate_research",
     "normalize_market",
     "load_strategy_policy",
     "size_binary_entry",
     "size_reduce_only",
     "sorted_candidate_ids",
+    "split_replay_dataset",
     "strategy_cycle_key",
+    "validate_readiness_artifact",
 ]
