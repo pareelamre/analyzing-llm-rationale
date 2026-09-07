@@ -203,6 +203,18 @@ def synchronize_complete_account(
             issues.append(str(exc))
     if issues:
         return AccountSyncResult(previous, previous is not None, tuple(issues))
+    generation_tokens = {
+        collection.generation_token for collection in collections.values()
+    }
+    if generation_tokens != {None}:
+        if None in generation_tokens:
+            return AccountSyncResult(
+                previous, previous is not None, ("account_generation_fence_incomplete",)
+            )
+        if len(generation_tokens) != 1:
+            return AccountSyncResult(
+                previous, previous is not None, ("account_generation_changed",)
+            )
     return synchronize_account(
         scope_id,
         generation=generation,
