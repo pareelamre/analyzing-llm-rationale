@@ -261,3 +261,108 @@ class AgentTradingAuditTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RequestedQuantityIsNotInventedTests(unittest.TestCase):
+    """The audit trail must not report a size the model never asked for.
+
+    `args` is the model's own tool call. When it omits `quantity` it is
+    delegating sizing to the Kelly layer, which then computes the real size.
+    Both audit call sites recorded `args.get("quantity", 1)`, so a delegated
+    order was written down as a request for one contract.
+
+    The published audits showed the result -- 13 of 228 records had
+    filled_quantity above requested_order.quantity, and the pairs are not
+    subtle:
+
+        gemma-4-26b-a4b-it     requested 1     filled 7003.47
+        gpt-oss-120b           requested 1     filled 3138.91
+        minimax-m3             requested 1     filled 2671.40
+
+    Read literally that says the fill engine delivered seven thousand times
+    the order. It did not; nobody ordered one. The same fills also appear on
+    a sibling record carrying the true requested size, so the trail
+    contradicted itself.
+
+    None is the honest value, and the schema already carries it -- one
+    llama-3.3-70b-instruct record shows `requested null, filled 7000.89`.
+    """
+
+    def _context(self, **overrides):
+        kwargs = dict(
+            requested_price=0.42,
+            requested_quantity=None,
+            market_check={"marketable": True, "status": "shadow_filled_at_market", "real_ask": 0.4},
+            sizing={"mode": "quarter_kelly", "applied": True},
+            guard={"allowed": True},
+            fill_status="shadow_assumed_full",
+            filled_quantity=7003.474675,
+        )
+        kwargs.update(overrides)
+        return benchmark_tools._trade_audit_context(**kwargs)
+
+    def test_a_delegated_size_is_recorded_as_none(self):
+        audit = self._context(requested_quantity=None)
+        self.assertIsNone(audit["requested_order"]["quantity"])
+
+    def test_a_delegated_size_is_not_recorded_as_one(self):
+        """The specific value the default invented."""
+        audit = self._context(requested_quantity=None)
+        self.assertNotEqual(audit["requested_order"]["quantity"], 1)
+
+    def test_an_explicit_size_is_preserved(self):
+        audit = self._context(requested_quantity=250, filled_quantity=250)
+        self.assertEqual(audit["requested_order"]["quantity"], 250)
+
+    def test_a_recorded_request_is_never_smaller_than_the_fill(self):
+        """You cannot fill more than was asked for -- the bug's signature."""
+        audit = self._context(requested_quantity=250, filled_quantity=120)
+        requested = audit["requested_order"]["quantity"]
+        self.assertIsNotNone(requested)
+        self.assertGreaterEqual(requested, audit["execution"]["filled_quantity"])
+
+
+class AuditCallSitesDoNotDefaultTheQuantityTests(unittest.TestCase):
+    """Guard the wiring, since the defect was a single default argument."""
+
+    def _call_sites(self):
+        import ast
+        from pathlib import Path as _Path
+
+        source = (
+            _Path(benchmark_tools.__file__).read_text(encoding="utf-8", errors="replace")
+        )
+        tree = ast.parse(source)
+        sites = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = getattr(func, "id", None) or getattr(func, "attr", None)
+            if name != "_trade_audit_context":
+                continue
+            for kw in node.keywords:
+                if kw.arg == "requested_quantity":
+                    sites.append((node.lineno, kw.value))
+        return sites
+
+    def test_the_scan_finds_the_call_sites(self):
+        self.assertGreaterEqual(len(self._call_sites()), 2)
+
+    def test_no_call_site_supplies_a_fallback_quantity(self):
+        import ast
+
+        offenders = []
+        for lineno, value in self._call_sites():
+            # args.get("quantity", <default>) -- two positional args to .get
+            if (
+                isinstance(value, ast.Call)
+                and getattr(value.func, "attr", None) == "get"
+                and len(value.args) > 1
+            ):
+                offenders.append(lineno)
+        self.assertEqual(
+            offenders, [],
+            "a default here invents a request the model never made; "
+            f"see benchmark_tools.py lines {offenders}",
+        )

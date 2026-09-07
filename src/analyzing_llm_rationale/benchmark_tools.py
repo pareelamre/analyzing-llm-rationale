@@ -3021,7 +3021,10 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             if not allowed:
                 audit = _trade_audit_context(
                     requested_price=requested_price,
-                    requested_quantity=args.get("quantity", 1),
+                    # No default. `args` is the model's own tool call, and a
+                    # missing quantity means it delegated sizing -- recording 1
+                    # puts a request in the audit trail that was never made.
+                    requested_quantity=args.get("quantity"),
                     market_check=market_check,
                     sizing=sizing,
                     guard=guard,
@@ -3135,7 +3138,8 @@ def place_trade(args: Mapping[str, Any], ctx: ToolContext) -> Dict[str, Any]:
             )
             audit = _trade_audit_context(
                 requested_price=requested_price,
-                requested_quantity=args.get("quantity", 1),
+                # See above: absent means delegated, not one contract.
+                requested_quantity=args.get("quantity"),
                 market_check=market_check,
                 sizing=sizing,
                 guard=accounting_guard,
