@@ -4770,6 +4770,52 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 429)
 
+    def _absent_store(self):
+        """Point both handlers at a path that does not exist, with no GCS call."""
+        import tempfile
+
+        missing = str(Path(tempfile.gettempdir()) / "foresea-no-such-store.duckdb")
+        self.assertFalse(Path(missing).exists())
+        return (
+            mock.patch.dict(os.environ, {"TRACK_STORE_PATH": missing}),
+            mock.patch("analyzing_llm_rationale.gcs_store.ensure_local_copy", return_value=False),
+        )
+
+    def test_market_history_without_a_store_returns_empty_without_opening_duckdb(self):
+        """The missing-store guard. Covers the branch, not just the status code.
+
+        Both handlers check the path after offloading the GCS sync. A test
+        asserting only status 200 cannot tell the guard from the query path,
+        because the query returns 200 and an empty history too -- so assert
+        that DuckDBStore is never constructed.
+        """
+        import analyzing_llm_rationale.trackrec_store as store_mod
+
+        env, gcs = self._absent_store()
+        with env, gcs, mock.patch.object(store_mod, "DuckDBStore") as duckdb:
+            resp = self.client.get(
+                "/market/history",
+                params={"platform": "polymarket", "ident": "fed-sept-26"},
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"history": []})
+        duckdb.assert_not_called()
+
+    def test_explain_shift_without_a_store_is_404(self):
+        import analyzing_llm_rationale.trackrec_store as store_mod
+
+        env, gcs = self._absent_store()
+        with env, gcs, mock.patch.object(store_mod, "DuckDBStore") as duckdb:
+            resp = self.client.post(
+                "/market/explain-shift",
+                json={"platform": "polymarket", "ident": "fed-sept-26"},
+            )
+
+        self.assertEqual(resp.status_code, 404)
+        self.assertIn("not found", resp.json()["detail"].lower())
+        duckdb.assert_not_called()
+
     def test_crypto_5m_equity_endpoint_returns_candidate_curves(self):
         import analyzing_llm_rationale.server as srv
         payload = {

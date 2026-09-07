@@ -96,9 +96,23 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B"]
-# B905 (zip-without-explicit-strict) requires the `strict=` kwarg, which is
-# Python 3.10+. We also run/test on 3.9, so don't force it.
+# ASYNC guards the event loop. This service is FastAPI in front of market
+# adapters that speak sync `requests`, so a blocking call reaching an
+# `async def` stalls every other request on the instance for the length of an
+# upstream round trip. The codebase already routes those through
+# run_in_executor and has zero violations, so this locks in a property we
+# have rather than asking for work.
+select = ["E", "F", "I", "B", "ASYNC"]
+# B905 (zip-without-explicit-strict) stays off, but not for the reason that
+# used to be written here -- that we run on 3.9. We do not: requires-python is
+# >=3.10, CI runs 3.11 and the image is python:3.11-slim, so `strict=` is
+# available everywhere.
+#
+# It stays off because it would not find anything. All 54 call sites zip
+# sequences whose lengths are fixed together by construction -- built from the
+# same count, selected by the same SQL statement, or read off the same cursor
+# as `dict(zip(cursor.description, row))`. Adding `strict=False` to each would
+# assert nothing and read as though a mismatch had been considered.
 ignore = ["E501", "B905"]
 
 [tool.setuptools.package-data]
