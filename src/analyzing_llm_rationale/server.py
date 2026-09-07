@@ -9238,14 +9238,52 @@ async def market_batch(
     return BatchQuoteResponse(quotes=list(by_key.values()), count=len(by_key), truncated=truncated)
 
 
+#: Track-record blocks /radar carries but does not need to.
+#
+# /radar is 2.12 MB, and 96% of it is these: models_comparison alone is
+# 1.12 MB because each of its ten model rows embeds a full paper_pnl ledger.
+# ``limit`` does not touch any of it -- it bounds ``markets``, which is 31 KB,
+# so /radar?limit=1 still returns 2.06 MB.
+#
+# Same set mcp_server._TRACK_RECORD_BULK_KEYS drops for the same reason. Kept
+# as a separate literal because the modules do not import each other; the test
+# asserts the two agree.
+_RADAR_TRACK_RECORD_BLOCKS = (
+    "models_comparison",
+    "paper_pnl",
+    "primary_paper_pnl",
+    "mark_to_market_by_model",
+    "quarter_kelly_by_model",
+    "growth_1pct_by_model",
+    "growth_2pct_by_model",
+)
+
+
 @app.get("/radar", tags=["Markets"], summary="Live Foresea market radar", response_model=RadarResponse)
-async def radar(limit: int = Query(12, ge=1, le=30)) -> JSONResponse:
+async def radar(
+    limit: int = Query(12, ge=1, le=30),
+    include_track_record: bool = Query(
+        True,
+        description=(
+            "Include the track-record ledger blocks. They are 96% of this "
+            "response and unrelated to the radar markets; pass false when you "
+            "only want the markets. Defaults true so existing callers are "
+            "unaffected."
+        ),
+    ),
+) -> JSONResponse:
     """Return a cached list of live markets with notable model-vs-market gaps."""
     payload = await asyncio.get_running_loop().run_in_executor(None, _radar_from_track_record, limit)
     if payload.markets:
         _spawn_background(_prefetch_radar_evidence(payload.markets))
+    body = payload.model_dump(mode="json")
+    if not include_track_record:
+        for key in _RADAR_TRACK_RECORD_BLOCKS:
+            # Empty rather than absent: the response model declares these, so a
+            # client that reads them keeps getting the type it expects.
+            body[key] = [] if isinstance(body.get(key), list) else None
     return JSONResponse(
-        payload.model_dump(mode="json"),
+        body,
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
 
