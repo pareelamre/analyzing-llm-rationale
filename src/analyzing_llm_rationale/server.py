@@ -4137,7 +4137,7 @@ async def market_history(
     store_path = Path(os.environ.get("TRACK_STORE_PATH") or _REPO_ROOT / "data" / "track_record_store.duckdb")
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, gcs_store.ensure_local_copy, store_path)
-    if not store_path.exists():
+    if not await loop.run_in_executor(None, store_path.exists):
         return {"history": []}
 
     def _fetch_history():
@@ -4194,7 +4194,7 @@ async def explain_shift(req: ExplainShiftRequest, request: Request) -> Dict[str,
     store_path = Path(os.environ.get("TRACK_STORE_PATH") or _REPO_ROOT / "data" / "track_record_store.duckdb")
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, gcs_store.ensure_local_copy, store_path)
-    if not store_path.exists():
+    if not await loop.run_in_executor(None, store_path.exists):
         raise HTTPException(status_code=404, detail="Track record store not found.")
 
     plat = req.platform.strip().lower()
