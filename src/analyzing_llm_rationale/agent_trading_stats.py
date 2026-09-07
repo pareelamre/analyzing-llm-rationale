@@ -105,6 +105,13 @@ def compute_agent_leaderboard(conn: sqlite3.Connection, quotes: QuoteMap) -> Lis
             realized_sql += " AND ts >= ?"
             params.append(since_ts)
 
+        # quantity > 0 deliberately drops zero-fill rows. They look like the
+        # worst possible rationing, but they are not rationing at all: of
+        # llama-3.3-70b-instruct's 17 zero-fill trades, six are
+        # shadow_unfilled_below_market -- a limit that never crossed the
+        # quote -- eleven predate the versioned audit block, and none are
+        # shadow_unfilled_no_depth. Counting them would fold "priced away
+        # from the market" into a number that means "the book was not there".
         fill_sql = (
             "SELECT metadata_json, quantity FROM agent_actions WHERE agent_id = ? "
             "AND action_type = 'trade' AND quantity > 0"

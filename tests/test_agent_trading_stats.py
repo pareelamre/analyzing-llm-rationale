@@ -891,3 +891,34 @@ class FillEfficiencyResetTests(unittest.TestCase):
         self.assertEqual(row["median_fill_fraction"], 1.0)
         self.assertEqual(row["partially_filled_count"], 0)
         self.assertLessEqual(row["sized_trade_count"], row["trade_count"])
+
+
+class FillEfficiencyZeroFillTests(unittest.TestCase):
+    """A zero fill is usually a pricing choice, not a liquidity fact.
+
+    Of llama-3.3-70b-instruct's 17 zero-fill trades, six are
+    shadow_unfilled_below_market and none are shadow_unfilled_no_depth, so
+    counting them would fold "priced away from the market" into a number
+    that is supposed to mean "the book was not there".
+    """
+
+    def test_a_zero_fill_is_not_counted_as_total_rationing(self):
+        with _fixture_conn() as conn:
+            _insert_account(conn, "model-z")
+            meta = json.dumps(
+                {"audit": {"version": 1, "sizing": {"target_quantity": 500.0}}}
+            )
+            _insert_action(conn, "model-z", quantity=0.0, metadata_json=meta)
+            _insert_action(conn, "model-z", quantity=500.0, metadata_json=meta)
+            conn.commit()
+
+            row = next(
+                r for r in agent_trading_stats.compute_agent_leaderboard(conn, {})
+                if r["agent_id"] == "model-z"
+            )
+
+        # Only the filled trade counts; the zero-fill would otherwise drag
+        # the median to 0.5 and assert rationing that did not happen.
+        self.assertEqual(row["sized_trade_count"], 1)
+        self.assertEqual(row["median_fill_fraction"], 1.0)
+        self.assertEqual(row["partially_filled_count"], 0)
