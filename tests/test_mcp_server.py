@@ -480,3 +480,39 @@ class FeedLatestFallbackTests(unittest.TestCase):
     def test_the_primary_path_is_still_preferred(self):
         client = self._client(FakeResponse(payload={"timestamp": "t", "signals": []}))
         self.assertEqual(client.feed_latest()["timestamp"], "t")
+
+
+class EdgeBoardRowsTests(unittest.TestCase):
+    """Two tools mistook the aggregate mapping for the list of opportunities.
+
+    feed_latest sliced it (TypeError: unhashable type: 'slice');
+    optimize_portfolio fed it to audit_edge_board, which iterates and gets
+    the mapping's string keys (ValueError: dictionary update sequence element
+    #0 has length 1; 2 is required). The second was hidden behind
+    `except Exception as exc: return {"error": str(exc)}`, so it returned a
+    plausible error object rather than a portfolio and never crashed.
+    """
+
+    def test_it_pulls_the_rows_out_of_the_aggregate(self):
+        board = {"edge_board": [{"ticker": "M1"}, {"ticker": "M2"}], "paper_pnl": {}}
+        self.assertEqual(len(mcp._edge_board_rows(board)), 2)
+
+    def test_a_bare_list_passes_through(self):
+        rows = [{"ticker": "M1"}]
+        self.assertEqual(mcp._edge_board_rows(rows), rows)
+
+    def test_anything_unusable_becomes_an_empty_list_not_an_exception(self):
+        for board in ({}, {"edge_board": None}, {"edge_board": {}}, None, "text", 7):
+            with self.subTest(board=board):
+                self.assertEqual(mcp._edge_board_rows(board), [])
+
+    def test_optimize_portfolio_no_longer_hands_a_mapping_to_the_auditor(self):
+        """The real failure: audit_edge_board iterates what it is given."""
+        from analyzing_llm_rationale.edge_credibility import audit_edge_board
+
+        aggregate = {"edge_board": [{"ticker": "M1", "edge": 0.2}], "paper_pnl": {}}
+        with self.assertRaises(ValueError):
+            audit_edge_board(aggregate)
+        self.assertEqual(
+            audit_edge_board(mcp._edge_board_rows(aggregate))[0]["ticker"], "M1"
+        )

@@ -208,6 +208,21 @@ _TRACK_RECORD_BULK_KEYS = (
 )
 
 
+def _edge_board_rows(board: Any) -> List[Dict[str, Any]]:
+    """The ranked markets from an /edge-board response.
+
+    edge_board() returns the aggregate mapping. Two callers treated it as the
+    list of opportunities -- feed_latest sliced it, optimize_portfolio fed it
+    to audit_edge_board, which iterates and gets the mapping's string keys.
+    Both failed in ways that did not name the cause.
+    """
+    if isinstance(board, dict):
+        rows = board.get("edge_board")
+    else:
+        rows = board
+    return rows if isinstance(rows, list) else []
+
+
 def _summarise_track_record(payload: Any) -> Any:
     """Drop the bulk blocks so the result fits an MCP client's response limit."""
     if not isinstance(payload, dict):
@@ -531,7 +546,7 @@ class ForeseaClient:
         try:
             from analyzing_llm_rationale.edge_credibility import audit_edge_board
             from analyzing_llm_rationale.portfolio_optimizer import optimize_portfolio_allocation
-            opps = audit_edge_board(self.edge_board())
+            opps = audit_edge_board(_edge_board_rows(self.edge_board()))
             return optimize_portfolio_allocation(opportunities=opps, bankroll_usd=bankroll_usd, kelly_fraction=kelly_fraction, min_edge=min_edge)
         except Exception as exc:
             return {"error": str(exc)}
@@ -556,10 +571,7 @@ class ForeseaClient:
         # raised "unhashable type: 'slice'" -- so every time this fallback ran,
         # the tool crashed instead of degrading. The ranked markets live under
         # the "edge_board" key.
-        board = self.edge_board()
-        signals = board.get("edge_board") if isinstance(board, dict) else board
-        if not isinstance(signals, list):
-            signals = []
+        signals = _edge_board_rows(self.edge_board())
         return {
             "channels": {
                 "discord": "https://discord.com/channels/1539674155228860527/1539674155799289991",
