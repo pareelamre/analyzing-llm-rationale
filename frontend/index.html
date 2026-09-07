@@ -7676,10 +7676,14 @@ function _renderLandingMarketTable(items) {
             ? `<span class="eb-fee-pill kalshi" style="margin-left:6px" title="Kalshi: ~1.75% taker fee at mid">Kalshi · ~1.75% fee</span>`
             : `<span class="eb-badge" style="margin-left:6px">${escHtml(e.platform)}</span>`)
       : '';
+    const isWeather = Boolean(e.weather_brief || (e.categories && e.categories.includes('weather')) || (e.category === 'weather'));
+    const weatherPill = isWeather
+      ? `<span class="eb-fee-pill weather" style="margin-left:6px;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.3)" title="${escAttr(e.weather_brief?.model_forecast?.station_microclimate_note || 'Calibrated neural weather forecast (Google DeepMind WeatherNext / MetNet)')}">☀️ ${escHtml(e.weather_brief?.station || 'WeatherNext')}</span>`
+      : '';
     const qTarget = e.market_url
       ? `<a href="${escHtml(e.market_url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onclick="trackEvent('market_link_clicked',{source:'radar',platform:'${escAttr(e.platform || '')}'})">${escHtml(q)}</a>`
       : escHtml(q);
-    html += `<div class="market-question-cell">${qTarget}${venuePill}<div class="market-actions">` +
+    html += `<div class="market-question-cell">${qTarget}${venuePill}${weatherPill}<div class="market-actions">` +
       `<button type="button" class="market-action" onclick='startForecast(${JSON.stringify(e.question || '').replace(/'/g, "&#39;")}, ${JSON.stringify(ctx).replace(/'/g, "&#39;")});trackEvent("radar_ask_clicked",{platform:${JSON.stringify(e.platform || '')}})'>Ask</button>` +
       `<button type="button" class="market-action ui-icon-label" onclick='toggleFavorite(${JSON.stringify(fav).replace(/'/g, "&#39;")}, this);trackEvent("track_clicked",{source:"radar",platform:${JSON.stringify(e.platform || '')}})'>${uiIcon('star')} Track</button>` +
       `</div></div>` +
