@@ -1942,7 +1942,13 @@ def _sharpe_and_max_drawdown(value_curve: List[Dict[str, Any]]) -> Dict[str, Opt
         if peak > 0:
             max_dd = max(max_dd, (peak - v) / peak)
 
-    return {"sharpe": sharpe, "max_drawdown": round(max_dd, 4)}
+    # 6dp to match _current_drawdown, which is published beside this in the
+    # same equity_curves block. At 4dp the max rounded *below* a 6dp current
+    # -- the live board showed 4 of 8 agents with current_drawdown greater
+    # than max_drawdown, which cannot happen: current is one of the values
+    # max is the maximum of. It was rounding, not accounting, but anything
+    # checking `current <= max` saw it break.
+    return {"sharpe": sharpe, "max_drawdown": round(max_dd, 6)}
 
 
 def build_mark_to_market_accounts(
