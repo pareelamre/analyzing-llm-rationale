@@ -2,6 +2,81 @@
   "audits": {
     "deepseek-v4-flash": [
       {
+        "action_id": "e98991c1-b034-4736-8b3b-2b00c607045e",
+        "agent_id": "deepseek-v4-flash",
+        "audit": {
+          "execution": {
+            "fill_status": "shadow_assumed_full",
+            "filled_quantity": 1987.256441
+          },
+          "quote": {
+            "marketable": true,
+            "observed_ask": 0.51,
+            "source": "live_venue_quote",
+            "status": "shadow_filled_at_market"
+          },
+          "requested_order": {
+            "price": 0.51,
+            "quantity": 1987.2564410275636
+          },
+          "risk": {
+            "allowed": true,
+            "cash_before": 8971.1146,
+            "cash_required": 0.0,
+            "concentration_cap": 1491.730538,
+            "cycle_id": "30m:993748",
+            "cycle_spend_after": 0.0,
+            "cycle_spend_before": 0.0,
+            "cycle_trade_count_after": 1,
+            "cycle_trade_count_before": 0,
+            "daily_risk_after": 228.8854,
+            "daily_risk_before": 228.8854,
+            "daily_risk_limit": 2983.461077,
+            "drawdown_after": 0.005513,
+            "fee": 0.0,
+            "gross_notional_override": true,
+            "market_cost_basis_after": 0,
+            "max_drawdown_limit": 0.5,
+            "max_open_markets": 10,
+            "max_trades_per_cycle": 6,
+            "notional": 1013.500785,
+            "open_markets_after": 0,
+            "per_cycle_spend_limit": 1988.974051,
+            "reasons": [],
+            "risk_reducing": true
+          },
+          "sizing": {
+            "applied": false,
+            "mode": "close"
+          },
+          "status": "recorded",
+          "version": 1
+        },
+        "cycle_id": "30m:993748",
+        "event_type": "trade",
+        "execution": {
+          "cash_delta": 973.7556561035061,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 1987.2564410275636,
+          "notional": 1013.5007849240575,
+          "price": 0.51,
+          "quantity": 1987.2564410275636,
+          "realized_pnl": -55.12974420516696,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "yes",
+          "ticker": "will-there-be-no-change-in-fed-interest-rates-after-the-september-2026-meeting-615"
+        },
+        "mode": "shadow",
+        "outcome": "realized",
+        "record_hash": "ef976b23461f1a9bb9ef87e8d1a104b7004eec14c18dd036365d0fed256563ed",
+        "recorded_at": "2026-09-07T02:05:57.507530+00:00"
+      },
+      {
         "action_id": "2884771e-73a5-4f7f-8c11-d60e407518aa",
         "agent_id": "deepseek-v4-flash",
         "audit": {
@@ -3953,6 +4028,36 @@
       }
     ],
     "llama-3.3-70b-instruct": [
+      {
+        "action_id": "a850e009-d5cb-4dc0-87fb-9b6aabf74016",
+        "agent_id": "llama-3.3-70b-instruct",
+        "audit": {
+          "status": "legacy_record"
+        },
+        "cycle_id": "30m:993748",
+        "event_type": "settlement",
+        "execution": {
+          "cash_delta": 0.0,
+          "cash_required": 0.0,
+          "fee": 0.0,
+          "netting_payout": 0.0,
+          "notional": 0.0,
+          "price": null,
+          "quantity": 7000.88862548003,
+          "realized_pnl": -490.0622037836022,
+          "settlement_fee": 0.0,
+          "submitted": false
+        },
+        "market": {
+          "platform": "polymarket",
+          "side": "no",
+          "ticker": "will-daniil-medvedev-win-the-2026-mens-us-open"
+        },
+        "mode": "shadow",
+        "outcome": "no",
+        "record_hash": "c6f08c5eb4ec6a65534deb978a0f9a09d8988b15c497d2f1fb845c229f521de8",
+        "recorded_at": "2026-09-07T02:15:09.684071+00:00"
+      },
       {
         "action_id": "2dbe4a4c-3458-495b-ba41-4527ba7c45b0",
         "agent_id": "llama-3.3-70b-instruct",
@@ -10417,7 +10522,7 @@
       }
     ]
   },
-  "generated_at": "2026-09-07T01:11:40.898402+00:00",
+  "generated_at": "2026-09-07T02:22:44.519509+00:00",
   "mode": "shadow",
   "models": [
     "deepseek-v4-flash",
