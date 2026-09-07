@@ -647,6 +647,65 @@ class Crypto5mTests(unittest.TestCase):
             equity = crypto_5m.crypto_5m_candidate_equity(db_path=db, since_hours=0)
             self.assertEqual(equity["resolved_rows"], result["records"])
 
+    def test_a_configured_gcs_bucket_is_preferred_over_raw_github(self):
+        """Reading from GCS is what lets the tick stop committing this.
+
+        ~808 revisions of a 395KB file, the third-heaviest committed
+        artifact in the repository.
+        """
+        from unittest import mock
+
+        from analyzing_llm_rationale import gcs_store
+
+        def fake_get(url, headers=None, timeout=None):
+            raise AssertionError("raw GitHub must not be reached when GCS answers")
+
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+        with (
+            mock.patch.object(
+                gcs_store, "read_json_object", lambda b, o: {"generated_at": "from-gcs"},
+            ),
+            mock.patch.dict(
+                os.environ, {"CRYPTO_5M_EQUITY_GCS_BUCKET": "bucket-x"}, clear=False,
+            ),
+        ):
+            os.environ.pop("CRYPTO_5M_EQUITY_GCS_OBJECT", None)
+            payload = crypto_5m._load_crypto_5m_equity_fallback(Path("missing.sqlite"))
+
+        self.assertEqual(payload["generated_at"], "from-gcs")
+        self.assertEqual(
+            payload["fallback_source"], "gs://bucket-x/crypto_5m_equity_payload.json",
+        )
+        self.assertTrue(payload["fallback"])
+
+    def test_an_unreachable_gcs_bucket_falls_through_to_raw_github(self):
+        from unittest import mock
+
+        from analyzing_llm_rationale import gcs_store
+
+        def fake_get(url, headers=None, timeout=None):
+            return FakeResponse({"generated_at": "from-http", "curves": []})
+
+        sys.modules["requests"] = SimpleNamespace(get=fake_get)
+
+        def _boom(bucket, obj):
+            raise RuntimeError("no credentials")
+
+        with (
+            mock.patch.object(gcs_store, "read_json_object", _boom),
+            mock.patch.dict(
+                os.environ,
+                {
+                    "CRYPTO_5M_EQUITY_GCS_BUCKET": "bucket-x",
+                    "CRYPTO_5M_EQUITY_URL": "https://example.test/equity.json",
+                },
+                clear=False,
+            ),
+        ):
+            payload = crypto_5m._load_crypto_5m_equity_fallback(Path("missing.sqlite"))
+
+        self.assertEqual(payload["generated_at"], "from-http")
+
     def test_remote_equity_fallback_bypasses_raw_github_cache(self):
         calls = []
 
