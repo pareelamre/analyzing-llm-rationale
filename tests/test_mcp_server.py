@@ -282,16 +282,21 @@ class ForeseaAsyncClientTests(unittest.IsolatedAsyncioTestCase):
 
         from analyzing_llm_rationale import market_data
         client = mcp.ForeseaClient(base_url="https://foresea.test")
+        # Most of these pass the adapter payload through untouched. The two
+        # that do not are the ones whose raw payload exceeded the MCP response
+        # limit, so their shaped result is the contract and is asserted as such.
         cases = [
-            (client.amarket_tags, (), "fetch_polymarket_tags", [{"id": 1}]),
-            (client.alive_data, ("KXBTC-TEST",), "fetch_kalshi_live_data", {"live_data": {}}),
-            (client.apolymarket_meta, ("series",), "fetch_polymarket_series", [{"id": 2}]),
-            (client.arecent_trades, ("kalshi", "KXFED-25JUN-H"), "fetch_recent_trades", [{"ticker": "KXFED-25JUN-H"}]),
-            (client.amarket_leaderboard, (5,), "fetch_trader_leaderboard", [{"rank": "1"}]),
+            (client.amarket_tags, (), "fetch_polymarket_tags", [{"id": 1}], [{"id": 1}]),
+            (client.alive_data, ("KXBTC-TEST",), "fetch_kalshi_live_data", {"live_data": {}}, {"live_data": {}}),
+            (client.apolymarket_meta, ("series",), "fetch_polymarket_series", [{"id": 2}], [{"id": 2, "event_count": 0}]),
+            (client.apolymarket_meta, ("sports",), "fetch_polymarket_sports", [{"id": 3, "image": "x"}], [{"id": 3}]),
+            (client.apolymarket_meta, ("comments", "m1"), "fetch_polymarket_comments", [{"id": "c1", "profile": {}}], [{"id": "c1"}]),
+            (client.arecent_trades, ("kalshi", "KXFED-25JUN-H"), "fetch_recent_trades", [{"ticker": "KXFED-25JUN-H"}], [{"ticker": "KXFED-25JUN-H"}]),
+            (client.amarket_leaderboard, (5,), "fetch_trader_leaderboard", [{"rank": "1"}], [{"rank": "1"}]),
         ]
-        for call, args, helper, payload in cases:
+        for call, args, helper, payload, expected in cases:
             with self.subTest(helper=helper), patch.object(market_data, helper, return_value=payload):
-                self.assertEqual(await call(*args), payload)
+                self.assertEqual(await call(*args), expected)
         with patch.object(market_data, "fetch_kalshi_exchange_status", return_value={"exchange_active": True}), patch.object(
             market_data, "fetch_kalshi_exchange_schedule", return_value={"schedule": []},
         ):
@@ -643,3 +648,146 @@ class TagsPageLimitTests(unittest.TestCase):
         from analyzing_llm_rationale import market_data
 
         self.assertLessEqual(market_data.POLYMARKET_TAGS_PAGE_LIMIT, 100)
+
+
+class PolymarketMetaSizeTests(unittest.TestCase):
+    """Two of this tool's four targets blew the MCP response limit outright.
+
+    Measured against live responses: series was 746,932 characters, 99.0% of
+    it the nested ``events`` array; sports was 147,844, of which 38.5% image
+    URLs, 13.7% createdAt and 10.5% a tag CSV. Both were rejected before the
+    caller saw anything, so the tool was unusable rather than merely verbose.
+    """
+
+    _SERIES = [
+        {
+            "id": "1",
+            "ticker": "nfl",
+            "slug": "nfl",
+            "title": "NFL",
+            "seriesType": "single",
+            "active": True,
+            "closed": False,
+            "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nfl.png",
+            "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nfl-i.png",
+            "events": [{"id": "e1", "markets": [{"id": "m1"}]}, {"id": "e2"}],
+        },
+    ]
+
+    _SPORTS = [
+        {
+            "id": 630,
+            "sport": "ufl",
+            "name": "UFL",
+            "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/ufl.png",
+            "resolution": "https://www.theufl.com/",
+            "ordering": "away",
+            "tags": "1,100639,1186,105925",
+            "primaryTagId": 105925,
+            "series": "12553",
+            "createdAt": "2026-08-07T21:41:19.879539Z",
+        },
+    ]
+
+    def test_series_drops_the_event_tree_and_counts_it_instead(self):
+        [series] = mcp._summarise_series(self._SERIES)
+        self.assertNotIn("events", series)
+        self.assertEqual(series["event_count"], 2)
+
+    def test_series_keeps_what_identifies_the_series(self):
+        [series] = mcp._summarise_series(self._SERIES)
+        for key in ("id", "ticker", "slug", "title", "seriesType", "active"):
+            self.assertIn(key, series)
+
+    def test_series_drops_the_artwork(self):
+        [series] = mcp._summarise_series(self._SERIES)
+        self.assertNotIn("image", series)
+        self.assertNotIn("icon", series)
+
+    def test_a_series_with_no_events_counts_zero_rather_than_omitting(self):
+        """A caller should not have to distinguish absent from empty."""
+        for events in ({}, {"events": None}, {"events": "not a list"}):
+            with self.subTest(events=events):
+                [series] = mcp._summarise_series([dict(events, id="x")])
+                self.assertEqual(series["event_count"], 0)
+
+    def test_sports_keeps_only_identity_and_cross_reference_ids(self):
+        [league] = mcp._summarise_sports(self._SPORTS)
+        self.assertEqual(
+            league, {"id": 630, "sport": "ufl", "name": "UFL",
+                     "series": "12553", "primaryTagId": 105925},
+        )
+
+    _COMMENTS = [
+        {
+            "id": "3199521",
+            "body": "Working on market analytics and automation tools.",
+            "createdAt": "2026-08-03T16:44:13.372149Z",
+            "parentEntityType": "Series",
+            "parentEntityID": 1,
+            "userAddress": "0x73ecb3d59aa08263f895604bb224b0a5b3db5787",
+            "reactionCount": 2,
+            "reportCount": 0,
+            "updatedAt": "2026-08-03T16:44:13.372149Z",
+            "profile": {"name": "trader", "bio": "x" * 300, "profileImage": "https://s3/x.png"},
+            "reactions": [{"id": "r1", "profile": {"bio": "y" * 300}}],
+        },
+    ]
+
+    def test_comments_keep_the_comment_and_drop_the_social_furniture(self):
+        [comment] = mcp._summarise_comments(self._COMMENTS)
+        self.assertEqual(comment["body"], "Working on market analytics and automation tools.")
+        self.assertEqual(comment["reactionCount"], 2)
+        for key in ("profile", "reactions", "reportCount", "updatedAt"):
+            self.assertNotIn(key, comment)
+
+    def test_comments_shrink_by_most_of_the_payload(self):
+        """profile and reactions measured at 74.7% of a live response."""
+        import json
+
+        def size(obj):
+            return len(json.dumps(obj, separators=(",", ":")))
+        rows = [dict(self._COMMENTS[0], id=str(n)) for n in range(182)]
+        self.assertLess(size(mcp._summarise_comments(rows)), size(rows) // 4)
+
+    def test_both_shapers_survive_junk(self):
+        for shaper in (mcp._summarise_series, mcp._summarise_sports, mcp._summarise_comments):
+            with self.subTest(shaper=shaper.__name__):
+                self.assertEqual(shaper(None), [])
+                self.assertEqual(shaper("text"), [])
+                self.assertEqual(shaper([None, 7, "x"]), [])
+
+    def test_polymarket_meta_applies_the_shaper_for_each_target(self):
+        """The wiring. Both targets were broken at exactly this seam."""
+        from analyzing_llm_rationale import market_data
+
+        originals = (market_data.fetch_polymarket_series,
+                     market_data.fetch_polymarket_sports)
+        market_data.fetch_polymarket_series = lambda: [dict(self._SERIES[0])]
+        market_data.fetch_polymarket_sports = lambda: [dict(self._SPORTS[0])]
+        try:
+            client = mcp.ForeseaClient()
+            [series] = client.polymarket_meta("series")
+            [league] = client.polymarket_meta("sports")
+        finally:
+            (market_data.fetch_polymarket_series,
+             market_data.fetch_polymarket_sports) = originals
+        self.assertNotIn("events", series)
+        self.assertNotIn("image", league)
+
+    def test_the_shapers_cut_the_measured_payloads_under_the_limit(self):
+        """Proportions taken from the live responses that were rejected."""
+        import json
+
+        def size(obj):
+            return len(json.dumps(obj, separators=(",", ":")))
+        series = [dict(self._SERIES[0], id=str(n),
+                       events=[{"id": f"e{i}", "blob": "x" * 2000}
+                               for i in range(14)]) for n in range(20)]
+        self.assertGreater(size(series), 500_000)
+        self.assertLess(size(mcp._summarise_series(series)), 20_000)
+
+        sports = [dict(self._SPORTS[0], id=n) for n in range(465)]
+        self.assertLess(
+            size(mcp._summarise_sports(sports)), size(sports) // 2
+        )
