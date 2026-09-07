@@ -40,6 +40,17 @@ class FrontendCopyTests(unittest.TestCase):
         self.assertIn("saved forecasts (research)", renderer.lower())
         self.assertIn("one settlement", renderer.lower())
 
+    def test_market_desk_and_radar_render_venue_fee_transparency(self):
+        for path in ("frontend/index.html", "static/index.html"):
+            index = (Path(__file__).resolve().parents[1] / path).read_text(encoding="utf-8")
+            with self.subTest(file=path):
+                self.assertIn(".eb-fee-pill.poly", index)
+                self.assertIn(".eb-fee-pill.kalshi", index)
+                self.assertIn("function _renderVenueWithFee(", index)
+                self.assertIn("0% fee", index)
+                self.assertIn("~1.75% fee", index)
+                self.assertIn("_renderVenueWithFee(e.platform)", index)
+
     def test_edge_board_model_comparison_chart_tracks_scads_models(self):
         index = (
             Path(__file__).resolve().parents[1] / "static" / "index.html"
