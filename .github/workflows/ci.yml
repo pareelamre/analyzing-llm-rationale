@@ -15,9 +15,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The published-artifact check compares this branch against the base
+          # branch, so the base ref has to be in the clone.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Check no published artifact is rewound
+        if: github.event_name == 'pull_request'
+        run: python scripts/check_published_artifacts.py --base "origin/${{ github.base_ref }}"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
