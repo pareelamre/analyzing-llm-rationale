@@ -982,7 +982,12 @@ def _sync_user_duckdb(sub: str, email: str, name: str, picture: str, created_at:
         finally:
             conn.close()
     except Exception:
-        pass
+        # Fail open: Datastore is the source of truth for the account and the
+        # caller has already written it, so a sign-in must not break because
+        # the analytics mirror did. Silence was the wrong half of that -- a
+        # mirror that has been failing for weeks looked identical to one that
+        # was working.
+        logger.warning("user duckdb mirror failed for %s", sub, exc_info=True)
 
 
 # Datastore kind: agent-forecast markets to enrol into the live track record.

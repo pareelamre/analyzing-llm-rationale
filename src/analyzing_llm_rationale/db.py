@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from pathlib import Path
 from typing import List, Optional
+
+logger = logging.getLogger("foresea")
 
 DB_PATH = Path(__file__).resolve().parents[2] / "forecasting.duckdb"
 
@@ -147,7 +150,13 @@ def ingest_all_results(results_root: Optional[Path] = None, conn=None) -> int:
                         result_file, model, temperature, variant, conn=conn
                     )
                 except Exception:
-                    pass
+                    # Keep ingesting the remaining files -- one malformed
+                    # result should not abort a whole directory -- but say so:
+                    # silently under-counting `total` reported a partial
+                    # ingest as a complete one.
+                    logger.warning(
+                        "failed to ingest %s; skipping", result_file, exc_info=True,
+                    )
 
     if close:
         conn.close()
