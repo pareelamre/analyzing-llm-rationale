@@ -430,3 +430,89 @@ class EdgeBoardSummaryTests(unittest.TestCase):
         lean = {"overall": {"n": 1}, "paper_pnl": {"rows": []}}
         out = mcp._summarise_track_record(lean)
         self.assertEqual(out["omitted_for_size"]["keys"], ["paper_pnl"])
+class FeedLatestFallbackTests(unittest.TestCase):
+    """The fallback crashed every time it ran.
+
+        "market_edge_signals": self.edge_board()[:limit]
+
+    edge_board() returns the aggregate mapping, and slicing a dict raises
+    TypeError: unhashable type: 'slice'. So whenever /feed/latest was
+    unavailable -- the only case this branch exists for -- the tool raised
+    instead of degrading. Calling foresea_feed_latest reproduced it exactly.
+    """
+
+    class _GetSession(FakeSession):
+        """feed_latest is the only client method that calls session.get()
+        directly rather than going through _request(), so the shared
+        FakeSession -- which implements request() only -- cannot drive it."""
+
+        def get(self, url, params=None, timeout=None):
+            self.calls.append({"method": "GET", "url": url, "params": params})
+            return self.responses.pop(0)
+
+    def _client(self, *responses):
+        return mcp.ForeseaClient(
+            base_url="https://foresea.test", session=self._GetSession(*responses)
+        )
+
+    def test_the_fallback_returns_ranked_markets_instead_of_raising(self):
+        board = {"edge_board": [{"ticker": f"M{i}"} for i in range(5)], "paper_pnl": {}}
+        client = self._client(FakeResponse(status_code=503), FakeResponse(payload=board))
+
+        out = client.feed_latest(limit=3)
+
+        self.assertEqual(len(out["market_edge_signals"]), 3)
+        self.assertEqual(out["market_edge_signals"][0]["ticker"], "M0")
+        self.assertIn("channels", out)
+
+    def test_a_board_without_the_key_degrades_to_empty_not_an_error(self):
+        client = self._client(FakeResponse(status_code=503), FakeResponse(payload={"other": 1}))
+        self.assertEqual(client.feed_latest(limit=3)["market_edge_signals"], [])
+
+    def test_a_non_object_board_response_surfaces_as_an_api_error(self):
+        """_request rejects non-object JSON, so edge_board() cannot return a
+        list. The isinstance guard in the fallback is belt-and-braces; the
+        real contract is that this raises rather than degrading silently."""
+        client = self._client(FakeResponse(status_code=503), FakeResponse(payload=["a"]))
+        with self.assertRaises(mcp.ForeseaApiError):
+            client.feed_latest(limit=2)
+
+    def test_the_primary_path_is_still_preferred(self):
+        client = self._client(FakeResponse(payload={"timestamp": "t", "signals": []}))
+        self.assertEqual(client.feed_latest()["timestamp"], "t")
+
+
+class EdgeBoardRowsTests(unittest.TestCase):
+    """Two tools mistook the aggregate mapping for the list of opportunities.
+
+    feed_latest sliced it (TypeError: unhashable type: 'slice');
+    optimize_portfolio fed it to audit_edge_board, which iterates and gets
+    the mapping's string keys (ValueError: dictionary update sequence element
+    #0 has length 1; 2 is required). The second was hidden behind
+    `except Exception as exc: return {"error": str(exc)}`, so it returned a
+    plausible error object rather than a portfolio and never crashed.
+    """
+
+    def test_it_pulls_the_rows_out_of_the_aggregate(self):
+        board = {"edge_board": [{"ticker": "M1"}, {"ticker": "M2"}], "paper_pnl": {}}
+        self.assertEqual(len(mcp._edge_board_rows(board)), 2)
+
+    def test_a_bare_list_passes_through(self):
+        rows = [{"ticker": "M1"}]
+        self.assertEqual(mcp._edge_board_rows(rows), rows)
+
+    def test_anything_unusable_becomes_an_empty_list_not_an_exception(self):
+        for board in ({}, {"edge_board": None}, {"edge_board": {}}, None, "text", 7):
+            with self.subTest(board=board):
+                self.assertEqual(mcp._edge_board_rows(board), [])
+
+    def test_optimize_portfolio_no_longer_hands_a_mapping_to_the_auditor(self):
+        """The real failure: audit_edge_board iterates what it is given."""
+        from analyzing_llm_rationale.edge_credibility import audit_edge_board
+
+        aggregate = {"edge_board": [{"ticker": "M1", "edge": 0.2}], "paper_pnl": {}}
+        with self.assertRaises(ValueError):
+            audit_edge_board(aggregate)
+        self.assertEqual(
+            audit_edge_board(mcp._edge_board_rows(aggregate))[0]["ticker"], "M1"
+        )

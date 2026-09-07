@@ -208,6 +208,21 @@ _TRACK_RECORD_BULK_KEYS = (
 )
 
 
+def _edge_board_rows(board: Any) -> List[Dict[str, Any]]:
+    """The ranked markets from an /edge-board response.
+
+    edge_board() returns the aggregate mapping. Two callers treated it as the
+    list of opportunities -- feed_latest sliced it, optimize_portfolio fed it
+    to audit_edge_board, which iterates and gets the mapping's string keys.
+    Both failed in ways that did not name the cause.
+    """
+    if isinstance(board, dict):
+        rows = board.get("edge_board")
+    else:
+        rows = board
+    return rows if isinstance(rows, list) else []
+
+
 def _summarise_track_record(payload: Any) -> Any:
     """Drop the bulk blocks so the result fits an MCP client's response limit."""
     if not isinstance(payload, dict):
@@ -521,6 +536,7 @@ class ForeseaClient:
             from analyzing_llm_rationale.debate_engine import conduct_market_debate
             return conduct_market_debate(question=question, platform=platform, market_prob=market_probability, resolution_criteria=resolution_criteria)
         except Exception as exc:
+            logger.warning("debate_market failed", exc_info=True)
             return {"error": str(exc)}
 
     async def adebate_market(self, question: str, platform: str = "Market", market_probability: Optional[float] = None, resolution_criteria: str = "") -> Dict[str, Any]:
@@ -531,9 +547,15 @@ class ForeseaClient:
         try:
             from analyzing_llm_rationale.edge_credibility import audit_edge_board
             from analyzing_llm_rationale.portfolio_optimizer import optimize_portfolio_allocation
-            opps = audit_edge_board(self.edge_board())
+            opps = audit_edge_board(_edge_board_rows(self.edge_board()))
             return optimize_portfolio_allocation(opportunities=opps, bankroll_usd=bankroll_usd, kelly_fraction=kelly_fraction, min_edge=min_edge)
         except Exception as exc:
+            # Returning {"error": ...} keeps the tool answering, but the
+            # caller sees only a message. This handler turned a total
+            # failure -- the aggregate passed where a list was expected --
+            # into something an agent read as "no allocation available",
+            # with nothing server-side to diagnose from.
+            logger.warning("optimize_portfolio failed", exc_info=True)
             return {"error": str(exc)}
 
     async def aoptimize_portfolio(self, bankroll_usd: float = 1000.0, kelly_fraction: float = 0.25, min_edge: float = 0.05) -> Dict[str, Any]:
@@ -543,17 +565,26 @@ class ForeseaClient:
     def feed_latest(self, limit: int = 10, min_edge: float = 0.05) -> Dict[str, Any]:
         """Fetch unified alpha and agent feed from Foresea API."""
         try:
-            resp = self._session.get(f"{self._base_url}/feed/latest", params={"limit": limit, "min_edge": min_edge}, timeout=15)
+            resp = self._session.get(f"{self.base_url}/feed/latest", params={"limit": limit, "min_edge": min_edge}, timeout=15)
             if resp.status_code == 200:
                 return resp.json()
+            logger.warning("feed/latest returned HTTP %s; using the edge-board fallback", resp.status_code)
         except Exception:
-            pass
+            # Swallowing kept the tool answering when the feed is down, but
+            # swallowing silently meant the fallback's own failure surfaced as
+            # an unexplained error with no trace of what went wrong first.
+            logger.warning("feed/latest request failed; using the edge-board fallback", exc_info=True)
+        # edge_board() returns the aggregate mapping, not a list. Slicing it
+        # raised "unhashable type: 'slice'" -- so every time this fallback ran,
+        # the tool crashed instead of degrading. The ranked markets live under
+        # the "edge_board" key.
+        signals = _edge_board_rows(self.edge_board())
         return {
             "channels": {
                 "discord": "https://discord.com/channels/1539674155228860527/1539674155799289991",
                 "telegram": "https://t.me/+QIVxIyqCc-w4NzQ9",
             },
-            "market_edge_signals": self.edge_board()[:limit],
+            "market_edge_signals": signals[:limit],
             "agent_trades": [],
         }
 
