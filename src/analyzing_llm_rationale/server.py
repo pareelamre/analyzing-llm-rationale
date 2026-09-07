@@ -204,6 +204,11 @@ _AGENT_TRADING_AUDIT_ARCHIVE_MANIFEST_URL = os.environ.get(
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/"
     "main/static/agent_trading_audit_archive_manifest.json",
 )
+# Default stays in crypto_kalshi, which owns the payload; this only makes it
+# overridable, as every other payload URL already is.
+_CRYPTO_KALSHI_EDGE_URL = os.environ.get(
+    "CRYPTO_KALSHI_EDGE_URL", crypto_kalshi.DEFAULT_KALSHI_EDGE_REMOTE_URL,
+)
 _AGENT_TRADING_AUDIT_ARCHIVE_BASE_URL = os.environ.get(
     "AGENT_TRADING_AUDIT_ARCHIVE_BASE_URL",
     "https://raw.githubusercontent.com/pareelamre/analyzing-llm-rationale/main/",
@@ -4359,12 +4364,24 @@ async def crypto_5m_kalshi_edge():
         if cached is not None:
             return cached
         payload: Optional[Dict[str, Any]] = None
-        try:
-            resp = requests.get(crypto_kalshi.DEFAULT_KALSHI_EDGE_REMOTE_URL, timeout=6)
-            if resp.status_code == 200:
-                payload = resp.json()
-        except Exception:
-            logger.warning("kalshi edge fetch failed; trying bundled copy", exc_info=True)
+        # The last payload reader that hardcoded its URL: every other one is
+        # env-overridable, so staging could not repoint this and it could not
+        # follow the others onto GCS.
+        gcs_source = _gcs_payload_source(
+            "CRYPTO_KALSHI_EDGE", "crypto_kalshi_edge_payload.json",
+        )
+        if gcs_source is not None:
+            try:
+                payload = gcs_source()
+            except Exception:
+                logger.warning("kalshi edge GCS read failed; trying HTTP", exc_info=True)
+        if payload is None:
+            try:
+                resp = requests.get(_CRYPTO_KALSHI_EDGE_URL, timeout=6)
+                if resp.status_code == 200:
+                    payload = resp.json()
+            except Exception:
+                logger.warning("kalshi edge fetch failed; trying bundled copy", exc_info=True)
         if payload is None:
             bundled = _STATIC_DIR / "crypto_kalshi_edge_payload.json"
             if bundled.exists():
