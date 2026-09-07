@@ -9767,14 +9767,25 @@ async def arbitrage_cross_venue_route(
     limit: int = Query(20, ge=1, le=100),
 ) -> Dict[str, Any]:
     """Scan and compute real-time cross-venue spreads between Polymarket and Kalshi."""
-    from analyzing_llm_rationale.arbitrage_scanner import scan_cross_venue_arbitrage
+    from analyzing_llm_rationale.arbitrage_scanner import (
+        fetch_markets_to_scan,
+        scan_cross_venue_arbitrage,
+    )
 
     loop = asyncio.get_running_loop()
-    opps = await loop.run_in_executor(None, lambda: scan_cross_venue_arbitrage(min_spread=min_spread))
+    poly, kalshi, venues_reachable = await loop.run_in_executor(None, fetch_markets_to_scan)
+    opps = await loop.run_in_executor(
+        None, lambda: scan_cross_venue_arbitrage(poly, kalshi, min_spread=min_spread),
+    )
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "n_opportunities": len(opps[:limit]),
         "opportunities": opps[:limit],
+        # Without these, no result and no data look identical: both answer
+        # n_opportunities 0. Say how much was compared, and whether both
+        # venues were actually reached.
+        "markets_scanned": {"polymarket": len(poly), "kalshi": len(kalshi)},
+        "venues_reachable": venues_reachable,
     }
 
 
