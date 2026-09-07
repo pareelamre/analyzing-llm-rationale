@@ -2470,6 +2470,49 @@ _rate_limiter = RateLimiter(calls=int(os.environ.get("RATE_LIMIT_PER_MIN", "60")
 _predict_rate_limiter = RateLimiter(calls=int(os.environ.get("PREDICT_RATE_LIMIT_PER_MIN", "10")), period=60)
 
 
+#: Endpoints whose only access control is _check_api_key.
+#
+# check_api_key returns without checking anything when no key is configured:
+#
+#     if not required_api_key:
+#         return
+#
+# so with API_KEY unset every endpoint below is public. That is a reasonable
+# default for a service with nothing to protect, and a silent one for a
+# service with these. The startup warning makes the state visible instead of
+# leaving it to be discovered by request.
+_API_KEY_GUARDED_ENDPOINTS = (
+    "/analytics/users",
+    "/analytics/dashboard",
+    "/analytics/export",
+    "/analytics/summary",
+    "/analytics/events/recent",
+    "/analytics/events/summary",
+    "/vertex-predict",
+    "/market/forecast/stream",
+)
+
+#: The subset that returns personal data, called out separately because an
+#: open traffic counter and an open list of registered users are not the same
+#: kind of open.
+_API_KEY_GUARDED_PERSONAL_DATA = ("/analytics/users",)
+
+
+def _warn_if_api_key_guard_is_inert() -> None:
+    """Say so at startup when API_KEY is unset, rather than never."""
+    if _REQUIRED_API_KEY:
+        return
+    logger.warning(
+        "API_KEY is not set, so _check_api_key passes every request and these "
+        "%d endpoints are public: %s. Of those, %s return personal data "
+        "(registered accounts, their email addresses and last login). Set the "
+        "API_KEY environment variable to close them.",
+        len(_API_KEY_GUARDED_ENDPOINTS),
+        ", ".join(_API_KEY_GUARDED_ENDPOINTS),
+        ", ".join(_API_KEY_GUARDED_PERSONAL_DATA),
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _ready
@@ -2491,6 +2534,7 @@ async def lifespan(app: FastAPI):
             'python-multipart is required for Form/File endpoints. '
             'Install the serve extras: pip install "analyzing-llm-rationale[serve]"'
         ) from None
+    _warn_if_api_key_guard_is_inert()
     logger.info("foresea server starting up")
     async with AsyncExitStack() as stack:
         if _PUBLIC_MCP is not None:
