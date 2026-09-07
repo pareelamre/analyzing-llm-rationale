@@ -307,3 +307,34 @@ class GcsPayloadSourceTests(unittest.TestCase):
                 self._factory()("P", "default.json")()
 
         self.assertEqual(seen, [("b", "default.json"), ("b", "custom.json")])
+
+
+class WiredPayloadSourceTests(unittest.TestCase):
+    """Every published payload should be opt-in-able, not just some.
+
+    The migration is worth little if a payload is left on raw GitHub by
+    oversight, so pin the set of readers wired to _gcs_payload_source.
+    """
+
+    def test_every_published_payload_has_a_gcs_opt_in(self):
+        import re
+
+        server_path = (
+            Path(__file__).resolve().parents[1]
+            / "src" / "analyzing_llm_rationale" / "server.py"
+        )
+        source = server_path.read_text(encoding="utf-8")
+        wired = set(
+            re.findall(r'_gcs_payload_source\(\s*"([A-Z_]+)"', source)
+        )
+        self.assertEqual(
+            wired,
+            {
+                "TRACK_RECORD_LIVE",
+                "FORECAST_EVALUATION",
+                "MARK_TO_MARKET",
+                "AGENT_TRADING_BOARD",
+                "AGENT_TRADING_AUDIT",
+                "AGENT_TRADING_AUDIT_ARCHIVE",
+            },
+        )

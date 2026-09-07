@@ -2282,6 +2282,7 @@ _AGENT_TRADING_BOARD_READER = live_track_record_support.LiveTrackRecordReader(
         user_agent="Foresea/agent-trading-board",
     ),
     logger=logger,
+    source=_gcs_payload_source("AGENT_TRADING_BOARD", "agent_trading_live.json"),
 )
 _read_agent_trading_board = _AGENT_TRADING_BOARD_READER.read
 _agent_trading_board_freshness = _AGENT_TRADING_BOARD_READER.freshness
@@ -2301,6 +2302,9 @@ _AGENT_TRADING_AUDIT_READER = live_track_record_support.LiveTrackRecordReader(
         user_agent="Foresea/agent-trading-audit",
     ),
     logger=logger,
+    source=_gcs_payload_source(
+        "AGENT_TRADING_AUDIT", "agent_trading_audit_live.json",
+    ),
 )
 _read_agent_trading_audit = _AGENT_TRADING_AUDIT_READER.read
 _agent_trading_audit_freshness = _AGENT_TRADING_AUDIT_READER.freshness
@@ -2320,6 +2324,10 @@ _AGENT_TRADING_AUDIT_ARCHIVE_READER = live_track_record_support.LiveTrackRecordR
         user_agent="Foresea/agent-trading-audit",
     ),
     logger=logger,
+    source=_gcs_payload_source(
+        "AGENT_TRADING_AUDIT_ARCHIVE",
+        "agent_trading_audit_archive_manifest.json",
+    ),
 )
 _read_agent_trading_audit_archive_manifest = _AGENT_TRADING_AUDIT_ARCHIVE_READER.read
 
